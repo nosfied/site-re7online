@@ -18,9 +18,9 @@ export default function Hero() {
         <div className="absolute -left-40 top-10 h-72 w-72 rounded-full bg-re7-sky/20 blur-3xl" />
         <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-re7-orange/20 blur-3xl" />
         <LogoCycle
-          className="absolute left-1/2 top-[-28%] hidden h-[640px] w-[640px] -translate-x-1/2 opacity-70 md:block lg:h-[760px] lg:w-[760px]"
+          className="absolute left-1/2 top-4 h-[220px] w-[220px] -translate-x-1/2 opacity-80 sm:top-0 sm:h-[280px] sm:w-[280px] md:top-[-28%] md:h-[640px] md:w-[640px] md:opacity-70 lg:h-[760px] lg:w-[760px]"
           aspectClass="h-full w-full"
-          sizes="(max-width: 1024px) 520px, 760px"
+          sizes="(max-width: 640px) 220px, (max-width: 1024px) 520px, 760px"
         />
       </div>
 
