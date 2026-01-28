@@ -11,7 +11,7 @@ const nav = [
 ];
 
 export default function Header() {
-  const [scrolled, setScrolled] = useState(false);
+  const [, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
