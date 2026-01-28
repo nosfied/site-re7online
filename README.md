@@ -32,6 +32,16 @@ npm run build
 - Vercel: importe o repositório e use o comando padrão de build (`npm run build`).
 - Outros ambientes: execute `npm run build` e sirva a pasta `.next` com `npm run start`.
 
+## CI / Build
+
+Validação local (ambiente limpo):
+
+```bash
+npm ci
+npm run lint
+npm run build
+```
+
 ## Fluxo de branches
 
 - `main`: produção
