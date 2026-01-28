@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Container from "@/components/Container";
 import Button from "@/components/Button";
+import LogoCycle from "@/components/LogoCycle";
 
 export default function Hero() {
   return (
@@ -16,15 +17,11 @@ export default function Hero() {
         <div className="absolute inset-0 bg-gradient-to-r from-re7-navy/95 via-re7-navy/80 to-re7-navy/40" />
         <div className="absolute -left-40 top-10 h-72 w-72 rounded-full bg-re7-sky/20 blur-3xl" />
         <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-re7-orange/20 blur-3xl" />
-        <div className="absolute left-1/2 top-[-28%] hidden h-[640px] w-[640px] -translate-x-1/2 opacity-70 md:block lg:h-[760px] lg:w-[760px]">
-          <Image
-            src="/brand/re7-logo.png"
-            alt=""
-            fill
-            className="object-contain"
-            priority
-          />
-        </div>
+        <LogoCycle
+          className="absolute left-1/2 top-[-28%] hidden h-[640px] w-[640px] -translate-x-1/2 opacity-70 md:block lg:h-[760px] lg:w-[760px]"
+          aspectClass="h-full w-full"
+          sizes="(max-width: 1024px) 520px, 760px"
+        />
       </div>
 
       <Container className="relative pb-10 pt-10 md:pb-16 md:pt-12">
@@ -32,6 +29,7 @@ export default function Hero() {
           <div className="hidden md:block h-64" />
 
           <div className="md:flex md:flex-col">
+            <h1 className="sr-only">Menos ruído. Mais resultados.</h1>
             <p className="text-[11px] uppercase tracking-[0.4em] text-re7-gray/70">
               Comunicação • Marketing • Tecnologia
             </p>
