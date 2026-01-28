@@ -6,10 +6,17 @@ export default function Hero() {
   return (
     <section id="topo" className="relative overflow-hidden pt-12 sm:pt-16">
       <div className="pointer-events-none absolute inset-0">
+        <Image
+          src="/brand/re7-office.jpeg"
+          alt=""
+          fill
+          className="object-cover object-right"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-re7-navy/95 via-re7-navy/80 to-re7-navy/40" />
         <div className="absolute -left-40 top-10 h-72 w-72 rounded-full bg-re7-sky/20 blur-3xl" />
         <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-re7-orange/20 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(127,196,229,0.18),transparent_55%)]" />
-        <div className="absolute left-1/2 top-[-28%] hidden h-[640px] w-[640px] -translate-x-1/2 md:block lg:h-[760px] lg:w-[760px]">
+        <div className="absolute left-1/2 top-[-28%] hidden h-[640px] w-[640px] -translate-x-1/2 opacity-70 md:block lg:h-[760px] lg:w-[760px]">
           <Image
             src="/brand/re7-logo.png"
             alt=""
