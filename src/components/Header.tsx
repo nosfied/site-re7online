@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Container from "@/components/Container";
 import Button from "@/components/Button";
 
@@ -13,6 +14,7 @@ const nav = [
 export default function Header() {
   const [, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -38,6 +40,10 @@ export default function Header() {
       document.body.style.overflow = original;
     };
   }, [open]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-re7-navy/80 backdrop-blur transition">
@@ -68,65 +74,80 @@ export default function Header() {
         </div>
 
         <button
-          className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white transition hover:bg-white/15 md:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/40 bg-white/20 text-white shadow-lg shadow-black/30 transition hover:bg-white/30 md:hidden"
           aria-label="Abrir menu"
           aria-expanded={open}
           aria-controls="mobile-menu"
           onClick={() => setOpen(true)}
         >
-          <span className="block h-0.5 w-5 bg-white" />
-          <span className="mt-1.5 block h-0.5 w-5 bg-white/90" />
-          <span className="mt-1.5 block h-0.5 w-5 bg-white/80" />
+          <svg
+            width="22"
+            height="18"
+            viewBox="0 0 22 18"
+            aria-hidden="true"
+            className="text-white"
+            fill="none"
+          >
+            <path
+              d="M1 2h20M1 9h20M1 16h20"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </button>
       </Container>
 
-      {open ? (
-        <div
-          className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm md:hidden"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            id="mobile-menu"
-            className="absolute right-0 top-0 h-full w-[86%] max-w-xs border-l border-white/10 bg-re7-navy/95 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex h-full flex-col gap-6 px-6 py-6">
-              <div className="flex items-center justify-between">
-                <span className="text-base font-semibold text-white">Menu</span>
-                <button
-                  className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs text-white"
-                  aria-label="Fechar menu"
-                  onClick={() => setOpen(false)}
-                >
-                  Fechar
-                </button>
-              </div>
+      {open && mounted
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[999] bg-re7-navy/60 md:hidden"
+              onClick={() => setOpen(false)}
+            >
+              <div
+                id="mobile-menu"
+                className="absolute inset-0 h-full w-full bg-re7-navy/80 shadow-2xl ring-1 ring-white/10"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex h-full flex-col gap-6 px-6 py-7">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-semibold text-white">Menu</span>
+                    <button
+                      className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs text-white"
+                      aria-label="Fechar menu"
+                      onClick={() => setOpen(false)}
+                    >
+                      Fechar
+                    </button>
+                  </div>
 
-              <nav className="flex flex-col gap-4 text-base text-white/85">
-                {nav.map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className="transition hover:text-white"
-                    onClick={() => setOpen(false)}
-                  >
-                    {item.label}
-                  </a>
-                ))}
-              </nav>
+                  <nav className="flex flex-col gap-5 text-base text-white/90">
+                    {nav.map((item) => (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        className="transition hover:text-white"
+                        onClick={() => setOpen(false)}
+                      >
+                        {item.label}
+                      </a>
+                    ))}
+                  </nav>
 
-              <div className="mt-auto flex flex-col gap-3">
-                <Button href="#diagnostico" variant="primary" className="w-full">
-                  Solicitar diagnóstico
-                </Button>
-                <Button href="#diagnostico" variant="ghost" className="w-full">
-                  Falar no WhatsApp
-                </Button>
+                  <div className="mt-auto flex flex-col gap-3">
+                    <Button href="#diagnostico" variant="primary" className="w-full">
+                      Solicitar diagnóstico
+                    </Button>
+                    <Button href="#diagnostico" variant="ghost" className="w-full">
+                      Falar no WhatsApp
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
     </header>
   );
 }

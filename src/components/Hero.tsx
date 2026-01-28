@@ -18,39 +18,39 @@ export default function Hero() {
         <div className="absolute -left-40 top-10 h-72 w-72 rounded-full bg-re7-sky/20 blur-3xl" />
         <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-re7-orange/20 blur-3xl" />
         <LogoCycle
-          className="absolute left-1/2 top-4 h-[220px] w-[220px] -translate-x-1/2 opacity-80 sm:top-0 sm:h-[280px] sm:w-[280px] md:top-[-28%] md:h-[640px] md:w-[640px] md:opacity-70 lg:h-[760px] lg:w-[760px]"
+          className="absolute left-1/2 top-[-2%] h-[180px] w-[180px] -translate-x-1/2 opacity-45 sm:top-[-6%] sm:h-[220px] sm:w-[220px] sm:opacity-50 md:top-[-28%] md:h-[640px] md:w-[640px] md:opacity-70 lg:h-[760px] lg:w-[760px]"
           aspectClass="h-full w-full"
-          sizes="(max-width: 640px) 220px, (max-width: 1024px) 520px, 760px"
+          sizes="(max-width: 640px) 180px, (max-width: 1024px) 520px, 760px"
         />
       </div>
 
       <Container className="relative pb-10 pt-10 md:pb-16 md:pt-12">
-        <div className="w-full max-w-5xl">
+        <div className="relative z-10 w-full max-w-5xl">
           <div className="hidden md:block h-64" />
 
           <div className="md:flex md:flex-col">
             <h1 className="sr-only">Menos ruído. Mais resultados.</h1>
-            <p className="text-[11px] uppercase tracking-[0.4em] text-re7-gray/70">
+            <p className="hidden text-[11px] uppercase tracking-[0.4em] text-re7-gray/70 sm:block">
               Comunicação • Marketing • Tecnologia
             </p>
 
-            <p className="mt-4 text-base text-re7-gray/90 md:text-lg text-balance max-w-xl">
+            <p className="mt-8 text-base text-re7-gray/90 md:mt-4 md:text-lg text-balance max-w-xl">
               Comunicação, marketing e tecnologia para negócios que querem crescer
               com estratégia.
             </p>
           </div>
 
           <div className="mt-10 md:mt-14 md:flex md:items-center md:justify-between md:gap-6">
-            <div className="flex flex-wrap gap-4 text-sm text-re7-gray/85">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+            <div className="flex flex-wrap gap-2 text-xs text-re7-gray/85 sm:gap-4 sm:text-sm">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Oferta clara
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Página que converte
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Rotina + campanhas
               </span>
