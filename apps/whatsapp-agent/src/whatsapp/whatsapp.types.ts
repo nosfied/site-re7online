@@ -1,4 +1,13 @@
 export type WhatsAppWebhookPayload = {
   object?: string;
-  entry?: unknown[];
+  entry?: Array<{
+    changes?: Array<{
+      value?: {
+        messages?: Array<{
+          from?: string;
+          text?: { body?: string };
+        }>;
+      };
+    }>;
+  }>;
 };
