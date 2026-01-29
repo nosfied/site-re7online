@@ -1,0 +1,7 @@
+export enum Intent {
+  VENDAS = "VENDAS",
+  SUPORTE = "SUPORTE",
+  AGENDAMENTO = "AGENDAMENTO",
+  FINANCEIRO = "FINANCEIRO",
+  HUMANO = "HUMANO",
+}
