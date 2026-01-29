@@ -18,9 +18,9 @@ export default function Hero() {
         <div className="absolute -left-40 top-10 h-72 w-72 rounded-full bg-re7-sky/20 blur-3xl" />
         <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-re7-orange/20 blur-3xl" />
         <LogoCycle
-          className="absolute left-1/2 top-[-2%] h-[180px] w-[180px] -translate-x-1/2 opacity-45 sm:top-[-6%] sm:h-[220px] sm:w-[220px] sm:opacity-50 md:top-[-28%] md:h-[640px] md:w-[640px] md:opacity-70 lg:h-[760px] lg:w-[760px]"
+          className="absolute left-1/2 top-[-10%] h-[280px] w-[280px] -translate-x-1/2 opacity-45 sm:top-[-8%] sm:h-[340px] sm:w-[340px] sm:opacity-50 md:top-[-28%] md:h-[640px] md:w-[640px] md:opacity-70 lg:h-[760px] lg:w-[760px]"
           aspectClass="h-full w-full"
-          sizes="(max-width: 640px) 180px, (max-width: 1024px) 520px, 760px"
+          sizes="(max-width: 640px) 280px, (max-width: 1024px) 520px, 760px"
         />
       </div>
 
@@ -34,7 +34,7 @@ export default function Hero() {
               Comunicação • Marketing • Tecnologia
             </p>
 
-            <p className="mt-8 text-base text-re7-gray/90 md:mt-4 md:text-lg text-balance max-w-xl">
+            <p className="mt-20 text-base text-re7-gray/90 md:mt-4 md:text-lg text-balance max-w-xl">
               Comunicação, marketing e tecnologia para negócios que querem crescer
               com estratégia.
             </p>
