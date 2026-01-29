@@ -45,6 +45,7 @@ export default function Header() {
   }, [open]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- evita mismatch de hidratação no Next.js
     setMounted(true);
   }, []);
 
