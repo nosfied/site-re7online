@@ -40,17 +40,17 @@ export default function Hero() {
             </p>
           </div>
 
-          <div className="mt-10 md:mt-14 md:flex md:items-center md:justify-between md:gap-6">
-            <div className="flex flex-wrap gap-2 text-xs text-re7-gray/85 sm:gap-4 sm:text-sm">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
+          <div className="mt-6 md:mt-14 md:flex md:items-center md:justify-between md:gap-6">
+            <div className="flex flex-wrap gap-1.5 text-[10px] text-re7-gray/85 sm:gap-4 sm:text-sm">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 sm:gap-2 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Oferta clara
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 sm:gap-2 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Página que converte
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 sm:px-3 sm:py-1.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 sm:gap-2 sm:px-3 sm:py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-re7-amber" />
                 Rotina + campanhas
               </span>

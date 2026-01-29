@@ -28,7 +28,10 @@ export default function Header() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
+    const onNavigate = () => setOpen(false);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("hashchange", onNavigate);
+    window.addEventListener("popstate", onNavigate);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
@@ -121,7 +124,10 @@ export default function Header() {
                     </button>
                   </div>
 
-                  <nav className="flex flex-col gap-5 text-base text-white/90">
+                  <nav
+                    className="flex flex-col gap-5 text-base text-white/90"
+                    onClick={() => setOpen(false)}
+                  >
                     {nav.map((item) => (
                       <a
                         key={item.href}
