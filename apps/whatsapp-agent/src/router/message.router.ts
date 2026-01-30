@@ -1,5 +1,6 @@
 import { Intent } from "./intents.js";
 
-export function routeIncomingMessage(_text: string): Intent {
+export function routeIncomingMessage(text: string): Intent {
+  void text;
   return Intent.VENDAS;
 }

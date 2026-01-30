@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "../logger/logger.js";
+import { env } from "../config/env.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { sendTextMessage } from "./graph.client.js";
 
@@ -8,10 +9,6 @@ export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
-
-  // debug local only
-  // eslint-disable-next-line no-console
-  console.log("hub.verify_token:", token, "env:", process.env.WHATSAPP_VERIFY_TOKEN);
 
   if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     res.writeHead(200, { "Content-Type": "text/plain" });
@@ -33,9 +30,10 @@ export async function receiveWebhook(
   let payload: WhatsAppWebhookPayload | null = null;
   try {
     payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
-  } catch {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "invalid_json" }));
+  } catch (error) {
+    logger.error(`webhook: invalid_json ${(error as Error).message}`);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, ignored: true }));
     return;
   }
 
@@ -62,13 +60,16 @@ export async function receiveWebhook(
     return;
   }
 
-  const allowlist = (process.env.WHATSAPP_ALLOWLIST ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
+  const allowlist = env.WHATSAPP_ALLOWLIST;
   if (allowlist.length > 0 && !allowlist.includes(from)) {
     logger.info(`webhook: ignored (not allowlisted) ${maskNumber(from)}`);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, ignored: true }));
+    return;
+  }
+
+  if (!env.outboundEnabled) {
+    logger.warn("outbound: disabled (missing credentials)");
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, ignored: true }));
     return;
