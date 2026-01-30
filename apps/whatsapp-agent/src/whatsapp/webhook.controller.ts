@@ -9,7 +9,11 @@ export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const token = url.searchParams.get("hub.verify_token");
   const challenge = url.searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === env.WHATSAPP_VERIFY_TOKEN) {
+  // debug local only
+  // eslint-disable-next-line no-console
+  console.log("hub.verify_token:", token, "env:", process.env.WHATSAPP_VERIFY_TOKEN);
+
+  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end(challenge ?? "");
     return;
