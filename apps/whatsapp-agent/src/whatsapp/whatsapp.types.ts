@@ -4,7 +4,9 @@ export type WhatsAppWebhookPayload = {
     changes?: Array<{
       value?: {
         messages?: Array<{
+          id?: string;
           from?: string;
+          type?: string;
           text?: { body?: string };
         }>;
       };
