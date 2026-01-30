@@ -1,8 +1,9 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { logger } from "../logger/logger.js";
 import { env } from "../config/env.js";
+import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
+import { logger } from "../infra/logger.js";
+import { jsonFileStorage } from "../infra/storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
-import { sendTextMessage } from "./graph.client.js";
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
@@ -25,70 +26,49 @@ export async function receiveWebhook(
   res: ServerResponse,
   rawBody: string
 ) {
-  logger.info("webhook: received");
+  logger.info({ event: "webhook.received" });
 
   let payload: WhatsAppWebhookPayload | null = null;
   try {
     payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
   } catch (error) {
-    logger.error(`webhook: invalid_json ${(error as Error).message}`);
+    logger.error({ event: "webhook.invalid_json", error: (error as Error).message });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, ignored: true }));
     return;
   }
 
-  const message = payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  const from = message?.from;
-  const text = message?.text?.body ?? "";
-  const messageId = message?.id;
-  const messageType = message?.type;
-
-  if (!message || !from) {
+  const normalized = normalizeWebhook(payload);
+  if (normalized.messages.length === 0) {
+    logger.warn({ event: "webhook.no_messages", reason: normalized.reason ?? "unknown" });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, ignored: true }));
     return;
   }
 
-  logger.info(`webhook: message from ${maskNumber(from)}`);
-  if (text) {
-    logger.info(`webhook: text "${text}"`);
-  }
+  for (const message of normalized.messages) {
+    const allowlistEnabled = env.WHATSAPP_ALLOWLIST.length > 0;
+    const allowlistHit = allowlistEnabled ? env.WHATSAPP_ALLOWLIST.includes(message.from) : true;
+    const status = allowlistHit ? "received" : "ignored";
 
-  if (messageType !== "text" || !text) {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ignored: true }));
-    return;
-  }
-
-  const allowlist = env.WHATSAPP_ALLOWLIST;
-  if (allowlist.length > 0 && !allowlist.includes(from)) {
-    logger.info(`webhook: ignored (not allowlisted) ${maskNumber(from)}`);
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ignored: true }));
-    return;
-  }
-
-  if (!env.outboundEnabled) {
-    logger.warn("outbound: disabled (missing credentials)");
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ignored: true }));
-    return;
-  }
-
-  logger.info(`outbound: sending echo to ${maskNumber(from)}`);
-  void sendTextMessage({ to: from, text: `Echo: ${text}` })
-    .then((ok) => {
-      if (ok) {
-        logger.info("outbound: success");
-      } else {
-        logger.error(`outbound: failed to ${maskNumber(from)} msg=${messageId ?? "n/a"}`);
-      }
-    })
-    .catch((error) => {
-      logger.error(
-        `outbound: failed to ${maskNumber(from)} msg=${messageId ?? "n/a"} err=${(error as Error).message}`
-      );
+    await jsonFileStorage.saveIncomingMessage({
+      ...message,
+      status,
+      allowlist: {
+        enabled: allowlistEnabled,
+        hit: allowlistHit,
+      },
     });
+
+    logger.info({
+      event: "webhook.message",
+      messageId: message.messageId,
+      from: maskNumber(message.from),
+      type: message.type,
+      status,
+      allowlistHit,
+    });
+  }
 
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: true }));
