@@ -31,6 +31,10 @@ export const jsonFileStorage: Storage = {
     records.push(record);
     await writeAll(records);
   },
+  async findByMessageId(messageId: string) {
+    const records = await readAll();
+    return records.find((item) => item.messageId === messageId) ?? null;
+  },
   async updateStatus(messageId: string, status: MessageStatus, extra?: Record<string, unknown>) {
     const records = await readAll();
     const index = records.findIndex((item) => item.messageId === messageId);
@@ -39,6 +43,18 @@ export const jsonFileStorage: Storage = {
         ...records[index],
         status,
         meta: { ...(records[index].meta ?? {}), ...(extra ?? {}) },
+      };
+      await writeAll(records);
+    }
+  },
+  async updateMessage(messageId: string, patch: Partial<StoredRecord>) {
+    const records = await readAll();
+    const index = records.findIndex((item) => item.messageId === messageId);
+    if (index >= 0) {
+      records[index] = {
+        ...records[index],
+        ...patch,
+        meta: { ...(records[index].meta ?? {}), ...(patch.meta ?? {}) },
       };
       await writeAll(records);
     }

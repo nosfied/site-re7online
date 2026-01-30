@@ -4,6 +4,7 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
+import { sendTextMessage } from "./whatsapp.client.js";
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
@@ -47,6 +48,24 @@ export async function receiveWebhook(
   }
 
   for (const message of normalized.messages) {
+    const existing = await jsonFileStorage.findByMessageId(message.messageId);
+    if (existing?.status === "replied") {
+      const repliedAt = existing.repliedAt ? Date.parse(existing.repliedAt) : 0;
+      const now = Date.now();
+      const withinWindow =
+        repliedAt > 0 &&
+        now - repliedAt <= env.WHATSAPP_DEDUP_WINDOW_SECONDS * 1000;
+
+      if (withinWindow) {
+        logger.warn({
+          event: "webhook.duplicate",
+          messageId: message.messageId,
+          from: maskNumber(message.from),
+        });
+        continue;
+      }
+    }
+
     const allowlistEnabled = env.WHATSAPP_ALLOWLIST.length > 0;
     const allowlistHit = allowlistEnabled ? env.WHATSAPP_ALLOWLIST.includes(message.from) : true;
     const status = allowlistHit ? "received" : "ignored";
@@ -68,6 +87,61 @@ export async function receiveWebhook(
       status,
       allowlistHit,
     });
+
+    if (!allowlistHit) {
+      continue;
+    }
+
+    if (!env.outboundEnabled) {
+      logger.warn({ event: "reply.disabled", reason: "missing_credentials" });
+      continue;
+    }
+
+    const replyType = env.WHATSAPP_ECHO_ENABLED ? "echo" : "default";
+    const replyText = env.WHATSAPP_ECHO_ENABLED
+      ? message.type === "text" && message.text
+        ? `ECO: ${message.text}`
+        : `ECO: (mensagem ${message.type} recebida)`
+      : env.WHATSAPP_DEFAULT_REPLY;
+
+    logger.info({
+      event: "reply.sending",
+      messageId: message.messageId,
+      replyType,
+      to: maskNumber(message.from),
+    });
+
+    void sendTextMessage(message.from, replyText)
+      .then(async (result) => {
+        if (result.ok) {
+          await jsonFileStorage.updateMessage(message.messageId, {
+            status: "replied",
+            repliedAt: new Date().toISOString(),
+            replyType,
+          });
+          logger.info({
+            event: "reply.sent",
+            messageId: message.messageId,
+            replyType,
+            status: result.status,
+          });
+        } else {
+          logger.error({
+            event: "reply.error",
+            messageId: message.messageId,
+            replyType,
+            status: result.status,
+          });
+        }
+      })
+      .catch((error) => {
+        logger.error({
+          event: "reply.error",
+          messageId: message.messageId,
+          replyType,
+          error: (error as Error).message,
+        });
+      });
   }
 
   res.writeHead(200, { "Content-Type": "application/json" });

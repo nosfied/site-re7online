@@ -6,6 +6,9 @@ export type Env = {
   WHATSAPP_PHONE_NUMBER_ID: string;
   WHATSAPP_API_VERSION: string;
   WHATSAPP_ALLOWLIST: string[];
+  WHATSAPP_ECHO_ENABLED: boolean;
+  WHATSAPP_DEFAULT_REPLY: string;
+  WHATSAPP_DEDUP_WINDOW_SECONDS: number;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
   phoneNumberIdPresent: boolean;
@@ -26,6 +29,14 @@ export function getEnv(): Env {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const WHATSAPP_ECHO_ENABLED = (process.env.WHATSAPP_ECHO_ENABLED ?? "false") === "true";
+  const WHATSAPP_DEFAULT_REPLY =
+    process.env.WHATSAPP_DEFAULT_REPLY ??
+    "Olá! Em breve nosso atendimento estará disponível por aqui.";
+  const WHATSAPP_DEDUP_WINDOW_SECONDS = toNumber(
+    process.env.WHATSAPP_DEDUP_WINDOW_SECONDS,
+    86400
+  );
 
   const verifyTokenPresent = WHATSAPP_VERIFY_TOKEN.length > 0;
   const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
@@ -39,6 +50,9 @@ export function getEnv(): Env {
     WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_API_VERSION,
     WHATSAPP_ALLOWLIST,
+    WHATSAPP_ECHO_ENABLED,
+    WHATSAPP_DEFAULT_REPLY,
+    WHATSAPP_DEDUP_WINDOW_SECONDS,
     verifyTokenPresent,
     accessTokenPresent,
     phoneNumberIdPresent,
