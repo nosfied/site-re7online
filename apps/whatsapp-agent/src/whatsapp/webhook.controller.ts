@@ -1,8 +1,8 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { env } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
-import { logger } from "../infra/logger.js";
-import { jsonFileStorage } from "../infra/storage/jsonFileStorage.js";
+import { logger } from "../logger/logger.js";
+import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {

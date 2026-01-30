@@ -1,4 +1,4 @@
-import { NormalizedMessage } from "../../domain/whatsapp/types.js";
+import { NormalizedMessage } from "../domain/whatsapp/types.js";
 
 export type MessageStatus = "received" | "ignored" | "replied";
 
