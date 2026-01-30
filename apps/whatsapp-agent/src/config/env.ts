@@ -31,7 +31,7 @@ const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
 const phoneNumberIdPresent = WHATSAPP_PHONE_NUMBER_ID.length > 0;
 
 export const env: Env = {
-  PORT: toNumber(process.env.PORT, 4000),
+  PORT: toNumber(process.env.PORT, 3001),
   ENV: process.env.ENV ?? "dev",
   WHATSAPP_VERIFY_TOKEN,
   WHATSAPP_ACCESS_TOKEN,

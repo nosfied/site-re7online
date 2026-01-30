@@ -1,10 +1,15 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "./http/server.js";
 import { logger } from "./logger/logger.js";
 
 async function bootstrap() {
   if (process.env.NODE_ENV !== "production") {
     const { config } = await import("dotenv");
-    config({ override: false });
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const envPath = path.resolve(__dirname, "../.env");
+    config({ path: envPath, override: false });
   }
 
   const { env } = await import("./config/env.js");
