@@ -15,6 +15,10 @@ export type Env = {
   outboundEnabled: boolean;
 };
 
+export function normalizeWaId(input: string): string {
+  return input.replace(/\D/g, "");
+}
+
 function toNumber(value: string | undefined, fallback: number) {
   const num = Number(value);
   return Number.isNaN(num) ? fallback : num;
@@ -28,6 +32,8 @@ export function getEnv(): Env {
   const WHATSAPP_ALLOWLIST = (process.env.WHATSAPP_ALLOWLIST ?? "")
     .split(",")
     .map((item) => item.trim())
+    .filter(Boolean)
+    .map(normalizeWaId)
     .filter(Boolean);
   const WHATSAPP_ECHO_ENABLED = (process.env.WHATSAPP_ECHO_ENABLED ?? "false") === "true";
   const WHATSAPP_DEFAULT_REPLY =

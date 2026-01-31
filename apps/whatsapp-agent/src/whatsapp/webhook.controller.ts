@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { env } from "../config/env.js";
+import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
@@ -66,9 +66,19 @@ export async function receiveWebhook(
       }
     }
 
+    const normalizedFrom = normalizeWaId(message.from);
     const allowlistEnabled = env.WHATSAPP_ALLOWLIST.length > 0;
-    const allowlistHit = allowlistEnabled ? env.WHATSAPP_ALLOWLIST.includes(message.from) : true;
+    const allowlistHit = allowlistEnabled
+      ? env.WHATSAPP_ALLOWLIST.includes(normalizedFrom)
+      : true;
     const status = allowlistHit ? "received" : "ignored";
+
+    logger.info({
+      event: "allowlist.check",
+      from: normalizedFrom,
+      allowlist: env.WHATSAPP_ALLOWLIST,
+      hit: allowlistHit,
+    });
 
     await jsonFileStorage.saveIncomingMessage({
       ...message,
@@ -131,6 +141,7 @@ export async function receiveWebhook(
             messageId: message.messageId,
             replyType,
             status: result.status,
+            errorBody: result.errorBody,
           });
         }
       })
