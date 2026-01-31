@@ -114,16 +114,21 @@ export async function receiveWebhook(
         : `ECO: (mensagem ${message.type} recebida)`
       : env.WHATSAPP_DEFAULT_REPLY;
 
+    const toForReply = env.WHATSAPP_SANDBOX
+      ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
+      : message.from;
+
     logger.info({
       event: "reply.sending",
       messageId: message.messageId,
       replyType,
       to: maskNumber(message.from),
+      toResolved: maskNumber(toForReply),
     });
 
     const sendPromise = env.WHATSAPP_SANDBOX
-      ? sendTemplateMessage(message.from, "hello_world")
-      : sendTextMessage(message.from, replyText);
+      ? sendTemplateMessage(toForReply, "hello_world")
+      : sendTextMessage(toForReply, replyText);
 
     void sendPromise
       .then(async (result) => {
