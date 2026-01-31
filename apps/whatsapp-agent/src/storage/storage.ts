@@ -9,8 +9,21 @@ export type StoredRecord = NormalizedMessage & {
     hit: boolean;
   };
   repliedAt?: string;
-  replyType?: "echo" | "default";
+  replyType?: "echo" | "default" | "text" | "template";
   meta?: Record<string, unknown>;
+};
+
+export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
+
+export type ConversationState = {
+  waId: string;
+  firstSeenAt: string;
+  lastInboundAt: string;
+  lastOutboundAt?: string;
+  lastInboundMessageId?: string;
+  lastOutboundMessageId?: string;
+  window: { isOpen: boolean; expiresAt?: string };
+  intent?: ConversationIntent;
 };
 
 export interface Storage {
@@ -22,4 +35,7 @@ export interface Storage {
     extra?: Record<string, unknown>
   ): Promise<void>;
   updateMessage(messageId: string, patch: Partial<StoredRecord>): Promise<void>;
+  getConversation(waId: string): Promise<ConversationState | null>;
+  upsertConversation(state: ConversationState): Promise<void>;
+  updateConversationWindow(waId: string, lastInboundAt: string): Promise<ConversationState>;
 }
