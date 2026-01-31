@@ -15,6 +15,9 @@ import {
   updateInbound,
   updateOutbound,
 } from "../conversation/conversation.service.js";
+import { createAgentBrain } from "../agent/agent.factory.js";
+
+const agentBrain = createAgentBrain();
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
@@ -198,7 +201,7 @@ export async function receiveWebhook(
         ? "text"
         : "template";
 
-    const replyText = env.WHATSAPP_ECHO_ENABLED
+    let replyText = env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
@@ -215,6 +218,40 @@ export async function receiveWebhook(
       to: maskNumber(message.from),
       toResolved: maskNumber(toForReply),
     });
+
+    if (
+      env.WHATSAPP_AI_ENABLED &&
+      !env.WHATSAPP_SANDBOX &&
+      replyType === "text" &&
+      updatedConversation.intent !== "handoff" &&
+      message.text
+    ) {
+      const start = Date.now();
+      try {
+        const aiReply = await agentBrain.generateReply({
+          waId: normalizedFrom,
+          intent: updatedConversation.intent ?? "unknown",
+          lastMessages: [message.text],
+          inboundText: message.text,
+          nowIso: new Date().toISOString(),
+          businessContext: "",
+        });
+        if (aiReply.text) {
+          replyText = aiReply.text;
+          logger.info({
+            event: "agent.reply",
+            source: aiReply.source,
+            model: aiReply.model,
+            latency_ms: Date.now() - start,
+          });
+        }
+      } catch (error) {
+        logger.error({
+          event: "agent.error",
+          message: (error as Error).message,
+        });
+      }
+    }
 
     const sendPromise =
       replyType === "template"

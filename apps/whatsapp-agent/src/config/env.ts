@@ -13,6 +13,13 @@ export type Env = {
   WHATSAPP_SANDBOX_TO: string;
   WHATSAPP_OUT_OF_WINDOW_TEMPLATE: string;
   WHATSAPP_DEDUP_WINDOW_SECONDS: number;
+  OPENAI_API_KEY: string;
+  WHATSAPP_AI_ENABLED: boolean;
+  WHATSAPP_AI_MODEL: string;
+  WHATSAPP_AI_MAX_OUTPUT_TOKENS: number;
+  WHATSAPP_AI_TEMPERATURE: number;
+  WHATSAPP_AI_SYSTEM_PROMPT: string;
+  WHATSAPP_AI_TIMEOUT_MS: number;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
   phoneNumberIdPresent: boolean;
@@ -57,6 +64,18 @@ export function getEnv(): Env {
     process.env.WHATSAPP_DEDUP_WINDOW_SECONDS,
     86400
   );
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+  const WHATSAPP_AI_ENABLED = (process.env.WHATSAPP_AI_ENABLED ?? "false") === "true";
+  const WHATSAPP_AI_MODEL = process.env.WHATSAPP_AI_MODEL ?? "gpt-4.1-mini";
+  const WHATSAPP_AI_MAX_OUTPUT_TOKENS = toNumber(
+    process.env.WHATSAPP_AI_MAX_OUTPUT_TOKENS,
+    200
+  );
+  const WHATSAPP_AI_TEMPERATURE = Number(
+    process.env.WHATSAPP_AI_TEMPERATURE ?? "0.4"
+  );
+  const WHATSAPP_AI_SYSTEM_PROMPT = process.env.WHATSAPP_AI_SYSTEM_PROMPT ?? "";
+  const WHATSAPP_AI_TIMEOUT_MS = toNumber(process.env.WHATSAPP_AI_TIMEOUT_MS, 8000);
 
   const verifyTokenPresent = WHATSAPP_VERIFY_TOKEN.length > 0;
   const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
@@ -77,6 +96,13 @@ export function getEnv(): Env {
     WHATSAPP_SANDBOX_TO,
     WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
     WHATSAPP_DEDUP_WINDOW_SECONDS,
+    OPENAI_API_KEY,
+    WHATSAPP_AI_ENABLED,
+    WHATSAPP_AI_MODEL,
+    WHATSAPP_AI_MAX_OUTPUT_TOKENS,
+    WHATSAPP_AI_TEMPERATURE,
+    WHATSAPP_AI_SYSTEM_PROMPT,
+    WHATSAPP_AI_TIMEOUT_MS,
     verifyTokenPresent,
     accessTokenPresent,
     phoneNumberIdPresent,
