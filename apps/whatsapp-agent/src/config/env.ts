@@ -8,6 +8,7 @@ export type Env = {
   WHATSAPP_ALLOWLIST: string[];
   WHATSAPP_ECHO_ENABLED: boolean;
   WHATSAPP_DEFAULT_REPLY: string;
+  WHATSAPP_SANDBOX: boolean;
   WHATSAPP_DEDUP_WINDOW_SECONDS: number;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
@@ -39,6 +40,7 @@ export function getEnv(): Env {
   const WHATSAPP_DEFAULT_REPLY =
     process.env.WHATSAPP_DEFAULT_REPLY ??
     "Olá! Em breve nosso atendimento estará disponível por aqui.";
+  const WHATSAPP_SANDBOX = (process.env.WHATSAPP_SANDBOX ?? "false") === "true";
   const WHATSAPP_DEDUP_WINDOW_SECONDS = toNumber(
     process.env.WHATSAPP_DEDUP_WINDOW_SECONDS,
     86400
@@ -58,6 +60,7 @@ export function getEnv(): Env {
     WHATSAPP_ALLOWLIST,
     WHATSAPP_ECHO_ENABLED,
     WHATSAPP_DEFAULT_REPLY,
+    WHATSAPP_SANDBOX,
     WHATSAPP_DEDUP_WINDOW_SECONDS,
     verifyTokenPresent,
     accessTokenPresent,

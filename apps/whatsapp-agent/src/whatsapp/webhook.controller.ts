@@ -4,7 +4,7 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
-import { sendTextMessage } from "./whatsapp.client.js";
+import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
@@ -107,7 +107,7 @@ export async function receiveWebhook(
       continue;
     }
 
-    const replyType = env.WHATSAPP_ECHO_ENABLED ? "echo" : "default";
+    const replyType = env.WHATSAPP_SANDBOX ? "template" : "text";
     const replyText = env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
@@ -121,7 +121,11 @@ export async function receiveWebhook(
       to: maskNumber(message.from),
     });
 
-    void sendTextMessage(message.from, replyText)
+    const sendPromise = env.WHATSAPP_SANDBOX
+      ? sendTemplateMessage(message.from, "hello_world")
+      : sendTextMessage(message.from, replyText);
+
+    void sendPromise
       .then(async (result) => {
         if (result.ok) {
           await jsonFileStorage.updateMessage(message.messageId, {
