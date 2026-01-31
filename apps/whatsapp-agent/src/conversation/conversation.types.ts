@@ -9,4 +9,7 @@ export type ConversationState = {
   lastOutboundMessageId?: string;
   window: { isOpen: boolean; expiresAt?: string };
   intent?: ConversationIntent;
+  botPaused: boolean;
+  pausedReason?: "handoff" | "admin";
+  pausedAt?: string;
 };

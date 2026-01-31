@@ -6,6 +6,7 @@ export type Env = {
   WHATSAPP_PHONE_NUMBER_ID: string;
   WHATSAPP_API_VERSION: string;
   WHATSAPP_ALLOWLIST: string[];
+  WHATSAPP_ADMIN_ALLOWLIST: string[];
   WHATSAPP_ECHO_ENABLED: boolean;
   WHATSAPP_DEFAULT_REPLY: string;
   WHATSAPP_SANDBOX: boolean;
@@ -38,6 +39,12 @@ export function getEnv(): Env {
     .filter(Boolean)
     .map(normalizeWaId)
     .filter(Boolean);
+  const WHATSAPP_ADMIN_ALLOWLIST = (process.env.WHATSAPP_ADMIN_ALLOWLIST ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(normalizeWaId)
+    .filter(Boolean);
   const WHATSAPP_ECHO_ENABLED = (process.env.WHATSAPP_ECHO_ENABLED ?? "false") === "true";
   const WHATSAPP_DEFAULT_REPLY =
     process.env.WHATSAPP_DEFAULT_REPLY ??
@@ -63,6 +70,7 @@ export function getEnv(): Env {
     WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_API_VERSION,
     WHATSAPP_ALLOWLIST,
+    WHATSAPP_ADMIN_ALLOWLIST,
     WHATSAPP_ECHO_ENABLED,
     WHATSAPP_DEFAULT_REPLY,
     WHATSAPP_SANDBOX,

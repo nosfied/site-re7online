@@ -6,10 +6,12 @@ import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import {
+  applyAdminCommand,
   getOrCreateConversation,
   isWindowOpen,
   logConversationIntent,
   logConversationWindow,
+  shouldAutoReply,
   updateInbound,
   updateOutbound,
 } from "../conversation/conversation.service.js";
@@ -99,7 +101,45 @@ export async function receiveWebhook(
       message.timestamp,
       message.text
     );
-    const updatedConversation = inboundConversation;
+    let updatedConversation = inboundConversation;
+    const isAdmin =
+      env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
+      env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
+    const adminResult = isAdmin
+      ? applyAdminCommand(updatedConversation, message.text)
+      : { handled: false, state: updatedConversation };
+    if (
+      !currentConversation.botPaused &&
+      updatedConversation.botPaused &&
+      updatedConversation.pausedReason === "handoff"
+    ) {
+      logger.info({
+        event: "bot.pause",
+        waId: maskNumber(normalizedFrom),
+        reason: "handoff",
+      });
+    }
+    if (isAdmin) {
+      if (adminResult.handled) {
+        updatedConversation = {
+          ...adminResult.state,
+          intent: currentConversation.intent,
+        };
+        if (adminResult.action === "pause") {
+          logger.info({
+            event: "bot.pause",
+            waId: maskNumber(normalizedFrom),
+            reason: "admin",
+          });
+        }
+        if (adminResult.action === "resume") {
+          logger.info({
+            event: "bot.resume",
+            waId: maskNumber(normalizedFrom),
+          });
+        }
+      }
+    }
     await jsonFileStorage.upsertConversation(updatedConversation);
     logConversationWindow(updatedConversation);
     logConversationIntent(updatedConversation);
@@ -123,6 +163,24 @@ export async function receiveWebhook(
     });
 
     if (!allowlistHit) {
+      continue;
+    }
+
+    if (adminResult.handled) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "admin_command",
+      });
+      continue;
+    }
+
+    if (!shouldAutoReply(updatedConversation)) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: updatedConversation.pausedReason ?? "paused",
+      });
       continue;
     }
 

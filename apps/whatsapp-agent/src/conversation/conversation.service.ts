@@ -28,6 +28,7 @@ export async function getOrCreateConversation(
     lastInboundAt: firstSeenAt,
     window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },
     intent: "unknown",
+    botPaused: false,
   };
   await storage.upsertConversation(state);
   return state;
@@ -52,7 +53,7 @@ export function detectIntent(text: string | null): ConversationIntent {
   if (/(suporte|ajuda|erro|problema)/i.test(value)) {
     return "support";
   }
-  if (/(humano|atendente|pessoa|ligar)/i.test(value)) {
+  if (/(humano|atendente|pessoa|falar com alguém|ligar)/i.test(value)) {
     return "handoff";
   }
   return "unknown";
@@ -64,6 +65,7 @@ export function updateInbound(
   timestamp: string,
   text: string | null
 ): ConversationState {
+  const nextIntent = detectIntent(text);
   const next = updateWindow(
     {
       ...state,
@@ -71,7 +73,19 @@ export function updateInbound(
     },
     timestamp
   );
-  return { ...next, intent: detectIntent(text) };
+  if (nextIntent === "handoff") {
+    const pausedAt = Number.isNaN(Date.parse(timestamp))
+      ? new Date().toISOString()
+      : new Date(Date.parse(timestamp)).toISOString();
+    return {
+      ...next,
+      intent: nextIntent,
+      botPaused: true,
+      pausedReason: "handoff",
+      pausedAt,
+    };
+  }
+  return { ...next, intent: nextIntent };
 }
 
 export function updateOutbound(
@@ -91,6 +105,46 @@ export function isWindowOpen(state: ConversationState, now: number) {
     return false;
   }
   return now < Date.parse(state.window.expiresAt);
+}
+
+export function shouldAutoReply(state: ConversationState) {
+  return !state.botPaused;
+}
+
+export function applyAdminCommand(
+  state: ConversationState,
+  inboundText: string | null
+): { state: ConversationState; handled: boolean; action?: "pause" | "resume" } {
+  if (!inboundText) {
+    return { state, handled: false };
+  }
+  const command = inboundText.trim().toLowerCase();
+  if (command === "#bot off") {
+    const pausedAt = new Date().toISOString();
+    return {
+      handled: true,
+      action: "pause",
+      state: {
+        ...state,
+        botPaused: true,
+        pausedReason: "admin",
+        pausedAt,
+      },
+    };
+  }
+  if (command === "#bot on") {
+    return {
+      handled: true,
+      action: "resume",
+      state: {
+        ...state,
+        botPaused: false,
+        pausedReason: undefined,
+        pausedAt: undefined,
+      },
+    };
+  }
+  return { state, handled: false };
 }
 
 export function logConversationWindow(state: ConversationState) {
