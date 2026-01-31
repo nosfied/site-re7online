@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Storage, StoredRecord, MessageStatus, ConversationState } from "./storage.js";
+import { Storage, StoredRecord, MessageStatus } from "./storage.js";
+import { ConversationState } from "../conversation/conversation.types.js";
 
 const dataDir = path.resolve(process.cwd(), ".data");
 const dataFile = path.join(dataDir, "whatsapp-events.json");

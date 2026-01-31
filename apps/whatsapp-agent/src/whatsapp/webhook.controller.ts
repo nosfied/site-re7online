@@ -3,9 +3,16 @@ import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
-import { ConversationIntent } from "../storage/storage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
+import {
+  getOrCreateConversation,
+  isWindowOpen,
+  logConversationIntent,
+  logConversationWindow,
+  updateInbound,
+  updateOutbound,
+} from "../conversation/conversation.service.js";
 
 export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
@@ -81,30 +88,21 @@ export async function receiveWebhook(
       hit: allowlistHit,
     });
 
-    const intent = detectIntent(message.text);
-    const conversation = await jsonFileStorage.updateConversationWindow(
+    const currentConversation = await getOrCreateConversation(
+      jsonFileStorage,
       normalizedFrom,
       message.timestamp
     );
-    const updatedConversation = {
-      ...conversation,
-      lastInboundMessageId: message.messageId,
-      intent,
-    };
+    const inboundConversation = updateInbound(
+      currentConversation,
+      message.messageId,
+      message.timestamp,
+      message.text
+    );
+    const updatedConversation = inboundConversation;
     await jsonFileStorage.upsertConversation(updatedConversation);
-
-    logger.info({
-      event: "conversation.window",
-      waId: maskNumber(normalizedFrom),
-      isOpen: updatedConversation.window.isOpen,
-      expiresAt: updatedConversation.window.expiresAt,
-    });
-
-    logger.info({
-      event: "conversation.intent",
-      waId: maskNumber(normalizedFrom),
-      intent,
-    });
+    logConversationWindow(updatedConversation);
+    logConversationIntent(updatedConversation);
 
     await jsonFileStorage.saveIncomingMessage({
       ...message,
@@ -134,10 +132,7 @@ export async function receiveWebhook(
     }
 
     const now = Date.now();
-    const expiresAt = updatedConversation.window.expiresAt
-      ? Date.parse(updatedConversation.window.expiresAt)
-      : 0;
-    const windowOpen = updatedConversation.window.isOpen && now < expiresAt;
+    const windowOpen = isWindowOpen(updatedConversation, now);
 
     const replyType = env.WHATSAPP_SANDBOX
       ? "template"
@@ -179,11 +174,12 @@ export async function receiveWebhook(
             repliedAt: new Date().toISOString(),
             replyType,
           });
-          await jsonFileStorage.upsertConversation({
-            ...updatedConversation,
-            lastOutboundAt: new Date().toISOString(),
-            lastOutboundMessageId: result.messageId,
-          });
+          const outboundConversation = updateOutbound(
+            updatedConversation,
+            result.messageId,
+            new Date().toISOString()
+          );
+          await jsonFileStorage.upsertConversation(outboundConversation);
           logger.info({
             event: "reply.sent",
             messageId: message.messageId,
@@ -217,21 +213,4 @@ export async function receiveWebhook(
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
-}
-
-function detectIntent(text: string | null): ConversationIntent {
-  if (!text) {
-    return "unknown";
-  }
-  const value = text.toLowerCase();
-  if (/(preço|valor|orçamento|quanto custa)/i.test(value)) {
-    return "pricing";
-  }
-  if (/(suporte|ajuda|erro|problema)/i.test(value)) {
-    return "support";
-  }
-  if (/(humano|atendente|pessoa|ligar)/i.test(value)) {
-    return "handoff";
-  }
-  return "unknown";
 }

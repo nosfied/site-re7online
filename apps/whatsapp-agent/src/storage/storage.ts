@@ -1,4 +1,5 @@
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
+import { ConversationState } from "../conversation/conversation.types.js";
 
 export type MessageStatus = "received" | "ignored" | "replied";
 
@@ -11,19 +12,6 @@ export type StoredRecord = NormalizedMessage & {
   repliedAt?: string;
   replyType?: "echo" | "default" | "text" | "template";
   meta?: Record<string, unknown>;
-};
-
-export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
-
-export type ConversationState = {
-  waId: string;
-  firstSeenAt: string;
-  lastInboundAt: string;
-  lastOutboundAt?: string;
-  lastInboundMessageId?: string;
-  lastOutboundMessageId?: string;
-  window: { isOpen: boolean; expiresAt?: string };
-  intent?: ConversationIntent;
 };
 
 export interface Storage {
