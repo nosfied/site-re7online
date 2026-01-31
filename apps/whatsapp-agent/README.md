@@ -17,7 +17,23 @@ Veja `.env.example`.
 - `WHATSAPP_ECHO_ENABLED` (true/false)
 - `WHATSAPP_DEFAULT_REPLY` (texto padrão)
 - `WHATSAPP_DEDUP_WINDOW_SECONDS` (janela em segundos)
+- `WHATSAPP_SANDBOX` (true/false)
+- `WHATSAPP_SANDBOX_TO` (número permitido do sandbox)
+
+## Sandbox vs produção
+- `WHATSAPP_SANDBOX=true` → respostas via template (ex.: `hello_world`)
+- Produção (`WHATSAPP_SANDBOX=false`) → respostas via texto
 
 ## Endpoints atuais
 - `GET /` → "whatsapp-agent running"
 - `GET /health` → `{ ok: true }`
+
+## Como testar (passo a passo)
+1) Preencha o `.env` conforme `.env.example`.
+2) Rode `npm run dev` e confirme o serviço na porta configurada.
+3) Teste saúde:
+   - `curl -s http://localhost:3001/health`
+4) Configure o webhook no painel da Meta e valide o verify token.
+5) Envie mensagem de teste pelo painel:
+   - Sandbox (`WHATSAPP_SANDBOX=true`): resposta deve vir via template `hello_world`.
+   - Produção (`WHATSAPP_SANDBOX=false`): resposta deve vir via texto (default reply).
