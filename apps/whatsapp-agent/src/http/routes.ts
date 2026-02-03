@@ -36,7 +36,12 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (url.startsWith("/webhook")) {
     if (req.method === "GET") {
-      return verifyWebhook(req, res);
+      const requestId = crypto.randomUUID();
+      return verifyWebhook(req, res, {
+        requestId,
+        route: "/webhook",
+        method: "GET",
+      });
     }
     if (req.method === "POST") {
       const requestId = crypto.randomUUID();

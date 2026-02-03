@@ -19,22 +19,6 @@ import { createAgentBrain } from "../agent/agent.factory.js";
 
 const agentBrain = createAgentBrain();
 
-export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
-  const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
-  const mode = url.searchParams.get("hub.mode");
-  const token = url.searchParams.get("hub.verify_token");
-  const challenge = url.searchParams.get("hub.challenge");
-
-  if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end(challenge ?? "");
-    return;
-  }
-
-  res.writeHead(403, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "forbidden" }));
-}
-
 type RequestMeta = {
   requestId: string;
   rawBodyLength: number;
@@ -42,6 +26,57 @@ type RequestMeta = {
   route: string;
   method: string;
 };
+
+export function verifyWebhook(
+  req: IncomingMessage,
+  res: ServerResponse,
+  meta?: Pick<RequestMeta, "requestId" | "route" | "method">
+) {
+  const url = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+  const mode = url.searchParams.get("hub.mode");
+  const token = url.searchParams.get("hub.verify_token");
+  const challenge = url.searchParams.get("hub.challenge");
+  const tokenPrefix = token ? token.slice(0, 3) : "";
+
+  if (mode !== "subscribe") {
+    logger.warn({
+      event: "webhook.verify.fail",
+      reason: "mode",
+      receivedMode: mode,
+      receivedTokenPrefix: tokenPrefix,
+      requestId: meta?.requestId,
+      route: meta?.route,
+      method: meta?.method,
+    });
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "forbidden", reason: "mode" }));
+    return;
+  }
+
+  if (token !== env.WHATSAPP_VERIFY_TOKEN) {
+    logger.warn({
+      event: "webhook.verify.fail",
+      reason: "token",
+      receivedMode: mode,
+      receivedTokenPrefix: tokenPrefix,
+      requestId: meta?.requestId,
+      route: meta?.route,
+      method: meta?.method,
+    });
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "forbidden", reason: "token" }));
+    return;
+  }
+
+  logger.info({
+    event: "webhook.verify.success",
+    requestId: meta?.requestId,
+    route: meta?.route,
+    method: meta?.method,
+  });
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end(challenge ?? "");
+}
 
 export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   logger.info({

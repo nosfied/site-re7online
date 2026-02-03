@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
+# Usage:
+#   WHATSAPP_VERIFY_TOKEN=... bash scripts/webhook-smoke.sh
+#   PORT=3001 BASE_URL=http://localhost:3001 bash scripts/webhook-smoke.sh
 set -euo pipefail
 
 PORT="${PORT:-3001}"
-BASE_URL="http://localhost:${PORT}"
-VERIFY_TOKEN="${WHATSAPP_VERIFY_TOKEN:-changeme}"
+BASE_URL="${BASE_URL:-http://localhost:${PORT}}"
+VERIFY_TOKEN="${WHATSAPP_VERIFY_TOKEN:-}"
+ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"
+
+if [[ -z "$VERIFY_TOKEN" && -f "$ENV_FILE" ]]; then
+  VERIFY_TOKEN=$(grep -E '^WHATSAPP_VERIFY_TOKEN=' "$ENV_FILE" | tail -n1 | cut -d '=' -f2- | tr -d '"' | tr -d "'")
+fi
+
+if [[ -z "$VERIFY_TOKEN" ]]; then
+  echo "WHATSAPP_VERIFY_TOKEN não definido. Use:"
+  echo "  WHATSAPP_VERIFY_TOKEN=... bash scripts/webhook-smoke.sh"
+  exit 1
+fi
 
 echo "== Verify =="
 curl -s -i "${BASE_URL}/webhook?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=123"
