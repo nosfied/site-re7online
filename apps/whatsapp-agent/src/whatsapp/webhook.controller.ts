@@ -35,30 +35,58 @@ export function verifyWebhook(req: IncomingMessage, res: ServerResponse) {
   res.end(JSON.stringify({ error: "forbidden" }));
 }
 
-export async function receiveWebhook(
-  _req: IncomingMessage,
-  res: ServerResponse,
-  rawBody: string
-) {
-  logger.info({ event: "webhook.received" });
+type RequestMeta = {
+  requestId: string;
+  rawBodyLength: number;
+  ip?: string;
+  route: string;
+  method: string;
+};
 
-  let payload: WhatsAppWebhookPayload | null = null;
-  try {
-    payload = JSON.parse(rawBody) as WhatsAppWebhookPayload;
-  } catch (error) {
-    logger.error({ event: "webhook.invalid_json", error: (error as Error).message });
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ignored: true }));
-    return;
+export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+  logger.info({
+    event: "webhook.received",
+    route: meta?.route,
+    method: meta?.method,
+    requestId: meta?.requestId,
+  });
+
+  const typedPayload = payload as WhatsAppWebhookPayload;
+  const normalized = normalizeWebhook(typedPayload);
+  const phoneNumberId =
+    typedPayload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+  const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
+  if (statuses && statuses.length > 0) {
+    logger.info({
+      event: "webhook.status",
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
+      phone_number_id: phoneNumberId,
+      count: statuses.length,
+    });
   }
 
-  const normalized = normalizeWebhook(payload);
   if (normalized.messages.length === 0) {
-    logger.warn({ event: "webhook.no_messages", reason: normalized.reason ?? "unknown" });
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ignored: true }));
+    logger.warn({
+      event: "webhook.no_messages",
+      reason: normalized.reason ?? "unknown",
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
+      phone_number_id: phoneNumberId,
+    });
     return;
   }
+
+  logger.info({
+    event: "webhook.inbound",
+    route: meta?.route,
+    method: meta?.method,
+    requestId: meta?.requestId,
+    phone_number_id: phoneNumberId,
+    count: normalized.messages.length,
+  });
 
   for (const message of normalized.messages) {
     const existing = await jsonFileStorage.findByMessageId(message.messageId);
@@ -74,6 +102,9 @@ export async function receiveWebhook(
           event: "webhook.duplicate",
           messageId: message.messageId,
           from: maskNumber(message.from),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
         });
         continue;
       }
@@ -91,6 +122,9 @@ export async function receiveWebhook(
       from: normalizedFrom,
       allowlist: env.WHATSAPP_ALLOWLIST,
       hit: allowlistHit,
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
     });
 
     const currentConversation = await getOrCreateConversation(
@@ -120,6 +154,9 @@ export async function receiveWebhook(
         event: "bot.pause",
         waId: maskNumber(normalizedFrom),
         reason: "handoff",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
       });
     }
     if (isAdmin) {
@@ -133,19 +170,25 @@ export async function receiveWebhook(
             event: "bot.pause",
             waId: maskNumber(normalizedFrom),
             reason: "admin",
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
           });
         }
         if (adminResult.action === "resume") {
           logger.info({
             event: "bot.resume",
             waId: maskNumber(normalizedFrom),
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
           });
         }
       }
     }
     await jsonFileStorage.upsertConversation(updatedConversation);
-    logConversationWindow(updatedConversation);
-    logConversationIntent(updatedConversation);
+    logConversationWindow(updatedConversation, meta);
+    logConversationIntent(updatedConversation, meta);
 
     await jsonFileStorage.saveIncomingMessage({
       ...message,
@@ -163,6 +206,9 @@ export async function receiveWebhook(
       type: message.type,
       status,
       allowlistHit,
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
     });
 
     if (!allowlistHit) {
@@ -174,6 +220,9 @@ export async function receiveWebhook(
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
         reason: "admin_command",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
       });
       continue;
     }
@@ -183,12 +232,21 @@ export async function receiveWebhook(
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
         reason: updatedConversation.pausedReason ?? "paused",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
       });
       continue;
     }
 
     if (!env.outboundEnabled) {
-      logger.warn({ event: "reply.disabled", reason: "missing_credentials" });
+      logger.warn({
+        event: "reply.disabled",
+        reason: "missing_credentials",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
       continue;
     }
 
@@ -217,6 +275,9 @@ export async function receiveWebhook(
       replyType,
       to: maskNumber(message.from),
       toResolved: maskNumber(toForReply),
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
     });
 
     if (
@@ -243,12 +304,18 @@ export async function receiveWebhook(
             source: aiReply.source,
             model: aiReply.model,
             latency_ms: Date.now() - start,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
           });
         }
       } catch (error) {
         logger.error({
           event: "agent.error",
           message: (error as Error).message,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
         });
       }
     }
@@ -280,6 +347,9 @@ export async function receiveWebhook(
             messageId: message.messageId,
             replyType,
             status: result.status,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
           });
         } else {
           logger.error({
@@ -288,6 +358,9 @@ export async function receiveWebhook(
             replyType,
             status: result.status,
             errorBody: result.errorBody,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
           });
         }
       })
@@ -297,12 +370,12 @@ export async function receiveWebhook(
           messageId: message.messageId,
           replyType,
           error: (error as Error).message,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
         });
       });
   }
-
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ ok: true }));
 }
 
 function maskNumber(number: string) {

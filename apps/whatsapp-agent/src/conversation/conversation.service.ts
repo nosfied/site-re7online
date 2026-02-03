@@ -147,20 +147,32 @@ export function applyAdminCommand(
   return { state, handled: false };
 }
 
-export function logConversationWindow(state: ConversationState) {
+export function logConversationWindow(
+  state: ConversationState,
+  meta?: { route?: string; method?: string; requestId?: string }
+) {
   logger.info({
     event: "conversation.window",
     waId: maskNumber(state.waId),
     isOpen: state.window.isOpen,
     expiresAt: state.window.expiresAt,
+    route: meta?.route,
+    method: meta?.method,
+    requestId: meta?.requestId,
   });
 }
 
-export function logConversationIntent(state: ConversationState) {
+export function logConversationIntent(
+  state: ConversationState,
+  meta?: { route?: string; method?: string; requestId?: string }
+) {
   logger.info({
     event: "conversation.intent",
     waId: maskNumber(state.waId),
     intent: state.intent ?? "unknown",
+    route: meta?.route,
+    method: meta?.method,
+    requestId: meta?.requestId,
   });
 }
 

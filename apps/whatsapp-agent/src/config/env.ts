@@ -13,6 +13,7 @@ export type Env = {
   WHATSAPP_SANDBOX_TO: string;
   WHATSAPP_OUT_OF_WINDOW_TEMPLATE: string;
   WHATSAPP_DEDUP_WINDOW_SECONDS: number;
+  META_APP_SECRET: string;
   OPENAI_API_KEY: string;
   WHATSAPP_AI_ENABLED: boolean;
   WHATSAPP_AI_MODEL: string;
@@ -64,6 +65,7 @@ export function getEnv(): Env {
     process.env.WHATSAPP_DEDUP_WINDOW_SECONDS,
     86400
   );
+  const META_APP_SECRET = process.env.META_APP_SECRET ?? "";
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
   const WHATSAPP_AI_ENABLED = (process.env.WHATSAPP_AI_ENABLED ?? "false") === "true";
   const WHATSAPP_AI_MODEL = process.env.WHATSAPP_AI_MODEL ?? "gpt-4.1-mini";
@@ -96,6 +98,7 @@ export function getEnv(): Env {
     WHATSAPP_SANDBOX_TO,
     WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
     WHATSAPP_DEDUP_WINDOW_SECONDS,
+    META_APP_SECRET,
     OPENAI_API_KEY,
     WHATSAPP_AI_ENABLED,
     WHATSAPP_AI_MODEL,
