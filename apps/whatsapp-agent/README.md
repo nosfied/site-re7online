@@ -10,6 +10,11 @@ npm install
 npm run dev
 ```
 
+## Scripts úteis
+- `npm run dev` → start local
+- `npm run build` → compilar TypeScript
+- `npm run start` → rodar build de produção
+
 ## Variáveis de ambiente
 Veja `.env.example`.
 
