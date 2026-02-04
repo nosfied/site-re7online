@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { env } from "../config/env.js";
-import { verifySignature } from "../whatsapp/webhook.signature.js";
+import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 
 export function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -45,38 +45,49 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
     if (req.method === "POST") {
       const requestId = crypto.randomUUID();
-      const chunks: Buffer[] = [];
-      req.on("data", (chunk) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      });
-      req.on("end", () => {
-        const rawBody = Buffer.concat(chunks);
+      readRawBody(req, (rawBody) => {
         const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
-        const signature = verifySignature(rawBody, signatureHeader, env.META_APP_SECRET);
-        if ("skipped" in signature && signature.skipped) {
+        const requireSignature =
+          process.env.NODE_ENV === "production" && env.META_APP_SECRET.length > 0;
+
+        if (requireSignature) {
+          if (!signatureHeader) {
+            logger.warn({
+              event: "webhook.signature.missing",
+              route: "/webhook",
+              method: "POST",
+              requestId,
+            });
+            res.writeHead(403, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "forbidden" }));
+            return;
+          }
+          const signature = validateMetaSignature(rawBody, signatureHeader, env.META_APP_SECRET);
+          if (!signature.ok) {
+            logger.warn({
+              event: "webhook.signature.invalid",
+              route: "/webhook",
+              method: "POST",
+              requestId,
+              reason: signature.reason,
+            });
+            res.writeHead(403, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "forbidden" }));
+            return;
+          }
+          logger.info({
+            event: "webhook.signature.valid",
+            route: "/webhook",
+            method: "POST",
+            requestId,
+          });
+        } else {
           logger.info({
             event: "webhook.signature.skipped",
             route: "/webhook",
             method: "POST",
             requestId,
-          });
-        } else if (!signature.ok) {
-          logger.warn({
-            event: "webhook.signature.fail",
-            route: "/webhook",
-            method: "POST",
-            requestId,
-            reason: signature.reason,
-          });
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "forbidden" }));
-          return;
-        } else {
-          logger.info({
-            event: "webhook.signature.ok",
-            route: "/webhook",
-            method: "POST",
-            requestId,
+            reason: process.env.NODE_ENV !== "production" ? "not_production" : "missing_secret",
           });
         }
 
@@ -117,6 +128,16 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse) {
             });
           });
         });
+      }).catch((error: Error) => {
+        logger.error({
+          event: "webhook.read_error",
+          route: "/webhook",
+          method: "POST",
+          requestId,
+          error: error.message,
+        });
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_body" }));
       });
       return;
     }
@@ -124,4 +145,18 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not_found" }));
+}
+
+function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
+  return new Promise<void>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    req.on("end", () => {
+      onEnd(Buffer.concat(chunks));
+      resolve();
+    });
+    req.on("error", reject);
+  });
 }
