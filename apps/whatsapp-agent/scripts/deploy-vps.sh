@@ -4,7 +4,6 @@ set -euo pipefail
 REPO_DIR="/opt/re7online/site-re7online"
 APP_DIR="${REPO_DIR}/apps/whatsapp-agent"
 PORT="${PORT:-3001}"
-VERIFY_TOKEN="${WHATSAPP_VERIFY_TOKEN:-}"
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "Diretorio nao encontrado: ${APP_DIR}"
@@ -17,12 +16,13 @@ git pull --ff-only
 
 cd "${APP_DIR}"
 
-if [[ -z "${VERIFY_TOKEN}" && -f ".env" ]]; then
-  VERIFY_TOKEN=$(grep -E '^WHATSAPP_VERIFY_TOKEN=' .env | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+VERIFY_TOKEN=""
+if [ -f ".env" ]; then
+  VERIFY_TOKEN=$(grep -E '^WHATSAPP_VERIFY_TOKEN=' .env | head -n1 | cut -d= -f2-)
 fi
 
-if [[ -z "${VERIFY_TOKEN}" ]]; then
-  echo "WHATSAPP_VERIFY_TOKEN ausente no ambiente e no .env"
+if [ -z "$VERIFY_TOKEN" ]; then
+  echo "Erro: WHATSAPP_VERIFY_TOKEN não encontrado no .env"
   exit 1
 fi
 
