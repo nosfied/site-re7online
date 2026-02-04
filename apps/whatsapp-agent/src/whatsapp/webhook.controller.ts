@@ -91,9 +91,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const phoneNumberId =
     typedPayload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
   const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
-  if (statuses && statuses.length > 0) {
+  const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
+  if (hasStatuses) {
     logger.info({
-      event: "webhook.status",
+      event: "webhook.status.received",
       route: meta?.route,
       method: meta?.method,
       requestId: meta?.requestId,
@@ -103,14 +104,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }
 
   if (normalized.messages.length === 0) {
-    logger.warn({
-      event: "webhook.no_messages",
-      reason: normalized.reason ?? "unknown",
-      route: meta?.route,
-      method: meta?.method,
-      requestId: meta?.requestId,
-      phone_number_id: phoneNumberId,
-    });
+    if (!hasStatuses) {
+      logger.warn({
+        event: "webhook.no_messages",
+        reason: normalized.reason ?? "unknown",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+        phone_number_id: phoneNumberId,
+      });
+    }
     return;
   }
 
