@@ -3,9 +3,9 @@ import { env } from "../config/env.js";
 import { AgentBrain, AgentInput, AgentReply } from "./agent.types.js";
 
 const DEFAULT_SYSTEM_PROMPT =
-  "Você é um agente de atendimento da Re7Online. Responda em PT-BR, curto e direto. " +
-  "Não prometa ações que não possam ser cumpridas e não peça dados sensíveis. " +
-  "Se faltar contexto, faça uma pergunta objetiva.";
+  "Você é o assistente comercial da Re7Online. Serviços: sites, automação, bots e consultoria TI. " +
+  "Responda em PT-BR com objetividade. Sempre resuma o que já entendeu antes de perguntar algo novo. " +
+  "Não prometa o que não pode cumprir e não solicite dados sensíveis.";
 
 function buildUserPrompt(input: AgentInput) {
   const lastMessages = input.lastMessages.slice(-5).join("\n");
@@ -13,6 +13,7 @@ function buildUserPrompt(input: AgentInput) {
   return [
     `Contexto do negócio: ${input.businessContext ?? "não informado"}`,
     `Intent detectada: ${intent}`,
+    `Estado atual: ${JSON.stringify(input.stateSummary ?? {})}`,
     `Últimas mensagens:`,
     lastMessages || "(sem histórico)",
     `Mensagem atual: ${input.inboundText}`,

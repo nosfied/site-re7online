@@ -7,6 +7,12 @@ export type AgentInput = {
   inboundText: string;
   nowIso: string;
   businessContext?: string;
+  stateSummary?: {
+    segment?: string;
+    flow?: string;
+    flowStep?: number;
+    answers?: Record<string, unknown>;
+  };
 };
 
 export type AgentReply = {

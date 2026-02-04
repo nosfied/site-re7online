@@ -110,6 +110,10 @@ export const jsonFileStorage: Storage = {
       botPaused: existing?.botPaused ?? false,
       pausedReason: existing?.pausedReason,
       pausedAt: existing?.pausedAt,
+      handoffPending: existing?.handoffPending ?? false,
+      flow: existing?.flow,
+      flowStep: existing?.flowStep,
+      answers: existing?.answers ?? {},
       window: { isOpen: true, expiresAt },
     };
 

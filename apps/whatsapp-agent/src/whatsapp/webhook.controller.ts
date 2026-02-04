@@ -6,8 +6,10 @@ import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import {
+  advanceQuoteSiteFlow,
   applyAdminCommand,
   getOrCreateConversation,
+  handleHandoff,
   isWindowOpen,
   logConversationIntent,
   logConversationWindow,
@@ -177,26 +179,72 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.text
     );
     let updatedConversation = inboundConversation;
+    const handoffResult = handleHandoff(updatedConversation, message.text);
+    if (handoffResult.handled) {
+      updatedConversation = handoffResult.state;
+      if (handoffResult.outcome === "requested") {
+        logger.info({
+          event: "handoff.detected",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "handoff.confirm.requested",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (handoffResult.outcome === "accepted") {
+        logger.info({
+          event: "handoff.confirm.accepted",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "bot.pause",
+          waId: maskNumber(normalizedFrom),
+          reason: "handoff_confirmed",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (handoffResult.outcome === "declined") {
+        logger.info({
+          event: "handoff.confirm.declined",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "bot.resume",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+    }
+
+    const flowResult = handoffResult.handled
+      ? { state: updatedConversation, handled: false as const, replyText: undefined }
+      : advanceQuoteSiteFlow(updatedConversation, message.text);
+    if (flowResult.handled) {
+      updatedConversation = flowResult.state;
+    }
     const isAdmin =
       env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
       env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
     const adminResult = isAdmin
       ? applyAdminCommand(updatedConversation, message.text)
       : { handled: false, state: updatedConversation };
-    if (
-      !currentConversation.botPaused &&
-      updatedConversation.botPaused &&
-      updatedConversation.pausedReason === "handoff"
-    ) {
-      logger.info({
-        event: "bot.pause",
-        waId: maskNumber(normalizedFrom),
-        reason: "handoff",
-        route: meta?.route,
-        method: meta?.method,
-        requestId: meta?.requestId,
-      });
-    }
     if (isAdmin) {
       if (adminResult.handled) {
         updatedConversation = {
@@ -297,11 +345,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         ? "text"
         : "template";
 
-    let replyText = env.WHATSAPP_ECHO_ENABLED
+    let replyText = flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
-      : env.WHATSAPP_DEFAULT_REPLY;
+      : env.WHATSAPP_DEFAULT_REPLY);
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
@@ -319,6 +367,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     if (
+      !flowResult.handled &&
+      !handoffResult.handled &&
       env.WHATSAPP_AI_ENABLED &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
@@ -334,6 +384,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           inboundText: message.text,
           nowIso: new Date().toISOString(),
           businessContext: "",
+          stateSummary: {
+            segment: updatedConversation.answers?.segment,
+            flow: updatedConversation.flow,
+            flowStep: updatedConversation.flowStep,
+            answers: updatedConversation.answers,
+          },
         });
         if (aiReply.text) {
           replyText = aiReply.text;

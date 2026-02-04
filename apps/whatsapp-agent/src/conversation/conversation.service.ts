@@ -1,6 +1,10 @@
 import { logger } from "../logger/logger.js";
 import { Storage } from "../storage/storage.js";
-import { ConversationIntent, ConversationState } from "./conversation.types.js";
+import {
+  ConversationIntent,
+  ConversationState,
+  QuoteSiteAnswers,
+} from "./conversation.types.js";
 
 const WINDOW_HOURS = 24;
 
@@ -29,6 +33,8 @@ export async function getOrCreateConversation(
     window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },
     intent: "unknown",
     botPaused: false,
+    handoffPending: false,
+    answers: {},
   };
   await storage.upsertConversation(state);
   return state;
@@ -73,19 +79,8 @@ export function updateInbound(
     },
     timestamp
   );
-  if (nextIntent === "handoff") {
-    const pausedAt = Number.isNaN(Date.parse(timestamp))
-      ? new Date().toISOString()
-      : new Date(Date.parse(timestamp)).toISOString();
-    return {
-      ...next,
-      intent: nextIntent,
-      botPaused: true,
-      pausedReason: "handoff",
-      pausedAt,
-    };
-  }
-  return { ...next, intent: nextIntent };
+  const answers = consolidateAnswers(next.answers ?? {}, text);
+  return { ...next, intent: nextIntent, answers };
 }
 
 export function updateOutbound(
@@ -109,6 +104,71 @@ export function isWindowOpen(state: ConversationState, now: number) {
 
 export function shouldAutoReply(state: ConversationState) {
   return !state.botPaused;
+}
+
+export function handleHandoff(
+  state: ConversationState,
+  inboundText: string | null
+): {
+  state: ConversationState;
+  handled: boolean;
+  replyText?: string;
+  outcome?: "requested" | "accepted" | "declined";
+} {
+  const text = (inboundText ?? "").trim().toLowerCase();
+  if (!text) {
+    return { state, handled: false };
+  }
+
+  if (state.handoffPending) {
+    if (text === "sim") {
+      const pausedAt = new Date().toISOString();
+      return {
+        handled: true,
+        outcome: "accepted",
+        state: {
+          ...state,
+          botPaused: true,
+          pausedReason: "handoff",
+          pausedAt,
+          handoffPending: false,
+        },
+      };
+    }
+    if (text === "não" || text === "nao") {
+      return {
+        handled: true,
+        outcome: "declined",
+        state: {
+          ...state,
+          botPaused: false,
+          pausedReason: undefined,
+          pausedAt: undefined,
+          handoffPending: false,
+        },
+      };
+    }
+    return {
+      handled: true,
+      outcome: "requested",
+      state,
+      replyText: "Posso transferir você para um atendente humano? Responda SIM ou NÃO.",
+    };
+  }
+
+  if (detectIntent(inboundText) === "handoff") {
+    return {
+      handled: true,
+      outcome: "requested",
+      state: {
+        ...state,
+        handoffPending: true,
+      },
+      replyText: "Posso transferir você para um atendente humano? Responda SIM ou NÃO.",
+    };
+  }
+
+  return { state, handled: false };
 }
 
 export function applyAdminCommand(
@@ -141,10 +201,138 @@ export function applyAdminCommand(
         botPaused: false,
         pausedReason: undefined,
         pausedAt: undefined,
+        handoffPending: false,
       },
     };
   }
   return { state, handled: false };
+}
+
+const quoteQuestions = [
+  "Qual o nome da empresa e sua cidade?",
+  "O site é institucional, landing page, e-commerce ou portal?",
+  "Quantas páginas você imagina? (1 / até 5 / 10+)",
+  "Precisa de quais itens? (WhatsApp, formulário, blog, agendamento, área do cliente)",
+  "Você já tem domínio e identidade visual (logo/cores)?",
+  "Qual prazo ideal para colocar no ar?",
+];
+
+export function advanceQuoteSiteFlow(
+  state: ConversationState,
+  inboundText: string | null
+): { state: ConversationState; handled: boolean; replyText?: string; completed?: boolean } {
+  const text = (inboundText ?? "").trim();
+  const normalized = text.toLowerCase();
+  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(normalized);
+  const hasSite = /\bsite\b/i.test(normalized);
+  const shouldStart = hasPricing && hasSite;
+
+  if (!state.flow && !shouldStart) {
+    return { state, handled: false };
+  }
+
+  const answers = consolidateAnswers(state.answers ?? {}, inboundText);
+
+  if (!state.flow && shouldStart) {
+    return {
+      handled: true,
+      state: {
+        ...state,
+        flow: "quote_site",
+        flowStep: 1,
+        answers,
+      },
+      replyText: quoteQuestions[0],
+    };
+  }
+
+  if (state.flow !== "quote_site") {
+    return { state, handled: false };
+  }
+
+  const currentStep = state.flowStep ?? 1;
+  const nextAnswers = saveFlowAnswer(answers, currentStep, text);
+  const nextStep = currentStep + 1;
+  if (nextStep <= 6) {
+    return {
+      handled: true,
+      state: {
+        ...state,
+        flow: "quote_site",
+        flowStep: nextStep,
+        answers: nextAnswers,
+      },
+      replyText: quoteQuestions[nextStep - 1],
+    };
+  }
+
+  return {
+    handled: true,
+    completed: true,
+    state: {
+      ...state,
+      flow: undefined,
+      flowStep: undefined,
+      answers: nextAnswers,
+    },
+    replyText: buildQuoteSummary(nextAnswers),
+  };
+}
+
+function saveFlowAnswer(answers: QuoteSiteAnswers, step: number, text: string): QuoteSiteAnswers {
+  const next = { ...answers };
+  if (!text) {
+    return next;
+  }
+  if (step === 1) next.companyCity = text;
+  if (step === 2) next.siteType = text;
+  if (step === 3) next.pages = text;
+  if (step === 4) next.items = text;
+  if (step === 5) next.brandAssets = text;
+  if (step === 6) next.deadline = text;
+  return next;
+}
+
+function consolidateAnswers(answers: QuoteSiteAnswers, text: string | null): QuoteSiteAnswers {
+  if (!text) {
+    return answers;
+  }
+  const next = { ...answers };
+  const normalized = text.toLowerCase();
+  if (/contab/.test(normalized)) {
+    next.segment = "contabilidade";
+  }
+  if (/(site novo|novo site|site novo)/i.test(normalized)) {
+    next.siteNew = true;
+  }
+  return next;
+}
+
+function buildQuoteSummary(answers: QuoteSiteAnswers): string {
+  const bullets = [
+    `Empresa/Cidade: ${answers.companyCity ?? "não informado"}`,
+    `Tipo de site: ${answers.siteType ?? "não informado"}`,
+    `Páginas: ${answers.pages ?? "não informado"}`,
+    `Itens: ${answers.items ?? "não informado"}`,
+    `Domínio/Identidade: ${answers.brandAssets ?? "não informado"}`,
+    `Prazo: ${answers.deadline ?? "não informado"}`,
+  ];
+
+  const packages = [
+    "Essencial: R$ 2.500 a R$ 4.000 (2-3 semanas)",
+    "Profissional: R$ 4.500 a R$ 8.000 (3-5 semanas)",
+    "Premium: R$ 9.000 a R$ 18.000 (5-8 semanas)",
+  ];
+
+  return [
+    "Perfeito! Resumo do briefing:",
+    ...bullets.map((item) => `- ${item}`),
+    "",
+    "Pacotes estimados:",
+    ...packages.map((item) => `- ${item}`),
+    "",
+    "Posso te enviar uma proposta formal? Qual seu e-mail?",
+  ].join("\n");
 }
 
 export function logConversationWindow(
