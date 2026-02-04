@@ -107,6 +107,9 @@ export const jsonFileStorage: Storage = {
       lastOutboundAt: existing?.lastOutboundAt,
       lastOutboundMessageId: existing?.lastOutboundMessageId,
       intent: existing?.intent,
+      botPaused: existing?.botPaused ?? false,
+      pausedReason: existing?.pausedReason,
+      pausedAt: existing?.pausedAt,
       window: { isOpen: true, expiresAt },
     };
 

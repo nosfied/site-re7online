@@ -3,6 +3,13 @@ export type WhatsAppWebhookPayload = {
   entry?: Array<{
     changes?: Array<{
       value?: {
+        metadata?: {
+          phone_number_id?: string;
+        };
+        statuses?: Array<{
+          id?: string;
+          status?: string;
+        }>;
         messages?: Array<{
           id?: string;
           from?: string;
