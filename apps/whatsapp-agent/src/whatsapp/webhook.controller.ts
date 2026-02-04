@@ -160,7 +160,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     logger.info({
       event: "allowlist.check",
       from: normalizedFrom,
-      allowlist: env.WHATSAPP_ALLOWLIST,
+      allowlistEnabled,
+      allowlistCount: env.WHATSAPP_ALLOWLIST.length,
       hit: allowlistHit,
       route: meta?.route,
       method: meta?.method,
@@ -179,6 +180,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.text
     );
     let updatedConversation = inboundConversation;
+    const wasPending = currentConversation.handoffPending === true;
     const handoffResult = handleHandoff(updatedConversation, message.text);
     if (handoffResult.handled) {
       updatedConversation = handoffResult.state;
@@ -193,6 +195,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         logger.info({
           event: "handoff.confirm.requested",
           waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (wasPending && handoffResult.outcome === "requested") {
+        logger.info({
+          event: "handoff.pending_invalid_reply",
+          waId: maskNumber(normalizedFrom),
+          textLength: message.text ? message.text.length : 0,
+          hasText: Boolean(message.text),
           route: meta?.route,
           method: meta?.method,
           requestId: meta?.requestId,
