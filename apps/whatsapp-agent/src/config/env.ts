@@ -21,6 +21,7 @@ export type Env = {
   WHATSAPP_AI_TEMPERATURE: number;
   WHATSAPP_AI_SYSTEM_PROMPT: string;
   WHATSAPP_AI_TIMEOUT_MS: number;
+  DISABLE_DEBUG_COMMANDS: boolean;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
   phoneNumberIdPresent: boolean;
@@ -78,6 +79,8 @@ export function getEnv(): Env {
   );
   const WHATSAPP_AI_SYSTEM_PROMPT = process.env.WHATSAPP_AI_SYSTEM_PROMPT ?? "";
   const WHATSAPP_AI_TIMEOUT_MS = toNumber(process.env.WHATSAPP_AI_TIMEOUT_MS, 8000);
+  const DISABLE_DEBUG_COMMANDS =
+    (process.env.DISABLE_DEBUG_COMMANDS ?? "true") === "true";
 
   const verifyTokenPresent = WHATSAPP_VERIFY_TOKEN.length > 0;
   const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
@@ -106,6 +109,7 @@ export function getEnv(): Env {
     WHATSAPP_AI_TEMPERATURE,
     WHATSAPP_AI_SYSTEM_PROMPT,
     WHATSAPP_AI_TIMEOUT_MS,
+    DISABLE_DEBUG_COMMANDS,
     verifyTokenPresent,
     accessTokenPresent,
     phoneNumberIdPresent,

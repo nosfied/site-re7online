@@ -186,6 +186,54 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const isAdmin =
       env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
       env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
+    const debugCommand = parseDebugCloseWindowCommand(message.text);
+    if (debugCommand && isAdmin && !env.DISABLE_DEBUG_COMMANDS) {
+      const targetWaId = normalizeWaId(debugCommand.waId);
+      const targetConversation = await getOrCreateConversation(
+        jsonFileStorage,
+        targetWaId,
+        message.timestamp
+      );
+      const pastIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const closedWindowState = {
+        ...targetConversation,
+        lastInboundAt: pastIso,
+        window: { isOpen: false, expiresAt: pastIso },
+      };
+      await jsonFileStorage.upsertConversation(closedWindowState);
+      logger.info({
+        event: "admin.debug.closewindow",
+        waId: maskNumber(targetWaId),
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      const updatedMeta = updateInboundMeta(
+        currentConversation,
+        message.messageId,
+        message.timestamp
+      );
+      await jsonFileStorage.upsertConversation(updatedMeta);
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+      const canConfirm =
+        env.outboundEnabled &&
+        !env.WHATSAPP_SANDBOX &&
+        isWindowOpen(currentConversation, Date.now());
+      if (canConfirm) {
+        await sendTextMessage(
+          normalizedFrom,
+          `Janela 24h fechada para ${targetWaId}.`
+        );
+      }
+      continue;
+    }
     const templateCommand = parseTemplateCommand(message.text);
     if (templateCommand) {
       const now = Date.now();
@@ -576,6 +624,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           if (event.event === "outbound.blocked.window_closed") {
             logger.warn({
               event: "outbound.blocked.window_closed",
+              messageId: message.messageId,
               waId: maskNumber(normalizedFrom),
               intent: updatedConversation.intent ?? "unknown",
               policy: decision.policy,
@@ -587,6 +636,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           if (event.event === "outbound.needs_template") {
             logger.warn({
               event: "outbound.needs_template",
+              messageId: message.messageId,
               waId: maskNumber(normalizedFrom),
               intent: updatedConversation.intent ?? "unknown",
               suggestedTemplate: event.suggestedTemplate,
@@ -859,6 +909,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (event.event === "outbound.blocked.window_closed") {
           logger.warn({
             event: "outbound.blocked.window_closed",
+            messageId: message.messageId,
             waId: maskNumber(normalizedFrom),
             intent: updatedConversation.intent ?? "unknown",
             policy: decision.policy,
@@ -870,6 +921,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         if (event.event === "outbound.needs_template") {
           logger.warn({
             event: "outbound.needs_template",
+            messageId: message.messageId,
             waId: maskNumber(normalizedFrom),
             intent: updatedConversation.intent ?? "unknown",
             suggestedTemplate: event.suggestedTemplate,
@@ -1016,4 +1068,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
+}
+
+function parseDebugCloseWindowCommand(text: string | null): { waId: string } | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+  const match = trimmed.match(/^#debug\s+closewindow\s+([0-9]+)$/i);
+  if (!match) return null;
+  return { waId: match[1] ?? "" };
 }

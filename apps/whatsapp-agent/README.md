@@ -14,9 +14,11 @@ npm run dev
 - `npm run dev` → start local
 - `npm run build` → compilar TypeScript
 - `npm run start` → rodar build de produção
+- `scripts/outbound-policyB-prod-check.sh` → valida Policy B em produção (janela fechada)
 
 ## Variáveis de ambiente
 Veja `.env.example`.
+Debug (desativado por padrão): `DISABLE_DEBUG_COMMANDS=true`.
 
 ## Echo (fase 2)
 - `WHATSAPP_ECHO_ENABLED` (true/false)
