@@ -30,6 +30,10 @@ export type ConversationState = {
   window: { isOpen: boolean; expiresAt?: string };
   intent?: ConversationIntent;
   handoff: HandoffState;
+  templateNeeded?: boolean;
+  templateSuggested?: string;
+  lastNeedAt?: string;
+  lastIntent?: ConversationIntent;
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;

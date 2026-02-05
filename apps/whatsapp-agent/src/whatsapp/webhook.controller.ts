@@ -8,18 +8,24 @@ import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import {
   advanceQuoteSiteFlow,
   applyAdminCommand,
+  clearTemplateNeeded,
+  decideOutboundPolicy,
   getHandoffStatus,
   getOrCreateConversation,
   handleHandoff,
-  isWindowOpen,
   logConversationIntent,
   logConversationWindow,
+  markTemplateNeeded,
   shouldAutoReply,
   updateInbound,
   updateInboundMeta,
   updateOutbound,
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
+import {
+  parseTemplateCommand,
+  resolveTemplateKey,
+} from "./templateCommand.js";
 
 const agentBrain = createAgentBrain();
 
@@ -178,6 +184,179 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const isAdmin =
       env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
       env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
+    const templateCommand = parseTemplateCommand(message.text);
+    if (templateCommand) {
+      if (!isAdmin) {
+        logger.warn({
+          event: "admin.template.denied",
+          from: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        const updatedMeta = updateInboundMeta(
+          currentConversation,
+          message.messageId,
+          message.timestamp
+        );
+        await jsonFileStorage.upsertConversation(updatedMeta);
+        await jsonFileStorage.saveIncomingMessage({
+          ...message,
+          status,
+          allowlist: {
+            enabled: allowlistEnabled,
+            hit: allowlistHit,
+          },
+        });
+        continue;
+      }
+
+      const templateConfig = resolveTemplateKey(templateCommand.templateKey);
+      if (!templateConfig) {
+        logger.error({
+          event: "admin.template.error",
+          from: maskNumber(normalizedFrom),
+          targetWaId: maskNumber(normalizedFrom),
+          templateKey: templateCommand.templateKey || "missing",
+          errorMessage: "template_key_not_found",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        const updatedMeta = updateInboundMeta(
+          currentConversation,
+          message.messageId,
+          message.timestamp
+        );
+        await jsonFileStorage.upsertConversation(updatedMeta);
+        await jsonFileStorage.saveIncomingMessage({
+          ...message,
+          status,
+          allowlist: {
+            enabled: allowlistEnabled,
+            hit: allowlistHit,
+          },
+        });
+        continue;
+      }
+
+      const targetWaId = normalizeWaId(
+        templateCommand.targetWaId ?? normalizedFrom
+      );
+      logger.info({
+        event: "admin.template.requested",
+        from: maskNumber(normalizedFrom),
+        targetWaId: maskNumber(targetWaId),
+        templateKey: templateConfig.key,
+        templateName: templateConfig.name,
+        language: templateConfig.language,
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+
+      if (!env.outboundEnabled) {
+        logger.error({
+          event: "admin.template.error",
+          from: maskNumber(normalizedFrom),
+          targetWaId: maskNumber(targetWaId),
+          templateKey: templateConfig.key,
+          templateName: templateConfig.name,
+          language: templateConfig.language,
+          errorMessage: "outbound_disabled",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        const updatedMeta = updateInboundMeta(
+          currentConversation,
+          message.messageId,
+          message.timestamp
+        );
+        await jsonFileStorage.upsertConversation(updatedMeta);
+        await jsonFileStorage.saveIncomingMessage({
+          ...message,
+          status,
+          allowlist: {
+            enabled: allowlistEnabled,
+            hit: allowlistHit,
+          },
+        });
+        continue;
+      }
+
+      logger.info({
+        event: "admin.template.sending",
+        from: maskNumber(normalizedFrom),
+        targetWaId: maskNumber(targetWaId),
+        templateKey: templateConfig.key,
+        templateName: templateConfig.name,
+        language: templateConfig.language,
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+
+      const result = await sendTemplateMessage(
+        targetWaId,
+        templateConfig.name,
+        templateConfig.language
+      );
+
+      if (result.ok) {
+        logger.info({
+          event: "admin.template.sent",
+          from: maskNumber(normalizedFrom),
+          targetWaId: maskNumber(targetWaId),
+          templateKey: templateConfig.key,
+          templateName: templateConfig.name,
+          language: templateConfig.language,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        const targetConversation = await getOrCreateConversation(
+          jsonFileStorage,
+          targetWaId,
+          message.timestamp
+        );
+        const clearedTarget = clearTemplateNeeded(
+          updateOutbound(targetConversation, result.messageId, new Date().toISOString())
+        );
+        await jsonFileStorage.upsertConversation(clearedTarget);
+      } else {
+        logger.error({
+          event: "admin.template.error",
+          from: maskNumber(normalizedFrom),
+          targetWaId: maskNumber(targetWaId),
+          templateKey: templateConfig.key,
+          templateName: templateConfig.name,
+          language: templateConfig.language,
+          errorMessage: result.errorBody ?? "send_failed",
+          errorCode: result.status,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+
+      const updatedMeta = updateInboundMeta(
+        currentConversation,
+        message.messageId,
+        message.timestamp
+      );
+      await jsonFileStorage.upsertConversation(updatedMeta);
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+      continue;
+    }
+
     const adminResult = isAdmin
       ? applyAdminCommand(currentConversation, message.text)
       : { handled: false, state: currentConversation };
@@ -347,13 +526,52 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         continue;
       }
 
-      const now = Date.now();
-      const windowOpen = isWindowOpen(updatedConversation, now);
-      const replyType = env.WHATSAPP_SANDBOX
-        ? "template"
-        : windowOpen
-          ? "text"
-          : "template";
+      const decision = decideOutboundPolicy({
+        state: updatedConversation,
+        now: Date.now(),
+        isSandbox: env.WHATSAPP_SANDBOX,
+        outOfWindowTemplate: env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+        sandboxTemplate: "hello_world",
+      });
+
+      if (decision.action === "block") {
+        const nowIso = new Date().toISOString();
+        const blockedConversation = markTemplateNeeded(updatedConversation, {
+          templateSuggested: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+          atIso: nowIso,
+          intent: updatedConversation.intent,
+          lastInboundMessageId: message.messageId,
+        });
+        await jsonFileStorage.upsertConversation(blockedConversation);
+        for (const event of decision.events ?? []) {
+          if (event.event === "outbound.blocked.window_closed") {
+            logger.warn({
+              event: "outbound.blocked.window_closed",
+              waId: maskNumber(normalizedFrom),
+              intent: updatedConversation.intent ?? "unknown",
+              policy: decision.policy,
+              route: meta?.route,
+              method: meta?.method,
+              requestId: meta?.requestId,
+            });
+          }
+          if (event.event === "outbound.needs_template") {
+            logger.warn({
+              event: "outbound.needs_template",
+              waId: maskNumber(normalizedFrom),
+              intent: updatedConversation.intent ?? "unknown",
+              suggestedTemplate: event.suggestedTemplate,
+              language: event.language,
+              route: meta?.route,
+              method: meta?.method,
+              requestId: meta?.requestId,
+            });
+          }
+        }
+        continue;
+      }
+
+      const replyType = decision.replyType ?? "text";
       const toForReply = env.WHATSAPP_SANDBOX
         ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
         : message.from;
@@ -373,7 +591,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         replyType === "template"
           ? sendTemplateMessage(
               toForReply,
-              env.WHATSAPP_SANDBOX ? "hello_world" : env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE
+              decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+              decision.templateLanguage ?? "pt_BR"
             )
           : sendTextMessage(toForReply, handoffResult.replyText);
 
@@ -590,14 +809,52 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    const now = Date.now();
-    const windowOpen = isWindowOpen(updatedConversation, now);
+    const decision = decideOutboundPolicy({
+      state: updatedConversation,
+      now: Date.now(),
+      isSandbox: env.WHATSAPP_SANDBOX,
+      outOfWindowTemplate: env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+      sandboxTemplate: "hello_world",
+    });
 
-    const replyType = env.WHATSAPP_SANDBOX
-      ? "template"
-      : windowOpen
-        ? "text"
-        : "template";
+    if (decision.action === "block") {
+      const nowIso = new Date().toISOString();
+      const blockedConversation = markTemplateNeeded(updatedConversation, {
+        templateSuggested: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+        atIso: nowIso,
+        intent: updatedConversation.intent,
+        lastInboundMessageId: message.messageId,
+      });
+      await jsonFileStorage.upsertConversation(blockedConversation);
+      for (const event of decision.events ?? []) {
+        if (event.event === "outbound.blocked.window_closed") {
+          logger.warn({
+            event: "outbound.blocked.window_closed",
+            waId: maskNumber(normalizedFrom),
+            intent: updatedConversation.intent ?? "unknown",
+            policy: decision.policy,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+        }
+        if (event.event === "outbound.needs_template") {
+          logger.warn({
+            event: "outbound.needs_template",
+            waId: maskNumber(normalizedFrom),
+            intent: updatedConversation.intent ?? "unknown",
+            suggestedTemplate: event.suggestedTemplate,
+            language: event.language,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+        }
+      }
+      continue;
+    }
+
+    const replyType = decision.replyType ?? "text";
 
     let replyText = flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
@@ -672,7 +929,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       replyType === "template"
         ? sendTemplateMessage(
             toForReply,
-            env.WHATSAPP_SANDBOX ? "hello_world" : env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE
+            decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+            decision.templateLanguage ?? "pt_BR"
           )
         : sendTextMessage(toForReply, replyText);
 

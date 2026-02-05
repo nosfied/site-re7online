@@ -109,11 +109,94 @@ export function updateOutbound(
   };
 }
 
+export function markTemplateNeeded(
+  state: ConversationState,
+  info: {
+    templateSuggested: string;
+    atIso: string;
+    intent?: ConversationIntent;
+    lastInboundMessageId?: string;
+  }
+): ConversationState {
+  return {
+    ...state,
+    templateNeeded: true,
+    templateSuggested: info.templateSuggested,
+    lastNeedAt: info.atIso,
+    lastIntent: info.intent ?? state.intent,
+    lastInboundMessageId: info.lastInboundMessageId ?? state.lastInboundMessageId,
+  };
+}
+
+export function clearTemplateNeeded(state: ConversationState): ConversationState {
+  return {
+    ...state,
+    templateNeeded: false,
+    templateSuggested: undefined,
+    lastNeedAt: undefined,
+    lastIntent: undefined,
+  };
+}
+
 export function isWindowOpen(state: ConversationState, now: number) {
   if (!state.window.isOpen || !state.window.expiresAt) {
     return false;
   }
   return now < Date.parse(state.window.expiresAt);
+}
+
+export type OutboundDecision = {
+  action: "send" | "block";
+  replyType?: "text" | "template";
+  templateName?: string;
+  templateLanguage?: string;
+  policy?: "B_manual_template";
+  windowOpen: boolean;
+  events?: Array<{
+    event: "outbound.blocked.window_closed" | "outbound.needs_template";
+    suggestedTemplate?: string;
+    language?: string;
+  }>;
+};
+
+export function decideOutboundPolicy(params: {
+  state: ConversationState;
+  now: number;
+  isSandbox: boolean;
+  outOfWindowTemplate: string;
+  sandboxTemplate?: string;
+}): OutboundDecision {
+  const windowOpen = isWindowOpen(params.state, params.now);
+  if (!windowOpen) {
+    const suggestedTemplate = params.outOfWindowTemplate;
+    return {
+      action: "block",
+      policy: "B_manual_template",
+      windowOpen,
+      templateName: suggestedTemplate,
+      templateLanguage: "pt_BR",
+      events: [
+        { event: "outbound.blocked.window_closed" },
+        {
+          event: "outbound.needs_template",
+          suggestedTemplate,
+          language: "pt_BR",
+        },
+      ],
+    };
+  }
+
+  if (params.isSandbox) {
+    return {
+      action: "send",
+      replyType: "template",
+      templateName: params.sandboxTemplate ?? "hello_world",
+      templateLanguage: "en_US",
+      windowOpen,
+    };
+  }
+
+  return { action: "send", replyType: "text", windowOpen };
 }
 
 export function shouldAutoReply(state: ConversationState) {
