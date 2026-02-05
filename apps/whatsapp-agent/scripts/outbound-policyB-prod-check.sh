@@ -133,16 +133,21 @@ start_ts=$(date +%s)
 found_blocked=""
 found_needs=""
 found_reply=""
+LOG_FILE="/home/deploy/.pm2/logs/re7-whatsapp-agent-out-0.log"
 
 while true; do
   now_ts=$(date +%s)
   if (( now_ts - start_ts > timeout_s )); then
     break
   fi
-  LOGS=$(pm2 logs 0 --raw --lines 2000 --nostream 2>/dev/null || pm2 logs 0 --raw --lines 2000 2>/dev/null || true)
-  found_blocked=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.blocked.window_closed"' || true)
-  found_needs=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.needs_template"' || true)
-  found_reply=$(echo "$LOGS" | grep "$RID" | grep -E '"event":"reply\.sending"|"event":"reply\.sent"' || true)
+  if [[ -f "$LOG_FILE" ]]; then
+    LOGS=$(tail -n 2000 "$LOG_FILE" 2>/dev/null || true)
+  else
+    LOGS=$(pm2 logs 0 --raw --lines 2000 --nostream 2>/dev/null || pm2 logs 0 --raw --lines 2000 2>/dev/null || true)
+  fi
+  found_blocked=$(echo "$LOGS" | grep "wamid.policyb.${RID}" | grep '"event":"outbound.blocked.window_closed"' || true)
+  found_needs=$(echo "$LOGS" | grep "wamid.policyb.${RID}" | grep '"event":"outbound.needs_template"' || true)
+  found_reply=$(echo "$LOGS" | grep "wamid.policyb.${RID}" | grep -E '"event":"reply\.sending"|"event":"reply\.sent"' || true)
   if [[ -n "$found_reply" ]]; then
     break
   fi
@@ -160,6 +165,12 @@ if [[ -z "$found_blocked" || -z "$found_needs" || -n "$found_reply" ]]; then
   echo "$found_needs"
   echo "== reply.sending/reply.sent (should be empty) =="
   echo "$found_reply"
+  echo "== dump (últimas 200 linhas filtradas por RID/eventos) =="
+  if [[ -f "$LOG_FILE" ]]; then
+    tail -n 200 "$LOG_FILE" | grep -E "wamid\\.(policyb|debug)\\.${RID}|outbound\\.blocked\\.window_closed|outbound\\.needs_template|reply\\.(sending|sent)" || true
+  else
+    echo "$LOGS" | grep -E "wamid\\.(policyb|debug)\\.${RID}|outbound\\.blocked\\.window_closed|outbound\\.needs_template|reply\\.(sending|sent)" || true
+  fi
   exit 1
 fi
 
