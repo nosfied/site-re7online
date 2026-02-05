@@ -222,11 +222,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           hit: allowlistHit,
         },
       });
-      const canConfirm =
-        env.outboundEnabled &&
-        !env.WHATSAPP_SANDBOX &&
-        isWindowOpen(currentConversation, Date.now());
-      if (canConfirm) {
+      if (env.outboundEnabled && !env.WHATSAPP_SANDBOX) {
         await sendTextMessage(
           normalizedFrom,
           `Janela 24h fechada para ${targetWaId}.`
