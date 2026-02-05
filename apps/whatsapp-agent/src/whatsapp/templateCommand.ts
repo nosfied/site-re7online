@@ -26,14 +26,14 @@ export function parseTemplateCommand(input: string | null): TemplateCommand | nu
     return null;
   }
   const trimmed = input.trim();
-  if (!trimmed.toLowerCase().startsWith("#template")) {
+  const match = /^#template\s+([A-Za-z0-9_-]+)(?:\s+([0-9]+))?$/.exec(trimmed);
+  if (!match) {
     return null;
   }
-  const parts = trimmed.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) {
-    return { templateKey: "" };
+  const templateKey = match[1].toLowerCase();
+  const targetWaId = match[2];
+  if (targetWaId && targetWaId.length < 10) {
+    return null;
   }
-  const templateKey = parts[1];
-  const targetWaId = parts[2];
   return { templateKey, targetWaId };
 }

@@ -28,6 +28,8 @@ import {
 } from "./templateCommand.js";
 
 const agentBrain = createAgentBrain();
+const adminTemplateDedup = new Map<string, number>();
+const ADMIN_TEMPLATE_TTL_MS = 10 * 60 * 1000;
 
 type RequestMeta = {
   requestId: string;
@@ -186,9 +188,30 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
     const templateCommand = parseTemplateCommand(message.text);
     if (templateCommand) {
+      const now = Date.now();
+      const existingExpiry = adminTemplateDedup.get(message.messageId);
+      if (existingExpiry && existingExpiry > now) {
+        logger.warn({
+          event: "admin.template.duplicate",
+          waId: maskNumber(normalizedFrom),
+          from: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        continue;
+      }
+      adminTemplateDedup.set(message.messageId, now + ADMIN_TEMPLATE_TTL_MS);
+      for (const [key, expiry] of adminTemplateDedup.entries()) {
+        if (expiry <= now) {
+          adminTemplateDedup.delete(key);
+        }
+      }
+
       if (!isAdmin) {
         logger.warn({
           event: "admin.template.denied",
+          waId: maskNumber(normalizedFrom),
           from: maskNumber(normalizedFrom),
           route: meta?.route,
           method: meta?.method,
@@ -215,6 +238,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (!templateConfig) {
         logger.error({
           event: "admin.template.error",
+          waId: maskNumber(normalizedFrom),
           from: maskNumber(normalizedFrom),
           targetWaId: maskNumber(normalizedFrom),
           templateKey: templateCommand.templateKey || "missing",
@@ -245,6 +269,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       );
       logger.info({
         event: "admin.template.requested",
+        waId: maskNumber(targetWaId),
         from: maskNumber(normalizedFrom),
         targetWaId: maskNumber(targetWaId),
         templateKey: templateConfig.key,
@@ -258,6 +283,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (!env.outboundEnabled) {
         logger.error({
           event: "admin.template.error",
+          waId: maskNumber(targetWaId),
           from: maskNumber(normalizedFrom),
           targetWaId: maskNumber(targetWaId),
           templateKey: templateConfig.key,
@@ -287,6 +313,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       logger.info({
         event: "admin.template.sending",
+        waId: maskNumber(targetWaId),
         from: maskNumber(normalizedFrom),
         targetWaId: maskNumber(targetWaId),
         templateKey: templateConfig.key,
@@ -306,6 +333,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (result.ok) {
         logger.info({
           event: "admin.template.sent",
+          waId: maskNumber(targetWaId),
           from: maskNumber(normalizedFrom),
           targetWaId: maskNumber(targetWaId),
           templateKey: templateConfig.key,
@@ -327,6 +355,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       } else {
         logger.error({
           event: "admin.template.error",
+          waId: maskNumber(targetWaId),
           from: maskNumber(normalizedFrom),
           targetWaId: maskNumber(targetWaId),
           templateKey: templateConfig.key,
