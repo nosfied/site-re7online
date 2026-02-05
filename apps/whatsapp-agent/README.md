@@ -15,6 +15,7 @@ npm run dev
 - `npm run build` → compilar TypeScript
 - `npm run start` → rodar build de produção
 - `scripts/outbound-policyB-prod-check.sh` → valida Policy B em produção (janela fechada)
+  (requer `DISABLE_DEBUG_COMMANDS=false` no `.env` para usar o comando admin de debug).
 
 ## Variáveis de ambiente
 Veja `.env.example`.

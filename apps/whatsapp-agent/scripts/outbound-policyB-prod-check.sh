@@ -6,6 +6,7 @@ ENV_FILE="${APP_DIR}/.env"
 PORT="${PORT:-3001}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:${PORT}}"
 RID="${RID:-$(date +%s)$RANDOM}"
+PAST_TS="${PAST_TS:-$(date -d '48 hours ago' +%s)}"
 
 if [[ -f "$ENV_FILE" ]]; then
   VERIFY_TOKEN=$(grep -E '^WHATSAPP_VERIFY_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'")
@@ -75,7 +76,7 @@ payload_debug=$(
               {
                 "id": "wamid.debug.${RID}",
                 "from": "${ADMIN_WAID}",
-                "timestamp": "$(date +%s)",
+                "timestamp": "${PAST_TS}",
                 "type": "text",
                 "text": { "body": "#debug closewindow ${TARGET_WAID}" }
               }
@@ -107,7 +108,7 @@ payload_inbound=$(
               {
                 "id": "wamid.policyb.${RID}",
                 "from": "${TARGET_WAID}",
-                "timestamp": "$(date +%s)",
+                "timestamp": "${PAST_TS}",
                 "type": "text",
                 "text": { "body": "quero orçamento" }
               }
@@ -123,25 +124,43 @@ JSON
 )
 
 echo "== Policy B prod check (RID=${RID}) =="
+echo "Timestamp usado (PAST_TS): ${PAST_TS}"
 post_webhook "$payload_debug"
 post_webhook "$payload_inbound"
 
-sleep 1
+timeout_s=15
+start_ts=$(date +%s)
+found_blocked=""
+found_needs=""
+found_reply=""
 
-LOGS=$(pm2 logs 0 --raw --lines 20000 2>/dev/null || true)
-BLOCKED=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.blocked.window_closed"' || true)
-NEEDS=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.needs_template"' || true)
-SENDING=$(echo "$LOGS" | grep "$RID" | grep '"event":"reply.sending"' || true)
+while true; do
+  now_ts=$(date +%s)
+  if (( now_ts - start_ts > timeout_s )); then
+    break
+  fi
+  LOGS=$(pm2 logs 0 --raw --lines 2000 --nostream 2>/dev/null || pm2 logs 0 --raw --lines 2000 2>/dev/null || true)
+  found_blocked=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.blocked.window_closed"' || true)
+  found_needs=$(echo "$LOGS" | grep "$RID" | grep '"event":"outbound.needs_template"' || true)
+  found_reply=$(echo "$LOGS" | grep "$RID" | grep -E '"event":"reply\.sending"|"event":"reply\.sent"' || true)
+  if [[ -n "$found_reply" ]]; then
+    break
+  fi
+  if [[ -n "$found_blocked" && -n "$found_needs" ]]; then
+    break
+  fi
+  sleep 1
+done
 
-if [[ -z "$BLOCKED" || -z "$NEEDS" || -n "$SENDING" ]]; then
-  echo "FAIL"
+if [[ -z "$found_blocked" || -z "$found_needs" || -n "$found_reply" ]]; then
+  echo "FAIL (RID=${RID})"
   echo "== outbound.blocked.window_closed =="
-  echo "$BLOCKED"
+  echo "$found_blocked"
   echo "== outbound.needs_template =="
-  echo "$NEEDS"
-  echo "== reply.sending (should be empty) =="
-  echo "$SENDING"
+  echo "$found_needs"
+  echo "== reply.sending/reply.sent (should be empty) =="
+  echo "$found_reply"
   exit 1
 fi
 
-echo "OK"
+echo "OK (RID=${RID})"
