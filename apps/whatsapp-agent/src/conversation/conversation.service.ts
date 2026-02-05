@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage.js";
 import {
   ConversationIntent,
   ConversationState,
+  HandoffState,
   QuoteSiteAnswers,
 } from "./conversation.types.js";
 
@@ -32,8 +33,7 @@ export async function getOrCreateConversation(
     lastInboundAt: firstSeenAt,
     window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },
     intent: "unknown",
-    botPaused: false,
-    handoffPending: false,
+    handoff: { status: "none" },
     answers: {},
   };
   await storage.upsertConversation(state);
@@ -83,6 +83,20 @@ export function updateInbound(
   return { ...next, intent: nextIntent, answers };
 }
 
+export function updateInboundMeta(
+  state: ConversationState,
+  messageId: string,
+  timestamp: string
+): ConversationState {
+  return updateWindow(
+    {
+      ...state,
+      lastInboundMessageId: messageId,
+    },
+    timestamp
+  );
+}
+
 export function updateOutbound(
   state: ConversationState,
   messageId: string | undefined,
@@ -103,12 +117,30 @@ export function isWindowOpen(state: ConversationState, now: number) {
 }
 
 export function shouldAutoReply(state: ConversationState) {
-  return !state.botPaused;
+  return state.handoff.status !== "active";
+}
+
+export function getHandoffStatus(state: ConversationState) {
+  return state.handoff.status;
+}
+
+function withHandoff(
+  state: ConversationState,
+  handoff: Partial<HandoffState> & { status: HandoffState["status"] }
+): ConversationState {
+  return {
+    ...state,
+    handoff: {
+      ...state.handoff,
+      ...handoff,
+    },
+  };
 }
 
 export function handleHandoff(
   state: ConversationState,
-  inboundText: string | null
+  inboundText: string | null,
+  timestamp: string
 ): {
   state: ConversationState;
   handled: boolean;
@@ -120,39 +152,32 @@ export function handleHandoff(
     return { state, handled: false };
   }
 
-  if (state.handoffPending) {
+  if (state.handoff.status === "pending") {
     if (text === "sim") {
-      const pausedAt = new Date().toISOString();
       return {
         handled: true,
         outcome: "accepted",
-        state: {
-          ...state,
-          botPaused: true,
-          pausedReason: "handoff",
-          pausedAt,
-          handoffPending: false,
-        },
+        state: withHandoff(state, {
+          status: "active",
+          activatedAt: timestamp,
+        }),
       };
     }
     if (text === "não" || text === "nao") {
       return {
         handled: true,
         outcome: "declined",
-        state: {
-          ...state,
-          botPaused: false,
-          pausedReason: undefined,
-          pausedAt: undefined,
-          handoffPending: false,
-        },
+        state: withHandoff(state, {
+          status: "none",
+          releasedAt: timestamp,
+        }),
       };
     }
     return {
       handled: true,
       outcome: "requested",
       state,
-      replyText: "Posso transferir você para um atendente humano? Responda SIM ou NÃO.",
+      replyText: "Responda apenas SIM ou NÃO para que eu possa transferir.",
     };
   }
 
@@ -160,10 +185,10 @@ export function handleHandoff(
     return {
       handled: true,
       outcome: "requested",
-      state: {
-        ...state,
-        handoffPending: true,
-      },
+      state: withHandoff(state, {
+        status: "pending",
+        requestedAt: timestamp,
+      }),
       replyText: "Posso transferir você para um atendente humano? Responda SIM ou NÃO.",
     };
   }
@@ -180,29 +205,23 @@ export function applyAdminCommand(
   }
   const command = inboundText.trim().toLowerCase();
   if (command === "#bot off") {
-    const pausedAt = new Date().toISOString();
     return {
       handled: true,
       action: "pause",
-      state: {
-        ...state,
-        botPaused: true,
-        pausedReason: "admin",
-        pausedAt,
-      },
+      state: withHandoff(state, {
+        status: "active",
+        activatedAt: new Date().toISOString(),
+      }),
     };
   }
   if (command === "#bot on") {
     return {
       handled: true,
       action: "resume",
-      state: {
-        ...state,
-        botPaused: false,
-        pausedReason: undefined,
-        pausedAt: undefined,
-        handoffPending: false,
-      },
+      state: withHandoff(state, {
+        status: "none",
+        releasedAt: new Date().toISOString(),
+      }),
     };
   }
   return { state, handled: false };

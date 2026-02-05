@@ -1,6 +1,13 @@
 export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
 export type ConversationFlow = "quote_site";
 
+export type HandoffState = {
+  status: "none" | "pending" | "active";
+  requestedAt?: string;
+  activatedAt?: string;
+  releasedAt?: string;
+};
+
 export type QuoteSiteAnswers = {
   companyCity?: string;
   siteType?: string;
@@ -22,10 +29,7 @@ export type ConversationState = {
   lastOutboundMessageId?: string;
   window: { isOpen: boolean; expiresAt?: string };
   intent?: ConversationIntent;
-  botPaused: boolean;
-  pausedReason?: "handoff" | "admin";
-  pausedAt?: string;
-  handoffPending?: boolean;
+  handoff: HandoffState;
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;

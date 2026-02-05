@@ -13,8 +13,7 @@ let state = {
   lastInboundAt: new Date().toISOString(),
   window: { isOpen: true, expiresAt: new Date(Date.now() + 86400000).toISOString() },
   intent: "unknown",
-  botPaused: false,
-  handoffPending: false,
+  handoff: { status: "none" },
   answers: {},
 };
 

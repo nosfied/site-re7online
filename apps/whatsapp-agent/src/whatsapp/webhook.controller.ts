@@ -8,6 +8,7 @@ import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import {
   advanceQuoteSiteFlow,
   applyAdminCommand,
+  getHandoffStatus,
   getOrCreateConversation,
   handleHandoff,
   isWindowOpen,
@@ -15,6 +16,7 @@ import {
   logConversationWindow,
   shouldAutoReply,
   updateInbound,
+  updateInboundMeta,
   updateOutbound,
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
@@ -173,6 +175,258 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       normalizedFrom,
       message.timestamp
     );
+    const isAdmin =
+      env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
+      env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
+    const adminResult = isAdmin
+      ? applyAdminCommand(currentConversation, message.text)
+      : { handled: false, state: currentConversation };
+    if (isAdmin && adminResult.handled) {
+      const updatedByAdmin = updateInboundMeta(
+        adminResult.state,
+        message.messageId,
+        message.timestamp
+      );
+      await jsonFileStorage.upsertConversation(updatedByAdmin);
+      if (adminResult.action === "pause") {
+        logger.info({
+          event: "bot.pause",
+          waId: maskNumber(normalizedFrom),
+          reason: "admin",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (adminResult.action === "resume") {
+        logger.info({
+          event: "bot.resume",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "admin_command",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    const currentHandoffStatus = getHandoffStatus(currentConversation);
+    if (currentHandoffStatus === "active") {
+      const blockedState = updateInboundMeta(
+        currentConversation,
+        message.messageId,
+        message.timestamp
+      );
+      await jsonFileStorage.upsertConversation(blockedState);
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+      logger.info({
+        event: "handoff.blocked",
+        waId: maskNumber(normalizedFrom),
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "handoff_active",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    if (currentHandoffStatus === "pending") {
+      const pendingState = updateInboundMeta(
+        currentConversation,
+        message.messageId,
+        message.timestamp
+      );
+      const handoffResult = handleHandoff(
+        pendingState,
+        message.text,
+        message.timestamp
+      );
+      const updatedConversation = handoffResult.state;
+
+      if (handoffResult.outcome === "requested") {
+        logger.info({
+          event: "handoff.pending_invalid_reply",
+          waId: maskNumber(normalizedFrom),
+          textLength: message.text ? message.text.length : 0,
+          hasText: Boolean(message.text),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (handoffResult.outcome === "accepted") {
+        logger.info({
+          event: "handoff.confirm.accepted",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "bot.pause",
+          waId: maskNumber(normalizedFrom),
+          reason: "handoff_confirmed",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+      if (handoffResult.outcome === "declined") {
+        logger.info({
+          event: "handoff.confirm.declined",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "bot.resume",
+          waId: maskNumber(normalizedFrom),
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      }
+
+      await jsonFileStorage.upsertConversation(updatedConversation);
+      logConversationWindow(updatedConversation, meta);
+      logConversationIntent(updatedConversation, meta);
+
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+
+      logger.info({
+        event: "webhook.message",
+        messageId: message.messageId,
+        from: maskNumber(message.from),
+        type: message.type,
+        status,
+        allowlistHit,
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+
+      if (!allowlistHit || !handoffResult.replyText || !env.outboundEnabled) {
+        continue;
+      }
+
+      const now = Date.now();
+      const windowOpen = isWindowOpen(updatedConversation, now);
+      const replyType = env.WHATSAPP_SANDBOX
+        ? "template"
+        : windowOpen
+          ? "text"
+          : "template";
+      const toForReply = env.WHATSAPP_SANDBOX
+        ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
+        : message.from;
+
+      logger.info({
+        event: "reply.sending",
+        messageId: message.messageId,
+        replyType,
+        to: maskNumber(message.from),
+        toResolved: maskNumber(toForReply),
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+
+      const sendPromise =
+        replyType === "template"
+          ? sendTemplateMessage(
+              toForReply,
+              env.WHATSAPP_SANDBOX ? "hello_world" : env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE
+            )
+          : sendTextMessage(toForReply, handoffResult.replyText);
+
+      void sendPromise
+        .then(async (result) => {
+          if (result.ok) {
+            await jsonFileStorage.updateMessage(message.messageId, {
+              status: "replied",
+              repliedAt: new Date().toISOString(),
+              replyType,
+            });
+            const outboundConversation = updateOutbound(
+              updatedConversation,
+              result.messageId,
+              new Date().toISOString()
+            );
+            await jsonFileStorage.upsertConversation(outboundConversation);
+            logger.info({
+              event: "reply.sent",
+              messageId: message.messageId,
+              replyType,
+              status: result.status,
+              route: meta?.route,
+              method: meta?.method,
+              requestId: meta?.requestId,
+            });
+          } else {
+            logger.error({
+              event: "reply.error",
+              messageId: message.messageId,
+              replyType,
+              status: result.status,
+              errorBody: result.errorBody,
+              route: meta?.route,
+              method: meta?.method,
+              requestId: meta?.requestId,
+            });
+          }
+        })
+        .catch((error) => {
+          logger.error({
+            event: "reply.error",
+            messageId: message.messageId,
+            replyType,
+            error: (error as Error).message,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+        });
+      continue;
+    }
+
     const inboundConversation = updateInbound(
       currentConversation,
       message.messageId,
@@ -180,8 +434,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.text
     );
     let updatedConversation = inboundConversation;
-    const wasPending = currentConversation.handoffPending === true;
-    const handoffResult = handleHandoff(updatedConversation, message.text);
+    const wasPending = currentConversation.handoff.status === "pending";
+    const handoffResult = handleHandoff(
+      updatedConversation,
+      message.text,
+      message.timestamp
+    );
     if (handoffResult.handled) {
       updatedConversation = handoffResult.state;
       if (handoffResult.outcome === "requested") {
@@ -246,44 +504,39 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
 
+    if (getHandoffStatus(updatedConversation) === "active") {
+      await jsonFileStorage.upsertConversation(updatedConversation);
+      await jsonFileStorage.saveIncomingMessage({
+        ...message,
+        status,
+        allowlist: {
+          enabled: allowlistEnabled,
+          hit: allowlistHit,
+        },
+      });
+      logger.info({
+        event: "handoff.blocked",
+        waId: maskNumber(normalizedFrom),
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "handoff_active",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
     const flowResult = handoffResult.handled
       ? { state: updatedConversation, handled: false as const, replyText: undefined }
       : advanceQuoteSiteFlow(updatedConversation, message.text);
     if (flowResult.handled) {
       updatedConversation = flowResult.state;
-    }
-    const isAdmin =
-      env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
-      env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);
-    const adminResult = isAdmin
-      ? applyAdminCommand(updatedConversation, message.text)
-      : { handled: false, state: updatedConversation };
-    if (isAdmin) {
-      if (adminResult.handled) {
-        updatedConversation = {
-          ...adminResult.state,
-          intent: currentConversation.intent,
-        };
-        if (adminResult.action === "pause") {
-          logger.info({
-            event: "bot.pause",
-            waId: maskNumber(normalizedFrom),
-            reason: "admin",
-            route: meta?.route,
-            method: meta?.method,
-            requestId: meta?.requestId,
-          });
-        }
-        if (adminResult.action === "resume") {
-          logger.info({
-            event: "bot.resume",
-            waId: maskNumber(normalizedFrom),
-            route: meta?.route,
-            method: meta?.method,
-            requestId: meta?.requestId,
-          });
-        }
-      }
     }
     await jsonFileStorage.upsertConversation(updatedConversation);
     logConversationWindow(updatedConversation, meta);
@@ -314,23 +567,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    if (adminResult.handled) {
-      logger.info({
-        event: "reply.skipped",
-        waId: maskNumber(normalizedFrom),
-        reason: "admin_command",
-        route: meta?.route,
-        method: meta?.method,
-        requestId: meta?.requestId,
-      });
-      continue;
-    }
-
     if (!shouldAutoReply(updatedConversation)) {
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
-        reason: updatedConversation.pausedReason ?? "paused",
+        reason: "handoff_active",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Storage, StoredRecord, MessageStatus } from "./storage.js";
-import { ConversationState } from "../conversation/conversation.types.js";
+import { ConversationState, HandoffState } from "../conversation/conversation.types.js";
 
 const dataDir = path.resolve(process.cwd(), ".data");
 const dataFile = path.join(dataDir, "whatsapp-events.json");
@@ -27,10 +27,51 @@ async function writeAll(records: StoredRecord[]) {
   await fs.rename(tempFile, dataFile);
 }
 
+type LegacyConversationState = ConversationState & {
+  botPaused?: boolean;
+  pausedReason?: "handoff" | "admin";
+  pausedAt?: string;
+  handoffPending?: boolean;
+};
+
+function normalizeHandoff(
+  raw: LegacyConversationState
+): HandoffState {
+  if (raw.handoff) {
+    return raw.handoff;
+  }
+  if (raw.botPaused && raw.pausedReason === "handoff") {
+    return { status: "active", activatedAt: raw.pausedAt };
+  }
+  if (raw.handoffPending) {
+    return { status: "pending" };
+  }
+  return { status: "none" };
+}
+
+function normalizeConversation(raw: LegacyConversationState): ConversationState {
+  const handoff = normalizeHandoff(raw);
+  return {
+    waId: raw.waId,
+    firstSeenAt: raw.firstSeenAt,
+    lastInboundAt: raw.lastInboundAt,
+    lastOutboundAt: raw.lastOutboundAt,
+    lastInboundMessageId: raw.lastInboundMessageId,
+    lastOutboundMessageId: raw.lastOutboundMessageId,
+    intent: raw.intent,
+    flow: raw.flow,
+    flowStep: raw.flowStep,
+    answers: raw.answers ?? {},
+    window: raw.window,
+    handoff,
+  };
+}
+
 async function readAllConversations(): Promise<ConversationState[]> {
   try {
     const content = await fs.readFile(conversationFile, "utf-8");
-    return JSON.parse(content) as ConversationState[];
+    const raw = JSON.parse(content) as LegacyConversationState[];
+    return raw.map(normalizeConversation);
   } catch {
     return [];
   }
@@ -107,13 +148,10 @@ export const jsonFileStorage: Storage = {
       lastOutboundAt: existing?.lastOutboundAt,
       lastOutboundMessageId: existing?.lastOutboundMessageId,
       intent: existing?.intent,
-      botPaused: existing?.botPaused ?? false,
-      pausedReason: existing?.pausedReason,
-      pausedAt: existing?.pausedAt,
-      handoffPending: existing?.handoffPending ?? false,
       flow: existing?.flow,
       flowStep: existing?.flowStep,
       answers: existing?.answers ?? {},
+      handoff: existing?.handoff ?? { status: "none" },
       window: { isOpen: true, expiresAt },
     };
 
