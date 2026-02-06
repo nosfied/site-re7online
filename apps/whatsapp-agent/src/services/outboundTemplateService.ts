@@ -26,6 +26,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
+      clientId: env.CLIENT_ID,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
@@ -51,6 +52,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
     intent: params.intent ?? "unknown",
     template: params.templateName,
     language: resolvedLang,
+    clientId: env.CLIENT_ID,
     requestId: params.requestId,
     rid: params.rid,
     messageId: params.messageId,
@@ -87,6 +89,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
         intent: params.intent ?? "unknown",
         template: params.templateName,
         language: resolvedLang,
+        clientId: env.CLIENT_ID,
         requestId: params.requestId,
         rid: params.rid,
         messageId: params.messageId,
@@ -103,6 +106,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
+      clientId: env.CLIENT_ID,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
@@ -119,6 +123,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
+      clientId: env.CLIENT_ID,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
@@ -130,6 +135,21 @@ export async function sendTemplate(params: OutboundTemplateParams) {
 
 export function resolveTemplateForIntent(intent: ConversationIntent | undefined) {
   const key = intent ?? "unknown";
+  const byClient = env.OUTBOUND_TEMPLATES_BY_CLIENT[env.CLIENT_ID] ?? {};
+  const clientMapped = byClient[key];
+  if (clientMapped && clientMapped.name) {
+    return {
+      name: clientMapped.name,
+      language: clientMapped.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+    };
+  }
+  const clientDefault = byClient.default;
+  if (clientDefault && clientDefault.name) {
+    return {
+      name: clientDefault.name,
+      language: clientDefault.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+    };
+  }
   const mapped = env.OUTBOUND_TEMPLATE_INTENT_MAP[key];
   if (mapped && mapped.name) {
     return {

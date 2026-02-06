@@ -26,6 +26,11 @@ export type Env = {
   OUTBOUND_TEMPLATE_DEFAULT_NAME: string;
   OUTBOUND_TEMPLATE_DEFAULT_LANG: string;
   OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }>;
+  CLIENT_ID: string;
+  OUTBOUND_TEMPLATES_BY_CLIENT: Record<
+    string,
+    Record<string, { name: string; language?: string }>
+  >;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
   phoneNumberIdPresent: boolean;
@@ -103,6 +108,23 @@ export function getEnv(): Env {
       OUTBOUND_TEMPLATE_INTENT_MAP = {};
     }
   }
+  const CLIENT_ID = process.env.CLIENT_ID ?? "default";
+  let OUTBOUND_TEMPLATES_BY_CLIENT: Record<
+    string,
+    Record<string, { name: string; language?: string }>
+  > = {};
+  const templatesByClientRaw = process.env.OUTBOUND_TEMPLATES_BY_CLIENT_JSON;
+  if (templatesByClientRaw) {
+    try {
+      OUTBOUND_TEMPLATES_BY_CLIENT = JSON.parse(templatesByClientRaw) as Record<
+        string,
+        Record<string, { name: string; language?: string }>
+      >;
+    } catch {
+      OUTBOUND_TEMPLATES_BY_CLIENT = {};
+      console.warn("[env] invalid OUTBOUND_TEMPLATES_BY_CLIENT_JSON, using {}");
+    }
+  }
 
   const verifyTokenPresent = WHATSAPP_VERIFY_TOKEN.length > 0;
   const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
@@ -136,6 +158,8 @@ export function getEnv(): Env {
     OUTBOUND_TEMPLATE_DEFAULT_NAME,
     OUTBOUND_TEMPLATE_DEFAULT_LANG,
     OUTBOUND_TEMPLATE_INTENT_MAP,
+    CLIENT_ID,
+    OUTBOUND_TEMPLATES_BY_CLIENT,
     verifyTokenPresent,
     accessTokenPresent,
     phoneNumberIdPresent,
