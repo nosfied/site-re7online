@@ -16,10 +16,12 @@ npm run dev
 - `npm run start` → rodar build de produção
 - `scripts/outbound-policyB-prod-check.sh` → valida Policy B em produção (janela fechada)
   (requer `DISABLE_DEBUG_COMMANDS=false` no `.env` para usar o comando admin de debug).
+Observação: em produção existe um utilitário operacional em `/usr/local/bin/outbound-policyB-prod-check`.
 
 ## Variáveis de ambiente
 Veja `.env.example`.
 Debug (desativado por padrão): `DISABLE_DEBUG_COMMANDS=true`.
+Feature flag (fallback automático fora da janela): `OUTBOUND_TEMPLATE_FALLBACK=true|false`.
 
 ## Echo (fase 2)
 - `WHATSAPP_ECHO_ENABLED` (true/false)
@@ -31,6 +33,11 @@ Debug (desativado por padrão): `DISABLE_DEBUG_COMMANDS=true`.
 ## Sandbox vs produção
 - `WHATSAPP_SANDBOX=true` → respostas via template (ex.: `hello_world`)
 - Produção (`WHATSAPP_SANDBOX=false`) → respostas via texto
+
+## Policy A (fallback automático fora da janela)
+Quando `OUTBOUND_TEMPLATE_FALLBACK=true`, o agente envia **template** automaticamente
+ao detectar janela 24h fechada (sem enviar texto livre).
+Quando `OUTBOUND_TEMPLATE_FALLBACK=false`, apenas loga `outbound.needs_template`.
 
 ## Endpoints atuais
 - `GET /` → "whatsapp-agent running"
