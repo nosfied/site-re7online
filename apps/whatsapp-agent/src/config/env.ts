@@ -22,6 +22,10 @@ export type Env = {
   WHATSAPP_AI_SYSTEM_PROMPT: string;
   WHATSAPP_AI_TIMEOUT_MS: number;
   DISABLE_DEBUG_COMMANDS: boolean;
+  OUTBOUND_TEMPLATE_FALLBACK: boolean;
+  OUTBOUND_TEMPLATE_DEFAULT_NAME: string;
+  OUTBOUND_TEMPLATE_DEFAULT_LANG: string;
+  OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }>;
   verifyTokenPresent: boolean;
   accessTokenPresent: boolean;
   phoneNumberIdPresent: boolean;
@@ -81,6 +85,24 @@ export function getEnv(): Env {
   const WHATSAPP_AI_TIMEOUT_MS = toNumber(process.env.WHATSAPP_AI_TIMEOUT_MS, 8000);
   const DISABLE_DEBUG_COMMANDS =
     (process.env.DISABLE_DEBUG_COMMANDS ?? "true") === "true";
+  const OUTBOUND_TEMPLATE_FALLBACK =
+    (process.env.OUTBOUND_TEMPLATE_FALLBACK ?? "false") === "true";
+  const OUTBOUND_TEMPLATE_DEFAULT_NAME =
+    process.env.OUTBOUND_TEMPLATE_DEFAULT_NAME ?? "hello_world";
+  const OUTBOUND_TEMPLATE_DEFAULT_LANG =
+    process.env.OUTBOUND_TEMPLATE_DEFAULT_LANG ?? "pt_BR";
+  let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
+  const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
+  if (mapRaw) {
+    try {
+      OUTBOUND_TEMPLATE_INTENT_MAP = JSON.parse(mapRaw) as Record<
+        string,
+        { name: string; language?: string }
+      >;
+    } catch {
+      OUTBOUND_TEMPLATE_INTENT_MAP = {};
+    }
+  }
 
   const verifyTokenPresent = WHATSAPP_VERIFY_TOKEN.length > 0;
   const accessTokenPresent = WHATSAPP_ACCESS_TOKEN.length > 0;
@@ -110,6 +132,10 @@ export function getEnv(): Env {
     WHATSAPP_AI_SYSTEM_PROMPT,
     WHATSAPP_AI_TIMEOUT_MS,
     DISABLE_DEBUG_COMMANDS,
+    OUTBOUND_TEMPLATE_FALLBACK,
+    OUTBOUND_TEMPLATE_DEFAULT_NAME,
+    OUTBOUND_TEMPLATE_DEFAULT_LANG,
+    OUTBOUND_TEMPLATE_INTENT_MAP,
     verifyTokenPresent,
     accessTokenPresent,
     phoneNumberIdPresent,

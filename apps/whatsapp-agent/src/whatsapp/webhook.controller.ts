@@ -26,6 +26,11 @@ import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
+import {
+  resolveTemplateForIntent,
+  sendTemplate,
+} from "../services/outboundTemplateService.js";
+import { ConversationIntent } from "../conversation/conversation.types.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -97,6 +102,86 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     method: meta?.method,
     requestId: meta?.requestId,
   });
+
+  const attemptTemplateFallback = async (params: {
+    waId: string;
+    toE164: string;
+    intent: ConversationIntent | undefined;
+    messageId: string;
+    reasonIfSkip?: string;
+  }) => {
+    if (!env.OUTBOUND_TEMPLATE_FALLBACK) {
+      return;
+    }
+    if (!env.outboundEnabled) {
+      logger.error({
+        event: "outbound.template.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        reason: "outbound_disabled",
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+      });
+      return;
+    }
+    if (params.reasonIfSkip) {
+      logger.error({
+        event: "outbound.template.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        reason: params.reasonIfSkip,
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+      });
+      return;
+    }
+    const resolvedIntent = params.intent && params.intent !== "unknown";
+    if (!resolvedIntent) {
+      logger.error({
+        event: "outbound.template.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        reason: "intent_unresolved",
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+      });
+      return;
+    }
+    const templateConfig = resolveTemplateForIntent(params.intent);
+    if (!templateConfig.name) {
+      logger.error({
+        event: "outbound.template.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: "missing",
+        reason: "template_missing",
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+      });
+      return;
+    }
+    await sendTemplate({
+      toE164: params.toE164,
+      waId: params.waId,
+      intent: params.intent,
+      templateName: templateConfig.name,
+      lang: templateConfig.language,
+      requestId: meta?.requestId,
+      rid: params.messageId,
+      messageId: params.messageId,
+    });
+  };
 
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
@@ -643,6 +728,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
           }
         }
+        await attemptTemplateFallback({
+          waId: normalizedFrom,
+          toE164: message.from,
+          intent: updatedConversation.intent,
+          messageId: message.messageId,
+        });
         continue;
       }
 
@@ -928,6 +1019,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         }
       }
+      await attemptTemplateFallback({
+        waId: normalizedFrom,
+        toE164: message.from,
+        intent: updatedConversation.intent,
+        messageId: message.messageId,
+      });
       continue;
     }
 
