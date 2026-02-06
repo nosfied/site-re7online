@@ -36,6 +36,33 @@
 - Alternativamente, validar logs:
   - `pm2 logs re7-whatsapp-agent --lines 300 | grep -E "template\.sent|window_closed|needs_template|reply\."`
 
+## Production snapshot
+- host: re7online-api-01
+- app: apps/whatsapp-agent
+- pm2: re7-whatsapp-agent (id 0)
+- HEAD(prod): 4e73be4
+- env:
+  - CLIENT_ID=default
+  - OUTBOUND_TEMPLATE_FALLBACK=true
+  - OUTBOUND_TEMPLATE_DEFAULT_NAME=hello_world
+  - OUTBOUND_TEMPLATE_DEFAULT_LANG=en_US
+  - OUTBOUND_TEMPLATE_INTENT_MAP_JSON=(vazio)
+
+## Validation commands
+- `pm2 env 0 | grep -E "CLIENT_ID|OUTBOUND_TEMPLATE_"`
+- `sudo -E /usr/local/bin/outbound-policyB-prod-check`
+- `REQ="<requestId>" && tail -n 20000 /home/deploy/.pm2/logs/re7-whatsapp-agent-out.log | grep "$REQ"`
+
+## Troubleshooting
+- Erro #132001 (template/language inexistente): usar defaults `hello_world` + `en_US`.
+- Erro `tsc: not found` (NODE_ENV=production + omit=dev): `npm install --include=dev`.
+
+## Evidência (requestId real)
+```
+{"event":"outbound.template.sending","requestId":"d0802cc8-8e8e-4c65-be0c-258e3d56ced7","language":"en_US"}
+{"event":"outbound.template.sent","requestId":"d0802cc8-8e8e-4c65-be0c-258e3d56ced7","language":"en_US"}
+```
+
 ## Comandos de logs essenciais
 - `pm2 logs re7-whatsapp-agent --lines 200`
 - `pm2 logs re7-whatsapp-agent --lines 200 | grep -E "handoff|outbound|template|reply"`
