@@ -698,8 +698,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       if (decision.action === "block") {
         const nowIso = new Date().toISOString();
+        const resolvedTemplate = resolveTemplateForIntent(updatedConversation.intent);
         const blockedConversation = markTemplateNeeded(updatedConversation, {
-          templateSuggested: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+          templateSuggested: resolvedTemplate.name,
           atIso: nowIso,
           intent: updatedConversation.intent,
           lastInboundMessageId: message.messageId,
@@ -725,9 +726,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               messageId: message.messageId,
               waId: maskNumber(normalizedFrom),
               intent: updatedConversation.intent ?? "unknown",
-              suggestedTemplate: event.suggestedTemplate,
-              language: event.language,
-              suggestedLanguage: event.language,
+              suggestedTemplate: resolvedTemplate.name,
+              language: resolvedTemplate.language,
+              suggestedLanguage: resolvedTemplate.language,
               clientId: env.CLIENT_ID,
               route: meta?.route,
               method: meta?.method,
@@ -992,8 +993,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (decision.action === "block") {
       const nowIso = new Date().toISOString();
+      const resolvedTemplate = resolveTemplateForIntent(updatedConversation.intent);
       const blockedConversation = markTemplateNeeded(updatedConversation, {
-        templateSuggested: decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
+        templateSuggested: resolvedTemplate.name,
         atIso: nowIso,
         intent: updatedConversation.intent,
         lastInboundMessageId: message.messageId,
@@ -1019,9 +1021,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             messageId: message.messageId,
             waId: maskNumber(normalizedFrom),
             intent: updatedConversation.intent ?? "unknown",
-            suggestedTemplate: event.suggestedTemplate,
-            language: event.language,
-            suggestedLanguage: event.language,
+            suggestedTemplate: resolvedTemplate.name,
+            language: resolvedTemplate.language,
+            suggestedLanguage: resolvedTemplate.language,
             clientId: env.CLIENT_ID,
             route: meta?.route,
             method: meta?.method,
