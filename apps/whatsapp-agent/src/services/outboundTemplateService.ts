@@ -7,13 +7,32 @@ export type OutboundTemplateParams = {
   waId: string;
   intent: ConversationIntent | undefined;
   templateName: string;
-  lang: string;
+  lang?: string;
   requestId?: string;
   rid?: string;
   messageId?: string;
 };
 
 export async function sendTemplate(params: OutboundTemplateParams) {
+  const resolvedLang =
+    params.lang && params.lang.trim().length > 0
+      ? params.lang
+      : env.OUTBOUND_TEMPLATE_DEFAULT_LANG;
+  if (!resolvedLang) {
+    logger.error({
+      event: "outbound.template.failed",
+      waId: maskNumber(params.waId),
+      to: maskNumber(params.toE164),
+      intent: params.intent ?? "unknown",
+      template: params.templateName,
+      language: resolvedLang,
+      requestId: params.requestId,
+      rid: params.rid,
+      messageId: params.messageId,
+      reason: "language_missing",
+    });
+    return { ok: false };
+  }
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const payload = {
     messaging_product: "whatsapp",
@@ -21,7 +40,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
     type: "template",
     template: {
       name: params.templateName,
-      language: { code: params.lang },
+      language: { code: resolvedLang },
     },
   };
 
@@ -31,6 +50,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
     to: maskNumber(params.toE164),
     intent: params.intent ?? "unknown",
     template: params.templateName,
+    language: resolvedLang,
     requestId: params.requestId,
     rid: params.rid,
     messageId: params.messageId,
@@ -66,6 +86,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
         template: params.templateName,
+        language: resolvedLang,
         requestId: params.requestId,
         rid: params.rid,
         messageId: params.messageId,
@@ -81,6 +102,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       to: maskNumber(params.toE164),
       intent: params.intent ?? "unknown",
       template: params.templateName,
+      language: resolvedLang,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
@@ -96,6 +118,7 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       to: maskNumber(params.toE164),
       intent: params.intent ?? "unknown",
       template: params.templateName,
+      language: resolvedLang,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
