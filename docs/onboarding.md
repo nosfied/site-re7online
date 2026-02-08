@@ -1,5 +1,13 @@
 # Onboarding — WhatsApp Agent (10 minutos)
 
+Documento canonical: `/docs/onboarding.md` (raiz do repo).
+
+Regra de ouro:
+```bash
+git rev-parse --show-toplevel
+```
+`/apps/whatsapp-agent/` **não** é a raiz do repositório.
+
 ## Setup rápido
 1) Clonar o repo e entrar em `apps/whatsapp-agent`.
 2) Criar `.env` a partir de `.env.example`.
@@ -10,7 +18,7 @@
    - `META_APP_SECRET`
    - `CLIENT_ID`
 4) Instalar e buildar:
-   - `npm ci`
+   - `npm install --include=dev`
    - `npm run build`
 5) Rodar com PM2:
    - `pm2 start ecosystem.config.cjs --env production`
@@ -62,6 +70,12 @@
 {"event":"outbound.template.sending","requestId":"d0802cc8-8e8e-4c65-be0c-258e3d56ced7","language":"en_US"}
 {"event":"outbound.template.sent","requestId":"d0802cc8-8e8e-4c65-be0c-258e3d56ced7","language":"en_US"}
 ```
+
+## Onde ficam as docs
+- `/docs/onboarding.md`
+- `/docs/whatsapp-agent/*` (produto)
+- `/docs/whatsapp-agent/ops/*` (operacional)
+- `/apps/whatsapp-agent/docs/README.md` (ponteiro)
 
 ## Comandos de logs essenciais
 - `pm2 logs re7-whatsapp-agent --lines 200`
