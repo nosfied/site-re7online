@@ -27,8 +27,10 @@ import {
   resolveTemplateKey,
 } from "./templateCommand.js";
 import {
+  resolveFallbackTemplate,
   resolveTemplateForIntent,
   sendTemplate,
+  shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
 
@@ -175,16 +177,43 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       return;
     }
-    await sendTemplate({
+    const primaryResult = await sendTemplate({
       toE164: params.toE164,
       waId: params.waId,
       intent: params.intent,
       templateName: templateConfig.name,
       lang: templateConfig.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+      isFallback: false,
       requestId: meta?.requestId,
       rid: params.messageId,
       messageId: params.messageId,
     });
+    if (!primaryResult.ok && env.OUTBOUND_TEMPLATE_FALLBACK) {
+      const fallback = resolveFallbackTemplate();
+      if (
+        shouldRetryWithFallback({
+          currentName: templateConfig.name,
+          currentLang: templateConfig.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+          fallbackName: fallback.name,
+          fallbackLang: fallback.language,
+          status: primaryResult.status,
+          errorBody: primaryResult.errorBody,
+        })
+      ) {
+        await sendTemplate({
+          toE164: params.toE164,
+          waId: params.waId,
+          intent: params.intent,
+          templateName: fallback.name,
+          lang: fallback.language,
+          isFallback: true,
+          fallbackReason: "primary_failed",
+          requestId: meta?.requestId,
+          rid: params.messageId,
+          messageId: params.messageId,
+        });
+      }
+    }
   };
 
   const typedPayload = payload as WhatsAppWebhookPayload;

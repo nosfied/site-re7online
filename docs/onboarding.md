@@ -30,6 +30,15 @@ git rev-parse --show-toplevel
 - `META_APP_SECRET`
 - `CLIENT_ID`
 
+## Templates (default e fallback)
+- `OUTBOUND_TEMPLATE_DEFAULT_NAME` / `OUTBOUND_TEMPLATE_DEFAULT_LANG` → template principal.
+- `OUTBOUND_TEMPLATE_FALLBACK_NAME` / `OUTBOUND_TEMPLATE_FALLBACK_LANG` → plano B recomendado (ex.: `hello_world` / `en_US`).
+- Exemplo:
+  - `OUTBOUND_TEMPLATE_DEFAULT_NAME=re7_pricing_v1`
+  - `OUTBOUND_TEMPLATE_DEFAULT_LANG=pt_BR`
+  - `OUTBOUND_TEMPLATE_FALLBACK_NAME=hello_world`
+  - `OUTBOUND_TEMPLATE_FALLBACK_LANG=en_US`
+
 ## Como configurar um novo cliente
 1) Definir `CLIENT_ID` exclusivo.
 2) Configurar templates no `.env`:

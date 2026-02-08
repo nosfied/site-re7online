@@ -8,12 +8,21 @@ export type OutboundTemplateParams = {
   intent: ConversationIntent | undefined;
   templateName: string;
   lang?: string;
+  isFallback?: boolean;
+  fallbackReason?: string;
   requestId?: string;
   rid?: string;
   messageId?: string;
 };
 
-export async function sendTemplate(params: OutboundTemplateParams) {
+export type SendTemplateResult = {
+  ok: boolean;
+  status?: number;
+  metaMessageId?: string;
+  errorBody?: string;
+};
+
+export async function sendTemplate(params: OutboundTemplateParams): Promise<SendTemplateResult> {
   const resolvedLang =
     params.lang && params.lang.trim().length > 0
       ? params.lang
@@ -27,12 +36,14 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       template: params.templateName,
       language: resolvedLang,
       clientId: env.CLIENT_ID,
+      isFallback: Boolean(params.isFallback),
+      fallbackReason: params.fallbackReason,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
       reason: "language_missing",
     });
-    return { ok: false };
+    return { ok: false, errorBody: "language_missing" };
   }
   const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const payload = {
@@ -53,6 +64,8 @@ export async function sendTemplate(params: OutboundTemplateParams) {
     template: params.templateName,
     language: resolvedLang,
     clientId: env.CLIENT_ID,
+    isFallback: Boolean(params.isFallback),
+    fallbackReason: params.fallbackReason,
     requestId: params.requestId,
     rid: params.rid,
     messageId: params.messageId,
@@ -90,6 +103,8 @@ export async function sendTemplate(params: OutboundTemplateParams) {
         template: params.templateName,
         language: resolvedLang,
         clientId: env.CLIENT_ID,
+        isFallback: Boolean(params.isFallback),
+        fallbackReason: params.fallbackReason,
         requestId: params.requestId,
         rid: params.rid,
         messageId: params.messageId,
@@ -107,13 +122,15 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       template: params.templateName,
       language: resolvedLang,
       clientId: env.CLIENT_ID,
+      isFallback: Boolean(params.isFallback),
+      fallbackReason: params.fallbackReason,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
       errorBody: errorText.slice(0, 500),
       status: response.status,
     });
-    return { ok: false, status: response.status };
+    return { ok: false, status: response.status, errorBody: errorText.slice(0, 500) };
   } catch (error) {
     clearTimeout(timeout);
     logger.error({
@@ -124,12 +141,14 @@ export async function sendTemplate(params: OutboundTemplateParams) {
       template: params.templateName,
       language: resolvedLang,
       clientId: env.CLIENT_ID,
+      isFallback: Boolean(params.isFallback),
+      fallbackReason: params.fallbackReason,
       requestId: params.requestId,
       rid: params.rid,
       messageId: params.messageId,
       errorMessage: (error as Error).message,
     });
-    return { ok: false };
+    return { ok: false, errorBody: (error as Error).message };
   }
 }
 
@@ -161,6 +180,37 @@ export function resolveTemplateForIntent(intent: ConversationIntent | undefined)
     name: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
     language: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
   };
+}
+
+export function resolveFallbackTemplate() {
+  const name = env.OUTBOUND_TEMPLATE_FALLBACK_NAME || env.OUTBOUND_TEMPLATE_DEFAULT_NAME;
+  const language = env.OUTBOUND_TEMPLATE_FALLBACK_LANG || env.OUTBOUND_TEMPLATE_DEFAULT_LANG;
+  return { name, language };
+}
+
+export function shouldRetryWithFallback(params: {
+  currentName: string;
+  currentLang: string;
+  fallbackName: string;
+  fallbackLang: string;
+  status?: number;
+  errorBody?: string;
+}) {
+  if (
+    params.currentName === params.fallbackName &&
+    params.currentLang === params.fallbackLang
+  ) {
+    return false;
+  }
+  const errorText = (params.errorBody ?? "").toLowerCase();
+  const isTemplateError =
+    params.status === 400 ||
+    params.status === 404 ||
+    params.status === 132001 ||
+    errorText.includes("does not exist in the translation") ||
+    errorText.includes("template") ||
+    errorText.includes("language");
+  return isTemplateError;
 }
 
 function maskNumber(number: string) {
