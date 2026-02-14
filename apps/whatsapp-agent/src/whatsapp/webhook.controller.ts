@@ -216,6 +216,53 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  const sendOutboundText = async (params: {
+    toE164: string;
+    waId: string;
+    intent: ConversationIntent | undefined;
+    messageId: string;
+    replyText: string;
+  }) => {
+    logger.info({
+      event: "outbound.text.sending",
+      waId: maskNumber(params.waId),
+      to: maskNumber(params.toE164),
+      intent: params.intent ?? "unknown",
+      clientId: env.CLIENT_ID,
+      requestId: meta?.requestId,
+      rid: params.messageId,
+      messageId: params.messageId,
+    });
+    const result = await sendTextMessage(params.toE164, params.replyText);
+    if (result.ok) {
+      logger.info({
+        event: "outbound.text.sent",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        clientId: env.CLIENT_ID,
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+        metaMessageId: result.messageId,
+      });
+    } else {
+      logger.error({
+        event: "outbound.text.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        clientId: env.CLIENT_ID,
+        requestId: meta?.requestId,
+        rid: params.messageId,
+        messageId: params.messageId,
+        status: result.status,
+        errorBody: result.errorBody,
+      });
+    }
+    return result;
+  };
+
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
@@ -775,9 +822,50 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
 
       const replyType = decision.replyType ?? "text";
+      if (replyType === "text" && !env.OUTBOUND_TEXT_ENABLED) {
+        logger.error({
+          event: "outbound.text.failed",
+          waId: maskNumber(normalizedFrom),
+          to: maskNumber(message.from),
+          intent: updatedConversation.intent ?? "unknown",
+          clientId: env.CLIENT_ID,
+          requestId: meta?.requestId,
+          rid: message.messageId,
+          messageId: message.messageId,
+          reason: "disabled",
+        });
+        await attemptTemplateFallback({
+          waId: normalizedFrom,
+          toE164: message.from,
+          intent: updatedConversation.intent,
+          messageId: message.messageId,
+        });
+        continue;
+      }
       const toForReply = env.WHATSAPP_SANDBOX
         ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
         : message.from;
+
+      if (replyType === "text" && !env.OUTBOUND_TEXT_ENABLED) {
+        logger.error({
+          event: "outbound.text.failed",
+          waId: maskNumber(normalizedFrom),
+          to: maskNumber(toForReply),
+          intent: updatedConversation.intent ?? "unknown",
+          clientId: env.CLIENT_ID,
+          requestId: meta?.requestId,
+          rid: message.messageId,
+          messageId: message.messageId,
+          reason: "disabled",
+        });
+        await attemptTemplateFallback({
+          waId: normalizedFrom,
+          toE164: message.from,
+          intent: updatedConversation.intent,
+          messageId: message.messageId,
+        });
+        continue;
+      }
 
       logger.info({
         event: "reply.sending",
@@ -797,7 +885,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
               decision.templateLanguage ?? "pt_BR"
             )
-          : sendTextMessage(toForReply, handoffResult.replyText);
+          : sendOutboundText({
+              toE164: toForReply,
+              waId: normalizedFrom,
+              intent: updatedConversation.intent,
+              messageId: message.messageId,
+              replyText: handoffResult.replyText,
+            });
 
       void sendPromise
         .then(async (result) => {
@@ -1147,7 +1241,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
             decision.templateLanguage ?? "pt_BR"
           )
-        : sendTextMessage(toForReply, replyText);
+        : sendOutboundText({
+            toE164: toForReply,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: message.messageId,
+            replyText,
+          });
 
     void sendPromise
       .then(async (result) => {
