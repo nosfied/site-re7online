@@ -63,6 +63,10 @@ Autenticação via `ADMIN_TOKEN` (header `Authorization: Bearer <token>` ou `x-a
 - `GET /admin/clients`
 - `POST /admin/clients` (body: `{ clientKey, name, phone_number_id }`)
 - `POST /admin/clients/:id/rotate-token`
+- `GET /admin/status`
+- `GET /admin/templates`
+- `GET /admin/messages?waId=...&limit=50`
+- `GET /admin/metrics?range=24h|7d`
 
 Comportamento idempotente do `POST /admin/clients`:
 - Se `clientKey` já existir e `phone_number_id` já estiver vinculado ao mesmo client: retorna 200.
@@ -77,6 +81,12 @@ curl -s -X POST http://localhost:3001/admin/clients \
   -d '{"clientKey":"default","name":"Default","phone_number_id":"1018032104719713"}'
 
 curl -s http://localhost:3001/admin/clients \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl -s http://localhost:3001/admin/status \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
