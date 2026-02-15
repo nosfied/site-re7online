@@ -1,10 +1,21 @@
 import "./bootstrap-env.js";
 import { createServer } from "./http/server.js";
 import { logger } from "./logger/logger.js";
-import { prisma } from "./db.js";
+import { getPrisma } from "./db.js";
 
 async function bootstrap() {
   const { env } = await import("./config/env.js");
+
+  logger.info({
+    event: "env.snapshot",
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    nodeEnv: process.env.NODE_ENV ?? "unknown",
+    port: env.PORT,
+  });
+  if (!process.env.DATABASE_URL) {
+    logger.error({ event: "env.missing", key: "DATABASE_URL" });
+    process.exit(1);
+  }
 
   if (!env.verifyTokenPresent) {
     logger.error({ event: "env.missing", key: "WHATSAPP_VERIFY_TOKEN" });
@@ -27,6 +38,7 @@ async function bootstrap() {
   }
 
   try {
+    const prisma = getPrisma();
     const client = await prisma.client.upsert({
       where: { clientKey: "default" },
       update: {},

@@ -1,6 +1,8 @@
 import "../bootstrap-env.js";
-import { prisma } from "../db.js";
+import { getPrisma } from "../db.js";
 import { env } from "../config/env.js";
+
+const prisma = getPrisma();
 
 async function main() {
   const clientKey = env.CLIENT_ID ?? "default";

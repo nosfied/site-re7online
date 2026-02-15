@@ -6,7 +6,7 @@ import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js
 import { env } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
-import { prisma } from "../db.js";
+import { getPrisma } from "../db.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -37,6 +37,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (url.startsWith("/admin")) {
+    const prisma = getPrisma();
     const token = getAdminToken(req);
     if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) {
       res.writeHead(401, { "Content-Type": "application/json" });

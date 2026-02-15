@@ -1,5 +1,5 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
-import { prisma } from "../db.js";
+import { getPrisma } from "../db.js";
 
 export async function persistInboundMessage(params: {
   clientId: string;
@@ -14,6 +14,7 @@ export async function persistInboundMessage(params: {
 }) {
   if (!params.clientId) return;
   try {
+    const prisma = getPrisma();
     await prisma.inboundMessage.create({
       data: {
         clientId: params.clientId,
@@ -45,6 +46,7 @@ export async function persistConversationWindow(params: {
   lastOutboundAt?: Date | null;
 }) {
   if (!params.clientId) return;
+  const prisma = getPrisma();
   await prisma.conversation.upsert({
     where: {
       clientId_waId: {
@@ -88,6 +90,7 @@ export async function persistOutboundMessage(params: {
 }) {
   if (!params.clientId) return;
   try {
+    const prisma = getPrisma();
     const data = {
       clientId: params.clientId,
       phoneNumberId: params.phoneNumberId,
@@ -137,6 +140,7 @@ export async function persistEvent(params: {
   if (!params.clientId) return;
   if (!params.requestId) return;
   try {
+    const prisma = getPrisma();
     await prisma.event.create({
       data: {
         clientId: params.clientId,

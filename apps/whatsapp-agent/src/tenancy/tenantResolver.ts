@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 
 export type TenantResolution = {
@@ -11,6 +11,7 @@ export async function resolveTenant(
   phoneNumberId: string | undefined,
   meta?: { requestId?: string; route?: string; method?: string }
 ): Promise<TenantResolution> {
+  const prisma = getPrisma();
   if (phoneNumberId) {
     const phone = await prisma.waPhoneNumber.findUnique({
       where: { phoneNumberId },
