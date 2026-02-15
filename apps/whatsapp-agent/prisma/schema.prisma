@@ -38,12 +38,15 @@ model Client {
   clientKey  String          @unique
   name       String
   status     ClientStatus    @default(ACTIVE)
+  adminToken String?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
   phoneNumbers WaPhoneNumber[]
   contacts     Contact[]
   conversations Conversation[]
+  inboundMessages InboundMessage[]
+  outboundMessages OutboundMessage[]
   events        Event[]
 }
 
@@ -110,6 +113,49 @@ model Message {
   @@index([requestId])
   @@index([messageId])
   @@unique([direction, messageId])
+}
+
+model InboundMessage {
+  id            String      @id @default(uuid())
+  clientId      String
+  phoneNumberId String?
+  waId          String
+  messageId     String
+  type          MessageType
+  bodyText      String?
+  allowlistHit  Boolean
+  requestId     String?
+  rawPayload    Json?
+  createdAt     DateTime    @default(now())
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([requestId])
+  @@unique([clientId, messageId])
+}
+
+model OutboundMessage {
+  id            String        @id @default(uuid())
+  clientId      String
+  phoneNumberId String?
+  waId          String
+  messageId     String?
+  type          MessageType
+  status        MessageStatus
+  bodyText      String?
+  templateName  String?
+  templateLang  String?
+  requestId     String?
+  metaMessageId String?
+  errorBody     String?
+  rawPayload    Json?
+  createdAt     DateTime      @default(now())
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([requestId])
+  @@index([messageId])
+  @@unique([clientId, messageId])
 }
 
 model Event {
