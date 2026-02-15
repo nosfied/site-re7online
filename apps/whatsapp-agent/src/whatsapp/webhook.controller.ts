@@ -121,6 +121,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     reasonIfSkip?: string;
   }) => {
     if (!env.OUTBOUND_TEMPLATE_FALLBACK) {
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        templateLang: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason: "fallback_disabled",
+      });
       return;
     }
     if (!env.outboundEnabled) {
@@ -137,6 +145,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         rid: params.messageId,
         messageId: params.messageId,
       });
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        templateLang: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason: "outbound_disabled",
+      });
       return;
     }
     if (params.reasonIfSkip) {
@@ -152,6 +168,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
         rid: params.messageId,
         messageId: params.messageId,
+      });
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        templateLang: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason: params.reasonIfSkip,
       });
       return;
     }
@@ -170,6 +194,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         rid: params.messageId,
         messageId: params.messageId,
       });
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
+        templateLang: env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason: "intent_unresolved",
+      });
       return;
     }
     const templateConfig = resolveTemplateForIntent(params.intent, tenantClientKey);
@@ -186,6 +218,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
         rid: params.messageId,
         messageId: params.messageId,
+      });
+      await persistOutboundBlockedSafe({
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: null,
+        templateLang: null,
+        reason: "template_missing",
       });
       return;
     }
@@ -475,6 +515,49 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       logger.error({
         event: "db.persist.error",
         target: "outbound_template",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
+  const persistOutboundBlockedSafe = async (params: {
+    waId: string;
+    messageId: string;
+    type: MessageType;
+    templateName?: string | null;
+    templateLang?: string | null;
+    reason: string;
+    policy?: string;
+  }) => {
+    try {
+      if (!tenantClientId) return;
+      const errorBody = JSON.stringify({
+        reason: params.reason,
+        policy: params.policy,
+      });
+      await persistOutboundMessage({
+        clientId: tenantClientId,
+        phoneNumberId: phoneNumberId ?? undefined,
+        waId: params.waId,
+        messageId: params.messageId,
+        type: params.type,
+        status: MessageStatus.FAILED,
+        templateName: params.templateName ?? undefined,
+        templateLang: params.templateLang ?? undefined,
+        requestId: meta?.requestId,
+        errorBody,
+        rawPayload: {
+          reason: params.reason,
+          policy: params.policy,
+          templateName: params.templateName ?? undefined,
+          templateLang: params.templateLang ?? undefined,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "outbound_blocked",
         message: (error as Error).message,
         requestId: meta?.requestId,
       });
@@ -1107,6 +1190,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
           }
         }
+        await persistOutboundBlockedSafe({
+          waId: normalizedFrom,
+          messageId: message.messageId,
+          type: MessageType.TEMPLATE,
+          templateName: resolvedTemplate.name,
+          templateLang: resolvedTemplate.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+          reason: "window_closed",
+          policy: decision.policy,
+        });
         await attemptTemplateFallback({
           waId: normalizedFrom,
           toE164: message.from,
@@ -1497,6 +1589,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         }
       }
+      await persistOutboundBlockedSafe({
+        waId: normalizedFrom,
+        messageId: message.messageId,
+        type: MessageType.TEMPLATE,
+        templateName: resolvedTemplate.name,
+        templateLang: resolvedTemplate.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        reason: "window_closed",
+        policy: decision.policy,
+      });
       await attemptTemplateFallback({
         waId: normalizedFrom,
         toE164: message.from,

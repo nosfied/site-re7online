@@ -88,23 +88,35 @@ export async function persistOutboundMessage(params: {
 }) {
   if (!params.clientId) return;
   try {
-    await prisma.outboundMessage.create({
-      data: {
-        clientId: params.clientId,
-        phoneNumberId: params.phoneNumberId,
-        waId: params.waId,
-        messageId: params.messageId ?? undefined,
-        type: params.type,
-        status: params.status,
-        bodyText: params.bodyText ?? undefined,
-        templateName: params.templateName ?? undefined,
-        templateLang: params.templateLang ?? undefined,
-        requestId: params.requestId,
-        metaMessageId: params.metaMessageId ?? undefined,
-        errorBody: params.errorBody ?? undefined,
-        rawPayload: params.rawPayload,
-      },
-    });
+    const data = {
+      clientId: params.clientId,
+      phoneNumberId: params.phoneNumberId,
+      waId: params.waId,
+      messageId: params.messageId ?? undefined,
+      type: params.type,
+      status: params.status,
+      bodyText: params.bodyText ?? undefined,
+      templateName: params.templateName ?? undefined,
+      templateLang: params.templateLang ?? undefined,
+      requestId: params.requestId,
+      metaMessageId: params.metaMessageId ?? undefined,
+      errorBody: params.errorBody ?? undefined,
+      rawPayload: params.rawPayload,
+    };
+    if (params.messageId) {
+      await prisma.outboundMessage.upsert({
+        where: {
+          clientId_messageId: {
+            clientId: params.clientId,
+            messageId: params.messageId,
+          },
+        },
+        update: data,
+        create: data,
+      });
+    } else {
+      await prisma.outboundMessage.create({ data });
+    }
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") return;
