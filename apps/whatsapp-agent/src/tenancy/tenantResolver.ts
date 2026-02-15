@@ -29,6 +29,7 @@ export async function resolveTenant(
     where: { clientKey: "default" },
   });
   if (fallbackClient) {
+    // Fail-soft: fallback default para não perder mensagens; admin deve cadastrar phone_number_id.
     logger.warn({
       event: "tenant.missing",
       phoneNumberId,
@@ -43,6 +44,7 @@ export async function resolveTenant(
     };
   }
 
+  // Sem fallback: mantém clientId vazio e loga erro para evitar hard-fail em produção.
   logger.error({
     event: "tenant.missing",
     phoneNumberId,

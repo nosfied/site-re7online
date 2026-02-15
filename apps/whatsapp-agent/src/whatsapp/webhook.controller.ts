@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
-import { MessageStatus, MessageType } from "@prisma/client";
+import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
@@ -344,16 +344,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message: (error as Error).message,
     });
   }
-  await persistEventSafe(
-    "webhook.received",
-    { route: meta?.route, method: meta?.method },
-    undefined,
-    undefined
-  );
-
   const persistEventSafe = async (
     eventName: string,
-    payloadJson: Record<string, unknown>,
+    payloadJson: Prisma.InputJsonValue,
     waId?: string,
     messageId?: string
   ) => {
@@ -377,13 +370,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  await persistEventSafe(
+    "webhook.received",
+    { route: meta?.route, method: meta?.method } as Prisma.InputJsonValue,
+    undefined,
+    undefined
+  );
+
   const persistInboundSafe = async (params: {
     waId: string;
     messageId: string;
     type: MessageType;
     bodyText?: string | null;
     allowlistHit: boolean;
-    rawPayload?: Record<string, unknown>;
+    rawPayload?: Prisma.InputJsonValue;
   }) => {
     try {
       if (!tenantClientId) return;
