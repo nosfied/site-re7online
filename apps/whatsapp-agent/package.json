@@ -14,6 +14,10 @@
     "db:seed": "tsx src/db/seed.ts",
     "dev:webhook": "node scripts/send-signed-webhook.mjs",
     "dev:webhook:file": "WEBHOOK_BODY_FILE=scripts/payload.sample.json node scripts/send-signed-webhook.mjs",
+    "dev:webhook:allow": "FROM=558499049614 node scripts/send-signed-webhook.mjs",
+    "dev:webhook:block": "FROM=5511999999999 node scripts/send-signed-webhook.mjs",
+    "dev:webhook:re7": "FROM=558499049614 PHONE_NUMBER_ID=1018032104719713 node scripts/send-signed-webhook.mjs",
+    "dev:webhook:help": "node scripts/send-signed-webhook.mjs --help",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production"
   },
