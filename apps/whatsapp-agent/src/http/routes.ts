@@ -211,7 +211,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               requestId,
             });
             res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden" }));
+            res.end(JSON.stringify({ error: "forbidden", reason: "signature_missing" }));
             return;
           }
           const signature = validateMetaSignature(rawBody, signatureHeader, env.META_APP_SECRET);
@@ -224,7 +224,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               reason: signature.reason,
             });
             res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden" }));
+            res.end(JSON.stringify({ error: "forbidden", reason: "signature_invalid" }));
             return;
           }
           logger.info({

@@ -84,6 +84,31 @@ curl -s http://localhost:3001/admin/clients \
 - `GET /` → "whatsapp-agent running"
 - `GET /health` → `{ ok: true }`
 
+## Teste local do webhook (assinatura)
+O endpoint `/webhook` exige assinatura `X-Hub-Signature-256` mesmo em dev. Para testar:
+
+Script (recomendado):
+```bash
+META_APP_SECRET=seu_segredo WEBHOOK_URL=http://localhost:3002/webhook npm run dev:webhook
+```
+
+Com payload de arquivo:
+```bash
+META_APP_SECRET=seu_segredo WEBHOOK_URL=http://localhost:3002/webhook npm run dev:webhook:file
+```
+
+Exemplo com curl + openssl:
+```bash
+RAW='{"object":"whatsapp_business_account","entry":[{"id":"entry-1","changes":[{"field":"messages","value":{"metadata":{"phone_number_id":"1018032104719713"},"messages":[{"id":"wamid.dev.curl","from":"5511999999999","timestamp":"1700000000","type":"text","text":{"body":"teste webhook"}}]}}]}]}'
+SIG=$(printf '%s' "$RAW" | openssl dgst -sha256 -hmac "$META_APP_SECRET" | awk '{print $2}')
+curl -s -X POST http://localhost:3002/webhook \\
+  -H "Content-Type: application/json" \\
+  -H "X-Hub-Signature-256: sha256=$SIG" \\
+  -d "$RAW"
+```
+
+Observação: se `WHATSAPP_ALLOWLIST` estiver ativo e o `from` não estiver permitido, o status será `ignored`.
+
 ## Como testar (passo a passo)
 1) Preencha o `.env` conforme `.env.example`.
 2) Rode `npm run dev` e confirme o serviço na porta configurada.
