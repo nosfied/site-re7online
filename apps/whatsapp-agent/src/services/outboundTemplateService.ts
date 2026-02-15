@@ -13,6 +13,8 @@ export type OutboundTemplateParams = {
   requestId?: string;
   rid?: string;
   messageId?: string;
+  clientId?: string;
+  clientKey?: string;
 };
 
 export type SendTemplateResult = {
@@ -35,7 +37,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
-      clientId: env.CLIENT_ID,
+      clientId: params.clientId ?? env.CLIENT_ID,
+      clientKey: params.clientKey ?? env.CLIENT_ID,
       isFallback: Boolean(params.isFallback),
       fallbackReason: params.fallbackReason,
       requestId: params.requestId,
@@ -63,7 +66,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     intent: params.intent ?? "unknown",
     template: params.templateName,
     language: resolvedLang,
-    clientId: env.CLIENT_ID,
+    clientId: params.clientId ?? env.CLIENT_ID,
+    clientKey: params.clientKey ?? env.CLIENT_ID,
     isFallback: Boolean(params.isFallback),
     fallbackReason: params.fallbackReason,
     requestId: params.requestId,
@@ -102,7 +106,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         intent: params.intent ?? "unknown",
         template: params.templateName,
         language: resolvedLang,
-        clientId: env.CLIENT_ID,
+        clientId: params.clientId ?? env.CLIENT_ID,
+        clientKey: params.clientKey ?? env.CLIENT_ID,
         isFallback: Boolean(params.isFallback),
         fallbackReason: params.fallbackReason,
         requestId: params.requestId,
@@ -121,7 +126,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
-      clientId: env.CLIENT_ID,
+      clientId: params.clientId ?? env.CLIENT_ID,
+      clientKey: params.clientKey ?? env.CLIENT_ID,
       isFallback: Boolean(params.isFallback),
       fallbackReason: params.fallbackReason,
       requestId: params.requestId,
@@ -140,7 +146,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       intent: params.intent ?? "unknown",
       template: params.templateName,
       language: resolvedLang,
-      clientId: env.CLIENT_ID,
+      clientId: params.clientId ?? env.CLIENT_ID,
+      clientKey: params.clientKey ?? env.CLIENT_ID,
       isFallback: Boolean(params.isFallback),
       fallbackReason: params.fallbackReason,
       requestId: params.requestId,
@@ -152,9 +159,12 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
   }
 }
 
-export function resolveTemplateForIntent(intent: ConversationIntent | undefined) {
+export function resolveTemplateForIntent(
+  intent: ConversationIntent | undefined,
+  clientKey: string = env.CLIENT_ID
+) {
   const key = intent ?? "unknown";
-  const byClient = env.OUTBOUND_TEMPLATES_BY_CLIENT[env.CLIENT_ID] ?? {};
+  const byClient = env.OUTBOUND_TEMPLATES_BY_CLIENT[clientKey] ?? {};
   const clientMapped = byClient[key];
   if (clientMapped && clientMapped.name) {
     return {

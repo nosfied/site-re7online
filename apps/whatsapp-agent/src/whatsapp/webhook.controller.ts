@@ -130,7 +130,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
         template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         reason: "outbound_disabled",
         requestId: meta?.requestId,
         rid: params.messageId,
@@ -145,7 +146,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
         template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         reason: params.reasonIfSkip,
         requestId: meta?.requestId,
         rid: params.messageId,
@@ -161,7 +163,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
         template: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         reason: "intent_unresolved",
         requestId: meta?.requestId,
         rid: params.messageId,
@@ -169,7 +172,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       return;
     }
-    const templateConfig = resolveTemplateForIntent(params.intent);
+    const templateConfig = resolveTemplateForIntent(params.intent, tenantClientKey);
     if (!templateConfig.name) {
       logger.error({
         event: "outbound.template.failed",
@@ -177,7 +180,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
         template: "missing",
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         reason: "template_missing",
         requestId: meta?.requestId,
         rid: params.messageId,
@@ -195,6 +199,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       requestId: meta?.requestId,
       rid: params.messageId,
       messageId: params.messageId,
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
     });
     await persistOutboundTemplateSafe({
       waId: params.waId,
@@ -239,6 +245,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
           rid: params.messageId,
           messageId: params.messageId,
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
         });
         await persistOutboundTemplateSafe({
           waId: params.waId,
@@ -277,7 +285,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       waId: maskNumber(params.waId),
       to: maskNumber(params.toE164),
       intent: params.intent ?? "unknown",
-      clientId: env.CLIENT_ID,
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
       requestId: meta?.requestId,
       rid: params.messageId,
       messageId: params.messageId,
@@ -289,7 +298,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         waId: maskNumber(params.waId),
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         requestId: meta?.requestId,
         rid: params.messageId,
         messageId: params.messageId,
@@ -301,7 +311,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         waId: maskNumber(params.waId),
         to: maskNumber(params.toE164),
         intent: params.intent ?? "unknown",
-        clientId: env.CLIENT_ID,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
         requestId: meta?.requestId,
         rid: params.messageId,
         messageId: params.messageId,
@@ -334,9 +345,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const phoneNumberId =
     typedPayload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
   let tenantClientId = "";
+  let tenantClientKey = env.CLIENT_ID;
   try {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
+    tenantClientKey = tenant.clientKey;
   } catch (error) {
     logger.error({
       event: "tenant.resolve.error",
@@ -1051,7 +1064,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       if (decision.action === "block") {
         const nowIso = new Date().toISOString();
-        const resolvedTemplate = resolveTemplateForIntent(updatedConversation.intent);
+        const resolvedTemplate = resolveTemplateForIntent(
+          updatedConversation.intent,
+          tenantClientKey
+        );
         const blockedConversation = markTemplateNeeded(updatedConversation, {
           templateSuggested: resolvedTemplate.name,
           atIso: nowIso,
@@ -1067,7 +1083,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               waId: maskNumber(normalizedFrom),
               intent: updatedConversation.intent ?? "unknown",
               policy: decision.policy,
-              clientId: env.CLIENT_ID,
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
               route: meta?.route,
               method: meta?.method,
               requestId: meta?.requestId,
@@ -1082,7 +1099,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               suggestedTemplate: resolvedTemplate.name,
               language: resolvedTemplate.language,
               suggestedLanguage: resolvedTemplate.language,
-              clientId: env.CLIENT_ID,
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
               route: meta?.route,
               method: meta?.method,
               requestId: meta?.requestId,
@@ -1105,7 +1123,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waId: maskNumber(normalizedFrom),
           to: maskNumber(message.from),
           intent: updatedConversation.intent ?? "unknown",
-          clientId: env.CLIENT_ID,
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
           requestId: meta?.requestId,
           rid: message.messageId,
           messageId: message.messageId,
@@ -1129,7 +1148,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waId: maskNumber(normalizedFrom),
           to: maskNumber(toForReply),
           intent: updatedConversation.intent ?? "unknown",
-          clientId: env.CLIENT_ID,
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
           requestId: meta?.requestId,
           rid: message.messageId,
           messageId: message.messageId,
@@ -1434,7 +1454,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (decision.action === "block") {
       const nowIso = new Date().toISOString();
-      const resolvedTemplate = resolveTemplateForIntent(updatedConversation.intent);
+      const resolvedTemplate = resolveTemplateForIntent(
+        updatedConversation.intent,
+        tenantClientKey
+      );
       const blockedConversation = markTemplateNeeded(updatedConversation, {
         templateSuggested: resolvedTemplate.name,
         atIso: nowIso,
@@ -1450,7 +1473,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             waId: maskNumber(normalizedFrom),
             intent: updatedConversation.intent ?? "unknown",
             policy: decision.policy,
-            clientId: env.CLIENT_ID,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
             route: meta?.route,
             method: meta?.method,
             requestId: meta?.requestId,
@@ -1465,7 +1489,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             suggestedTemplate: resolvedTemplate.name,
             language: resolvedTemplate.language,
             suggestedLanguage: resolvedTemplate.language,
-            clientId: env.CLIENT_ID,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
             route: meta?.route,
             method: meta?.method,
             requestId: meta?.requestId,
