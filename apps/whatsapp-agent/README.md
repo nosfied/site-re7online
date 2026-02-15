@@ -92,6 +92,23 @@ Script (recomendado):
 META_APP_SECRET=seu_segredo WEBHOOK_URL=http://localhost:3002/webhook npm run dev:webhook
 ```
 
+Testes com allowlist (ajuste `WHATSAPP_ALLOWLIST` no `.env`):
+```bash
+# dentro da allowlist
+META_APP_SECRET=seu_segredo npm run dev:webhook:allow
+
+# fora da allowlist
+META_APP_SECRET=seu_segredo npm run dev:webhook:block
+```
+
+Overrides por CLI:
+```bash
+META_APP_SECRET=seu_segredo node scripts/send-signed-webhook.mjs \\
+  --from 5511999999999 \\
+  --text \"mensagem de teste\" \\
+  --phone-number-id 1018032104719713
+```
+
 Com payload de arquivo:
 ```bash
 META_APP_SECRET=seu_segredo WEBHOOK_URL=http://localhost:3002/webhook npm run dev:webhook:file
