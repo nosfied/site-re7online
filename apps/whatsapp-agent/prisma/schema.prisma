@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  TEMPLATE
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  UNKNOWN
+}
+
+enum MessageStatus {
+  RECEIVED
+  SENT
+  FAILED
+}
+
+model Client {
+  id         String          @id @default(uuid())
+  clientKey  String          @unique
+  name       String
+  status     ClientStatus    @default(ACTIVE)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  phoneNumbers WaPhoneNumber[]
+  contacts     Contact[]
+  conversations Conversation[]
+  events        Event[]
+}
+
+model WaPhoneNumber {
+  id            String   @id @default(uuid())
+  clientId      String
+  phoneNumberId String   @unique
+  display       String?
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id])
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  clientId  String
+  waId      String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@unique([clientId, waId])
+}
+
+model Conversation {
+  id               String   @id @default(uuid())
+  clientId         String
+  waId             String
+  phoneNumberId    String?
+  windowIsOpen     Boolean  @default(true)
+  windowExpiresAt  DateTime?
+  lastInboundAt    DateTime?
+  lastOutboundAt   DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client   Client    @relation(fields: [clientId], references: [id])
+  messages Message[]
+
+  @@unique([clientId, waId])
+  @@index([clientId, waId])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  conversationId String
+  direction      Direction
+  messageId      String?
+  waId           String
+  type           MessageType
+  intent         String?
+  bodyText       String?
+  templateName   String?
+  templateLang   String?
+  status         MessageStatus
+  requestId      String?
+  metaMessageId  String?
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  @@index([requestId])
+  @@index([messageId])
+  @@unique([direction, messageId])
+}
+
+model Event {
+  id             String   @id @default(uuid())
+  clientId       String
+  conversationId String?
+  waId           String?
+  messageId      String?
+  requestId      String?
+  eventName      String
+  payloadJson    Json
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([requestId])
+  @@index([messageId])
+  @@unique([eventName, requestId])
+}
