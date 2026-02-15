@@ -57,6 +57,13 @@ Produção:
 npm run db:deploy
 ```
 
+## Endpoints admin
+Autenticação via `ADMIN_TOKEN` (header `Authorization: Bearer <token>` ou `x-admin-token`).
+- `GET /admin/health`
+- `GET /admin/clients`
+- `POST /admin/clients` (body: `{ clientKey, name, phone_number_id }`)
+- `POST /admin/clients/:id/rotate-token`
+
 ## Endpoints atuais
 - `GET /` → "whatsapp-agent running"
 - `GET /health` → `{ ok: true }`
