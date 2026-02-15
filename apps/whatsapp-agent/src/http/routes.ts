@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { env } from "../config/env.js";
@@ -76,22 +77,95 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         res.end(JSON.stringify({ error: "invalid_body" }));
         return;
       }
-      const client = await prisma.client.create({
-        data: {
-          clientKey,
-          name,
-          phoneNumbers: {
-            create: {
+      try {
+        let created = false;
+        let createdPhone = false;
+        let client = await prisma.client.findUnique({
+          where: { clientKey },
+          include: { phoneNumbers: true },
+        });
+        if (!client) {
+          client = await prisma.client.create({
+            data: { clientKey, name },
+            include: { phoneNumbers: true },
+          });
+          created = true;
+        }
+
+        const existingPhone = await prisma.waPhoneNumber.findUnique({
+          where: { phoneNumberId },
+        });
+        if (existingPhone && existingPhone.clientId !== client.id) {
+          const owner = await prisma.client.findUnique({
+            where: { id: existingPhone.clientId },
+          });
+          res.writeHead(409, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "phone_number_conflict",
+              phoneNumberId,
+              clientKey: owner?.clientKey ?? null,
+            })
+          );
+          return;
+        }
+
+        if (!existingPhone) {
+          await prisma.waPhoneNumber.create({
+            data: {
               phoneNumberId,
               display: phoneNumberId,
+              clientId: client.id,
             },
-          },
-        },
-        include: { phoneNumbers: true },
-      });
-      res.writeHead(201, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(client));
-      return;
+          });
+          createdPhone = true;
+        }
+
+        const updatedClient = await prisma.client.findUnique({
+          where: { id: client.id },
+          include: { phoneNumbers: true },
+        });
+        const status = created || createdPhone ? 201 : 200;
+        res.writeHead(status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(updatedClient));
+        return;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          const existingPhone = await prisma.waPhoneNumber.findUnique({
+            where: { phoneNumberId },
+          });
+          if (existingPhone) {
+            const owner = await prisma.client.findUnique({
+              where: { id: existingPhone.clientId },
+            });
+            res.writeHead(409, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "phone_number_conflict",
+                phoneNumberId,
+                clientKey: owner?.clientKey ?? null,
+              })
+            );
+            return;
+          }
+          const existingClient = await prisma.client.findUnique({
+            where: { clientKey },
+            include: { phoneNumbers: true },
+          });
+          if (existingClient) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(existingClient));
+            return;
+          }
+        }
+        logger.error({
+          event: "admin.clients.error",
+          error: (error as Error).message,
+        });
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "server_error" }));
+        return;
+      }
     }
 
     if (req.method === "POST" && url.startsWith("/admin/clients/")) {

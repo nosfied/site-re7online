@@ -64,6 +64,22 @@ Autenticação via `ADMIN_TOKEN` (header `Authorization: Bearer <token>` ou `x-a
 - `POST /admin/clients` (body: `{ clientKey, name, phone_number_id }`)
 - `POST /admin/clients/:id/rotate-token`
 
+Comportamento idempotente do `POST /admin/clients`:
+- Se `clientKey` já existir e `phone_number_id` já estiver vinculado ao mesmo client: retorna 200.
+- Se `phone_number_id` estiver vinculado a outro client: retorna 409.
+- Se criar client e/ou vínculo: retorna 201.
+
+Exemplos (curl):
+```bash
+curl -s -X POST http://localhost:3001/admin/clients \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"clientKey":"default","name":"Default","phone_number_id":"1018032104719713"}'
+
+curl -s http://localhost:3001/admin/clients \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
 ## Endpoints atuais
 - `GET /` → "whatsapp-agent running"
 - `GET /health` → `{ ok: true }`
