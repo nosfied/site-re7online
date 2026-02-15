@@ -5,8 +5,9 @@ import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js
 import { env } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
+import { prisma } from "../db.js";
 
-export function handleRequest(req: IncomingMessage, res: ServerResponse) {
+export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
 
   if (req.method === "GET" && url === "/health") {
@@ -32,6 +33,83 @@ export function handleRequest(req: IncomingMessage, res: ServerResponse) {
       })
     );
     return;
+  }
+
+  if (url.startsWith("/admin")) {
+    const token = getAdminToken(req);
+    if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+
+    if (req.method === "GET" && url === "/admin/health") {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, db: true }));
+      } catch {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, db: false }));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && url === "/admin/clients") {
+      const clients = await prisma.client.findMany({
+        include: { phoneNumbers: true },
+        orderBy: { createdAt: "desc" },
+      });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ items: clients }));
+      return;
+    }
+
+    if (req.method === "POST" && url === "/admin/clients") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const clientKey = String(body.clientKey ?? "").trim();
+      const name = String(body.name ?? "").trim();
+      const phoneNumberId = String(body.phone_number_id ?? "").trim();
+      if (!clientKey || !name || !phoneNumberId) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_body" }));
+        return;
+      }
+      const client = await prisma.client.create({
+        data: {
+          clientKey,
+          name,
+          phoneNumbers: {
+            create: {
+              phoneNumberId,
+              display: phoneNumberId,
+            },
+          },
+        },
+        include: { phoneNumbers: true },
+      });
+      res.writeHead(201, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(client));
+      return;
+    }
+
+    if (req.method === "POST" && url.startsWith("/admin/clients/")) {
+      const [, , , id, action] = url.split("/");
+      if (action !== "rotate-token") {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "not_found" }));
+        return;
+      }
+      const newToken = crypto.randomBytes(24).toString("hex");
+      const updated = await prisma.client.update({
+        where: { id },
+        data: { adminToken: newToken },
+      });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ id: updated.id, adminToken: newToken }));
+      return;
+    }
   }
 
   if (url.startsWith("/webhook")) {
@@ -158,5 +236,33 @@ function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
       resolve();
     });
     req.on("error", reject);
+  });
+}
+
+function getAdminToken(req: IncomingMessage) {
+  const header = req.headers["authorization"];
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    return header.slice(7);
+  }
+  const token = req.headers["x-admin-token"];
+  return typeof token === "string" ? token : "";
+}
+
+async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
+  return new Promise<Record<string, unknown> | null>((resolve) => {
+    readRawBody(req, (rawBody) => {
+      try {
+        const parsed = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+        resolve(parsed);
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid_json" }));
+        resolve(null);
+      }
+    }).catch(() => {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "invalid_body" }));
+      resolve(null);
+    });
   });
 }

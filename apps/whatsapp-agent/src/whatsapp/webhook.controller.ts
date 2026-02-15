@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import { MessageStatus, MessageType } from "@prisma/client";
 import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
@@ -33,6 +34,13 @@ import {
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
+import { resolveTenant } from "../tenancy/tenantResolver.js";
+import {
+  persistConversationWindow,
+  persistEvent,
+  persistInboundMessage,
+  persistOutboundMessage,
+} from "../db/persist.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -188,6 +196,26 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       rid: params.messageId,
       messageId: params.messageId,
     });
+    await persistOutboundTemplateSafe({
+      waId: params.waId,
+      messageId: params.messageId,
+      templateName: templateConfig.name,
+      templateLang: templateConfig.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+      status: primaryResult.ok ? MessageStatus.SENT : MessageStatus.FAILED,
+      errorBody: primaryResult.errorBody ?? null,
+      metaMessageId: primaryResult.metaMessageId ?? null,
+    });
+    await persistEventSafe(
+      primaryResult.ok ? "outbound.template.sent" : "outbound.template.failed",
+      {
+        template: templateConfig.name,
+        language: templateConfig.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        status: primaryResult.status,
+        errorBody: primaryResult.errorBody,
+      },
+      params.waId,
+      params.messageId
+    );
     if (!primaryResult.ok && env.OUTBOUND_TEMPLATE_FALLBACK) {
       const fallback = resolveFallbackTemplate();
       if (
@@ -200,7 +228,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           errorBody: primaryResult.errorBody,
         })
       ) {
-        await sendTemplate({
+        const fallbackResult = await sendTemplate({
           toE164: params.toE164,
           waId: params.waId,
           intent: params.intent,
@@ -212,6 +240,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           rid: params.messageId,
           messageId: params.messageId,
         });
+        await persistOutboundTemplateSafe({
+          waId: params.waId,
+          messageId: params.messageId,
+          templateName: fallback.name,
+          templateLang: fallback.language,
+          status: fallbackResult.ok ? MessageStatus.SENT : MessageStatus.FAILED,
+          errorBody: fallbackResult.errorBody ?? null,
+          metaMessageId: fallbackResult.metaMessageId ?? null,
+        });
+        await persistEventSafe(
+          fallbackResult.ok ? "outbound.template.sent" : "outbound.template.failed",
+          {
+            template: fallback.name,
+            language: fallback.language,
+            status: fallbackResult.status,
+            errorBody: fallbackResult.errorBody,
+            isFallback: true,
+          },
+          params.waId,
+          params.messageId
+        );
       }
     }
   };
@@ -260,6 +309,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         errorBody: result.errorBody,
       });
     }
+    await persistOutboundTextSafe({
+      waId: params.waId,
+      messageId: params.messageId,
+      bodyText: params.replyText,
+      status: result.ok ? MessageStatus.SENT : MessageStatus.FAILED,
+      errorBody: result.errorBody ?? null,
+      metaMessageId: result.messageId ?? null,
+    });
+    await persistEventSafe(
+      result.ok ? "outbound.text.sent" : "outbound.text.failed",
+      {
+        status: result.status,
+        errorBody: result.errorBody,
+      },
+      params.waId,
+      params.messageId
+    );
     return result;
   };
 
@@ -267,6 +333,176 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
     typedPayload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+  let tenantClientId = "";
+  try {
+    const tenant = await resolveTenant(phoneNumberId, meta);
+    tenantClientId = tenant.clientId;
+  } catch (error) {
+    logger.error({
+      event: "tenant.resolve.error",
+      requestId: meta?.requestId,
+      message: (error as Error).message,
+    });
+  }
+  await persistEventSafe(
+    "webhook.received",
+    { route: meta?.route, method: meta?.method },
+    undefined,
+    undefined
+  );
+
+  const persistEventSafe = async (
+    eventName: string,
+    payloadJson: Record<string, unknown>,
+    waId?: string,
+    messageId?: string
+  ) => {
+    try {
+      if (!tenantClientId || !meta?.requestId) return;
+      await persistEvent({
+        clientId: tenantClientId,
+        waId: waId ?? null,
+        messageId: messageId ?? null,
+        requestId: meta.requestId,
+        eventName,
+        payloadJson,
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "event",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
+  const persistInboundSafe = async (params: {
+    waId: string;
+    messageId: string;
+    type: MessageType;
+    bodyText?: string | null;
+    allowlistHit: boolean;
+    rawPayload?: Record<string, unknown>;
+  }) => {
+    try {
+      if (!tenantClientId) return;
+      await persistInboundMessage({
+        clientId: tenantClientId,
+        phoneNumberId: phoneNumberId ?? undefined,
+        waId: params.waId,
+        messageId: params.messageId,
+        type: params.type,
+        bodyText: params.bodyText,
+        allowlistHit: params.allowlistHit,
+        requestId: meta?.requestId,
+        rawPayload: params.rawPayload,
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "inbound",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
+  const persistConversationSafe = async (state: { waId: string; windowIsOpen: boolean; windowExpiresAt?: string; lastInboundAt?: string | null; lastOutboundAt?: string | null; }) => {
+    try {
+      if (!tenantClientId) return;
+      await persistConversationWindow({
+        clientId: tenantClientId,
+        waId: state.waId,
+        phoneNumberId: phoneNumberId ?? undefined,
+        windowIsOpen: state.windowIsOpen,
+        windowExpiresAt: state.windowExpiresAt ? new Date(state.windowExpiresAt) : null,
+        lastInboundAt: state.lastInboundAt ? new Date(state.lastInboundAt) : null,
+        lastOutboundAt: state.lastOutboundAt ? new Date(state.lastOutboundAt) : null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "conversation",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
+  const persistOutboundTemplateSafe = async (params: {
+    waId: string;
+    messageId: string;
+    templateName: string;
+    templateLang: string;
+    status: MessageStatus;
+    errorBody: string | null;
+    metaMessageId: string | null;
+  }) => {
+    try {
+      if (!tenantClientId) return;
+      await persistOutboundMessage({
+        clientId: tenantClientId,
+        phoneNumberId: phoneNumberId ?? undefined,
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEMPLATE,
+        status: params.status,
+        templateName: params.templateName,
+        templateLang: params.templateLang,
+        requestId: meta?.requestId,
+        metaMessageId: params.metaMessageId,
+        errorBody: params.errorBody,
+        rawPayload: {
+          templateName: params.templateName,
+          templateLang: params.templateLang,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "outbound_template",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
+  const persistOutboundTextSafe = async (params: {
+    waId: string;
+    messageId: string;
+    bodyText: string;
+    status: MessageStatus;
+    errorBody: string | null;
+    metaMessageId: string | null;
+  }) => {
+    try {
+      if (!tenantClientId) return;
+      await persistOutboundMessage({
+        clientId: tenantClientId,
+        phoneNumberId: phoneNumberId ?? undefined,
+        waId: params.waId,
+        messageId: params.messageId,
+        type: MessageType.TEXT,
+        status: params.status,
+        bodyText: params.bodyText,
+        requestId: meta?.requestId,
+        metaMessageId: params.metaMessageId,
+        errorBody: params.errorBody,
+        rawPayload: {
+          bodyText: params.bodyText,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "db.persist.error",
+        target: "outbound_text",
+        message: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
   const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
   const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
   if (hasStatuses) {
@@ -278,6 +514,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       phone_number_id: phoneNumberId,
       count: statuses.length,
     });
+    await persistEventSafe(
+      "webhook.status.received",
+      { phone_number_id: phoneNumberId, count: statuses.length },
+      undefined,
+      undefined
+    );
   }
 
   if (normalized.messages.length === 0) {
@@ -302,6 +544,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     phone_number_id: phoneNumberId,
     count: normalized.messages.length,
   });
+  await persistEventSafe(
+    "webhook.inbound",
+    { phone_number_id: phoneNumberId, count: normalized.messages.length },
+    undefined,
+    undefined
+  );
 
   for (const message of normalized.messages) {
     const existing = await jsonFileStorage.findByMessageId(message.messageId);
@@ -342,6 +590,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       method: meta?.method,
       requestId: meta?.requestId,
     });
+    await persistEventSafe(
+      "allowlist.check",
+      { from: normalizedFrom, allowlistEnabled, allowlistCount: env.WHATSAPP_ALLOWLIST.length, hit: allowlistHit },
+      normalizedFrom,
+      message.messageId
+    );
 
     const currentConversation = await getOrCreateConversation(
       jsonFileStorage,
@@ -738,6 +992,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await jsonFileStorage.upsertConversation(updatedConversation);
       logConversationWindow(updatedConversation, meta);
       logConversationIntent(updatedConversation, meta);
+      await persistEventSafe(
+        "conversation.window",
+        {
+          waId: updatedConversation.waId,
+          isOpen: updatedConversation.window.isOpen,
+          expiresAt: updatedConversation.window.expiresAt,
+        },
+        updatedConversation.waId,
+        message.messageId
+      );
+      await persistEventSafe(
+        "conversation.intent",
+        { waId: updatedConversation.waId, intent: updatedConversation.intent ?? "unknown" },
+        updatedConversation.waId,
+        message.messageId
+      );
+      await persistConversationSafe({
+        waId: updatedConversation.waId,
+        windowIsOpen: updatedConversation.window.isOpen,
+        windowExpiresAt: updatedConversation.window.expiresAt,
+        lastInboundAt: updatedConversation.lastInboundAt ?? null,
+        lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+      });
 
       await jsonFileStorage.saveIncomingMessage({
         ...message,
@@ -1057,6 +1334,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     await jsonFileStorage.upsertConversation(updatedConversation);
     logConversationWindow(updatedConversation, meta);
     logConversationIntent(updatedConversation, meta);
+    await persistEventSafe(
+      "conversation.window",
+      {
+        waId: updatedConversation.waId,
+        isOpen: updatedConversation.window.isOpen,
+        expiresAt: updatedConversation.window.expiresAt,
+      },
+      updatedConversation.waId,
+      message.messageId
+    );
+    await persistEventSafe(
+      "conversation.intent",
+      { waId: updatedConversation.waId, intent: updatedConversation.intent ?? "unknown" },
+      updatedConversation.waId,
+      message.messageId
+    );
+    await persistConversationSafe({
+      waId: updatedConversation.waId,
+      windowIsOpen: updatedConversation.window.isOpen,
+      windowExpiresAt: updatedConversation.window.expiresAt,
+      lastInboundAt: updatedConversation.lastInboundAt ?? null,
+      lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+    });
 
     await jsonFileStorage.saveIncomingMessage({
       ...message,
@@ -1077,6 +1377,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       route: meta?.route,
       method: meta?.method,
       requestId: meta?.requestId,
+    });
+    await persistEventSafe(
+      "webhook.message",
+      { messageId: message.messageId, from: message.from, type: message.type, status, allowlistHit },
+      message.from,
+      message.messageId
+    );
+    await persistInboundSafe({
+      waId: message.from,
+      messageId: message.messageId,
+      type: mapMessageType(message.type),
+      bodyText: message.text,
+      allowlistHit,
+      rawPayload: {
+        ...message.raw,
+        text: message.text,
+        timestamp: message.timestamp,
+      },
     });
 
     if (!allowlistHit) {
@@ -1302,6 +1620,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
+}
+
+function mapMessageType(type: string): MessageType {
+  if (type === "text") return MessageType.TEXT;
+  if (type === "image") return MessageType.IMAGE;
+  if (type === "audio") return MessageType.AUDIO;
+  if (type === "video") return MessageType.VIDEO;
+  if (type === "document") return MessageType.DOCUMENT;
+  if (type === "template") return MessageType.TEMPLATE;
+  return MessageType.UNKNOWN;
 }
 
 function parseDebugCloseWindowCommand(text: string | null): { waId: string } | null {

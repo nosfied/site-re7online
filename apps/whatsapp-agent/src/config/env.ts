@@ -29,6 +29,7 @@ export type Env = {
   OUTBOUND_TEMPLATE_FALLBACK_LANG: string;
   OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }>;
   OUTBOUND_TEXT_ENABLED: boolean;
+  ADMIN_TOKEN: string;
   CLIENT_ID: string;
   OUTBOUND_TEMPLATES_BY_CLIENT: Record<
     string,
@@ -105,6 +106,7 @@ export function getEnv(): Env {
     process.env.OUTBOUND_TEMPLATE_FALLBACK_LANG ?? "";
   const OUTBOUND_TEXT_ENABLED =
     (process.env.OUTBOUND_TEXT_ENABLED ?? "true") === "true";
+  const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
   let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
   const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
   if (mapRaw) {
@@ -170,6 +172,7 @@ export function getEnv(): Env {
     OUTBOUND_TEMPLATE_FALLBACK_LANG,
     OUTBOUND_TEMPLATE_INTENT_MAP,
     OUTBOUND_TEXT_ENABLED,
+    ADMIN_TOKEN,
     CLIENT_ID,
     OUTBOUND_TEMPLATES_BY_CLIENT,
     verifyTokenPresent,

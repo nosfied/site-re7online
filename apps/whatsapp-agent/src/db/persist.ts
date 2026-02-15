@@ -1,0 +1,145 @@
+import { Prisma, MessageStatus, MessageType } from "@prisma/client";
+import { prisma } from "../db.js";
+
+export async function persistInboundMessage(params: {
+  clientId: string;
+  phoneNumberId?: string;
+  waId: string;
+  messageId: string;
+  type: MessageType;
+  bodyText?: string | null;
+  allowlistHit: boolean;
+  requestId?: string;
+  rawPayload?: Prisma.InputJsonValue;
+}) {
+  if (!params.clientId) return;
+  try {
+    await prisma.inboundMessage.create({
+      data: {
+        clientId: params.clientId,
+        phoneNumberId: params.phoneNumberId,
+        waId: params.waId,
+        messageId: params.messageId,
+        type: params.type,
+        bodyText: params.bodyText ?? undefined,
+        allowlistHit: params.allowlistHit,
+        requestId: params.requestId,
+        rawPayload: params.rawPayload,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") return;
+    }
+    throw error;
+  }
+}
+
+export async function persistConversationWindow(params: {
+  clientId: string;
+  waId: string;
+  phoneNumberId?: string;
+  windowIsOpen: boolean;
+  windowExpiresAt?: Date | null;
+  lastInboundAt?: Date | null;
+  lastOutboundAt?: Date | null;
+}) {
+  if (!params.clientId) return;
+  await prisma.conversation.upsert({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    update: {
+      phoneNumberId: params.phoneNumberId,
+      windowIsOpen: params.windowIsOpen,
+      windowExpiresAt: params.windowExpiresAt ?? undefined,
+      lastInboundAt: params.lastInboundAt ?? undefined,
+      lastOutboundAt: params.lastOutboundAt ?? undefined,
+    },
+    create: {
+      clientId: params.clientId,
+      waId: params.waId,
+      phoneNumberId: params.phoneNumberId,
+      windowIsOpen: params.windowIsOpen,
+      windowExpiresAt: params.windowExpiresAt ?? undefined,
+      lastInboundAt: params.lastInboundAt ?? undefined,
+      lastOutboundAt: params.lastOutboundAt ?? undefined,
+    },
+  });
+}
+
+export async function persistOutboundMessage(params: {
+  clientId: string;
+  phoneNumberId?: string;
+  waId: string;
+  messageId?: string | null;
+  type: MessageType;
+  status: MessageStatus;
+  bodyText?: string | null;
+  templateName?: string | null;
+  templateLang?: string | null;
+  requestId?: string;
+  metaMessageId?: string | null;
+  errorBody?: string | null;
+  rawPayload?: Prisma.InputJsonValue;
+}) {
+  if (!params.clientId) return;
+  try {
+    await prisma.outboundMessage.create({
+      data: {
+        clientId: params.clientId,
+        phoneNumberId: params.phoneNumberId,
+        waId: params.waId,
+        messageId: params.messageId ?? undefined,
+        type: params.type,
+        status: params.status,
+        bodyText: params.bodyText ?? undefined,
+        templateName: params.templateName ?? undefined,
+        templateLang: params.templateLang ?? undefined,
+        requestId: params.requestId,
+        metaMessageId: params.metaMessageId ?? undefined,
+        errorBody: params.errorBody ?? undefined,
+        rawPayload: params.rawPayload,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") return;
+    }
+    throw error;
+  }
+}
+
+export async function persistEvent(params: {
+  clientId: string;
+  conversationId?: string | null;
+  waId?: string | null;
+  messageId?: string | null;
+  requestId?: string | null;
+  eventName: string;
+  payloadJson: Prisma.InputJsonValue;
+}) {
+  if (!params.clientId) return;
+  if (!params.requestId) return;
+  try {
+    await prisma.event.create({
+      data: {
+        clientId: params.clientId,
+        conversationId: params.conversationId ?? undefined,
+        waId: params.waId ?? undefined,
+        messageId: params.messageId ?? undefined,
+        requestId: params.requestId,
+        eventName: params.eventName,
+        payloadJson: params.payloadJson,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2002") return;
+    }
+    throw error;
+  }
+}
