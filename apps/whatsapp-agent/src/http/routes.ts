@@ -408,57 +408,86 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const range = String(query.range ?? "24h");
         const now = Date.now();
         const from =
-          range === "7d" ? new Date(now - 7 * 24 * 60 * 60 * 1000) : new Date(now - 24 * 60 * 60 * 1000);
+          range === "1h"
+            ? new Date(now - 1 * 60 * 60 * 1000)
+            : range === "7d"
+              ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+              : range === "30d"
+                ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+                : new Date(now - 24 * 60 * 60 * 1000);
         const to = new Date(now);
+        const clientKey = String(query.clientKey ?? "default").trim() || "default";
+        const client = await prisma.client.findUnique({ where: { clientKey } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
 
-        const [eventCounts, inboundTotal, outboundFailed, outboundTextSent, outboundTemplateSent, blockedWindowClosed, needsTemplate, lastErrors] =
+        const [inboundReceived, outboundSentText, outboundSentTemplate, outboundFailed, blockedWindowClosed, lastErrors] =
           await Promise.all([
-            prisma.event.groupBy({
-              by: ["eventName"],
-              where: { createdAt: { gte: from, lte: to } },
-              _count: { eventName: true },
+            prisma.inboundMessage.count({
+              where: { clientId: client.id, createdAt: { gte: from, lte: to } },
             }),
-            prisma.inboundMessage.count({ where: { createdAt: { gte: from, lte: to } } }),
             prisma.outboundMessage.count({
-              where: { status: "FAILED", createdAt: { gte: from, lte: to } },
+              where: {
+                clientId: client.id,
+                status: "SENT",
+                type: "TEXT",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.outboundMessage.count({
+              where: {
+                clientId: client.id,
+                status: "SENT",
+                type: "TEMPLATE",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.outboundMessage.count({
+              where: {
+                clientId: client.id,
+                status: "FAILED",
+                createdAt: { gte: from, lte: to },
+              },
             }),
             prisma.event.count({
-              where: { eventName: "outbound.text.sent", createdAt: { gte: from, lte: to } },
-            }),
-            prisma.event.count({
-              where: { eventName: "outbound.template.sent", createdAt: { gte: from, lte: to } },
-            }),
-            prisma.event.count({
-              where: { eventName: "outbound.blocked.window_closed", createdAt: { gte: from, lte: to } },
-            }),
-            prisma.event.count({
-              where: { eventName: "outbound.needs_template", createdAt: { gte: from, lte: to } },
+              where: {
+                eventName: "outbound.blocked.window_closed",
+                createdAt: { gte: from, lte: to },
+              },
             }),
             prisma.outboundMessage.findMany({
-              where: { status: "FAILED" },
+              where: { clientId: client.id, status: "FAILED" },
               orderBy: { createdAt: "desc" },
               take: 10,
               select: { createdAt: true, errorBody: true, requestId: true, templateName: true },
             }),
           ]);
 
-        const counts = eventCounts.reduce<Record<string, number>>((acc, item) => {
-          acc[item.eventName] = item._count.eventName;
-          return acc;
-        }, {});
+        const sentTotal = outboundSentText + outboundSentTemplate;
+        const deliveryDenominator = sentTotal + outboundFailed;
+        const deliveryRate = deliveryDenominator > 0 ? sentTotal / deliveryDenominator : 0;
+        const templateRate = sentTotal > 0 ? outboundSentTemplate / sentTotal : 0;
+        const blockedRate = inboundReceived > 0 ? blockedWindowClosed / inboundReceived : 0;
 
         json(res, 200, {
           range,
           from,
           to,
-          counts,
+          counts: {
+            inbound: { received: inboundReceived },
+            outbound: {
+              sent_text: outboundSentText,
+              sent_template: outboundSentTemplate,
+              failed: outboundFailed,
+              blocked_window_closed: blockedWindowClosed,
+            },
+          },
           kpis: {
-            inbound_total: inboundTotal,
-            outbound_text_sent: outboundTextSent,
-            outbound_template_sent: outboundTemplateSent,
-            blocked_window_closed: blockedWindowClosed,
-            needs_template: needsTemplate,
-            failures: outboundFailed,
+            delivery_rate: deliveryRate,
+            template_rate: templateRate,
+            blocked_rate: blockedRate,
           },
           topErrors: lastErrors.map((item) => ({
             createdAt: item.createdAt,
@@ -466,6 +495,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             templateName: item.templateName,
             errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
           })),
+          lastUpdatedAt: new Date().toISOString(),
         });
       } catch (error) {
         logger.error({
