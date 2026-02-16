@@ -166,3 +166,8 @@ curl -s http://127.0.0.1:3001/admin/templates -H "X-Admin-Token: $ADMIN_TOKEN"
 curl -s "http://127.0.0.1:3001/admin/metrics?range=24h" -H "X-Admin-Token: $ADMIN_TOKEN"
 curl -s "http://127.0.0.1:3001/admin/messages?waId=558494786787&limit=20" -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
+
+Smoke automático:
+```bash
+PORT=3001 ./scripts/smoke-admin.sh
+```

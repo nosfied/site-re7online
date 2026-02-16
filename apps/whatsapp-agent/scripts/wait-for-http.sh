@@ -2,6 +2,7 @@
 set -euo pipefail
 
 URL="${1:-}"
+# wait for HTTP 2xx
 TIMEOUT_SEC="${2:-20}"
 SLEEP_MS="${3:-200}"
 
