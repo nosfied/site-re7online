@@ -47,6 +47,24 @@ if [[ "${DISABLE_DEBUG_COMMANDS:-true}" == "true" ]]; then
   exit 1
 fi
 
+wait_ready() {
+  local timeout_s=10
+  local start_ts
+  start_ts=$(date +%s)
+  while true; do
+    local code
+    code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 1 "${BASE_URL}/admin/health" || true)
+    if [[ "$code" =~ ^2 ]]; then
+      return 0
+    fi
+    if (( $(date +%s) - start_ts >= timeout_s )); then
+      echo "FAIL: server not ready at ${BASE_URL}"
+      return 1
+    fi
+    sleep 0.2
+  done
+}
+
 post_webhook() {
   local payload="$1"
   if [[ -n "${META_APP_SECRET:-}" ]]; then
@@ -125,6 +143,7 @@ JSON
 
 echo "== Policy B prod check (RID=${RID}) =="
 echo "Timestamp usado (PAST_TS): ${PAST_TS}"
+wait_ready
 post_webhook "$payload_debug"
 post_webhook "$payload_inbound"
 
