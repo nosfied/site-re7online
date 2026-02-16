@@ -34,6 +34,8 @@ export type ConversationState = {
   templateSuggested?: string;
   lastNeedAt?: string;
   lastIntent?: ConversationIntent;
+  leadRequestedAt?: string;
+  leadCapturedAt?: string;
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;

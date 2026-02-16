@@ -21,6 +21,7 @@ import {
   updateInbound,
   updateInboundMeta,
   updateOutbound,
+  isWindowOpen,
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
@@ -262,6 +263,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       params.waId,
       params.messageId
     );
+    if (primaryResult.ok && params.intent === "pricing") {
+      await persistEventSafe(
+        "lead.template.sent",
+        {
+          intent: "pricing",
+          templateName: templateConfig.name,
+          templateLang: templateConfig.language ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+        },
+        params.waId,
+        params.messageId
+      );
+    }
     if (!primaryResult.ok && env.OUTBOUND_TEMPLATE_FALLBACK) {
       const fallback = resolveFallbackTemplate();
       if (
@@ -309,6 +322,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           params.waId,
           params.messageId
         );
+        if (fallbackResult.ok && params.intent === "pricing") {
+          await persistEventSafe(
+            "lead.template.sent",
+            {
+              intent: "pricing",
+              templateName: fallback.name,
+              templateLang: fallback.language,
+            },
+            params.waId,
+            params.messageId
+          );
+        }
       }
     }
   };
@@ -1536,9 +1561,79 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    const now = Date.now();
+    const leadWindowMs = 24 * 60 * 60 * 1000;
+    let leadReplyText: string | undefined;
+    let leadHandled = false;
+    let leadUpdated = false;
+
+    if (message.text && updatedConversation.leadRequestedAt) {
+      const requestedAtMs = Date.parse(updatedConversation.leadRequestedAt);
+      if (!Number.isNaN(requestedAtMs) && now - requestedAtMs <= leadWindowMs) {
+        const parsedLead = parseLeadFields(message.text);
+        const hasAtLeastTwo =
+          Number(Boolean(parsedLead.name)) +
+            Number(Boolean(parsedLead.city)) +
+            Number(Boolean(parsedLead.serviceType)) >=
+          2;
+        if (hasAtLeastTwo || message.text.length >= 10) {
+          const nowIso = new Date(now).toISOString();
+          updatedConversation = {
+            ...updatedConversation,
+            leadRequestedAt: undefined,
+            leadCapturedAt: nowIso,
+          };
+          leadUpdated = true;
+          leadHandled = true;
+          leadReplyText = parsedLead.name
+            ? `Perfeito, ${parsedLead.name}. Já registrei seu pedido. Um atendente chama você em seguida.`
+            : "Perfeito. Já registrei seu pedido. Um atendente chama você em seguida.";
+          await persistEventSafe(
+            "lead.captured",
+            {
+              name: parsedLead.name,
+              city: parsedLead.city,
+              serviceType: parsedLead.serviceType,
+              rawText: parsedLead.rawText,
+            },
+            updatedConversation.waId,
+            message.messageId
+          );
+        }
+      }
+    }
+
+    if (!leadReplyText && updatedConversation.intent === "pricing") {
+      const windowOpen = isWindowOpen(updatedConversation, now);
+      const hasRecentRequest =
+        updatedConversation.leadRequestedAt &&
+        now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs;
+      if (windowOpen && !hasRecentRequest) {
+        const nowIso = new Date(now).toISOString();
+        updatedConversation = {
+          ...updatedConversation,
+          leadRequestedAt: nowIso,
+        };
+        leadUpdated = true;
+        leadHandled = true;
+        leadReplyText =
+          "Para te ajudar melhor, me informe: Nome, Cidade e Serviço (Tráfego, Site, WhatsApp ou Social Media).";
+        await persistEventSafe(
+          "lead.capture.requested",
+          { intent: "pricing" },
+          updatedConversation.waId,
+          message.messageId
+        );
+      }
+    }
+
+    if (leadUpdated) {
+      await jsonFileStorage.upsertConversation(updatedConversation);
+    }
+
     const decision = decideOutboundPolicy({
       state: updatedConversation,
-      now: Date.now(),
+      now,
       isSandbox: env.WHATSAPP_SANDBOX,
       outOfWindowTemplate: env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
       sandboxTemplate: "hello_world",
@@ -1609,7 +1704,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const replyType = decision.replyType ?? "text";
 
-    let replyText = flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
+    let replyText = leadReplyText ?? flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
@@ -1631,6 +1726,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     if (
+      !leadHandled &&
       !flowResult.handled &&
       !handoffResult.handled &&
       env.WHATSAPP_AI_ENABLED &&
@@ -1746,6 +1842,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
+}
+
+function parseLeadFields(text: string) {
+  const rawText = text.trim().slice(0, 500);
+  const lines = rawText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lower = rawText.toLowerCase();
+
+  const nameMatch = rawText.match(/nome\\s*[:\\-]\\s*(.+)/i);
+  const cityMatch = rawText.match(/cidade\\s*[:\\-]\\s*(.+)/i);
+  const serviceMatch = rawText.match(/servi[cç]o\\s*[:\\-]\\s*(.+)/i);
+
+  const name = nameMatch?.[1]?.trim() || (lines.length > 0 ? lines[0] : undefined);
+  const city = cityMatch?.[1]?.trim();
+
+  let serviceType = serviceMatch?.[1]?.trim();
+  if (!serviceType) {
+    if (/(tr[áa]fego)/i.test(lower)) serviceType = "Tráfego";
+    else if (/(site|website)/i.test(lower)) serviceType = "Site";
+    else if (/(whatsapp)/i.test(lower)) serviceType = "WhatsApp";
+    else if (/(social media|m[ií]dias? sociais?)/i.test(lower)) serviceType = "Social Media";
+  }
+
+  return { name, city, serviceType, rawText };
 }
 
 function mapMessageType(type: string): MessageType {

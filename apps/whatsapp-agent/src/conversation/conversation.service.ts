@@ -53,7 +53,7 @@ export function detectIntent(text: string | null): ConversationIntent {
     return "unknown";
   }
   const value = text.toLowerCase();
-  if (/(preço|valor|orçamento|quanto custa)/i.test(value)) {
+  if (/(preço|valor|orçamento|quanto custa|planos)/i.test(value)) {
     return "pricing";
   }
   if (/(suporte|ajuda|erro|problema)/i.test(value)) {
