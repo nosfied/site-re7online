@@ -175,3 +175,4 @@ Smoke automático:
 ```bash
 PORT=3001 ./scripts/smoke-admin.sh 558494786787
 ```
+Readiness usa `/health` público.

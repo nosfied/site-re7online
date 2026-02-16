@@ -23,7 +23,7 @@ if [[ -z "$ADMIN_TOKEN" ]]; then
   exit 1
 fi
 
-"${ROOT_DIR}/scripts/wait-for-http.sh" "${BASE_URL}/admin/health"
+"${ROOT_DIR}/scripts/wait-for-http.sh" "${BASE_URL}/health"
 
 call_endpoint() {
   local endpoint="$1"
