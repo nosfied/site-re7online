@@ -151,3 +151,18 @@ Observação: se `WHATSAPP_ALLOWLIST` estiver ativo e o `from` não estiver perm
 5) Envie mensagem de teste pelo painel:
    - Sandbox (`WHATSAPP_SANDBOX=true`): resposta deve vir via template `hello_world`.
    - Produção (`WHATSAPP_SANDBOX=false`): resposta deve vir via texto (default reply).
+
+## Smoke Admin (com wait-for-health)
+Após restart do PM2:
+```bash
+pm2 restart re7-whatsapp-agent --update-env
+./scripts/wait-for-http.sh http://127.0.0.1:3001/admin/health
+```
+
+Depois:
+```bash
+curl -s http://127.0.0.1:3001/admin/status -H "X-Admin-Token: $ADMIN_TOKEN"
+curl -s http://127.0.0.1:3001/admin/templates -H "X-Admin-Token: $ADMIN_TOKEN"
+curl -s "http://127.0.0.1:3001/admin/metrics?range=24h" -H "X-Admin-Token: $ADMIN_TOKEN"
+curl -s "http://127.0.0.1:3001/admin/messages?waId=558494786787&limit=20" -H "X-Admin-Token: $ADMIN_TOKEN"
+```
