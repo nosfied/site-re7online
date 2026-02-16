@@ -245,7 +245,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/templates") {
       try {
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const failed = await prisma.outboundMessage.findMany({
           where: { status: "FAILED" },
           orderBy: { createdAt: "desc" },
@@ -262,13 +263,70 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             metaMessageId: true,
           },
         });
-        const breakdown = await prisma.outboundMessage.groupBy({
-          by: ["templateName"],
-          where: {
-            createdAt: { gte: since },
-          },
-          _count: { templateName: true },
-        });
+        const [breakdown24h, breakdown7d] = await Promise.all([
+          prisma.outboundMessage.groupBy({
+            by: ["templateName", "templateLang"],
+            where: {
+              createdAt: { gte: since24h },
+              templateName: { not: null },
+            },
+            _count: { templateName: true },
+          }),
+          prisma.outboundMessage.groupBy({
+            by: ["templateName", "templateLang"],
+            where: {
+              createdAt: { gte: since7d },
+              templateName: { not: null },
+            },
+            _count: { templateName: true },
+          }),
+        ]);
+
+        const topTemplateKeys = new Set(
+          breakdown7d
+            .slice()
+            .sort((a, b) => b._count.templateName - a._count.templateName)
+            .slice(0, 5)
+            .map((item) => `${item.templateName ?? "unknown"}::${item.templateLang ?? ""}`)
+        );
+        const topTemplateGroups: Record<
+          string,
+          Array<{ waId: string; count: number }>
+        > = {};
+        if (topTemplateKeys.size > 0) {
+          const groups = await prisma.outboundMessage.groupBy({
+            by: ["templateName", "templateLang", "waId"],
+            where: {
+              createdAt: { gte: since7d },
+              templateName: { not: null },
+            },
+            _count: { waId: true },
+          });
+          for (const group of groups) {
+            const key = `${group.templateName ?? "unknown"}::${group.templateLang ?? ""}`;
+            if (!topTemplateKeys.has(key)) continue;
+            if (!topTemplateGroups[key]) topTemplateGroups[key] = [];
+            topTemplateGroups[key].push({
+              waId: maskWaId(group.waId),
+              count: group._count.waId,
+            });
+          }
+          for (const key of Object.keys(topTemplateGroups)) {
+            topTemplateGroups[key] = topTemplateGroups[key]
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 5);
+          }
+        }
+
+        const normalizeBreakdown = (
+          items: Array<{ templateName: string | null; templateLang: string | null; _count: { templateName: number } }>
+        ) =>
+          items.map((item) => ({
+            templateName: item.templateName,
+            templateLang: item.templateLang,
+            count: item._count.templateName,
+            topWaIds: topTemplateGroups[`${item.templateName ?? "unknown"}::${item.templateLang ?? ""}`] ?? [],
+          }));
         json(res, 200, {
           defaultTemplate: {
             name: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
@@ -290,10 +348,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
             metaMessageId: item.metaMessageId,
           })),
-          breakdown24h: breakdown.map((item) => ({
-            templateName: item.templateName,
-            count: item._count.templateName,
-          })),
+          breakdown24h: normalizeBreakdown(breakdown24h),
+          breakdown7d: normalizeBreakdown(breakdown7d),
         });
       } catch (error) {
         logger.error({
@@ -309,6 +365,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (req.method === "GET" && pathname === "/admin/messages") {
       try {
         const waId = String(query.waId ?? "").trim();
+        const statusFilter = String(query.status ?? "").trim().toUpperCase();
+        const typeFilter = String(query.type ?? "").trim().toUpperCase();
+        const fromRaw = String(query.from ?? "").trim();
+        const toRaw = String(query.to ?? "").trim();
+        const from = fromRaw ? new Date(fromRaw) : null;
+        const to = toRaw ? new Date(toRaw) : null;
         if (!waId) {
           json(res, 400, { error: "waId_required" });
           return;
@@ -323,9 +385,37 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
+        const inboundWhere: Record<string, unknown> = {
+          clientId: client.id,
+          waId,
+        };
+        if (from || to) {
+          inboundWhere.createdAt = {
+            ...(from ? { gte: from } : {}),
+            ...(to ? { lte: to } : {}),
+          };
+        }
+        const outboundWhere: Record<string, unknown> = {
+          clientId: client.id,
+          waId,
+        };
+        if (from || to) {
+          outboundWhere.createdAt = {
+            ...(from ? { gte: from } : {}),
+            ...(to ? { lte: to } : {}),
+          };
+        }
+        if (statusFilter) {
+          outboundWhere.status = statusFilter;
+        }
+        if (typeFilter) {
+          inboundWhere.type = typeFilter;
+          outboundWhere.type = typeFilter;
+        }
+
         const [inbound, outbound] = await Promise.all([
           prisma.inboundMessage.findMany({
-            where: { clientId: client.id, waId },
+            where: inboundWhere,
             orderBy: { createdAt: "desc" },
             take: limit,
             select: {
@@ -338,7 +428,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             },
           }),
           prisma.outboundMessage.findMany({
-            where: { clientId: client.id, waId },
+            where: outboundWhere,
             orderBy: { createdAt: "desc" },
             take: limit,
             select: {
@@ -362,12 +452,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             direction: "INBOUND",
             type: item.type,
             status: "RECEIVED",
-            bodyText: item.bodyText ? item.bodyText.slice(0, 500) : null,
+            intent: null,
+            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
             templateName: null,
             templateLang: null,
             requestId: item.requestId,
             messageId: item.messageId,
             metaMessageId: null,
+            errorBody: null,
             createdAt: item.createdAt,
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
@@ -375,12 +467,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             direction: "OUTBOUND",
             type: item.type,
             status: item.status,
-            bodyText: item.bodyText ? item.bodyText.slice(0, 500) : null,
+            intent: null,
+            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
             templateName: item.templateName,
             templateLang: item.templateLang,
             requestId: item.requestId,
             messageId: item.messageId,
             metaMessageId: item.metaMessageId,
+            errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
             createdAt: item.createdAt,
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
@@ -389,7 +483,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           .slice(0, limit);
 
         json(res, 200, {
-          waId: maskWaId(waId),
+          ok: true,
+          waIdMasked: maskWaId(waId),
+          filters: {
+            waId: maskWaId(waId),
+            status: statusFilter || null,
+            type: typeFilter || null,
+            from: from ? from.toISOString() : null,
+            to: to ? to.toISOString() : null,
+            clientKey,
+            limit,
+          },
+          count: combined.length,
           items: combined,
         });
       } catch (error) {
