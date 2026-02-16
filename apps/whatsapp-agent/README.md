@@ -58,7 +58,7 @@ npm run db:deploy
 ```
 
 ## Endpoints admin
-Autenticação via `ADMIN_TOKEN` (header `Authorization: Bearer <token>` ou `x-admin-token`).
+Autenticação via `ADMIN_TOKEN` (header `X-Admin-Token: <token>`).
 - `GET /admin/health`
 - `GET /admin/clients`
 - `POST /admin/clients` (body: `{ clientKey, name, phone_number_id }`)
@@ -76,18 +76,24 @@ Comportamento idempotente do `POST /admin/clients`:
 Exemplos (curl):
 ```bash
 curl -s -X POST http://localhost:3001/admin/clients \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "X-Admin-Token: $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"clientKey":"default","name":"Default","phone_number_id":"1018032104719713"}'
 
 curl -s http://localhost:3001/admin/clients \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 
 curl -s http://localhost:3001/admin/status \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s http://localhost:3001/admin/templates \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 
 curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s "http://localhost:3001/admin/metrics?range=24h" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 ## Endpoints atuais

@@ -42,11 +42,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (pathname.startsWith("/admin")) {
     const prisma = getPrisma();
     const query = parseQuery(parsedUrl);
-    const token = getAdminToken(req);
-    if (!env.ADMIN_TOKEN || token !== env.ADMIN_TOKEN) {
+    const auth = getAdminToken(req);
+    if (!env.ADMIN_TOKEN || auth.token !== env.ADMIN_TOKEN) {
       json(res, 401, { error: "unauthorized" });
       return;
     }
+    logger.info({
+      event: "admin.auth",
+      authSource: auth.source,
+      requestId,
+    });
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
@@ -634,12 +639,17 @@ function maskWaId(waId: string) {
 }
 
 function getAdminToken(req: IncomingMessage) {
-  const header = req.headers["authorization"];
-  if (typeof header === "string" && header.startsWith("Bearer ")) {
-    return header.slice(7);
+  const headerToken = req.headers["x-admin-token"];
+  if (typeof headerToken === "string" && headerToken.trim()) {
+    return { token: headerToken.trim(), source: "x-admin-token" as const };
   }
-  const token = req.headers["x-admin-token"];
-  return typeof token === "string" ? token : "";
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return { token: "", source: "missing" as const };
+  const [scheme, token] = authHeader.split(" ");
+  if (!scheme || !token || scheme.toLowerCase() !== "bearer") {
+    return { token: "", source: "invalid" as const };
+  }
+  return { token: token.trim(), source: "authorization" as const };
 }
 
 async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
