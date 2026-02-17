@@ -181,3 +181,4 @@ Readiness usa `/health` público.
 ```bash
 ./scripts/e2e-lead-pricing.sh 558494786787
 ```
+Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa `/usr/local/bin/outbound-policyB-prod-check` se existir.
