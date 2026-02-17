@@ -176,3 +176,8 @@ Smoke automático:
 PORT=3001 ./scripts/smoke-admin.sh 558494786787
 ```
 Readiness usa `/health` público.
+
+## E2E Lead Pricing
+```bash
+./scripts/e2e-lead-pricing.sh 558494786787
+```
