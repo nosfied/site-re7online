@@ -8,6 +8,10 @@ export type OutboundTemplateParams = {
   intent: ConversationIntent | undefined;
   templateName: string;
   lang?: string;
+  components?: Array<{
+    type: "body";
+    parameters: Array<{ type: "text"; text: string }>;
+  }>;
   isFallback?: boolean;
   fallbackReason?: string;
   requestId?: string;
@@ -56,6 +60,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     template: {
       name: params.templateName,
       language: { code: resolvedLang },
+      ...(params.components ? { components: params.components } : {}),
     },
   };
 

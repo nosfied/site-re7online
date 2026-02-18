@@ -531,12 +531,36 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return;
     }
 
+    const templateParams = [
+      tenantClientKey || env.CLIENT_ID || "Re7Online",
+      params.intent !== "unknown" ? params.intent : "Demonstração",
+      params.schedule || "a combinar",
+      `Falar pelo WhatsApp | Lead: ${maskedLead}`,
+    ];
+
+    logger.info({
+      event: "handoff.notify.template.params",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      paramsCount: templateParams.length,
+      requestId: params.requestId,
+    });
+
     const templateResult = await sendTemplate({
       toE164: params.attendantWaId,
       waId: params.attendantWaId,
       intent: "handoff",
       templateName,
       lang: templateLang,
+      components: [
+        {
+          type: "body",
+          parameters: templateParams.map((text) => ({
+            type: "text",
+            text,
+          })),
+        },
+      ],
       isFallback: false,
       requestId: params.requestId,
       rid: `${baseMessageId}.template`,
