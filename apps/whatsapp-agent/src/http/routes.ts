@@ -537,6 +537,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           leadRequested,
           leadCaptured,
           leadTemplateSent,
+          demoRequested,
+          demoScheduled,
           lastErrors,
         ] = await Promise.all([
             prisma.inboundMessage.count({
@@ -593,6 +595,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 createdAt: { gte: from, lte: to },
               },
             }),
+            prisma.event.count({
+              where: {
+                clientId: client.id,
+                eventName: "lead.demo_requested",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.event.count({
+              where: {
+                clientId: client.id,
+                eventName: "lead.demo_scheduled",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
             prisma.outboundMessage.findMany({
               where: { clientId: client.id, status: "FAILED" },
               orderBy: { createdAt: "desc" },
@@ -607,6 +623,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const templateRate = sentTotal > 0 ? outboundSentTemplate / sentTotal : 0;
         const blockedRate = inboundReceived > 0 ? blockedWindowClosed / inboundReceived : 0;
         const leadConversionRate = leadRequested > 0 ? leadCaptured / leadRequested : 0;
+        const demoConversionRate = inboundReceived > 0 ? demoScheduled / inboundReceived : 0;
 
         json(res, 200, {
           ok: true,
@@ -632,6 +649,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             captured: leadCaptured,
             template_sent: leadTemplateSent,
             conversion_rate: leadConversionRate,
+            demo_requested: demoRequested,
+            demo_scheduled: demoScheduled,
+            conversion_rate_demo: demoConversionRate,
           },
           topErrors: lastErrors.map((item) => ({
             createdAt: item.createdAt,

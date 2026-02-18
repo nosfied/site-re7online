@@ -183,6 +183,11 @@ Readiness usa `/health` público.
 ```
 Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa o wrapper versionado no repo.
 
+## E2E Demo (requested/scheduled)
+```bash
+./scripts/e2e-demo.sh 558494786787
+```
+
 ## Operação em Produção (Runbook)
 Path: `/opt/re7online/site-re7online/apps/whatsapp-agent`  
 PM2: `re7-whatsapp-agent` (porta 3001)
@@ -224,6 +229,7 @@ Smoke prod (Policy B wrapper + E2E):
 ```bash
 ./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h
 ./scripts/e2e-lead-pricing.sh 558494786787 --range 1h
+./scripts/e2e-demo.sh 558494786787 --range 1h
 ```
 
 Status completo:
