@@ -1640,7 +1640,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           };
           demoUpdated = true;
           demoHandled = true;
-          demoReplyText = "Qual melhor dia e horário para falarmos?";
+          demoReplyText = "Qual melhor dia e horário para a demonstração?";
           await persistEventSafe(
             "lead.demo_requested",
             {
