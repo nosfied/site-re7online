@@ -9,6 +9,7 @@ RID="${RID:-$(date +%s)$RANDOM}"
 PAST_TS="${PAST_TS:-$(date -d '48 hours ago' +%s)}"
 INTENT="pricing"
 TARGET_WAID=""
+RANGE="1h"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -21,10 +22,11 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --range)
+      RANGE="$2"
       shift 2
       ;;
     *)
-      echo "Uso: $0 --to <waId> [--intent pricing]" >&2
+      echo "Uso: $0 --to <waId> [--intent pricing] [--range 1h|24h|7d|30d]" >&2
       exit 2
       ;;
   esac
@@ -88,16 +90,26 @@ post_webhook() {
     -d "$payload" "${BASE_URL}/webhook" >/dev/null
 }
 
+metrics_json() {
+  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" -H "X-Admin-Token: ${ADMIN_TOKEN}"
+}
+
 metrics_count() {
   local field="$1"
-  curl -s "${BASE_URL}/admin/metrics?range=1h" -H "X-Admin-Token: ${ADMIN_TOKEN}" |
-    node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(0,'utf8'));const path='${field}'.split('.');let v=data;for (const p of path){v=v?.[p];}process.stdout.write(String(v ?? 0));"
+  local payload
+  payload=$(metrics_json)
+  if ! echo "$payload" | node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(0,'utf8'));if(!data||data.ok!==true){process.exit(1)}"; then
+    echo "FAIL: /admin/metrics retornou erro ou JSON inválido" >&2
+    exit 1
+  fi
+  echo "$payload" | node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(0,'utf8'));const path='${field}'.split('.');let v=data;for (const p of path){v=v?.[p];}process.stdout.write(String(v ?? 0));"
 }
 
 echo "== Policy B prod check (RID=${RID}) =="
 wait_ready
 
-before_blocked=$(metrics_count "counts.outbound.blocked_window_closed")
+before_template=$(metrics_count "counts.outbound.sent_template")
+before_lead_template=$(metrics_count "lead.template_sent")
 
 payload_inbound=$(
   cat <<JSON
@@ -133,18 +145,25 @@ JSON
 
 post_webhook "$payload_inbound"
 
-after_blocked="$before_blocked"
+after_template="$before_template"
+after_lead_template="$before_lead_template"
 for _ in 1 2 3 4 5; do
-  after_blocked=$(metrics_count "counts.outbound.blocked_window_closed")
-  if [[ "$after_blocked" -gt "$before_blocked" ]]; then
+  after_template=$(metrics_count "counts.outbound.sent_template")
+  after_lead_template=$(metrics_count "lead.template_sent")
+  if [[ "$after_template" -gt "$before_template" ]]; then
     break
   fi
   sleep 1
 done
 
-if [[ "$after_blocked" -le "$before_blocked" ]]; then
-  echo "FAIL: blocked_window_closed não incrementou (before=${before_blocked}, after=${after_blocked})" >&2
+if [[ "$after_template" -le "$before_template" ]]; then
+  echo "FAIL: sent_template não incrementou (before=${before_template}, after=${after_template})" >&2
   exit 1
 fi
 
-echo "OK: Policy B bloqueou janela (before=${before_blocked}, after=${after_blocked})"
+if [[ "$after_lead_template" -le "$before_lead_template" ]]; then
+  echo "FAIL: lead.template_sent não incrementou (before=${before_lead_template}, after=${after_lead_template})" >&2
+  exit 1
+fi
+
+echo "OK: Policy B (window closed) -> template sent (before=${before_template}, after=${after_template})"
