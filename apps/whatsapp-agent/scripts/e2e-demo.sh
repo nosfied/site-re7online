@@ -132,7 +132,7 @@ payload_demo=$(cat <<JSON
                 "from": "${WAID}",
                 "timestamp": "${NEXT_TS}",
                 "type": "text",
-                "text": { "body": "Sim, amanhã 14h pode ser" }
+                "text": { "body": "terça 14h" }
               }
             ]
           },

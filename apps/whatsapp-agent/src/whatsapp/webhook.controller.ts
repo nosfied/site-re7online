@@ -1587,8 +1587,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const hasDemoContext = demoContext.some((word) => normalizedDemoText.includes(word));
       const isDemoContinuation = (updatedConversation.demoStatus ?? "none") === "requested";
 
-      const demoResult = hasDemoContext || isDemoContinuation ? parseDemoIntent(message.text) : null;
+      const demoResult =
+        hasDemoContext || isDemoContinuation
+          ? parseDemoIntent(message.text, !isDemoContinuation)
+          : null;
       const canProcessDemo =
+        hasDemoContext ||
+        isDemoContinuation ||
         updatedConversation.intent === "pricing" ||
         Boolean(updatedConversation.leadRequestedAt) ||
         (updatedConversation.demoStatus ?? "none") !== "none";
@@ -1971,7 +1976,10 @@ function normalizeLite(text: string) {
     .trim();
 }
 
-function parseDemoIntent(text: string): { type: "requested" | "scheduled"; scheduleExtract?: string } | null {
+function parseDemoIntent(
+  text: string,
+  requirePositive = true
+): { type: "requested" | "scheduled"; scheduleExtract?: string } | null {
   const normalized = normalizeLite(text);
   const positives = [
     "sim",
@@ -1985,7 +1993,7 @@ function parseDemoIntent(text: string): { type: "requested" | "scheduled"; sched
     "pode falar",
   ];
   const hasPositive = positives.some((word) => normalized.includes(word));
-  if (!hasPositive) return null;
+  if (requirePositive && !hasPositive) return null;
 
   const hourMatch = normalized.match(/\b([01]?\d|2[0-3])\s*(h|hs)\b/) ?? normalized.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
   const dayMatch = normalized.match(/\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/);
