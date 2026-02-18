@@ -226,6 +226,11 @@ Smoke prod (Policy B wrapper + E2E):
 ./scripts/e2e-lead-pricing.sh 558494786787 --range 1h
 ```
 
+Status completo:
+```bash
+./scripts/prod-status.sh
+```
+
 Diagnóstico rápido do storage:
 ```bash
 ls -lah .data
