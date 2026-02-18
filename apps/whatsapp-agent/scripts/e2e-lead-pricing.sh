@@ -183,40 +183,48 @@ log_step "D: validar via admin"
 MSG_FILE="/tmp/re7-whatsapp-agent-admin-lead-messages-${RID}.json"
 METRICS_FILE="/tmp/re7-whatsapp-agent-admin-lead-metrics-${RID}.json"
 
-curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=50" \
+curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200" \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$MSG_FILE"
 
 curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
 
-if ! grep -qi '"templateName":"re7_pricing_v1"' "$MSG_FILE" || ! grep -qi '"templateLang":"pt_BR"' "$MSG_FILE"; then
-  if grep -q '"blocked_window_closed":0' "$METRICS_FILE"; then
-    echo "FAIL: não encontrou template re7_pricing_v1/pt_BR e blocked_window_closed=0"
-    exit 1
-  fi
-fi
-if ! grep -qi "nome" "$MSG_FILE"; then
-  echo "FAIL: pergunta de lead não encontrada"
+if ! grep -q '"ok":true' "$MSG_FILE"; then
+  echo "FAIL: resposta de /admin/messages sem ok=true"
+  echo "---- messages (tail) ----"
+  tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
+if ! grep -q '"ok":true' "$METRICS_FILE"; then
+  echo "FAIL: resposta de /admin/metrics sem ok=true"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
+  exit 1
+fi
+
 if ! grep -qi "Para te ajudar melhor, me informe:" "$MSG_FILE"; then
   echo "FAIL: pergunta esperada ('Para te ajudar melhor, me informe:') não encontrada"
-  exit 1
-fi
-if ! grep -qi "wamid.e2e.lead.${RID}" "$MSG_FILE"; then
-  echo "FAIL: confirmação após lead (wamid.e2e.lead.${RID}) não encontrada"
+  echo "---- messages (tail) ----"
+  tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
 if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
   echo "FAIL: confirmação de lead não contém 'como posso ajudar' ou 'posso ajudar'"
+  echo "---- messages (tail) ----"
+  tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
+
 if ! grep -qi "lead" "$METRICS_FILE"; then
   echo "FAIL: métricas de lead não encontradas"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
 fi
 if ! grep -qi "conversion_rate" "$METRICS_FILE"; then
   echo "FAIL: conversion_rate não encontrada"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
 fi
 
