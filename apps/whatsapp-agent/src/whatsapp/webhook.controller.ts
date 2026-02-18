@@ -429,12 +429,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     messageId?: string
   ) => {
     try {
-      if (!tenantClientId || !meta?.requestId) return;
+      const requestId = meta?.requestId ?? messageId ?? null;
+      if (!tenantClientId || !requestId) return;
       await persistEvent({
         clientId: tenantClientId,
         waId: waId ?? null,
         messageId: messageId ?? null,
-        requestId: meta.requestId,
+        requestId,
         eventName,
         payloadJson,
       });
