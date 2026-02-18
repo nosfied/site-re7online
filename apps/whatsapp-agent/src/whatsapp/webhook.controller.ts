@@ -425,12 +425,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const nowIso = new Date().toISOString();
     const maskedLead = maskNumber(params.leadWaId);
     const maskedAttendant = maskNumber(params.attendantWaId);
+    const clientDisplay =
+      tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online";
+    const intentLabel = params.intent !== "unknown" ? params.intent : "Demonstração";
+    const scheduleLabel = params.schedule || "A combinar";
+    const leadLink = `https://wa.me/${params.leadWaId}`;
     const baseMessageId = `handoff.notify.${params.requestId ?? Date.now()}`;
     const textBody = [
       "[DEMO] Lead pediu demonstração",
-      `Cliente: ${maskedLead}`,
-      `Intent: ${params.intent}`,
-      `Quando: ${params.schedule}`,
+      `Cliente: ${clientDisplay}`,
+      `Serviço: ${intentLabel}`,
+      `Quando: ${scheduleLabel}`,
+      `Lead: ${params.leadWaId}`,
+      `Link: ${leadLink}`,
       `Msg: ${params.snippet}`,
       `TS: ${nowIso}`,
     ].join("\n");
@@ -532,10 +539,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const templateParams = [
-      tenantClientKey || env.CLIENT_ID || "Re7Online",
-      params.intent !== "unknown" ? params.intent : "Demonstração",
-      params.schedule || "a combinar",
-      `Falar pelo WhatsApp | Lead: ${maskedLead}`,
+      clientDisplay,
+      intentLabel,
+      scheduleLabel,
+      `Chamar no WhatsApp: ${leadLink}`,
     ];
 
     logger.info({
@@ -605,49 +612,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       leadWaId: maskedLead,
       requestId: params.requestId,
     });
-
-    logger.info({
-      event: "handoff.notify.sending",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      notifyType: "text_after_template",
-      requestId: params.requestId,
-    });
-    const secondResult = await sendOutboundText({
-      toE164: params.attendantWaId,
-      waId: params.attendantWaId,
-      intent: "handoff",
-      messageId: `${baseMessageId}.text2`,
-      replyText: textBody,
-    });
-    if (secondResult.ok) {
-      logger.info({
-        event: "handoff.notify.sent",
-        waId: maskedAttendant,
+    await persistEventSafe(
+      "lead.handoff_notified",
+      {
         leadWaId: maskedLead,
-        notifyType: "text_after_template",
-        requestId: params.requestId,
-      });
-      await persistEventSafe(
-        "lead.handoff_notified",
-        {
-          leadWaId: maskedLead,
-          intent: params.intent,
-          schedule: params.schedule,
-        },
-        params.leadWaId,
-        `${baseMessageId}.text2`
-      );
-    } else {
-      logger.error({
-        event: "handoff.notify.failed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        notifyType: "text_after_template",
-        status: secondResult.status,
-        requestId: params.requestId,
-      });
-    }
+        intent: params.intent,
+        schedule: params.schedule,
+      },
+      params.leadWaId,
+      `${baseMessageId}.template`
+    );
+    return;
   };
 
   const typedPayload = payload as WhatsAppWebhookPayload;
@@ -1876,18 +1851,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
+          const handoffKey = `${normalizedFrom}:${demoResult.scheduleExtract ?? ""}:${nowIso}`;
           if (env.HANDOFF_ENABLED && env.HANDOFF_ATTENDANT_WAID) {
-            const scheduleText = demoResult.scheduleExtract ?? "-";
-            const snippet =
-              message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
-            await notifyAttendantDemoScheduled({
-              attendantWaId: env.HANDOFF_ATTENDANT_WAID,
-              leadWaId: normalizedFrom,
-              intent: updatedConversation.intent ?? "unknown",
-              schedule: scheduleText,
-              snippet,
-              requestId: meta?.requestId,
-            });
+            if (updatedConversation.lastHandoffDemoScheduledKey !== handoffKey) {
+              const scheduleText = demoResult.scheduleExtract ?? "A combinar";
+              const snippet =
+                message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
+              await notifyAttendantDemoScheduled({
+                attendantWaId: env.HANDOFF_ATTENDANT_WAID,
+                leadWaId: normalizedFrom,
+                intent: updatedConversation.intent ?? "unknown",
+                schedule: scheduleText,
+                snippet,
+                requestId: meta?.requestId,
+              });
+              updatedConversation = {
+                ...updatedConversation,
+                lastHandoffDemoScheduledKey: handoffKey,
+                lastHandoffDemoScheduledAt: nowIso,
+              };
+              demoUpdated = true;
+            }
           }
         }
         if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {

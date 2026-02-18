@@ -40,6 +40,8 @@ export type ConversationState = {
   lastDemoRequestedAt?: string;
   lastDemoScheduledAt?: string;
   demoPreferredSchedule?: string;
+  lastHandoffDemoScheduledKey?: string;
+  lastHandoffDemoScheduledAt?: string;
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;
