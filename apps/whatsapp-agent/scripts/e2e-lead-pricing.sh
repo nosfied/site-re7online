@@ -48,8 +48,14 @@ fi
 
 ADMIN_TOKEN=$(grep -E '^ADMIN_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2-)
 META_APP_SECRET=$(grep -E '^META_APP_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -f2-)
-PHONE_NUMBER_ID=$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2-)
-DISABLE_DEBUG_COMMANDS=$(grep -E '^DISABLE_DEBUG_COMMANDS=' "$ENV_FILE" | head -n1 | cut -d= -f2-)
+PHONE_NUMBER_ID=$(
+  grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- \
+  | tr -d '\r"' | xargs || true
+)
+DISABLE_DEBUG_COMMANDS=$(
+  grep -E '^DISABLE_DEBUG_COMMANDS=' "$ENV_FILE" | head -n1 | cut -d= -f2- \
+  | tr -d '\r"' | xargs || true
+)
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -83,8 +89,9 @@ if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
   "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
 elif [[ -x "/usr/local/bin/outbound-policyB-prod-check" && "${DISABLE_DEBUG_COMMANDS:-true}" != "true" ]]; then
   TARGET_WAID="$WAID" RID="$RID" ENV_FILE="$ENV_FILE" BASE_URL="$BASE_URL" \
-    /usr/local/bin/outbound-policyB-prod-check
+    /usr/local/bin/outbound-policyB-prod-check --to "$WAID" --intent pricing
 else
+  echo "SKIP: Policy B legacy prod-check indisponível (ou debug desabilitado). Wrapper não encontrado." >&2
   PAST_TS=$(date -d '48 hours ago' +%s)
   payload_policyb=$(cat <<JSON
 {
