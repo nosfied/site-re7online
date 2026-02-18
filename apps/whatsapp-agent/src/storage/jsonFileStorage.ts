@@ -20,11 +20,27 @@ async function readAll(): Promise<StoredRecord[]> {
   }
 }
 
+async function renameWithRetry(tempFile: string, targetFile: string) {
+  const delays = [50, 100, 200];
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      await fs.rename(tempFile, targetFile);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" || attempt === delays.length) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
+}
+
 async function writeAll(records: StoredRecord[]) {
   await ensureDataDir();
-  const tempFile = `${dataFile}.tmp`;
+  const tempFile = path.join(dataDir, "whatsapp-events.json.tmp");
   await fs.writeFile(tempFile, JSON.stringify(records, null, 2), "utf-8");
-  await fs.rename(tempFile, dataFile);
+  await renameWithRetry(tempFile, dataFile);
 }
 
 type LegacyConversationState = ConversationState & {
@@ -85,9 +101,9 @@ async function readAllConversations(): Promise<ConversationState[]> {
 
 async function writeAllConversations(conversations: ConversationState[]) {
   await ensureDataDir();
-  const tempFile = `${conversationFile}.tmp`;
+  const tempFile = path.join(dataDir, "conversations.json.tmp");
   await fs.writeFile(tempFile, JSON.stringify(conversations, null, 2), "utf-8");
-  await fs.rename(tempFile, conversationFile);
+  await renameWithRetry(tempFile, conversationFile);
 }
 
 export const jsonFileStorage: Storage = {
