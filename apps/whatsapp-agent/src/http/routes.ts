@@ -528,8 +528,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
-        const [inboundReceived, outboundSentText, outboundSentTemplate, outboundFailed, blockedWindowClosed, lastErrors] =
-          await Promise.all([
+        const [
+          inboundReceived,
+          outboundSentText,
+          outboundSentTemplate,
+          outboundFailed,
+          blockedWindowClosed,
+          leadRequested,
+          leadCaptured,
+          leadTemplateSent,
+          lastErrors,
+        ] = await Promise.all([
             prisma.inboundMessage.count({
               where: { clientId: client.id, createdAt: { gte: from, lte: to } },
             }),
@@ -558,7 +567,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             }),
             prisma.event.count({
               where: {
+                clientId: client.id,
                 eventName: "outbound.blocked.window_closed",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.event.count({
+              where: {
+                clientId: client.id,
+                eventName: "lead.capture.requested",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.event.count({
+              where: {
+                clientId: client.id,
+                eventName: "lead.captured",
+                createdAt: { gte: from, lte: to },
+              },
+            }),
+            prisma.event.count({
+              where: {
+                clientId: client.id,
+                eventName: "lead.template.sent",
                 createdAt: { gte: from, lte: to },
               },
             }),
@@ -575,8 +606,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const deliveryRate = deliveryDenominator > 0 ? sentTotal / deliveryDenominator : 0;
         const templateRate = sentTotal > 0 ? outboundSentTemplate / sentTotal : 0;
         const blockedRate = inboundReceived > 0 ? blockedWindowClosed / inboundReceived : 0;
+        const leadConversionRate = leadRequested > 0 ? leadCaptured / leadRequested : 0;
 
         json(res, 200, {
+          ok: true,
           range,
           from,
           to,
@@ -593,6 +626,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             delivery_rate: deliveryRate,
             template_rate: templateRate,
             blocked_rate: blockedRate,
+          },
+          lead: {
+            requested: leadRequested,
+            captured: leadCaptured,
+            template_sent: leadTemplateSent,
+            conversion_rate: leadConversionRate,
           },
           topErrors: lastErrors.map((item) => ({
             createdAt: item.createdAt,

@@ -195,7 +195,7 @@ if ! grep -q '"ok":true' "$MSG_FILE"; then
   tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
-if ! grep -q '"range":' "$METRICS_FILE" || ! grep -q '"counts":' "$METRICS_FILE"; then
+if ! grep -q '"ok":true' "$METRICS_FILE"; then
   echo "FAIL: resposta de /admin/metrics sem ok=true"
   echo "---- metrics ----"
   cat "$METRICS_FILE" | head -c 2000 || true
@@ -215,8 +215,20 @@ if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
   exit 1
 fi
 
-if ! grep -qi "lead" "$METRICS_FILE"; then
+if ! grep -q '"lead":' "$METRICS_FILE"; then
   echo "FAIL: métricas de lead não encontradas"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
+  exit 1
+fi
+if ! grep -q '"requested"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+  echo "FAIL: lead.requested < 1"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
+  exit 1
+fi
+if ! grep -q '"captured"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+  echo "FAIL: lead.captured < 1"
   echo "---- metrics ----"
   cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
