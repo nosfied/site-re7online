@@ -195,7 +195,7 @@ if ! grep -q '"ok":true' "$MSG_FILE"; then
   tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
-if ! grep -q '"ok":true' "$METRICS_FILE"; then
+if ! grep -q '"range":' "$METRICS_FILE" || ! grep -q '"counts":' "$METRICS_FILE"; then
   echo "FAIL: resposta de /admin/metrics sem ok=true"
   echo "---- metrics ----"
   cat "$METRICS_FILE" | head -c 2000 || true
