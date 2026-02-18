@@ -29,6 +29,10 @@ export type Env = {
   OUTBOUND_TEMPLATE_FALLBACK_LANG: string;
   OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }>;
   OUTBOUND_TEXT_ENABLED: boolean;
+  HANDOFF_ENABLED: boolean;
+  HANDOFF_ATTENDANT_WAID: string;
+  HANDOFF_NOTIFY_TEMPLATE_NAME: string;
+  HANDOFF_NOTIFY_TEMPLATE_LANG: string;
   ADMIN_TOKEN: string;
   CLIENT_ID: string;
   OUTBOUND_TEMPLATES_BY_CLIENT: Record<
@@ -106,6 +110,18 @@ export function getEnv(): Env {
     process.env.OUTBOUND_TEMPLATE_FALLBACK_LANG ?? "";
   const OUTBOUND_TEXT_ENABLED =
     (process.env.OUTBOUND_TEXT_ENABLED ?? "true") === "true";
+  const HANDOFF_ENABLED = (process.env.HANDOFF_ENABLED ?? "false") === "true";
+  const HANDOFF_ATTENDANT_WAID = normalizeWaId(
+    process.env.HANDOFF_ATTENDANT_WAID ?? ""
+  );
+  const HANDOFF_NOTIFY_TEMPLATE_NAME =
+    process.env.HANDOFF_NOTIFY_TEMPLATE_NAME ||
+    OUTBOUND_TEMPLATE_FALLBACK_NAME ||
+    "hello_world";
+  const HANDOFF_NOTIFY_TEMPLATE_LANG =
+    process.env.HANDOFF_NOTIFY_TEMPLATE_LANG ||
+    OUTBOUND_TEMPLATE_FALLBACK_LANG ||
+    "en_US";
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
   let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
   const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
@@ -172,6 +188,10 @@ export function getEnv(): Env {
     OUTBOUND_TEMPLATE_FALLBACK_LANG,
     OUTBOUND_TEMPLATE_INTENT_MAP,
     OUTBOUND_TEXT_ENABLED,
+    HANDOFF_ENABLED,
+    HANDOFF_ATTENDANT_WAID,
+    HANDOFF_NOTIFY_TEMPLATE_NAME,
+    HANDOFF_NOTIFY_TEMPLATE_LANG,
     ADMIN_TOKEN,
     CLIENT_ID,
     OUTBOUND_TEMPLATES_BY_CLIENT,

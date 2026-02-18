@@ -49,6 +49,8 @@ fi
 ADMIN_TOKEN=$(grep -E '^ADMIN_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 META_APP_SECRET=$(grep -E '^META_APP_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 PHONE_NUMBER_ID=$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
+HANDOFF_ENABLED=$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
+HANDOFF_ATTENDANT_WAID=$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -172,6 +174,22 @@ if [[ "$demo_scheduled" -lt 1 ]]; then
   echo "FAIL: lead.demo_scheduled < 1"
   head -c 2000 "$METRICS_FILE" || true
   exit 1
+fi
+
+if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+  ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+  curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+  if ! grep -q '"ok":true' "$ATT_FILE"; then
+    echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
+    tail -c 2000 "$ATT_FILE" || true
+    exit 1
+  fi
+  if ! grep -q "\\[DEMO\\]" "$ATT_FILE"; then
+    echo "FAIL: notificação [DEMO] não encontrada para atendente"
+    tail -c 2000 "$ATT_FILE" || true
+    exit 1
+  fi
 fi
 
 echo "Counters: demoRequested=${demo_requested} demoScheduled=${demo_scheduled}"

@@ -1631,6 +1631,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
+          if (env.HANDOFF_ENABLED && env.HANDOFF_ATTENDANT_WAID) {
+            const scheduleText = demoResult.scheduleExtract ?? "-";
+            const snippet =
+              message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
+            await notifyAttendantDemoScheduled({
+              attendantWaId: env.HANDOFF_ATTENDANT_WAID,
+              leadWaId: normalizedFrom,
+              intent: updatedConversation.intent ?? "unknown",
+              schedule: scheduleText,
+              snippet,
+              requestId: meta?.requestId,
+            });
+          }
         }
         if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {
           updatedConversation = {
@@ -2009,6 +2022,120 @@ function parseDemoIntent(
   }
 
   return { type: "requested" };
+}
+
+function isWindowClosedError(errorBody?: string, status?: number) {
+  const message = (errorBody ?? "").toLowerCase();
+  if (status === 470) return true;
+  if (message.includes("window") && message.includes("closed")) return true;
+  if (message.includes("outside") && message.includes("24")) return true;
+  if (message.includes("time window")) return true;
+  return false;
+}
+
+async function notifyAttendantDemoScheduled(params: {
+  attendantWaId: string;
+  leadWaId: string;
+  intent: string;
+  schedule: string;
+  snippet: string;
+  requestId?: string;
+}) {
+  const nowIso = new Date().toISOString();
+  const maskedLead = maskNumber(params.leadWaId);
+  const maskedAttendant = maskNumber(params.attendantWaId);
+  const textBody = [
+    "[DEMO] Lead pediu demonstração",
+    `Cliente: ${maskedLead}`,
+    `Intent: ${params.intent}`,
+    `Quando: ${params.schedule}`,
+    `Msg: ${params.snippet}`,
+    `TS: ${nowIso}`,
+  ].join("\n");
+
+  logger.info({
+    event: "handoff.notify.sending",
+    waId: maskedAttendant,
+    leadWaId: maskedLead,
+    notifyType: "text",
+    requestId: params.requestId,
+  });
+  const textResult = await sendTextMessage(params.attendantWaId, textBody);
+  if (textResult.ok) {
+  logger.info({
+    event: "handoff.notify.sent",
+    waId: maskedAttendant,
+    leadWaId: maskedLead,
+    notifyType: "text",
+    requestId: params.requestId,
+  });
+  return;
+  }
+
+  if (!isWindowClosedError(textResult.errorBody, textResult.status)) {
+    logger.error({
+      event: "handoff.notify.failed",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "text",
+      status: textResult.status,
+      requestId: params.requestId,
+    });
+    return;
+  }
+
+  const templateName = env.HANDOFF_NOTIFY_TEMPLATE_NAME || "hello_world";
+  const templateLang = env.HANDOFF_NOTIFY_TEMPLATE_LANG || "en_US";
+  logger.info({
+    event: "handoff.notify.sending",
+    waId: maskedAttendant,
+    leadWaId: maskedLead,
+    notifyType: "template",
+    requestId: params.requestId,
+  });
+  const templateResult = await sendTemplateMessage(
+    params.attendantWaId,
+    templateName,
+    templateLang
+  );
+  if (!templateResult.ok) {
+    logger.error({
+      event: "handoff.notify.failed",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "template",
+      status: templateResult.status,
+      requestId: params.requestId,
+    });
+    return;
+  }
+
+  logger.info({
+    event: "handoff.notify.sending",
+    waId: maskedAttendant,
+    leadWaId: maskedLead,
+    notifyType: "text_after_template",
+    requestId: params.requestId,
+  });
+  const secondResult = await sendTextMessage(params.attendantWaId, textBody);
+  if (secondResult.ok) {
+    logger.info({
+      event: "handoff.notify.sent",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "text_after_template",
+      requestId: params.requestId,
+    });
+  } else {
+    logger.error({
+      event: "handoff.notify.failed",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "text_after_template",
+      status: secondResult.status,
+      requestId: params.requestId,
+    });
+  }
 }
 
 function mapMessageType(type: string): MessageType {
