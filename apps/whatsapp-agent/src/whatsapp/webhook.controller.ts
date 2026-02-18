@@ -1572,7 +1572,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let demoUpdated = false;
 
     if (message.text) {
-      const demoResult = parseDemoIntent(message.text);
+      const demoContext = [
+        "demo",
+        "demonstra",
+        "reuniao",
+        "reunião",
+        "apresenta",
+        "call",
+        "contato",
+        "horario",
+        "horário",
+      ];
+      const normalizedDemoText = normalizeLite(message.text);
+      const hasDemoContext = demoContext.some((word) => normalizedDemoText.includes(word));
+      const isDemoContinuation = (updatedConversation.demoStatus ?? "none") === "requested";
+
+      const demoResult = hasDemoContext || isDemoContinuation ? parseDemoIntent(message.text) : null;
       const canProcessDemo =
         updatedConversation.intent === "pricing" ||
         Boolean(updatedConversation.leadRequestedAt) ||
@@ -1979,7 +1994,7 @@ function parseDemoIntent(text: string): { type: "requested" | "scheduled"; sched
   const hasHour = Boolean(hourMatch);
   const hasDayOrDate = Boolean(dayMatch || dateMatch);
 
-  if (hasHour && (hasDayOrDate || hourMatch)) {
+  if (hasHour && hasDayOrDate) {
     const extract = [dayMatch?.[0], dateMatch?.[0], hourMatch?.[0]].filter(Boolean).join(" ").trim();
     return { type: "scheduled", scheduleExtract: extract || undefined };
   }
