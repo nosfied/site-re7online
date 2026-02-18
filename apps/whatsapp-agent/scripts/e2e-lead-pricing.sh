@@ -186,19 +186,10 @@ METRICS_FILE="/tmp/re7-whatsapp-agent-admin-lead-metrics-${RID}.json"
 curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200" \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$MSG_FILE"
 
-curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
-  -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
-
 if ! grep -q '"ok":true' "$MSG_FILE"; then
   echo "FAIL: resposta de /admin/messages sem ok=true"
   echo "---- messages (tail) ----"
   tail -c 2000 "$MSG_FILE" || true
-  exit 1
-fi
-if ! grep -q '"ok":true' "$METRICS_FILE"; then
-  echo "FAIL: resposta de /admin/metrics sem ok=true"
-  echo "---- metrics ----"
-  cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
 fi
 
@@ -215,6 +206,23 @@ if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
   exit 1
 fi
 
+lead_captured_ok=""
+for _ in 1 2 3 4 5; do
+  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
+  if ! grep -q '"ok":true' "$METRICS_FILE"; then
+    echo "FAIL: resposta de /admin/metrics sem ok=true"
+    echo "---- metrics ----"
+    cat "$METRICS_FILE" | head -c 2000 || true
+    exit 1
+  fi
+  if grep -q '"captured"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+    lead_captured_ok="yes"
+    break
+  fi
+  sleep 1
+done
+
 if ! grep -q '"lead":' "$METRICS_FILE"; then
   echo "FAIL: métricas de lead não encontradas"
   echo "---- metrics ----"
@@ -227,7 +235,7 @@ if ! grep -q '"requested"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
   cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
 fi
-if ! grep -q '"captured"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+if [[ -z "$lead_captured_ok" ]]; then
   echo "FAIL: lead.captured < 1"
   echo "---- metrics ----"
   cat "$METRICS_FILE" | head -c 2000 || true
