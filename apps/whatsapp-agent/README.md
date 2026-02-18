@@ -232,6 +232,16 @@ Smoke prod (Policy B wrapper + E2E):
 ./scripts/e2e-demo.sh 558494786787 --range 1h
 ```
 
+Handoff notify (template aprovado):
+```bash
+# .env (produção)
+HANDOFF_ENABLED=true
+HANDOFF_ATTENDANT_WAID=5584999049614
+HANDOFF_TEMPLATE_NAME=re7_atendente_manual_v1
+HANDOFF_TEMPLATE_LANG=pt_BR
+HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE=true
+```
+
 Status completo:
 ```bash
 ./scripts/prod-status.sh
