@@ -14,8 +14,8 @@ npm run dev
 - `npm run dev` → start local
 - `npm run build` → compilar TypeScript
 - `npm run start` → rodar build de produção
-- `scripts/outbound-policyB-prod-check.sh` → valida Policy B em produção (janela fechada)
-  (requer `DISABLE_DEBUG_COMMANDS=false` no `.env` para usar o comando admin de debug).
+- `scripts/outbound-policyB-prod-check-wrapper.sh` → valida Policy B em produção (janela fechada)
+  (não depende de comandos debug; usa webhook assinado).
 Observação: em produção existe um utilitário operacional em `/usr/local/bin/outbound-policyB-prod-check`.
 - `npm run db:migrate` → cria migrations (dev)
 - `npm run db:deploy` → aplica migrations (prod)
@@ -61,7 +61,7 @@ npm run db:deploy
 Autenticação via `ADMIN_TOKEN` (header `X-Admin-Token: <token>`).
 Para atualizar o utilitário de produção:
 ```bash
-sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check
+sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wrapper.sh /usr/local/bin/outbound-policyB-prod-check
 ```
 - `GET /admin/health`
 - `GET /admin/clients`
