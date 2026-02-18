@@ -1567,8 +1567,85 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let leadReplyText: string | undefined;
     let leadHandled = false;
     let leadUpdated = false;
+    let demoReplyText: string | undefined;
+    let demoHandled = false;
+    let demoUpdated = false;
 
-    if (message.text && updatedConversation.leadRequestedAt) {
+    if (message.text) {
+      const demoResult = parseDemoIntent(message.text);
+      const canProcessDemo =
+        updatedConversation.intent === "pricing" ||
+        Boolean(updatedConversation.leadRequestedAt) ||
+        (updatedConversation.demoStatus ?? "none") !== "none";
+      if (demoResult && canProcessDemo) {
+        const nowIso = new Date(now).toISOString();
+        const currentStatus = updatedConversation.demoStatus ?? "none";
+        if (demoResult.type === "scheduled" && currentStatus !== "scheduled") {
+          updatedConversation = {
+            ...updatedConversation,
+            demoStatus: "scheduled",
+            lastDemoScheduledAt: nowIso,
+            demoPreferredSchedule: demoResult.scheduleExtract,
+          };
+          demoUpdated = true;
+          demoHandled = true;
+          demoReplyText =
+            "Perfeito! Vamos entrar em contato no dia/horário informado. Se preferir, diga outra opção.";
+          await persistEventSafe(
+            "lead.demo_scheduled",
+            {
+              intent: updatedConversation.intent ?? "unknown",
+              scheduleExtract: demoResult.scheduleExtract,
+            },
+            updatedConversation.waId,
+            message.messageId
+          );
+          logger.info({
+            event: "lead.demo_scheduled",
+            waId: maskNumber(normalizedFrom),
+            intent: updatedConversation.intent ?? "unknown",
+            scheduleExtract: demoResult.scheduleExtract,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+        }
+        if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {
+          updatedConversation = {
+            ...updatedConversation,
+            demoStatus: "requested",
+            lastDemoRequestedAt: nowIso,
+          };
+          demoUpdated = true;
+          demoHandled = true;
+          demoReplyText = "Qual melhor dia e horário para falarmos?";
+          await persistEventSafe(
+            "lead.demo_requested",
+            {
+              intent: updatedConversation.intent ?? "unknown",
+              scheduleExtract: demoResult.scheduleExtract,
+            },
+            updatedConversation.waId,
+            message.messageId
+          );
+          logger.info({
+            event: "lead.demo_requested",
+            waId: maskNumber(normalizedFrom),
+            intent: updatedConversation.intent ?? "unknown",
+            scheduleExtract: demoResult.scheduleExtract,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+        }
+      }
+    }
+
+    if (!demoHandled && message.text && updatedConversation.leadRequestedAt) {
       const requestedAtMs = Date.parse(updatedConversation.leadRequestedAt);
       if (!Number.isNaN(requestedAtMs) && now - requestedAtMs <= leadWindowMs) {
         const parsedLead = parseLeadFields(message.text);
@@ -1604,7 +1681,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
 
-    if (!leadReplyText && updatedConversation.intent === "pricing") {
+    if (!demoHandled && !leadReplyText && updatedConversation.intent === "pricing") {
       const windowOpen = isWindowOpen(updatedConversation, now);
       const hasRecentRequest =
         updatedConversation.leadRequestedAt &&
@@ -1628,7 +1705,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
 
-    if (leadUpdated) {
+    if (leadUpdated || demoUpdated) {
       await jsonFileStorage.upsertConversation(updatedConversation);
     }
 
@@ -1705,7 +1782,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const replyType = decision.replyType ?? "text";
 
-    let replyText = leadReplyText ?? flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
+    let replyText = demoReplyText ?? leadReplyText ?? flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
@@ -1730,6 +1807,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !leadHandled &&
       !flowResult.handled &&
       !handoffResult.handled &&
+      !demoHandled &&
+      !leadHandled &&
       env.WHATSAPP_AI_ENABLED &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
@@ -1866,6 +1945,46 @@ function parseLeadFields(text: string) {
   }
 
   return { name, city, serviceType, rawText };
+}
+
+function normalizeLite(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseDemoIntent(text: string): { type: "requested" | "scheduled"; scheduleExtract?: string } | null {
+  const normalized = normalizeLite(text);
+  const positives = [
+    "sim",
+    "quero",
+    "pode",
+    "ok",
+    "beleza",
+    "vamos",
+    "aceito",
+    "pode chamar",
+    "pode falar",
+  ];
+  const hasPositive = positives.some((word) => normalized.includes(word));
+  if (!hasPositive) return null;
+
+  const hourMatch = normalized.match(/\b([01]?\d|2[0-3])\s*(h|hs)\b/) ?? normalized.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+  const dayMatch = normalized.match(/\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/);
+  const dateMatch = normalized.match(/\b(\d{1,2}\/\d{1,2})\b/);
+
+  const hasHour = Boolean(hourMatch);
+  const hasDayOrDate = Boolean(dayMatch || dateMatch);
+
+  if (hasHour && (hasDayOrDate || hourMatch)) {
+    const extract = [dayMatch?.[0], dateMatch?.[0], hourMatch?.[0]].filter(Boolean).join(" ").trim();
+    return { type: "scheduled", scheduleExtract: extract || undefined };
+  }
+
+  return { type: "requested" };
 }
 
 function mapMessageType(type: string): MessageType {

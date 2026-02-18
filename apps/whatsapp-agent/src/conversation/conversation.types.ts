@@ -36,6 +36,10 @@ export type ConversationState = {
   lastIntent?: ConversationIntent;
   leadRequestedAt?: string;
   leadCapturedAt?: string;
+  demoStatus?: "none" | "requested" | "scheduled";
+  lastDemoRequestedAt?: string;
+  lastDemoScheduledAt?: string;
+  demoPreferredSchedule?: string;
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;
