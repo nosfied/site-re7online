@@ -199,8 +199,16 @@ if ! grep -qi "nome" "$MSG_FILE"; then
   echo "FAIL: pergunta de lead não encontrada"
   exit 1
 fi
-if ! grep -qi "perfeito\|já registrei" "$MSG_FILE"; then
-  echo "FAIL: confirmação de lead não encontrada"
+if ! grep -qi "Para te ajudar melhor, me informe:" "$MSG_FILE"; then
+  echo "FAIL: pergunta esperada ('Para te ajudar melhor, me informe:') não encontrada"
+  exit 1
+fi
+if ! grep -qi "wamid.e2e.lead.${RID}" "$MSG_FILE"; then
+  echo "FAIL: confirmação após lead (wamid.e2e.lead.${RID}) não encontrada"
+  exit 1
+fi
+if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
+  echo "FAIL: confirmação de lead não contém 'como posso ajudar' ou 'posso ajudar'"
   exit 1
 fi
 if ! grep -qi "lead" "$METRICS_FILE"; then
