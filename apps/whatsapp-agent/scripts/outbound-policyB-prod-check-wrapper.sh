@@ -91,18 +91,35 @@ post_webhook() {
 }
 
 metrics_json() {
-  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" -H "X-Admin-Token: ${ADMIN_TOKEN}"
+  curl -sS "${BASE_URL}/admin/metrics?range=${RANGE}" -H "X-Admin-Token: ${ADMIN_TOKEN}"
 }
 
 metrics_count() {
   local field="$1"
   local payload
-  payload=$(metrics_json)
-  if ! echo "$payload" | node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(0,'utf8'));if(!data||data.ok!==true){process.exit(1)}"; then
-    echo "FAIL: /admin/metrics retornou erro ou JSON inválido" >&2
+  payload="$(metrics_json)"
+
+  # valida JSON e ok:true (falha com mensagem clara)
+  if ! printf '%s' "$payload" | node -e "
+    const fs=require('fs');
+    const s=fs.readFileSync(0,'utf8');
+    let data;
+    try { data=JSON.parse(s); } catch(e) { process.exit(2); }
+    if (!data || data.ok !== true) process.exit(1);
+  " >/dev/null 2>&1; then
+    echo "FAIL: /admin/metrics retornou erro, unauthorized ou JSON inválido" >&2
+    echo "Dica: verifique ADMIN_TOKEN e header X-Admin-Token" >&2
     exit 1
   fi
-  echo "$payload" | node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(0,'utf8'));const path='${field}'.split('.');let v=data;for (const p of path){v=v?.[p];}process.stdout.write(String(v ?? 0));"
+
+  printf '%s' "$payload" | node -e "
+    const fs=require('fs');
+    const data=JSON.parse(fs.readFileSync(0,'utf8'));
+    const path='${field}'.split('.');
+    let v=data;
+    for (const p of path) v = v?.[p];
+    process.stdout.write(String(v ?? 0));
+  "
 }
 
 echo "== Policy B prod check (RID=${RID}) =="
@@ -150,7 +167,7 @@ after_lead_template="$before_lead_template"
 for _ in 1 2 3 4 5; do
   after_template=$(metrics_count "counts.outbound.sent_template")
   after_lead_template=$(metrics_count "lead.template_sent")
-  if [[ "$after_template" -gt "$before_template" ]]; then
+  if [[ "$after_template" -gt "$before_template" && "$after_lead_template" -gt "$before_lead_template" ]]; then
     break
   fi
   sleep 1
