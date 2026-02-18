@@ -65,17 +65,17 @@ if [[ -z "$TARGET_WAID" ]]; then
 fi
 
 wait_ready() {
-  local timeout_s=10
+  local timeout_s=12
   local start_ts
   start_ts=$(date +%s)
   while true; do
-    local code
-    code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 1 "${BASE_URL}/health" || true)
+    local code="000"
+    code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 1 "${BASE_URL}/health" 2>/dev/null || true)
     if [[ "$code" =~ ^2 ]]; then
       return 0
     fi
     if (( $(date +%s) - start_ts >= timeout_s )); then
-      echo "FAIL: server not ready at ${BASE_URL}" >&2
+      echo "FAIL: server not ready at ${BASE_URL} (health code=${code})" >&2
       return 1
     fi
     sleep 0.2
