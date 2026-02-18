@@ -6,9 +6,24 @@ import { ConversationState, HandoffState } from "../conversation/conversation.ty
 const dataDir = path.resolve(process.cwd(), ".data");
 const dataFile = path.join(dataDir, "whatsapp-events.json");
 const conversationFile = path.join(dataDir, "conversations.json");
+const writeQueues = new Map<string, Promise<void>>();
 
 async function ensureDataDir() {
   await fs.mkdir(dataDir, { recursive: true });
+}
+
+function enqueueWrite(targetFile: string, fn: () => Promise<void>) {
+  const prev = writeQueues.get(targetFile) ?? Promise.resolve();
+  const next = prev
+    .catch(() => undefined)
+    .then(fn);
+  writeQueues.set(targetFile, next);
+  void next.finally(() => {
+    if (writeQueues.get(targetFile) === next) {
+      writeQueues.delete(targetFile);
+    }
+  });
+  return next;
 }
 
 async function readAll(): Promise<StoredRecord[]> {
@@ -37,11 +52,22 @@ async function renameWithRetry(tempFile: string, targetFile: string) {
   }
 }
 
-async function writeAll(records: StoredRecord[]) {
+async function writeAtomic(targetFile: string, payload: string) {
   await ensureDataDir();
-  const tempFile = path.join(path.dirname(dataFile), "whatsapp-events.json.tmp");
-  await fs.writeFile(tempFile, JSON.stringify(records, null, 2), "utf-8");
-  await renameWithRetry(tempFile, dataFile);
+  const dir = path.dirname(targetFile);
+  const base = path.basename(targetFile);
+  const tmp = path.join(
+    dir,
+    `${base}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  );
+  await fs.writeFile(tmp, payload, "utf-8");
+  await renameWithRetry(tmp, targetFile);
+}
+
+async function writeAll(records: StoredRecord[]) {
+  return enqueueWrite(dataFile, () =>
+    writeAtomic(dataFile, JSON.stringify(records, null, 2))
+  );
 }
 
 type LegacyConversationState = ConversationState & {
@@ -101,10 +127,9 @@ async function readAllConversations(): Promise<ConversationState[]> {
 }
 
 async function writeAllConversations(conversations: ConversationState[]) {
-  await ensureDataDir();
-  const tempFile = path.join(path.dirname(conversationFile), "conversations.json.tmp");
-  await fs.writeFile(tempFile, JSON.stringify(conversations, null, 2), "utf-8");
-  await renameWithRetry(tempFile, conversationFile);
+  return enqueueWrite(conversationFile, () =>
+    writeAtomic(conversationFile, JSON.stringify(conversations, null, 2))
+  );
 }
 
 export const jsonFileStorage: Storage = {
