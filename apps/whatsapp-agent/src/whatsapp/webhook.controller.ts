@@ -1784,6 +1784,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const now = Date.now();
     const leadWindowMs = 24 * 60 * 60 * 1000;
+    let flowReplyText = flowResult.replyText;
     let leadReplyText: string | undefined;
     let leadHandled = false;
     let leadUpdated = false;
@@ -1792,6 +1793,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let demoUpdated = false;
 
     if (message.text) {
+      if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
+        const normalizedText = normalizeLite(message.text);
+        if (!normalizedText.includes("reagendar")) {
+          demoHandled = true;
+          flowReplyText = undefined;
+        }
+      }
       const demoContext = [
         "demo",
         "demonstra",
@@ -2044,7 +2052,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const replyType = decision.replyType ?? "text";
 
-    let replyText = demoReplyText ?? leadReplyText ?? flowResult.replyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
+    let replyText = demoReplyText ?? leadReplyText ?? flowReplyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
