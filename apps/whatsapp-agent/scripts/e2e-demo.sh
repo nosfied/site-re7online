@@ -185,8 +185,8 @@ if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" 
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
-  if ! grep -q "\\[DEMO\\]" "$ATT_FILE"; then
-    echo "FAIL: notificação [DEMO] não encontrada para atendente"
+  if ! grep -q "\\[DEMO\\]" "$ATT_FILE" && ! grep -q '"type":"TEMPLATE"' "$ATT_FILE"; then
+    echo "FAIL: notificação do atendente não encontrada (texto ou template)"
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
