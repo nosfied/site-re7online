@@ -2,6 +2,7 @@
 set -euo pipefail
 
 WAID=""
+WAID_OPEN=""
 RANGE="1h"
 PORT="${PORT:-3001}"
 
@@ -19,12 +20,16 @@ while [[ $# -gt 0 ]]; do
       WAID="$2"
       shift 2
       ;;
+    --waid-open)
+      WAID_OPEN="$2"
+      shift 2
+      ;;
     *)
       if [[ -z "$WAID" ]]; then
         WAID="$1"
         shift 1
       else
-        echo "Uso: $0 <waId> [--range 1h|24h|7d|30d] [--port 3001]" >&2
+        echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001]" >&2
         exit 2
       fi
       ;;
@@ -32,7 +37,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WAID" ]]; then
-  echo "Uso: $0 <waId> [--range 1h|24h|7d|30d] [--port 3001]" >&2
+  echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001]" >&2
   exit 2
 fi
 
@@ -77,6 +82,46 @@ post_webhook() {
   else
     curl -s -i -H "Content-Type: application/json" -d "$payload" "${BASE_URL}/webhook" >/dev/null
   fi
+}
+
+force_attendant_window() {
+  local mode="$1"
+  local ts
+  if [[ "$mode" == "open" ]]; then
+    ts=$(date +%s)
+  else
+    ts=$(date -d '48 hours ago' +%s)
+  fi
+  local payload
+  payload=$(cat <<JSON
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "${RID}",
+      "changes": [
+        {
+          "value": {
+            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
+            "messages": [
+              {
+                "id": "wamid.e2e.demo.attendant.${mode}.${RID}",
+                "from": "${HANDOFF_ATTENDANT_WAID}",
+                "timestamp": "${ts}",
+                "type": "text",
+                "text": { "body": "ping ${mode}" }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
+JSON
+)
+  post_webhook "$payload"
 }
 
 log_step "A: Policy B (template)"
@@ -177,6 +222,14 @@ if [[ "$demo_scheduled" -lt 1 ]]; then
 fi
 
 if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+  if [[ -z "$WAID_OPEN" ]]; then
+    echo "FAIL: --waid-open é obrigatório para validar janela aberta e fechada do atendente" >&2
+    exit 1
+  fi
+
+  log_step "E: forçar janela fechada do atendente"
+  force_attendant_window "closed"
+  sleep 1
   ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
   curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
     -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
@@ -186,7 +239,87 @@ if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" 
     exit 1
   fi
   if ! grep -q "re7_atendente_manual_v1" "$ATT_FILE"; then
-    echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente"
+    echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente (janela fechada)"
+    tail -c 2000 "$ATT_FILE" || true
+    exit 1
+  fi
+
+  log_step "F: forçar janela aberta do atendente"
+  force_attendant_window "open"
+  sleep 1
+  log_step "G: demo scheduled (janela aberta)"
+  NOW_TS=$(date +%s)
+  payload_open=$(cat <<JSON
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "${RID}",
+      "changes": [
+        {
+          "value": {
+            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
+            "messages": [
+              {
+                "id": "wamid.e2e.demo.open2.${RID}",
+                "from": "${WAID_OPEN}",
+                "timestamp": "${NOW_TS}",
+                "type": "text",
+                "text": { "body": "Quero uma demonstração" }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
+JSON
+)
+  post_webhook "$payload_open"
+  NEXT_TS=$((NOW_TS + 5))
+  payload_demo=$(cat <<JSON
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "${RID}",
+      "changes": [
+        {
+          "value": {
+            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
+            "messages": [
+              {
+                "id": "wamid.e2e.demo.schedule2.${RID}",
+                "from": "${WAID_OPEN}",
+                "timestamp": "${NEXT_TS}",
+                "type": "text",
+                "text": { "body": "terça 14h" }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
+JSON
+)
+  post_webhook "$payload_demo"
+  sleep 1
+
+  ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+  curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+  if ! grep -q '"ok":true' "$ATT_FILE"; then
+    echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
+    tail -c 2000 "$ATT_FILE" || true
+    exit 1
+  fi
+  if grep -q "re7_atendente_manual_v1" "$ATT_FILE"; then
+    echo "FAIL: template encontrado para atendente mesmo com janela aberta"
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
