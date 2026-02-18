@@ -139,7 +139,6 @@ export async function persistEvent(params: {
 }) {
   if (!params.clientId) return;
   const requestId = params.requestId ?? params.messageId ?? null;
-  if (!requestId) return;
   try {
     const prisma = getPrisma();
     await prisma.event.create({
@@ -148,7 +147,7 @@ export async function persistEvent(params: {
         conversationId: params.conversationId ?? undefined,
         waId: params.waId ?? undefined,
         messageId: params.messageId ?? undefined,
-        requestId,
+        requestId: requestId ?? undefined,
         eventName: params.eventName,
         payloadJson: params.payloadJson,
       },
