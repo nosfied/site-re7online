@@ -45,6 +45,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env"
 BASE_URL="http://127.0.0.1:${PORT}"
 RID="${RID:-$(date +%s)$RANDOM}"
+RID_OPEN="${RID_OPEN:-$(date +%s)$RANDOM}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "FAIL: .env não encontrado em ${ENV_FILE}" >&2
@@ -124,6 +125,12 @@ JSON
   post_webhook "$payload"
 }
 
+count_attendant_templates() {
+  local file="$1"
+  local rid="$2"
+  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const rid=process.argv[2];const count=items.filter((i)=>String(i.messageId||'').includes(rid)&&i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&i.status==='SENT').length;process.stdout.write(String(count));" "$file" "$rid"
+}
+
 log_step "A: Policy B (template)"
 if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
   "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
@@ -151,7 +158,7 @@ if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" 
             "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
             "messages": [
               {
-                "id": "wamid.e2e.demo.open2.${RID}",
+                "id": "wamid.e2e.demo.open2.${RID_OPEN}",
                 "from": "${WAID_OPEN}",
                 "timestamp": "${NOW_TS}",
                 "type": "text",
@@ -181,7 +188,7 @@ JSON
             "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
             "messages": [
               {
-                "id": "wamid.e2e.demo.schedule2.${RID}",
+                "id": "wamid.e2e.demo.schedule2.${RID_OPEN}",
                 "from": "${WAID_OPEN}",
                 "timestamp": "${NEXT_TS}",
                 "type": "text",
@@ -207,8 +214,8 @@ JSON
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
-  if grep -q "re7_atendente_manual_v1" "$ATT_FILE"; then
-    echo "FAIL: template encontrado para atendente mesmo com janela aberta"
+  if [[ "$(count_attendant_templates "$ATT_FILE" "$RID_OPEN")" -gt 0 ]]; then
+    echo "FAIL: template encontrado para atendente mesmo com janela aberta (RID_OPEN)"
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
@@ -323,6 +330,11 @@ if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" 
   fi
   if ! grep -q "re7_atendente_manual_v1" "$ATT_FILE"; then
     echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente (janela fechada)"
+    tail -c 2000 "$ATT_FILE" || true
+    exit 1
+  fi
+  if [[ "$(count_attendant_templates "$ATT_FILE" "$RID")" -lt 1 ]]; then
+    echo "FAIL: template não encontrado para o RID atual (janela fechada)"
     tail -c 2000 "$ATT_FILE" || true
     exit 1
   fi
