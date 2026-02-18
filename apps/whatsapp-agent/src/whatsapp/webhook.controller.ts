@@ -1791,13 +1791,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let demoReplyText: string | undefined;
     let demoHandled = false;
     let demoUpdated = false;
+    let skipDemoReplies = false;
 
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
         const normalizedText = normalizeLite(message.text);
         if (!normalizedText.includes("reagendar")) {
+          skipDemoReplies = true;
           demoHandled = true;
           flowReplyText = undefined;
+          logger.info({
+            event: "demo.guardrail.scheduled_skip",
+            waId: maskNumber(normalizedFrom),
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
         }
       }
       const demoContext = [
@@ -2051,6 +2060,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const replyType = decision.replyType ?? "text";
+
+    if (skipDemoReplies && !demoReplyText) {
+      continue;
+    }
 
     let replyText = demoReplyText ?? leadReplyText ?? flowReplyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
