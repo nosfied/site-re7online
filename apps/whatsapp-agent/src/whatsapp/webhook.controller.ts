@@ -405,6 +405,193 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return result;
   };
 
+  const isWindowClosedError = (errorBody?: string, status?: number) => {
+    const message = (errorBody ?? "").toLowerCase();
+    if (status === 470) return true;
+    if (message.includes("window") && message.includes("closed")) return true;
+    if (message.includes("outside") && message.includes("24")) return true;
+    if (message.includes("time window")) return true;
+    return false;
+  };
+
+  const notifyAttendantDemoScheduled = async (params: {
+    attendantWaId: string;
+    leadWaId: string;
+    intent: string;
+    schedule: string;
+    snippet: string;
+    requestId?: string;
+  }) => {
+    const nowIso = new Date().toISOString();
+    const maskedLead = maskNumber(params.leadWaId);
+    const maskedAttendant = maskNumber(params.attendantWaId);
+    const baseMessageId = `handoff.notify.${params.requestId ?? Date.now()}`;
+    const textBody = [
+      "[DEMO] Lead pediu demonstração",
+      `Cliente: ${maskedLead}`,
+      `Intent: ${params.intent}`,
+      `Quando: ${params.schedule}`,
+      `Msg: ${params.snippet}`,
+      `TS: ${nowIso}`,
+    ].join("\n");
+
+    logger.info({
+      event: "handoff.notify.sending",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "text",
+      requestId: params.requestId,
+    });
+    const textResult = await sendOutboundText({
+      toE164: params.attendantWaId,
+      waId: params.attendantWaId,
+      intent: "handoff",
+      messageId: `${baseMessageId}.text`,
+      replyText: textBody,
+    });
+    if (textResult.ok) {
+      logger.info({
+        event: "handoff.notify.sent",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "text",
+        requestId: params.requestId,
+      });
+      await persistEventSafe(
+        "lead.handoff_notified",
+        {
+          leadWaId: maskedLead,
+          intent: params.intent,
+          schedule: params.schedule,
+        },
+        params.leadWaId,
+        `${baseMessageId}.text`
+      );
+      return;
+    }
+
+    if (!isWindowClosedError(textResult.errorBody, textResult.status)) {
+      logger.error({
+        event: "handoff.notify.failed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "text",
+        status: textResult.status,
+        requestId: params.requestId,
+      });
+      return;
+    }
+
+    const templateName = env.HANDOFF_NOTIFY_TEMPLATE_NAME || "";
+    const templateLang = env.HANDOFF_NOTIFY_TEMPLATE_LANG || "";
+    if (!templateName || !templateLang) {
+      logger.error({
+        event: "handoff.notify.failed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "template",
+        reason: "template_missing",
+        requestId: params.requestId,
+      });
+      return;
+    }
+
+    logger.info({
+      event: "handoff.notify.sending",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "template",
+      requestId: params.requestId,
+    });
+    const templateResult = await sendTemplate({
+      toE164: params.attendantWaId,
+      waId: params.attendantWaId,
+      intent: "handoff",
+      templateName,
+      lang: templateLang,
+      isFallback: false,
+      requestId: params.requestId,
+      rid: `${baseMessageId}.template`,
+      messageId: `${baseMessageId}.template`,
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+    });
+    await persistOutboundTemplateSafe({
+      waId: params.attendantWaId,
+      messageId: `${baseMessageId}.template`,
+      templateName,
+      templateLang,
+      status: templateResult.ok ? MessageStatus.SENT : MessageStatus.FAILED,
+      errorBody: templateResult.errorBody ?? null,
+      metaMessageId: templateResult.metaMessageId ?? null,
+    });
+    await persistEventSafe(
+      templateResult.ok ? "outbound.template.sent" : "outbound.template.failed",
+      {
+        template: templateName,
+        language: templateLang,
+        status: templateResult.status,
+        errorBody: templateResult.errorBody,
+      },
+      params.attendantWaId,
+      `${baseMessageId}.template`
+    );
+    if (!templateResult.ok) {
+      logger.error({
+        event: "handoff.notify.failed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "template",
+        status: templateResult.status,
+        requestId: params.requestId,
+      });
+      return;
+    }
+
+    logger.info({
+      event: "handoff.notify.sending",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      notifyType: "text_after_template",
+      requestId: params.requestId,
+    });
+    const secondResult = await sendOutboundText({
+      toE164: params.attendantWaId,
+      waId: params.attendantWaId,
+      intent: "handoff",
+      messageId: `${baseMessageId}.text2`,
+      replyText: textBody,
+    });
+    if (secondResult.ok) {
+      logger.info({
+        event: "handoff.notify.sent",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "text_after_template",
+        requestId: params.requestId,
+      });
+      await persistEventSafe(
+        "lead.handoff_notified",
+        {
+          leadWaId: maskedLead,
+          intent: params.intent,
+          schedule: params.schedule,
+        },
+        params.leadWaId,
+        `${baseMessageId}.text2`
+      );
+    } else {
+      logger.error({
+        event: "handoff.notify.failed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "text_after_template",
+        status: secondResult.status,
+        requestId: params.requestId,
+      });
+    }
+  };
+
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
@@ -2022,120 +2209,6 @@ function parseDemoIntent(
   }
 
   return { type: "requested" };
-}
-
-function isWindowClosedError(errorBody?: string, status?: number) {
-  const message = (errorBody ?? "").toLowerCase();
-  if (status === 470) return true;
-  if (message.includes("window") && message.includes("closed")) return true;
-  if (message.includes("outside") && message.includes("24")) return true;
-  if (message.includes("time window")) return true;
-  return false;
-}
-
-async function notifyAttendantDemoScheduled(params: {
-  attendantWaId: string;
-  leadWaId: string;
-  intent: string;
-  schedule: string;
-  snippet: string;
-  requestId?: string;
-}) {
-  const nowIso = new Date().toISOString();
-  const maskedLead = maskNumber(params.leadWaId);
-  const maskedAttendant = maskNumber(params.attendantWaId);
-  const textBody = [
-    "[DEMO] Lead pediu demonstração",
-    `Cliente: ${maskedLead}`,
-    `Intent: ${params.intent}`,
-    `Quando: ${params.schedule}`,
-    `Msg: ${params.snippet}`,
-    `TS: ${nowIso}`,
-  ].join("\n");
-
-  logger.info({
-    event: "handoff.notify.sending",
-    waId: maskedAttendant,
-    leadWaId: maskedLead,
-    notifyType: "text",
-    requestId: params.requestId,
-  });
-  const textResult = await sendTextMessage(params.attendantWaId, textBody);
-  if (textResult.ok) {
-  logger.info({
-    event: "handoff.notify.sent",
-    waId: maskedAttendant,
-    leadWaId: maskedLead,
-    notifyType: "text",
-    requestId: params.requestId,
-  });
-  return;
-  }
-
-  if (!isWindowClosedError(textResult.errorBody, textResult.status)) {
-    logger.error({
-      event: "handoff.notify.failed",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      notifyType: "text",
-      status: textResult.status,
-      requestId: params.requestId,
-    });
-    return;
-  }
-
-  const templateName = env.HANDOFF_NOTIFY_TEMPLATE_NAME || "hello_world";
-  const templateLang = env.HANDOFF_NOTIFY_TEMPLATE_LANG || "en_US";
-  logger.info({
-    event: "handoff.notify.sending",
-    waId: maskedAttendant,
-    leadWaId: maskedLead,
-    notifyType: "template",
-    requestId: params.requestId,
-  });
-  const templateResult = await sendTemplateMessage(
-    params.attendantWaId,
-    templateName,
-    templateLang
-  );
-  if (!templateResult.ok) {
-    logger.error({
-      event: "handoff.notify.failed",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      notifyType: "template",
-      status: templateResult.status,
-      requestId: params.requestId,
-    });
-    return;
-  }
-
-  logger.info({
-    event: "handoff.notify.sending",
-    waId: maskedAttendant,
-    leadWaId: maskedLead,
-    notifyType: "text_after_template",
-    requestId: params.requestId,
-  });
-  const secondResult = await sendTextMessage(params.attendantWaId, textBody);
-  if (secondResult.ok) {
-    logger.info({
-      event: "handoff.notify.sent",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      notifyType: "text_after_template",
-      requestId: params.requestId,
-    });
-  } else {
-    logger.error({
-      event: "handoff.notify.failed",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      notifyType: "text_after_template",
-      status: secondResult.status,
-      requestId: params.requestId,
-    });
-  }
 }
 
 function mapMessageType(type: string): MessageType {
