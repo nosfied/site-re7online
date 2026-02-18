@@ -1992,8 +1992,9 @@ function parseDemoIntent(
     "pode chamar",
     "pode falar",
   ];
-  const hasPositive = positives.some((word) => normalized.includes(word));
-  if (requirePositive && !hasPositive) return null;
+  if (requirePositive && !positives.some((word) => normalized.includes(word))) {
+    return null;
+  }
 
   const hourMatch = normalized.match(/\b([01]?\d|2[0-3])\s*(h|hs)\b/) ?? normalized.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
   const dayMatch = normalized.match(/\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/);
