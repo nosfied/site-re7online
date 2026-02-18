@@ -181,4 +181,55 @@ Readiness usa `/health` público.
 ```bash
 ./scripts/e2e-lead-pricing.sh 558494786787
 ```
-Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa `/usr/local/bin/outbound-policyB-prod-check` se existir.
+Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa o wrapper versionado no repo.
+
+## Operação em Produção (Runbook)
+Path: `/opt/re7online/site-re7online/apps/whatsapp-agent`  
+PM2: `re7-whatsapp-agent` (porta 3001)
+
+Health check:
+```bash
+curl -s http://127.0.0.1:3001/health
+```
+
+PM2 status e logs:
+```bash
+pm2 status
+pm2 logs re7-whatsapp-agent --lines 200
+pm2 flush
+```
+
+Deploy padrão:
+```bash
+cd /opt/re7online/site-re7online
+git pull --ff-only
+cd apps/whatsapp-agent
+npm ci --include=dev
+npm run build
+pm2 reload re7-whatsapp-agent --update-env
+```
+
+ADMIN_TOKEN (sem imprimir o valor):
+```bash
+ADMIN_TOKEN=$(grep -E '^ADMIN_TOKEN=' .env | head -n1 | cut -d= -f2-)
+export ADMIN_TOKEN
+```
+
+Consultar métricas:
+```bash
+curl -s "http://127.0.0.1:3001/admin/metrics?range=1h" -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+Smoke prod (Policy B wrapper + E2E):
+```bash
+./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h
+./scripts/e2e-lead-pricing.sh 558494786787 --range 1h
+```
+
+Diagnóstico rápido do storage:
+```bash
+ls -lah .data
+du -h .data
+pm2 flush
+pm2 logs re7-whatsapp-agent --lines 200 | grep -E "ENOENT|rename|whatsapp-events"
+```
