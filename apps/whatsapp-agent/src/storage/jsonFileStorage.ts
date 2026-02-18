@@ -28,7 +28,8 @@ async function renameWithRetry(tempFile: string, targetFile: string) {
       return;
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT" || attempt === delays.length) {
+      const retryable = code === "ENOENT" || code === "EBUSY" || code === "EPERM";
+      if (!retryable || attempt === delays.length) {
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
@@ -38,7 +39,7 @@ async function renameWithRetry(tempFile: string, targetFile: string) {
 
 async function writeAll(records: StoredRecord[]) {
   await ensureDataDir();
-  const tempFile = path.join(dataDir, "whatsapp-events.json.tmp");
+  const tempFile = path.join(path.dirname(dataFile), "whatsapp-events.json.tmp");
   await fs.writeFile(tempFile, JSON.stringify(records, null, 2), "utf-8");
   await renameWithRetry(tempFile, dataFile);
 }
@@ -101,7 +102,7 @@ async function readAllConversations(): Promise<ConversationState[]> {
 
 async function writeAllConversations(conversations: ConversationState[]) {
   await ensureDataDir();
-  const tempFile = path.join(dataDir, "conversations.json.tmp");
+  const tempFile = path.join(path.dirname(conversationFile), "conversations.json.tmp");
   await fs.writeFile(tempFile, JSON.stringify(conversations, null, 2), "utf-8");
   await renameWithRetry(tempFile, conversationFile);
 }
