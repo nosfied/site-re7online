@@ -69,7 +69,7 @@ post_webhook() {
   local payload="$1"
   if [[ -n "${META_APP_SECRET:-}" ]]; then
     local signature
-    signature=$(printf "%s" "$payload" | node -e "const crypto=require('crypto');const fs=require('fs');const secret=process.env.META_APP_SECRET;const body=fs.readFileSync(0);process.stdout.write('sha256='+crypto.createHmac('sha256',secret).update(body).digest('hex'));" )
+    signature=$(printf "%s" "$payload" | META_APP_SECRET="$META_APP_SECRET" node -e "const crypto=require('crypto');const fs=require('fs');const secret=process.env.META_APP_SECRET;const body=fs.readFileSync(0);process.stdout.write('sha256='+crypto.createHmac('sha256',secret).update(body).digest('hex'));" )
     curl -s -i -H "Content-Type: application/json" -H "X-Hub-Signature-256: ${signature}" \
       -d "$payload" "${BASE_URL}/webhook" >/dev/null
   else

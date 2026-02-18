@@ -61,7 +61,7 @@ npm run db:deploy
 Autenticação via `ADMIN_TOKEN` (header `X-Admin-Token: <token>`).
 Para atualizar o utilitário de produção:
 ```bash
-sudo install -m 755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check
+sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check
 ```
 - `GET /admin/health`
 - `GET /admin/clients`
