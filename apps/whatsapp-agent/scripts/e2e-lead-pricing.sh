@@ -207,6 +207,9 @@ if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
 fi
 
 lead_captured_ok=""
+lead_requested_count="0"
+lead_captured_count="0"
+lead_template_count="0"
 for _ in 1 2 3 4 5; do
   curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
     -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
@@ -216,7 +219,10 @@ for _ in 1 2 3 4 5; do
     cat "$METRICS_FILE" | head -c 2000 || true
     exit 1
   fi
-  if grep -q '"captured"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+  read -r lead_requested_count lead_captured_count lead_template_count < <(
+    node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};process.stdout.write(String(lead.requested??0)+' '+String(lead.captured??0)+' '+String(lead.template_sent??0));" "$METRICS_FILE"
+  )
+  if [[ "$lead_captured_count" -ge 1 && "$lead_requested_count" -ge 1 && "$lead_template_count" -ge 1 ]]; then
     lead_captured_ok="yes"
     break
   fi
@@ -229,8 +235,14 @@ if ! grep -q '"lead":' "$METRICS_FILE"; then
   cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
 fi
-if ! grep -q '"requested"[[:space:]]*:[[:space:]]*[1-9]' "$METRICS_FILE"; then
+if [[ "$lead_requested_count" -lt 1 ]]; then
   echo "FAIL: lead.requested < 1"
+  echo "---- metrics ----"
+  cat "$METRICS_FILE" | head -c 2000 || true
+  exit 1
+fi
+if [[ "$lead_template_count" -lt 1 ]]; then
+  echo "FAIL: lead.template_sent < 1"
   echo "---- metrics ----"
   cat "$METRICS_FILE" | head -c 2000 || true
   exit 1
@@ -248,4 +260,5 @@ if ! grep -qi "conversion_rate" "$METRICS_FILE"; then
   exit 1
 fi
 
+echo "Counters: leadRequested=${lead_requested_count} leadCaptured=${lead_captured_count} templateSent=${lead_template_count}"
 echo "E2E OK waId=${WAID} rid=${RID}"
