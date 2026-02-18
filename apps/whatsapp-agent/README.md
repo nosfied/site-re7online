@@ -231,6 +231,12 @@ Status completo:
 ./scripts/prod-status.sh
 ```
 
+Backup:
+```bash
+./scripts/backup-data.sh --keep 20
+```
+Recomendações: rodar antes de deploys e após incidentes. Os backups ficam em `.backups/` e não são versionados.
+
 Diagnóstico rápido do storage:
 ```bash
 ls -lah .data
