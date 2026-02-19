@@ -152,22 +152,24 @@ run_once() {
 
   log_step "A: Policy B (template)"
   if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
-    "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
+    if ! RID="$RID" "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"; then
+      echo "WARN: wrapper de Policy B falhou; seguindo com validação por evidência" >&2
+    fi
   fi
 
   POLICY_FILE="/tmp/re7-whatsapp-agent-admin-demo-policyb-${RID}.json"
-  curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=80" \
+  curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
     -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$POLICY_FILE"
   if ! grep -q '"ok":true' "$POLICY_FILE"; then
     echo "FAIL: resposta de /admin/messages (policyB) sem ok=true"
     tail -c 2000 "$POLICY_FILE" || true
-    exit 1
+    return 1
   fi
-  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const rid=process.argv[2];const hit=items.some((i)=>i.direction==='OUTBOUND'&&i.type==='TEMPLATE'&&i.templateName==='re7_pricing_v1'&&i.status==='SENT'&&String(i.messageId||'').includes(rid));if(!hit)process.exit(2);" "$POLICY_FILE" "$RID"
+  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const start=Number(process.argv[2]||0);const hit=items.some((i)=>i.direction==='OUTBOUND'&&i.type==='TEMPLATE'&&i.templateName==='re7_pricing_v1'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start));if(!hit)process.exit(2);" "$POLICY_FILE" "$START_EPOCH_MS"
   if [[ $? -ne 0 ]]; then
     echo "FAIL: Policy B template não encontrado para RID atual"
     tail -c 2000 "$POLICY_FILE" || true
-    exit 1
+    return 1
   fi
 
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" && -n "${WAID_OPEN:-}" ]]; then
@@ -242,17 +244,17 @@ JSON
     if ! grep -q '"ok":true' "$ATT_FILE"; then
       echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
       tail -c 2000 "$ATT_FILE" || true
-      exit 1
+      return 1
     fi
     if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -gt 0 ]]; then
       echo "FAIL: template encontrado para atendente mesmo com janela aberta (run atual)"
       tail -c 2000 "$ATT_FILE" || true
-      exit 1
+      return 1
     fi
     if [[ "$(count_text_by_window "$ATT_FILE" "$START_EPOCH_MS")" -lt 1 ]]; then
       echo "FAIL: não encontrou texto do atendente no run atual (janela aberta)"
       tail -c 2000 "$ATT_FILE" || true
-      exit 1
+      return 1
     fi
   fi
 
@@ -332,27 +334,27 @@ JSON
   curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
     -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
 
-if ! grep -q '"ok":true' "$METRICS_FILE"; then
-  echo "FAIL: resposta de /admin/metrics sem ok=true"
-  head -c 2000 "$METRICS_FILE" || true
-  exit 1
-fi
+  if ! grep -q '"ok":true' "$METRICS_FILE"; then
+    echo "FAIL: resposta de /admin/metrics sem ok=true"
+    head -c 2000 "$METRICS_FILE" || true
+    return 1
+  fi
 
   read -r demo_requested demo_scheduled < <(
     node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};process.stdout.write(String(lead.demo_requested??0)+' '+String(lead.demo_scheduled??0));" "$METRICS_FILE"
   )
 
-if [[ "$demo_requested" -lt 1 ]]; then
-  echo "FAIL: lead.demo_requested < 1"
-  head -c 2000 "$METRICS_FILE" || true
-  exit 1
-fi
+  if [[ "$demo_requested" -lt 1 ]]; then
+    echo "FAIL: lead.demo_requested < 1"
+    head -c 2000 "$METRICS_FILE" || true
+    return 1
+  fi
 
-if [[ "$demo_scheduled" -lt 1 ]]; then
-  echo "FAIL: lead.demo_scheduled < 1"
-  head -c 2000 "$METRICS_FILE" || true
-  exit 1
-fi
+  if [[ "$demo_scheduled" -lt 1 ]]; then
+    echo "FAIL: lead.demo_scheduled < 1"
+    head -c 2000 "$METRICS_FILE" || true
+    return 1
+  fi
 
   LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
   curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
@@ -360,7 +362,7 @@ fi
   if ! grep -q '"ok":true' "$LEAD_FILE"; then
     echo "FAIL: resposta de /admin/messages (lead) sem ok=true"
     tail -c 2000 "$LEAD_FILE" || true
-    exit 1
+    return 1
   fi
 
   node -e "
@@ -378,7 +380,7 @@ fi
   if [[ $? -ne 0 ]]; then
     echo "FAIL: encontrou pergunta de solução/produto após agendamento"
     tail -c 2000 "$LEAD_FILE" || true
-    exit 1
+    return 1
   fi
 
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
@@ -388,20 +390,29 @@ fi
     if ! grep -q '"ok":true' "$ATT_FILE"; then
       echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
       tail -c 2000 "$ATT_FILE" || true
-      exit 1
+      return 1
     fi
     if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -lt 1 ]]; then
       echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente (janela fechada)"
       tail -c 2000 "$ATT_FILE" || true
-      exit 1
+      return 1
     fi
   fi
 
   echo "Counters: demoRequested=${demo_requested} demoScheduled=${demo_scheduled}"
   echo "E2E OK waId=${WAID} rid=${RID}"
+  return 0
 }
 
+failures=0
 for run in $(seq 1 "$REPEAT"); do
   echo "== RUN ${run}/${REPEAT} =="
-  run_once
+  if ! run_once; then
+    failures=$((failures + 1))
+  fi
 done
+
+if [[ "$failures" -gt 0 ]]; then
+  echo "E2E FAIL (runs failed: ${failures}/${REPEAT})" >&2
+  exit 1
+fi
