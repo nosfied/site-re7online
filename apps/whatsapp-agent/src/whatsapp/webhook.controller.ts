@@ -1836,13 +1836,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
         const normalizedText = normalizeLite(message.text);
-        if (!normalizedText.includes("reagendar")) {
+        const isReschedule = normalizedText.includes("reagendar");
+        const looksLikeDemoFollowup =
+          /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
+            normalizedText
+          );
+        if (!isReschedule && looksLikeDemoFollowup) {
           skipDemoReplies = true;
           demoHandled = true;
           flowReplyText = undefined;
           logger.info({
             event: "demo.guardrail.scheduled_skip",
             waId: maskNumber(normalizedFrom),
+            reason: "looks_like_demo_followup",
+            intent: updatedConversation.intent ?? "unknown",
+            text: message.text,
             route: meta?.route,
             method: meta?.method,
             requestId: meta?.requestId,
