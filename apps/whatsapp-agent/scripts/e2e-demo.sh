@@ -265,54 +265,74 @@ JSON
     sleep 1
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-open-${RID_OPEN}.json"
-    check_attendant_open() {
-      curl -s "${BASE_URL}/admin/messages?waId=${WAID_OPEN}&limit=50" \
+    SCHEDULE_ANCHOR="/tmp/re7-whatsapp-agent-admin-demo-open-anchor-${RID_OPEN}.txt"
+    scheduleOpenTsMs=""
+    scheduleOpenCreatedAt=""
+
+    fetch_schedule_open_anchor() {
+      curl -s "${BASE_URL}/admin/messages?waId=${WAID_OPEN}&limit=200" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$OPEN_FILE"
       if ! grep -q '"ok":true' "$OPEN_FILE"; then
         return 1
       fi
-      scheduleOpenTs=$(node -e "
+      if ! node -e "
         const fs=require('fs');
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const rid=process.argv[2];
         const msg=items.find((i)=>String(i.messageId||'').includes('schedule2.'+rid)&&i.direction==='INBOUND');
-        if(!msg){process.exit(2);}
+        if(!msg) process.exit(2);
         const ts=Date.parse(msg.createdAt||'');
         if(!Number.isFinite(ts)) process.exit(2);
-        process.stdout.write(String(ts));
-      " "$OPEN_FILE" "$RID_OPEN" 2>/dev/null) || return 1
+        fs.writeFileSync(process.argv[3], String(ts)+'\n'+String(msg.createdAt||''));
+      " "$OPEN_FILE" "$RID_OPEN" "$SCHEDULE_ANCHOR"; then
+        return 1
+      fi
+      scheduleOpenTsMs=$(sed -n '1p' "$SCHEDULE_ANCHOR" | tr -d '\r')
+      scheduleOpenCreatedAt=$(sed -n '2p' "$SCHEDULE_ANCHOR" | tr -d '\r')
+      return 0
+    }
 
+    if ! poll_until "anchor schedule2 não encontrado" 6 1 fetch_schedule_open_anchor; then
+      tail -c 2000 "$OPEN_FILE" || true
+      return 1
+    fi
+
+    check_attendant_open() {
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
       fi
 
-      if ! node -e "
+      templateCount=$(node -e "
         const fs=require('fs');
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const templateHit=items.some((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>start));
-        if(templateHit) process.exit(2);
-      " "$ATT_FILE" "$scheduleOpenTs"; then
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>start)).length;
+        process.stdout.write(String(cnt));
+      " "$ATT_FILE" "$scheduleOpenTsMs" 2>/dev/null) || return 1
+      if [[ "${templateCount:-0}" -gt 0 ]]; then
         return 1
       fi
 
-      if ! node -e "
+      textCount=$(node -e "
         const fs=require('fs');
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const textHit=items.some((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start));
-        if(!textHit) process.exit(2);
-      " "$ATT_FILE" "$scheduleOpenTs"; then
+        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start)).length;
+        process.stdout.write(String(cnt));
+      " "$ATT_FILE" "$scheduleOpenTsMs" 2>/dev/null) || return 1
+      if [[ "${textCount:-0}" -lt 1 ]]; then
         return 1
       fi
       return 0
     }
     if ! poll_until "janela aberta: validações do atendente" 6 1 check_attendant_open; then
+      echo "scheduleOpenTsMs=${scheduleOpenTsMs:-} scheduleOpenCreatedAt=${scheduleOpenCreatedAt:-}" >&2
+      echo "templateCount=${templateCount:-} textCount=${textCount:-}" >&2
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
