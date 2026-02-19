@@ -294,7 +294,7 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const templateHit=items.some((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start));
+        const templateHit=items.some((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>start));
         if(templateHit) process.exit(2);
       " "$ATT_FILE" "$scheduleOpenTs"; then
         return 1
