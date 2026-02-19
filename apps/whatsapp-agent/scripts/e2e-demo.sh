@@ -5,6 +5,7 @@ WAID=""
 WAID_OPEN=""
 RANGE="1h"
 PORT="${PORT:-3001}"
+REPEAT=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -24,12 +25,16 @@ while [[ $# -gt 0 ]]; do
       WAID_OPEN="$2"
       shift 2
       ;;
+    --repeat)
+      REPEAT="$2"
+      shift 2
+      ;;
     *)
       if [[ -z "$WAID" ]]; then
         WAID="$1"
         shift 1
       else
-        echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001]" >&2
+        echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
         exit 2
       fi
       ;;
@@ -37,16 +42,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WAID" ]]; then
-  echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001]" >&2
+  echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
   exit 2
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env"
 BASE_URL="http://127.0.0.1:${PORT}"
-RID="${RID:-$(date +%s)$RANDOM}"
-RID_OPEN="${RID_OPEN:-$(date +%s)$RANDOM}"
-START_EPOCH="${START_EPOCH:-$(date +%s)}"
+RID="${RID:-}"
+RID_OPEN="${RID_OPEN:-}"
+START_EPOCH="${START_EPOCH:-}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "FAIL: .env não encontrado em ${ENV_FILE}" >&2
@@ -126,28 +131,52 @@ JSON
   post_webhook "$payload"
 }
 
-count_attendant_templates() {
+count_templates_by_window() {
   local file="$1"
-  local rid="$2"
-  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const rid=process.argv[2];const count=items.filter((i)=>String(i.messageId||'').includes(rid)&&i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&i.status==='SENT').length;process.stdout.write(String(count));" "$file" "$rid"
+  local template="$2"
+  local startEpochMs="$3"
+  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const tmpl=process.argv[2];const start=Number(process.argv[3]||0);const count=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName===tmpl&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;process.stdout.write(String(count));" "$file" "$template" "$startEpochMs"
 }
 
-log_step "A: Policy B (template)"
-if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
-  "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
-fi
+count_text_by_window() {
+  local file="$1"
+  local startEpochMs="$2"
+  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const start=Number(process.argv[2]||0);const count=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;process.stdout.write(String(count));" "$file" "$startEpochMs"
+}
 
-if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-  if [[ -z "$WAID_OPEN" ]]; then
-    echo "FAIL: --waid-open é obrigatório para validar janela aberta e fechada do atendente" >&2
+run_once() {
+  RID="${RID:-$(date +%s)$RANDOM}"
+  RID_OPEN="${RID_OPEN:-$(date +%s)$RANDOM}"
+  START_EPOCH="${START_EPOCH:-$(date +%s)}"
+  START_EPOCH_MS=$((START_EPOCH * 1000))
+
+  log_step "A: Policy B (template)"
+  if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
+    "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
+  fi
+
+  POLICY_FILE="/tmp/re7-whatsapp-agent-admin-demo-policyb-${RID}.json"
+  curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=80" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$POLICY_FILE"
+  if ! grep -q '"ok":true' "$POLICY_FILE"; then
+    echo "FAIL: resposta de /admin/messages (policyB) sem ok=true"
+    tail -c 2000 "$POLICY_FILE" || true
     exit 1
   fi
-  log_step "B: forçar janela aberta do atendente"
-  force_attendant_window "open"
-  sleep 1
-  log_step "C: demo scheduled (janela aberta)"
-  NOW_TS=$(date +%s)
-  payload_open=$(cat <<JSON
+  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const rid=process.argv[2];const hit=items.some((i)=>i.direction==='OUTBOUND'&&i.type==='TEMPLATE'&&i.templateName==='re7_pricing_v1'&&i.status==='SENT'&&String(i.messageId||'').includes(rid));if(!hit)process.exit(2);" "$POLICY_FILE" "$RID"
+  if [[ $? -ne 0 ]]; then
+    echo "FAIL: Policy B template não encontrado para RID atual"
+    tail -c 2000 "$POLICY_FILE" || true
+    exit 1
+  fi
+
+  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" && -n "${WAID_OPEN:-}" ]]; then
+    log_step "B: forçar janela aberta do atendente"
+    force_attendant_window "open"
+    sleep 1
+    log_step "C: demo scheduled (janela aberta)"
+    NOW_TS=$(date +%s)
+    payload_open=$(cat <<JSON
 {
   "object": "whatsapp_business_account",
   "entry": [
@@ -175,9 +204,9 @@ if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" 
 }
 JSON
 )
-  post_webhook "$payload_open"
-  NEXT_TS=$((NOW_TS + 5))
-  payload_demo=$(cat <<JSON
+    post_webhook "$payload_open"
+    NEXT_TS=$((NOW_TS + 5))
+    payload_demo=$(cat <<JSON
 {
   "object": "whatsapp_business_account",
   "entry": [
@@ -205,32 +234,37 @@ JSON
 }
 JSON
 )
-  post_webhook "$payload_demo"
-  sleep 1
-  ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
-  curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
-    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
-  if ! grep -q '"ok":true' "$ATT_FILE"; then
-    echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
-    tail -c 2000 "$ATT_FILE" || true
-    exit 1
+    post_webhook "$payload_demo"
+    sleep 1
+    ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+    if ! grep -q '"ok":true' "$ATT_FILE"; then
+      echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
+      tail -c 2000 "$ATT_FILE" || true
+      exit 1
+    fi
+    if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -gt 0 ]]; then
+      echo "FAIL: template encontrado para atendente mesmo com janela aberta (run atual)"
+      tail -c 2000 "$ATT_FILE" || true
+      exit 1
+    fi
+    if [[ "$(count_text_by_window "$ATT_FILE" "$START_EPOCH_MS")" -lt 1 ]]; then
+      echo "FAIL: não encontrou texto do atendente no run atual (janela aberta)"
+      tail -c 2000 "$ATT_FILE" || true
+      exit 1
+    fi
   fi
-  if [[ "$(count_attendant_templates "$ATT_FILE" "$RID_OPEN")" -gt 0 ]]; then
-    echo "FAIL: template encontrado para atendente mesmo com janela aberta (RID_OPEN)"
-    tail -c 2000 "$ATT_FILE" || true
-    exit 1
+
+  log_step "D: forçar janela fechada do atendente"
+  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+    force_attendant_window "closed"
+    sleep 1
   fi
-fi
 
-log_step "D: forçar janela fechada do atendente"
-if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-  force_attendant_window "closed"
-  sleep 1
-fi
-
-log_step "E: abrir janela do lead"
-NOW_TS=$(date +%s)
-payload_open=$(cat <<JSON
+  log_step "E: abrir janela do lead"
+  NOW_TS=$(date +%s)
+  payload_open=$(cat <<JSON
 {
   "object": "whatsapp_business_account",
   "entry": [
@@ -258,11 +292,11 @@ payload_open=$(cat <<JSON
 }
 JSON
 )
-post_webhook "$payload_open"
+  post_webhook "$payload_open"
 
-log_step "F: demo scheduled"
-NEXT_TS=$((NOW_TS + 5))
-payload_demo=$(cat <<JSON
+  log_step "F: demo scheduled"
+  NEXT_TS=$((NOW_TS + 5))
+  payload_demo=$(cat <<JSON
 {
   "object": "whatsapp_business_account",
   "entry": [
@@ -290,13 +324,13 @@ payload_demo=$(cat <<JSON
 }
 JSON
 )
-post_webhook "$payload_demo"
+  post_webhook "$payload_demo"
 
-log_step "G: validar via admin"
-METRICS_FILE="/tmp/re7-whatsapp-agent-admin-demo-metrics-${RID}.json"
+  log_step "G: validar via admin"
+  METRICS_FILE="/tmp/re7-whatsapp-agent-admin-demo-metrics-${RID}.json"
 
-curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
-  -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
+  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
 
 if ! grep -q '"ok":true' "$METRICS_FILE"; then
   echo "FAIL: resposta de /admin/metrics sem ok=true"
@@ -304,9 +338,9 @@ if ! grep -q '"ok":true' "$METRICS_FILE"; then
   exit 1
 fi
 
-read -r demo_requested demo_scheduled < <(
-  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};process.stdout.write(String(lead.demo_requested??0)+' '+String(lead.demo_scheduled??0));" "$METRICS_FILE"
-)
+  read -r demo_requested demo_scheduled < <(
+    node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};process.stdout.write(String(lead.demo_requested??0)+' '+String(lead.demo_scheduled??0));" "$METRICS_FILE"
+  )
 
 if [[ "$demo_requested" -lt 1 ]]; then
   echo "FAIL: lead.demo_requested < 1"
@@ -320,16 +354,16 @@ if [[ "$demo_scheduled" -lt 1 ]]; then
   exit 1
 fi
 
-LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
-curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
-  -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
-if ! grep -q '"ok":true' "$LEAD_FILE"; then
-  echo "FAIL: resposta de /admin/messages (lead) sem ok=true"
-  tail -c 2000 "$LEAD_FILE" || true
-  exit 1
-fi
+  LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
+  curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
+  if ! grep -q '"ok":true' "$LEAD_FILE"; then
+    echo "FAIL: resposta de /admin/messages (lead) sem ok=true"
+    tail -c 2000 "$LEAD_FILE" || true
+    exit 1
+  fi
 
-node -e "
+  node -e "
   const fs=require('fs');
   const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
   const items=data.items||[];
@@ -340,33 +374,34 @@ node -e "
   const re=/(Qual (solu[cç][aã]o|produto|servi[cç]o)|Para qual (produto|servi[cç]o)|qual produto ou servi[cç]o)/i;
   const hit=after.some((i)=>i.direction==='OUTBOUND' && String(i.messageId||'').includes(rid) && re.test(String(i.bodyText||'')) && (!startEpoch || Date.parse(i.createdAt||'')>=startEpoch));
   if(hit){process.exit(2);}
-" "$LEAD_FILE" "$RID" "$START_EPOCH"
-if [[ $? -ne 0 ]]; then
-  echo "FAIL: encontrou pergunta de solução/produto após agendamento"
-  tail -c 2000 "$LEAD_FILE" || true
-  exit 1
-fi
+  " "$LEAD_FILE" "$RID" "$START_EPOCH"
+  if [[ $? -ne 0 ]]; then
+    echo "FAIL: encontrou pergunta de solução/produto após agendamento"
+    tail -c 2000 "$LEAD_FILE" || true
+    exit 1
+  fi
 
-if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-  ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
-  curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
-    -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
-  if ! grep -q '"ok":true' "$ATT_FILE"; then
-    echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
-    tail -c 2000 "$ATT_FILE" || true
-    exit 1
+  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+    ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+    if ! grep -q '"ok":true' "$ATT_FILE"; then
+      echo "FAIL: resposta de /admin/messages (attendant) sem ok=true"
+      tail -c 2000 "$ATT_FILE" || true
+      exit 1
+    fi
+    if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -lt 1 ]]; then
+      echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente (janela fechada)"
+      tail -c 2000 "$ATT_FILE" || true
+      exit 1
+    fi
   fi
-  if ! grep -q "re7_atendente_manual_v1" "$ATT_FILE"; then
-    echo "FAIL: template re7_atendente_manual_v1 não encontrado para atendente (janela fechada)"
-    tail -c 2000 "$ATT_FILE" || true
-    exit 1
-  fi
-  if [[ "$(count_attendant_templates "$ATT_FILE" "$RID")" -lt 1 ]]; then
-    echo "FAIL: template não encontrado para o RID atual (janela fechada)"
-    tail -c 2000 "$ATT_FILE" || true
-    exit 1
-  fi
-fi
 
-echo "Counters: demoRequested=${demo_requested} demoScheduled=${demo_scheduled}"
-echo "E2E OK waId=${WAID} rid=${RID}"
+  echo "Counters: demoRequested=${demo_requested} demoScheduled=${demo_scheduled}"
+  echo "E2E OK waId=${WAID} rid=${RID}"
+}
+
+for run in $(seq 1 "$REPEAT"); do
+  echo "== RUN ${run}/${REPEAT} =="
+  run_once
+done
