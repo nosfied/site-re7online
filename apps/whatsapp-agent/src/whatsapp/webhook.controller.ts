@@ -46,6 +46,7 @@ import {
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
 const ADMIN_TEMPLATE_TTL_MS = 10 * 60 * 1000;
+const conversationVersionByWaId = new Map<string, { version: number; lastInboundAt?: string }>();
 
 type RequestMeta = {
   requestId: string;
@@ -338,13 +339,42 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  const shouldSendOutbound = (
+    waId: string,
+    guard?: { version: number; lastInboundAt?: string }
+  ) => {
+    if (!guard) return true;
+    const current = conversationVersionByWaId.get(waId);
+    const matchesVersion = current?.version === guard.version;
+    const matchesInboundAt =
+      !guard.lastInboundAt || current?.lastInboundAt === guard.lastInboundAt;
+    if (!matchesVersion || !matchesInboundAt) {
+      logger.warn({
+        event: "demo.guardrail.drop_late_reply",
+        waId: maskNumber(waId),
+        requestId: meta?.requestId,
+        reason: matchesVersion ? "inbound_changed" : "version_mismatch",
+        myVersion: guard.version,
+        currentVersion: current?.version ?? 0,
+        lastInboundAt: guard.lastInboundAt,
+        currentInboundAt: current?.lastInboundAt,
+      });
+      return false;
+    }
+    return true;
+  };
+
   const sendOutboundText = async (params: {
     toE164: string;
     waId: string;
     intent: ConversationIntent | undefined;
     messageId: string;
     replyText: string;
+    guard?: { version: number; lastInboundAt?: string };
   }) => {
+    if (!shouldSendOutbound(params.waId, params.guard)) {
+      return { ok: false, errorBody: "late_reply_dropped" };
+    }
     logger.info({
       event: "outbound.text.sending",
       waId: maskNumber(params.waId),
@@ -1526,6 +1556,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               intent: updatedConversation.intent,
               messageId: message.messageId,
               replyText: handoffResult.replyText,
+              guard: undefined,
             });
 
       void sendPromise
@@ -1584,6 +1615,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.timestamp,
       message.text
     );
+    const nextVersion = (conversationVersionByWaId.get(normalizedFrom)?.version ?? 0) + 1;
+    conversationVersionByWaId.set(normalizedFrom, {
+      version: nextVersion,
+      lastInboundAt: inboundConversation.lastInboundAt,
+    });
+    const inboundGuard = {
+      version: nextVersion,
+      lastInboundAt: inboundConversation.lastInboundAt,
+    };
     let updatedConversation = inboundConversation;
     const wasPending = currentConversation.handoff.status === "pending";
     const handoffResult = handleHandoff(
@@ -1900,6 +1940,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               intent: updatedConversation.intent,
               messageId: message.messageId,
               replyText: demoReplyText,
+              guard: inboundGuard,
             });
           }
           continue;
@@ -2164,6 +2205,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             intent: updatedConversation.intent,
             messageId: message.messageId,
             replyText,
+            guard: inboundGuard,
           });
 
     void sendPromise
