@@ -268,6 +268,7 @@ JSON
     SCHEDULE_ANCHOR="/tmp/re7-whatsapp-agent-admin-demo-open-anchor-${RID_OPEN}.txt"
     scheduleOpenTsMs=""
     scheduleOpenCreatedAt=""
+    ANCHOR_TS_MS=""
 
     fetch_schedule_open_anchor() {
       curl -s "${BASE_URL}/admin/messages?waId=${WAID_OPEN}&limit=200" \
@@ -290,6 +291,12 @@ JSON
       fi
       scheduleOpenTsMs=$(sed -n '1p' "$SCHEDULE_ANCHOR" | tr -d '\r')
       scheduleOpenCreatedAt=$(sed -n '2p' "$SCHEDULE_ANCHOR" | tr -d '\r')
+      if [[ -n "$scheduleOpenTsMs" ]]; then
+        ANCHOR_TS_MS=$((scheduleOpenTsMs - 5000))
+        if [[ "$ANCHOR_TS_MS" -lt 0 ]]; then
+          ANCHOR_TS_MS=0
+        fi
+      fi
       return 0
     }
 
@@ -310,9 +317,9 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>start)).length;
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>=start)).length;
         process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$scheduleOpenTsMs" 2>/dev/null) || return 1
+      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
       if [[ "${templateCount:-0}" -gt 0 ]]; then
         return 1
       fi
@@ -322,9 +329,9 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start)).length;
+        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;
         process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$scheduleOpenTsMs" 2>/dev/null) || return 1
+      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
       if [[ "${textCount:-0}" -lt 1 ]]; then
         return 1
       fi
@@ -332,7 +339,25 @@ JSON
     }
     if ! poll_until "janela aberta: validações do atendente" 6 1 check_attendant_open; then
       echo "scheduleOpenTsMs=${scheduleOpenTsMs:-} scheduleOpenCreatedAt=${scheduleOpenCreatedAt:-}" >&2
+      echo "ANCHOR_TS_MS=${ANCHOR_TS_MS:-} delta=$((scheduleOpenTsMs-ANCHOR_TS_MS))" >&2
       echo "templateCount=${templateCount:-} textCount=${textCount:-}" >&2
+      node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=(data.items||[]);
+        const start=Number(process.argv[2]||0);
+        const filtered=items
+          .filter((i)=>Date.parse(i.createdAt||'')>=start)
+          .slice(0,10)
+          .map((i)=>({
+            createdAt:i.createdAt,
+            type:i.type,
+            status:i.status,
+            templateName:i.templateName,
+            messageId:i.messageId
+          }));
+        console.error(JSON.stringify(filtered,null,2));
+      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null || true
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
