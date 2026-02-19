@@ -163,13 +163,11 @@ count_text_by_window() {
 
 run_once() {
   local RID
-  local RID_OPEN
   local START_EPOCH
   local START_EPOCH_MS
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   RID="$(date +%s)$RANDOM"
-  RID_OPEN="$(date +%s)$RANDOM"
   START_EPOCH="$(date +%s)"
   START_EPOCH_MS=$((START_EPOCH * 1000))
 
@@ -197,179 +195,20 @@ run_once() {
     return 1
   fi
 
-  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" && -n "${WAID_OPEN:-}" ]]; then
-    log_step "B: forçar janela aberta do atendente"
-    force_attendant_window "open"
-    sleep 1
-    log_step "C: demo scheduled (janela aberta)"
-    NOW_TS=$(date +%s)
-    payload_open=$(cat <<JSON
-{
-  "object": "whatsapp_business_account",
-  "entry": [
-    {
-      "id": "${RID}",
-      "changes": [
-        {
-          "value": {
-            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
-            "messages": [
-              {
-                "id": "wamid.e2e.demo.open2.${RID_OPEN}",
-                "from": "${WAID_OPEN}",
-                "timestamp": "${NOW_TS}",
-                "type": "text",
-                "text": { "body": "Quero uma demonstração" }
-              }
-            ]
-          },
-          "field": "messages"
-        }
-      ]
-    }
-  ]
-}
-JSON
-)
-    post_webhook "$payload_open"
-    NEXT_TS=$((NOW_TS + 5))
-    payload_demo=$(cat <<JSON
-{
-  "object": "whatsapp_business_account",
-  "entry": [
-    {
-      "id": "${RID}",
-      "changes": [
-        {
-          "value": {
-            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
-            "messages": [
-              {
-                "id": "wamid.e2e.demo.schedule2.${RID_OPEN}",
-                "from": "${WAID_OPEN}",
-                "timestamp": "${NEXT_TS}",
-                "type": "text",
-                "text": { "body": "terça 14h" }
-              }
-            ]
-          },
-          "field": "messages"
-        }
-      ]
-    }
-  ]
-}
-JSON
-)
-    post_webhook "$payload_demo"
-    sleep 1
-    ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
-    OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-open-${RID_OPEN}.json"
-    SCHEDULE_ANCHOR="/tmp/re7-whatsapp-agent-admin-demo-open-anchor-${RID_OPEN}.txt"
-    scheduleOpenTsMs=""
-    scheduleOpenCreatedAt=""
-    ANCHOR_TS_MS=""
-
-    fetch_schedule_open_anchor() {
-      curl -s "${BASE_URL}/admin/messages?waId=${WAID_OPEN}&limit=200" \
-        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$OPEN_FILE"
-      if ! grep -q '"ok":true' "$OPEN_FILE"; then
-        return 1
-      fi
-      if ! node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const rid=process.argv[2];
-        const msg=items.find((i)=>String(i.messageId||'').includes('schedule2.'+rid)&&i.direction==='INBOUND');
-        if(!msg) process.exit(2);
-        const ts=Date.parse(msg.createdAt||'');
-        if(!Number.isFinite(ts)) process.exit(2);
-        fs.writeFileSync(process.argv[3], String(ts)+'\n'+String(msg.createdAt||''));
-      " "$OPEN_FILE" "$RID_OPEN" "$SCHEDULE_ANCHOR"; then
-        return 1
-      fi
-      scheduleOpenTsMs=$(sed -n '1p' "$SCHEDULE_ANCHOR" | tr -d '\r')
-      scheduleOpenCreatedAt=$(sed -n '2p' "$SCHEDULE_ANCHOR" | tr -d '\r')
-      if [[ -n "$scheduleOpenTsMs" ]]; then
-        ANCHOR_TS_MS=$((scheduleOpenTsMs - 5000))
-        if [[ "$ANCHOR_TS_MS" -lt 0 ]]; then
-          ANCHOR_TS_MS=0
-        fi
-      fi
-      return 0
-    }
-
-    if ! poll_until "anchor schedule2 não encontrado" 6 1 fetch_schedule_open_anchor; then
-      tail -c 2000 "$OPEN_FILE" || true
-      return 1
-    fi
-
-    check_attendant_open() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
-        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
-      if ! grep -q '"ok":true' "$ATT_FILE"; then
-        return 1
-      fi
-
-      templateCount=$(node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>=start)).length;
-        process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
-      if [[ "${templateCount:-0}" -gt 0 ]]; then
-        return 1
-      fi
-
-      textCount=$(node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;
-        process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
-      if [[ "${textCount:-0}" -lt 1 ]]; then
-        return 1
-      fi
-      return 0
-    }
-    if ! poll_until "janela aberta: validações do atendente" 6 1 check_attendant_open; then
-      echo "scheduleOpenTsMs=${scheduleOpenTsMs:-} scheduleOpenCreatedAt=${scheduleOpenCreatedAt:-}" >&2
-      echo "ANCHOR_TS_MS=${ANCHOR_TS_MS:-} delta=$((scheduleOpenTsMs-ANCHOR_TS_MS))" >&2
-      echo "templateCount=${templateCount:-} textCount=${textCount:-}" >&2
-      node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=(data.items||[]);
-        const start=Number(process.argv[2]||0);
-        const filtered=items
-          .filter((i)=>Date.parse(i.createdAt||'')>=start)
-          .slice(0,10)
-          .map((i)=>({
-            createdAt:i.createdAt,
-            type:i.type,
-            status:i.status,
-            templateName:i.templateName,
-            messageId:i.messageId
-          }));
-        console.error(JSON.stringify(filtered,null,2));
-      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null || true
-      tail -c 2000 "$ATT_FILE" || true
-      return 1
-    fi
-  fi
-
-  log_step "D: forçar janela fechada do atendente"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-    force_attendant_window "closed"
-    sleep 1
+    log_step "B: reset conversation do atendente"
+    reset_result=$(curl -s -X POST "${BASE_URL}/admin/debug/reset-conversation" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"waId\":\"${HANDOFF_ATTENDANT_WAID}\"}")
+    if ! echo "$reset_result" | grep -q '"ok":true'; then
+      echo "FAIL: reset-conversation não respondeu ok=true"
+      echo "$reset_result" | head -c 2000
+      return 1
+    fi
   fi
 
-  log_step "E: abrir janela do lead"
+  log_step "C: demo scheduled (janela fechada)"
   NOW_TS=$(date +%s)
   payload_open=$(cat <<JSON
 {
@@ -401,7 +240,6 @@ JSON
 )
   post_webhook "$payload_open"
 
-  log_step "F: demo scheduled"
   NEXT_TS=$((NOW_TS + 5))
   payload_demo=$(cat <<JSON
 {
@@ -432,6 +270,154 @@ JSON
 JSON
 )
   post_webhook "$payload_demo"
+
+  log_step "D: validar template no atendente (janela fechada)"
+  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+    ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    check_attendant_closed() {
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+      if ! grep -q '"ok":true' "$ATT_FILE"; then
+        return 1
+      fi
+      templateCount=$(node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const start=Number(process.argv[2]||0);
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>=start)).length;
+        process.stdout.write(String(cnt));
+      " "$ATT_FILE" "$START_EPOCH_MS" 2>/dev/null) || return 1
+      if [[ "${templateCount:-0}" -lt 1 ]]; then
+        return 1
+      fi
+      return 0
+    }
+    if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
+      tail -c 2000 "$ATT_FILE" || true
+      return 1
+    fi
+  fi
+
+  log_step "E: abrir janela do atendente"
+  if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" && -n "${WAID_OPEN:-}" ]]; then
+    force_attendant_window "open"
+    sleep 1
+  fi
+
+  log_step "F: demo scheduled (janela aberta)"
+  if [[ -n "${WAID_OPEN:-}" ]]; then
+    NOW_TS=$(date +%s)
+    payload_demo_open=$(cat <<JSON
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "${RID}",
+      "changes": [
+        {
+          "value": {
+            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
+            "messages": [
+              {
+                "id": "wamid.e2e.demo.schedule.open.${RID}",
+                "from": "${WAID}",
+                "timestamp": "${NOW_TS}",
+                "type": "text",
+                "text": { "body": "terça 14h" }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
+JSON
+)
+    post_webhook "$payload_demo_open"
+    sleep 1
+    LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-open-${RID}.json"
+    ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    SCHEDULE_ANCHOR="/tmp/re7-whatsapp-agent-admin-demo-lead-anchor-${RID}.txt"
+    scheduleOpenTsMs=""
+    scheduleOpenCreatedAt=""
+    ANCHOR_TS_MS=""
+
+    fetch_schedule_open_anchor() {
+      curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
+      if ! grep -q '"ok":true' "$LEAD_FILE"; then
+        return 1
+      fi
+      if ! node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const rid=process.argv[2];
+        const msg=items.find((i)=>String(i.messageId||'').includes('schedule.open.'+rid)&&i.direction==='INBOUND');
+        if(!msg) process.exit(2);
+        const ts=Date.parse(msg.createdAt||'');
+        if(!Number.isFinite(ts)) process.exit(2);
+        fs.writeFileSync(process.argv[3], String(ts)+'\n'+String(msg.createdAt||''));
+      " "$LEAD_FILE" "$RID" "$SCHEDULE_ANCHOR"; then
+        return 1
+      fi
+      scheduleOpenTsMs=$(sed -n '1p' "$SCHEDULE_ANCHOR" | tr -d '\r')
+      scheduleOpenCreatedAt=$(sed -n '2p' "$SCHEDULE_ANCHOR" | tr -d '\r')
+      if [[ -n "$scheduleOpenTsMs" ]]; then
+        ANCHOR_TS_MS=$((scheduleOpenTsMs - 5000))
+        if [[ "$ANCHOR_TS_MS" -lt 0 ]]; then
+          ANCHOR_TS_MS=0
+        fi
+      fi
+      return 0
+    }
+
+    if ! poll_until "anchor schedule.open não encontrado" 6 1 fetch_schedule_open_anchor; then
+      tail -c 2000 "$LEAD_FILE" || true
+      return 1
+    fi
+
+    check_attendant_open() {
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
+      if ! grep -q '"ok":true' "$ATT_FILE"; then
+        return 1
+      fi
+      templateCount=$(node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const start=Number(process.argv[2]||0);
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>=start)).length;
+        process.stdout.write(String(cnt));
+      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
+      if [[ "${templateCount:-0}" -gt 0 ]]; then
+        return 1
+      fi
+      textCount=$(node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const start=Number(process.argv[2]||0);
+        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;
+        process.stdout.write(String(cnt));
+      " "$ATT_FILE" "$ANCHOR_TS_MS" 2>/dev/null) || return 1
+      if [[ "${textCount:-0}" -lt 1 ]]; then
+        return 1
+      fi
+      return 0
+    }
+    if ! poll_until "janela aberta: validações do atendente" 6 1 check_attendant_open; then
+      echo "scheduleOpenTsMs=${scheduleOpenTsMs:-} scheduleOpenCreatedAt=${scheduleOpenCreatedAt:-}" >&2
+      echo "ANCHOR_TS_MS=${ANCHOR_TS_MS:-} delta=$((scheduleOpenTsMs-ANCHOR_TS_MS))" >&2
+      echo "templateCount=${templateCount:-} textCount=${textCount:-}" >&2
+      tail -c 2000 "$ATT_FILE" || true
+      return 1
+    fi
+  fi
 
   log_step "G: validar via admin"
   METRICS_FILE="/tmp/re7-whatsapp-agent-admin-demo-metrics-${RID}.json"
