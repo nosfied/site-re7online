@@ -391,10 +391,12 @@ JSON
     const items=data.items||[];
     const rid=process.argv[2];
     const startEpoch=Number(process.argv[3]||0)*1000;
-    const idx=items.findIndex((i)=>String(i.messageId||'').includes('schedule.'+rid)&&i.direction==='INBOUND');
-    const after=idx>=0?items.slice(0,idx):items;
+    const scheduleItem=items.find((i)=>String(i.messageId||'').includes('schedule.'+rid)&&i.direction==='INBOUND');
+    if(!scheduleItem) process.exit(2);
+    const scheduleTs=Date.parse(scheduleItem.createdAt||'');
+    if(!Number.isFinite(scheduleTs)) process.exit(2);
     const re=/(Qual (solu[cç][aã]o|produto|servi[cç]o)|Para qual (produto|servi[cç]o)|qual produto ou servi[cç]o)/i;
-    const hit=after.some((i)=>i.direction==='OUTBOUND' && String(i.messageId||'').includes(rid) && re.test(String(i.bodyText||'')) && (!startEpoch || Date.parse(i.createdAt||'')>=startEpoch));
+    const hit=items.some((i)=>i.direction==='OUTBOUND' && re.test(String(i.bodyText||'')) && (!startEpoch || Date.parse(i.createdAt||'')>=startEpoch) && (Date.parse(i.createdAt||'')>scheduleTs));
     if(hit){process.exit(2);}
     " "$LEAD_FILE" "$RID" "$START_EPOCH"; then
       return 1
