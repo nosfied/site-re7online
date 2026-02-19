@@ -186,6 +186,13 @@ export const jsonFileStorage: Storage = {
     }
     await writeAllConversations(conversations);
   },
+  async deleteConversation(waId: string) {
+    const conversations = await readAllConversations();
+    const filtered = conversations.filter((item) => item.waId !== waId);
+    if (filtered.length !== conversations.length) {
+      await writeAllConversations(filtered);
+    }
+  },
   async updateConversationWindow(waId: string, lastInboundAt: string) {
     const conversations = await readAllConversations();
     const index = conversations.findIndex((item) => item.waId === waId);

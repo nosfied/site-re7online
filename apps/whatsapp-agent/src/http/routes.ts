@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
+import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 import { env } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
@@ -60,6 +61,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch {
         json(res, 200, { ok: true, db: false });
       }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/debug/reset-conversation") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const waId = String(body.waId ?? "").trim();
+      if (!waId) {
+        json(res, 400, { ok: false, error: "bad_request" });
+        return;
+      }
+      await jsonFileStorage.deleteConversation(waId);
+      logger.info({
+        event: "admin.debug.reset_conversation",
+        waId,
+        requestId,
+      });
+      json(res, 200, { ok: true });
       return;
     }
 

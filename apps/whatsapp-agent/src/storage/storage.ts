@@ -26,4 +26,5 @@ export interface Storage {
   getConversation(waId: string): Promise<ConversationState | null>;
   upsertConversation(state: ConversationState): Promise<void>;
   updateConversationWindow(waId: string, lastInboundAt: string): Promise<ConversationState>;
+  deleteConversation(waId: string): Promise<void>;
 }
