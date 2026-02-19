@@ -46,6 +46,7 @@ ENV_FILE="${ROOT_DIR}/.env"
 BASE_URL="http://127.0.0.1:${PORT}"
 RID="${RID:-$(date +%s)$RANDOM}"
 RID_OPEN="${RID_OPEN:-$(date +%s)$RANDOM}"
+START_EPOCH="${START_EPOCH:-$(date +%s)}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "FAIL: .env não encontrado em ${ENV_FILE}" >&2
@@ -333,12 +334,13 @@ node -e "
   const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
   const items=data.items||[];
   const rid=process.argv[2];
+  const startEpoch=Number(process.argv[3]||0)*1000;
   const idx=items.findIndex((i)=>String(i.messageId||'').includes('schedule.'+rid)&&i.direction==='INBOUND');
   const after=idx>=0?items.slice(0,idx):items;
   const re=/(Qual (solu[cç][aã]o|produto|servi[cç]o)|Para qual (produto|servi[cç]o)|qual produto ou servi[cç]o)/i;
-  const hit=after.some((i)=>i.direction==='OUTBOUND' && re.test(String(i.bodyText||'')));
+  const hit=after.some((i)=>i.direction==='OUTBOUND' && String(i.messageId||'').includes(rid) && re.test(String(i.bodyText||'')) && (!startEpoch || Date.parse(i.createdAt||'')>=startEpoch));
   if(hit){process.exit(2);}
-" "$LEAD_FILE" "$RID"
+" "$LEAD_FILE" "$RID" "$START_EPOCH"
 if [[ $? -ne 0 ]]; then
   echo "FAIL: encontrou pergunta de solução/produto após agendamento"
   tail -c 2000 "$LEAD_FILE" || true
