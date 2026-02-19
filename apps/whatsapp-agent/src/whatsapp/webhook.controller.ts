@@ -478,15 +478,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const windowOpen = attendantConversation
       ? isWindowOpen(attendantConversation, Date.now())
       : false;
+    const windowState = windowOpen ? "open" : "closed";
 
-    if (!windowOpen) {
-      logger.warn({
-        event: "handoff.notify.window_closed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        requestId: params.requestId,
-      });
-    }
+    logger.info({
+      event: "handoff.notify.window_state",
+      waId: maskedAttendant,
+      leadWaId: maskedLead,
+      windowState,
+      requestId: params.requestId,
+    });
 
     if (windowOpen) {
       logger.info({
@@ -494,6 +494,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         waId: maskedAttendant,
         leadWaId: maskedLead,
         notifyType: "text",
+        windowState,
+        chosenChannel: "text",
         requestId: params.requestId,
       });
       const textResult = await sendOutboundText({
@@ -523,17 +525,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
         return;
       }
-      if (!isWindowClosedError(textResult.errorBody, textResult.status)) {
-        logger.error({
-          event: "handoff.notify.failed",
-          waId: maskedAttendant,
-          leadWaId: maskedLead,
-          notifyType: "text",
-          status: textResult.status,
-          requestId: params.requestId,
-        });
-        return;
-      }
+      logger.error({
+        event: "handoff.notify.failed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        notifyType: "text",
+        status: textResult.status,
+        requestId: params.requestId,
+      });
+      return;
+    }
+
+    if (!windowOpen) {
+      logger.warn({
+        event: "handoff.notify.window_closed",
+        waId: maskedAttendant,
+        leadWaId: maskedLead,
+        requestId: params.requestId,
+      });
     }
 
     if (!env.HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE) {
@@ -552,6 +561,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       event: "handoff.notify.template.sending",
       waId: maskedAttendant,
       leadWaId: maskedLead,
+      windowState,
+      chosenChannel: "template",
       requestId: params.requestId,
     });
 
@@ -568,11 +579,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return;
     }
 
+    const toParam = (value: string | undefined) => {
+      const text = (value ?? "").trim();
+      return text.length > 0 ? text : "-";
+    };
+
     const templateParams = [
-      clientDisplay,
-      intentLabel,
-      scheduleLabel,
-      `Chamar no WhatsApp: ${leadLink}`,
+      toParam(clientDisplay),
+      toParam(intentLabel),
+      toParam(scheduleLabel),
+      toParam(`Chamar no WhatsApp: ${leadLink}`),
     ];
 
     logger.info({
