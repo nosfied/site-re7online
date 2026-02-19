@@ -319,6 +319,32 @@ if [[ "$demo_scheduled" -lt 1 ]]; then
   exit 1
 fi
 
+LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
+curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
+  -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
+if ! grep -q '"ok":true' "$LEAD_FILE"; then
+  echo "FAIL: resposta de /admin/messages (lead) sem ok=true"
+  tail -c 2000 "$LEAD_FILE" || true
+  exit 1
+fi
+
+node -e "
+  const fs=require('fs');
+  const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+  const items=data.items||[];
+  const rid=process.argv[2];
+  const idx=items.findIndex((i)=>String(i.messageId||'').includes('schedule.'+rid)&&i.direction==='INBOUND');
+  const after=idx>=0?items.slice(0,idx):items;
+  const re=/(Qual (solu[cç][aã]o|produto|servi[cç]o)|Para qual (produto|servi[cç]o)|qual produto ou servi[cç]o)/i;
+  const hit=after.some((i)=>i.direction==='OUTBOUND' && re.test(String(i.bodyText||'')));
+  if(hit){process.exit(2);}
+" "$LEAD_FILE" "$RID"
+if [[ $? -ne 0 ]]; then
+  echo "FAIL: encontrou pergunta de solução/produto após agendamento"
+  tail -c 2000 "$LEAD_FILE" || true
+  exit 1
+fi
+
 if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
   ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
   curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
