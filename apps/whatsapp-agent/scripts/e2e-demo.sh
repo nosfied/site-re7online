@@ -49,9 +49,6 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env"
 BASE_URL="http://127.0.0.1:${PORT}"
-RID="${RID:-}"
-RID_OPEN="${RID_OPEN:-}"
-START_EPOCH="${START_EPOCH:-}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "FAIL: .env não encontrado em ${ENV_FILE}" >&2
@@ -145,9 +142,13 @@ count_text_by_window() {
 }
 
 run_once() {
-  RID="${RID:-$(date +%s)$RANDOM}"
-  RID_OPEN="${RID_OPEN:-$(date +%s)$RANDOM}"
-  START_EPOCH="${START_EPOCH:-$(date +%s)}"
+  local RID
+  local RID_OPEN
+  local START_EPOCH
+  local START_EPOCH_MS
+  RID="$(date +%s)$RANDOM"
+  RID_OPEN="$(date +%s)$RANDOM"
+  START_EPOCH="$(date +%s)"
   START_EPOCH_MS=$((START_EPOCH * 1000))
 
   log_step "A: Policy B (template)"
@@ -165,8 +166,7 @@ run_once() {
     tail -c 2000 "$POLICY_FILE" || true
     return 1
   fi
-  node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const start=Number(process.argv[2]||0);const hit=items.some((i)=>i.direction==='OUTBOUND'&&i.type==='TEMPLATE'&&i.templateName==='re7_pricing_v1'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start));if(!hit)process.exit(2);" "$POLICY_FILE" "$START_EPOCH_MS"
-  if [[ $? -ne 0 ]]; then
+  if ! node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const items=data.items||[];const start=Number(process.argv[2]||0);const hit=items.some((i)=>i.direction==='OUTBOUND'&&i.type==='TEMPLATE'&&i.templateName==='re7_pricing_v1'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start));if(!hit)process.exit(2);" "$POLICY_FILE" "$START_EPOCH_MS"; then
     echo "FAIL: Policy B template não encontrado para RID atual"
     tail -c 2000 "$POLICY_FILE" || true
     return 1
@@ -365,7 +365,7 @@ JSON
     return 1
   fi
 
-  node -e "
+  if ! node -e "
   const fs=require('fs');
   const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
   const items=data.items||[];
@@ -376,8 +376,7 @@ JSON
   const re=/(Qual (solu[cç][aã]o|produto|servi[cç]o)|Para qual (produto|servi[cç]o)|qual produto ou servi[cç]o)/i;
   const hit=after.some((i)=>i.direction==='OUTBOUND' && String(i.messageId||'').includes(rid) && re.test(String(i.bodyText||'')) && (!startEpoch || Date.parse(i.createdAt||'')>=startEpoch));
   if(hit){process.exit(2);}
-  " "$LEAD_FILE" "$RID" "$START_EPOCH"
-  if [[ $? -ne 0 ]]; then
+  " "$LEAD_FILE" "$RID" "$START_EPOCH"; then
     echo "FAIL: encontrou pergunta de solução/produto após agendamento"
     tail -c 2000 "$LEAD_FILE" || true
     return 1
