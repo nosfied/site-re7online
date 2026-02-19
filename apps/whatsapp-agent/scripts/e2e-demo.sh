@@ -264,16 +264,50 @@ JSON
     post_webhook "$payload_demo"
     sleep 1
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-open-${RID_OPEN}.json"
     check_attendant_open() {
+      curl -s "${BASE_URL}/admin/messages?waId=${WAID_OPEN}&limit=50" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$OPEN_FILE"
+      if ! grep -q '"ok":true' "$OPEN_FILE"; then
+        return 1
+      fi
+      scheduleOpenTs=$(node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const rid=process.argv[2];
+        const msg=items.find((i)=>String(i.messageId||'').includes('schedule2.'+rid)&&i.direction==='INBOUND');
+        if(!msg){process.exit(2);}
+        const ts=Date.parse(msg.createdAt||'');
+        if(!Number.isFinite(ts)) process.exit(2);
+        process.stdout.write(String(ts));
+      " "$OPEN_FILE" "$RID_OPEN" 2>/dev/null) || return 1
+
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
       fi
-      if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -gt 0 ]]; then
+
+      if ! node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const start=Number(process.argv[2]||0);
+        const templateHit=items.some((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start));
+        if(templateHit) process.exit(2);
+      " "$ATT_FILE" "$scheduleOpenTs"; then
         return 1
       fi
-      if [[ "$(count_text_by_window "$ATT_FILE" "$START_EPOCH_MS")" -lt 1 ]]; then
+
+      if ! node -e "
+        const fs=require('fs');
+        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+        const items=data.items||[];
+        const start=Number(process.argv[2]||0);
+        const textHit=items.some((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>start));
+        if(!textHit) process.exit(2);
+      " "$ATT_FILE" "$scheduleOpenTs"; then
         return 1
       fi
       return 0

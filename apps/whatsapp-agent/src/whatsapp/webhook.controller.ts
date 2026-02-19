@@ -525,15 +525,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
         return;
       }
-      logger.error({
-        event: "handoff.notify.failed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        notifyType: "text",
-        status: textResult.status,
-        requestId: params.requestId,
-      });
-      return;
+      if (isWindowClosedError(textResult.errorBody, textResult.status)) {
+        logger.warn({
+          event: "handoff.notify.text_fallback_to_template",
+          waId: maskedAttendant,
+          leadWaId: maskedLead,
+          status: textResult.status,
+          requestId: params.requestId,
+        });
+      } else {
+        logger.error({
+          event: "handoff.notify.failed",
+          waId: maskedAttendant,
+          leadWaId: maskedLead,
+          notifyType: "text",
+          status: textResult.status,
+          requestId: params.requestId,
+        });
+        return;
+      }
     }
 
     if (!windowOpen) {
