@@ -1807,6 +1807,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
+          await jsonFileStorage.upsertConversation(updatedConversation);
+          continue;
         }
       }
       const demoContext = [
@@ -1890,6 +1892,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               demoUpdated = true;
             }
           }
+          await jsonFileStorage.upsertConversation(updatedConversation);
+          if (demoReplyText) {
+            await sendOutboundText({
+              toE164: message.from,
+              waId: normalizedFrom,
+              intent: updatedConversation.intent,
+              messageId: message.messageId,
+              replyText: demoReplyText,
+            });
+          }
+          continue;
         }
         if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {
           updatedConversation = {
@@ -1900,6 +1913,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           demoUpdated = true;
           demoHandled = true;
           demoReplyText = "Qual melhor dia e horário para a demonstração?";
+          flowReplyText = undefined;
           await persistEventSafe(
             "lead.demo_requested",
             {
