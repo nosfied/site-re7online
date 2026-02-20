@@ -35,6 +35,7 @@ export type Env = {
   HANDOFF_TEMPLATE_LANG: string;
   HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE: boolean;
   ADMIN_TOKEN: string;
+  ALLOW_ADMIN_DEBUG_IN_PROD: boolean;
   CLIENT_ID: string;
   OUTBOUND_TEMPLATES_BY_CLIENT: Record<
     string,
@@ -128,6 +129,8 @@ export function getEnv(): Env {
   const HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE =
     (process.env.HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE ?? "true") === "true";
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
+  const ALLOW_ADMIN_DEBUG_IN_PROD =
+    (process.env.ALLOW_ADMIN_DEBUG_IN_PROD ?? "false") === "true";
   let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
   const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
   if (mapRaw) {
@@ -199,6 +202,7 @@ export function getEnv(): Env {
     HANDOFF_TEMPLATE_LANG,
     HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE,
     ADMIN_TOKEN,
+    ALLOW_ADMIN_DEBUG_IN_PROD,
     CLIENT_ID,
     OUTBOUND_TEMPLATES_BY_CLIENT,
     verifyTokenPresent,

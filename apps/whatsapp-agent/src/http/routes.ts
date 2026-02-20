@@ -65,6 +65,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "POST" && pathname === "/admin/debug/reset-conversation") {
+      if (env.DISABLE_DEBUG_COMMANDS) {
+        logger.warn({
+          event: "admin.debug.blocked",
+          reason: "disabled_by_env",
+          requestId,
+        });
+        json(res, 403, { ok: false, error: "forbidden" });
+        return;
+      }
+      if (env.ENV === "production" && !env.ALLOW_ADMIN_DEBUG_IN_PROD) {
+        logger.warn({
+          event: "admin.debug.blocked",
+          reason: "not_allowed_in_prod",
+          requestId,
+        });
+        json(res, 403, { ok: false, error: "forbidden" });
+        return;
+      }
       const body = await readJsonBody(req, res);
       if (!body) return;
       const waId = String(body.waId ?? "").trim();
