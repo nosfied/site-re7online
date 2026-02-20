@@ -7,6 +7,8 @@ RANGE="1h"
 PORT="${PORT:-3001}"
 REPEAT=1
 E2E_RUN_POLICYB="${E2E_RUN_POLICYB:-false}"
+POLL_TRIES_DEFAULT="${POLL_TRIES_DEFAULT:-20}"
+POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -72,6 +74,14 @@ if [[ -z "$PHONE_NUMBER_ID" ]]; then
   echo "FAIL: WHATSAPP_PHONE_NUMBER_ID ausente no .env" >&2
   exit 1
 fi
+if [[ -z "${ADMIN_TOKEN:-}" ]]; then
+  echo "FATAL: ADMIN_TOKEN vazio" >&2
+  exit 2
+fi
+if [[ "${HANDOFF_ENABLED:-}" == "true" && -z "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+  echo "FATAL: HANDOFF_ATTENDANT_WAID vazio" >&2
+  exit 2
+fi
 
 "${ROOT_DIR}/scripts/wait-for-http.sh" "${BASE_URL}/health"
 
@@ -79,16 +89,58 @@ log_step() {
   echo "== $1 =="
 }
 
+redact_token() {
+  if [[ -n "${1:-}" ]]; then
+    echo "***REDACTED***"
+  else
+    echo ""
+  fi
+}
+
 fail() {
   echo "FAIL: $1" >&2
   return 1
 }
 
+print_attendant_tail() {
+  local file="$1"
+  node -e '
+    const fs=require("fs");
+    const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const items=(data.items||[]).slice(0,10).map((m)=>({
+      createdAt:m.createdAt,
+      direction:m.direction,
+      type:m.type,
+      status:m.status,
+      templateName:m.templateName,
+      messageId:m.messageId
+    }));
+    console.error(JSON.stringify(items,null,2));
+  ' "$file" 2>/dev/null || true
+}
+
+print_events_summary() {
+  local file="$1"
+  local rid="$2"
+  node -e '
+    const fs=require("fs");
+    const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const rid=String(process.argv[2]||"");
+    const byRid=(Array.isArray(data)?data:[]).filter((i)=>String(i.messageId||"").includes(rid));
+    const openId="wamid.e2e.demo.open."+rid;
+    const scheduleId="wamid.e2e.demo.schedule."+rid;
+    const openCount=byRid.filter((i)=>String(i.messageId||"")===openId).length;
+    const scheduleCount=byRid.filter((i)=>String(i.messageId||"")===scheduleId).length;
+    console.error(JSON.stringify({openCount,scheduleCount,totalByRid:byRid.length},null,2));
+    console.error(JSON.stringify(byRid.slice(0,10),null,2));
+  ' "$file" "$rid" 2>/dev/null || true
+}
+
 poll_until() {
   local desc="$1"
-  local attempts="$2"
-  local sleep_sec="$3"
-  shift 3
+  local attempts="${2:-$POLL_TRIES_DEFAULT}"
+  local sleep_sec="${3:-$POLL_SLEEP_DEFAULT}"
+  shift 3 || true
   local i
   for i in $(seq 1 "$attempts"); do
     if "$@"; then
@@ -113,12 +165,14 @@ post_webhook() {
 
 run_once() {
   local RID
+  local RUN_ID
   local START_EPOCH
   local START_EPOCH_MS
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
-  RID="$(date +%s)$RANDOM"
+  RUN_ID="${RUN_ID:-$(date +%s)$RANDOM}"
+  RID="${RID:-$RUN_ID}"
   START_EPOCH="$(date +%s)"
   START_EPOCH_MS=$((START_EPOCH * 1000))
   EXPECTED_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-${HANDOFF_TEMPLATE_NAME:-}}"
@@ -126,6 +180,9 @@ run_once() {
     echo "FAIL: HANDOFF_TEMPLATE_NAME/HANDOFF_NOTIFY_TEMPLATE_NAME ausente no .env" >&2
     return 1
   fi
+  echo "runId=${RUN_ID} rid=${RID}"
+  echo "BASE_URL=${BASE_URL} RANGE=${RANGE} HANDOFF_ENABLED=${HANDOFF_ENABLED} HANDOFF_ATTENDANT_WAID=${HANDOFF_ATTENDANT_WAID} EXPECTED_TEMPLATE_NAME=${EXPECTED_TEMPLATE_NAME}"
+  echo "ADMIN_TOKEN=$(redact_token "${ADMIN_TOKEN}")"
 
   log_step "A: reset e2e state"
   if ! node "${ROOT_DIR}/scripts/reset-e2e-state.mjs" \
@@ -241,8 +298,10 @@ JSON
       fi
       return 0
     }
-    if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
+    if ! poll_until "template do atendente não encontrado (janela fechada)" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_tail "$ATT_FILE"
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
@@ -267,7 +326,7 @@ JSON
     fi
     return 0
   }
-  if ! poll_until "métricas de demo não atingiram o mínimo" 6 1 check_metrics; then
+  if ! poll_until "métricas de demo não atingiram o mínimo" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_metrics; then
     head -c 2000 "$METRICS_FILE" || true
     return 1
   fi
@@ -302,7 +361,9 @@ JSON
     fi
     return 0
   }
-  if ! poll_until "eventos demo (requested/scheduled) por RID ausentes ou inválidos" 6 1 check_events_rid; then
+  if ! poll_until "eventos demo (requested/scheduled) por RID ausentes ou inválidos" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_events_rid; then
+    echo "EVENTS_FILE=${EVENTS_FILE}" >&2
+    print_events_summary "$EVENTS_FILE" "$RID"
     tail -c 2000 "$EVENTS_FILE" || true
     return 1
   fi
@@ -332,7 +393,7 @@ JSON
     fi
     return 0
   }
-  if ! poll_until "encontrou pergunta de solução/produto após agendamento" 6 1 check_lead_followup; then
+  if ! poll_until "encontrou pergunta de solução/produto após agendamento" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_lead_followup; then
     tail -c 2000 "$LEAD_FILE" || true
     return 1
   fi
