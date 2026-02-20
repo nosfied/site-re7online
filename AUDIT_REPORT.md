@@ -143,6 +143,7 @@ a12583f fix(handoff): attendant template params + window gate
 
 4) **Persistência de outbound em whatsapp-events.json**
    - Outbound template/text agora também grava evento em `.data/whatsapp-events.json` com `direction="outbound"` e campos opcionais (templateName, language, intent, clientKey, metaMessageId).
+   - Ajuste semântico: `from` representa o participante (destinatário real), `type` inclui `template`.
 
 5) **Backup throttling/retention (reset-e2e-state)**
    - Backup dos arquivos `.data` agora respeita `BACKUP_MIN_INTERVAL_MINUTES` e mantém apenas `BACKUP_MAX_DIRS` diretórios.

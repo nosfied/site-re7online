@@ -1,4 +1,4 @@
-export type MessageType = "text" | "image" | "audio" | "video" | "document" | "unknown";
+export type MessageType = "text" | "image" | "audio" | "video" | "document" | "unknown" | "template";
 
 export type NormalizedMessage = {
   messageId: string;
