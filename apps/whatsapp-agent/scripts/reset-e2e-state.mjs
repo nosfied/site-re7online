@@ -79,6 +79,12 @@ async function resetConversations() {
     next.demoStatus = "none";
     next.answers = {};
     next.handoff = { status: "none" };
+    if (conv.waId === attendant) {
+      next.window = {
+        isOpen: false,
+        expiresAt: new Date(0).toISOString(),
+      };
+    }
     return next;
   });
 

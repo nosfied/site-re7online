@@ -61,6 +61,8 @@ META_APP_SECRET=$(grep -E '^META_APP_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -
 PHONE_NUMBER_ID=$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 HANDOFF_ENABLED=$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 HANDOFF_ATTENDANT_WAID=$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
+HANDOFF_NOTIFY_TEMPLATE_NAME=$(grep -E '^HANDOFF_NOTIFY_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
+HANDOFF_TEMPLATE_NAME=$(grep -E '^HANDOFF_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -115,9 +117,15 @@ run_once() {
   local START_EPOCH_MS
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
+  local EXPECTED_TEMPLATE_NAME
   RID="$(date +%s)$RANDOM"
   START_EPOCH="$(date +%s)"
   START_EPOCH_MS=$((START_EPOCH * 1000))
+  EXPECTED_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-${HANDOFF_TEMPLATE_NAME:-}}"
+  if [[ -z "$EXPECTED_TEMPLATE_NAME" ]]; then
+    echo "FAIL: HANDOFF_TEMPLATE_NAME/HANDOFF_NOTIFY_TEMPLATE_NAME ausente no .env" >&2
+    return 1
+  fi
 
   log_step "A: reset e2e state"
   if ! node "${ROOT_DIR}/scripts/reset-e2e-state.mjs" \
@@ -215,9 +223,10 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&(Date.parse(i.createdAt||'')>=start)).length;
+        const expected=process.argv[3];
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName===expected&&(Date.parse(i.createdAt||'')>=start)).length;
         process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$START_EPOCH_MS" 2>/dev/null) || return 1
+      " "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" 2>/dev/null) || return 1
       if [[ "${templateCount:-0}" -ne 1 ]]; then
         return 1
       fi
@@ -237,15 +246,18 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
         const items=data.items||[];
         const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName==='re7_atendente_manual_v1'&&i.status==='FAILED'&&(Date.parse(i.createdAt||'')>=start)).length;
+        const expected=process.argv[3];
+        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName===expected&&i.status==='FAILED'&&(Date.parse(i.createdAt||'')>=start)).length;
         process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$START_EPOCH_MS" 2>/dev/null) || return 1
+      " "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" 2>/dev/null) || return 1
       if [[ "${failedTemplateCount:-0}" -gt 0 ]]; then
         return 1
       fi
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
+      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "templateCount=${templateCount:-} textCount=${textCount:-} failedTemplateCount=${failedTemplateCount:-}" >&2
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
@@ -288,13 +300,11 @@ JSON
       const lead=process.argv[3];
       const attendant=process.argv[4];
       if(!Array.isArray(data)) process.exit(2);
-      const withEventName=data.filter((i)=>typeof i.eventName==='string');
-      if(withEventName.length===0) process.exit(2);
-      const byRid=withEventName.filter((i)=>String(i.messageId||'').includes(rid));
-      const demoReq=byRid.filter((i)=>i.eventName==='lead.demo_requested').length;
-      const demoSched=byRid.filter((i)=>i.eventName==='lead.demo_scheduled').length;
-      if(demoReq!==1 || demoSched!==1) process.exit(2);
-      const inboundAttendant=byRid.filter((i)=>i.eventName==='webhook.message' && String(i.payloadJson?.from||'')===attendant).length;
+      const byRid=data.filter((i)=>String(i.messageId||'').includes(rid));
+      const openCount=byRid.filter((i)=>String(i.messageId||'')===`wamid.e2e.demo.open.${rid}` && i.status==='received').length;
+      const scheduleCount=byRid.filter((i)=>String(i.messageId||'')===`wamid.e2e.demo.schedule.${rid}` && i.status==='received').length;
+      if(openCount!==1 || scheduleCount!==1) process.exit(2);
+      const inboundAttendant=byRid.filter((i)=>String(i.from||'')===attendant).length;
       if(inboundAttendant>0) process.exit(2);
       process.exit(0);
     " "$EVENTS_FILE" "$RID" "$WAID" "$HANDOFF_ATTENDANT_WAID"; then
