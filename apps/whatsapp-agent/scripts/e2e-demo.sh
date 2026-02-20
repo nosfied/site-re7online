@@ -345,12 +345,31 @@ JSON
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
       fi
-      if [[ "$(count_templates_by_window "$ATT_FILE" "re7_atendente_manual_v1" "$START_EPOCH_MS")" -lt 1 ]]; then
+      if ! node -e '
+        const fs=require("fs");
+        const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+        const startMs=Number(process.argv[2]||0)||0;
+        const expected=String(process.argv[3]||"");
+        const items=(j && (j.items||[]))||[];
+        if(!Array.isArray(items)) process.exit(2);
+        const hit=items.some((m)=>{
+          const tpl=String(m.templateName||"");
+          if(tpl!==expected) return false;
+          const dir=String(m.direction||"");
+          if(dir==="INBOUND") return false;
+          if(dir && dir!=="OUTBOUND") return false;
+          const ts=Date.parse(m.createdAt||"");
+          if(startMs && Number.isFinite(ts) && ts<startMs) return false;
+          return true;
+        });
+        process.exit(hit?0:2);
+      ' "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
         return 1
       fi
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
+      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
