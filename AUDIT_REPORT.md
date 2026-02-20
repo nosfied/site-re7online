@@ -132,6 +132,7 @@ a12583f fix(handoff): attendant template params + window gate
 1) **Guardrail admin debug reset**
    - Bloqueia `/admin/debug/reset-conversation` quando `DISABLE_DEBUG_COMMANDS=true` ou `ENV=production` sem `ALLOW_ADMIN_DEBUG_IN_PROD=true`.
    - Loga `admin.debug.blocked` com motivo.
+   - **ENV source confirmed:** o guardrail agora usa `process.env.NODE_ENV` (env.ENV não é fonte confiável de produção).
 
 2) **Idempotência handoff notify**
    - Dedup baseado em `notifyKey` determinístico (lead+attendant+messageId+templateName).

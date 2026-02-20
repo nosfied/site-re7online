@@ -74,7 +74,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { ok: false, error: "forbidden" });
         return;
       }
-      if (env.ENV === "production" && !env.ALLOW_ADMIN_DEBUG_IN_PROD) {
+      if (process.env.NODE_ENV === "production" && !env.ALLOW_ADMIN_DEBUG_IN_PROD) {
         logger.warn({
           event: "admin.debug.blocked",
           reason: "not_allowed_in_prod",
