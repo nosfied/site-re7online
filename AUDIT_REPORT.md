@@ -140,3 +140,9 @@ a12583f fix(handoff): attendant template params + window gate
 
 3) **TTL opcional para eventos E2E**
    - Script manual `scripts/cleanup-e2e-events.mjs` remove apenas `wamid.e2e.*` mais antigos que TTL (default 7 dias).
+
+4) **Persistência de outbound em whatsapp-events.json**
+   - Outbound template/text agora também grava evento em `.data/whatsapp-events.json` com `direction="outbound"` e campos opcionais (templateName, language, intent, clientKey, metaMessageId).
+
+5) **Backup throttling/retention (reset-e2e-state)**
+   - Backup dos arquivos `.data` agora respeita `BACKUP_MIN_INTERVAL_MINUTES` e mantém apenas `BACKUP_MAX_DIRS` diretórios.
