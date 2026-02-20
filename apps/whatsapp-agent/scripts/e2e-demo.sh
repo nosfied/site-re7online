@@ -226,8 +226,9 @@ JSON
         const items=(j && (j.items||[]))||[];
         if(!Array.isArray(items)) process.exit(2);
         const hit=items.some((m)=>{
-          const dir=String(m.direction||"");
-          if(dir && dir!=="OUTBOUND") return false;
+        const dir=String(m.direction||"");
+        if (dir === "INBOUND") return false;
+        if (dir && dir !== "OUTBOUND") return false;
           const tpl=String(m.templateName||"");
           if(tpl!==expected) return false;
           const ts=Date.parse(m.createdAt||"");
@@ -289,7 +290,11 @@ JSON
       const openCount=byRid.filter((i)=>String(i.messageId||"")===openId && (i.status==="received" || i.status==="replied")).length;
       const scheduleCount=byRid.filter((i)=>String(i.messageId||"")===scheduleId && i.status==="received").length;
       if(openCount!==1 || scheduleCount!==1) process.exit(2);
-      const inboundAttendant=byRid.filter((i)=>String(i.from||"")===attendant).length;
+      const inboundAttendant=byRid.filter((i)=>{
+        const dir=String(i.direction||"");
+        if (dir) return dir === "INBOUND" && String(i.from || "") === attendant;
+        return false;
+      }).length;
       if(inboundAttendant>0) process.exit(2);
       process.exit(0);
     ' "$EVENTS_FILE" "$RID" "$HANDOFF_ATTENDANT_WAID"; then
