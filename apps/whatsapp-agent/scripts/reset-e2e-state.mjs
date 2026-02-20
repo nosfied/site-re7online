@@ -21,6 +21,44 @@ if (!lead || !attendant) {
 const dataDir = path.resolve(process.cwd(), ".data");
 const conversationsFile = path.join(dataDir, "conversations.json");
 const eventsFile = path.join(dataDir, "whatsapp-events.json");
+const BACKUP_MIN_INTERVAL_MINUTES = Number(
+  process.env.BACKUP_MIN_INTERVAL_MINUTES ?? "60"
+);
+const BACKUP_MAX_DIRS = Number(process.env.BACKUP_MAX_DIRS ?? "10");
+
+let cachedBackupDir = null;
+
+async function getBackupDir() {
+  if (cachedBackupDir !== null) return cachedBackupDir;
+  try {
+    const entries = await fs.readdir(dataDir, { withFileTypes: true });
+    const backupDirs = await Promise.all(
+      entries
+        .filter((e) => e.isDirectory() && e.name.startsWith("backup-"))
+        .map(async (e) => {
+          const full = path.join(dataDir, e.name);
+          const stat = await fs.stat(full);
+          return { name: e.name, full, mtimeMs: stat.mtimeMs };
+        })
+    );
+    backupDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const latest = backupDirs[0];
+    if (latest) {
+      const minMs = (Number.isNaN(BACKUP_MIN_INTERVAL_MINUTES) ? 60 : BACKUP_MIN_INTERVAL_MINUTES) * 60 * 1000;
+      if (Date.now() - latest.mtimeMs < minMs) {
+        cachedBackupDir = null;
+        return null;
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupDir = path.join(dataDir, `backup-${ts}`);
+  await fs.mkdir(backupDir, { recursive: true });
+  cachedBackupDir = backupDir;
+  return backupDir;
+}
 
 async function backupFile(filePath) {
   try {
@@ -28,11 +66,29 @@ async function backupFile(filePath) {
   } catch {
     return;
   }
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupDir = path.join(dataDir, `backup-${ts}`);
-  await fs.mkdir(backupDir, { recursive: true });
+  const backupDir = await getBackupDir();
+  if (!backupDir) return;
   const dest = path.join(backupDir, path.basename(filePath));
   await fs.copyFile(filePath, dest);
+}
+
+async function enforceBackupRetention() {
+  if (Number.isNaN(BACKUP_MAX_DIRS) || BACKUP_MAX_DIRS <= 0) return;
+  const entries = await fs.readdir(dataDir, { withFileTypes: true });
+  const backupDirs = await Promise.all(
+    entries
+      .filter((e) => e.isDirectory() && e.name.startsWith("backup-"))
+      .map(async (e) => {
+        const full = path.join(dataDir, e.name);
+        const stat = await fs.stat(full);
+        return { name: e.name, full, mtimeMs: stat.mtimeMs };
+      })
+  );
+  backupDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const toRemove = backupDirs.slice(BACKUP_MAX_DIRS);
+  for (const dir of toRemove) {
+    await fs.rm(dir.full, { recursive: true, force: true });
+  }
 }
 
 async function resetConversations() {
@@ -113,6 +169,7 @@ async function resetEventsFile() {
 await fs.mkdir(dataDir, { recursive: true });
 await backupFile(conversationsFile);
 if (resetEvents) await backupFile(eventsFile);
+await enforceBackupRetention();
 await resetConversations();
 await resetEventsFile();
 console.log("OK: reset-e2e-state");
