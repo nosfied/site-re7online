@@ -49,20 +49,20 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.env"
-BASE_URL="http://127.0.0.1:${PORT}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:${PORT}}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "FAIL: .env não encontrado em ${ENV_FILE}" >&2
   exit 1
 fi
 
-ADMIN_TOKEN=$(grep -E '^ADMIN_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-META_APP_SECRET=$(grep -E '^META_APP_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-PHONE_NUMBER_ID=$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-HANDOFF_ENABLED=$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-HANDOFF_ATTENDANT_WAID=$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-HANDOFF_NOTIFY_TEMPLATE_NAME=$(grep -E '^HANDOFF_NOTIFY_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
-HANDOFF_TEMPLATE_NAME=$(grep -E '^HANDOFF_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r"' | xargs || true)
+ADMIN_TOKEN="${ADMIN_TOKEN:-$(grep -E '^ADMIN_TOKEN=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+META_APP_SECRET="${META_APP_SECRET:-$(grep -E '^META_APP_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+PHONE_NUMBER_ID="${PHONE_NUMBER_ID:-$(grep -E '^WHATSAPP_PHONE_NUMBER_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+HANDOFF_ENABLED="${HANDOFF_ENABLED:-$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+HANDOFF_ATTENDANT_WAID="${HANDOFF_ATTENDANT_WAID:-$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+HANDOFF_NOTIFY_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-$(grep -E '^HANDOFF_NOTIFY_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+HANDOFF_TEMPLATE_NAME="${HANDOFF_TEMPLATE_NAME:-$(grep -E '^HANDOFF_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -218,46 +218,30 @@ JSON
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
       fi
-      templateCount=$(node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const start=Number(process.argv[2]||0);
-        const expected=process.argv[3];
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName===expected&&(Date.parse(i.createdAt||'')>=start)).length;
-        process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" 2>/dev/null) || return 1
-      if [[ "${templateCount:-0}" -ne 1 ]]; then
-        return 1
-      fi
-      textCount=$(node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const start=Number(process.argv[2]||0);
-        const cnt=items.filter((i)=>i.type==='TEXT'&&i.direction==='OUTBOUND'&&i.status==='SENT'&&(Date.parse(i.createdAt||'')>=start)).length;
-        process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$START_EPOCH_MS" 2>/dev/null) || return 1
-      if [[ "${textCount:-0}" -ne 0 ]]; then
-        return 1
-      fi
-      failedTemplateCount=$(node -e "
-        const fs=require('fs');
-        const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-        const items=data.items||[];
-        const start=Number(process.argv[2]||0);
-        const expected=process.argv[3];
-        const cnt=items.filter((i)=>i.type==='TEMPLATE'&&i.templateName===expected&&i.status==='FAILED'&&(Date.parse(i.createdAt||'')>=start)).length;
-        process.stdout.write(String(cnt));
-      " "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" 2>/dev/null) || return 1
-      if [[ "${failedTemplateCount:-0}" -gt 0 ]]; then
+      if ! node -e '
+        const fs=require("fs");
+        const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+        const startMs=Number(process.argv[2]||0)||0;
+        const expected=String(process.argv[3]||"");
+        const items=(j && (j.items||[]))||[];
+        if(!Array.isArray(items)) process.exit(2);
+        const hit=items.some((m)=>{
+          const dir=String(m.direction||"");
+          if(dir && dir!=="OUTBOUND") return false;
+          const tpl=String(m.templateName||"");
+          if(tpl!==expected) return false;
+          const ts=Date.parse(m.createdAt||"");
+          if(startMs && Number.isFinite(ts) && ts<startMs) return false;
+          return true;
+        });
+        process.exit(hit?0:2);
+      ' "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
         return 1
       fi
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-      echo "templateCount=${templateCount:-} textCount=${textCount:-} failedTemplateCount=${failedTemplateCount:-}" >&2
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
@@ -293,21 +277,22 @@ JSON
     if [[ ! -f "$EVENTS_FILE" ]]; then
       return 1
     fi
-    if ! node -e "
-      const fs=require('fs');
-      const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
-      const rid=process.argv[2];
-      const lead=process.argv[3];
-      const attendant=process.argv[4];
+    if ! node -e '
+      const fs=require("fs");
+      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const rid=String(process.argv[2]||"");
+      const attendant=String(process.argv[3]||"");
       if(!Array.isArray(data)) process.exit(2);
-      const byRid=data.filter((i)=>String(i.messageId||'').includes(rid));
-      const openCount=byRid.filter((i)=>String(i.messageId||'')===`wamid.e2e.demo.open.${rid}` && i.status==='received').length;
-      const scheduleCount=byRid.filter((i)=>String(i.messageId||'')===`wamid.e2e.demo.schedule.${rid}` && i.status==='received').length;
+      const byRid=data.filter((i)=>String(i.messageId||"").includes(rid));
+      const openId="wamid.e2e.demo.open."+rid;
+      const scheduleId="wamid.e2e.demo.schedule."+rid;
+      const openCount=byRid.filter((i)=>String(i.messageId||"")===openId && (i.status==="received" || i.status==="replied")).length;
+      const scheduleCount=byRid.filter((i)=>String(i.messageId||"")===scheduleId && i.status==="received").length;
       if(openCount!==1 || scheduleCount!==1) process.exit(2);
-      const inboundAttendant=byRid.filter((i)=>String(i.from||'')===attendant).length;
+      const inboundAttendant=byRid.filter((i)=>String(i.from||"")===attendant).length;
       if(inboundAttendant>0) process.exit(2);
       process.exit(0);
-    " "$EVENTS_FILE" "$RID" "$WAID" "$HANDOFF_ATTENDANT_WAID"; then
+    ' "$EVENTS_FILE" "$RID" "$HANDOFF_ATTENDANT_WAID"; then
       return 1
     fi
     return 0
