@@ -121,6 +121,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         status: "sent",
         allowlist: { enabled: false, hit: false },
         raw: {
+          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
           requestId: params.requestId,
           rid: params.rid,
           metaMessageId,
@@ -163,6 +164,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       status: "failed",
       allowlist: { enabled: false, hit: false },
       raw: {
+        senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
         requestId: params.requestId,
         rid: params.rid,
         errorBody: errorText.slice(0, 500),

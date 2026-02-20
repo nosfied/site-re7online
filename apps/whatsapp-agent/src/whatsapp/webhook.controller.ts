@@ -414,6 +414,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         status: "sent",
         allowlist: { enabled: false, hit: false },
         raw: {
+          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
           requestId: meta?.requestId,
           rid: params.messageId,
           metaMessageId: result.messageId,
@@ -447,6 +448,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         status: "failed",
         allowlist: { enabled: false, hit: false },
         raw: {
+          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
           requestId: meta?.requestId,
           rid: params.messageId,
           errorBody: result.errorBody,
