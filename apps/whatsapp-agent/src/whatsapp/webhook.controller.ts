@@ -1944,9 +1944,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          const handoffKey = `${normalizedFrom}:${demoResult.scheduleExtract ?? ""}:${nowIso}`;
+          const notifyKey = `${normalizedFrom}|${env.HANDOFF_ATTENDANT_WAID}|${message.messageId}|${env.HANDOFF_TEMPLATE_NAME}`;
           if (env.HANDOFF_ENABLED && env.HANDOFF_ATTENDANT_WAID) {
-            if (updatedConversation.lastHandoffDemoScheduledKey !== handoffKey) {
+            if (updatedConversation.lastHandoffDemoScheduledKey === notifyKey) {
+              logger.info({
+                event: "handoff.notify_dedup",
+                waId: maskNumber(normalizedFrom),
+                notifyKey,
+                decision: "skip",
+                requestId: meta?.requestId,
+              });
+            } else {
               const scheduleText = demoResult.scheduleExtract ?? "A combinar";
               const snippet =
                 message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
@@ -1960,7 +1968,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               });
               updatedConversation = {
                 ...updatedConversation,
-                lastHandoffDemoScheduledKey: handoffKey,
+                lastHandoffDemoScheduledKey: notifyKey,
                 lastHandoffDemoScheduledAt: nowIso,
               };
               demoUpdated = true;
