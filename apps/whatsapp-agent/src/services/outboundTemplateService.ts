@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
+import { jsonFileStorage } from "../storage/jsonFileStorage.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -104,6 +105,28 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         // ignore parse errors
       }
 
+      await jsonFileStorage.appendOutboundEvent({
+        direction: "outbound",
+        messageId: metaMessageId ?? params.messageId ?? params.rid ?? "",
+        metaMessageId: metaMessageId ?? undefined,
+        from: params.waId,
+        to: params.toE164,
+        timestamp: new Date().toISOString(),
+        type: "unknown",
+        text: null,
+        templateName: params.templateName,
+        language: resolvedLang,
+        intent: params.intent ?? undefined,
+        clientKey: params.clientKey ?? env.CLIENT_ID,
+        status: "sent",
+        allowlist: { enabled: false, hit: false },
+        raw: {
+          requestId: params.requestId,
+          rid: params.rid,
+          metaMessageId,
+        },
+      });
+
       logger.info({
         event: "outbound.template.sent",
         waId: maskNumber(params.waId),
@@ -124,6 +147,27 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     }
 
     const errorText = await response.text().catch(() => "");
+    await jsonFileStorage.appendOutboundEvent({
+      direction: "outbound",
+      messageId: params.messageId ?? params.rid ?? "",
+      metaMessageId: undefined,
+      from: params.waId,
+      to: params.toE164,
+      timestamp: new Date().toISOString(),
+      type: "unknown",
+      text: null,
+      templateName: params.templateName,
+      language: resolvedLang,
+      intent: params.intent ?? undefined,
+      clientKey: params.clientKey ?? env.CLIENT_ID,
+      status: "failed",
+      allowlist: { enabled: false, hit: false },
+      raw: {
+        requestId: params.requestId,
+        rid: params.rid,
+        errorBody: errorText.slice(0, 500),
+      },
+    });
     logger.error({
       event: "outbound.template.failed",
       waId: maskNumber(params.waId),

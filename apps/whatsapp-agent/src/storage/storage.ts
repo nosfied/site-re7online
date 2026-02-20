@@ -1,7 +1,7 @@
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
 import { ConversationState } from "../conversation/conversation.types.js";
 
-export type MessageStatus = "received" | "ignored" | "replied";
+export type MessageStatus = "received" | "ignored" | "replied" | "sent" | "failed";
 
 export type StoredRecord = NormalizedMessage & {
   status: MessageStatus;
@@ -9,6 +9,13 @@ export type StoredRecord = NormalizedMessage & {
     enabled: boolean;
     hit: boolean;
   };
+  direction?: "inbound" | "outbound";
+  to?: string;
+  templateName?: string;
+  language?: string;
+  intent?: string;
+  clientKey?: string;
+  metaMessageId?: string;
   repliedAt?: string;
   replyType?: "echo" | "default" | "text" | "template";
   meta?: Record<string, unknown>;
@@ -16,6 +23,7 @@ export type StoredRecord = NormalizedMessage & {
 
 export interface Storage {
   saveIncomingMessage(record: StoredRecord): Promise<void>;
+  appendOutboundEvent(record: StoredRecord): Promise<void>;
   findByMessageId(messageId: string): Promise<StoredRecord | null>;
   updateStatus(
     messageId: string,

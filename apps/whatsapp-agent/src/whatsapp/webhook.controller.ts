@@ -400,6 +400,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         messageId: params.messageId,
         metaMessageId: result.messageId,
       });
+      await jsonFileStorage.appendOutboundEvent({
+        direction: "outbound",
+        messageId: result.messageId ?? params.messageId,
+        metaMessageId: result.messageId ?? undefined,
+        from: params.waId,
+        to: params.toE164,
+        timestamp: new Date().toISOString(),
+        type: "text",
+        text: params.replyText,
+        intent: params.intent ?? undefined,
+        clientKey: tenantClientKey,
+        status: "sent",
+        allowlist: { enabled: false, hit: false },
+        raw: {
+          requestId: meta?.requestId,
+          rid: params.messageId,
+          metaMessageId: result.messageId,
+        },
+      });
     } else {
       logger.error({
         event: "outbound.text.failed",
@@ -413,6 +432,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         messageId: params.messageId,
         status: result.status,
         errorBody: result.errorBody,
+      });
+      await jsonFileStorage.appendOutboundEvent({
+        direction: "outbound",
+        messageId: params.messageId,
+        metaMessageId: undefined,
+        from: params.waId,
+        to: params.toE164,
+        timestamp: new Date().toISOString(),
+        type: "text",
+        text: params.replyText,
+        intent: params.intent ?? undefined,
+        clientKey: tenantClientKey,
+        status: "failed",
+        allowlist: { enabled: false, hit: false },
+        raw: {
+          requestId: meta?.requestId,
+          rid: params.messageId,
+          errorBody: result.errorBody,
+        },
       });
     }
     await persistOutboundTextSafe({

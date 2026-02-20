@@ -144,6 +144,11 @@ export const jsonFileStorage: Storage = {
     records.push(record);
     await writeAll(records);
   },
+  async appendOutboundEvent(record: StoredRecord) {
+    const records = await readAll();
+    records.push(record);
+    await writeAll(records);
+  },
   async findByMessageId(messageId: string) {
     const records = await readAll();
     return records.find((item) => item.messageId === messageId) ?? null;
