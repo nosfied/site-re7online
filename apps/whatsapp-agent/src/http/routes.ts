@@ -8,6 +8,7 @@ import { env } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
+import { getTenants } from "../config/tenantConfig.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -106,6 +107,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         orderBy: { createdAt: "desc" },
       });
       json(res, 200, { items: clients });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/tenants") {
+      const tenants = await getTenants();
+      json(res, 200, {
+        ok: true,
+        count: Object.keys(tenants).length,
+        items: Object.values(tenants),
+      });
       return;
     }
 

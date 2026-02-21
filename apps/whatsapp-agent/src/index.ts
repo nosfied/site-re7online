@@ -2,6 +2,7 @@ import "./bootstrap-env.js";
 import { createServer } from "./http/server.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
+import { getTenants } from "./config/tenantConfig.js";
 
 async function bootstrap() {
   const { env } = await import("./config/env.js");
@@ -38,6 +39,7 @@ async function bootstrap() {
   }
 
   try {
+    await getTenants();
     const prisma = getPrisma();
     const client = await prisma.client.upsert({
       where: { clientKey: "default" },
