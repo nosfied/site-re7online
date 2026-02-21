@@ -9,6 +9,9 @@ REPEAT=1
 E2E_RUN_POLICYB="${E2E_RUN_POLICYB:-false}"
 POLL_TRIES_DEFAULT="${POLL_TRIES_DEFAULT:-20}"
 POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
+ATT_LIMIT="${ATT_LIMIT:-200}"
+ATT_RETRIES="${ATT_RETRIES:-12}"
+ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -119,6 +122,26 @@ print_attendant_tail() {
   ' "$file" 2>/dev/null || true
 }
 
+print_attendant_headtail() {
+  local file="$1"
+  node -e '
+    const fs=require("fs");
+    const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+    const items=(data.items||[]).map((m)=>({
+      createdAt:m.createdAt,
+      direction:m.direction,
+      type:m.type,
+      status:m.status,
+      templateName:m.templateName,
+      requestId:m.requestId,
+      messageId:m.messageId
+    }));
+    const head=items.slice(0,5);
+    const tail=items.slice(-5);
+    console.error(JSON.stringify({head,tail},null,2));
+  ' "$file" 2>/dev/null || true
+}
+
 print_events_summary() {
   local file="$1"
   local rid="$2"
@@ -168,6 +191,8 @@ run_once() {
   local RUN_ID
   local START_EPOCH
   local START_EPOCH_MS
+  local SINCE_EPOCH
+  local SINCE_EPOCH_MS
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
@@ -175,6 +200,8 @@ run_once() {
   RID="${RID:-$RUN_ID}"
   START_EPOCH="$(date +%s)"
   START_EPOCH_MS=$((START_EPOCH * 1000))
+  SINCE_EPOCH="$START_EPOCH"
+  SINCE_EPOCH_MS=$((SINCE_EPOCH * 1000))
   EXPECTED_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-${HANDOFF_TEMPLATE_NAME:-}}"
   if [[ -z "$EXPECTED_TEMPLATE_NAME" ]]; then
     echo "FAIL: HANDOFF_TEMPLATE_NAME/HANDOFF_NOTIFY_TEMPLATE_NAME ausente no .env" >&2
@@ -270,7 +297,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -283,24 +310,30 @@ JSON
         const items=(j && (j.items||[]))||[];
         if(!Array.isArray(items)) process.exit(2);
         const hit=items.some((m)=>{
-        const dir=String(m.direction||"");
-        if (dir === "INBOUND") return false;
-        if (dir && dir !== "OUTBOUND") return false;
+          const dir=String(m.direction||"");
+          if (dir === "INBOUND") return false;
+          if (dir && dir !== "OUTBOUND") return false;
           const tpl=String(m.templateName||"");
           if(tpl!==expected) return false;
+          const type=String(m.type||"");
+          if(type && type !== "TEMPLATE") return false;
+          const status=String(m.status||"");
+          if(status && status !== "SENT") return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
         });
         process.exit(hit?0:2);
-      ' "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
+      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
         return 1
       fi
       return 0
     }
-    if ! poll_until "template do atendente não encontrado (janela fechada)" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_attendant_closed; then
+    if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
       echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_headtail "$ATT_FILE"
       print_attendant_tail "$ATT_FILE"
       tail -c 2000 "$ATT_FILE" || true
       return 1
@@ -401,7 +434,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=50" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -419,18 +452,25 @@ JSON
           const dir=String(m.direction||"");
           if(dir==="INBOUND") return false;
           if(dir && dir!=="OUTBOUND") return false;
+          const type=String(m.type||"");
+          if(type && type !== "TEMPLATE") return false;
+          const status=String(m.status||"");
+          if(status && status !== "SENT") return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
         });
         process.exit(hit?0:2);
-      ' "$ATT_FILE" "$START_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
+      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
         return 1
       fi
       return 0
     }
-    if ! poll_until "template do atendente não encontrado (janela fechada)" 6 1 check_attendant_closed; then
+    if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
+      echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_headtail "$ATT_FILE"
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
