@@ -404,6 +404,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const waId = String(query.waId ?? "").trim();
         const statusFilter = String(query.status ?? "").trim().toUpperCase();
         const typeFilter = String(query.type ?? "").trim().toUpperCase();
+        const templateNameFilter = String(query.templateName ?? "").trim();
         const orderRaw = String(query.order ?? "desc").trim().toLowerCase();
         const order = orderRaw === "asc" ? "asc" : "desc";
         const fromRaw = String(query.from ?? "").trim();
@@ -450,6 +451,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (typeFilter) {
           inboundWhere.type = typeFilter;
           outboundWhere.type = typeFilter;
+        }
+        if (templateNameFilter) {
+          outboundWhere.templateName = templateNameFilter;
         }
 
         const [inbound, outbound] = await Promise.all([
@@ -532,6 +536,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             waId: maskWaId(waId),
             status: statusFilter || null,
             type: typeFilter || null,
+            templateName: templateNameFilter || null,
             from: from ? from.toISOString() : null,
             to: to ? to.toISOString() : null,
             clientKey,

@@ -11,7 +11,7 @@ POLL_TRIES_DEFAULT="${POLL_TRIES_DEFAULT:-20}"
 POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
 ATT_LIMIT="${ATT_LIMIT:-200}"
 ATT_RETRIES="${ATT_RETRIES:-12}"
-ATT_SLEEP_S="${ATT_SLEEP_S:-1}"
+ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -122,7 +122,7 @@ print_attendant_tail() {
   ' "$file" 2>/dev/null || true
 }
 
-print_attendant_top5() {
+print_attendant_headtail() {
   local file="$1"
   node -e '
     const fs=require("fs");
@@ -136,8 +136,9 @@ print_attendant_top5() {
       requestId:m.requestId,
       messageId:m.messageId
     }));
-    items.sort((a,b)=>Date.parse(b.createdAt||"")-Date.parse(a.createdAt||""));
-    console.error(JSON.stringify(items.slice(0,5),null,2));
+    const head=items.slice(0,5);
+    const tail=items.slice(-5);
+    console.error(JSON.stringify({head,tail},null,2));
   ' "$file" 2>/dev/null || true
 }
 
@@ -296,7 +297,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -330,9 +331,9 @@ JSON
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
       echo "ATT_FILE=${ATT_FILE}" >&2
-      print_attendant_top5 "$ATT_FILE"
-      echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_headtail "$ATT_FILE"
       print_attendant_tail "$ATT_FILE"
       tail -c 2000 "$ATT_FILE" || true
       return 1
@@ -433,7 +434,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -467,8 +468,9 @@ JSON
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
       echo "ATT_FILE=${ATT_FILE}" >&2
-      print_attendant_top5 "$ATT_FILE"
+      print_attendant_headtail "$ATT_FILE"
       tail -c 2000 "$ATT_FILE" || true
       return 1
     fi
