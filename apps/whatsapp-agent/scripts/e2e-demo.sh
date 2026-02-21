@@ -296,7 +296,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -402,7 +402,7 @@ JSON
 
   LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
   check_lead_followup() {
-    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120&order=desc" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
     if ! grep -q '"ok":true' "$LEAD_FILE"; then
       return 1
@@ -433,7 +433,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
