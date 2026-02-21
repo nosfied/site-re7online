@@ -312,7 +312,10 @@ JSON
       const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       const items=data.items||[];
       const rid=process.argv[2];
-      const scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="INBOUND");
+      let scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="OUTBOUND");
+      if(!scheduleItem){
+        scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid));
+      }
       if(!scheduleItem || !scheduleItem.requestId){ process.exit(2); }
       process.stdout.write(String(scheduleItem.requestId));
     ' "$LEAD_REQ_FILE" "$RID") || return 1
@@ -336,6 +339,7 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
         const expectedReq=String(process.argv[2]||"");
         const expectedTpl=String(process.argv[3]||"");
+        const sinceMs=Number(process.argv[4]||0)||0;
         if(!Array.isArray(data)) process.exit(2);
         const hit=data.find((m)=>{
           if(String(m.direction||"")!=="outbound") return false;
@@ -343,11 +347,15 @@ JSON
           if(String(m.status||"")!=="sent") return false;
           const req=String(m.raw && m.raw.requestId || "");
           if(expectedReq && req !== expectedReq) return false;
+          if(!expectedReq && sinceMs){
+            const ts=Date.parse(String(m.timestamp||""));
+            if(!Number.isFinite(ts) || ts < sinceMs) return false;
+          }
           return true;
         });
         if(!hit){ process.exit(2); }
         process.stdout.write(String(hit.timestamp||""));
-      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME"; then
+      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
         return 1
       fi
       return 0
