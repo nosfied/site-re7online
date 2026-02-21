@@ -185,7 +185,7 @@ model Event {
 
 model ConversationRuntimeState {
   id                  String        @id @default(uuid())
-  clientId            String
+  clientId            String        @db.Uuid
   waId                String
   windowIsOpen        Boolean       @default(true)
   windowExpiresAt     DateTime?
