@@ -404,6 +404,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const waId = String(query.waId ?? "").trim();
         const statusFilter = String(query.status ?? "").trim().toUpperCase();
         const typeFilter = String(query.type ?? "").trim().toUpperCase();
+        const orderRaw = String(query.order ?? "desc").trim().toLowerCase();
+        const order = orderRaw === "asc" ? "asc" : "desc";
         const fromRaw = String(query.from ?? "").trim();
         const toRaw = String(query.to ?? "").trim();
         const from = fromRaw ? new Date(fromRaw) : null;
@@ -453,7 +455,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const [inbound, outbound] = await Promise.all([
           prisma.inboundMessage.findMany({
             where: inboundWhere,
-            orderBy: { createdAt: "desc" },
+            orderBy: { createdAt: order },
             take: limit,
             select: {
               createdAt: true,
@@ -466,7 +468,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }),
           prisma.outboundMessage.findMany({
             where: outboundWhere,
-            orderBy: { createdAt: "desc" },
+            orderBy: { createdAt: order },
             take: limit,
             select: {
               createdAt: true,
@@ -516,7 +518,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
         ]
-          .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+          .sort((a, b) =>
+            order === "asc"
+              ? Number(a.createdAt) - Number(b.createdAt)
+              : Number(b.createdAt) - Number(a.createdAt)
+          )
           .slice(0, limit);
 
         json(res, 200, {
@@ -530,6 +536,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             to: to ? to.toISOString() : null,
             clientKey,
             limit,
+            order,
           },
           count: combined.length,
           items: combined,
