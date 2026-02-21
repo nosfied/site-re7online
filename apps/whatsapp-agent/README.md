@@ -242,6 +242,14 @@ HANDOFF_TEMPLATE_LANG=pt_BR
 HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE=true
 ```
 
+Shadow state (ConversationState → Postgres):
+```bash
+# .env (default false)
+CONV_STATE_DUAL_WRITE=false
+CONV_STATE_SHADOW_COMPARE=false
+CONV_STATE_DB_WRITE_STRICT=false
+```
+
 Status completo:
 ```bash
 ./scripts/prod-status.sh

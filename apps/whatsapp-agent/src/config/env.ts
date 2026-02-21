@@ -36,6 +36,10 @@ export type Env = {
   HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE: boolean;
   ADMIN_TOKEN: string;
   ALLOW_ADMIN_DEBUG_IN_PROD: boolean;
+  CONV_STATE_DUAL_WRITE: boolean;
+  CONV_STATE_SHADOW_COMPARE: boolean;
+  CONV_STATE_DB_WRITE_STRICT: boolean;
+  CLIENT_KEY: string;
   CLIENT_ID: string;
   OUTBOUND_TEMPLATES_BY_CLIENT: Record<
     string,
@@ -131,6 +135,13 @@ export function getEnv(): Env {
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
   const ALLOW_ADMIN_DEBUG_IN_PROD =
     (process.env.ALLOW_ADMIN_DEBUG_IN_PROD ?? "false") === "true";
+  const CONV_STATE_DUAL_WRITE =
+    (process.env.CONV_STATE_DUAL_WRITE ?? "false") === "true";
+  const CONV_STATE_SHADOW_COMPARE =
+    (process.env.CONV_STATE_SHADOW_COMPARE ?? "false") === "true";
+  const CONV_STATE_DB_WRITE_STRICT =
+    (process.env.CONV_STATE_DB_WRITE_STRICT ?? "false") === "true";
+  const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
   let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
   const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
   if (mapRaw) {
@@ -203,6 +214,10 @@ export function getEnv(): Env {
     HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE,
     ADMIN_TOKEN,
     ALLOW_ADMIN_DEBUG_IN_PROD,
+    CONV_STATE_DUAL_WRITE,
+    CONV_STATE_SHADOW_COMPARE,
+    CONV_STATE_DB_WRITE_STRICT,
+    CLIENT_KEY,
     CLIENT_ID,
     OUTBOUND_TEMPLATES_BY_CLIENT,
     verifyTokenPresent,
