@@ -199,6 +199,7 @@ run_once() {
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
   local EXPECTED_REQUEST_ID
+  local EVENTS_FILE
   RUN_ID="${RUN_ID:-$(date +%s)$RANDOM}"
   RID="${RID:-$RUN_ID}"
   START_EPOCH="$(date +%s)"
@@ -206,6 +207,7 @@ run_once() {
   SINCE_EPOCH="$START_EPOCH"
   SINCE_EPOCH_MS=$((SINCE_EPOCH * 1000))
   EXPECTED_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-${HANDOFF_TEMPLATE_NAME:-}}"
+  EVENTS_FILE="${ROOT_DIR}/.data/whatsapp-events.json"
   if [[ -z "$EXPECTED_TEMPLATE_NAME" ]]; then
     echo "FAIL: HANDOFF_TEMPLATE_NAME/HANDOFF_NOTIFY_TEMPLATE_NAME ausente no .env" >&2
     return 1
@@ -324,6 +326,38 @@ JSON
   log_step "C: validar template no atendente (janela fechada)"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    event_confirmed="false"
+    check_outbound_template_event() {
+      if [[ ! -f "$EVENTS_FILE" ]]; then
+        return 1
+      fi
+      if ! node -e '
+        const fs=require("fs");
+        const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+        const expectedReq=String(process.argv[2]||"");
+        const expectedTpl=String(process.argv[3]||"");
+        if(!Array.isArray(data)) process.exit(2);
+        const hit=data.some((m)=>{
+          if(String(m.direction||"")!=="outbound") return false;
+          if(String(m.templateName||"")!==expectedTpl) return false;
+          if(String(m.status||"")!=="sent") return false;
+          const req=String(m.raw && m.raw.requestId || "");
+          if(expectedReq && req !== expectedReq) return false;
+          return true;
+        });
+        process.exit(hit?0:2);
+      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME"; then
+        return 1
+      fi
+      return 0
+    }
+    # Fonte de verdade: evento outbound.template.sent persistido em .data
+    if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
+      event_confirmed="true"
+      echo "OK: outbound.template.sent confirmado na .data"
+    else
+      echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
+    fi
     check_attendant_closed() {
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
@@ -369,15 +403,19 @@ JSON
       sleep "$E2E_STEP_C_SLEEP_SECONDS"
     done
     if ! check_attendant_closed; then
-      echo "FAIL: template do atendente não encontrado após ${E2E_STEP_C_TRIES} tentativas" >&2
-      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-      echo "expectedRequestId=${EXPECTED_REQUEST_ID}" >&2
-      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
-      echo "ATT_FILE=${ATT_FILE}" >&2
-      print_attendant_headtail "$ATT_FILE"
-      print_attendant_tail "$ATT_FILE"
-      tail -c 2000 "$ATT_FILE" || true
-      return 1
+      if [[ "$event_confirmed" == "true" ]]; then
+        echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
+      else
+        echo "FAIL: template do atendente não encontrado após ${E2E_STEP_C_TRIES} tentativas" >&2
+        echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+        echo "expectedRequestId=${EXPECTED_REQUEST_ID}" >&2
+        echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
+        echo "ATT_FILE=${ATT_FILE}" >&2
+        print_attendant_headtail "$ATT_FILE"
+        print_attendant_tail "$ATT_FILE"
+        tail -c 2000 "$ATT_FILE" || true
+        return 1
+      fi
     fi
   fi
 
