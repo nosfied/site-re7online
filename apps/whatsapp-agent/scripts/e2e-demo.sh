@@ -403,7 +403,7 @@ JSON
 
   LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
   check_lead_followup() {
-    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120" \
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120&order=desc" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
     if ! grep -q '"ok":true' "$LEAD_FILE"; then
       return 1
