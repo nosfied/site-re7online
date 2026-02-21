@@ -372,6 +372,7 @@ JSON
           if(String(m.templateName||"")!==expectedTpl) return false;
           if(String(m.status||"")!=="sent") return false;
           const msgId=String(m.messageId||"");
+<<<<<<< HEAD
           if(msgId && !msgId.startsWith("handoff.notify.")) return false;
 <<<<<<< HEAD
           if(!expectedReq && sinceMs){
@@ -385,6 +386,11 @@ JSON
         process.stdout.write(String(hit.timestamp||"") + "|" + req);
       ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
 =======
+=======
+          const rawMeta=String(m.raw && (m.raw.metaMessageId || m.raw.messageId) || "");
+          const candidateId = msgId || rawMeta;
+          if(candidateId && !candidateId.startsWith("handoff.notify.")) return false;
+>>>>>>> 43d36bc (fix(e2e): accept raw meta id when messageId missing)
           const ts=Date.parse(String(m.timestamp||""));
           if(!Number.isFinite(ts) || ts < sinceMs) return false;
           return true;
@@ -437,7 +443,9 @@ JSON
           const status=String(m.status||"");
           if(status && status !== "SENT") return false;
           const msgId=String(m.messageId||"");
-          if(msgId && !msgId.startsWith("handoff.notify.")) return false;
+          const rawMeta=String(m.rawPayload && (m.rawPayload.metaMessageId || m.rawPayload.messageId) || "");
+          const candidateId = msgId || rawMeta;
+          if(candidateId && !candidateId.startsWith("handoff.notify.")) return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
