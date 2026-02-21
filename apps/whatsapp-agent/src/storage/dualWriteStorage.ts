@@ -11,7 +11,7 @@ type ShadowCompareFields = {
   lastInboundAt?: string | null;
   lastOutboundAt?: string | null;
   intent?: string | null;
-  handoffStatus?: string | null;
+  handoffStatus?: HandoffStatus | null;
   leadRequestedAt?: string | null;
   leadCapturedAt?: string | null;
   demoStatus?: string | null;
@@ -37,7 +37,7 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     lastInboundAt: toIso(state.lastInboundAt),
     lastOutboundAt: toIso(state.lastOutboundAt),
     intent: state.intent ?? null,
-    handoffStatus: (state.handoff?.status ?? "none").toUpperCase(),
+    handoffStatus: toHandoffStatus(state.handoff?.status),
     leadRequestedAt: toIso(state.leadRequestedAt),
     leadCapturedAt: toIso(state.leadCapturedAt),
     demoStatus: state.demoStatus ?? null,
@@ -52,7 +52,7 @@ function mapDbToShadow(db: {
   lastInboundAt: Date | null;
   lastOutboundAt: Date | null;
   intent: string | null;
-  handoffStatus: string | null;
+  handoffStatus: HandoffStatus | null;
   leadRequestedAt: Date | null;
   leadCapturedAt: Date | null;
   demoStatus: string | null;
@@ -65,7 +65,7 @@ function mapDbToShadow(db: {
     lastInboundAt: db.lastInboundAt ? db.lastInboundAt.toISOString() : null,
     lastOutboundAt: db.lastOutboundAt ? db.lastOutboundAt.toISOString() : null,
     intent: db.intent ?? null,
-    handoffStatus: db.handoffStatus ? db.handoffStatus.toUpperCase() : null,
+    handoffStatus: db.handoffStatus ?? null,
     leadRequestedAt: db.leadRequestedAt ? db.leadRequestedAt.toISOString() : null,
     leadCapturedAt: db.leadCapturedAt ? db.leadCapturedAt.toISOString() : null,
     demoStatus: db.demoStatus ?? null,
@@ -101,12 +101,19 @@ export function createDualWriteStorage(primary: Storage): Storage {
 
   async function getClientId() {
     if (cachedClientId) return cachedClientId;
-    const clientKey = env.CLIENT_ID ?? "default";
+    const clientKey = env.CLIENT_KEY || env.CLIENT_ID || "default";
     const client = await prisma.client.findUnique({
       where: { clientKey },
       select: { id: true },
     });
-    if (!client) return null;
+    if (!client) {
+      logger.warn({
+        event: "state.shadow.write_failed",
+        reason: "client_not_found",
+        clientKey,
+      });
+      return null;
+    }
     cachedClientId = client.id;
     return cachedClientId;
   }
@@ -114,11 +121,6 @@ export function createDualWriteStorage(primary: Storage): Storage {
   async function writeShadow(state: ConversationState) {
     const clientId = await getClientId();
     if (!clientId) {
-      logger.warn({
-        event: "state.shadow.write_failed",
-        reason: "client_not_found",
-        clientKey: env.CLIENT_ID ?? "default",
-      });
       return;
     }
     await prisma.conversationRuntimeState.upsert({
