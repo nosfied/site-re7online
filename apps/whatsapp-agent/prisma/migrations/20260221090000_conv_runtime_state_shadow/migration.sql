@@ -4,7 +4,7 @@ CREATE TYPE "HandoffStatus" AS ENUM ('NONE', 'PENDING', 'ACTIVE');
 -- CreateTable
 CREATE TABLE "ConversationRuntimeState" (
     "id" TEXT NOT NULL,
-    "clientId" TEXT NOT NULL,
+    "clientId" UUID NOT NULL,
     "waId" TEXT NOT NULL,
     "windowIsOpen" BOOLEAN NOT NULL DEFAULT true,
     "windowExpiresAt" TIMESTAMP(3),
