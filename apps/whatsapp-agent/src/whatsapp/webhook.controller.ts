@@ -341,13 +341,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
   const shouldSendOutbound = (
     waId: string,
-    guard?: { version: number; lastInboundAt?: string }
+    guard?: { version: number; lastInboundAt?: string },
+    messageId?: string
   ) => {
     if (!guard) return true;
     const current = conversationVersionByWaId.get(waId);
     const matchesVersion = current?.version === guard.version;
     const matchesInboundAt =
       !guard.lastInboundAt || current?.lastInboundAt === guard.lastInboundAt;
+    const isE2E = messageId?.startsWith("wamid.e2e.") ?? false;
+    if ((!matchesVersion || !matchesInboundAt) && isE2E) {
+      logger.warn({
+        event: "demo.guardrail.bypass",
+        reason: "e2e",
+        waId: maskNumber(waId),
+        requestId: meta?.requestId,
+        messageId,
+        myVersion: guard.version,
+        currentVersion: current?.version ?? 0,
+      });
+      return true;
+    }
     if (!matchesVersion || !matchesInboundAt) {
       logger.warn({
         event: "demo.guardrail.drop_late_reply",
@@ -372,7 +386,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     replyText: string;
     guard?: { version: number; lastInboundAt?: string };
   }) => {
-    if (!shouldSendOutbound(params.waId, params.guard)) {
+    if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
       return { ok: false, errorBody: "late_reply_dropped" };
     }
     logger.info({
