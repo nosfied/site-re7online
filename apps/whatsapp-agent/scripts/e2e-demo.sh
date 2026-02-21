@@ -12,6 +12,8 @@ POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
 ATT_LIMIT="${ATT_LIMIT:-200}"
 ATT_RETRIES="${ATT_RETRIES:-12}"
 ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
+E2E_STEP_C_TRIES="${E2E_STEP_C_TRIES:-20}"
+E2E_STEP_C_SLEEP_SECONDS="${E2E_STEP_C_SLEEP_SECONDS:-1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -196,6 +198,7 @@ run_once() {
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
+  local EXPECTED_REQUEST_ID
   RUN_ID="${RUN_ID:-$(date +%s)$RANDOM}"
   RID="${RID:-$RUN_ID}"
   START_EPOCH="$(date +%s)"
@@ -293,6 +296,31 @@ JSON
 )
   post_webhook "$payload_demo"
 
+  log_step "B2: capturar requestId do agendamento"
+  EXPECTED_REQUEST_ID=""
+  LEAD_REQ_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-req-${RID}.json"
+  capture_schedule_request_id() {
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_REQ_FILE"
+    if ! grep -q '"ok":true' "$LEAD_REQ_FILE"; then
+      return 1
+    fi
+    EXPECTED_REQUEST_ID=$(node -e '
+      const fs=require("fs");
+      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const items=data.items||[];
+      const rid=process.argv[2];
+      const scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="INBOUND");
+      if(!scheduleItem || !scheduleItem.requestId){ process.exit(2); }
+      process.stdout.write(String(scheduleItem.requestId));
+    ' "$LEAD_REQ_FILE" "$RID") || return 1
+    return 0
+  }
+  if ! poll_until "requestId do agendamento não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
+    echo "WARN: requestId do agendamento não encontrado; validando apenas por templateName/createdAt" >&2
+    EXPECTED_REQUEST_ID=""
+  fi
+
   log_step "C: validar template no atendente (janela fechada)"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
@@ -307,6 +335,7 @@ JSON
         const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
         const startMs=Number(process.argv[2]||0)||0;
         const expected=String(process.argv[3]||"");
+        const expectedReq=String(process.argv[4]||"");
         const items=(j && (j.items||[]))||[];
         if(!Array.isArray(items)) process.exit(2);
         const hit=items.some((m)=>{
@@ -319,18 +348,30 @@ JSON
           if(type && type !== "TEMPLATE") return false;
           const status=String(m.status||"");
           if(status && status !== "SENT") return false;
+          if(expectedReq && String(m.requestId||"") !== expectedReq) return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
         });
         process.exit(hit?0:2);
-      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
+      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" "$EXPECTED_REQUEST_ID"; then
         return 1
       fi
       return 0
     }
-    if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
+    local try_i
+    for try_i in $(seq 1 "$E2E_STEP_C_TRIES"); do
+      if check_attendant_closed; then
+        echo "OK: template encontrado no atendente"
+        break
+      fi
+      echo "WAIT: template ainda não apareceu no /admin/messages (try ${try_i}/${E2E_STEP_C_TRIES})"
+      sleep "$E2E_STEP_C_SLEEP_SECONDS"
+    done
+    if ! check_attendant_closed; then
+      echo "FAIL: template do atendente não encontrado após ${E2E_STEP_C_TRIES} tentativas" >&2
       echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "expectedRequestId=${EXPECTED_REQUEST_ID}" >&2
       echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
       echo "ATT_FILE=${ATT_FILE}" >&2
       print_attendant_headtail "$ATT_FILE"
