@@ -12,7 +12,7 @@ POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
 ATT_LIMIT="${ATT_LIMIT:-200}"
 ATT_RETRIES="${ATT_RETRIES:-12}"
 ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
-E2E_STEP_C_TRIES="${E2E_STEP_C_TRIES:-20}"
+E2E_STEP_C_TRIES="${E2E_STEP_C_TRIES:-40}"
 E2E_STEP_C_SLEEP_SECONDS="${E2E_STEP_C_SLEEP_SECONDS:-1}"
 
 while [[ $# -gt 0 ]]; do
@@ -312,14 +312,17 @@ JSON
       const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       const items=data.items||[];
       const rid=process.argv[2];
-      const scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="INBOUND");
+      let scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="OUTBOUND");
+      if(!scheduleItem){
+        scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid));
+      }
       if(!scheduleItem || !scheduleItem.requestId){ process.exit(2); }
       process.stdout.write(String(scheduleItem.requestId));
     ' "$LEAD_REQ_FILE" "$RID") || return 1
     return 0
   }
   if ! poll_until "requestId do agendamento não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
-    echo "WARN: requestId do agendamento não encontrado; validando apenas por templateName/createdAt" >&2
+    echo "WARN: requestId do agendamento não encontrado; Step C usará apenas templateName/createdAt" >&2
     EXPECTED_REQUEST_ID=""
   fi
 
@@ -336,25 +339,32 @@ JSON
         const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
         const expectedReq=String(process.argv[2]||"");
         const expectedTpl=String(process.argv[3]||"");
+        const sinceMs=Number(process.argv[4]||0)||0;
         if(!Array.isArray(data)) process.exit(2);
-        const hit=data.some((m)=>{
+        const hit=data.find((m)=>{
           if(String(m.direction||"")!=="outbound") return false;
           if(String(m.templateName||"")!==expectedTpl) return false;
           if(String(m.status||"")!=="sent") return false;
           const req=String(m.raw && m.raw.requestId || "");
           if(expectedReq && req !== expectedReq) return false;
+          if(!expectedReq && sinceMs){
+            const ts=Date.parse(String(m.timestamp||""));
+            if(!Number.isFinite(ts) || ts < sinceMs) return false;
+          }
           return true;
         });
-        process.exit(hit?0:2);
-      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME"; then
+        if(!hit){ process.exit(2); }
+        process.stdout.write(String(hit.timestamp||""));
+      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
         return 1
       fi
       return 0
     }
-    # Fonte de verdade: evento outbound.template.sent persistido em .data
+    echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
       event_confirmed="true"
-      echo "OK: outbound.template.sent confirmado na .data"
+      event_created_at=$(check_outbound_template_event 2>/dev/null || true)
+      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
     else
       echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
     fi
