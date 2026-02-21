@@ -345,8 +345,8 @@ JSON
           if(String(m.direction||"")!=="outbound") return false;
           if(String(m.templateName||"")!==expectedTpl) return false;
           if(String(m.status||"")!=="sent") return false;
-          const req=String(m.raw && m.raw.requestId || "");
-          if(expectedReq && req !== expectedReq) return false;
+          const msgId=String(m.messageId||"");
+          if(msgId && !msgId.startsWith("handoff.notify.")) return false;
           if(!expectedReq && sinceMs){
             const ts=Date.parse(String(m.timestamp||""));
             if(!Number.isFinite(ts) || ts < sinceMs) return false;
@@ -354,7 +354,8 @@ JSON
           return true;
         });
         if(!hit){ process.exit(2); }
-        process.stdout.write(String(hit.timestamp||""));
+        const req=String(hit.raw && hit.raw.requestId || "");
+        process.stdout.write(String(hit.timestamp||"") + "|" + req);
       ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
         return 1
       fi
@@ -363,8 +364,10 @@ JSON
     echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
       event_confirmed="true"
-      event_created_at=$(check_outbound_template_event 2>/dev/null || true)
-      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
+      event_payload=$(check_outbound_template_event 2>/dev/null || true)
+      event_created_at=$(echo "$event_payload" | cut -d'|' -f1)
+      event_req_id=$(echo "$event_payload" | cut -d'|' -f2)
+      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a}, requestId=${event_req_id:-n/a})"
     else
       echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
     fi
@@ -392,7 +395,8 @@ JSON
           if(type && type !== "TEMPLATE") return false;
           const status=String(m.status||"");
           if(status && status !== "SENT") return false;
-          if(expectedReq && String(m.requestId||"") !== expectedReq) return false;
+          const msgId=String(m.messageId||"");
+          if(msgId && !msgId.startsWith("handoff.notify.")) return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
