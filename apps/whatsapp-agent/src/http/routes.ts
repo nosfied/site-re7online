@@ -533,11 +533,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
         ]
-          .sort((a, b) =>
-            order === "asc"
-              ? Number(a.createdAt) - Number(b.createdAt)
-              : Number(b.createdAt) - Number(a.createdAt)
-          )
+          .sort((a, b) => {
+            const aTs =
+              a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
+            const bTs =
+              b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
+            const aValid = Number.isFinite(aTs);
+            const bValid = Number.isFinite(bTs);
+            if (!aValid && !bValid) return 0;
+            if (!aValid) return 1;
+            if (!bValid) return -1;
+            return order === "asc" ? aTs - bTs : bTs - aTs;
+          })
           .slice(0, limit);
 
         json(res, 200, {
