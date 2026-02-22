@@ -28,6 +28,7 @@ import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
+import { getDefaultTenant } from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
   resolveTemplateForIntent,
@@ -115,6 +116,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     method: meta?.method,
     requestId: meta?.requestId,
   });
+
+  const tenant = await getDefaultTenant();
+  const tenantAllowlist = (tenant?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+    .map((value: string) => normalizeWaId(value))
+    .filter(Boolean);
+  const tenantHandoffAttendantWaid =
+    tenant?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+  const tenantHandoffTemplateName =
+    tenant?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
 
   const attemptTemplateFallback = async (params: {
     waId: string;
@@ -505,6 +515,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     intent: string;
     schedule: string;
     snippet: string;
+    templateName?: string;
     requestId?: string;
   }) => {
     const nowIso = new Date().toISOString();
@@ -631,7 +642,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       requestId: params.requestId,
     });
 
-    const templateName = env.HANDOFF_TEMPLATE_NAME || "";
+    const templateName = (params.templateName ?? env.HANDOFF_TEMPLATE_NAME) || "";
     const templateLang = env.HANDOFF_TEMPLATE_LANG || "";
     if (!templateName || !templateLang) {
       logger.error({
@@ -1027,9 +1038,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const normalizedFrom = normalizeWaId(message.from);
-    const allowlistEnabled = env.WHATSAPP_ALLOWLIST.length > 0;
+    logger.info({
+      event: "tenant.resolved",
+      tenantId: tenant?.id ?? "default",
+      waId: maskNumber(normalizedFrom),
+      requestId: meta?.requestId,
+    });
+    const allowlistEnabled = tenantAllowlist.length > 0;
     const allowlistHit = allowlistEnabled
-      ? env.WHATSAPP_ALLOWLIST.includes(normalizedFrom)
+      ? tenantAllowlist.includes(normalizedFrom)
       : true;
     const status = allowlistHit ? "received" : "ignored";
 
@@ -1037,7 +1054,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       event: "allowlist.check",
       from: normalizedFrom,
       allowlistEnabled,
-      allowlistCount: env.WHATSAPP_ALLOWLIST.length,
+      allowlistCount: tenantAllowlist.length,
       hit: allowlistHit,
       route: meta?.route,
       method: meta?.method,
@@ -1045,7 +1062,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
     await persistEventSafe(
       "allowlist.check",
-      { from: normalizedFrom, allowlistEnabled, allowlistCount: env.WHATSAPP_ALLOWLIST.length, hit: allowlistHit },
+      { from: normalizedFrom, allowlistEnabled, allowlistCount: tenantAllowlist.length, hit: allowlistHit },
       normalizedFrom,
       message.messageId
     );
@@ -1999,8 +2016,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          const notifyKey = `${normalizedFrom}|${env.HANDOFF_ATTENDANT_WAID}|${message.messageId}|${env.HANDOFF_TEMPLATE_NAME}`;
-          if (env.HANDOFF_ENABLED && env.HANDOFF_ATTENDANT_WAID) {
+          const notifyKey = `${normalizedFrom}|${tenantHandoffAttendantWaid}|${message.messageId}|${tenantHandoffTemplateName}`;
+          if (env.HANDOFF_ENABLED && tenantHandoffAttendantWaid) {
             if (updatedConversation.lastHandoffDemoScheduledKey === notifyKey) {
               logger.info({
                 event: "handoff.notify_dedup",
@@ -2014,11 +2031,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               const snippet =
                 message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
               await notifyAttendantDemoScheduled({
-                attendantWaId: env.HANDOFF_ATTENDANT_WAID,
+                attendantWaId: tenantHandoffAttendantWaid,
                 leadWaId: normalizedFrom,
                 intent: updatedConversation.intent ?? "unknown",
                 schedule: scheduleText,
                 snippet,
+                templateName: tenantHandoffTemplateName,
                 requestId: meta?.requestId,
               });
               updatedConversation = {
