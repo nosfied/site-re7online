@@ -198,11 +198,7 @@ run_once() {
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
-<<<<<<< HEAD
-  local EXPECTED_REQUEST_ID
-=======
   local SCHEDULE_REQUEST_ID
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
   local EVENTS_FILE
   RUN_ID="${RUN_ID:-$(date +%s)$RANDOM}"
   RID="${RID:-$RUN_ID}"
@@ -302,13 +298,8 @@ JSON
 )
   post_webhook "$payload_demo"
 
-<<<<<<< HEAD
-  log_step "B2: capturar requestId do agendamento"
-  EXPECTED_REQUEST_ID=""
-=======
   log_step "B2: capturar requestId do agendamento (debug-only)"
   SCHEDULE_REQUEST_ID=""
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
   LEAD_REQ_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-req-${RID}.json"
   capture_schedule_request_id() {
     curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
@@ -316,11 +307,7 @@ JSON
     if ! grep -q '"ok":true' "$LEAD_REQ_FILE"; then
       return 1
     fi
-<<<<<<< HEAD
-    EXPECTED_REQUEST_ID=$(node -e '
-=======
     SCHEDULE_REQUEST_ID=$(node -e '
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
       const fs=require("fs");
       const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
       const items=data.items||[];
@@ -334,17 +321,11 @@ JSON
     ' "$LEAD_REQ_FILE" "$RID") || return 1
     return 0
   }
-<<<<<<< HEAD
-  if ! poll_until "requestId do agendamento não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
-    echo "WARN: requestId do agendamento não encontrado; Step C usará apenas templateName/createdAt" >&2
-    EXPECTED_REQUEST_ID=""
-=======
   if poll_until "schedule requestId não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
     echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}"
   else
     echo "WARN: scheduleRequestId não encontrado (debug-only)" >&2
     SCHEDULE_REQUEST_ID=""
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
   fi
 
   log_step "C: validar template no atendente (janela fechada)"
@@ -358,39 +339,18 @@ JSON
       if ! node -e '
         const fs=require("fs");
         const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-<<<<<<< HEAD
-        const expectedReq=String(process.argv[2]||"");
-        const expectedTpl=String(process.argv[3]||"");
-        const sinceMs=Number(process.argv[4]||0)||0;
-=======
         const expectedTpl=String(process.argv[2]||"");
         const sinceMs=Number(process.argv[3]||0)||0;
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
         if(!Array.isArray(data)) process.exit(2);
         const hit=data.find((m)=>{
           if(String(m.direction||"")!=="outbound") return false;
           if(String(m.templateName||"")!==expectedTpl) return false;
           if(String(m.status||"")!=="sent") return false;
           const msgId=String(m.messageId||"");
-<<<<<<< HEAD
-          if(msgId && !msgId.startsWith("handoff.notify.")) return false;
-<<<<<<< HEAD
-          if(!expectedReq && sinceMs){
-            const ts=Date.parse(String(m.timestamp||""));
-            if(!Number.isFinite(ts) || ts < sinceMs) return false;
-          }
-          return true;
-        });
-        if(!hit){ process.exit(2); }
-        const req=String(hit.raw && hit.raw.requestId || "");
-        process.stdout.write(String(hit.timestamp||"") + "|" + req);
-      ' "$EVENTS_FILE" "$EXPECTED_REQUEST_ID" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
-=======
-=======
           const rawMeta=String(m.raw && (m.raw.metaMessageId || m.raw.messageId) || "");
           const candidateId = msgId || rawMeta;
-          if(candidateId && !candidateId.startsWith("handoff.notify.")) return false;
->>>>>>> 43d36bc (fix(e2e): accept raw meta id when messageId missing)
+          if(!candidateId) return false;
+          if(!candidateId.startsWith("handoff.notify.")) return false;
           const ts=Date.parse(String(m.timestamp||""));
           if(!Number.isFinite(ts) || ts < sinceMs) return false;
           return true;
@@ -398,7 +358,6 @@ JSON
         if(!hit){ process.exit(2); }
         process.stdout.write(String(hit.timestamp||""));
       ' "$EVENTS_FILE" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
         return 1
       fi
       return 0
@@ -406,15 +365,8 @@ JSON
     echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
       event_confirmed="true"
-<<<<<<< HEAD
-      event_payload=$(check_outbound_template_event 2>/dev/null || true)
-      event_created_at=$(echo "$event_payload" | cut -d'|' -f1)
-      event_req_id=$(echo "$event_payload" | cut -d'|' -f2)
-      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a}, requestId=${event_req_id:-n/a})"
-=======
       event_created_at=$(check_outbound_template_event 2>/dev/null || true)
       echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
     else
       echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
     fi
@@ -429,7 +381,6 @@ JSON
         const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
         const startMs=Number(process.argv[2]||0)||0;
         const expected=String(process.argv[3]||"");
-        const expectedReq=String(process.argv[4]||"");
         const items=(j && (j.items||[]))||[];
         if(!Array.isArray(items)) process.exit(2);
         const hit=items.some((m)=>{
@@ -451,29 +402,11 @@ JSON
           return true;
         });
         process.exit(hit?0:2);
-      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME" "$EXPECTED_REQUEST_ID"; then
+      ' "$ATT_FILE" "$SINCE_EPOCH_MS" "$EXPECTED_TEMPLATE_NAME"; then
         return 1
       fi
       return 0
     }
-<<<<<<< HEAD
-    local try_i
-    for try_i in $(seq 1 "$E2E_STEP_C_TRIES"); do
-      if check_attendant_closed; then
-        echo "OK: template encontrado no atendente"
-        break
-      fi
-      echo "WAIT: template ainda não apareceu no /admin/messages (try ${try_i}/${E2E_STEP_C_TRIES})"
-      sleep "$E2E_STEP_C_SLEEP_SECONDS"
-    done
-    if ! check_attendant_closed; then
-      if [[ "$event_confirmed" == "true" ]]; then
-        echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
-      else
-        echo "FAIL: template do atendente não encontrado após ${E2E_STEP_C_TRIES} tentativas" >&2
-        echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-        echo "expectedRequestId=${EXPECTED_REQUEST_ID}" >&2
-=======
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
       if [[ "$event_confirmed" == "true" ]]; then
         echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
@@ -481,7 +414,6 @@ JSON
         echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
         echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
         echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
->>>>>>> 23616e8 (fix(e2e): remove schedule requestId correlation in Step C)
         echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
         echo "ATT_FILE=${ATT_FILE}" >&2
         print_attendant_headtail "$ATT_FILE"
