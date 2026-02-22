@@ -198,6 +198,8 @@ run_once() {
   local DEMO_REQUESTED
   local DEMO_SCHEDULED
   local EXPECTED_TEMPLATE_NAME
+  local SCHEDULE_REQUEST_ID
+  local EVENTS_FILE
   RUN_ID="${RUN_ID:-$(date +%s)$RANDOM}"
   RID="${RID:-$RUN_ID}"
   START_EPOCH="$(date +%s)"
@@ -205,6 +207,7 @@ run_once() {
   SINCE_EPOCH="$START_EPOCH"
   SINCE_EPOCH_MS=$((SINCE_EPOCH * 1000))
   EXPECTED_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-${HANDOFF_TEMPLATE_NAME:-}}"
+  EVENTS_FILE="${ROOT_DIR}/.data/whatsapp-events.json"
   if [[ -z "$EXPECTED_TEMPLATE_NAME" ]]; then
     echo "FAIL: HANDOFF_TEMPLATE_NAME/HANDOFF_NOTIFY_TEMPLATE_NAME ausente no .env" >&2
     return 1
@@ -295,9 +298,78 @@ JSON
 )
   post_webhook "$payload_demo"
 
+  log_step "B2: capturar requestId do agendamento (debug-only)"
+  SCHEDULE_REQUEST_ID=""
+  LEAD_REQ_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-req-${RID}.json"
+  capture_schedule_request_id() {
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_REQ_FILE"
+    if ! grep -q '"ok":true' "$LEAD_REQ_FILE"; then
+      return 1
+    fi
+    SCHEDULE_REQUEST_ID=$(node -e '
+      const fs=require("fs");
+      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const items=data.items||[];
+      const rid=process.argv[2];
+      let scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid) && i.direction==="OUTBOUND");
+      if(!scheduleItem){
+        scheduleItem=items.find((i)=>String(i.messageId||"").includes("schedule."+rid));
+      }
+      if(!scheduleItem || !scheduleItem.requestId){ process.exit(2); }
+      process.stdout.write(String(scheduleItem.requestId));
+    ' "$LEAD_REQ_FILE" "$RID") || return 1
+    return 0
+  }
+  if poll_until "schedule requestId não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
+    echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}"
+  else
+    echo "WARN: scheduleRequestId não encontrado (debug-only)" >&2
+    SCHEDULE_REQUEST_ID=""
+  fi
+
   log_step "C: validar template no atendente (janela fechada)"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
+    event_confirmed="false"
+    check_outbound_template_event() {
+      if [[ ! -f "$EVENTS_FILE" ]]; then
+        return 1
+      fi
+      if ! node -e '
+        const fs=require("fs");
+        const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+        const expectedTpl=String(process.argv[2]||"");
+        const sinceMs=Number(process.argv[3]||0)||0;
+        if(!Array.isArray(data)) process.exit(2);
+        const hit=data.find((m)=>{
+          if(String(m.direction||"")!=="outbound") return false;
+          if(String(m.templateName||"")!==expectedTpl) return false;
+          if(String(m.status||"")!=="sent") return false;
+          const msgId=String(m.messageId||"");
+          const rawMeta=String(m.raw && (m.raw.metaMessageId || m.raw.messageId) || "");
+          const candidateId = msgId || rawMeta;
+          if(!candidateId) return false;
+          if(!candidateId.startsWith("handoff.notify.")) return false;
+          const ts=Date.parse(String(m.timestamp||""));
+          if(!Number.isFinite(ts) || ts < sinceMs) return false;
+          return true;
+        });
+        if(!hit){ process.exit(2); }
+        process.stdout.write(String(hit.timestamp||""));
+      ' "$EVENTS_FILE" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
+        return 1
+      fi
+      return 0
+    }
+    echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
+    if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
+      event_confirmed="true"
+      event_created_at=$(check_outbound_template_event 2>/dev/null || true)
+      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
+    else
+      echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
+    fi
     check_attendant_closed() {
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
@@ -321,6 +393,10 @@ JSON
           if(type && type !== "TEMPLATE") return false;
           const status=String(m.status||"");
           if(status && status !== "SENT") return false;
+          const msgId=String(m.messageId||"");
+          const rawMeta=String(m.rawPayload && (m.rawPayload.metaMessageId || m.rawPayload.messageId) || "");
+          const candidateId = msgId || rawMeta;
+          if(candidateId && !candidateId.startsWith("handoff.notify.")) return false;
           const ts=Date.parse(m.createdAt||"");
           if(startMs && Number.isFinite(ts) && ts<startMs) return false;
           return true;
@@ -332,13 +408,19 @@ JSON
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
-      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
-      echo "ATT_FILE=${ATT_FILE}" >&2
-      print_attendant_headtail "$ATT_FILE"
-      print_attendant_tail "$ATT_FILE"
-      tail -c 2000 "$ATT_FILE" || true
-      return 1
+      if [[ "$event_confirmed" == "true" ]]; then
+        echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
+      else
+        echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
+        echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+        echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
+        echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
+        echo "ATT_FILE=${ATT_FILE}" >&2
+        print_attendant_headtail "$ATT_FILE"
+        print_attendant_tail "$ATT_FILE"
+        tail -c 2000 "$ATT_FILE" || true
+        return 1
+      fi
     fi
   fi
 

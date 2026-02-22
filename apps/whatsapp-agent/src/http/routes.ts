@@ -8,6 +8,7 @@ import { env } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
+import { getTenants } from "../config/tenantConfig.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -106,6 +107,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         orderBy: { createdAt: "desc" },
       });
       json(res, 200, { items: clients });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/tenants") {
+      const tenants = await getTenants();
+      json(res, 200, {
+        ok: true,
+        count: Object.keys(tenants).length,
+        items: Object.values(tenants),
+      });
       return;
     }
 
@@ -522,11 +533,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
         ]
-          .sort((a, b) =>
-            order === "asc"
-              ? Number(a.createdAt) - Number(b.createdAt)
-              : Number(b.createdAt) - Number(a.createdAt)
-          )
+          .sort((a, b) => {
+            const aTs =
+              a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
+            const bTs =
+              b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
+            const aValid = Number.isFinite(aTs);
+            const bValid = Number.isFinite(bTs);
+            if (!aValid && !bValid) return 0;
+            if (!aValid) return 1;
+            if (!bValid) return -1;
+            return order === "asc" ? aTs - bTs : bTs - aTs;
+          })
           .slice(0, limit);
 
         json(res, 200, {
