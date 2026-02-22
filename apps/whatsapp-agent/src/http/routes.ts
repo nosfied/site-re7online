@@ -522,11 +522,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             rawPayload: includeRaw ? item.rawPayload : undefined,
           })),
         ]
-          .sort((a, b) =>
-            order === "asc"
-              ? Number(a.createdAt) - Number(b.createdAt)
-              : Number(b.createdAt) - Number(a.createdAt)
-          )
+          .sort((a, b) => {
+            const aTs =
+              a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
+            const bTs =
+              b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
+            const safeATs = Number.isFinite(aTs) ? aTs : 0;
+            const safeBTs = Number.isFinite(bTs) ? bTs : 0;
+            return order === "asc" ? safeATs - safeBTs : safeBTs - safeATs;
+          })
           .slice(0, limit);
 
         json(res, 200, {
