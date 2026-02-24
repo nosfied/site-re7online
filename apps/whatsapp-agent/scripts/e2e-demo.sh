@@ -70,6 +70,7 @@ HANDOFF_ENABLED="${HANDOFF_ENABLED:-$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | 
 HANDOFF_ATTENDANT_WAID="${HANDOFF_ATTENDANT_WAID:-$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 HANDOFF_NOTIFY_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-$(grep -E '^HANDOFF_NOTIFY_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 HANDOFF_TEMPLATE_NAME="${HANDOFF_TEMPLATE_NAME:-$(grep -E '^HANDOFF_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+DISABLE_DEBUG_COMMANDS="${DISABLE_DEBUG_COMMANDS:-$(grep -E '^DISABLE_DEBUG_COMMANDS=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -216,12 +217,32 @@ run_once() {
   echo "BASE_URL=${BASE_URL} RANGE=${RANGE} HANDOFF_ENABLED=${HANDOFF_ENABLED} HANDOFF_ATTENDANT_WAID=${HANDOFF_ATTENDANT_WAID} EXPECTED_TEMPLATE_NAME=${EXPECTED_TEMPLATE_NAME}"
   echo "ADMIN_TOKEN=$(redact_token "${ADMIN_TOKEN}")"
 
-  log_step "A: reset e2e state"
+log_step "A: reset e2e state"
   if ! node "${ROOT_DIR}/scripts/reset-e2e-state.mjs" \
     --lead "${WAID}" \
     --attendant "${HANDOFF_ATTENDANT_WAID}" \
     --events; then
     return 1
+  fi
+  if [[ "${DISABLE_DEBUG_COMMANDS:-}" != "true" ]]; then
+    admin_reset_conversation() {
+      local target="$1"
+      curl -s -o /tmp/re7-whatsapp-agent-admin-reset.json -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+        -d "{\"waId\":\"${target}\"}" \
+        "${BASE_URL}/admin/debug/reset-conversation"
+    }
+    local_status=$(admin_reset_conversation "${WAID}" || true)
+    if [[ "${local_status}" != "200" ]]; then
+      echo "WARN: reset-conversation lead falhou (http=${local_status})" >&2
+    fi
+    if [[ -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+      local_status=$(admin_reset_conversation "${HANDOFF_ATTENDANT_WAID}" || true)
+      if [[ "${local_status}" != "200" ]]; then
+        echo "WARN: reset-conversation attendant falhou (http=${local_status})" >&2
+      fi
+    fi
   fi
 
   if [[ "${E2E_RUN_POLICYB}" == "true" ]]; then
