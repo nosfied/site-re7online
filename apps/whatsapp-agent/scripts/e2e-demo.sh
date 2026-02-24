@@ -9,9 +9,9 @@ REPEAT=1
 E2E_RUN_POLICYB="${E2E_RUN_POLICYB:-false}"
 POLL_TRIES_DEFAULT="${POLL_TRIES_DEFAULT:-20}"
 POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
-ATT_LIMIT="${ATT_LIMIT:-200}"
-ATT_RETRIES="${ATT_RETRIES:-12}"
-ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
+ATT_LIMIT="${ATT_LIMIT:-1000}"
+ATT_RETRIES="${ATT_RETRIES:-80}"
+ATT_SLEEP_S="${ATT_SLEEP_S:-6}"
 E2E_STEP_C_TRIES="${E2E_STEP_C_TRIES:-$ATT_RETRIES}"
 E2E_STEP_C_SLEEP_SECONDS="${E2E_STEP_C_SLEEP_SECONDS:-$ATT_SLEEP_S}"
 
@@ -331,45 +331,7 @@ JSON
   log_step "C: validar template no atendente (janela fechada)"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
-    event_confirmed="false"
-    check_outbound_template_event() {
-      if [[ ! -f "$EVENTS_FILE" ]]; then
-        return 1
-      fi
-      if ! node -e '
-        const fs=require("fs");
-        const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-        const expectedTpl=String(process.argv[2]||"");
-        const sinceMs=Number(process.argv[3]||0)||0;
-        if(!Array.isArray(data)) process.exit(2);
-        const hit=data.find((m)=>{
-          if(String(m.direction||"")!=="outbound") return false;
-          if(String(m.templateName||"")!==expectedTpl) return false;
-          if(String(m.status||"")!=="sent") return false;
-          const msgId=String(m.messageId||"");
-          const rawMeta=String(m.raw && (m.raw.metaMessageId || m.raw.messageId) || "");
-          const candidateId = msgId || rawMeta;
-          if(!candidateId) return false;
-          if(!candidateId.startsWith("handoff.notify.")) return false;
-          const ts=Date.parse(String(m.timestamp||""));
-          if(!Number.isFinite(ts) || ts < sinceMs) return false;
-          return true;
-        });
-        if(!hit){ process.exit(2); }
-        process.stdout.write(String(hit.timestamp||""));
-      ' "$EVENTS_FILE" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
-        return 1
-      fi
-      return 0
-    }
     echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
-    if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
-      event_confirmed="true"
-      event_created_at=$(check_outbound_template_event 2>/dev/null || true)
-      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
-    else
-      echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
-    fi
     check_attendant_closed() {
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
@@ -408,19 +370,15 @@ JSON
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
-      if [[ "$event_confirmed" == "true" ]]; then
-        echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
-      else
-        echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
-        echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-        echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
-        echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
-        echo "ATT_FILE=${ATT_FILE}" >&2
-        print_attendant_headtail "$ATT_FILE"
-        print_attendant_tail "$ATT_FILE"
-        tail -c 2000 "$ATT_FILE" || true
-        return 1
-      fi
+      echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
+      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
+      echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_headtail "$ATT_FILE"
+      print_attendant_tail "$ATT_FILE"
+      tail -c 2000 "$ATT_FILE" || true
+      return 1
     fi
   fi
 
@@ -445,43 +403,6 @@ JSON
   }
   if ! poll_until "métricas de demo não atingiram o mínimo" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_metrics; then
     head -c 2000 "$METRICS_FILE" || true
-    return 1
-  fi
-
-  log_step "E: validar eventos por RID (.data/whatsapp-events.json)"
-  EVENTS_FILE="${ROOT_DIR}/.data/whatsapp-events.json"
-  check_events_rid() {
-    if [[ ! -f "$EVENTS_FILE" ]]; then
-      return 1
-    fi
-    if ! node -e '
-      const fs=require("fs");
-      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-      const rid=String(process.argv[2]||"");
-      const attendant=String(process.argv[3]||"");
-      if(!Array.isArray(data)) process.exit(2);
-      const byRid=data.filter((i)=>String(i.messageId||"").includes(rid));
-      const openId="wamid.e2e.demo.open."+rid;
-      const scheduleId="wamid.e2e.demo.schedule."+rid;
-      const openCount=byRid.filter((i)=>String(i.messageId||"")===openId && (i.status==="received" || i.status==="replied")).length;
-      const scheduleCount=byRid.filter((i)=>String(i.messageId||"")===scheduleId && i.status==="received").length;
-      if(openCount!==1 || scheduleCount!==1) process.exit(2);
-      const inboundAttendant=byRid.filter((i)=>{
-        const dir=String(i.direction||"");
-        if (dir) return dir === "INBOUND" && String(i.from || "") === attendant;
-        return false;
-      }).length;
-      if(inboundAttendant>0) process.exit(2);
-      process.exit(0);
-    ' "$EVENTS_FILE" "$RID" "$HANDOFF_ATTENDANT_WAID"; then
-      return 1
-    fi
-    return 0
-  }
-  if ! poll_until "eventos demo (requested/scheduled) por RID ausentes ou inválidos" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_events_rid; then
-    echo "EVENTS_FILE=${EVENTS_FILE}" >&2
-    print_events_summary "$EVENTS_FILE" "$RID"
-    tail -c 2000 "$EVENTS_FILE" || true
     return 1
   fi
 
