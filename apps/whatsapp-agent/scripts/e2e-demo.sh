@@ -287,6 +287,29 @@ log_step "A: reset e2e state"
 JSON
 )
   post_webhook "$payload_open"
+  sleep 2
+  LEAD_OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-open-${RID}.json"
+  wait_lead_open_recorded() {
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_OPEN_FILE"
+    if ! grep -q '"ok":true' "$LEAD_OPEN_FILE"; then
+      return 1
+    fi
+    if ! node -e '
+      const fs=require("fs");
+      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const items=data.items||[];
+      const rid=process.argv[2];
+      const hit=items.some((i)=>String(i.messageId||"").includes("open."+rid) && i.direction==="INBOUND");
+      process.exit(hit?0:2);
+    ' "$LEAD_OPEN_FILE" "$RID"; then
+      return 1
+    fi
+    return 0
+  }
+  if ! poll_until "lead open não registrado (seguindo)" 5 1 wait_lead_open_recorded; then
+    echo "WARN: lead open não confirmado no admin (seguindo)" >&2
+  fi
 
   NEXT_TS=$((NOW_TS + 5))
   payload_demo=$(cat <<JSON
