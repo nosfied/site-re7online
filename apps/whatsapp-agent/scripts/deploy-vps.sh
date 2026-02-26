@@ -1,48 +1,67 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="/opt/re7online/site-re7online"
-APP_DIR="${REPO_DIR}/apps/whatsapp-agent"
+WORKDIR="${WORKDIR:-/opt/re7online/site-re7online}"
+APP_DIR="${WORKDIR}/apps/whatsapp-agent"
+PM2_ID="${PM2_ID:-0}"
 PORT="${PORT:-3001}"
 
-if [[ ! -d "${APP_DIR}" ]]; then
-  echo "Diretorio nao encontrado: ${APP_DIR}"
+log() {
+  echo "[deploy-vps] $*"
+}
+
+log "Starting deploy"
+log "WORKDIR=${WORKDIR}"
+log "APP_DIR=${APP_DIR}"
+log "PM2_ID=${PM2_ID}"
+log "PORT=${PORT}"
+
+if ! command -v pm2 >/dev/null 2>&1; then
+  log "ERROR: pm2 not found in PATH"
   exit 1
 fi
 
-cd "${REPO_DIR}"
-git fetch --all --prune
+if [[ ! -d "${WORKDIR}/.git" ]]; then
+  log "ERROR: WORKDIR is not a git repository: ${WORKDIR}"
+  exit 1
+fi
+
+if [[ ! -d "${APP_DIR}" ]]; then
+  log "ERROR: app directory not found: ${APP_DIR}"
+  exit 1
+fi
+
+log "Step 1/7: git pull --ff-only"
+cd "${WORKDIR}"
 git pull --ff-only
 
+log "Step 2/7: npm ci --include=dev"
 cd "${APP_DIR}"
+npm ci --include=dev
 
-VERIFY_TOKEN=""
-if [ -f ".env" ]; then
-  VERIFY_TOKEN=$(grep -E '^WHATSAPP_VERIFY_TOKEN=' .env | head -n1 | cut -d= -f2-)
-fi
+log "Step 3/7: npm run db:deploy"
+npm run db:deploy
 
-if [ -z "$VERIFY_TOKEN" ]; then
-  echo "Erro: WHATSAPP_VERIFY_TOKEN não encontrado no .env"
-  exit 1
-fi
-
-if [[ -f "package-lock.json" ]]; then
-  npm ci
-else
-  npm install
-fi
-
+log "Step 4/7: npm run build"
 npm run build
 
-if pm2 describe re7-whatsapp-agent >/dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --env production
-else
+log "Step 5/7: pm2 reload/start"
+if pm2 describe "${PM2_ID}" >/dev/null 2>&1; then
+  pm2 reload "${PM2_ID}" --update-env
+elif [[ -f "${APP_DIR}/ecosystem.config.cjs" ]]; then
   pm2 start ecosystem.config.cjs --env production
+else
+  pm2 start dist/index.js --name re7-whatsapp-agent
 fi
 
-pm2 status
+log "Step 6/7: pm2 flush ${PM2_ID}"
+if pm2 describe "${PM2_ID}" >/dev/null 2>&1; then
+  pm2 flush "${PM2_ID}"
+else
+  pm2 flush re7-whatsapp-agent
+fi
 
+log "Step 7/7: health check"
 curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null
-curl -fsS "http://127.0.0.1:${PORT}/webhook?hub.mode=subscribe&hub.verify_token=${VERIFY_TOKEN}&hub.challenge=777" >/dev/null
 
-echo "Deploy concluido com sucesso."
+log "Deploy finished successfully"
