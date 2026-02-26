@@ -613,7 +613,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (!windowOpen) {
-      logger.warn({
+      logger.info({
         event: "handoff.notify.window_closed",
         waId: maskedAttendant,
         leadWaId: maskedLead,
