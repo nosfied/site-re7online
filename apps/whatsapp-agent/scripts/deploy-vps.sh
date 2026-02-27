@@ -62,6 +62,26 @@ else
 fi
 
 log "Step 7/7: health check"
-curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null
+HEALTH_URL="http://127.0.0.1:${PORT}/health"
+HEALTH_OK=false
+for i in $(seq 1 20); do
+  log "health check try ${i}/20"
+  if curl -fsS "${HEALTH_URL}" >/dev/null; then
+    HEALTH_OK=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "${HEALTH_OK}" != "true" ]]; then
+  log "ERROR: health check failed"
+  pm2 status || true
+  pm2 describe "${PM2_ID}" | sed -n '1,200p' || true
+  pm2 logs "${PM2_ID}" --err --lines 200 --nostream || true
+  pm2 logs "${PM2_ID}" --out --lines 80 --nostream || true
+  exit 1
+fi
+
+log "health OK"
 
 log "Deploy finished successfully"
