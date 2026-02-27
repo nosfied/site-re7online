@@ -9,6 +9,7 @@ import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
 import { getTenants } from "../config/tenantConfig.js";
+import { checkRateLimit } from "./rateLimit.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -39,6 +40,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       })
     );
     return;
+  }
+
+  if (pathname.startsWith("/admin/") || pathname.startsWith("/webhook")) {
+    const rate = checkRateLimit(req, pathname);
+    if (rate.limited) {
+      logger.warn({
+        event: "rate.limit.hit",
+        ip: rate.ip,
+        path: pathname,
+        requestId,
+        limit: rate.limit,
+        class: rate.bucketClass,
+        windowMs: rate.windowMs,
+      });
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      json(res, 429, { ok: false, error: "rate_limited", retryAfterSec: rate.retryAfterSec });
+      return;
+    }
   }
 
   if (pathname.startsWith("/admin")) {
