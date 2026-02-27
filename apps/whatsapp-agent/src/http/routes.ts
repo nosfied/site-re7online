@@ -51,8 +51,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         path: pathname,
         requestId,
         limit: rate.limit,
+        class: rate.bucketClass,
+        windowMs: rate.windowMs,
       });
-      json(res, 429, { ok: false, error: "rate_limited" });
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      json(res, 429, { ok: false, error: "rate_limited", retryAfterSec: rate.retryAfterSec });
       return;
     }
   }
