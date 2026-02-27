@@ -1935,7 +1935,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
         const normalizedText = normalizeLite(message.text);
-        const isReschedule = normalizedText.includes("reagendar");
+        const isReschedule = /(reagendar|agendar|marcar|demo|demonstra)/i.test(
+          normalizedText
+        );
         const looksLikeDemoFollowup =
           /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
             normalizedText
