@@ -2133,6 +2133,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             ...updatedConversation,
             leadRequestedAt: undefined,
             leadCapturedAt: nowIso,
+            flow: undefined,
+            flowStep: undefined,
+            answers: undefined,
           };
           leadUpdated = true;
           leadHandled = true;
