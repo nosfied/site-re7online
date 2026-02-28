@@ -1934,12 +1934,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
         const normalizedText = normalizeLite(message.text);
+        const isGreetingOnly =
+          /^(oi|ola|bom dia|boa tarde|boa noite|oi bom dia|oi boa tarde|oi boa noite|ola bom dia|ola boa tarde|ola boa noite)$/i.test(
+            normalizedText
+          );
         const isReschedule = normalizedText.includes("reagendar");
         const looksLikeDemoFollowup =
           /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
             normalizedText
           );
-        if (!isReschedule && looksLikeDemoFollowup) {
+        if (!isReschedule && looksLikeDemoFollowup && !isGreetingOnly) {
           skipDemoReplies = true;
           demoHandled = true;
           flowReplyText = undefined;
@@ -2104,7 +2108,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         const isRecentSchedule =
           !Number.isNaN(scheduledAtMs) && now - scheduledAtMs <= 30 * 60 * 1000;
         const isSimpleAffirmation =
-          /^(sim|ok|beleza|certo|confirmo|confirmado|obrigado|obg|valeu|oi|ola|olá|bom dia|boa tarde|boa noite)$/i.test(
+          /^(sim|ok|beleza|certo|confirmo|confirmado|obrigado|obg|valeu)$/i.test(
             normalizedText
           );
         const isSimpleDecline = /^(nao|não)$/i.test(normalizedText);
@@ -2284,9 +2288,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
-    const lastDemoScheduledAtMs = Date.parse(updatedConversation.lastDemoScheduledAt ?? "");
-    const recentDemoCompletion =
-      !Number.isNaN(lastDemoScheduledAtMs) && now - lastDemoScheduledAtMs <= 30 * 60 * 1000;
 
     if (
       !leadHandled &&
@@ -2295,7 +2296,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled &&
       !leadHandled &&
       !demoAwaitingSchedule &&
-      !recentDemoCompletion &&
       env.WHATSAPP_AI_ENABLED &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
