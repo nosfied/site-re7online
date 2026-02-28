@@ -2064,6 +2064,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           }
           continue;
         }
+        if (!demoHandled && demoResult.type === "requested" && currentStatus === "requested") {
+          demoHandled = true;
+          demoReplyText = "Qual melhor dia e horário para a demonstração?";
+          flowReplyText = undefined;
+        }
         if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {
           updatedConversation = {
             ...updatedConversation,
@@ -2094,6 +2099,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
+        }
+      }
+
+      if (!demoHandled && (updatedConversation.demoStatus ?? "none") === "scheduled") {
+        const normalizedText = normalizeLite(message.text);
+        const scheduledAtMs = Date.parse(updatedConversation.lastDemoScheduledAt ?? "");
+        const isRecentSchedule =
+          !Number.isNaN(scheduledAtMs) && now - scheduledAtMs <= 30 * 60 * 1000;
+        const isSimpleAffirmation =
+          /^(sim|ok|beleza|certo|confirmo|confirmado|obrigado|obg|valeu|oi|ola|olá|bom dia|boa tarde|boa noite)$/i.test(
+            normalizedText
+          );
+        const isSimpleDecline = /^(nao|não)$/i.test(normalizedText);
+        if (isRecentSchedule && (isSimpleAffirmation || isSimpleDecline)) {
+          demoHandled = true;
+          flowReplyText = undefined;
+          demoReplyText = isSimpleDecline
+            ? "Tudo bem. Se quiser reagendar, envie outro dia e horário."
+            : "Seu agendamento já foi registrado. Nosso time confirma com você pelo WhatsApp.";
         }
       }
     }
@@ -2260,6 +2284,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       requestId: meta?.requestId,
     });
 
+    const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
+    const lastDemoScheduledAtMs = Date.parse(updatedConversation.lastDemoScheduledAt ?? "");
+    const recentDemoCompletion =
+      !Number.isNaN(lastDemoScheduledAtMs) && now - lastDemoScheduledAtMs <= 30 * 60 * 1000;
+
     if (
       !leadHandled &&
       !flowResult.handled &&
@@ -2267,6 +2296,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled &&
       !hasDemoSignal &&
       !leadHandled &&
+      !demoAwaitingSchedule &&
+      !recentDemoCompletion &&
       env.WHATSAPP_AI_ENABLED &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
