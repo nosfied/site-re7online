@@ -352,6 +352,11 @@ export function advanceQuoteSiteFlow(
     return { state, handled: false };
   }
 
+  // Do not consume demo scheduling messages as quote answers.
+  if (looksLikeDemoInterruption(text)) {
+    return { state, handled: false };
+  }
+
   const currentStep = state.flowStep ?? 1;
   const nextAnswers = saveFlowAnswer(answers, currentStep, text);
   const nextStep = currentStep + 1;
@@ -435,6 +440,24 @@ function buildQuoteSummary(answers: QuoteSiteAnswers): string {
     "",
     "Posso te enviar uma proposta formal? Qual seu e-mail?",
   ].join("\n");
+}
+
+function looksLikeDemoInterruption(text: string) {
+  if (!text) {
+    return false;
+  }
+  const normalized = text.toLowerCase();
+  const hasDemoKeyword =
+    /(demo|demonstra|agend|reagendar|apresenta|reuni[aã]o|call)/i.test(normalized);
+  const hasDayOrDate =
+    /\b(hoje|amanh[aã]|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/i.test(
+      normalized
+    ) || /\b\d{1,2}\/\d{1,2}\b/.test(normalized);
+  const hasHour =
+    /\b([01]?\d|2[0-3])\s*(h|hs)\b/i.test(normalized) ||
+    /\b([01]?\d|2[0-3]):[0-5]\d\b/.test(normalized);
+
+  return hasDemoKeyword || (hasDayOrDate && hasHour);
 }
 
 export function logConversationWindow(
