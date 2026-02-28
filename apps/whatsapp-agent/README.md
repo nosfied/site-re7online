@@ -188,6 +188,43 @@ Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa o wrapper versionado no repo.
 ./scripts/e2e-demo.sh 558494786787
 ```
 
+## Fluxo Base Validado em Produção
+Fluxo manual aceito como baseline operacional:
+
+1. saudação inicial
+2. pedido de preço de site
+3. captura comercial (`Nome, Cidade e Serviço`)
+4. pedido de demonstração
+5. agendamento de dia/horário
+6. mudança de assunto após agendamento
+
+Roteiro validado no lead de teste:
+```text
+oi
+qual o preço de um site?
+deifson, natal, site
+vcs fazem uma demonstração?
+quarta, 14h, tudo bem?
+vcs tb trabalham com automação?
+```
+
+Critérios de aceite:
+- não ressuscitar o `quote_site` após `lead.captured`
+- não cair no fallback genérico após `lead.demo_scheduled`
+- tratar a última mensagem como assunto novo, sem perder contexto
+- manter handoff do atendente funcionando após `lead.demo_scheduled`
+
+Logs esperados ao validar manualmente:
+- `lead.captured`
+- `lead.demo_requested`
+- `lead.demo_scheduled`
+- `outbound.text.sent`
+
+Logs que não devem aparecer como problema operacional:
+- `Unique constraint failed`
+- `P2002`
+- `db.persist.error`
+
 ## Operação em Produção (Runbook)
 Path: `/opt/re7online/site-re7online/apps/whatsapp-agent`  
 PM2: `re7-whatsapp-agent` (porta 3001)
