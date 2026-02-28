@@ -72,9 +72,27 @@ git rev-parse --show-toplevel
 - `sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check`
 - `REQ="<requestId>" && tail -n 20000 /home/deploy/.pm2/logs/re7-whatsapp-agent-out.log | grep "$REQ"`
 
+## E2E (estabilidade e reset)
+- O E2E usa reset local e, quando habilitado, reset via admin debug.
+- Para habilitar reset via admin (temporário):
+  - `DISABLE_DEBUG_COMMANDS=false`
+  - `ALLOW_ADMIN_DEBUG_IN_PROD=true`
+  - `pm2 reload 0 --update-env`
+- Para desabilitar após testes:
+  - `DISABLE_DEBUG_COMMANDS=true`
+  - `ALLOW_ADMIN_DEBUG_IN_PROD=false`
+  - `pm2 reload 0 --update-env`
+
+## Como confirmar env carregada no PM2
+- `pm2 env 0 | grep -E "DISABLE_DEBUG_COMMANDS|ALLOW_ADMIN_DEBUG_IN_PROD|NODE_ENV"`
+- Se o `.env` mudou e o PM2 não refletiu:
+  - `set -a; source .env; set +a`
+  - `pm2 reload 0 --update-env`
+
 ## Troubleshooting
 - Erro #132001 (template/language inexistente): usar defaults `hello_world` + `en_US`.
-- Erro `tsc: not found` (NODE_ENV=production + omit=dev): `npm install --include=dev`.
+- Erro `TS2688: Cannot find type definition file for 'node'` (NODE_ENV=production + omit=dev):
+  - `NODE_ENV=development npm ci` ou `npm ci --include=dev`.
 
 ## Evidência (requestId real)
 ```

@@ -1,4 +1,5 @@
 import "./bootstrap-env.js";
+import "./processHandlers.js";
 import { createServer } from "./http/server.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
