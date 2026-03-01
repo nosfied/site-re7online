@@ -63,16 +63,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (pathname.startsWith("/admin")) {
     const prisma = getPrisma();
     const query = parseQuery(parsedUrl);
-    const auth = getAdminToken(req);
-    if (!env.ADMIN_TOKEN || auth.token !== env.ADMIN_TOKEN) {
+    const authToken = getAdminToken(req);
+    const adminAuth = await resolveAdminAuth(prisma, authToken.token);
+    if (!adminAuth) {
       json(res, 401, { error: "unauthorized" });
       return;
     }
     logger.info({
       event: "admin.auth",
-      authSource: auth.source,
+      authSource: authToken.source,
+      role: adminAuth.role,
+      clientKey: adminAuth.clientKey ?? null,
       requestId,
     });
+    const tenantAdmin = adminAuth.role === "tenant";
+    const requireSuperadmin = () => {
+      if (!tenantAdmin) return false;
+      json(res, 403, { error: "forbidden" });
+      return true;
+    };
+    const getScopedClientKey = () =>
+      tenantAdmin ? adminAuth.clientKey : String(query.clientKey ?? "default").trim() || "default";
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
@@ -85,6 +96,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "POST" && pathname === "/admin/debug/reset-conversation") {
+      if (requireSuperadmin()) return;
       if (env.DISABLE_DEBUG_COMMANDS) {
         logger.warn({
           event: "admin.debug.blocked",
@@ -121,6 +133,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "GET" && pathname === "/admin/clients") {
+      if (requireSuperadmin()) return;
       const clients = await prisma.client.findMany({
         include: { phoneNumbers: true },
         orderBy: { createdAt: "desc" },
@@ -130,6 +143,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "GET" && pathname === "/admin/tenants") {
+      if (requireSuperadmin()) return;
       const tenants = await getTenants();
       json(res, 200, {
         ok: true,
@@ -140,6 +154,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "POST" && pathname === "/admin/clients") {
+      if (requireSuperadmin()) return;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const clientKey = String(body.clientKey ?? "").trim();
@@ -242,18 +257,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           dbConnected = false;
         }
 
+        const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : undefined;
         const [clientsCount, conversationsCount, inboundCount, outboundCount] = await Promise.all([
-          prisma.client.count(),
-          prisma.conversation.count(),
-          prisma.inboundMessage.count(),
-          prisma.outboundMessage.count(),
+          tenantAdmin ? Promise.resolve(1) : prisma.client.count(),
+          prisma.conversation.count({ where: tenantWhere }),
+          prisma.inboundMessage.count({ where: tenantWhere }),
+          prisma.outboundMessage.count({ where: tenantWhere }),
         ]);
 
         const lastInbound = await prisma.inboundMessage.findFirst({
+          where: tenantWhere,
           orderBy: { createdAt: "desc" },
           select: { createdAt: true, requestId: true },
         });
         const lastOutbound = await prisma.outboundMessage.findFirst({
+          where: tenantWhere,
           orderBy: { createdAt: "desc" },
           select: { createdAt: true, requestId: true },
         });
@@ -270,7 +288,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             pid: process.pid,
           },
           config: {
-            clientKey: env.CLIENT_ID,
+            clientKey: tenantAdmin ? adminAuth.clientKey : env.CLIENT_ID,
             phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || null,
             sandbox: env.WHATSAPP_SANDBOX,
             allowlistEnabled: env.WHATSAPP_ALLOWLIST.length > 0,
@@ -314,8 +332,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : {};
         const failed = await prisma.outboundMessage.findMany({
-          where: { status: "FAILED" },
+          where: { ...tenantWhere, status: "FAILED" },
           orderBy: { createdAt: "desc" },
           take: 20,
           select: {
@@ -334,6 +353,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since24h },
               templateName: { not: null },
             },
@@ -342,6 +362,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since7d },
               templateName: { not: null },
             },
@@ -364,6 +385,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const groups = await prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang", "waId"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since7d },
               templateName: { not: null },
             },
@@ -448,7 +470,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const limitRaw = Number(query.limit ?? 50);
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
         const includeRaw = String(query.includeRaw ?? "false") === "true";
-        const clientKey = String(query.clientKey ?? "default").trim() || "default";
+        const clientKey = getScopedClientKey();
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -607,7 +629,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? new Date(now - 30 * 24 * 60 * 60 * 1000)
                 : new Date(now - 24 * 60 * 60 * 1000);
         const to = new Date(now);
-        const clientKey = String(query.clientKey ?? "default").trim() || "default";
+        const clientKey = getScopedClientKey();
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -759,6 +781,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "POST" && pathname.startsWith("/admin/clients/")) {
+      if (requireSuperadmin()) return;
       const [, , , id, action] = pathname.split("/");
       if (action !== "rotate-token") {
         json(res, 404, { error: "not_found" });
@@ -930,6 +953,22 @@ function getAdminToken(req: IncomingMessage) {
     return { token: "", source: "invalid" as const };
   }
   return { token: token.trim(), source: "authorization" as const };
+}
+
+async function resolveAdminAuth(
+  prisma: ReturnType<typeof getPrisma>,
+  token: string
+): Promise<{ role: "superadmin"; clientId: null; clientKey: null } | { role: "tenant"; clientId: string; clientKey: string } | null> {
+  if (!token) return null;
+  if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) {
+    return { role: "superadmin", clientId: null, clientKey: null };
+  }
+  const client = await prisma.client.findFirst({
+    where: { adminToken: token },
+    select: { id: true, clientKey: true },
+  });
+  if (!client) return null;
+  return { role: "tenant", clientId: client.id, clientKey: client.clientKey };
 }
 
 async function readJsonBody(req: IncomingMessage, res: ServerResponse) {

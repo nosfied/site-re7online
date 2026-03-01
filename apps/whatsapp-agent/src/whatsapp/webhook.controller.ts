@@ -28,7 +28,10 @@ import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
-import { getDefaultTenant } from "../config/tenantConfig.js";
+import {
+  getDefaultTenant,
+  getTenantByClientKeyOrPhoneNumberId,
+} from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
   resolveTemplateForIntent,
@@ -117,14 +120,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     requestId: meta?.requestId,
   });
 
-  const tenant = await getDefaultTenant();
-  const tenantAllowlist = (tenant?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+  let appliedTenantConfig = await getDefaultTenant();
+  let hasResolvedTenantConfig = false;
+  let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
     .map((value: string) => normalizeWaId(value))
     .filter(Boolean);
-  const tenantHandoffAttendantWaid =
-    tenant?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
-  const tenantHandoffTemplateName =
-    tenant?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+  let tenantHandoffAttendantWaid =
+    appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+  let tenantHandoffTemplateName =
+    appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+  let tenantDefaultLanguage =
+    appliedTenantConfig?.defaultLanguage ||
+    env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+    "pt_BR";
 
   const attemptTemplateFallback = async (params: {
     waId: string;
@@ -643,7 +651,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     const templateName = (params.templateName ?? env.HANDOFF_TEMPLATE_NAME) || "";
-    const templateLang = env.HANDOFF_TEMPLATE_LANG || "";
+    const templateLang = env.HANDOFF_TEMPLATE_LANG || tenantDefaultLanguage || "";
     if (!templateName || !templateLang) {
       logger.error({
         event: "handoff.notify.template.failed",
@@ -757,6 +765,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
     tenantClientKey = tenant.clientKey;
+    const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
+      tenantClientKey,
+      phoneNumberId
+    );
+    appliedTenantConfig = resolvedTenantConfig.tenant;
+    hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
+    tenantAllowlist = (
+      appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
+    )
+      .map((value: string) => normalizeWaId(value))
+      .filter(Boolean);
+    tenantHandoffAttendantWaid =
+      appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+    tenantHandoffTemplateName =
+      appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+    tenantDefaultLanguage =
+      appliedTenantConfig?.defaultLanguage ||
+      env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+      "pt_BR";
   } catch (error) {
     logger.error({
       event: "tenant.resolve.error",
@@ -1040,7 +1067,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const normalizedFrom = normalizeWaId(message.from);
     logger.info({
       event: "tenant.resolved",
-      tenantId: tenant?.id ?? "default",
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      hasTenantConfig: hasResolvedTenantConfig,
       waId: maskNumber(normalizedFrom),
       requestId: meta?.requestId,
     });

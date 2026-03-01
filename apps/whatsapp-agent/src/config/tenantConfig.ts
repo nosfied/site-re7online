@@ -74,6 +74,33 @@ export async function getTenant(tenantId: string) {
   return tenants[tenantId];
 }
 
+export async function getTenantByClientKeyOrPhoneNumberId(
+  clientKey?: string | null,
+  phoneNumberId?: string | null
+) {
+  const tenants = await getTenants();
+  const key = (clientKey ?? "").trim();
+  if (key && tenants[key]) {
+    return { tenant: tenants[key], hasTenantConfig: true };
+  }
+
+  const resolvedPhoneNumberId = (phoneNumberId ?? "").trim();
+  if (resolvedPhoneNumberId) {
+    const matchedTenant =
+      Object.values(tenants).find(
+        (tenant) => tenant.metaPhoneNumberId === resolvedPhoneNumberId
+      ) ?? null;
+    if (matchedTenant) {
+      return { tenant: matchedTenant, hasTenantConfig: true };
+    }
+  }
+
+  return {
+    tenant: tenants.default ?? Object.values(tenants)[0] ?? null,
+    hasTenantConfig: false,
+  };
+}
+
 export async function getDefaultTenant() {
   const tenants = await getTenants();
   return tenants.default ?? Object.values(tenants)[0] ?? null;
