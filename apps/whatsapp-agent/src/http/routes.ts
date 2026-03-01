@@ -102,11 +102,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     ) {
       if (requireSuperadmin()) return;
       const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const clientKey = getSuperadminClientKey(req, query);
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
       }
-      const conversation = await jsonFileStorage.getConversation(waId);
+      const conversation = await jsonFileStorage.getConversation(waId, clientKey);
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -114,6 +115,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       logger.info({
         event: "admin.conversation.inspect",
         waId: maskWaId(waId),
+        clientKey,
         authSource: authToken.source,
         requestId,
       });
@@ -140,14 +142,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (requireSuperadmin()) return;
       const parts = pathname.split("/");
       const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
+      const clientKey = getSuperadminClientKey(req, query);
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
       }
-      await jsonFileStorage.deleteConversation(waId);
+      await jsonFileStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.conversation.reset",
         waId: maskWaId(waId),
+        clientKey,
         authSource: authToken.source,
         requestId,
       });
@@ -177,15 +181,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
-      const waId = String(body.waId ?? "").trim();
+      const waId = normalizeWaId(String(body.waId ?? "").trim());
+      const clientKey = String(body.clientKey ?? "default").trim() || "default";
       if (!waId) {
         json(res, 400, { ok: false, error: "bad_request" });
         return;
       }
-      await jsonFileStorage.deleteConversation(waId);
+      await jsonFileStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.debug.reset_conversation",
         waId,
+        clientKey,
         requestId,
       });
       json(res, 200, { ok: true });
@@ -989,6 +995,14 @@ function parseQuery(parsed: URL) {
     query[key] = value;
   }
   return query;
+}
+
+function getSuperadminClientKey(req: IncomingMessage, query: Record<string, string>) {
+  const headerClientKey = req.headers["x-client-key"];
+  if (typeof headerClientKey === "string" && headerClientKey.trim()) {
+    return headerClientKey.trim();
+  }
+  return String(query.clientKey ?? "default").trim() || "default";
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {
