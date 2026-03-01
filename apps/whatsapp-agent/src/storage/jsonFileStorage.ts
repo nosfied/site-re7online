@@ -2,6 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Storage, StoredRecord, MessageStatus } from "./storage.js";
 import { ConversationState, HandoffState } from "../conversation/conversation.types.js";
+import { logger } from "../logger/logger.js";
+import {
+  getClientKeyFromConversationKey,
+  makeConversationKey,
+} from "./conversationKey.js";
 
 const dataDir = path.resolve(process.cwd(), ".data");
 const dataFile = path.join(dataDir, "whatsapp-events.json");
@@ -94,7 +99,11 @@ function normalizeHandoff(
 
 function normalizeConversation(raw: LegacyConversationState): ConversationState {
   const handoff = normalizeHandoff(raw);
+  const derivedClientKey =
+    raw.clientKey ?? getClientKeyFromConversationKey(raw.conversationKey) ?? undefined;
   return {
+    clientKey: derivedClientKey,
+    conversationKey: raw.conversationKey,
     waId: raw.waId,
     firstSeenAt: raw.firstSeenAt,
     lastInboundAt: raw.lastInboundAt,
@@ -138,6 +147,33 @@ async function writeAllConversations(conversations: ConversationState[]) {
   );
 }
 
+function maskWaId(waId: string) {
+  return `***${waId.slice(-4)}`;
+}
+
+function findConversationIndex(
+  conversations: ConversationState[],
+  clientKey: string,
+  waId: string
+) {
+  const conversationKey = makeConversationKey(clientKey, waId);
+  const scopedIndex = conversations.findIndex(
+    (item) =>
+      item.conversationKey === conversationKey ||
+      (item.clientKey === clientKey && item.waId === waId)
+  );
+  if (scopedIndex >= 0) {
+    return { index: scopedIndex, conversationKey, migrated: false };
+  }
+  const legacyIndex = conversations.findIndex(
+    (item) => !item.conversationKey && item.waId === waId
+  );
+  if (legacyIndex >= 0) {
+    return { index: legacyIndex, conversationKey, migrated: true };
+  }
+  return { index: -1, conversationKey, migrated: false };
+}
+
 export const jsonFileStorage: Storage = {
   async saveIncomingMessage(record: StoredRecord) {
     const records = await readAll();
@@ -177,36 +213,99 @@ export const jsonFileStorage: Storage = {
       await writeAll(records);
     }
   },
-  async getConversation(waId: string) {
+  async getConversation(waId: string, clientKey = "default") {
     const conversations = await readAllConversations();
-    return conversations.find((item) => item.waId === waId) ?? null;
+    const found = findConversationIndex(conversations, clientKey, waId);
+    if (found.index < 0) {
+      logger.info({
+        event: "storage.conversation.read",
+        clientKey,
+        waId: maskWaId(waId),
+        found: false,
+      });
+      return null;
+    }
+    const current = conversations[found.index];
+    const nextState: ConversationState = {
+      ...current,
+      clientKey,
+      conversationKey: found.conversationKey,
+    };
+    if (found.migrated) {
+      conversations[found.index] = nextState;
+      await writeAllConversations(conversations);
+      logger.info({
+        event: "storage.conversation.migrated",
+        clientKey,
+        waId: maskWaId(waId),
+      });
+    }
+    logger.info({
+      event: "storage.conversation.read",
+      clientKey,
+      waId: maskWaId(waId),
+      found: true,
+    });
+    return nextState;
   },
   async upsertConversation(state: ConversationState) {
+    const clientKey = state.clientKey ?? "default";
     const conversations = await readAllConversations();
-    const index = conversations.findIndex((item) => item.waId === state.waId);
-    if (index >= 0) {
-      conversations[index] = { ...conversations[index], ...state };
+    const found = findConversationIndex(conversations, clientKey, state.waId);
+    const nextState: ConversationState = {
+      ...state,
+      clientKey,
+      conversationKey: found.conversationKey,
+    };
+    if (found.index >= 0) {
+      conversations[found.index] = { ...conversations[found.index], ...nextState };
     } else {
-      conversations.push(state);
+      conversations.push(nextState);
     }
     await writeAllConversations(conversations);
+    if (found.migrated) {
+      logger.info({
+        event: "storage.conversation.migrated",
+        clientKey,
+        waId: maskWaId(state.waId),
+      });
+    }
+    logger.info({
+      event: "storage.conversation.write",
+      clientKey,
+      waId: maskWaId(state.waId),
+    });
   },
-  async deleteConversation(waId: string) {
+  async deleteConversation(waId: string, clientKey = "default") {
     const conversations = await readAllConversations();
-    const filtered = conversations.filter((item) => item.waId !== waId);
+    const conversationKey = makeConversationKey(clientKey, waId);
+    const filtered = conversations.filter(
+      (item) =>
+        item.conversationKey !== conversationKey &&
+        !(item.clientKey === clientKey && item.waId === waId) &&
+        !(!item.conversationKey && item.waId === waId)
+    );
     if (filtered.length !== conversations.length) {
       await writeAllConversations(filtered);
     }
+    logger.info({
+      event: "storage.conversation.write",
+      clientKey,
+      waId: maskWaId(waId),
+    });
   },
-  async updateConversationWindow(waId: string, lastInboundAt: string) {
+  async updateConversationWindow(waId: string, lastInboundAt: string, clientKey = "default") {
     const conversations = await readAllConversations();
-    const index = conversations.findIndex((item) => item.waId === waId);
+    const found = findConversationIndex(conversations, clientKey, waId);
+    const index = found.index;
     const inboundTime = Number.isNaN(Date.parse(lastInboundAt))
       ? Date.now()
       : Date.parse(lastInboundAt);
     const expiresAt = new Date(inboundTime + 24 * 60 * 60 * 1000).toISOString();
     const existing = index >= 0 ? conversations[index] : null;
     const updated: ConversationState = {
+      clientKey,
+      conversationKey: found.conversationKey,
       waId,
       firstSeenAt: existing?.firstSeenAt ?? lastInboundAt,
       lastInboundAt,
@@ -240,6 +339,18 @@ export const jsonFileStorage: Storage = {
     }
 
     await writeAllConversations(conversations);
+    if (found.migrated) {
+      logger.info({
+        event: "storage.conversation.migrated",
+        clientKey,
+        waId: maskWaId(waId),
+      });
+    }
+    logger.info({
+      event: "storage.conversation.write",
+      clientKey,
+      waId: maskWaId(waId),
+    });
     return updated;
   },
 };

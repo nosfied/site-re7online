@@ -16,10 +16,11 @@ function addHoursIso(timestamp: string, hours: number) {
 
 export async function getOrCreateConversation(
   storage: Storage,
+  clientKey: string,
   waId: string,
   timestamp: string
 ): Promise<ConversationState> {
-  const existing = await storage.getConversation(waId);
+  const existing = await storage.getConversation(waId, clientKey);
   if (existing) {
     return existing;
   }
@@ -28,6 +29,7 @@ export async function getOrCreateConversation(
     ? new Date().toISOString()
     : new Date(Date.parse(timestamp)).toISOString();
   const state: ConversationState = {
+    clientKey,
     waId,
     firstSeenAt,
     lastInboundAt: firstSeenAt,

@@ -38,7 +38,10 @@ import {
   sendTemplate,
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
-import { ConversationIntent } from "../conversation/conversation.types.js";
+import {
+  ConversationIntent,
+  ConversationState,
+} from "../conversation/conversation.types.js";
 import { resolveTenant } from "../tenancy/tenantResolver.js";
 import {
   persistConversationWindow,
@@ -547,7 +550,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     ].join("\n");
 
     const attendantConversation = await storage.getConversation(
-      params.attendantWaId
+      params.attendantWaId,
+      tenantClientKey
     );
     const windowOpen = attendantConversation
       ? isWindowOpen(attendantConversation, Date.now())
@@ -816,6 +820,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
     }
+  };
+  const persistOutboundConversation = async (
+    state: ConversationState,
+    messageId?: string
+  ) => {
+    const nextState = updateOutbound(
+      state,
+      messageId,
+      new Date().toISOString()
+    );
+    await storage.upsertConversation(nextState);
+    return nextState;
   };
 
   await persistEventSafe(
@@ -1098,6 +1114,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const currentConversation = await getOrCreateConversation(
       storage,
+      tenantClientKey,
       normalizedFrom,
       message.timestamp
     );
@@ -1109,6 +1126,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const targetWaId = normalizeWaId(debugCommand.waId);
       const targetConversation = await getOrCreateConversation(
         storage,
+        tenantClientKey,
         targetWaId,
         message.timestamp
       );
@@ -1307,11 +1325,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         const targetConversation = await getOrCreateConversation(
           storage,
+          tenantClientKey,
           targetWaId,
           message.timestamp
         );
         const clearedTarget = clearTemplateNeeded(
-          updateOutbound(targetConversation, result.messageId, new Date().toISOString())
+          await persistOutboundConversation(
+            targetConversation,
+            result.messageId
+          )
         );
         await storage.upsertConversation(clearedTarget);
       } else {
@@ -1694,12 +1716,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               repliedAt: new Date().toISOString(),
               replyType,
             });
-            const outboundConversation = updateOutbound(
+            await persistOutboundConversation(
               updatedConversation,
-              result.messageId,
-              new Date().toISOString()
+              result.messageId
             );
-            await storage.upsertConversation(outboundConversation);
             logger.info({
               event: "reply.sent",
               messageId: message.messageId,
@@ -2394,12 +2414,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             repliedAt: new Date().toISOString(),
             replyType,
           });
-          const outboundConversation = updateOutbound(
+          await persistOutboundConversation(
             updatedConversation,
-            result.messageId,
-            new Date().toISOString()
+            result.messageId
           );
-          await storage.upsertConversation(outboundConversation);
           logger.info({
             event: "reply.sent",
             messageId: message.messageId,
