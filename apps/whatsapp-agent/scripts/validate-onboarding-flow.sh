@@ -93,11 +93,13 @@ capture_latest_rid() {
   local tail4 rid
   tail4="$(mask_tail "$WAID")"
   rid="$(
-    pm2 logs 0 --lines 8000 --nostream 2>/dev/null \
-      | rg '"event":"webhook\\.inbound"|"event":"webhook\\.message"' \
-      | rg "\"from\":\"${WAID}\"|\"waId\":\"\\*\\*\\*${tail4}\"" \
-      | tail -n1 \
-      | sed -E 's/.*"requestId":"([^"]+)".*/\1/'
+    {
+      pm2 logs 0 --lines 8000 --nostream 2>/dev/null \
+        | rg '"event":"webhook\\.inbound"|"event":"webhook\\.message"' \
+        | rg "\"from\":\"${WAID}\"|\"waId\":\"\\*\\*\\*${tail4}\"" \
+        | tail -n1 \
+        | sed -E 's/.*"requestId":"([^"]+)".*/\1/'
+    } || true
   )"
   if [[ -z "$rid" ]]; then
     die "nao foi possivel capturar requestId para ${WAID}"
