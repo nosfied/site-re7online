@@ -109,10 +109,20 @@ capture_latest_rid() {
 
 print_rid_trace() {
   local rid="$1"
+  local trace
   log "Trilha do requestId=${rid}"
-  pm2 logs 0 --lines 8000 --nostream 2>/dev/null \
-    | rg -n "$rid" \
-    | rg -n "tenant\\.resolved|allowlist\\.check|conversation\\.intent|lead\\.demo_|handoff\\.notify|reply\\.|outbound\\.|failed|error|skipped|blocked"
+  trace="$(
+    {
+      pm2 logs 0 --lines 8000 --nostream 2>/dev/null \
+        | rg -n "$rid" \
+        | rg -n "tenant\\.resolved|allowlist\\.check|conversation\\.intent|lead\\.demo_|handoff\\.notify|reply\\.|outbound\\.|failed|error|skipped|blocked"
+    } || true
+  )"
+  if [[ -z "$trace" ]]; then
+    log "Nenhuma trilha encontrada para requestId=${rid}"
+    return
+  fi
+  printf '%s\n' "$trace"
 }
 
 step_prompt() {
