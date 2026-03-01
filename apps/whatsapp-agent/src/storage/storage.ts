@@ -31,8 +31,12 @@ export interface Storage {
     extra?: Record<string, unknown>
   ): Promise<void>;
   updateMessage(messageId: string, patch: Partial<StoredRecord>): Promise<void>;
-  getConversation(waId: string): Promise<ConversationState | null>;
+  getConversation(waId: string, clientKey?: string): Promise<ConversationState | null>;
   upsertConversation(state: ConversationState): Promise<void>;
-  updateConversationWindow(waId: string, lastInboundAt: string): Promise<ConversationState>;
-  deleteConversation(waId: string): Promise<void>;
+  updateConversationWindow(
+    waId: string,
+    lastInboundAt: string,
+    clientKey?: string
+  ): Promise<ConversationState>;
+  deleteConversation(waId: string, clientKey?: string): Promise<void>;
 }

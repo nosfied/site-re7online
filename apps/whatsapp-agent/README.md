@@ -71,6 +71,8 @@ sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wra
 - `GET /admin/templates`
 - `GET /admin/messages?waId=...&limit=50`
 - `GET /admin/metrics?range=24h|7d`
+- `GET /admin/conversations/:waId?clientKey=...` (superadmin only; aceita `X-Client-Key`)
+- `POST /admin/conversations/:waId/reset?clientKey=...` (superadmin only; aceita `X-Client-Key`)
 
 Comportamento idempotente do `POST /admin/clients`:
 - Se `clientKey` já existir e `phone_number_id` já estiver vinculado ao mesmo client: retorna 200.
@@ -97,6 +99,12 @@ curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
 curl -s "http://localhost:3001/admin/metrics?range=24h" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s "http://localhost:3001/admin/conversations/558494786787?clientKey=default" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s -X POST "http://localhost:3001/admin/conversations/558494786787/reset?clientKey=default" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
@@ -260,6 +268,15 @@ export ADMIN_TOKEN
 Consultar métricas:
 ```bash
 curl -s "http://127.0.0.1:3001/admin/metrics?range=1h" -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+Inspecionar/resetar conversa por tenant:
+```bash
+curl -s "http://127.0.0.1:3001/admin/conversations/558494786787?clientKey=cliente1" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s -X POST "http://127.0.0.1:3001/admin/conversations/558494786787/reset?clientKey=cliente1" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 Smoke prod (Policy B wrapper + E2E):
