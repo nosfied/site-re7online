@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
-import { env } from "../config/env.js";
+import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
@@ -92,6 +92,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch {
         json(res, 200, { ok: true, db: false });
       }
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/conversations/") &&
+      pathname.split("/").length === 4
+    ) {
+      if (requireSuperadmin()) return;
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const conversation = await jsonFileStorage.getConversation(waId);
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      logger.info({
+        event: "admin.conversation.inspect",
+        waId: maskWaId(waId),
+        authSource: authToken.source,
+        requestId,
+      });
+      json(res, 200, {
+        waId: conversation.waId,
+        intent: conversation.intent ?? null,
+        demoStatus: conversation.demoStatus ?? "none",
+        demoPreferredSchedule: conversation.demoPreferredSchedule ?? null,
+        handoff: conversation.handoff,
+        flow: conversation.flow ?? null,
+        flowStep: conversation.flowStep ?? null,
+        lastInboundAt: conversation.lastInboundAt ?? null,
+        lastOutboundAt: conversation.lastOutboundAt ?? null,
+      });
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversations/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/reset")
+    ) {
+      if (requireSuperadmin()) return;
+      const parts = pathname.split("/");
+      const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      await jsonFileStorage.deleteConversation(waId);
+      logger.info({
+        event: "admin.conversation.reset",
+        waId: maskWaId(waId),
+        authSource: authToken.source,
+        requestId,
+      });
+      json(res, 200, { ok: true, waId });
       return;
     }
 
