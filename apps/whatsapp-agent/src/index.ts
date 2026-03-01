@@ -39,35 +39,106 @@ async function bootstrap() {
   }
 
   try {
-    await getTenants();
+    const tenants = await getTenants();
     const prisma = getPrisma();
-    const client = await prisma.client.upsert({
-      where: { clientKey: "default" },
-      update: {},
-      create: { clientKey: "default", name: "Default" },
-    });
-    if (env.WHATSAPP_PHONE_NUMBER_ID) {
-      const phone = await prisma.waPhoneNumber.upsert({
-        where: { phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID },
-        update: {
-          clientId: client.id,
-          display: env.WHATSAPP_PHONE_NUMBER_ID,
-        },
-        create: {
-          clientId: client.id,
-          phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
-          display: env.WHATSAPP_PHONE_NUMBER_ID,
+    const forcePhoneAssign =
+      String(process.env.BOOTSTRAP_FORCE_PHONE_ASSIGN ?? "").toLowerCase() === "true";
+
+    for (const [clientKey, tenant] of Object.entries(tenants)) {
+      const client = await prisma.client.upsert({
+        where: { clientKey },
+        update: { name: tenant.name || clientKey },
+        create: { clientKey, name: tenant.name || clientKey },
+      });
+
+      const phoneNumberId = (tenant.metaPhoneNumberId ?? "").trim();
+      if (!phoneNumberId) {
+        logger.warn({
+          event: "bootstrap.tenant.skipped",
+          tenantId: tenant.id,
+          clientKey,
+          reason: "missing_phone_number_id",
+        });
+        continue;
+      }
+
+      const existingPhone = await prisma.waPhoneNumber.findUnique({
+        where: { phoneNumberId },
+        include: {
+          client: {
+            select: {
+              id: true,
+              clientKey: true,
+            },
+          },
         },
       });
-      logger.info({
+
+      if (!existingPhone) {
+        const phone = await prisma.waPhoneNumber.create({
+          data: {
+            clientId: client.id,
+            phoneNumberId,
+            display: phoneNumberId,
+          },
+        });
+        logger.info({
+          event: "bootstrap.tenant.ready",
+          tenantId: tenant.id,
+          clientKey,
+          clientId: client.id,
+          phoneNumberId: phone.phoneNumberId,
+          action: "created",
+        });
+        continue;
+      }
+
+      if (existingPhone.clientId === client.id) {
+        const phone = await prisma.waPhoneNumber.update({
+          where: { phoneNumberId },
+          data: { display: phoneNumberId },
+        });
+        logger.info({
+          event: "bootstrap.tenant.ready",
+          tenantId: tenant.id,
+          clientKey,
+          clientId: client.id,
+          phoneNumberId: phone.phoneNumberId,
+          action: "existing",
+        });
+        continue;
+      }
+
+      if (!forcePhoneAssign) {
+        logger.warn({
+          event: "bootstrap.tenant.conflict",
+          tenantId: tenant.id,
+          clientKey,
+          clientId: client.id,
+          phoneNumberId,
+          existingClientId: existingPhone.clientId,
+          existingClientKey: existingPhone.client?.clientKey ?? null,
+          forcePhoneAssign,
+        });
+        continue;
+      }
+
+      const phone = await prisma.waPhoneNumber.update({
+        where: { phoneNumberId },
+        data: {
+          clientId: client.id,
+          display: phoneNumberId,
+        },
+      });
+      logger.warn({
         event: "bootstrap.tenant.ready",
+        tenantId: tenant.id,
+        clientKey,
         clientId: client.id,
         phoneNumberId: phone.phoneNumberId,
-      });
-    } else {
-      logger.warn({
-        event: "bootstrap.tenant.skipped",
-        reason: "missing_phone_number_id",
+        action: "reassigned",
+        previousClientId: existingPhone.clientId,
+        previousClientKey: existingPhone.client?.clientKey ?? null,
       });
     }
   } catch (error) {
