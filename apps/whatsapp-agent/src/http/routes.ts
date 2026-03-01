@@ -220,6 +220,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 4
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, { error: "tenant_not_found" });
+        return;
+      }
+      json(res, 200, { ok: true, tenantId, tenant });
+      return;
+    }
+
     if (req.method === "PUT" && pathname === "/admin/tenants") {
       if (requireSuperadmin()) return;
       const body = await readJsonBody(req, res);
@@ -243,6 +264,62 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.warn({
           event: "admin.tenant.update",
+          authSource: authToken.source,
+          status: "rejected",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 400, { error: "invalid_tenants_config", message: (error as Error).message });
+      }
+      return;
+    }
+
+    if (
+      req.method === "PUT" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 4
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      try {
+        const currentTenants = await getTenants();
+        const previousTenant = currentTenants[tenantId];
+        const nextTenant = {
+          ...(previousTenant ?? {}),
+          ...body,
+          id: String((body.id ?? tenantId)).trim() || tenantId,
+        };
+        const nextTenants = {
+          ...currentTenants,
+          [tenantId]: nextTenant,
+        };
+        const fieldsChanged = diffTenantFields(previousTenant, nextTenant);
+        const saved = await saveTenants(nextTenants);
+        logger.info({
+          event: "admin.tenant.update",
+          tenantId,
+          authSource: authToken.source,
+          fieldsChanged,
+          backupPath: saved.backupPath,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          backupPath: saved.backupPath,
+          fieldsChanged,
+          tenant: saved.tenants[tenantId],
+        });
+      } catch (error) {
+        logger.warn({
+          event: "admin.tenant.update",
+          tenantId,
           authSource: authToken.source,
           status: "rejected",
           message: (error as Error).message,
@@ -1037,6 +1114,43 @@ function getSuperadminClientKey(req: IncomingMessage, query: Record<string, stri
     return headerClientKey.trim();
   }
   return String(query.clientKey ?? "default").trim() || "default";
+}
+
+function diffTenantFields(
+  previousTenant: Record<string, unknown> | undefined,
+  nextTenant: Record<string, unknown>
+) {
+  const fieldsChanged: string[] = [];
+  const previousTemplates =
+    previousTenant && typeof previousTenant.templates === "object" && previousTenant.templates
+      ? (previousTenant.templates as Record<string, unknown>)
+      : {};
+  const nextTemplates =
+    typeof nextTenant.templates === "object" && nextTenant.templates
+      ? (nextTenant.templates as Record<string, unknown>)
+      : {};
+
+  const compareField = (field: string) => {
+    const previousValue = previousTenant?.[field] ?? null;
+    const nextValue = nextTenant[field] ?? null;
+    if (JSON.stringify(previousValue) !== JSON.stringify(nextValue)) {
+      fieldsChanged.push(field);
+    }
+  };
+
+  compareField("id");
+  compareField("name");
+  compareField("metaPhoneNumberId");
+  compareField("allowlist");
+  compareField("handoffAttendantWaid");
+  compareField("defaultLanguage");
+  if (
+    JSON.stringify(previousTemplates.manualHandoff ?? null) !==
+    JSON.stringify(nextTemplates.manualHandoff ?? null)
+  ) {
+    fieldsChanged.push("templates.manualHandoff");
+  }
+  return fieldsChanged;
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {

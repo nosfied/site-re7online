@@ -71,6 +71,8 @@ sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wra
 - `GET /admin/templates`
 - `GET /admin/tenants`
 - `PUT /admin/tenants` (body: objeto completo de tenants; grava com backup em `.data/tenants.json`)
+- `GET /admin/tenants/:tenantId`
+- `PUT /admin/tenants/:tenantId` (body: patch do tenant; grava com backup em `.data/tenants.json`)
 - `GET /admin/messages?waId=...&limit=50`
 - `GET /admin/metrics?range=24h|7d`
 - `GET /admin/conversations/:waId?clientKey=...` (superadmin only; aceita `X-Client-Key`)
