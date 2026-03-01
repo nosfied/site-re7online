@@ -94,7 +94,8 @@ capture_latest_rid() {
   tail4="$(mask_tail "$WAID")"
   rid="$(
     pm2 logs 0 --lines 8000 --nostream 2>/dev/null \
-      | rg "\"requestId\":\"[^\"]+\".*(\"from\":\"${WAID}\"|\"waId\":\"\\*\\*\\*${tail4}\"|\"leadWaId\":\"\\*\\*\\*${tail4}\"|\"toResolved\":\"\\*\\*\\*${tail4}\")|(\"from\":\"${WAID}\"|\"waId\":\"\\*\\*\\*${tail4}\"|\"leadWaId\":\"\\*\\*\\*${tail4}\"|\"toResolved\":\"\\*\\*\\*${tail4}\").*\"requestId\":\"[^\"]+\"" \
+      | rg '"event":"webhook\\.inbound"|"event":"webhook\\.message"' \
+      | rg "\"from\":\"${WAID}\"|\"waId\":\"\\*\\*\\*${tail4}\"" \
       | tail -n1 \
       | sed -E 's/.*"requestId":"([^"]+)".*/\1/'
   )"
