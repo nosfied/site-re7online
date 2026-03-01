@@ -120,7 +120,9 @@ step_prompt() {
   local human_text="$2"
   echo
   log "Envie agora no WhatsApp (${WAID}): ${human_text}"
-  read -r -p "[validate-onboarding] Pressione ENTER apos enviar (${label})... " _
+  if ! read -r -p "[validate-onboarding] Pressione ENTER apos enviar (${label})... " _; then
+    log "STDIN indisponivel; continuando sem bloqueio interativo"
+  fi
 }
 
 summarize() {
