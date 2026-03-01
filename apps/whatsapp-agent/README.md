@@ -69,6 +69,8 @@ sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wra
 - `POST /admin/clients/:id/rotate-token`
 - `GET /admin/status`
 - `GET /admin/templates`
+- `GET /admin/tenants`
+- `PUT /admin/tenants` (body: objeto completo de tenants; grava com backup em `.data/tenants.json`)
 - `GET /admin/messages?waId=...&limit=50`
 - `GET /admin/metrics?range=24h|7d`
 - `GET /admin/conversations/:waId?clientKey=...` (superadmin only; aceita `X-Client-Key`)
@@ -99,6 +101,9 @@ curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
 curl -s "http://localhost:3001/admin/metrics?range=24h" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s http://localhost:3001/admin/tenants \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
 curl -s "http://localhost:3001/admin/conversations/558494786787?clientKey=default" \

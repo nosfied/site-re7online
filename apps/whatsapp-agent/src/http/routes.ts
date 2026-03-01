@@ -8,7 +8,7 @@ import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
-import { getTenants } from "../config/tenantConfig.js";
+import { getTenants, saveTenants } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -214,8 +214,42 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         count: Object.keys(tenants).length,
+        tenants,
         items: Object.values(tenants),
       });
+      return;
+    }
+
+    if (req.method === "PUT" && pathname === "/admin/tenants") {
+      if (requireSuperadmin()) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      try {
+        const saved = await saveTenants(body);
+        logger.info({
+          event: "admin.tenant.update",
+          authSource: authToken.source,
+          tenantCount: Object.keys(saved.tenants).length,
+          backupPath: saved.backupPath,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          count: Object.keys(saved.tenants).length,
+          backupPath: saved.backupPath,
+          tenants: saved.tenants,
+          items: Object.values(saved.tenants),
+        });
+      } catch (error) {
+        logger.warn({
+          event: "admin.tenant.update",
+          authSource: authToken.source,
+          status: "rejected",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 400, { error: "invalid_tenants_config", message: (error as Error).message });
+      }
       return;
     }
 
