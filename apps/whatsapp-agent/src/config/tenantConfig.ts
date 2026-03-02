@@ -10,6 +10,8 @@ export type TenantConfig = {
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
+  quotaMonthlyConversations?: number;
+  quotaWarnAtPct?: number;
   templates: {
     manualHandoff: string;
   };
@@ -99,6 +101,23 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (typeof tenant.defaultLanguage !== "string" || !tenant.defaultLanguage.trim()) {
       throw new Error(`invalid_tenant_language:${key}`);
+    }
+    if (
+      tenant.quotaMonthlyConversations !== undefined &&
+      (typeof tenant.quotaMonthlyConversations !== "number" ||
+        !Number.isFinite(tenant.quotaMonthlyConversations) ||
+        tenant.quotaMonthlyConversations < 0)
+    ) {
+      throw new Error(`invalid_tenant_quota_monthly:${key}`);
+    }
+    if (
+      tenant.quotaWarnAtPct !== undefined &&
+      (typeof tenant.quotaWarnAtPct !== "number" ||
+        !Number.isFinite(tenant.quotaWarnAtPct) ||
+        tenant.quotaWarnAtPct < 0 ||
+        tenant.quotaWarnAtPct > 1)
+    ) {
+      throw new Error(`invalid_tenant_quota_warn:${key}`);
     }
     const templates = tenant.templates as Record<string, unknown> | undefined;
     if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
