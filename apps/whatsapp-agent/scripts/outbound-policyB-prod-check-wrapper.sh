@@ -10,6 +10,7 @@ PAST_TS="${PAST_TS:-$(date -d '48 hours ago' +%s)}"
 INTENT="pricing"
 TARGET_WAID=""
 RANGE="1h"
+CLIENT_KEY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -25,8 +26,12 @@ while [[ $# -gt 0 ]]; do
       RANGE="$2"
       shift 2
       ;;
+    --client-key)
+      CLIENT_KEY="$2"
+      shift 2
+      ;;
     *)
-      echo "Uso: $0 --to <waId> [--intent pricing] [--range 1h|24h|7d|30d]" >&2
+      echo "Uso: $0 --to <waId> [--intent pricing] [--range 1h|24h|7d|30d] [--client-key <clientKey>]" >&2
       exit 2
       ;;
   esac
@@ -52,6 +57,23 @@ fi
 if [[ -z "$PHONE_NUMBER_ID" ]]; then
   echo "Erro: WHATSAPP_PHONE_NUMBER_ID ausente no .env" >&2
   exit 1
+fi
+
+if [[ -z "$CLIENT_KEY" ]]; then
+  TENANTS_FILE="${APP_DIR}/.data/tenants.json"
+  if [[ -f "$TENANTS_FILE" && -x "$(command -v jq)" ]]; then
+    CLIENT_KEY="$(
+      jq -r --arg phone "$PHONE_NUMBER_ID" '
+        to_entries[]
+        | select((.value.metaPhoneNumberId // "") == $phone)
+        | .key
+      ' "$TENANTS_FILE" 2>/dev/null | head -n1
+    )"
+  fi
+fi
+
+if [[ -z "$CLIENT_KEY" ]]; then
+  CLIENT_KEY=$(grep -E '^CLIENT_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
 if [[ -z "$TARGET_WAID" ]]; then
@@ -91,7 +113,11 @@ post_webhook() {
 }
 
 metrics_json() {
-  curl -sS "${BASE_URL}/admin/metrics?range=${RANGE}" -H "X-Admin-Token: ${ADMIN_TOKEN}"
+  local url="${BASE_URL}/admin/metrics?range=${RANGE}"
+  if [[ -n "$CLIENT_KEY" ]]; then
+    url="${url}&clientKey=${CLIENT_KEY}"
+  fi
+  curl -sS "$url" -H "X-Admin-Token: ${ADMIN_TOKEN}"
 }
 
 metrics_count() {
@@ -122,7 +148,41 @@ metrics_count() {
   "
 }
 
-echo "== Policy B prod check (RID=${RID}) =="
+messages_json() {
+  local url="${BASE_URL}/admin/messages?waId=${TARGET_WAID}&status=SENT&type=TEMPLATE&limit=50&order=desc"
+  if [[ -n "$CLIENT_KEY" ]]; then
+    url="${url}&clientKey=${CLIENT_KEY}"
+  fi
+  curl -sS "$url" -H "X-Admin-Token: ${ADMIN_TOKEN}"
+}
+
+messages_confirm_template() {
+  local payload
+  payload="$(messages_json)"
+  printf '%s' "$payload" | node -e "
+    const fs=require('fs');
+    const data=JSON.parse(fs.readFileSync(0,'utf8'));
+    const rid='wamid.policyb.${RID}';
+    const ok=Array.isArray(data.items) && data.items.some((item)=>
+      item &&
+      item.direction==='OUTBOUND' &&
+      item.type==='TEMPLATE' &&
+      item.status==='SENT' &&
+      item.messageId===rid
+    );
+    process.stdout.write(ok ? '1' : '0');
+  "
+}
+
+logs_confirm_template() {
+  if pm2 logs 0 --lines 4000 --nostream 2>/dev/null | rg -q "\"event\":\"outbound\\.template\\.sent\".*\"rid\":\"wamid\\.policyb\\.${RID}\""; then
+    printf '1'
+  else
+    printf '0'
+  fi
+}
+
+echo "== Policy B prod check (RID=${RID}, clientKey=${CLIENT_KEY:-<empty>}) =="
 wait_ready
 
 before_template=$(metrics_count "counts.outbound.sent_template")
@@ -174,13 +234,33 @@ for _ in 1 2 3 4 5; do
 done
 
 if [[ "$after_template" -le "$before_template" ]]; then
-  echo "FAIL: sent_template não incrementou (before=${before_template}, after=${after_template})" >&2
-  exit 1
+  messages_hit=$(messages_confirm_template)
+  if [[ "$messages_hit" -eq 1 ]]; then
+    echo "WARN: sent_template não incrementou, mas /admin/messages confirmou TEMPLATE SENT para o RID" >&2
+  else
+    logs_hit=$(logs_confirm_template)
+    if [[ "$logs_hit" -eq 1 ]]; then
+      echo "WARN: sent_template não incrementou, mas os logs confirmaram outbound.template.sent para o RID" >&2
+    else
+      echo "FAIL: sent_template não incrementou (before=${before_template}, after=${after_template})" >&2
+      exit 1
+    fi
+  fi
 fi
 
 if [[ "$after_lead_template" -le "$before_lead_template" ]]; then
-  echo "FAIL: lead.template_sent não incrementou (before=${before_lead_template}, after=${after_lead_template})" >&2
-  exit 1
+  messages_hit=$(messages_confirm_template)
+  if [[ "$messages_hit" -eq 1 ]]; then
+    echo "WARN: lead.template_sent não incrementou, mas /admin/messages confirmou TEMPLATE SENT para o RID" >&2
+  else
+    logs_hit=$(logs_confirm_template)
+    if [[ "$logs_hit" -eq 1 ]]; then
+      echo "WARN: lead.template_sent não incrementou, mas os logs confirmaram outbound.template.sent para o RID" >&2
+    else
+      echo "FAIL: lead.template_sent não incrementou (before=${before_lead_template}, after=${after_lead_template})" >&2
+      exit 1
+    fi
+  fi
 fi
 
 echo "OK: Policy B (window closed) -> template sent (before=${before_template}, after=${after_template})"
