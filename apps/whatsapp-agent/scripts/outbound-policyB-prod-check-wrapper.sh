@@ -222,45 +222,32 @@ JSON
 
 post_webhook "$payload_inbound"
 
-after_template="$before_template"
-after_lead_template="$before_lead_template"
+messages_hit=0
+logs_hit=0
 for _ in 1 2 3 4 5; do
-  after_template=$(metrics_count "counts.outbound.sent_template")
-  after_lead_template=$(metrics_count "lead.template_sent")
-  if [[ "$after_template" -gt "$before_template" && "$after_lead_template" -gt "$before_lead_template" ]]; then
+  messages_hit=$(messages_confirm_template)
+  if [[ "$messages_hit" -eq 1 ]]; then
+    break
+  fi
+  logs_hit=$(logs_confirm_template)
+  if [[ "$logs_hit" -eq 1 ]]; then
     break
   fi
   sleep 1
 done
 
+if [[ "$messages_hit" -ne 1 && "$logs_hit" -ne 1 ]]; then
+  echo "FAIL: nem /admin/messages nem os logs confirmaram outbound.template.sent para o RID=${RID}" >&2
+  exit 1
+fi
+
+after_template=$(metrics_count "counts.outbound.sent_template")
+after_lead_template=$(metrics_count "lead.template_sent")
 if [[ "$after_template" -le "$before_template" ]]; then
-  messages_hit=$(messages_confirm_template)
-  if [[ "$messages_hit" -eq 1 ]]; then
-    echo "WARN: sent_template não incrementou, mas /admin/messages confirmou TEMPLATE SENT para o RID" >&2
-  else
-    logs_hit=$(logs_confirm_template)
-    if [[ "$logs_hit" -eq 1 ]]; then
-      echo "WARN: sent_template não incrementou, mas os logs confirmaram outbound.template.sent para o RID" >&2
-    else
-      echo "FAIL: sent_template não incrementou (before=${before_template}, after=${after_template})" >&2
-      exit 1
-    fi
-  fi
+  echo "WARN: sent_template não incrementou (before=${before_template}, after=${after_template})" >&2
 fi
-
 if [[ "$after_lead_template" -le "$before_lead_template" ]]; then
-  messages_hit=$(messages_confirm_template)
-  if [[ "$messages_hit" -eq 1 ]]; then
-    echo "WARN: lead.template_sent não incrementou, mas /admin/messages confirmou TEMPLATE SENT para o RID" >&2
-  else
-    logs_hit=$(logs_confirm_template)
-    if [[ "$logs_hit" -eq 1 ]]; then
-      echo "WARN: lead.template_sent não incrementou, mas os logs confirmaram outbound.template.sent para o RID" >&2
-    else
-      echo "FAIL: lead.template_sent não incrementou (before=${before_lead_template}, after=${after_lead_template})" >&2
-      exit 1
-    fi
-  fi
+  echo "WARN: lead.template_sent não incrementou (before=${before_lead_template}, after=${after_lead_template})" >&2
 fi
 
-echo "OK: Policy B (window closed) -> template sent (before=${before_template}, after=${after_template})"
+echo "OK: Policy B (window closed) -> template confirmado por evidência forte (messages/logs)"
