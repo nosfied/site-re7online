@@ -10,7 +10,10 @@ PAST_TS="${PAST_TS:-$(date -d '48 hours ago' +%s)}"
 INTENT="pricing"
 TARGET_WAID=""
 RANGE="1h"
-CLIENT_KEY=""
+TENANT_ID="re7online"
+TEMP_ALLOWLIST=false
+ORIG_ALLOWLIST_JSON='[]'
+ALLOWLIST_TEMP_ADDED=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,12 +29,20 @@ while [[ $# -gt 0 ]]; do
       RANGE="$2"
       shift 2
       ;;
+    --tenant)
+      TENANT_ID="$2"
+      shift 2
+      ;;
+    --temp-allowlist)
+      TEMP_ALLOWLIST=true
+      shift
+      ;;
     --client-key)
-      CLIENT_KEY="$2"
+      TENANT_ID="$2"
       shift 2
       ;;
     *)
-      echo "Uso: $0 --to <waId> [--intent pricing] [--range 1h|24h|7d|30d] [--client-key <clientKey>]" >&2
+      echo "Uso: $0 --to <waId> [--intent pricing] [--range 1h|24h|7d|30d] [--tenant <tenantId>] [--temp-allowlist]" >&2
       exit 2
       ;;
   esac
@@ -58,24 +69,6 @@ if [[ -z "$PHONE_NUMBER_ID" ]]; then
   echo "Erro: WHATSAPP_PHONE_NUMBER_ID ausente no .env" >&2
   exit 1
 fi
-
-if [[ -z "$CLIENT_KEY" ]]; then
-  TENANTS_FILE="${APP_DIR}/.data/tenants.json"
-  if [[ -f "$TENANTS_FILE" && -x "$(command -v jq)" ]]; then
-    CLIENT_KEY="$(
-      jq -r --arg phone "$PHONE_NUMBER_ID" '
-        to_entries[]
-        | select((.value.metaPhoneNumberId // "") == $phone)
-        | .key
-      ' "$TENANTS_FILE" 2>/dev/null | head -n1
-    )"
-  fi
-fi
-
-if [[ -z "$CLIENT_KEY" ]]; then
-  CLIENT_KEY=$(grep -E '^CLIENT_ID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
 if [[ -z "$TARGET_WAID" ]]; then
   echo "Erro: --to <waId> é obrigatório" >&2
   exit 2
@@ -104,6 +97,54 @@ wait_ready() {
   done
 }
 
+fetch_tenant_json() {
+  curl -sS "${BASE_URL}/admin/tenants/${TENANT_ID}" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}"
+}
+
+tenant_allowlist_json() {
+  local payload="$1"
+  printf '%s' "$payload" | node -e "
+    const fs=require('fs');
+    const data=JSON.parse(fs.readFileSync(0,'utf8'));
+    if (!data || data.ok !== true || !data.tenant) process.exit(1);
+    const allowlist=Array.isArray(data.tenant.allowlist) ? data.tenant.allowlist : [];
+    process.stdout.write(JSON.stringify(allowlist));
+  "
+}
+
+allowlist_contains() {
+  local allowlist_json="$1"
+  local waid="$2"
+  TARGET="$waid" printf '%s' "$allowlist_json" | node -e "
+    const fs=require('fs');
+    const target=process.env.TARGET;
+    const allowlist=JSON.parse(fs.readFileSync(0,'utf8'));
+    const hit=Array.isArray(allowlist) && allowlist.some((value)=>String(value)===target);
+    process.stdout.write(hit ? '1' : '0');
+  "
+}
+
+update_tenant_allowlist() {
+  local allowlist_json="$1"
+  local body
+  body=$(printf '{"allowlist":%s}' "$allowlist_json")
+  curl -sS -X PUT "${BASE_URL}/admin/tenants/${TENANT_ID}" \
+    -H "Content-Type: application/json" \
+    -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+    -d "$body" >/dev/null
+}
+
+restore_allowlist() {
+  if [[ "$ALLOWLIST_TEMP_ADDED" != true ]]; then
+    return
+  fi
+  echo "== Policy B prod check cleanup: restaurando allowlist original do tenant ${TENANT_ID} ==" >&2
+  update_tenant_allowlist "$ORIG_ALLOWLIST_JSON" || true
+}
+
+trap restore_allowlist EXIT INT TERM
+
 post_webhook() {
   local payload="$1"
   local signature
@@ -113,10 +154,7 @@ post_webhook() {
 }
 
 metrics_json() {
-  local url="${BASE_URL}/admin/metrics?range=${RANGE}"
-  if [[ -n "$CLIENT_KEY" ]]; then
-    url="${url}&clientKey=${CLIENT_KEY}"
-  fi
+  local url="${BASE_URL}/admin/metrics?range=${RANGE}&clientKey=${TENANT_ID}"
   curl -sS "$url" -H "X-Admin-Token: ${ADMIN_TOKEN}"
 }
 
@@ -125,7 +163,6 @@ metrics_count() {
   local payload
   payload="$(metrics_json)"
 
-  # valida JSON e ok:true (falha com mensagem clara)
   if ! printf '%s' "$payload" | node -e "
     const fs=require('fs');
     const s=fs.readFileSync(0,'utf8');
@@ -134,7 +171,7 @@ metrics_count() {
     if (!data || data.ok !== true) process.exit(1);
   " >/dev/null 2>&1; then
     echo "FAIL: /admin/metrics retornou erro, unauthorized ou JSON inválido" >&2
-    echo "Dica: verifique ADMIN_TOKEN e header X-Admin-Token" >&2
+    echo "Dica: verifique ADMIN_TOKEN e clientKey=${TENANT_ID}" >&2
     exit 1
   fi
 
@@ -149,10 +186,7 @@ metrics_count() {
 }
 
 messages_json() {
-  local url="${BASE_URL}/admin/messages?waId=${TARGET_WAID}&status=SENT&type=TEMPLATE&limit=50&order=desc"
-  if [[ -n "$CLIENT_KEY" ]]; then
-    url="${url}&clientKey=${CLIENT_KEY}"
-  fi
+  local url="${BASE_URL}/admin/messages?waId=${TARGET_WAID}&status=SENT&type=TEMPLATE&limit=50&order=desc&clientKey=${TENANT_ID}"
   curl -sS "$url" -H "X-Admin-Token: ${ADMIN_TOKEN}"
 }
 
@@ -182,7 +216,37 @@ logs_confirm_template() {
   fi
 }
 
-echo "== Policy B prod check (RID=${RID}, clientKey=${CLIENT_KEY:-<empty>}) =="
+tenant_payload="$(fetch_tenant_json)"
+if ! printf '%s' "$tenant_payload" | node -e "
+  const fs=require('fs');
+  const data=JSON.parse(fs.readFileSync(0,'utf8'));
+  if (!data || data.ok !== true || !data.tenant) process.exit(1);
+" >/dev/null 2>&1; then
+  echo "FAIL: tenant ${TENANT_ID} não encontrado ou admin API recusou /admin/tenants/${TENANT_ID}" >&2
+  exit 1
+fi
+
+ORIG_ALLOWLIST_JSON="$(tenant_allowlist_json "$tenant_payload")"
+allowlist_hit="$(allowlist_contains "$ORIG_ALLOWLIST_JSON" "$TARGET_WAID")"
+
+if [[ "$allowlist_hit" != "1" ]]; then
+  if [[ "$TEMP_ALLOWLIST" != true ]]; then
+    echo "FAIL: waId ${TARGET_WAID} não está allowlisted no tenant ${TENANT_ID} -> use --temp-allowlist ou faça PUT /admin/tenants/${TENANT_ID}" >&2
+    exit 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "FAIL: jq é obrigatório para --temp-allowlist; instale jq ou edite a allowlist manualmente" >&2
+    exit 1
+  fi
+  NEXT_ALLOWLIST_JSON="$(
+    printf '%s' "$ORIG_ALLOWLIST_JSON" \
+      | jq -c --arg waid "$TARGET_WAID" '((. // []) + [$waid] | map(tostring) | unique)'
+  )"
+  update_tenant_allowlist "$NEXT_ALLOWLIST_JSON"
+  ALLOWLIST_TEMP_ADDED=true
+fi
+
+echo "== Policy B prod check (RID=${RID}, tenant=${TENANT_ID}, clientKey=${TENANT_ID}, to=${TARGET_WAID}, range=${RANGE}, intent=${INTENT}, tempAllowlist=${TEMP_ALLOWLIST}) =="
 wait_ready
 
 before_template=$(metrics_count "counts.outbound.sent_template")
