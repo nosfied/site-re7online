@@ -97,11 +97,12 @@ function toHandoffStatus(value?: string | null): HandoffStatus {
 
 export function createDualWriteStorage(primary: Storage): Storage {
   const prisma = getPrisma();
-  let cachedClientId: string | null = null;
+  const cachedClientIds = new Map<string, string>();
 
-  async function getClientId() {
-    if (cachedClientId) return cachedClientId;
-    const clientKey = env.CLIENT_KEY || env.CLIENT_ID || "default";
+  async function getClientId(clientKeyFromState?: string | null) {
+    const clientKey = clientKeyFromState || env.CLIENT_KEY || env.CLIENT_ID || "default";
+    const cached = cachedClientIds.get(clientKey);
+    if (cached) return cached;
     const client = await prisma.client.findUnique({
       where: { clientKey },
       select: { id: true },
@@ -114,12 +115,12 @@ export function createDualWriteStorage(primary: Storage): Storage {
       });
       return null;
     }
-    cachedClientId = client.id;
-    return cachedClientId;
+    cachedClientIds.set(clientKey, client.id);
+    return client.id;
   }
 
   async function writeShadow(state: ConversationState) {
-    const clientId = await getClientId();
+    const clientId = await getClientId(state.clientKey);
     if (!clientId) {
       return;
     }
@@ -171,7 +172,7 @@ export function createDualWriteStorage(primary: Storage): Storage {
   }
 
   async function compareShadow(state: ConversationState) {
-    const clientId = await getClientId();
+    const clientId = await getClientId(state.clientKey);
     if (!clientId) return;
     const db = await prisma.conversationRuntimeState.findUnique({
       where: {
@@ -238,8 +239,8 @@ export function createDualWriteStorage(primary: Storage): Storage {
     async updateMessage(messageId: string, patch: Partial<StoredRecord>) {
       await primary.updateMessage(messageId, patch);
     },
-    async getConversation(waId: string) {
-      const state = await primary.getConversation(waId);
+    async getConversation(waId: string, clientKey = "default") {
+      const state = await primary.getConversation(waId, clientKey);
       if (state && env.CONV_STATE_SHADOW_COMPARE) {
         try {
           await compareShadow(state);
@@ -258,13 +259,17 @@ export function createDualWriteStorage(primary: Storage): Storage {
       await primary.upsertConversation(state);
       await writeShadowSafe(state);
     },
-    async updateConversationWindow(waId: string, lastInboundAt: string) {
-      const updated = await primary.updateConversationWindow(waId, lastInboundAt);
+    async updateConversationWindow(waId: string, lastInboundAt: string, clientKey = "default") {
+      const updated = await primary.updateConversationWindow(
+        waId,
+        lastInboundAt,
+        clientKey
+      );
       await writeShadowSafe(updated);
       return updated;
     },
-    async deleteConversation(waId: string) {
-      await primary.deleteConversation(waId);
+    async deleteConversation(waId: string, clientKey = "default") {
+      await primary.deleteConversation(waId, clientKey);
     },
   };
 }

@@ -4,11 +4,12 @@ import { Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { jsonFileStorage } from "../storage/jsonFileStorage.js";
-import { env } from "../config/env.js";
+import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
-import { getTenants } from "../config/tenantConfig.js";
+import { getTenants, saveTenants } from "../config/tenantConfig.js";
+import { checkRateLimit } from "./rateLimit.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -41,19 +42,88 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname.startsWith("/admin/") || pathname.startsWith("/webhook")) {
+    const rate = checkRateLimit(req, pathname);
+    if (rate.limited) {
+      logger.warn({
+        event: "rate.limit.hit",
+        ip: rate.ip,
+        path: pathname,
+        requestId,
+        limit: rate.limit,
+        class: rate.bucketClass,
+        windowMs: rate.windowMs,
+      });
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      json(res, 429, { ok: false, error: "rate_limited", retryAfterSec: rate.retryAfterSec });
+      return;
+    }
+  }
+
   if (pathname.startsWith("/admin")) {
     const prisma = getPrisma();
     const query = parseQuery(parsedUrl);
-    const auth = getAdminToken(req);
-    if (!env.ADMIN_TOKEN || auth.token !== env.ADMIN_TOKEN) {
+    const authToken = getAdminToken(req);
+    const adminAuth = await resolveAdminAuth(prisma, authToken.token);
+    if (!adminAuth) {
       json(res, 401, { error: "unauthorized" });
       return;
     }
     logger.info({
       event: "admin.auth",
-      authSource: auth.source,
+      authSource: authToken.source,
+      role: adminAuth.role,
+      clientKey: adminAuth.clientKey ?? null,
       requestId,
     });
+    const tenantAdmin = adminAuth.role === "tenant";
+    const requestedClientKey = getRequestedClientKey(req, query);
+    const requireSuperadmin = () => {
+      if (!tenantAdmin) return false;
+      logger.warn({
+        event: "rbac.denied",
+        path: pathname,
+        method: req.method ?? "GET",
+        role: adminAuth.role,
+        tokenType: authToken.source,
+        requestedClientKey: requestedClientKey ?? null,
+        clientKeyResolved: adminAuth.clientKey,
+        requestId,
+      });
+      json(res, 403, { error: "forbidden" });
+      return true;
+    };
+    const getScopedClientKey = async () => {
+      if (tenantAdmin) {
+        if (requestedClientKey && requestedClientKey !== adminAuth.clientKey) {
+          logger.warn({
+            event: "rbac.scope_violation",
+            path: pathname,
+            method: req.method ?? "GET",
+            role: adminAuth.role,
+            tokenType: authToken.source,
+            requestedClientKey,
+            clientKeyResolved: adminAuth.clientKey,
+            requestId,
+          });
+          json(res, 403, { error: "forbidden" });
+          return null;
+        }
+        return adminAuth.clientKey;
+      }
+
+      if (requestedClientKey) {
+        return requestedClientKey;
+      }
+
+      const tenants = await getTenants();
+      const tenantKeys = Object.keys(tenants);
+      if (tenantKeys.length !== 1) {
+        json(res, 400, { error: "missing_clientKey" });
+        return null;
+      }
+      return tenantKeys[0];
+    };
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
@@ -65,7 +135,72 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/conversations/") &&
+      pathname.split("/").length === 4
+    ) {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const clientKey = await getScopedClientKey();
+      if (!clientKey) return;
+      const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      logger.info({
+        event: "admin.conversation.inspect",
+        waId: maskWaId(waId),
+        clientKey,
+        authSource: authToken.source,
+        requestId,
+      });
+      json(res, 200, {
+        waId: conversation.waId,
+        intent: conversation.intent ?? null,
+        demoStatus: conversation.demoStatus ?? "none",
+        demoPreferredSchedule: conversation.demoPreferredSchedule ?? null,
+        handoff: conversation.handoff,
+        flow: conversation.flow ?? null,
+        flowStep: conversation.flowStep ?? null,
+        lastInboundAt: conversation.lastInboundAt ?? null,
+        lastOutboundAt: conversation.lastOutboundAt ?? null,
+      });
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversations/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/reset")
+    ) {
+      const parts = pathname.split("/");
+      const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const clientKey = await getScopedClientKey();
+      if (!clientKey) return;
+      await jsonFileStorage.deleteConversation(waId, clientKey);
+      logger.info({
+        event: "admin.conversation.reset",
+        waId: maskWaId(waId),
+        clientKey,
+        authSource: authToken.source,
+        requestId,
+      });
+      json(res, 200, { ok: true, waId });
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/admin/debug/reset-conversation") {
+      if (requireSuperadmin()) return;
       if (env.DISABLE_DEBUG_COMMANDS) {
         logger.warn({
           event: "admin.debug.blocked",
@@ -86,15 +221,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
-      const waId = String(body.waId ?? "").trim();
+      const waId = normalizeWaId(String(body.waId ?? "").trim());
+      const clientKey = String(body.clientKey ?? "default").trim() || "default";
       if (!waId) {
         json(res, 400, { ok: false, error: "bad_request" });
         return;
       }
-      await jsonFileStorage.deleteConversation(waId);
+      await jsonFileStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.debug.reset_conversation",
         waId,
+        clientKey,
         requestId,
       });
       json(res, 200, { ok: true });
@@ -102,6 +239,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "GET" && pathname === "/admin/clients") {
+      if (requireSuperadmin()) return;
       const clients = await prisma.client.findMany({
         orderBy: { createdAt: "desc" },
         select: {
@@ -117,16 +255,129 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "GET" && pathname === "/admin/tenants") {
+      if (requireSuperadmin()) return;
       const tenants = await getTenants();
       json(res, 200, {
         ok: true,
         count: Object.keys(tenants).length,
+        tenants,
         items: Object.values(tenants),
       });
       return;
     }
 
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 4
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, { error: "tenant_not_found" });
+        return;
+      }
+      json(res, 200, { ok: true, tenantId, tenant });
+      return;
+    }
+
+    if (req.method === "PUT" && pathname === "/admin/tenants") {
+      if (requireSuperadmin()) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      try {
+        const saved = await saveTenants(body);
+        logger.info({
+          event: "admin.tenant.update",
+          authSource: authToken.source,
+          tenantCount: Object.keys(saved.tenants).length,
+          backupPath: saved.backupPath,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          count: Object.keys(saved.tenants).length,
+          backupPath: saved.backupPath,
+          tenants: saved.tenants,
+          items: Object.values(saved.tenants),
+        });
+      } catch (error) {
+        logger.warn({
+          event: "admin.tenant.update",
+          authSource: authToken.source,
+          status: "rejected",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 400, { error: "invalid_tenants_config", message: (error as Error).message });
+      }
+      return;
+    }
+
+    if (
+      req.method === "PUT" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 4
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      try {
+        const currentTenants = await getTenants();
+        const previousTenant = currentTenants[tenantId];
+        const nextTenant = {
+          ...(previousTenant ?? {}),
+          ...body,
+          id: String((body.id ?? tenantId)).trim() || tenantId,
+        };
+        const nextTenants = {
+          ...currentTenants,
+          [tenantId]: nextTenant,
+        };
+        const fieldsChanged = diffTenantFields(previousTenant, nextTenant);
+        const saved = await saveTenants(nextTenants);
+        logger.info({
+          event: "admin.tenant.update",
+          tenantId,
+          authSource: authToken.source,
+          fieldsChanged,
+          backupPath: saved.backupPath,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          backupPath: saved.backupPath,
+          fieldsChanged,
+          tenant: saved.tenants[tenantId],
+        });
+      } catch (error) {
+        logger.warn({
+          event: "admin.tenant.update",
+          tenantId,
+          authSource: authToken.source,
+          status: "rejected",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 400, { error: "invalid_tenants_config", message: (error as Error).message });
+      }
+      return;
+    }
+
     if (req.method === "POST" && pathname === "/admin/clients") {
+      if (requireSuperadmin()) return;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const clientKey = String(body.clientKey ?? "").trim();
@@ -229,18 +480,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           dbConnected = false;
         }
 
+        const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : undefined;
         const [clientsCount, conversationsCount, inboundCount, outboundCount] = await Promise.all([
-          prisma.client.count(),
-          prisma.conversation.count(),
-          prisma.inboundMessage.count(),
-          prisma.outboundMessage.count(),
+          tenantAdmin ? Promise.resolve(1) : prisma.client.count(),
+          prisma.conversation.count({ where: tenantWhere }),
+          prisma.inboundMessage.count({ where: tenantWhere }),
+          prisma.outboundMessage.count({ where: tenantWhere }),
         ]);
 
         const lastInbound = await prisma.inboundMessage.findFirst({
+          where: tenantWhere,
           orderBy: { createdAt: "desc" },
           select: { createdAt: true, requestId: true },
         });
         const lastOutbound = await prisma.outboundMessage.findFirst({
+          where: tenantWhere,
           orderBy: { createdAt: "desc" },
           select: { createdAt: true, requestId: true },
         });
@@ -257,7 +511,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             pid: process.pid,
           },
           config: {
-            clientKey: env.CLIENT_ID,
+            clientKey: tenantAdmin ? adminAuth.clientKey : env.CLIENT_ID,
             phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || null,
             sandbox: env.WHATSAPP_SANDBOX,
             allowlistEnabled: env.WHATSAPP_ALLOWLIST.length > 0,
@@ -301,8 +555,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : {};
         const failed = await prisma.outboundMessage.findMany({
-          where: { status: "FAILED" },
+          where: { ...tenantWhere, status: "FAILED" },
           orderBy: { createdAt: "desc" },
           take: 20,
           select: {
@@ -321,6 +576,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since24h },
               templateName: { not: null },
             },
@@ -329,6 +585,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since7d },
               templateName: { not: null },
             },
@@ -351,6 +608,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const groups = await prisma.outboundMessage.groupBy({
             by: ["templateName", "templateLang", "waId"],
             where: {
+              ...tenantWhere,
               createdAt: { gte: since7d },
               templateName: { not: null },
             },
@@ -435,7 +693,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const limitRaw = Number(query.limit ?? 50);
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
         const includeRaw = String(query.includeRaw ?? "false") === "true";
-        const clientKey = String(query.clientKey ?? "default").trim() || "default";
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -594,7 +853,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? new Date(now - 30 * 24 * 60 * 60 * 1000)
                 : new Date(now - 24 * 60 * 60 * 1000);
         const to = new Date(now);
-        const clientKey = String(query.clientKey ?? "default").trim() || "default";
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -918,6 +1178,52 @@ function parseQuery(parsed: URL) {
   return query;
 }
 
+function getRequestedClientKey(req: IncomingMessage, query: Record<string, string>) {
+  const headerClientKey = req.headers["x-client-key"];
+  if (typeof headerClientKey === "string" && headerClientKey.trim()) {
+    return headerClientKey.trim();
+  }
+  const queryClientKey = String(query.clientKey ?? "").trim();
+  return queryClientKey || null;
+}
+
+function diffTenantFields(
+  previousTenant: Record<string, unknown> | undefined,
+  nextTenant: Record<string, unknown>
+) {
+  const fieldsChanged: string[] = [];
+  const previousTemplates =
+    previousTenant && typeof previousTenant.templates === "object" && previousTenant.templates
+      ? (previousTenant.templates as Record<string, unknown>)
+      : {};
+  const nextTemplates =
+    typeof nextTenant.templates === "object" && nextTenant.templates
+      ? (nextTenant.templates as Record<string, unknown>)
+      : {};
+
+  const compareField = (field: string) => {
+    const previousValue = previousTenant?.[field] ?? null;
+    const nextValue = nextTenant[field] ?? null;
+    if (JSON.stringify(previousValue) !== JSON.stringify(nextValue)) {
+      fieldsChanged.push(field);
+    }
+  };
+
+  compareField("id");
+  compareField("name");
+  compareField("metaPhoneNumberId");
+  compareField("allowlist");
+  compareField("handoffAttendantWaid");
+  compareField("defaultLanguage");
+  if (
+    JSON.stringify(previousTemplates.manualHandoff ?? null) !==
+    JSON.stringify(nextTemplates.manualHandoff ?? null)
+  ) {
+    fieldsChanged.push("templates.manualHandoff");
+  }
+  return fieldsChanged;
+}
+
 function json(res: ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(payload));
@@ -940,6 +1246,22 @@ function getAdminToken(req: IncomingMessage) {
     return { token: "", source: "invalid" as const };
   }
   return { token: token.trim(), source: "authorization" as const };
+}
+
+async function resolveAdminAuth(
+  prisma: ReturnType<typeof getPrisma>,
+  token: string
+): Promise<{ role: "superadmin"; clientId: null; clientKey: null } | { role: "tenant"; clientId: string; clientKey: string } | null> {
+  if (!token) return null;
+  if (env.ADMIN_TOKEN && token === env.ADMIN_TOKEN) {
+    return { role: "superadmin", clientId: null, clientKey: null };
+  }
+  const client = await prisma.client.findFirst({
+    where: { adminToken: token },
+    select: { id: true, clientKey: true },
+  });
+  if (!client) return null;
+  return { role: "tenant", clientId: client.id, clientKey: client.clientKey };
 }
 
 async function readJsonBody(req: IncomingMessage, res: ServerResponse) {

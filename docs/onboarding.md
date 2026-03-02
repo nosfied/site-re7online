@@ -47,6 +47,29 @@ git rev-parse --show-toplevel
    - (opcional) `OUTBOUND_TEMPLATES_BY_CLIENT_JSON`
 3) Separar `.data/` por instância (recomendado 1 instância por cliente).
 
+## Onboarding via script
+Caminho oficial para criar tenant novo (DB + `tenants.json`) sem editar arquivo manualmente:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+./scripts/onboard-tenant.ts \
+  --tenant cliente-demo \
+  --name "Cliente Demo" \
+  --client-key cliente-demo \
+  --allowlist 558494786787 \
+  --handoff-attendant-waid 558499049614 \
+  --manual-handoff-template re7_atendente_manual_v1
+```
+
+Observações:
+- usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env`
+- cria/atualiza `Client` no DB
+- gera `adminToken` quando necessário
+- atualiza `tenants.json` via `PUT /admin/tenants/:tenantId`
+- preserva backup/atomic write/logs do caminho já validado
+- se o tenant já existir, exige `--force`
+- `metaPhoneNumberId` só muda com `--force --force-phone-id`
+
 ## Validação (Policy B / fallback)
 - Usar o utilitário operacional:
   - `/usr/local/bin/outbound-policyB-prod-check`
@@ -67,14 +90,32 @@ git rev-parse --show-toplevel
 
 ## Validation commands
 - `pm2 env 0 | grep -E "CLIENT_ID|OUTBOUND_TEMPLATE_"`
-- `sudo -E /usr/local/bin/outbound-policyB-prod-check`
+- `sudo -E /usr/local/bin/outbound-policyB-prod-check --to 558494786787 --intent pricing --range 1h --tenant re7online`
 - Atualizar binário:
-- `sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check`
+- `sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wrapper.sh /usr/local/bin/outbound-policyB-prod-check`
 - `REQ="<requestId>" && tail -n 20000 /home/deploy/.pm2/logs/re7-whatsapp-agent-out.log | grep "$REQ"`
+
+## E2E (estabilidade e reset)
+- O E2E usa reset local e, quando habilitado, reset via admin debug.
+- Para habilitar reset via admin (temporário):
+  - `DISABLE_DEBUG_COMMANDS=false`
+  - `ALLOW_ADMIN_DEBUG_IN_PROD=true`
+  - `pm2 reload 0 --update-env`
+- Para desabilitar após testes:
+  - `DISABLE_DEBUG_COMMANDS=true`
+  - `ALLOW_ADMIN_DEBUG_IN_PROD=false`
+  - `pm2 reload 0 --update-env`
+
+## Como confirmar env carregada no PM2
+- `pm2 env 0 | grep -E "DISABLE_DEBUG_COMMANDS|ALLOW_ADMIN_DEBUG_IN_PROD|NODE_ENV"`
+- Se o `.env` mudou e o PM2 não refletiu:
+  - `set -a; source .env; set +a`
+  - `pm2 reload 0 --update-env`
 
 ## Troubleshooting
 - Erro #132001 (template/language inexistente): usar defaults `hello_world` + `en_US`.
-- Erro `tsc: not found` (NODE_ENV=production + omit=dev): `npm install --include=dev`.
+- Erro `TS2688: Cannot find type definition file for 'node'` (NODE_ENV=production + omit=dev):
+  - `NODE_ENV=development npm ci` ou `npm ci --include=dev`.
 
 ## Evidência (requestId real)
 ```

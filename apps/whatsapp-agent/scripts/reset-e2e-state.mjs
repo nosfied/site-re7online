@@ -103,6 +103,20 @@ async function resetConversations() {
   if (!Array.isArray(conversations)) return;
 
   const targets = new Set([lead, attendant]);
+  const epochIso = new Date(0).toISOString();
+  const baseConversation = (waId, isAttendant = false) => ({
+    waId,
+    firstSeenAt: epochIso,
+    lastInboundAt: epochIso,
+    window: {
+      isOpen: false,
+      expiresAt: epochIso,
+    },
+    handoff: { status: "none" },
+    demoStatus: "none",
+    answers: {},
+    ...(isAttendant ? { window: { isOpen: false, expiresAt: epochIso } } : {}),
+  });
   const resetKeys = [
     "intent",
     "lastIntent",
@@ -143,6 +157,14 @@ async function resetConversations() {
     }
     return next;
   });
+
+  const existing = new Set(updated.map((conv) => conv.waId));
+  if (!existing.has(lead)) {
+    updated.push(baseConversation(lead, false));
+  }
+  if (!existing.has(attendant)) {
+    updated.push(baseConversation(attendant, true));
+  }
 
   await fs.writeFile(conversationsFile, JSON.stringify(updated, null, 2));
 }

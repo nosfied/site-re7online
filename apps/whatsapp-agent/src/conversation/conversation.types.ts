@@ -21,6 +21,8 @@ export type QuoteSiteAnswers = {
 };
 
 export type ConversationState = {
+  clientKey?: string;
+  conversationKey?: string;
   waId: string;
   firstSeenAt: string;
   lastInboundAt: string;

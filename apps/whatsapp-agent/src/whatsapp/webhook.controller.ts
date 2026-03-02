@@ -28,14 +28,20 @@ import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
-import { getDefaultTenant } from "../config/tenantConfig.js";
+import {
+  getDefaultTenant,
+  getTenantByClientKeyOrPhoneNumberId,
+} from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
   resolveTemplateForIntent,
   sendTemplate,
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
-import { ConversationIntent } from "../conversation/conversation.types.js";
+import {
+  ConversationIntent,
+  ConversationState,
+} from "../conversation/conversation.types.js";
 import { resolveTenant } from "../tenancy/tenantResolver.js";
 import {
   persistConversationWindow,
@@ -117,14 +123,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     requestId: meta?.requestId,
   });
 
-  const tenant = await getDefaultTenant();
-  const tenantAllowlist = (tenant?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+  let appliedTenantConfig = await getDefaultTenant();
+  let hasResolvedTenantConfig = false;
+  let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
     .map((value: string) => normalizeWaId(value))
     .filter(Boolean);
-  const tenantHandoffAttendantWaid =
-    tenant?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
-  const tenantHandoffTemplateName =
-    tenant?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+  let tenantHandoffAttendantWaid =
+    appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+  let tenantHandoffTemplateName =
+    appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+  let tenantDefaultLanguage =
+    appliedTenantConfig?.defaultLanguage ||
+    env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+    "pt_BR";
 
   const attemptTemplateFallback = async (params: {
     waId: string;
@@ -539,7 +550,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     ].join("\n");
 
     const attendantConversation = await storage.getConversation(
-      params.attendantWaId
+      params.attendantWaId,
+      tenantClientKey
     );
     const windowOpen = attendantConversation
       ? isWindowOpen(attendantConversation, Date.now())
@@ -613,7 +625,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (!windowOpen) {
-      logger.warn({
+      logger.info({
         event: "handoff.notify.window_closed",
         waId: maskedAttendant,
         leadWaId: maskedLead,
@@ -643,7 +655,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     const templateName = (params.templateName ?? env.HANDOFF_TEMPLATE_NAME) || "";
-    const templateLang = env.HANDOFF_TEMPLATE_LANG || "";
+    const templateLang = env.HANDOFF_TEMPLATE_LANG || tenantDefaultLanguage || "";
     if (!templateName || !templateLang) {
       logger.error({
         event: "handoff.notify.template.failed",
@@ -757,6 +769,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
     tenantClientKey = tenant.clientKey;
+    const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
+      tenantClientKey,
+      phoneNumberId
+    );
+    appliedTenantConfig = resolvedTenantConfig.tenant;
+    hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
+    tenantAllowlist = (
+      appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
+    )
+      .map((value: string) => normalizeWaId(value))
+      .filter(Boolean);
+    tenantHandoffAttendantWaid =
+      appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+    tenantHandoffTemplateName =
+      appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+    tenantDefaultLanguage =
+      appliedTenantConfig?.defaultLanguage ||
+      env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+      "pt_BR";
   } catch (error) {
     logger.error({
       event: "tenant.resolve.error",
@@ -789,6 +820,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
     }
+  };
+  const persistOutboundConversation = async (
+    state: ConversationState,
+    messageId?: string
+  ) => {
+    const nextState = updateOutbound(
+      state,
+      messageId,
+      new Date().toISOString()
+    );
+    await storage.upsertConversation(nextState);
+    return nextState;
   };
 
   await persistEventSafe(
@@ -1040,7 +1083,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const normalizedFrom = normalizeWaId(message.from);
     logger.info({
       event: "tenant.resolved",
-      tenantId: tenant?.id ?? "default",
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      hasTenantConfig: hasResolvedTenantConfig,
       waId: maskNumber(normalizedFrom),
       requestId: meta?.requestId,
     });
@@ -1069,6 +1114,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const currentConversation = await getOrCreateConversation(
       storage,
+      tenantClientKey,
       normalizedFrom,
       message.timestamp
     );
@@ -1080,6 +1126,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const targetWaId = normalizeWaId(debugCommand.waId);
       const targetConversation = await getOrCreateConversation(
         storage,
+        tenantClientKey,
         targetWaId,
         message.timestamp
       );
@@ -1278,11 +1325,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         const targetConversation = await getOrCreateConversation(
           storage,
+          tenantClientKey,
           targetWaId,
           message.timestamp
         );
         const clearedTarget = clearTemplateNeeded(
-          updateOutbound(targetConversation, result.messageId, new Date().toISOString())
+          await persistOutboundConversation(
+            targetConversation,
+            result.messageId
+          )
         );
         await storage.upsertConversation(clearedTarget);
       } else {
@@ -1665,12 +1716,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               repliedAt: new Date().toISOString(),
               replyType,
             });
-            const outboundConversation = updateOutbound(
+            await persistOutboundConversation(
               updatedConversation,
-              result.messageId,
-              new Date().toISOString()
+              result.messageId
             );
-            await storage.upsertConversation(outboundConversation);
             logger.info({
               event: "reply.sent",
               messageId: message.messageId,
@@ -1930,16 +1979,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let demoHandled = false;
     let demoUpdated = false;
     let skipDemoReplies = false;
+    let hasDemoSignal = false;
 
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
         const normalizedText = normalizeLite(message.text);
+        const isGreetingOnly =
+          /^(oi|ola|bom dia|boa tarde|boa noite|oi bom dia|oi boa tarde|oi boa noite|ola bom dia|ola boa tarde|ola boa noite)$/i.test(
+            normalizedText
+          );
         const isReschedule = normalizedText.includes("reagendar");
         const looksLikeDemoFollowup =
           /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
             normalizedText
           );
-        if (!isReschedule && looksLikeDemoFollowup) {
+        if (!isReschedule && looksLikeDemoFollowup && !isGreetingOnly) {
           skipDemoReplies = true;
           demoHandled = true;
           flowReplyText = undefined;
@@ -1970,6 +2024,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ];
       const normalizedDemoText = normalizeLite(message.text);
       const hasDemoContext = demoContext.some((word) => normalizedDemoText.includes(word));
+      hasDemoSignal = hasDemoContext;
       const isDemoContinuation = (updatedConversation.demoStatus ?? "none") === "requested";
 
       const demoResult =
@@ -2060,6 +2115,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           }
           continue;
         }
+        if (!demoHandled && demoResult.type === "requested" && currentStatus === "requested") {
+          demoHandled = true;
+          demoReplyText = "Qual melhor dia e horário para a demonstração?";
+          flowReplyText = undefined;
+        }
         if (!demoHandled && demoResult.type === "requested" && currentStatus !== "requested") {
           updatedConversation = {
             ...updatedConversation,
@@ -2092,6 +2152,25 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         }
       }
+
+      if (!demoHandled && (updatedConversation.demoStatus ?? "none") === "scheduled") {
+        const normalizedText = normalizeLite(message.text);
+        const scheduledAtMs = Date.parse(updatedConversation.lastDemoScheduledAt ?? "");
+        const isRecentSchedule =
+          !Number.isNaN(scheduledAtMs) && now - scheduledAtMs <= 30 * 60 * 1000;
+        const isSimpleAffirmation =
+          /^(sim|ok|beleza|certo|confirmo|confirmado|obrigado|obg|valeu)$/i.test(
+            normalizedText
+          );
+        const isSimpleDecline = /^(nao|não)$/i.test(normalizedText);
+        if (isRecentSchedule && (isSimpleAffirmation || isSimpleDecline)) {
+          demoHandled = true;
+          flowReplyText = undefined;
+          demoReplyText = isSimpleDecline
+            ? "Tudo bem. Se quiser reagendar, envie outro dia e horário."
+            : "Seu agendamento já foi registrado. Nosso time confirma com você pelo WhatsApp.";
+        }
+      }
     }
 
     if (!demoHandled && message.text && updatedConversation.leadRequestedAt) {
@@ -2109,6 +2188,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             ...updatedConversation,
             leadRequestedAt: undefined,
             leadCapturedAt: nowIso,
+            flow: undefined,
+            flowStep: undefined,
+            answers: undefined,
           };
           leadUpdated = true;
           leadHandled = true;
@@ -2256,12 +2338,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       requestId: meta?.requestId,
     });
 
+    const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
+
     if (
       !leadHandled &&
       !flowResult.handled &&
       !handoffResult.handled &&
       !demoHandled &&
+      !hasDemoSignal &&
       !leadHandled &&
+      !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
@@ -2331,12 +2417,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             repliedAt: new Date().toISOString(),
             replyType,
           });
-          const outboundConversation = updateOutbound(
+          await persistOutboundConversation(
             updatedConversation,
-            result.messageId,
-            new Date().toISOString()
+            result.messageId
           );
-          await storage.upsertConversation(outboundConversation);
           logger.info({
             event: "reply.sent",
             messageId: message.messageId,
@@ -2425,8 +2509,20 @@ function parseDemoIntent(
     "aceito",
     "pode chamar",
     "pode falar",
+    "gostaria",
+    "agendar",
+    "marcar",
   ];
-  if (requirePositive && !positives.some((word) => normalized.includes(word))) {
+  const hasDemoAction =
+    normalized.includes("demo") ||
+    normalized.includes("demonstra") ||
+    normalized.includes("agendar") ||
+    normalized.includes("marcar");
+  if (
+    requirePositive &&
+    !hasDemoAction &&
+    !positives.some((word) => normalized.includes(word))
+  ) {
     return null;
   }
 

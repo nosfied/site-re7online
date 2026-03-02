@@ -23,6 +23,15 @@ function getTenantsPath() {
   return path.join(process.cwd(), ".data", "tenants.json");
 }
 
+function getBackupPath() {
+  const stamp = new Date().toISOString().replace(/[-:.]/g, "").replace("T", "-").slice(0, 15);
+  return path.join(process.cwd(), ".data", `tenants.json.bak.${stamp}`);
+}
+
+async function ensureTenantsDir() {
+  await fs.mkdir(path.dirname(getTenantsPath()), { recursive: true });
+}
+
 function buildDefaultTenant(): TenantConfigMap {
   const tenant: TenantConfig = {
     id: "default",
@@ -57,6 +66,50 @@ async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
   }
 }
 
+function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("invalid_tenants_root");
+  }
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0) {
+    throw new Error("empty_tenants");
+  }
+  for (const [key, value] of entries) {
+    if (!key.trim()) {
+      throw new Error("invalid_tenant_key");
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`invalid_tenant:${key}`);
+    }
+    const tenant = value as Record<string, unknown>;
+    if (typeof tenant.id !== "string" || !tenant.id.trim()) {
+      throw new Error(`invalid_tenant_id:${key}`);
+    }
+    if (typeof tenant.name !== "string" || !tenant.name.trim()) {
+      throw new Error(`invalid_tenant_name:${key}`);
+    }
+    if (typeof tenant.metaPhoneNumberId !== "string") {
+      throw new Error(`invalid_tenant_phone:${key}`);
+    }
+    if (!Array.isArray(tenant.allowlist) || tenant.allowlist.some((item) => typeof item !== "string")) {
+      throw new Error(`invalid_tenant_allowlist:${key}`);
+    }
+    if (typeof tenant.handoffAttendantWaid !== "string") {
+      throw new Error(`invalid_tenant_handoff:${key}`);
+    }
+    if (typeof tenant.defaultLanguage !== "string" || !tenant.defaultLanguage.trim()) {
+      throw new Error(`invalid_tenant_language:${key}`);
+    }
+    const templates = tenant.templates as Record<string, unknown> | undefined;
+    if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
+      throw new Error(`invalid_tenant_templates:${key}`);
+    }
+    if (typeof templates.manualHandoff !== "string" || !templates.manualHandoff.trim()) {
+      throw new Error(`invalid_tenant_manual_handoff:${key}`);
+    }
+  }
+}
+
 export async function getTenants(): Promise<TenantConfigMap> {
   if (cachedTenants) return cachedTenants;
   const fromFile = await loadTenantsFromFile();
@@ -74,7 +127,60 @@ export async function getTenant(tenantId: string) {
   return tenants[tenantId];
 }
 
+export async function getTenantByClientKeyOrPhoneNumberId(
+  clientKey?: string | null,
+  phoneNumberId?: string | null
+) {
+  const tenants = await getTenants();
+  const key = (clientKey ?? "").trim();
+  if (key && tenants[key]) {
+    return { tenant: tenants[key], hasTenantConfig: true };
+  }
+
+  const resolvedPhoneNumberId = (phoneNumberId ?? "").trim();
+  if (resolvedPhoneNumberId) {
+    const matchedTenant =
+      Object.values(tenants).find(
+        (tenant) => tenant.metaPhoneNumberId === resolvedPhoneNumberId
+      ) ?? null;
+    if (matchedTenant) {
+      return { tenant: matchedTenant, hasTenantConfig: true };
+    }
+  }
+
+  return {
+    tenant: tenants.default ?? Object.values(tenants)[0] ?? null,
+    hasTenantConfig: false,
+  };
+}
+
 export async function getDefaultTenant() {
   const tenants = await getTenants();
   return tenants.default ?? Object.values(tenants)[0] ?? null;
+}
+
+export async function saveTenants(nextTenants: unknown) {
+  assertTenantConfigMap(nextTenants);
+  await ensureTenantsDir();
+  const tenantsPath = getTenantsPath();
+  const backupPath = getBackupPath();
+  try {
+    const current = await fs.readFile(tenantsPath, "utf-8");
+    await fs.writeFile(backupPath, current, "utf-8");
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const payload = JSON.stringify(nextTenants, null, 2);
+  const tempPath = `${tenantsPath}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tempPath, payload, "utf-8");
+  await fs.rename(tempPath, tenantsPath);
+  cachedTenants = nextTenants;
+  return {
+    tenants: cachedTenants,
+    backupPath,
+  };
 }

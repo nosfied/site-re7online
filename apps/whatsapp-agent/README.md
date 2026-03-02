@@ -15,8 +15,9 @@ npm run dev
 - `npm run build` → compilar TypeScript
 - `npm run start` → rodar build de produção
 - `scripts/outbound-policyB-prod-check-wrapper.sh` → valida Policy B em produção (janela fechada)
-  (não depende de comandos debug; usa webhook assinado).
-Observação: em produção existe um utilitário operacional em `/usr/local/bin/outbound-policyB-prod-check`.
+  (não depende de comandos debug; usa webhook assinado, `--tenant` e `--temp-allowlist`).
+Observação: em produção o utilitário operacional `/usr/local/bin/outbound-policyB-prod-check`
+deve ser a instalação deste wrapper versionado no repo.
 - `npm run db:migrate` → cria migrations (dev)
 - `npm run db:deploy` → aplica migrations (prod)
 - `npm run db:generate` → gera client Prisma
@@ -69,8 +70,14 @@ sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wra
 - `POST /admin/clients/:id/rotate-token`
 - `GET /admin/status`
 - `GET /admin/templates`
+- `GET /admin/tenants`
+- `PUT /admin/tenants` (body: objeto completo de tenants; grava com backup em `.data/tenants.json`)
+- `GET /admin/tenants/:tenantId`
+- `PUT /admin/tenants/:tenantId` (body: patch do tenant; grava com backup em `.data/tenants.json`)
 - `GET /admin/messages?waId=...&limit=50`
 - `GET /admin/metrics?range=24h|7d`
+- `GET /admin/conversations/:waId?clientKey=...` (superadmin only; aceita `X-Client-Key`)
+- `POST /admin/conversations/:waId/reset?clientKey=...` (superadmin only; aceita `X-Client-Key`)
 
 Comportamento idempotente do `POST /admin/clients`:
 - Se `clientKey` já existir e `phone_number_id` já estiver vinculado ao mesmo client: retorna 200.
@@ -96,7 +103,20 @@ curl -s http://localhost:3001/admin/templates \
 curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
+# superadmin multi-tenant: prefira query ?clientKey=... ou header X-Client-Key
+curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20&clientKey=re7online" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
 curl -s "http://localhost:3001/admin/metrics?range=24h" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s http://localhost:3001/admin/tenants \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s "http://localhost:3001/admin/conversations/558494786787?clientKey=default" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s -X POST "http://localhost:3001/admin/conversations/558494786787/reset?clientKey=default" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
@@ -188,6 +208,43 @@ Funciona com `DISABLE_DEBUG_COMMANDS=true` e usa o wrapper versionado no repo.
 ./scripts/e2e-demo.sh 558494786787
 ```
 
+## Fluxo Base Validado em Produção
+Fluxo manual aceito como baseline operacional:
+
+1. saudação inicial
+2. pedido de preço de site
+3. captura comercial (`Nome, Cidade e Serviço`)
+4. pedido de demonstração
+5. agendamento de dia/horário
+6. mudança de assunto após agendamento
+
+Roteiro validado no lead de teste:
+```text
+oi
+qual o preço de um site?
+deifson, natal, site
+vcs fazem uma demonstração?
+quarta, 14h, tudo bem?
+vcs tb trabalham com automação?
+```
+
+Critérios de aceite:
+- não ressuscitar o `quote_site` após `lead.captured`
+- não cair no fallback genérico após `lead.demo_scheduled`
+- tratar a última mensagem como assunto novo, sem perder contexto
+- manter handoff do atendente funcionando após `lead.demo_scheduled`
+
+Logs esperados ao validar manualmente:
+- `lead.captured`
+- `lead.demo_requested`
+- `lead.demo_scheduled`
+- `outbound.text.sent`
+
+Logs que não devem aparecer como problema operacional:
+- `Unique constraint failed`
+- `P2002`
+- `db.persist.error`
+
 ## Operação em Produção (Runbook)
 Path: `/opt/re7online/site-re7online/apps/whatsapp-agent`  
 PM2: `re7-whatsapp-agent` (porta 3001)
@@ -223,11 +280,25 @@ export ADMIN_TOKEN
 Consultar métricas:
 ```bash
 curl -s "http://127.0.0.1:3001/admin/metrics?range=1h" -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# em multi-tenant, superadmin deve informar clientKey
+curl -s "http://127.0.0.1:3001/admin/metrics?range=1h&clientKey=re7online" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+```
+
+Inspecionar/resetar conversa por tenant:
+```bash
+curl -s "http://127.0.0.1:3001/admin/conversations/558494786787?clientKey=cliente1" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
+curl -s -X POST "http://127.0.0.1:3001/admin/conversations/558494786787/reset?clientKey=cliente1" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 Smoke prod (Policy B wrapper + E2E):
 ```bash
-./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h
+./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h --tenant re7online
+./scripts/outbound-policyB-prod-check-wrapper.sh --to 5511951957784 --intent pricing --range 1h --tenant re7online --temp-allowlist
 ./scripts/e2e-lead-pricing.sh 558494786787 --range 1h
 ./scripts/e2e-demo.sh 558494786787 --range 1h
 ```
