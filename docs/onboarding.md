@@ -67,9 +67,9 @@ git rev-parse --show-toplevel
 
 ## Validation commands
 - `pm2 env 0 | grep -E "CLIENT_ID|OUTBOUND_TEMPLATE_"`
-- `sudo -E /usr/local/bin/outbound-policyB-prod-check`
+- `sudo -E /usr/local/bin/outbound-policyB-prod-check --to 558494786787 --intent pricing --range 1h --tenant re7online`
 - Atualizar binário:
-- `sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check.sh /usr/local/bin/outbound-policyB-prod-check`
+- `sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wrapper.sh /usr/local/bin/outbound-policyB-prod-check`
 - `REQ="<requestId>" && tail -n 20000 /home/deploy/.pm2/logs/re7-whatsapp-agent-out.log | grep "$REQ"`
 
 ## E2E (estabilidade e reset)

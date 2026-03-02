@@ -87,42 +87,10 @@ post_webhook() {
 log_step "A: Policy B (template)"
 if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
   "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
-elif [[ -x "/usr/local/bin/outbound-policyB-prod-check" && "${DISABLE_DEBUG_COMMANDS:-true}" != "true" ]]; then
-  TARGET_WAID="$WAID" RID="$RID" ENV_FILE="$ENV_FILE" BASE_URL="$BASE_URL" \
-    /usr/local/bin/outbound-policyB-prod-check --to "$WAID" --intent pricing
 else
-  echo "SKIP: Policy B legacy prod-check indisponível (ou debug desabilitado). Wrapper não encontrado." >&2
-  PAST_TS=$(date -d '48 hours ago' +%s)
-  payload_policyb=$(cat <<JSON
-{
-  "object": "whatsapp_business_account",
-  "entry": [
-    {
-      "id": "${RID}",
-      "changes": [
-        {
-          "value": {
-            "metadata": { "phone_number_id": "${PHONE_NUMBER_ID}" },
-            "messages": [
-              {
-                "id": "wamid.policyb.${RID}",
-                "from": "${WAID}",
-                "timestamp": "${PAST_TS}",
-                "type": "text",
-                "text": { "body": "quero orçamento" }
-              }
-            ]
-          },
-          "field": "messages"
-        }
-      ]
-    }
-  ]
-}
-JSON
-)
-  post_webhook "$payload_policyb"
-  sleep 1
+  echo "FAIL: wrapper do repo não encontrado em ${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" >&2
+  echo "Dica: rode o E2E a partir do repo ou instale o wrapper versionado em /usr/local/bin/outbound-policyB-prod-check" >&2
+  exit 1
 fi
 
 log_step "B: abrir janela (lead.capture.requested)"
