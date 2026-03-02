@@ -288,11 +288,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         let monthlyUsage: Array<{ clientId: string; used: bigint | number }> = [];
         if (clientIds.length) {
           try {
+            const clientIdsArray = Prisma.sql`ARRAY[${Prisma.join(
+              clientIds.map((id) => Prisma.sql`${id}::uuid`)
+            )}]`;
             monthlyUsage = await prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(
               Prisma.sql`
                 SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
                 FROM "InboundMessage"
-                WHERE "createdAt" >= ${monthStart}
+                WHERE "clientId" = ANY(${clientIdsArray})
+                  AND "createdAt" >= ${monthStart}
                   AND "createdAt" <= ${to}
                 GROUP BY "clientId"
               `
@@ -341,11 +345,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const lastOutboundByClient = new Map(
           lastOutbound.map((row) => [row.clientId, row._max.createdAt ?? null])
         );
-        const clientByIdSet = new Set(clientIds);
         const monthlyUsageByClient = new Map(
-          monthlyUsage
-            .filter((row) => clientByIdSet.has(row.clientId))
-            .map((row) => [row.clientId, Number(row.used)])
+          monthlyUsage.map((row) => [row.clientId, Number(row.used)])
         );
         const outboundByClient = new Map<
           string,
