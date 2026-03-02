@@ -103,8 +103,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/clients") {
       const clients = await prisma.client.findMany({
-        include: { phoneNumbers: true },
         orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          clientKey: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
       json(res, 200, { items: clients });
       return;
@@ -740,17 +746,40 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (req.method === "POST" && pathname.startsWith("/admin/clients/")) {
-      const [, , , id, action] = pathname.split("/");
+      const [, , , clientRef, action] = pathname.split("/");
       if (action !== "rotate-token") {
         json(res, 404, { error: "not_found" });
         return;
       }
-      const newToken = crypto.randomBytes(24).toString("hex");
-      const updated = await prisma.client.update({
-        where: { id },
+      const client =
+        (await prisma.client.findUnique({
+          where: { clientKey: clientRef },
+          select: { id: true, clientKey: true },
+        })) ??
+        (await prisma.client.findUnique({
+          where: { id: clientRef },
+          select: { id: true, clientKey: true },
+        }));
+      if (!client) {
+        json(res, 404, { error: "not_found" });
+        return;
+      }
+      const newToken = crypto.randomBytes(32).toString("hex");
+      await prisma.client.update({
+        where: { id: client.id },
         data: { adminToken: newToken },
       });
-      json(res, 200, { id: updated.id, adminToken: newToken });
+      logger.info({
+        event: "admin.client.token.rotate",
+        clientKey: client.clientKey,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        clientKey: client.clientKey,
+        rotatedAt: new Date().toISOString(),
+        adminToken: newToken,
+      });
       return;
     }
   }
