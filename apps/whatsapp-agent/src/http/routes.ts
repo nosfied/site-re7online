@@ -291,7 +291,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         const clientIds = clients.map((client) => client.id);
 
-        const [inboundCounts, outboundCounts, lastInbound, lastOutbound, monthlyUsage] = clientIds.length
+        let monthlyUsage: Array<{ clientId: string; used: bigint | number }> = [];
+        if (clientIds.length) {
+          try {
+            const clientIdsArray = Prisma.sql`ARRAY[${Prisma.join(
+              clientIds.map((id) => Prisma.sql`${id}::uuid`)
+            )}]`;
+            monthlyUsage = await prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(
+              Prisma.sql`
+                SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
+                FROM "InboundMessage"
+                WHERE "clientId" = ANY(${clientIdsArray})
+                  AND "createdAt" >= ${monthStart}
+                  AND "createdAt" <= ${to}
+                GROUP BY "clientId"
+              `
+            );
+          } catch (error) {
+            logger.warn({
+              event: "quota.calc_error",
+              message: (error as Error).message,
+              requestId,
+            });
+            monthlyUsage = [];
+          }
+        }
+
+        const [inboundCounts, outboundCounts, lastInbound, lastOutbound] = clientIds.length
           ? await Promise.all([
               prisma.inboundMessage.groupBy({
                 by: ["clientId"],
@@ -313,16 +339,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 where: { clientId: { in: clientIds } },
                 _max: { createdAt: true },
               }),
-              prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(Prisma.sql`
-                SELECT "clientId", COUNT(DISTINCT "waId") AS "used"
-                FROM "InboundMessage"
-                WHERE "clientId" IN (${Prisma.join(clientIds)})
-                  AND "createdAt" >= ${monthStart}
-                  AND "createdAt" <= ${to}
-                GROUP BY "clientId"
-              `),
             ])
-          : [[], [], [], [], []];
+          : [[], [], [], []];
 
         const inboundByClient = new Map(
           inboundCounts.map((row) => [row.clientId, row._count._all])
