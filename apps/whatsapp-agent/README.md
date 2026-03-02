@@ -15,7 +15,7 @@ npm run dev
 - `npm run build` → compilar TypeScript
 - `npm run start` → rodar build de produção
 - `scripts/outbound-policyB-prod-check-wrapper.sh` → valida Policy B em produção (janela fechada)
-  (não depende de comandos debug; usa webhook assinado).
+  (não depende de comandos debug; usa webhook assinado, `--tenant` e `--temp-allowlist`).
 Observação: em produção existe um utilitário operacional em `/usr/local/bin/outbound-policyB-prod-check`.
 - `npm run db:migrate` → cria migrations (dev)
 - `npm run db:deploy` → aplica migrations (prod)
@@ -296,7 +296,8 @@ curl -s -X POST "http://127.0.0.1:3001/admin/conversations/558494786787/reset?cl
 
 Smoke prod (Policy B wrapper + E2E):
 ```bash
-./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h
+./scripts/outbound-policyB-prod-check-wrapper.sh --to 558494786787 --intent pricing --range 1h --tenant re7online
+./scripts/outbound-policyB-prod-check-wrapper.sh --to 5511951957784 --intent pricing --range 1h --tenant re7online --temp-allowlist
 ./scripts/e2e-lead-pricing.sh 558494786787 --range 1h
 ./scripts/e2e-demo.sh 558494786787 --range 1h
 ```
