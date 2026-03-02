@@ -83,7 +83,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return true;
     };
     const getScopedClientKey = () =>
-      tenantAdmin ? adminAuth.clientKey : String(query.clientKey ?? "default").trim() || "default";
+      tenantAdmin ? adminAuth.clientKey : getSuperadminClientKey(req, query);
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
@@ -630,6 +630,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/messages") {
       try {
+        if (
+          !tenantAdmin &&
+          !query.clientKey &&
+          !(typeof req.headers["x-client-key"] === "string" && req.headers["x-client-key"].trim())
+        ) {
+          const tenants = await getTenants();
+          if (Object.keys(tenants).length > 1) {
+            json(res, 400, { error: "missing_clientKey" });
+            return;
+          }
+        }
         const waId = String(query.waId ?? "").trim();
         const statusFilter = String(query.status ?? "").trim().toUpperCase();
         const typeFilter = String(query.type ?? "").trim().toUpperCase();
@@ -795,6 +806,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/metrics") {
       try {
+        if (
+          !tenantAdmin &&
+          !query.clientKey &&
+          !(typeof req.headers["x-client-key"] === "string" && req.headers["x-client-key"].trim())
+        ) {
+          const tenants = await getTenants();
+          if (Object.keys(tenants).length > 1) {
+            json(res, 400, { error: "missing_clientKey" });
+            return;
+          }
+        }
         const range = String(query.range ?? "24h");
         const now = Date.now();
         const from =

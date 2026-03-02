@@ -102,6 +102,10 @@ curl -s http://localhost:3001/admin/templates \
 curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
+# superadmin multi-tenant: prefira query ?clientKey=... ou header X-Client-Key
+curl -s "http://localhost:3001/admin/messages?waId=558494786787&limit=20&clientKey=re7online" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
+
 curl -s "http://localhost:3001/admin/metrics?range=24h" \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 
@@ -275,6 +279,10 @@ export ADMIN_TOKEN
 Consultar métricas:
 ```bash
 curl -s "http://127.0.0.1:3001/admin/metrics?range=1h" -H "X-Admin-Token: $ADMIN_TOKEN"
+
+# em multi-tenant, superadmin deve informar clientKey
+curl -s "http://127.0.0.1:3001/admin/metrics?range=1h&clientKey=re7online" \
+  -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
 Inspecionar/resetar conversa por tenant:
