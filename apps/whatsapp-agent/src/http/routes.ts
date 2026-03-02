@@ -83,7 +83,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return true;
     };
     const getScopedClientKey = () =>
-      tenantAdmin ? adminAuth.clientKey : String(query.clientKey ?? "default").trim() || "default";
+      tenantAdmin ? adminAuth.clientKey : getSuperadminClientKey(req, query);
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
