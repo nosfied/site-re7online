@@ -45,7 +45,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const prisma = getPrisma();
     const query = parseQuery(parsedUrl);
     const auth = getAdminToken(req);
-    if (!env.ADMIN_TOKEN || auth.token !== env.ADMIN_TOKEN) {
+    const isSuperadmin = Boolean(env.ADMIN_TOKEN) && auth.token === env.ADMIN_TOKEN;
+    const tenantAdmin =
+      !isSuperadmin && auth.token
+        ? await prisma.client.findFirst({
+            where: { adminToken: auth.token },
+            select: { clientKey: true },
+          })
+        : null;
+    if (!isSuperadmin && req.method === "GET" && pathname === "/admin/tenants/summary" && tenantAdmin) {
+      logger.warn({
+        event: "rbac.denied",
+        path: pathname,
+        method: req.method,
+        role: "tenant",
+        requestId,
+      });
+      json(res, 403, { error: "forbidden" });
+      return;
+    }
+    if (!isSuperadmin) {
       json(res, 401, { error: "unauthorized" });
       return;
     }
