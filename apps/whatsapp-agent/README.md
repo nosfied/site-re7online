@@ -16,7 +16,8 @@ npm run dev
 - `npm run start` → rodar build de produção
 - `scripts/outbound-policyB-prod-check-wrapper.sh` → valida Policy B em produção (janela fechada)
   (não depende de comandos debug; usa webhook assinado, `--tenant` e `--temp-allowlist`).
-Observação: em produção existe um utilitário operacional em `/usr/local/bin/outbound-policyB-prod-check`.
+Observação: em produção o utilitário operacional `/usr/local/bin/outbound-policyB-prod-check`
+deve ser a instalação deste wrapper versionado no repo.
 - `npm run db:migrate` → cria migrations (dev)
 - `npm run db:deploy` → aplica migrations (prod)
 - `npm run db:generate` → gera client Prisma
