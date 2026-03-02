@@ -47,6 +47,29 @@ git rev-parse --show-toplevel
    - (opcional) `OUTBOUND_TEMPLATES_BY_CLIENT_JSON`
 3) Separar `.data/` por instância (recomendado 1 instância por cliente).
 
+## Onboarding via script
+Caminho oficial para criar tenant novo (DB + `tenants.json`) sem editar arquivo manualmente:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+./scripts/onboard-tenant.ts \
+  --tenant cliente-demo \
+  --name "Cliente Demo" \
+  --client-key cliente-demo \
+  --allowlist 558494786787 \
+  --handoff-attendant-waid 558499049614 \
+  --manual-handoff-template re7_atendente_manual_v1
+```
+
+Observações:
+- usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env`
+- cria/atualiza `Client` no DB
+- gera `adminToken` quando necessário
+- atualiza `tenants.json` via `PUT /admin/tenants/:tenantId`
+- preserva backup/atomic write/logs do caminho já validado
+- se o tenant já existir, exige `--force`
+- `metaPhoneNumberId` só muda com `--force --force-phone-id`
+
 ## Validação (Policy B / fallback)
 - Usar o utilitário operacional:
   - `/usr/local/bin/outbound-policyB-prod-check`
