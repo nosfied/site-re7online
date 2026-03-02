@@ -280,6 +280,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? new Date(now - 30 * 24 * 60 * 60 * 1000)
                 : new Date(now - 24 * 60 * 60 * 1000);
         const to = new Date(now);
+        const monthStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), 1, 0, 0, 0, 0));
+        const quotaPeriod = `${to.getUTCFullYear()}-${String(to.getUTCMonth() + 1).padStart(2, "0")}`;
 
         const tenants = await getTenants();
         const tenantKeys = Object.keys(tenants);
@@ -289,7 +291,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         const clientIds = clients.map((client) => client.id);
 
-        const [inboundCounts, outboundCounts, lastInbound, lastOutbound] = clientIds.length
+        const [inboundCounts, outboundCounts, lastInbound, lastOutbound, monthlyUsage] = clientIds.length
           ? await Promise.all([
               prisma.inboundMessage.groupBy({
                 by: ["clientId"],
@@ -311,8 +313,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 where: { clientId: { in: clientIds } },
                 _max: { createdAt: true },
               }),
+              prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(Prisma.sql`
+                SELECT "clientId", COUNT(DISTINCT "waId") AS "used"
+                FROM "InboundMessage"
+                WHERE "clientId" IN (${Prisma.join(clientIds)})
+                  AND "createdAt" >= ${monthStart}
+                  AND "createdAt" <= ${to}
+                GROUP BY "clientId"
+              `),
             ])
-          : [[], [], [], []];
+          : [[], [], [], [], []];
 
         const inboundByClient = new Map(
           inboundCounts.map((row) => [row.clientId, row._count._all])
@@ -322,6 +332,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         const lastOutboundByClient = new Map(
           lastOutbound.map((row) => [row.clientId, row._max.createdAt ?? null])
+        );
+        const monthlyUsageByClient = new Map(
+          monthlyUsage.map((row) => [row.clientId, Number(row.used)])
         );
         const outboundByClient = new Map<
           string,
@@ -349,6 +362,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const clientByKey = new Map(clients.map((client) => [client.clientKey, client]));
         const items = tenantKeys.map((tenantKey) => {
           const client = clientByKey.get(tenantKey);
+          const tenantConfig = tenants[tenantKey];
           const counts = client
             ? outboundByClient.get(client.id) ?? {
                 sent_text: 0,
@@ -369,16 +383,51 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? inboundAt
                 : outboundAt
               : inboundAt ?? outboundAt ?? null;
+          const monthlyUsed = client ? monthlyUsageByClient.get(client.id) ?? 0 : 0;
+          const monthlyLimit =
+            typeof tenantConfig?.quotaMonthlyConversations === "number"
+              ? tenantConfig.quotaMonthlyConversations
+              : null;
+          const warnAtPct =
+            monthlyLimit === null
+              ? null
+              : typeof tenantConfig?.quotaWarnAtPct === "number"
+                ? tenantConfig.quotaWarnAtPct
+                : 0.8;
+          const pct = monthlyLimit && monthlyLimit > 0 ? monthlyUsed / monthlyLimit : null;
+          const warning =
+            monthlyLimit !== null && warnAtPct !== null && pct !== null ? pct >= warnAtPct : false;
+
+          if (warning) {
+            logger.warn({
+              event: "quota.warning",
+              tenantId: tenantKey,
+              clientKey: tenantKey,
+              limit: monthlyLimit,
+              used: monthlyUsed,
+              pct,
+              period: quotaPeriod,
+              requestId,
+            });
+          }
 
           return {
             tenantId: tenantKey,
             clientKey: tenantKey,
-            name: client?.name ?? tenants[tenantKey]?.name ?? tenantKey,
+            name: client?.name ?? tenantConfig?.name ?? tenantKey,
             counts: {
               inbound: { received: inboundReceived },
               outbound: counts,
             },
             lastMessageAt,
+            quota: {
+              period: quotaPeriod,
+              limit: monthlyLimit,
+              used: monthlyUsed,
+              pct,
+              warnAtPct,
+              warning,
+            },
           };
         });
 
