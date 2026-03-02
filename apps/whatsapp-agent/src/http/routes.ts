@@ -77,13 +77,53 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       requestId,
     });
     const tenantAdmin = adminAuth.role === "tenant";
+    const requestedClientKey = getRequestedClientKey(req, query);
     const requireSuperadmin = () => {
       if (!tenantAdmin) return false;
+      logger.warn({
+        event: "rbac.denied",
+        path: pathname,
+        method: req.method ?? "GET",
+        role: adminAuth.role,
+        tokenType: authToken.source,
+        requestedClientKey: requestedClientKey ?? null,
+        clientKeyResolved: adminAuth.clientKey,
+        requestId,
+      });
       json(res, 403, { error: "forbidden" });
       return true;
     };
-    const getScopedClientKey = () =>
-      tenantAdmin ? adminAuth.clientKey : getSuperadminClientKey(req, query);
+    const getScopedClientKey = async () => {
+      if (tenantAdmin) {
+        if (requestedClientKey && requestedClientKey !== adminAuth.clientKey) {
+          logger.warn({
+            event: "rbac.scope_violation",
+            path: pathname,
+            method: req.method ?? "GET",
+            role: adminAuth.role,
+            tokenType: authToken.source,
+            requestedClientKey,
+            clientKeyResolved: adminAuth.clientKey,
+            requestId,
+          });
+          json(res, 403, { error: "forbidden" });
+          return null;
+        }
+        return adminAuth.clientKey;
+      }
+
+      if (requestedClientKey) {
+        return requestedClientKey;
+      }
+
+      const tenants = await getTenants();
+      const tenantKeys = Object.keys(tenants);
+      if (tenantKeys.length !== 1) {
+        json(res, 400, { error: "missing_clientKey" });
+        return null;
+      }
+      return tenantKeys[0];
+    };
 
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
@@ -100,13 +140,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.startsWith("/admin/conversations/") &&
       pathname.split("/").length === 4
     ) {
-      if (requireSuperadmin()) return;
       const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
-      const clientKey = getSuperadminClientKey(req, query);
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
       }
+      const clientKey = await getScopedClientKey();
+      if (!clientKey) return;
       const conversation = await jsonFileStorage.getConversation(waId, clientKey);
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
@@ -139,14 +179,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.split("/").length === 5 &&
       pathname.endsWith("/reset")
     ) {
-      if (requireSuperadmin()) return;
       const parts = pathname.split("/");
       const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
-      const clientKey = getSuperadminClientKey(req, query);
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
       }
+      const clientKey = await getScopedClientKey();
+      if (!clientKey) return;
       await jsonFileStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.conversation.reset",
@@ -630,17 +670,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/messages") {
       try {
-        if (
-          !tenantAdmin &&
-          !query.clientKey &&
-          !(typeof req.headers["x-client-key"] === "string" && req.headers["x-client-key"].trim())
-        ) {
-          const tenants = await getTenants();
-          if (Object.keys(tenants).length > 1) {
-            json(res, 400, { error: "missing_clientKey" });
-            return;
-          }
-        }
         const waId = String(query.waId ?? "").trim();
         const statusFilter = String(query.status ?? "").trim().toUpperCase();
         const typeFilter = String(query.type ?? "").trim().toUpperCase();
@@ -658,7 +687,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const limitRaw = Number(query.limit ?? 50);
         const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
         const includeRaw = String(query.includeRaw ?? "false") === "true";
-        const clientKey = getScopedClientKey();
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -806,17 +836,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/metrics") {
       try {
-        if (
-          !tenantAdmin &&
-          !query.clientKey &&
-          !(typeof req.headers["x-client-key"] === "string" && req.headers["x-client-key"].trim())
-        ) {
-          const tenants = await getTenants();
-          if (Object.keys(tenants).length > 1) {
-            json(res, 400, { error: "missing_clientKey" });
-            return;
-          }
-        }
         const range = String(query.range ?? "24h");
         const now = Date.now();
         const from =
@@ -828,7 +847,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? new Date(now - 30 * 24 * 60 * 60 * 1000)
                 : new Date(now - 24 * 60 * 60 * 1000);
         const to = new Date(now);
-        const clientKey = getScopedClientKey();
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey } });
         if (!client) {
           json(res, 404, { error: "client_not_found" });
@@ -1130,12 +1150,13 @@ function parseQuery(parsed: URL) {
   return query;
 }
 
-function getSuperadminClientKey(req: IncomingMessage, query: Record<string, string>) {
+function getRequestedClientKey(req: IncomingMessage, query: Record<string, string>) {
   const headerClientKey = req.headers["x-client-key"];
   if (typeof headerClientKey === "string" && headerClientKey.trim()) {
     return headerClientKey.trim();
   }
-  return String(query.clientKey ?? "default").trim() || "default";
+  const queryClientKey = String(query.clientKey ?? "").trim();
+  return queryClientKey || null;
 }
 
 function diffTenantFields(
