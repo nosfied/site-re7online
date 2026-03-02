@@ -266,6 +266,146 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/tenants/summary") {
+      if (requireSuperadmin()) return;
+      try {
+        const range = String(query.range ?? "24h");
+        const now = Date.now();
+        const from =
+          range === "1h"
+            ? new Date(now - 1 * 60 * 60 * 1000)
+            : range === "7d"
+              ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+              : range === "30d"
+                ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+                : new Date(now - 24 * 60 * 60 * 1000);
+        const to = new Date(now);
+
+        const tenants = await getTenants();
+        const tenantKeys = Object.keys(tenants);
+        const clients = await prisma.client.findMany({
+          where: { clientKey: { in: tenantKeys } },
+          select: { id: true, clientKey: true, name: true },
+        });
+        const clientIds = clients.map((client) => client.id);
+
+        const [inboundCounts, outboundCounts, lastInbound, lastOutbound] = clientIds.length
+          ? await Promise.all([
+              prisma.inboundMessage.groupBy({
+                by: ["clientId"],
+                where: { clientId: { in: clientIds }, createdAt: { gte: from, lte: to } },
+                _count: { _all: true },
+              }),
+              prisma.outboundMessage.groupBy({
+                by: ["clientId", "status", "type"],
+                where: { clientId: { in: clientIds }, createdAt: { gte: from, lte: to } },
+                _count: { _all: true },
+              }),
+              prisma.inboundMessage.groupBy({
+                by: ["clientId"],
+                where: { clientId: { in: clientIds } },
+                _max: { createdAt: true },
+              }),
+              prisma.outboundMessage.groupBy({
+                by: ["clientId"],
+                where: { clientId: { in: clientIds } },
+                _max: { createdAt: true },
+              }),
+            ])
+          : [[], [], [], []];
+
+        const inboundByClient = new Map(
+          inboundCounts.map((row) => [row.clientId, row._count._all])
+        );
+        const lastInboundByClient = new Map(
+          lastInbound.map((row) => [row.clientId, row._max.createdAt ?? null])
+        );
+        const lastOutboundByClient = new Map(
+          lastOutbound.map((row) => [row.clientId, row._max.createdAt ?? null])
+        );
+        const outboundByClient = new Map<
+          string,
+          { sent_text: number; sent_template: number; failed: number }
+        >();
+
+        for (const row of outboundCounts) {
+          const current = outboundByClient.get(row.clientId) ?? {
+            sent_text: 0,
+            sent_template: 0,
+            failed: 0,
+          };
+
+          if (row.status === "FAILED") {
+            current.failed += row._count._all;
+          } else if (row.status === "SENT" && row.type === "TEMPLATE") {
+            current.sent_template += row._count._all;
+          } else if (row.status === "SENT" && row.type === "TEXT") {
+            current.sent_text += row._count._all;
+          }
+
+          outboundByClient.set(row.clientId, current);
+        }
+
+        const clientByKey = new Map(clients.map((client) => [client.clientKey, client]));
+        const items = tenantKeys.map((tenantKey) => {
+          const client = clientByKey.get(tenantKey);
+          const counts = client
+            ? outboundByClient.get(client.id) ?? {
+                sent_text: 0,
+                sent_template: 0,
+                failed: 0,
+              }
+            : {
+                sent_text: 0,
+                sent_template: 0,
+                failed: 0,
+              };
+          const inboundReceived = client ? inboundByClient.get(client.id) ?? 0 : 0;
+          const inboundAt = client ? lastInboundByClient.get(client.id) ?? null : null;
+          const outboundAt = client ? lastOutboundByClient.get(client.id) ?? null : null;
+          const lastMessageAt =
+            inboundAt && outboundAt
+              ? inboundAt > outboundAt
+                ? inboundAt
+                : outboundAt
+              : inboundAt ?? outboundAt ?? null;
+
+          return {
+            tenantId: tenantKey,
+            clientKey: tenantKey,
+            name: client?.name ?? tenants[tenantKey]?.name ?? tenantKey,
+            counts: {
+              inbound: { received: inboundReceived },
+              outbound: counts,
+            },
+            lastMessageAt,
+          };
+        });
+
+        logger.info({
+          event: "admin.tenants.summary",
+          range,
+          tenantCount: items.length,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          range,
+          from,
+          to,
+          tenants: items,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.tenants.summary.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/tenants/") &&
