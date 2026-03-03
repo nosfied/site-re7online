@@ -6,6 +6,7 @@ import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
+import { getPrisma } from "../db.js";
 import {
   advanceQuoteSiteFlow,
   applyAdminCommand,
@@ -116,6 +117,7 @@ export function verifyWebhook(
 }
 
 export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
+  const prisma = getPrisma();
   logger.info({
     event: "webhook.received",
     route: meta?.route,
@@ -1111,6 +1113,128 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       normalizedFrom,
       message.messageId
     );
+
+    if (
+      allowlistHit &&
+      tenantClientId &&
+      typeof appliedTenantConfig?.quotaMonthlyConversations === "number" &&
+      appliedTenantConfig.quotaMonthlyConversations >= 0
+    ) {
+      const { period, from, to } = getMonthRangeUtc(new Date());
+      let quotaBlocked = false;
+
+      try {
+        const distinctInboundWaIds = await prisma.inboundMessage.groupBy({
+          by: ["waId"],
+          where: {
+            clientId: tenantClientId,
+            createdAt: { gte: from, lt: to },
+          },
+          _count: { waId: true },
+        });
+        const quotaUsed = distinctInboundWaIds.length;
+        const existingThisMonth = await prisma.inboundMessage.findFirst({
+          where: {
+            clientId: tenantClientId,
+            waId: normalizedFrom,
+            createdAt: { gte: from, lt: to },
+          },
+          select: { id: true },
+        });
+        const isNewThisMonth = !existingThisMonth;
+
+        if (quotaUsed >= appliedTenantConfig.quotaMonthlyConversations && isNewThisMonth) {
+          quotaBlocked = true;
+          logger.info({
+            event: "quota.blocked",
+            tenantId: appliedTenantConfig.id,
+            clientKey: tenantClientKey,
+            limit: appliedTenantConfig.quotaMonthlyConversations,
+            used: quotaUsed,
+            period,
+            waId: maskNumber(normalizedFrom),
+            requestId: meta?.requestId,
+          });
+        } else {
+          logger.info({
+            event: "quota.checked",
+            tenantId: appliedTenantConfig.id,
+            clientKey: tenantClientKey,
+            limit: appliedTenantConfig.quotaMonthlyConversations,
+            used: quotaUsed,
+            period,
+            isNewThisMonth,
+            waId: maskNumber(normalizedFrom),
+            requestId: meta?.requestId,
+          });
+        }
+      } catch (error) {
+        logger.error({
+          event: "quota.calc_error",
+          tenantId: appliedTenantConfig.id,
+          clientKey: tenantClientKey,
+          period,
+          message: (error as Error).message,
+          requestId: meta?.requestId,
+        });
+      }
+
+      if (quotaBlocked) {
+        await persistInboundSafe({
+          waId: message.from,
+          messageId: message.messageId,
+          type: mapMessageType(message.type),
+          bodyText: message.text,
+          allowlistHit,
+          rawPayload: {
+            ...message.raw,
+            text: message.text,
+            timestamp: message.timestamp,
+          },
+        });
+
+        await storage.saveIncomingMessage({
+          ...message,
+          status,
+          allowlist: {
+            enabled: allowlistEnabled,
+            hit: allowlistHit,
+          },
+        });
+
+        logger.info({
+          event: "webhook.message",
+          messageId: message.messageId,
+          from: maskNumber(message.from),
+          type: message.type,
+          status,
+          allowlistHit,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "webhook.message",
+          { messageId: message.messageId, from: message.from, type: message.type, status, allowlistHit },
+          message.from,
+          message.messageId
+        );
+
+        const quotaReplyTo = env.WHATSAPP_SANDBOX
+          ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
+          : message.from;
+        await sendOutboundText({
+          toE164: quotaReplyTo,
+          waId: normalizedFrom,
+          intent: undefined,
+          messageId: message.messageId,
+          replyText:
+            "No momento atingimos o limite de atendimentos automáticos do mês. Para seguir com prioridade, fale com um atendente.",
+          guard: undefined,
+        });
+        continue;
+      }
+    }
 
     const currentConversation = await getOrCreateConversation(
       storage,
@@ -2557,4 +2681,13 @@ function parseDebugCloseWindowCommand(text: string | null): { waId: string } | n
   const match = trimmed.match(/^#debug\s+closewindow\s+([0-9]+)$/i);
   if (!match) return null;
   return { waId: match[1] ?? "" };
+}
+
+function getMonthRangeUtc(now = new Date()) {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const from = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  const to = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
+  const period = `${year}-${String(month + 1).padStart(2, "0")}`;
+  return { period, from, to };
 }
