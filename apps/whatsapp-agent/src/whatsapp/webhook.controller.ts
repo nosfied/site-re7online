@@ -1128,6 +1128,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           by: ["waId"],
           where: {
             clientId: tenantClientId,
+            allowlistHit: true,
             createdAt: { gte: from, lt: to },
           },
           _count: { waId: true },
@@ -1137,6 +1138,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           where: {
             clientId: tenantClientId,
             waId: normalizedFrom,
+            allowlistHit: true,
             createdAt: { gte: from, lt: to },
           },
           select: { id: true },
