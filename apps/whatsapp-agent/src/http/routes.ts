@@ -290,14 +290,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true, clientKey: true, name: true },
         });
         const clientIds = clients.map((client) => client.id);
+        const quotaExcludeByTenantKey = new Map(
+          tenantKeys.map((tenantKey) => {
+            const excludes = Array.isArray(tenants[tenantKey]?.quotaExcludeWaIds)
+              ? Array.from(
+                  new Set(
+                    (tenants[tenantKey]?.quotaExcludeWaIds ?? [])
+                      .map((waId) => waId.replace(/\D/g, ""))
+                      .filter(Boolean)
+                  )
+                )
+              : [];
+            return [tenantKey, excludes];
+          })
+        );
+        const quotaExcludeUnion = Array.from(
+          new Set(Array.from(quotaExcludeByTenantKey.values()).flat())
+        );
 
-        let monthlyUsage: Array<{ clientId: string; used: bigint | number }> = [];
+        let monthlyUsageAll: Array<{ clientId: string; used: bigint | number }> = [];
+        let monthlyUsageExcluded: Array<{ clientId: string; used: bigint | number }> = [];
         if (clientIds.length) {
           try {
             const clientIdsArray = Prisma.sql`ARRAY[${Prisma.join(
               clientIds.map((id) => Prisma.sql`${id}::uuid`)
             )}]`;
-            monthlyUsage = await prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(
+            monthlyUsageAll = await prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(
               Prisma.sql`
                 SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
                 FROM "InboundMessage"
@@ -307,13 +325,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 GROUP BY "clientId"
               `
             );
+            if (quotaExcludeUnion.length > 0) {
+              const excludedWaIdsArray = Prisma.sql`ARRAY[${Prisma.join(
+                quotaExcludeUnion.map((waId) => Prisma.sql`${waId}`)
+              )}]`;
+              monthlyUsageExcluded = await prisma.$queryRaw<Array<{ clientId: string; used: bigint | number }>>(
+                Prisma.sql`
+                  SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
+                  FROM "InboundMessage"
+                  WHERE "clientId" = ANY(${clientIdsArray})
+                    AND "waId" = ANY(${excludedWaIdsArray})
+                    AND "createdAt" >= ${monthStart}
+                    AND "createdAt" <= ${to}
+                  GROUP BY "clientId"
+                `
+              );
+            }
           } catch (error) {
             logger.warn({
               event: "quota.calc_error",
               message: (error as Error).message,
               requestId,
             });
-            monthlyUsage = [];
+            monthlyUsageAll = [];
+            monthlyUsageExcluded = [];
           }
         }
 
@@ -351,8 +386,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const lastOutboundByClient = new Map(
           lastOutbound.map((row) => [row.clientId, row._max.createdAt ?? null])
         );
-        const monthlyUsageByClient = new Map(
-          monthlyUsage.map((row) => [row.clientId, Number(row.used)])
+        const monthlyUsageAllByClient = new Map(
+          monthlyUsageAll.map((row) => [row.clientId, Number(row.used)])
+        );
+        const monthlyUsageExcludedByClient = new Map(
+          monthlyUsageExcluded.map((row) => [row.clientId, Number(row.used)])
         );
         const outboundByClient = new Map<
           string,
@@ -401,7 +439,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? inboundAt
                 : outboundAt
               : inboundAt ?? outboundAt ?? null;
-          const monthlyUsed = client ? monthlyUsageByClient.get(client.id) ?? 0 : 0;
+          const monthlyUsedAll = client ? monthlyUsageAllByClient.get(client.id) ?? 0 : 0;
+          const monthlyUsedExcluded =
+            client && (quotaExcludeByTenantKey.get(tenantKey)?.length ?? 0) > 0
+              ? monthlyUsageExcludedByClient.get(client.id) ?? 0
+              : 0;
+          const monthlyUsed = Math.max(0, monthlyUsedAll - monthlyUsedExcluded);
           const monthlyLimit =
             typeof tenantConfig?.quotaMonthlyConversations === "number"
               ? tenantConfig.quotaMonthlyConversations
@@ -1422,6 +1465,10 @@ function diffTenantFields(
   compareField("allowlist");
   compareField("handoffAttendantWaid");
   compareField("defaultLanguage");
+  compareField("quotaMonthlyConversations");
+  compareField("quotaWarnAtPct");
+  compareField("quotaBlockedReplyText");
+  compareField("quotaExcludeWaIds");
   if (
     JSON.stringify(previousTemplates.manualHandoff ?? null) !==
     JSON.stringify(nextTemplates.manualHandoff ?? null)

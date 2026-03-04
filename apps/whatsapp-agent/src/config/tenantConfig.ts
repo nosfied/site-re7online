@@ -13,6 +13,7 @@ export type TenantConfig = {
   quotaMonthlyConversations?: number;
   quotaWarnAtPct?: number;
   quotaBlockedReplyText?: string;
+  quotaExcludeWaIds?: string[];
   templates: {
     manualHandoff: string;
   };
@@ -53,7 +54,8 @@ function buildDefaultTenant(): TenantConfigMap {
 async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
   try {
     const raw = await fs.readFile(getTenantsPath(), "utf-8");
-    const data = JSON.parse(raw) as TenantConfigMap;
+    const data = normalizeTenantConfigMap(JSON.parse(raw));
+    assertTenantConfigMap(data);
     return data;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -67,6 +69,30 @@ async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
     }
     return null;
   }
+}
+
+function normalizeTenantConfigMap(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const tenants = input as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(tenants)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      normalized[key] = value;
+      continue;
+    }
+    const tenant = value as Record<string, unknown>;
+    const nextTenant: Record<string, unknown> = { ...tenant };
+    if (Array.isArray(tenant.quotaExcludeWaIds)) {
+      nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
+        typeof waId === "string" ? waId.replace(/\D/g, "") : waId
+      );
+    }
+    normalized[key] = nextTenant;
+  }
+  return normalized;
 }
 
 function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap {
@@ -125,6 +151,16 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       (typeof tenant.quotaBlockedReplyText !== "string" || !tenant.quotaBlockedReplyText.trim())
     ) {
       throw new Error(`invalid_tenant_quota_blocked_reply:${key}`);
+    }
+    if (
+      tenant.quotaExcludeWaIds !== undefined &&
+      (!Array.isArray(tenant.quotaExcludeWaIds) ||
+        tenant.quotaExcludeWaIds.some(
+          (waId) =>
+            typeof waId !== "string" || !waId.trim() || !/^\d+$/.test(waId)
+        ))
+    ) {
+      throw new Error(`invalid_tenant_quota_exclude_waids:${key}`);
     }
     const templates = tenant.templates as Record<string, unknown> | undefined;
     if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
@@ -186,7 +222,8 @@ export async function getDefaultTenant() {
 }
 
 export async function saveTenants(nextTenants: unknown) {
-  assertTenantConfigMap(nextTenants);
+  const normalizedTenants = normalizeTenantConfigMap(nextTenants);
+  assertTenantConfigMap(normalizedTenants);
   await ensureTenantsDir();
   const tenantsPath = getTenantsPath();
   const backupPath = getBackupPath();
@@ -200,11 +237,11 @@ export async function saveTenants(nextTenants: unknown) {
     }
   }
 
-  const payload = JSON.stringify(nextTenants, null, 2);
+  const payload = JSON.stringify(normalizedTenants, null, 2);
   const tempPath = `${tenantsPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tempPath, payload, "utf-8");
   await fs.rename(tempPath, tenantsPath);
-  cachedTenants = nextTenants;
+  cachedTenants = normalizedTenants;
   return {
     tenants: cachedTenants,
     backupPath,
