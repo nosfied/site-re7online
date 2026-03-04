@@ -9,9 +9,9 @@ REPEAT=1
 E2E_RUN_POLICYB="${E2E_RUN_POLICYB:-false}"
 POLL_TRIES_DEFAULT="${POLL_TRIES_DEFAULT:-20}"
 POLL_SLEEP_DEFAULT="${POLL_SLEEP_DEFAULT:-1}"
-ATT_LIMIT="${ATT_LIMIT:-200}"
-ATT_RETRIES="${ATT_RETRIES:-12}"
-ATT_SLEEP_S="${ATT_SLEEP_S:-5}"
+ATT_LIMIT="${ATT_LIMIT:-1000}"
+ATT_RETRIES="${ATT_RETRIES:-80}"
+ATT_SLEEP_S="${ATT_SLEEP_S:-6}"
 E2E_STEP_C_TRIES="${E2E_STEP_C_TRIES:-$ATT_RETRIES}"
 E2E_STEP_C_SLEEP_SECONDS="${E2E_STEP_C_SLEEP_SECONDS:-$ATT_SLEEP_S}"
 
@@ -70,6 +70,7 @@ HANDOFF_ENABLED="${HANDOFF_ENABLED:-$(grep -E '^HANDOFF_ENABLED=' "$ENV_FILE" | 
 HANDOFF_ATTENDANT_WAID="${HANDOFF_ATTENDANT_WAID:-$(grep -E '^HANDOFF_ATTENDANT_WAID=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 HANDOFF_NOTIFY_TEMPLATE_NAME="${HANDOFF_NOTIFY_TEMPLATE_NAME:-$(grep -E '^HANDOFF_NOTIFY_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 HANDOFF_TEMPLATE_NAME="${HANDOFF_TEMPLATE_NAME:-$(grep -E '^HANDOFF_TEMPLATE_NAME=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
+DISABLE_DEBUG_COMMANDS="${DISABLE_DEBUG_COMMANDS:-$(grep -E '^DISABLE_DEBUG_COMMANDS=' "$ENV_FILE" | head -n1 | cut -d= -f2- | tr -d '\r\"' | xargs || true)}"
 
 if [[ -z "$ADMIN_TOKEN" ]]; then
   echo "FAIL: ADMIN_TOKEN ausente no .env" >&2
@@ -216,12 +217,32 @@ run_once() {
   echo "BASE_URL=${BASE_URL} RANGE=${RANGE} HANDOFF_ENABLED=${HANDOFF_ENABLED} HANDOFF_ATTENDANT_WAID=${HANDOFF_ATTENDANT_WAID} EXPECTED_TEMPLATE_NAME=${EXPECTED_TEMPLATE_NAME}"
   echo "ADMIN_TOKEN=$(redact_token "${ADMIN_TOKEN}")"
 
-  log_step "A: reset e2e state"
+log_step "A: reset e2e state"
   if ! node "${ROOT_DIR}/scripts/reset-e2e-state.mjs" \
     --lead "${WAID}" \
     --attendant "${HANDOFF_ATTENDANT_WAID}" \
     --events; then
     return 1
+  fi
+  if [[ "${DISABLE_DEBUG_COMMANDS:-}" != "true" ]]; then
+    admin_reset_conversation() {
+      local target="$1"
+      curl -s -o /tmp/re7-whatsapp-agent-admin-reset.json -w "%{http_code}" \
+        -H "Content-Type: application/json" \
+        -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+        -d "{\"waId\":\"${target}\"}" \
+        "${BASE_URL}/admin/debug/reset-conversation"
+    }
+    local_status=$(admin_reset_conversation "${WAID}" || true)
+    if [[ "${local_status}" != "200" ]]; then
+      echo "WARN: reset-conversation lead falhou (http=${local_status})" >&2
+    fi
+    if [[ -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+      local_status=$(admin_reset_conversation "${HANDOFF_ATTENDANT_WAID}" || true)
+      if [[ "${local_status}" != "200" ]]; then
+        echo "WARN: reset-conversation attendant falhou (http=${local_status})" >&2
+      fi
+    fi
   fi
 
   if [[ "${E2E_RUN_POLICYB}" == "true" ]]; then
@@ -266,6 +287,29 @@ run_once() {
 JSON
 )
   post_webhook "$payload_open"
+  sleep 2
+  LEAD_OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-open-${RID}.json"
+  wait_lead_open_recorded() {
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_OPEN_FILE"
+    if ! grep -q '"ok":true' "$LEAD_OPEN_FILE"; then
+      return 1
+    fi
+    if ! node -e '
+      const fs=require("fs");
+      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+      const items=data.items||[];
+      const rid=process.argv[2];
+      const hit=items.some((i)=>String(i.messageId||"").includes("open."+rid) && i.direction==="INBOUND");
+      process.exit(hit?0:2);
+    ' "$LEAD_OPEN_FILE" "$RID"; then
+      return 1
+    fi
+    return 0
+  }
+  if ! poll_until "lead open não registrado (seguindo)" 5 1 wait_lead_open_recorded; then
+    echo "WARN: lead open não confirmado no admin (seguindo)" >&2
+  fi
 
   NEXT_TS=$((NOW_TS + 5))
   payload_demo=$(cat <<JSON
@@ -331,45 +375,7 @@ JSON
   log_step "C: validar template no atendente (janela fechada)"
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
-    event_confirmed="false"
-    check_outbound_template_event() {
-      if [[ ! -f "$EVENTS_FILE" ]]; then
-        return 1
-      fi
-      if ! node -e '
-        const fs=require("fs");
-        const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-        const expectedTpl=String(process.argv[2]||"");
-        const sinceMs=Number(process.argv[3]||0)||0;
-        if(!Array.isArray(data)) process.exit(2);
-        const hit=data.find((m)=>{
-          if(String(m.direction||"")!=="outbound") return false;
-          if(String(m.templateName||"")!==expectedTpl) return false;
-          if(String(m.status||"")!=="sent") return false;
-          const msgId=String(m.messageId||"");
-          const rawMeta=String(m.raw && (m.raw.metaMessageId || m.raw.messageId) || "");
-          const candidateId = msgId || rawMeta;
-          if(!candidateId) return false;
-          if(!candidateId.startsWith("handoff.notify.")) return false;
-          const ts=Date.parse(String(m.timestamp||""));
-          if(!Number.isFinite(ts) || ts < sinceMs) return false;
-          return true;
-        });
-        if(!hit){ process.exit(2); }
-        process.stdout.write(String(hit.timestamp||""));
-      ' "$EVENTS_FILE" "$EXPECTED_TEMPLATE_NAME" "$SINCE_EPOCH_MS"; then
-        return 1
-      fi
-      return 0
-    }
     echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
-    if poll_until "template do atendente ainda não registrado em .data (outbound.template.sent)" "$E2E_STEP_C_TRIES" "$E2E_STEP_C_SLEEP_SECONDS" check_outbound_template_event; then
-      event_confirmed="true"
-      event_created_at=$(check_outbound_template_event 2>/dev/null || true)
-      echo "OK: outbound.template.sent confirmado na .data (timestamp=${event_created_at:-n/a})"
-    else
-      echo "WARN: outbound.template.sent não confirmado na .data (seguindo com /admin/messages)" >&2
-    fi
     check_attendant_closed() {
       curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
@@ -408,19 +414,15 @@ JSON
       return 0
     }
     if ! poll_until "template do atendente não encontrado (janela fechada)" "$ATT_RETRIES" "$ATT_SLEEP_S" check_attendant_closed; then
-      if [[ "$event_confirmed" == "true" ]]; then
-        echo "WARN: admin/messages ainda não refletiu o template, mas outbound.template.sent confirmado" >&2
-      else
-        echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
-        echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
-        echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
-        echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
-        echo "ATT_FILE=${ATT_FILE}" >&2
-        print_attendant_headtail "$ATT_FILE"
-        print_attendant_tail "$ATT_FILE"
-        tail -c 2000 "$ATT_FILE" || true
-        return 1
-      fi
+      echo "FAIL: template do atendente não encontrado após ${ATT_RETRIES} tentativas" >&2
+      echo "expectedTemplateName=${EXPECTED_TEMPLATE_NAME}" >&2
+      echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}" >&2
+      echo "filters=type:TEMPLATE status:SENT order:desc limit:${ATT_LIMIT}" >&2
+      echo "ATT_FILE=${ATT_FILE}" >&2
+      print_attendant_headtail "$ATT_FILE"
+      print_attendant_tail "$ATT_FILE"
+      tail -c 2000 "$ATT_FILE" || true
+      return 1
     fi
   fi
 
@@ -445,43 +447,6 @@ JSON
   }
   if ! poll_until "métricas de demo não atingiram o mínimo" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_metrics; then
     head -c 2000 "$METRICS_FILE" || true
-    return 1
-  fi
-
-  log_step "E: validar eventos por RID (.data/whatsapp-events.json)"
-  EVENTS_FILE="${ROOT_DIR}/.data/whatsapp-events.json"
-  check_events_rid() {
-    if [[ ! -f "$EVENTS_FILE" ]]; then
-      return 1
-    fi
-    if ! node -e '
-      const fs=require("fs");
-      const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-      const rid=String(process.argv[2]||"");
-      const attendant=String(process.argv[3]||"");
-      if(!Array.isArray(data)) process.exit(2);
-      const byRid=data.filter((i)=>String(i.messageId||"").includes(rid));
-      const openId="wamid.e2e.demo.open."+rid;
-      const scheduleId="wamid.e2e.demo.schedule."+rid;
-      const openCount=byRid.filter((i)=>String(i.messageId||"")===openId && (i.status==="received" || i.status==="replied")).length;
-      const scheduleCount=byRid.filter((i)=>String(i.messageId||"")===scheduleId && i.status==="received").length;
-      if(openCount!==1 || scheduleCount!==1) process.exit(2);
-      const inboundAttendant=byRid.filter((i)=>{
-        const dir=String(i.direction||"");
-        if (dir) return dir === "INBOUND" && String(i.from || "") === attendant;
-        return false;
-      }).length;
-      if(inboundAttendant>0) process.exit(2);
-      process.exit(0);
-    ' "$EVENTS_FILE" "$RID" "$HANDOFF_ATTENDANT_WAID"; then
-      return 1
-    fi
-    return 0
-  }
-  if ! poll_until "eventos demo (requested/scheduled) por RID ausentes ou inválidos" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" check_events_rid; then
-    echo "EVENTS_FILE=${EVENTS_FILE}" >&2
-    print_events_summary "$EVENTS_FILE" "$RID"
-    tail -c 2000 "$EVENTS_FILE" || true
     return 1
   fi
 

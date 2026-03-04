@@ -630,7 +630,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (!windowOpen) {
-      logger.warn({
+      logger.info({
         event: "handoff.notify.window_closed",
         waId: maskedAttendant,
         leadWaId: maskedLead,
@@ -2123,6 +2123,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let demoHandled = false;
     let demoUpdated = false;
     let skipDemoReplies = false;
+    let hasDemoSignal = false;
 
     if (message.text) {
       if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
@@ -2167,6 +2168,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ];
       const normalizedDemoText = normalizeLite(message.text);
       const hasDemoContext = demoContext.some((word) => normalizedDemoText.includes(word));
+      hasDemoSignal = hasDemoContext;
       const isDemoContinuation = (updatedConversation.demoStatus ?? "none") === "requested";
 
       const demoResult =
@@ -2487,6 +2489,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !flowResult.handled &&
       !handoffResult.handled &&
       !demoHandled &&
+      !hasDemoSignal &&
       !leadHandled &&
       !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
@@ -2660,8 +2663,20 @@ function parseDemoIntent(
     "aceito",
     "pode chamar",
     "pode falar",
+    "gostaria",
+    "agendar",
+    "marcar",
   ];
-  if (requirePositive && !positives.some((word) => normalized.includes(word))) {
+  const hasDemoAction =
+    normalized.includes("demo") ||
+    normalized.includes("demonstra") ||
+    normalized.includes("agendar") ||
+    normalized.includes("marcar");
+  if (
+    requirePositive &&
+    !hasDemoAction &&
+    !positives.some((word) => normalized.includes(word))
+  ) {
     return null;
   }
 
