@@ -1099,6 +1099,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ? tenantAllowlist.includes(normalizedFrom)
       : true;
     const status = allowlistHit ? "received" : "ignored";
+    const quotaExcludeWaIds = new Set(
+      (appliedTenantConfig?.quotaExcludeWaIds ?? [])
+        .map((waId) => waId.replace(/\D/g, ""))
+        .filter(Boolean)
+    );
+    const isQuotaExcludedWaId = quotaExcludeWaIds.has(normalizedFrom);
 
     logger.info({
       event: "allowlist.check",
@@ -1119,6 +1125,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (
       allowlistHit &&
+      !isQuotaExcludedWaId &&
       tenantClientId &&
       typeof appliedTenantConfig?.quotaMonthlyConversations === "number" &&
       appliedTenantConfig.quotaMonthlyConversations >= 0
@@ -1137,7 +1144,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           },
           _count: { waId: true },
         });
-        quotaUsed = distinctInboundWaIds.length;
+        quotaUsed = distinctInboundWaIds
+          .map((row) => normalizeWaId(row.waId))
+          .filter((waId) => !quotaExcludeWaIds.has(waId)).length;
         const existingThisMonth = await prisma.inboundMessage.findFirst({
           where: {
             clientId: tenantClientId,
@@ -1254,6 +1263,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         continue;
       }
+    }
+
+    if (
+      allowlistHit &&
+      isQuotaExcludedWaId &&
+      typeof appliedTenantConfig?.quotaMonthlyConversations === "number" &&
+      appliedTenantConfig.quotaMonthlyConversations >= 0
+    ) {
+      logger.info({
+        event: "quota.excluded",
+        tenantId: appliedTenantConfig.id,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        requestId: meta?.requestId,
+      });
     }
 
     const currentConversation = await getOrCreateConversation(
