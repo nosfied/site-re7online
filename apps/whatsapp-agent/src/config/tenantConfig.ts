@@ -12,6 +12,7 @@ export type TenantConfig = {
   defaultLanguage: string;
   quotaMonthlyConversations?: number;
   quotaWarnAtPct?: number;
+  quotaBlockedReplyText?: string;
   templates: {
     manualHandoff: string;
   };
@@ -118,6 +119,12 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         tenant.quotaWarnAtPct > 1)
     ) {
       throw new Error(`invalid_tenant_quota_warn:${key}`);
+    }
+    if (
+      tenant.quotaBlockedReplyText !== undefined &&
+      (typeof tenant.quotaBlockedReplyText !== "string" || !tenant.quotaBlockedReplyText.trim())
+    ) {
+      throw new Error(`invalid_tenant_quota_blocked_reply:${key}`);
     }
     const templates = tenant.templates as Record<string, unknown> | undefined;
     if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
