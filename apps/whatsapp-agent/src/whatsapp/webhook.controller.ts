@@ -56,6 +56,9 @@ const storage = createStorage();
 const adminTemplateDedup = new Map<string, number>();
 const ADMIN_TEMPLATE_TTL_MS = 10 * 60 * 1000;
 const conversationVersionByWaId = new Map<string, { version: number; lastInboundAt?: string }>();
+const DEFAULT_QUOTA_BLOCKED_TEXT =
+  "No momento atingimos o limite de atendimentos automáticos do mês.\n" +
+  "Para seguir com prioridade, fale com um atendente.";
 
 type RequestMeta = {
   requestId: string;
@@ -1122,6 +1125,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     ) {
       const { period, from, to } = getMonthRangeUtc(new Date());
       let quotaBlocked = false;
+      let quotaUsed = 0;
 
       try {
         const distinctInboundWaIds = await prisma.inboundMessage.groupBy({
@@ -1133,7 +1137,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           },
           _count: { waId: true },
         });
-        const quotaUsed = distinctInboundWaIds.length;
+        quotaUsed = distinctInboundWaIds.length;
         const existingThisMonth = await prisma.inboundMessage.findFirst({
           where: {
             clientId: tenantClientId,
@@ -1225,13 +1229,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         const quotaReplyTo = env.WHATSAPP_SANDBOX
           ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
           : message.from;
+        const quotaLimit = appliedTenantConfig.quotaMonthlyConversations;
+        const rawQuotaTemplate =
+          typeof appliedTenantConfig.quotaBlockedReplyText === "string" &&
+          appliedTenantConfig.quotaBlockedReplyText.trim()
+            ? appliedTenantConfig.quotaBlockedReplyText.trim()
+            : DEFAULT_QUOTA_BLOCKED_TEXT;
+        const replyText = renderQuotaBlockedText(rawQuotaTemplate, {
+          tenantName: appliedTenantConfig.name || tenantClientKey || "nosso time",
+          period,
+          used: quotaUsed,
+          limit: quotaLimit,
+          attendantWaidMasked: appliedTenantConfig.handoffAttendantWaid
+            ? maskNumber(appliedTenantConfig.handoffAttendantWaid)
+            : "",
+        });
         await sendOutboundText({
           toE164: quotaReplyTo,
           waId: normalizedFrom,
           intent: undefined,
           messageId: message.messageId,
-          replyText:
-            "No momento atingimos o limite de atendimentos automáticos do mês. Para seguir com prioridade, fale com um atendente.",
+          replyText,
           guard: undefined,
         });
         continue;
@@ -2583,6 +2601,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
+}
+
+function renderQuotaBlockedText(
+  template: string,
+  vars: Record<string, string | number | null | undefined>
+) {
+  return template.replace(/\{(\w+)\}/g, (_match, key: string) => {
+    const value = vars[key];
+    return value === null || value === undefined ? "" : String(value);
+  });
 }
 
 function parseLeadFields(text: string) {
