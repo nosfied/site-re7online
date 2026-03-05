@@ -58,6 +58,9 @@ function getDefaultBaseUrl() {
 export function normalizeBaseUrl(input: string) {
   const value = input.trim().replace(/\/+$/, "");
   if (!value) return "";
+  if (value.startsWith("/")) {
+    return value;
+  }
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
@@ -114,7 +117,7 @@ async function requestJson<T>(
 ): Promise<T> {
   const baseUrl = normalizeBaseUrl(connection.baseUrl);
   if (!baseUrl) {
-    const error = new Error("Base URL invalida. Use http(s)://...") as AdminApiError;
+    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
     error.status = 400;
     throw error;
   }
