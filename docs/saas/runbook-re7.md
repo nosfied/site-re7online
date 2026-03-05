@@ -76,8 +76,8 @@ Resposta inclui `quota` por tenant:
 
 Regra de calculo de `quota.used` (mes UTC):
 
-- `usedAll = COUNT(DISTINCT waId)` inbound no mes UTC por `clientId`.
-- `usedExcluded = COUNT(DISTINCT waId)` inbound no mes UTC por `clientId` onde `waId` esta na uniao de `quotaExcludeWaIds` dos tenants conhecidos.
+- `usedAll = COUNT(DISTINCT waId)` inbound no mes UTC por `clientId` com `allowlistHit=true`.
+- `usedExcluded = COUNT(DISTINCT waId)` inbound no mes UTC por `clientId` com `allowlistHit=true` onde `waId` esta na uniao de `quotaExcludeWaIds` dos tenants conhecidos.
 - `used = max(0, usedAll - usedExcluded)`.
 
 ### 3) Checklist Front dev

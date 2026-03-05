@@ -320,6 +320,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
                 FROM "InboundMessage"
                 WHERE "clientId" = ANY(${clientIdsArray})
+                  AND "allowlistHit" = true
                   AND "createdAt" >= ${monthStart}
                   AND "createdAt" <= ${to}
                 GROUP BY "clientId"
@@ -334,6 +335,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   SELECT "clientId"::text AS "clientId", COUNT(DISTINCT "waId")::int AS "used"
                   FROM "InboundMessage"
                   WHERE "clientId" = ANY(${clientIdsArray})
+                    AND "allowlistHit" = true
                     AND "waId" = ANY(${excludedWaIdsArray})
                     AND "createdAt" >= ${monthStart}
                     AND "createdAt" <= ${to}
