@@ -94,6 +94,17 @@ post_webhook() {
   fi
 }
 
+log_step "A0: reset da conversa (tenant-scoped)"
+RESET_FILE="/tmp/re7-whatsapp-agent-admin-reset-${RID}.json"
+curl -s -X POST "${BASE_URL}/admin/conversations/${WAID}/reset?clientKey=${TENANT}" \
+  -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$RESET_FILE"
+if ! grep -q '"ok":true' "$RESET_FILE"; then
+  echo "FAIL: reset de conversa falhou para waId=${WAID} tenant=${TENANT}"
+  echo "---- reset ----"
+  cat "$RESET_FILE" | head -c 2000 || true
+  exit 1
+fi
+
 log_step "A: Policy B (template)"
 if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
   WRAPPER_ARGS=(
@@ -197,8 +208,8 @@ if ! grep -qi "Para te ajudar melhor, me informe:" "$MSG_FILE"; then
   tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
-if ! grep -qi "como posso ajudar\|posso ajudar" "$MSG_FILE"; then
-  echo "FAIL: confirmação de lead não contém 'como posso ajudar' ou 'posso ajudar'"
+if ! grep -Eqi "perfeito.*atendente.*(chama|chamara|chamará).*seguida" "$MSG_FILE"; then
+  echo "FAIL: confirmação de lead não contém texto esperado de encaminhamento ao atendente"
   echo "---- messages (tail) ----"
   tail -c 2000 "$MSG_FILE" || true
   exit 1
