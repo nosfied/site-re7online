@@ -14,10 +14,11 @@ export type FlowContext = {
 };
 
 export type FlowMatch = {
-  flowKey: string;
+  flowKey: "quote_site";
 };
 
 export type FlowResult = {
+  flowKey?: FlowMatch["flowKey"];
   handled: boolean;
   stopPipeline?: boolean;
   state?: ConversationState;
