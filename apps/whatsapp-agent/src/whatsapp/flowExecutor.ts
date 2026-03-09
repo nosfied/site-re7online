@@ -1,5 +1,6 @@
 import {
   advanceQuoteSiteFlow,
+  isWindowOpen,
   maybeCaptureLeadFromReply,
   maybeRequestLeadCapture,
   shouldStartLeadCapture,
@@ -83,7 +84,7 @@ export async function runPostDemoFlowExecutor(
     demoHandled: ctx.demoHandled,
     leadReplyText: ctx.leadReplyText,
     intent: ctx.conversation.intent,
-    windowOpen: Boolean(ctx.conversation.window?.isOpen),
+    windowOpen: isWindowOpen(ctx.conversation, ctx.nowMs),
     hasRecentRequest: Boolean(
       ctx.conversation.leadRequestedAt &&
         ctx.nowMs - Date.parse(ctx.conversation.leadRequestedAt) <= ctx.leadWindowMs
