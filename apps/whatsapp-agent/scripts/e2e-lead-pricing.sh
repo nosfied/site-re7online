@@ -208,7 +208,7 @@ if ! grep -qi "Para te ajudar melhor, me informe:" "$MSG_FILE"; then
   tail -c 2000 "$MSG_FILE" || true
   exit 1
 fi
-if ! grep -Eqi "perfeito.*atendente.*(chama|chamara|chamará).*seguida" "$MSG_FILE"; then
+if ! grep -Eqi "perfeito.*registrei seu pedido.*atendente chama voc.*seguida" "$MSG_FILE"; then
   echo "FAIL: confirmação de lead não contém texto esperado de encaminhamento ao atendente"
   echo "---- messages (tail) ----"
   tail -c 2000 "$MSG_FILE" || true
