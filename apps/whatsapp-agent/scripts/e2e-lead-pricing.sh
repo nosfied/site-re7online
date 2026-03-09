@@ -4,6 +4,7 @@ set -euo pipefail
 WAID=""
 RANGE="1h"
 PORT="${PORT:-3001}"
+TENANT="${TENANT:-re7online}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,12 +20,16 @@ while [[ $# -gt 0 ]]; do
       WAID="$2"
       shift 2
       ;;
+    --tenant)
+      TENANT="$2"
+      shift 2
+      ;;
     *)
       if [[ -z "$WAID" ]]; then
         WAID="$1"
         shift 1
       else
-        echo "Uso: $0 <waId> [--range 1h|24h|7d|30d] [--port 3001]" >&2
+        echo "Uso: $0 <waId> [--tenant tenantId] [--range 1h|24h|7d|30d] [--port 3001]" >&2
         exit 2
       fi
       ;;
@@ -32,7 +37,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WAID" ]]; then
-  echo "Uso: $0 <waId> [--range 1h|24h|7d|30d] [--port 3001]" >&2
+  echo "Uso: $0 <waId> [--tenant tenantId] [--range 1h|24h|7d|30d] [--port 3001]" >&2
   exit 2
 fi
 
@@ -86,7 +91,11 @@ post_webhook() {
 
 log_step "A: Policy B (template)"
 if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
-  "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" --to "$WAID" --intent pricing --range "$RANGE"
+  "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" \
+    --to "$WAID" \
+    --intent pricing \
+    --range "$RANGE" \
+    --tenant "$TENANT"
 else
   echo "FAIL: wrapper do repo não encontrado em ${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" >&2
   echo "Dica: rode o E2E a partir do repo ou instale o wrapper versionado em /usr/local/bin/outbound-policyB-prod-check" >&2
@@ -161,7 +170,7 @@ log_step "D: validar via admin"
 MSG_FILE="/tmp/re7-whatsapp-agent-admin-lead-messages-${RID}.json"
 METRICS_FILE="/tmp/re7-whatsapp-agent-admin-lead-metrics-${RID}.json"
 
-curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200" \
+curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&clientKey=${TENANT}" \
   -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$MSG_FILE"
 
 if ! grep -q '"ok":true' "$MSG_FILE"; then
@@ -189,7 +198,7 @@ lead_requested_count="0"
 lead_captured_count="0"
 lead_template_count="0"
 for _ in 1 2 3 4 5; do
-  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
+  curl -s "${BASE_URL}/admin/metrics?range=${RANGE}&clientKey=${TENANT}" \
     -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
   if ! grep -q '"ok":true' "$METRICS_FILE"; then
     echo "FAIL: resposta de /admin/metrics sem ok=true"
