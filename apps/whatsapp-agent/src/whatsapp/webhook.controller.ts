@@ -9,7 +9,6 @@ import { runFlowExecutor } from "./flowExecutor.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
-  advanceQuoteSiteFlow,
   applyAdminCommand,
   clearTemplateNeeded,
   decideOutboundPolicy,
@@ -2041,9 +2040,35 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const flowResult = handoffResult.handled
       ? { state: updatedConversation, handled: false as const, replyText: undefined }
-      : advanceQuoteSiteFlow(updatedConversation, message.text);
+      : await runFlowExecutor({
+          tenantId: appliedTenantConfig?.id ?? "default",
+          clientKey: tenantClientKey,
+          requestId: meta?.requestId,
+          meta: {
+            route: meta?.route,
+            method: meta?.method,
+          },
+          message,
+          conversation: updatedConversation,
+        });
+    logger.info({
+      event: "flow.executor.checked",
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      flowKey: flowResult.flowKey ?? null,
+      handled: flowResult.handled,
+      requestId: meta?.requestId,
+    });
+    if (flowResult.handled && flowResult.flowKey === "quote_site") {
+      logger.info({
+        event: "flow.quote_site.handled",
+        tenantId: appliedTenantConfig?.id ?? "default",
+        clientKey: tenantClientKey,
+        requestId: meta?.requestId,
+      });
+    }
     if (flowResult.handled) {
-      updatedConversation = flowResult.state;
+      updatedConversation = flowResult.state ?? updatedConversation;
     }
     await storage.upsertConversation(updatedConversation);
     logConversationWindow(updatedConversation, meta);
@@ -2136,34 +2161,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
       continue;
-    }
-
-    const flowExecution = await runFlowExecutor({
-      tenantId: appliedTenantConfig?.id ?? "default",
-      clientKey: tenantClientKey,
-      requestId: meta?.requestId,
-      meta: {
-        route: meta?.route,
-        method: meta?.method,
-      },
-      message,
-      conversation: updatedConversation,
-    });
-    logger.info({
-      event: "flow.executor.checked",
-      tenantId: appliedTenantConfig?.id ?? "default",
-      clientKey: tenantClientKey,
-      handled: flowExecution.handled,
-      requestId: meta?.requestId,
-    });
-    if (flowExecution.handled) {
-      if (flowExecution.state) {
-        updatedConversation = flowExecution.state;
-        await storage.upsertConversation(updatedConversation);
-      }
-      if (flowExecution.stopPipeline) {
-        continue;
-      }
     }
 
     const now = Date.now();
