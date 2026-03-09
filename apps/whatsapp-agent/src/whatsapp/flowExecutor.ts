@@ -1,8 +1,17 @@
 import {
   advanceQuoteSiteFlow,
+  maybeCaptureLeadFromReply,
+  maybeRequestLeadCapture,
+  shouldStartLeadCapture,
   shouldStartQuoteSite,
 } from "../conversation/conversation.service.js";
-import { AppliedFlowResult, FlowContext, FlowMatch, FlowResult } from "./flow.types.js";
+import {
+  AppliedFlowResult,
+  FlowContext,
+  FlowMatch,
+  FlowResult,
+  PostDemoFlowContext,
+} from "./flow.types.js";
 
 function shouldMatchQuoteSite(ctx: FlowContext) {
   if (ctx.conversation.flow === "quote_site") {
@@ -43,5 +52,63 @@ export async function runFlowExecutor(ctx: FlowContext): Promise<AppliedFlowResu
   return {
     flowKey: match.flowKey,
     ...result,
+  };
+}
+
+export async function runPostDemoFlowExecutor(
+  ctx: PostDemoFlowContext
+): Promise<AppliedFlowResult> {
+  const capture = maybeCaptureLeadFromReply({
+    state: ctx.conversation,
+    inboundText: ctx.message.text,
+    parsedLead: ctx.parsedLead ?? {},
+    nowMs: ctx.nowMs,
+    nowIso: new Date(ctx.nowMs).toISOString(),
+    demoHandled: ctx.demoHandled,
+    leadWindowMs: ctx.leadWindowMs,
+  });
+
+  if (capture.captured) {
+    return {
+      flowKey: "lead_capture",
+      handled: true,
+      state: capture.state,
+      replyText: capture.replyText,
+      leadAction: "captured",
+      parsedLead: capture.parsedLead,
+    };
+  }
+
+  const shouldRequest = shouldStartLeadCapture({
+    demoHandled: ctx.demoHandled,
+    leadReplyText: ctx.leadReplyText,
+    intent: ctx.conversation.intent,
+    windowOpen: Boolean(ctx.conversation.window?.isOpen),
+    hasRecentRequest: Boolean(
+      ctx.conversation.leadRequestedAt &&
+        ctx.nowMs - Date.parse(ctx.conversation.leadRequestedAt) <= ctx.leadWindowMs
+    ),
+  });
+
+  if (!shouldRequest) {
+    return { handled: false };
+  }
+
+  const request = maybeRequestLeadCapture({
+    state: ctx.conversation,
+    nowIso: new Date(ctx.nowMs).toISOString(),
+    shouldRequest: true,
+  });
+
+  if (!request.requested) {
+    return { handled: false };
+  }
+
+  return {
+    flowKey: "lead_capture",
+    handled: true,
+    state: request.state,
+    replyText: request.replyText,
+    leadAction: "requested",
   };
 }

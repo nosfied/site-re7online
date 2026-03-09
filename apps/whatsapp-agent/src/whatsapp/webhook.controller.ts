@@ -5,7 +5,7 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
-import { runFlowExecutor } from "./flowExecutor.js";
+import { runFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
@@ -2374,61 +2374,109 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const leadCaptureAttempt = maybeCaptureLeadFromReply({
-      state: updatedConversation,
-      inboundText: message.text,
-      parsedLead: parsedLeadForCapture,
+    const postDemoFlowResult = await runPostDemoFlowExecutor({
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      requestId: meta?.requestId,
+      meta: {
+        route: meta?.route,
+        method: meta?.method,
+      },
+      message,
+      conversation: updatedConversation,
       nowMs: now,
-      nowIso: new Date(now).toISOString(),
-      demoHandled,
       leadWindowMs,
-    });
-    if (leadCaptureAttempt.captured) {
-      updatedConversation = leadCaptureAttempt.state;
-      leadUpdated = true;
-      leadHandled = true;
-      leadReplyText = leadCaptureAttempt.replyText;
-      const parsedLead = leadCaptureAttempt.parsedLead;
-      await persistEventSafe(
-        "lead.captured",
-        {
-          name: parsedLead?.name,
-          city: parsedLead?.city,
-          serviceType: parsedLead?.serviceType,
-          rawText: parsedLead?.rawText,
-        },
-        updatedConversation.waId,
-        message.messageId
-      );
-    }
-
-    if (shouldStartLeadCapture({
       demoHandled,
       leadReplyText,
-      intent: updatedConversation.intent,
-      windowOpen: isWindowOpen(updatedConversation, now),
-      hasRecentRequest: Boolean(
-        updatedConversation.leadRequestedAt &&
-          now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs
-      ),
-    })) {
-      const leadRequest = maybeRequestLeadCapture({
+      parsedLead: parsedLeadForCapture,
+    });
+    if (postDemoFlowResult.handled) {
+      updatedConversation = postDemoFlowResult.state ?? updatedConversation;
+      leadUpdated = true;
+      leadHandled = true;
+      leadReplyText = postDemoFlowResult.replyText;
+
+      if (postDemoFlowResult.leadAction === "captured") {
+        const parsedLead = postDemoFlowResult.parsedLead;
+        await persistEventSafe(
+          "lead.captured",
+          {
+            name: parsedLead?.name,
+            city: parsedLead?.city,
+            serviceType: parsedLead?.serviceType,
+            rawText: parsedLead?.rawText,
+          },
+          updatedConversation.waId,
+          message.messageId
+        );
+      }
+      if (postDemoFlowResult.leadAction === "requested") {
+        await persistEventSafe(
+          "lead.capture.requested",
+          { intent: "pricing" },
+          updatedConversation.waId,
+          message.messageId
+        );
+      }
+    }
+
+    if (!postDemoFlowResult.handled) {
+      const leadCaptureAttempt = maybeCaptureLeadFromReply({
         state: updatedConversation,
+        inboundText: message.text,
+        parsedLead: parsedLeadForCapture,
+        nowMs: now,
         nowIso: new Date(now).toISOString(),
-        shouldRequest: true,
+        demoHandled,
+        leadWindowMs,
       });
-      if (leadRequest.requested) {
-        updatedConversation = leadRequest.state;
+      if (leadCaptureAttempt.captured) {
+        updatedConversation = leadCaptureAttempt.state;
         leadUpdated = true;
         leadHandled = true;
-        leadReplyText = leadRequest.replyText;
+        leadReplyText = leadCaptureAttempt.replyText;
+        const parsedLead = leadCaptureAttempt.parsedLead;
+        await persistEventSafe(
+          "lead.captured",
+          {
+            name: parsedLead?.name,
+            city: parsedLead?.city,
+            serviceType: parsedLead?.serviceType,
+            rawText: parsedLead?.rawText,
+          },
+          updatedConversation.waId,
+          message.messageId
+        );
       }
-      await persistEventSafe(
-        "lead.capture.requested",
-        { intent: "pricing" },
-        updatedConversation.waId,
-        message.messageId
-      );
+
+      if (shouldStartLeadCapture({
+        demoHandled,
+        leadReplyText,
+        intent: updatedConversation.intent,
+        windowOpen: isWindowOpen(updatedConversation, now),
+        hasRecentRequest: Boolean(
+          updatedConversation.leadRequestedAt &&
+            now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs
+        ),
+      })) {
+        const leadRequest = maybeRequestLeadCapture({
+          state: updatedConversation,
+          nowIso: new Date(now).toISOString(),
+          shouldRequest: true,
+        });
+        if (leadRequest.requested) {
+          updatedConversation = leadRequest.state;
+          leadUpdated = true;
+          leadHandled = true;
+          leadReplyText = leadRequest.replyText;
+        }
+        await persistEventSafe(
+          "lead.capture.requested",
+          { intent: "pricing" },
+          updatedConversation.waId,
+          message.messageId
+        );
+      }
     }
 
     if (leadUpdated || demoUpdated) {
