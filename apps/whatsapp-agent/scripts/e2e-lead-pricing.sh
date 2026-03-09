@@ -5,6 +5,7 @@ WAID=""
 RANGE="1h"
 PORT="${PORT:-3001}"
 TENANT="${TENANT:-re7online}"
+TEMP_ALLOWLIST=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -24,12 +25,16 @@ while [[ $# -gt 0 ]]; do
       TENANT="$2"
       shift 2
       ;;
+    --temp-allowlist)
+      TEMP_ALLOWLIST=1
+      shift 1
+      ;;
     *)
       if [[ -z "$WAID" ]]; then
         WAID="$1"
         shift 1
       else
-        echo "Uso: $0 <waId> [--tenant tenantId] [--range 1h|24h|7d|30d] [--port 3001]" >&2
+        echo "Uso: $0 <waId> [--tenant tenantId] [--temp-allowlist] [--range 1h|24h|7d|30d] [--port 3001]" >&2
         exit 2
       fi
       ;;
@@ -37,7 +42,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WAID" ]]; then
-  echo "Uso: $0 <waId> [--tenant tenantId] [--range 1h|24h|7d|30d] [--port 3001]" >&2
+  echo "Uso: $0 <waId> [--tenant tenantId] [--temp-allowlist] [--range 1h|24h|7d|30d] [--port 3001]" >&2
   exit 2
 fi
 
@@ -91,11 +96,17 @@ post_webhook() {
 
 log_step "A: Policy B (template)"
 if [[ -x "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" ]]; then
-  "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" \
-    --to "$WAID" \
-    --intent pricing \
-    --range "$RANGE" \
+  WRAPPER_ARGS=(
+    --to "$WAID"
+    --intent pricing
+    --range "$RANGE"
     --tenant "$TENANT"
+  )
+  if [[ "$TEMP_ALLOWLIST" -eq 1 ]]; then
+    WRAPPER_ARGS+=(--temp-allowlist)
+  fi
+  "${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" \
+    "${WRAPPER_ARGS[@]}"
 else
   echo "FAIL: wrapper do repo não encontrado em ${ROOT_DIR}/scripts/outbound-policyB-prod-check-wrapper.sh" >&2
   echo "Dica: rode o E2E a partir do repo ou instale o wrapper versionado em /usr/local/bin/outbound-policyB-prod-check" >&2
