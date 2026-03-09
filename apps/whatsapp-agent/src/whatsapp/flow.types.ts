@@ -1,4 +1,5 @@
 import { ConversationState } from "../conversation/conversation.types.js";
+import type { ParsedLeadFields } from "../conversation/conversation.service.js";
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
 
 export type FlowContext = {
@@ -14,7 +15,7 @@ export type FlowContext = {
 };
 
 export type FlowMatch = {
-  flowKey: "quote_site";
+  flowKey: "quote_site" | "lead_capture";
 };
 
 export type FlowResult = {
@@ -23,6 +24,16 @@ export type FlowResult = {
   stopPipeline?: boolean;
   state?: ConversationState;
   replyText?: string;
+  leadAction?: "captured" | "requested";
+  parsedLead?: ParsedLeadFields;
 };
 
 export type AppliedFlowResult = FlowResult;
+
+export type PostDemoFlowContext = FlowContext & {
+  nowMs: number;
+  leadWindowMs: number;
+  demoHandled: boolean;
+  leadReplyText?: string;
+  parsedLead?: ParsedLeadFields;
+};
