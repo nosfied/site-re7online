@@ -5,6 +5,7 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
+import { runFlowExecutor } from "./flowExecutor.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
@@ -2135,6 +2136,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId,
       });
       continue;
+    }
+
+    const flowExecution = await runFlowExecutor({
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      requestId: meta?.requestId,
+      meta: {
+        route: meta?.route,
+        method: meta?.method,
+      },
+      message,
+      conversation: updatedConversation,
+    });
+    logger.info({
+      event: "flow.executor.checked",
+      tenantId: appliedTenantConfig?.id ?? "default",
+      clientKey: tenantClientKey,
+      handled: flowExecution.handled,
+      requestId: meta?.requestId,
+    });
+    if (flowExecution.handled) {
+      if (flowExecution.state) {
+        updatedConversation = flowExecution.state;
+        await storage.upsertConversation(updatedConversation);
+      }
+      if (flowExecution.stopPipeline) {
+        continue;
+      }
     }
 
     const now = Date.now();
