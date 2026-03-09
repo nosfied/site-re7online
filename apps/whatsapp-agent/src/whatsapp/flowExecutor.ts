@@ -1,14 +1,14 @@
-import { advanceQuoteSiteFlow } from "../conversation/conversation.service.js";
+import {
+  advanceQuoteSiteFlow,
+  shouldStartQuoteSite,
+} from "../conversation/conversation.service.js";
 import { AppliedFlowResult, FlowContext, FlowMatch, FlowResult } from "./flow.types.js";
 
 function shouldMatchQuoteSite(ctx: FlowContext) {
   if (ctx.conversation.flow === "quote_site") {
     return true;
   }
-  const text = (ctx.message.text ?? "").toLowerCase();
-  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(text);
-  const hasSite = /\bsite\b/i.test(text);
-  return hasPricing && hasSite;
+  return shouldStartQuoteSite(ctx.message.text);
 }
 
 export function matchFlow(ctx: FlowContext): FlowMatch | null {

@@ -18,7 +18,10 @@ import {
   logConversationIntent,
   logConversationWindow,
   markTemplateNeeded,
+  maybeCaptureLeadFromReply,
+  maybeRequestLeadCapture,
   shouldAutoReply,
+  shouldStartLeadCapture,
   updateInbound,
   updateInboundMeta,
   updateOutbound,
@@ -2367,67 +2370,65 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
     }
 
-    if (!demoHandled && message.text && updatedConversation.leadRequestedAt) {
-      const requestedAtMs = Date.parse(updatedConversation.leadRequestedAt);
-      if (!Number.isNaN(requestedAtMs) && now - requestedAtMs <= leadWindowMs) {
-        const parsedLead = parseLeadFields(message.text);
-        const hasAtLeastTwo =
-          Number(Boolean(parsedLead.name)) +
-            Number(Boolean(parsedLead.city)) +
-            Number(Boolean(parsedLead.serviceType)) >=
-          2;
-        if (hasAtLeastTwo || message.text.length >= 10) {
-          const nowIso = new Date(now).toISOString();
-          updatedConversation = {
-            ...updatedConversation,
-            leadRequestedAt: undefined,
-            leadCapturedAt: nowIso,
-            flow: undefined,
-            flowStep: undefined,
-            answers: undefined,
-          };
-          leadUpdated = true;
-          leadHandled = true;
-          leadReplyText = parsedLead.name
-            ? `Perfeito, ${parsedLead.name}. Já registrei seu pedido. Um atendente chama você em seguida.`
-            : "Perfeito. Já registrei seu pedido. Um atendente chama você em seguida.";
-          await persistEventSafe(
-            "lead.captured",
-            {
-              name: parsedLead.name,
-              city: parsedLead.city,
-              serviceType: parsedLead.serviceType,
-              rawText: parsedLead.rawText,
-            },
-            updatedConversation.waId,
-            message.messageId
-          );
-        }
-      }
+    const parsedLeadForCapture =
+      !demoHandled && message.text && updatedConversation.leadRequestedAt
+        ? parseLeadFields(message.text)
+        : {};
+    const leadCaptureAttempt = maybeCaptureLeadFromReply({
+      state: updatedConversation,
+      inboundText: message.text,
+      parsedLead: parsedLeadForCapture,
+      nowMs: now,
+      nowIso: new Date(now).toISOString(),
+      demoHandled,
+      leadWindowMs,
+    });
+    if (leadCaptureAttempt.captured) {
+      updatedConversation = leadCaptureAttempt.state;
+      leadUpdated = true;
+      leadHandled = true;
+      leadReplyText = leadCaptureAttempt.replyText;
+      const parsedLead = leadCaptureAttempt.parsedLead;
+      await persistEventSafe(
+        "lead.captured",
+        {
+          name: parsedLead?.name,
+          city: parsedLead?.city,
+          serviceType: parsedLead?.serviceType,
+          rawText: parsedLead?.rawText,
+        },
+        updatedConversation.waId,
+        message.messageId
+      );
     }
 
-    if (!demoHandled && !leadReplyText && updatedConversation.intent === "pricing") {
-      const windowOpen = isWindowOpen(updatedConversation, now);
-      const hasRecentRequest =
+    if (shouldStartLeadCapture({
+      demoHandled,
+      leadReplyText,
+      intent: updatedConversation.intent,
+      windowOpen: isWindowOpen(updatedConversation, now),
+      hasRecentRequest: Boolean(
         updatedConversation.leadRequestedAt &&
-        now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs;
-      if (windowOpen && !hasRecentRequest) {
-        const nowIso = new Date(now).toISOString();
-        updatedConversation = {
-          ...updatedConversation,
-          leadRequestedAt: nowIso,
-        };
+          now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs
+      ),
+    })) {
+      const leadRequest = maybeRequestLeadCapture({
+        state: updatedConversation,
+        nowIso: new Date(now).toISOString(),
+        shouldRequest: true,
+      });
+      if (leadRequest.requested) {
+        updatedConversation = leadRequest.state;
         leadUpdated = true;
         leadHandled = true;
-        leadReplyText =
-          "Para te ajudar melhor, me informe: Nome, Cidade e Serviço (Tráfego, Site, WhatsApp ou Social Media).";
-        await persistEventSafe(
-          "lead.capture.requested",
-          { intent: "pricing" },
-          updatedConversation.waId,
-          message.messageId
-        );
+        leadReplyText = leadRequest.replyText;
       }
+      await persistEventSafe(
+        "lead.capture.requested",
+        { intent: "pricing" },
+        updatedConversation.waId,
+        message.messageId
+      );
     }
 
     if (leadUpdated || demoUpdated) {

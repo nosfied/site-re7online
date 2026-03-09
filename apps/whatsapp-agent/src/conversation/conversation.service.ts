@@ -326,10 +326,7 @@ export function advanceQuoteSiteFlow(
   inboundText: string | null
 ): { state: ConversationState; handled: boolean; replyText?: string; completed?: boolean } {
   const text = (inboundText ?? "").trim();
-  const normalized = text.toLowerCase();
-  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(normalized);
-  const hasSite = /\bsite\b/i.test(normalized);
-  const shouldStart = hasPricing && hasSite;
+  const shouldStart = shouldStartQuoteSite(text);
 
   if (!state.flow && !shouldStart) {
     return { state, handled: false };
@@ -385,6 +382,111 @@ export function advanceQuoteSiteFlow(
       answers: nextAnswers,
     },
     replyText: buildQuoteSummary(nextAnswers),
+  };
+}
+
+export function shouldStartQuoteSite(text: string | null | undefined): boolean {
+  const normalized = (text ?? "").toLowerCase().trim();
+  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(normalized);
+  const hasSite = /\bsite\b/i.test(normalized);
+  return hasPricing && hasSite;
+}
+
+export type ParsedLeadFields = {
+  name?: string;
+  city?: string;
+  serviceType?: string;
+  rawText?: string;
+};
+
+export function shouldStartLeadCapture(params: {
+  demoHandled: boolean;
+  leadReplyText?: string;
+  intent?: ConversationIntent;
+  windowOpen: boolean;
+  hasRecentRequest: boolean;
+}) {
+  return (
+    !params.demoHandled &&
+    !params.leadReplyText &&
+    params.intent === "pricing" &&
+    params.windowOpen &&
+    !params.hasRecentRequest
+  );
+}
+
+export function maybeRequestLeadCapture(params: {
+  state: ConversationState;
+  nowIso: string;
+  shouldRequest: boolean;
+}): {
+  requested: boolean;
+  state: ConversationState;
+  replyText?: string;
+} {
+  if (!params.shouldRequest) {
+    return { requested: false, state: params.state };
+  }
+  return {
+    requested: true,
+    state: {
+      ...params.state,
+      leadRequestedAt: params.nowIso,
+    },
+    replyText:
+      "Para te ajudar melhor, me informe: Nome, Cidade e Serviço (Tráfego, Site, WhatsApp ou Social Media).",
+  };
+}
+
+export function maybeCaptureLeadFromReply(params: {
+  state: ConversationState;
+  inboundText: string | null;
+  parsedLead: ParsedLeadFields;
+  nowMs: number;
+  nowIso: string;
+  demoHandled: boolean;
+  leadWindowMs: number;
+}): {
+  captured: boolean;
+  state: ConversationState;
+  replyText?: string;
+  parsedLead?: ParsedLeadFields;
+} {
+  if (params.demoHandled || !params.inboundText || !params.state.leadRequestedAt) {
+    return { captured: false, state: params.state };
+  }
+  const requestedAtMs = Date.parse(params.state.leadRequestedAt);
+  if (Number.isNaN(requestedAtMs) || params.nowMs - requestedAtMs > params.leadWindowMs) {
+    return { captured: false, state: params.state };
+  }
+
+  const hasAtLeastTwo =
+    Number(Boolean(params.parsedLead.name)) +
+      Number(Boolean(params.parsedLead.city)) +
+      Number(Boolean(params.parsedLead.serviceType)) >=
+    2;
+  if (!hasAtLeastTwo && params.inboundText.length < 10) {
+    return { captured: false, state: params.state };
+  }
+
+  const nextState: ConversationState = {
+    ...params.state,
+    leadRequestedAt: undefined,
+    leadCapturedAt: params.nowIso,
+    flow: undefined,
+    flowStep: undefined,
+    answers: undefined,
+  };
+
+  const replyText = params.parsedLead.name
+    ? `Perfeito, ${params.parsedLead.name}. Já registrei seu pedido. Um atendente chama você em seguida.`
+    : "Perfeito. Já registrei seu pedido. Um atendente chama você em seguida.";
+
+  return {
+    captured: true,
+    state: nextState,
+    replyText,
+    parsedLead: params.parsedLead,
   };
 }
 
