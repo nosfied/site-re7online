@@ -326,10 +326,7 @@ export function advanceQuoteSiteFlow(
   inboundText: string | null
 ): { state: ConversationState; handled: boolean; replyText?: string; completed?: boolean } {
   const text = (inboundText ?? "").trim();
-  const normalized = text.toLowerCase();
-  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(normalized);
-  const hasSite = /\bsite\b/i.test(normalized);
-  const shouldStart = hasPricing && hasSite;
+  const shouldStart = shouldStartQuoteSite(text);
 
   if (!state.flow && !shouldStart) {
     return { state, handled: false };
@@ -386,6 +383,13 @@ export function advanceQuoteSiteFlow(
     },
     replyText: buildQuoteSummary(nextAnswers),
   };
+}
+
+export function shouldStartQuoteSite(text: string | null | undefined): boolean {
+  const normalized = (text ?? "").toLowerCase().trim();
+  const hasPricing = /(orçamento|orcamento|preço|valor|quanto custa)/i.test(normalized);
+  const hasSite = /\bsite\b/i.test(normalized);
+  return hasPricing && hasSite;
 }
 
 function saveFlowAnswer(answers: QuoteSiteAnswers, step: number, text: string): QuoteSiteAnswers {
