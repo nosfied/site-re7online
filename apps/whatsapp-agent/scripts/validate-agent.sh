@@ -10,12 +10,20 @@ WAID_DEMO="${WAID_DEMO:-}"
 WAID_LEAD="${WAID_LEAD:-}"
 
 if [[ -z "$WAID_DEMO" ]]; then
-  echo "FAIL: WAID_DEMO nao definido (ex.: export WAID_DEMO=55849...)" >&2
+  echo "FAIL: WAID_DEMO nao definido." >&2
+  echo "Defina um waId homologado para o cenario de demo E2E (ex.: export WAID_DEMO=55849...)." >&2
   exit 2
 fi
 
 if [[ -z "$WAID_LEAD" ]]; then
-  echo "FAIL: WAID_LEAD nao definido (ex.: export WAID_LEAD=55849...)" >&2
+  echo "FAIL: WAID_LEAD nao definido." >&2
+  echo "Defina um waId homologado para o cenario de lead E2E (ex.: export WAID_LEAD=55849...)." >&2
+  exit 2
+fi
+
+if [[ "$WAID_DEMO" == "$WAID_LEAD" ]]; then
+  echo "FAIL: WAID_DEMO e WAID_LEAD nao devem ser iguais." >&2
+  echo "Use waIds homologados distintos para reduzir interferencia entre os cenarios E2E." >&2
   exit 2
 fi
 
@@ -39,6 +47,11 @@ run_step() {
 }
 
 cd "$ROOT_DIR"
+
+echo "Gate pre-deploy whatsapp-agent"
+echo "tenant=${TENANT} range=${RANGE}"
+echo "waid_demo=${WAID_DEMO} waid_lead=${WAID_LEAD}"
+echo "Obs: os dois waIds devem estar homologados para os cenarios E2E."
 
 run_step 1 "build whatsapp-agent" \
   npm --prefix apps/whatsapp-agent run build
