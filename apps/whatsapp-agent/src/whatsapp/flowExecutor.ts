@@ -105,6 +105,13 @@ export async function runMidDemoFlowExecutor(
     }
 
     if (demoResult.type === "requested") {
+      if (
+        isDemoContinuation &&
+        !hasDemoContext &&
+        Boolean(ctx.conversation.leadRequestedAt)
+      ) {
+        return { handled: false, hasDemoSignal: hasDemoContext };
+      }
       const requested = applyDemoRequestedTransition(ctx.conversation, nowIso);
       return {
         handled: true,
