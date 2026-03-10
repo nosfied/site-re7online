@@ -18,10 +18,7 @@ import {
   logConversationIntent,
   logConversationWindow,
   markTemplateNeeded,
-  maybeCaptureLeadFromReply,
-  maybeRequestLeadCapture,
   shouldAutoReply,
-  shouldStartLeadCapture,
   updateInbound,
   updateInboundMeta,
   updateOutbound,
@@ -2411,65 +2408,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
       }
       if (postDemoFlowResult.leadAction === "requested") {
-        await persistEventSafe(
-          "lead.capture.requested",
-          { intent: "pricing" },
-          updatedConversation.waId,
-          message.messageId
-        );
-      }
-    }
-
-    if (!postDemoFlowResult.handled) {
-      const leadCaptureAttempt = maybeCaptureLeadFromReply({
-        state: updatedConversation,
-        inboundText: message.text,
-        parsedLead: parsedLeadForCapture,
-        nowMs: now,
-        nowIso: new Date(now).toISOString(),
-        demoHandled,
-        leadWindowMs,
-      });
-      if (leadCaptureAttempt.captured) {
-        updatedConversation = leadCaptureAttempt.state;
-        leadUpdated = true;
-        leadHandled = true;
-        leadReplyText = leadCaptureAttempt.replyText;
-        const parsedLead = leadCaptureAttempt.parsedLead;
-        await persistEventSafe(
-          "lead.captured",
-          {
-            name: parsedLead?.name,
-            city: parsedLead?.city,
-            serviceType: parsedLead?.serviceType,
-            rawText: parsedLead?.rawText,
-          },
-          updatedConversation.waId,
-          message.messageId
-        );
-      }
-
-      if (shouldStartLeadCapture({
-        demoHandled,
-        leadReplyText,
-        intent: updatedConversation.intent,
-        windowOpen: isWindowOpen(updatedConversation, now),
-        hasRecentRequest: Boolean(
-          updatedConversation.leadRequestedAt &&
-            now - Date.parse(updatedConversation.leadRequestedAt) <= leadWindowMs
-        ),
-      })) {
-        const leadRequest = maybeRequestLeadCapture({
-          state: updatedConversation,
-          nowIso: new Date(now).toISOString(),
-          shouldRequest: true,
-        });
-        if (leadRequest.requested) {
-          updatedConversation = leadRequest.state;
-          leadUpdated = true;
-          leadHandled = true;
-          leadReplyText = leadRequest.replyText;
-        }
         await persistEventSafe(
           "lead.capture.requested",
           { intent: "pricing" },
