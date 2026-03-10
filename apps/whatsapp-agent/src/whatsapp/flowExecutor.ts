@@ -1,8 +1,13 @@
 import {
+  applyDemoRequestedTransition,
+  applyDemoScheduledTransition,
   advanceQuoteSiteFlow,
+  getDemoScheduledQuickReply,
+  hasDemoContextSignal,
   isWindowOpen,
   maybeCaptureLeadFromReply,
   maybeRequestLeadCapture,
+  parseDemoIntent,
   shouldStartLeadCapture,
   shouldStartQuoteSite,
 } from "../conversation/conversation.service.js";
@@ -11,6 +16,7 @@ import {
   FlowContext,
   FlowMatch,
   FlowResult,
+  MidDemoFlowContext,
   PostDemoFlowContext,
 } from "./flow.types.js";
 
@@ -54,6 +60,80 @@ export async function runFlowExecutor(ctx: FlowContext): Promise<AppliedFlowResu
     flowKey: match.flowKey,
     ...result,
   };
+}
+
+export async function runMidDemoFlowExecutor(
+  ctx: MidDemoFlowContext
+): Promise<AppliedFlowResult> {
+  if (!ctx.message.text || ctx.demoHandled) {
+    return { handled: false, hasDemoSignal: false };
+  }
+
+  const hasDemoContext = hasDemoContextSignal(ctx.message.text);
+  const isDemoContinuation = (ctx.conversation.demoStatus ?? "none") === "requested";
+  const demoResult =
+    hasDemoContext || isDemoContinuation
+      ? parseDemoIntent(ctx.message.text, !isDemoContinuation)
+      : null;
+  const canProcessDemo =
+    hasDemoContext ||
+    isDemoContinuation ||
+    ctx.conversation.intent === "pricing" ||
+    Boolean(ctx.conversation.leadRequestedAt) ||
+    (ctx.conversation.demoStatus ?? "none") !== "none";
+
+  if (demoResult && canProcessDemo) {
+    const nowIso = new Date(ctx.nowMs).toISOString();
+    if (demoResult.type === "scheduled") {
+      const scheduled = applyDemoScheduledTransition({
+        state: ctx.conversation,
+        nowIso,
+        scheduleExtract: demoResult.scheduleExtract,
+      });
+      if (scheduled.updated) {
+        return {
+          handled: true,
+          state: scheduled.state,
+          replyText: scheduled.replyText,
+          demoAction: "scheduled",
+          demoStateUpdated: true,
+          scheduleExtract: demoResult.scheduleExtract,
+          stopPipeline: true,
+          hasDemoSignal: hasDemoContext,
+        };
+      }
+    }
+
+    if (demoResult.type === "requested") {
+      const requested = applyDemoRequestedTransition(ctx.conversation, nowIso);
+      return {
+        handled: true,
+        state: requested.state,
+        replyText: requested.replyText,
+        demoAction: "requested",
+        demoStateUpdated: requested.updated,
+        scheduleExtract: demoResult.scheduleExtract,
+        hasDemoSignal: hasDemoContext,
+      };
+    }
+  }
+
+  const shortReply = getDemoScheduledQuickReply({
+    state: ctx.conversation,
+    inboundText: ctx.message.text,
+    nowMs: ctx.nowMs,
+  });
+  if (shortReply) {
+    return {
+      handled: true,
+      state: ctx.conversation,
+      replyText: shortReply,
+      demoAction: "quick_reply",
+      hasDemoSignal: hasDemoContext,
+    };
+  }
+
+  return { handled: false, hasDemoSignal: hasDemoContext };
 }
 
 export async function runPostDemoFlowExecutor(
