@@ -399,6 +399,162 @@ export type ParsedLeadFields = {
   rawText?: string;
 };
 
+export type DemoIntentResult = {
+  type: "requested" | "scheduled";
+  scheduleExtract?: string;
+};
+
+export function hasDemoContextSignal(text: string): boolean {
+  const normalized = normalizeConversationTextLite(text);
+  const demoContext = [
+    "demo",
+    "demonstra",
+    "reuniao",
+    "reunião",
+    "apresenta",
+    "call",
+    "contato",
+    "horario",
+    "horário",
+  ];
+  return demoContext.some((word) => normalized.includes(word));
+}
+
+export function parseDemoIntent(
+  text: string,
+  requirePositive = true
+): DemoIntentResult | null {
+  const normalized = normalizeConversationTextLite(text);
+  const positives = [
+    "sim",
+    "quero",
+    "pode",
+    "ok",
+    "beleza",
+    "vamos",
+    "aceito",
+    "pode chamar",
+    "pode falar",
+    "gostaria",
+    "agendar",
+    "marcar",
+  ];
+  const hasDemoAction =
+    normalized.includes("demo") ||
+    normalized.includes("demonstra") ||
+    normalized.includes("agendar") ||
+    normalized.includes("marcar");
+  if (
+    requirePositive &&
+    !hasDemoAction &&
+    !positives.some((word) => normalized.includes(word))
+  ) {
+    return null;
+  }
+
+  const hourMatch =
+    normalized.match(/\b([01]?\d|2[0-3])\s*(h|hs)\b/) ??
+    normalized.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+  const dayMatch = normalized.match(
+    /\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/
+  );
+  const dateMatch = normalized.match(/\b(\d{1,2}\/\d{1,2})\b/);
+
+  const hasHour = Boolean(hourMatch);
+  const hasDayOrDate = Boolean(dayMatch || dateMatch);
+
+  if (hasHour && hasDayOrDate) {
+    const extract = [dayMatch?.[0], dateMatch?.[0], hourMatch?.[0]]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return { type: "scheduled", scheduleExtract: extract || undefined };
+  }
+
+  return { type: "requested" };
+}
+
+export function applyDemoRequestedTransition(
+  state: ConversationState,
+  nowIso: string
+): {
+  state: ConversationState;
+  updated: boolean;
+  replyText: string;
+} {
+  if ((state.demoStatus ?? "none") === "requested") {
+    return {
+      state,
+      updated: false,
+      replyText: "Qual melhor dia e horário para a demonstração?",
+    };
+  }
+
+  return {
+    state: {
+      ...state,
+      demoStatus: "requested",
+      lastDemoRequestedAt: nowIso,
+    },
+    updated: true,
+    replyText: "Qual melhor dia e horário para a demonstração?",
+  };
+}
+
+export function applyDemoScheduledTransition(params: {
+  state: ConversationState;
+  nowIso: string;
+  scheduleExtract?: string;
+}): {
+  state: ConversationState;
+  updated: boolean;
+  replyText: string;
+} {
+  if ((params.state.demoStatus ?? "none") === "scheduled") {
+    return {
+      state: params.state,
+      updated: false,
+      replyText:
+        "Perfeito! Vamos entrar em contato no dia/horário informado. Se preferir, diga outra opção.",
+    };
+  }
+
+  return {
+    state: {
+      ...params.state,
+      demoStatus: "scheduled",
+      lastDemoScheduledAt: params.nowIso,
+      demoPreferredSchedule: params.scheduleExtract,
+    },
+    updated: true,
+    replyText:
+      "Perfeito! Vamos entrar em contato no dia/horário informado. Se preferir, diga outra opção.",
+  };
+}
+
+export function getDemoScheduledQuickReply(params: {
+  state: ConversationState;
+  inboundText: string;
+  nowMs: number;
+}): string | null {
+  if ((params.state.demoStatus ?? "none") !== "scheduled") {
+    return null;
+  }
+  const normalizedText = normalizeConversationTextLite(params.inboundText);
+  const scheduledAtMs = Date.parse(params.state.lastDemoScheduledAt ?? "");
+  const isRecentSchedule =
+    !Number.isNaN(scheduledAtMs) && params.nowMs - scheduledAtMs <= 30 * 60 * 1000;
+  const isSimpleAffirmation =
+    /^(sim|ok|beleza|certo|confirmo|confirmado|obrigado|obg|valeu)$/i.test(normalizedText);
+  const isSimpleDecline = /^(nao|não)$/i.test(normalizedText);
+  if (!isRecentSchedule || (!isSimpleAffirmation && !isSimpleDecline)) {
+    return null;
+  }
+  return isSimpleDecline
+    ? "Tudo bem. Se quiser reagendar, envie outro dia e horário."
+    : "Seu agendamento já foi registrado. Nosso time confirma com você pelo WhatsApp.";
+}
+
 export function shouldStartLeadCapture(params: {
   demoHandled: boolean;
   leadReplyText?: string;
@@ -562,6 +718,15 @@ function looksLikeDemoInterruption(text: string) {
     /\b([01]?\d|2[0-3]):[0-5]\d\b/.test(normalized);
 
   return hasDemoKeyword || (hasDayOrDate && hasHour);
+}
+
+function normalizeConversationTextLite(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function logConversationWindow(
