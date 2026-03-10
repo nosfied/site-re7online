@@ -3,6 +3,7 @@ set -euo pipefail
 
 WAID=""
 WAID_OPEN=""
+TENANT="re7online"
 RANGE="1h"
 PORT="${PORT:-3001}"
 REPEAT=1
@@ -33,6 +34,10 @@ while [[ $# -gt 0 ]]; do
       WAID_OPEN="$2"
       shift 2
       ;;
+    --tenant)
+      TENANT="$2"
+      shift 2
+      ;;
     --repeat)
       REPEAT="$2"
       shift 2
@@ -42,7 +47,7 @@ while [[ $# -gt 0 ]]; do
         WAID="$1"
         shift 1
       else
-        echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
+        echo "Uso: $0 <waId> [--tenant <tenantId>] [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
         exit 2
       fi
       ;;
@@ -50,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$WAID" ]]; then
-  echo "Uso: $0 <waId> [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
+  echo "Uso: $0 <waId> [--tenant <tenantId>] [--waid-open <waId>] [--range 1h|24h|7d|30d] [--port 3001] [--repeat N]" >&2
   exit 2
 fi
 
@@ -214,7 +219,7 @@ run_once() {
     return 1
   fi
   echo "runId=${RUN_ID} rid=${RID}"
-  echo "BASE_URL=${BASE_URL} RANGE=${RANGE} HANDOFF_ENABLED=${HANDOFF_ENABLED} HANDOFF_ATTENDANT_WAID=${HANDOFF_ATTENDANT_WAID} EXPECTED_TEMPLATE_NAME=${EXPECTED_TEMPLATE_NAME}"
+  echo "BASE_URL=${BASE_URL} TENANT=${TENANT} RANGE=${RANGE} HANDOFF_ENABLED=${HANDOFF_ENABLED} HANDOFF_ATTENDANT_WAID=${HANDOFF_ATTENDANT_WAID} EXPECTED_TEMPLATE_NAME=${EXPECTED_TEMPLATE_NAME}"
   echo "ADMIN_TOKEN=$(redact_token "${ADMIN_TOKEN}")"
 
 log_step "A: reset e2e state"
@@ -222,26 +227,25 @@ log_step "A: reset e2e state"
     --lead "${WAID}" \
     --attendant "${HANDOFF_ATTENDANT_WAID}" \
     --events; then
+    echo "WARN: reset-e2e-state local falhou; seguindo com reset via admin API" >&2
+  fi
+  admin_reset_conversation() {
+    local target="$1"
+    curl -s -o /tmp/re7-whatsapp-agent-admin-reset.json -w "%{http_code}" \
+      -X POST \
+      -H "X-Admin-Token: ${ADMIN_TOKEN}" \
+      "${BASE_URL}/admin/conversations/${target}/reset?clientKey=${TENANT}"
+  }
+  local_status=$(admin_reset_conversation "${WAID}" || true)
+  if [[ "${local_status}" != "200" ]]; then
+    echo "FAIL: reset-conversation lead falhou (http=${local_status}) tenant=${TENANT}" >&2
     return 1
   fi
-  if [[ "${DISABLE_DEBUG_COMMANDS:-}" != "true" ]]; then
-    admin_reset_conversation() {
-      local target="$1"
-      curl -s -o /tmp/re7-whatsapp-agent-admin-reset.json -w "%{http_code}" \
-        -H "Content-Type: application/json" \
-        -H "X-Admin-Token: ${ADMIN_TOKEN}" \
-        -d "{\"waId\":\"${target}\"}" \
-        "${BASE_URL}/admin/debug/reset-conversation"
-    }
-    local_status=$(admin_reset_conversation "${WAID}" || true)
+  if [[ -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+    local_status=$(admin_reset_conversation "${HANDOFF_ATTENDANT_WAID}" || true)
     if [[ "${local_status}" != "200" ]]; then
-      echo "WARN: reset-conversation lead falhou (http=${local_status})" >&2
-    fi
-    if [[ -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-      local_status=$(admin_reset_conversation "${HANDOFF_ATTENDANT_WAID}" || true)
-      if [[ "${local_status}" != "200" ]]; then
-        echo "WARN: reset-conversation attendant falhou (http=${local_status})" >&2
-      fi
+      echo "FAIL: reset-conversation attendant falhou (http=${local_status}) tenant=${TENANT}" >&2
+      return 1
     fi
   fi
 
@@ -290,7 +294,7 @@ JSON
   sleep 2
   LEAD_OPEN_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-open-${RID}.json"
   wait_lead_open_recorded() {
-    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&clientKey=${TENANT}&limit=200&order=desc" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_OPEN_FILE"
     if ! grep -q '"ok":true' "$LEAD_OPEN_FILE"; then
       return 1
@@ -346,7 +350,7 @@ JSON
   SCHEDULE_REQUEST_ID=""
   LEAD_REQ_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-req-${RID}.json"
   capture_schedule_request_id() {
-    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=200&order=desc" \
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&clientKey=${TENANT}&limit=200&order=desc" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_REQ_FILE"
     if ! grep -q '"ok":true' "$LEAD_REQ_FILE"; then
       return 1
@@ -365,7 +369,13 @@ JSON
     ' "$LEAD_REQ_FILE" "$RID") || return 1
     return 0
   }
-  if poll_until "schedule requestId não encontrado" "$POLL_TRIES_DEFAULT" "$POLL_SLEEP_DEFAULT" capture_schedule_request_id; then
+  for _ in $(seq 1 "$POLL_TRIES_DEFAULT"); do
+    if capture_schedule_request_id; then
+      break
+    fi
+    sleep "$POLL_SLEEP_DEFAULT"
+  done
+  if [[ -n "${SCHEDULE_REQUEST_ID}" ]]; then
     echo "scheduleRequestId (debug-only)=${SCHEDULE_REQUEST_ID}"
   else
     echo "WARN: scheduleRequestId não encontrado (debug-only)" >&2
@@ -377,7 +387,7 @@ JSON
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     echo "Step C poll start: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&clientKey=${TENANT}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
@@ -429,7 +439,7 @@ JSON
   log_step "D: validar via admin"
   METRICS_FILE="/tmp/re7-whatsapp-agent-admin-demo-metrics-${RID}.json"
   check_metrics() {
-    curl -s "${BASE_URL}/admin/metrics?range=${RANGE}" \
+    curl -s "${BASE_URL}/admin/metrics?range=${RANGE}&clientKey=${TENANT}" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$METRICS_FILE"
     if ! grep -q '"ok":true' "$METRICS_FILE"; then
       return 1
@@ -452,7 +462,7 @@ JSON
 
   LEAD_FILE="/tmp/re7-whatsapp-agent-admin-demo-lead-${RID}.json"
   check_lead_followup() {
-    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&limit=120&order=desc" \
+    curl -s "${BASE_URL}/admin/messages?waId=${WAID}&clientKey=${TENANT}&limit=120&order=desc" \
       -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$LEAD_FILE"
     if ! grep -q '"ok":true' "$LEAD_FILE"; then
       return 1
@@ -483,7 +493,7 @@ JSON
   if [[ "${HANDOFF_ENABLED:-false}" == "true" && -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
     ATT_FILE="/tmp/re7-whatsapp-agent-admin-demo-attendant-${RID}.json"
     check_attendant_closed() {
-      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
+      curl -s "${BASE_URL}/admin/messages?waId=${HANDOFF_ATTENDANT_WAID}&clientKey=${TENANT}&limit=${ATT_LIMIT}&order=desc&type=TEMPLATE&status=SENT&templateName=${EXPECTED_TEMPLATE_NAME}" \
         -H "X-Admin-Token: ${ADMIN_TOKEN}" > "$ATT_FILE"
       if ! grep -q '"ok":true' "$ATT_FILE"; then
         return 1
