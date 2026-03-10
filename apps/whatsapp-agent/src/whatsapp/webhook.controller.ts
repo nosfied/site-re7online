@@ -2176,35 +2176,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let hasDemoSignal = false;
 
     if (message.text) {
-      if ((updatedConversation.demoStatus ?? "none") === "scheduled") {
-        const normalizedText = normalizeLite(message.text);
-        const isGreetingOnly =
-          /^(oi|ola|bom dia|boa tarde|boa noite|oi bom dia|oi boa tarde|oi boa noite|ola bom dia|ola boa tarde|ola boa noite)$/i.test(
-            normalizedText
-          );
-        const isReschedule = normalizedText.includes("reagendar");
-        const looksLikeDemoFollowup =
-          /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
-            normalizedText
-          );
-        if (!isReschedule && looksLikeDemoFollowup && !isGreetingOnly) {
-          skipDemoReplies = true;
-          demoHandled = true;
-          flowReplyText = undefined;
-          logger.info({
-            event: "demo.guardrail.scheduled_skip",
-            waId: maskNumber(normalizedFrom),
-            reason: "looks_like_demo_followup",
-            intent: updatedConversation.intent ?? "unknown",
-            text: message.text,
-            route: meta?.route,
-            method: meta?.method,
-            requestId: meta?.requestId,
-          });
-          await storage.upsertConversation(updatedConversation);
-          continue;
-        }
-      }
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -2319,6 +2290,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
         if (midDemoFlowResult.demoAction === "quick_reply") {
           flowReplyText = undefined;
+        }
+        if (midDemoFlowResult.demoAction === "scheduled_skip") {
+          skipDemoReplies = true;
+          flowReplyText = undefined;
+          logger.info({
+            event: "demo.guardrail.scheduled_skip",
+            waId: maskNumber(normalizedFrom),
+            reason: "looks_like_demo_followup",
+            intent: updatedConversation.intent ?? "unknown",
+            text: message.text,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+          await storage.upsertConversation(updatedConversation);
+          continue;
         }
       }
     }

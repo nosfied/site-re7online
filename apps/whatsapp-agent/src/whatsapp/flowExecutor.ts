@@ -20,6 +20,32 @@ import {
   PostDemoFlowContext,
 } from "./flow.types.js";
 
+function normalizeDemoText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldSkipScheduledDemoFollowup(state: MidDemoFlowContext["conversation"], text: string) {
+  if ((state.demoStatus ?? "none") !== "scheduled") {
+    return false;
+  }
+  const normalizedText = normalizeDemoText(text);
+  const isGreetingOnly =
+    /^(oi|ola|bom dia|boa tarde|boa noite|oi bom dia|oi boa tarde|oi boa noite|ola bom dia|ola boa tarde|ola boa noite)$/i.test(
+      normalizedText
+    );
+  const isReschedule = normalizedText.includes("reagendar");
+  const looksLikeDemoFollowup =
+    /demonstra|demo|agend|reagendar|segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo|hoje|amanha|amanhã|\b\d{1,2}\s?h\b|\b\d{1,2}:\d{2}\b|manh[aã]|tarde|noite/i.test(
+      normalizedText
+    );
+  return !isReschedule && looksLikeDemoFollowup && !isGreetingOnly;
+}
+
 function shouldMatchQuoteSite(ctx: FlowContext) {
   if (ctx.conversation.flow === "quote_site") {
     return true;
@@ -67,6 +93,16 @@ export async function runMidDemoFlowExecutor(
 ): Promise<AppliedFlowResult> {
   if (!ctx.message.text || ctx.demoHandled) {
     return { handled: false, hasDemoSignal: false };
+  }
+
+  if (shouldSkipScheduledDemoFollowup(ctx.conversation, ctx.message.text)) {
+    return {
+      handled: true,
+      state: ctx.conversation,
+      demoAction: "scheduled_skip",
+      stopPipeline: true,
+      hasDemoSignal: false,
+    };
   }
 
   const hasDemoContext = hasDemoContextSignal(ctx.message.text);
