@@ -6,6 +6,7 @@ import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
+import { acquireConversationMutex } from "./conversationMutex.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
@@ -1064,28 +1065,33 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   );
 
   for (const message of normalized.messages) {
-    const existing = await storage.findByMessageId(message.messageId);
-    if (existing?.status === "replied") {
-      const repliedAt = existing.repliedAt ? Date.parse(existing.repliedAt) : 0;
-      const now = Date.now();
-      const withinWindow =
-        repliedAt > 0 &&
-        now - repliedAt <= env.WHATSAPP_DEDUP_WINDOW_SECONDS * 1000;
-
-      if (withinWindow) {
-        logger.warn({
-          event: "webhook.duplicate",
-          messageId: message.messageId,
-          from: maskNumber(message.from),
-          route: meta?.route,
-          method: meta?.method,
-          requestId: meta?.requestId,
-        });
-        continue;
-      }
-    }
-
     const normalizedFrom = normalizeWaId(message.from);
+    const releaseConversationMutex = await acquireConversationMutex(
+      tenantClientKey,
+      normalizedFrom
+    );
+    try {
+      const existing = await storage.findByMessageId(message.messageId);
+      if (existing?.status === "replied") {
+        const repliedAt = existing.repliedAt ? Date.parse(existing.repliedAt) : 0;
+        const now = Date.now();
+        const withinWindow =
+          repliedAt > 0 &&
+          now - repliedAt <= env.WHATSAPP_DEDUP_WINDOW_SECONDS * 1000;
+
+        if (withinWindow) {
+          logger.warn({
+            event: "webhook.duplicate",
+            messageId: message.messageId,
+            from: maskNumber(message.from),
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+          continue;
+        }
+      }
+
     logger.info({
       event: "tenant.resolved",
       tenantId: appliedTenantConfig?.id ?? "default",
@@ -2578,6 +2584,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
       });
+    } finally {
+      releaseConversationMutex();
+    }
   }
 }
 
