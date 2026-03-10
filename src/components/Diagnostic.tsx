@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import Container from "@/components/Container";
 import Button from "@/components/Button";
 
-const WHATSAPP_NUMBER = "5584992172110";
+const WHATSAPP_NUMBER = "558494312982";
 
 const segments = [
   "Serviços",
