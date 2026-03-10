@@ -5,24 +5,19 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
-import { runFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
+import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
 import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
-  applyDemoRequestedTransition,
-  applyDemoScheduledTransition,
   applyAdminCommand,
   clearTemplateNeeded,
   decideOutboundPolicy,
-  getDemoScheduledQuickReply,
   getHandoffStatus,
   getOrCreateConversation,
   handleHandoff,
-  hasDemoContextSignal,
   logConversationIntent,
   logConversationWindow,
   markTemplateNeeded,
-  parseDemoIntent,
   shouldAutoReply,
   updateInbound,
   updateInboundMeta,
@@ -2210,113 +2205,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           continue;
         }
       }
-      const hasDemoContext = hasDemoContextSignal(message.text);
-      hasDemoSignal = hasDemoContext;
-      const isDemoContinuation = (updatedConversation.demoStatus ?? "none") === "requested";
+      const midDemoFlowResult = await runMidDemoFlowExecutor({
+        tenantId: appliedTenantConfig?.id ?? "default",
+        clientKey: tenantClientKey,
+        requestId: meta?.requestId,
+        meta: {
+          route: meta?.route,
+          method: meta?.method,
+        },
+        message,
+        conversation: updatedConversation,
+        nowMs: now,
+        demoHandled,
+      });
+      hasDemoSignal = midDemoFlowResult.hasDemoSignal ?? false;
 
-      const demoResult =
-        hasDemoContext || isDemoContinuation
-          ? parseDemoIntent(message.text, !isDemoContinuation)
-          : null;
-      const canProcessDemo =
-        hasDemoContext ||
-        isDemoContinuation ||
-        updatedConversation.intent === "pricing" ||
-        Boolean(updatedConversation.leadRequestedAt) ||
-        (updatedConversation.demoStatus ?? "none") !== "none";
-      if (demoResult && canProcessDemo) {
-        const nowIso = new Date(now).toISOString();
-        if (demoResult.type === "scheduled") {
-          const scheduled = applyDemoScheduledTransition({
-            state: updatedConversation,
-            nowIso,
-            scheduleExtract: demoResult.scheduleExtract,
-          });
-          if (!scheduled.updated) {
-            // Already scheduled; keep previous behavior by ignoring repeated schedule transitions.
-          } else {
-            updatedConversation = scheduled.state;
-            demoUpdated = true;
-            demoHandled = true;
-            demoReplyText = scheduled.replyText;
-            await persistEventSafe(
-              "lead.demo_scheduled",
-              {
-                intent: updatedConversation.intent ?? "unknown",
-                scheduleExtract: demoResult.scheduleExtract,
-              },
-              updatedConversation.waId,
-              message.messageId
-            );
-            logger.info({
-              event: "lead.demo_scheduled",
-              waId: maskNumber(normalizedFrom),
-              intent: updatedConversation.intent ?? "unknown",
-              scheduleExtract: demoResult.scheduleExtract,
-              clientId: tenantClientId,
-              clientKey: tenantClientKey,
-              route: meta?.route,
-              method: meta?.method,
-              requestId: meta?.requestId,
-            });
-            const notifyKey = `${normalizedFrom}|${tenantHandoffAttendantWaid}|${message.messageId}|${tenantHandoffTemplateName}`;
-            if (env.HANDOFF_ENABLED && tenantHandoffAttendantWaid) {
-              if (updatedConversation.lastHandoffDemoScheduledKey === notifyKey) {
-                logger.info({
-                  event: "handoff.notify_dedup",
-                  waId: maskNumber(normalizedFrom),
-                  notifyKey,
-                  decision: "skip",
-                  requestId: meta?.requestId,
-                });
-              } else {
-                const scheduleText = demoResult.scheduleExtract ?? "A combinar";
-                const snippet =
-                  message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
-                await notifyAttendantDemoScheduled({
-                  attendantWaId: tenantHandoffAttendantWaid,
-                  leadWaId: normalizedFrom,
-                  intent: updatedConversation.intent ?? "unknown",
-                  schedule: scheduleText,
-                  snippet,
-                  templateName: tenantHandoffTemplateName,
-                  requestId: meta?.requestId,
-                });
-                updatedConversation = {
-                  ...updatedConversation,
-                  lastHandoffDemoScheduledKey: notifyKey,
-                  lastHandoffDemoScheduledAt: nowIso,
-                };
-                demoUpdated = true;
-              }
-            }
-            await storage.upsertConversation(updatedConversation);
-            if (demoReplyText) {
-              await sendOutboundText({
-                toE164: message.from,
-                waId: normalizedFrom,
-                intent: updatedConversation.intent,
-                messageId: message.messageId,
-                replyText: demoReplyText,
-                guard: inboundGuard,
-              });
-            }
-            continue;
-          }
-        }
-        if (!demoHandled && demoResult.type === "requested") {
-          const requested = applyDemoRequestedTransition(updatedConversation, nowIso);
-          updatedConversation = requested.state;
-          demoHandled = true;
-          demoReplyText = requested.replyText;
+      if (midDemoFlowResult.handled) {
+        updatedConversation = midDemoFlowResult.state ?? updatedConversation;
+        demoHandled = true;
+        demoReplyText = midDemoFlowResult.replyText;
+        if (midDemoFlowResult.demoAction === "requested") {
           flowReplyText = undefined;
-          if (requested.updated) {
+          if (midDemoFlowResult.demoStateUpdated) {
             demoUpdated = true;
             await persistEventSafe(
               "lead.demo_requested",
               {
                 intent: updatedConversation.intent ?? "unknown",
-                scheduleExtract: demoResult.scheduleExtract,
+                scheduleExtract: midDemoFlowResult.scheduleExtract,
               },
               updatedConversation.waId,
               message.messageId
@@ -2325,7 +2241,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               event: "lead.demo_requested",
               waId: maskNumber(normalizedFrom),
               intent: updatedConversation.intent ?? "unknown",
-              scheduleExtract: demoResult.scheduleExtract,
+              scheduleExtract: midDemoFlowResult.scheduleExtract,
               clientId: tenantClientId,
               clientKey: tenantClientKey,
               route: meta?.route,
@@ -2334,18 +2250,75 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
           }
         }
-      }
-
-      if (!demoHandled) {
-        const shortReply = getDemoScheduledQuickReply({
-          state: updatedConversation,
-          inboundText: message.text,
-          nowMs: now,
-        });
-        if (shortReply) {
-          demoHandled = true;
+        if (midDemoFlowResult.demoAction === "scheduled") {
+          const nowIso = new Date(now).toISOString();
+          demoUpdated = true;
+          await persistEventSafe(
+            "lead.demo_scheduled",
+            {
+              intent: updatedConversation.intent ?? "unknown",
+              scheduleExtract: midDemoFlowResult.scheduleExtract,
+            },
+            updatedConversation.waId,
+            message.messageId
+          );
+          logger.info({
+            event: "lead.demo_scheduled",
+            waId: maskNumber(normalizedFrom),
+            intent: updatedConversation.intent ?? "unknown",
+            scheduleExtract: midDemoFlowResult.scheduleExtract,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+          });
+          const notifyKey = `${normalizedFrom}|${tenantHandoffAttendantWaid}|${message.messageId}|${tenantHandoffTemplateName}`;
+          if (env.HANDOFF_ENABLED && tenantHandoffAttendantWaid) {
+            if (updatedConversation.lastHandoffDemoScheduledKey === notifyKey) {
+              logger.info({
+                event: "handoff.notify_dedup",
+                waId: maskNumber(normalizedFrom),
+                notifyKey,
+                decision: "skip",
+                requestId: meta?.requestId,
+              });
+            } else {
+              const scheduleText = midDemoFlowResult.scheduleExtract ?? "A combinar";
+              const snippet =
+                message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
+              await notifyAttendantDemoScheduled({
+                attendantWaId: tenantHandoffAttendantWaid,
+                leadWaId: normalizedFrom,
+                intent: updatedConversation.intent ?? "unknown",
+                schedule: scheduleText,
+                snippet,
+                templateName: tenantHandoffTemplateName,
+                requestId: meta?.requestId,
+              });
+              updatedConversation = {
+                ...updatedConversation,
+                lastHandoffDemoScheduledKey: notifyKey,
+                lastHandoffDemoScheduledAt: nowIso,
+              };
+              demoUpdated = true;
+            }
+          }
+          await storage.upsertConversation(updatedConversation);
+          if (demoReplyText) {
+            await sendOutboundText({
+              toE164: message.from,
+              waId: normalizedFrom,
+              intent: updatedConversation.intent,
+              messageId: message.messageId,
+              replyText: demoReplyText,
+              guard: inboundGuard,
+            });
+          }
+          continue;
+        }
+        if (midDemoFlowResult.demoAction === "quick_reply") {
           flowReplyText = undefined;
-          demoReplyText = shortReply;
         }
       }
     }

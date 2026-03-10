@@ -25,6 +25,10 @@ export type FlowResult = {
   state?: ConversationState;
   replyText?: string;
   leadAction?: "captured" | "requested";
+  demoAction?: "requested" | "scheduled" | "quick_reply";
+  demoStateUpdated?: boolean;
+  scheduleExtract?: string;
+  hasDemoSignal?: boolean;
   parsedLead?: ParsedLeadFields;
 };
 
@@ -36,4 +40,9 @@ export type PostDemoFlowContext = FlowContext & {
   demoHandled: boolean;
   leadReplyText?: string;
   parsedLead?: ParsedLeadFields;
+};
+
+export type MidDemoFlowContext = FlowContext & {
+  nowMs: number;
+  demoHandled: boolean;
 };
