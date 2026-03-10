@@ -25,7 +25,7 @@ export type FlowResult = {
   state?: ConversationState;
   replyText?: string;
   leadAction?: "captured" | "requested";
-  demoAction?: "requested" | "scheduled" | "quick_reply";
+  demoAction?: "requested" | "scheduled" | "quick_reply" | "scheduled_skip";
   demoStateUpdated?: boolean;
   scheduleExtract?: string;
   hasDemoSignal?: boolean;
