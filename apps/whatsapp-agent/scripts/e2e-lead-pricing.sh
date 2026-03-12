@@ -229,7 +229,7 @@ for _ in 1 2 3 4 5; do
     exit 1
   fi
   read -r lead_requested_count lead_captured_count lead_template_count < <(
-    node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};process.stdout.write(String(lead.requested??0)+' '+String(lead.captured??0)+' '+String(lead.template_sent??0));" "$METRICS_FILE"
+    node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const lead=data.lead||{};console.log(String(lead.requested??0)+' '+String(lead.captured??0)+' '+String(lead.template_sent??0));" "$METRICS_FILE"
   )
   if [[ "$lead_captured_count" -ge 1 && "$lead_requested_count" -ge 1 && "$lead_template_count" -ge 1 ]]; then
     lead_captured_ok="yes"
