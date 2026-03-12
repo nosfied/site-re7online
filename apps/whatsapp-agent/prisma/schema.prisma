@@ -229,4 +229,7 @@ model Lead {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, waId])
+  @@index([tenantId, createdAt])
 }
