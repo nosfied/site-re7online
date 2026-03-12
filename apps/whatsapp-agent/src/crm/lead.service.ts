@@ -21,6 +21,7 @@ export async function upsertLeadFromCapture(params: {
       where: { id: existing.id },
       data: {
         name: params.name ?? existing.name,
+        phone: existing.phone ?? params.waId,
         city: params.city ?? existing.city,
         service: params.service ?? existing.service,
         status: "QUALIFIED",
@@ -33,6 +34,7 @@ export async function upsertLeadFromCapture(params: {
       tenantId: params.tenantId,
       waId: params.waId,
       name: params.name,
+      phone: params.waId,
       city: params.city,
       service: params.service,
     },
