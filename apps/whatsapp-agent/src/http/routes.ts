@@ -1092,6 +1092,51 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/leads") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+
+        const leads = await prisma.lead.findMany({
+          where: { tenantId: client.id },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        });
+
+        json(res, 200, {
+          ok: true,
+          count: leads.length,
+          items: leads.map((l) => ({
+            id: l.id,
+            waId: l.waId,
+            name: l.name,
+            city: l.city,
+            service: l.service,
+            status: l.status,
+            createdAt: l.createdAt,
+          })),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.leads.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "internal_error" });
+      }
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/admin/metrics") {
       try {
         const range = String(query.range ?? "24h");
