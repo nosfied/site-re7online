@@ -1,7 +1,7 @@
 -- CreateTable
 CREATE TABLE "Lead" (
     "id" TEXT NOT NULL,
-    "tenantId" TEXT NOT NULL,
+    "tenantId" UUID NOT NULL,
     "waId" TEXT NOT NULL,
     "name" TEXT,
     "phone" TEXT,

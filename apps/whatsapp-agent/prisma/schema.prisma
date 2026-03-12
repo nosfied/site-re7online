@@ -215,7 +215,7 @@ model ConversationRuntimeState {
 model Lead {
   id        String   @id @default(cuid())
 
-  tenantId  String
+  tenantId  String   @db.Uuid
   client    Client   @relation(fields: [tenantId], references: [id])
 
   waId      String
