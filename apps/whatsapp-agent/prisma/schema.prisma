@@ -54,6 +54,7 @@ model Client {
   inboundMessages InboundMessage[]
   outboundMessages OutboundMessage[]
   events        Event[]
+  leads         Lead[]
   runtimeStates ConversationRuntimeState[]
 }
 
@@ -209,4 +210,23 @@ model ConversationRuntimeState {
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+
+  tenantId  String
+  client    Client   @relation(fields: [tenantId], references: [id])
+
+  waId      String
+
+  name      String?
+  phone     String?
+  city      String?
+  service   String?
+
+  status    String   @default("NEW")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
