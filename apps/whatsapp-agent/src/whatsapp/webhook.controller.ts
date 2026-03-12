@@ -45,6 +45,7 @@ import {
   ConversationState,
 } from "../conversation/conversation.types.js";
 import { resolveTenant } from "../tenancy/tenantResolver.js";
+import { upsertLeadFromCapture } from "../crm/lead.service.js";
 import {
   persistConversationWindow,
   persistEvent,
@@ -2344,6 +2345,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       if (postDemoFlowResult.leadAction === "captured") {
         const parsedLead = postDemoFlowResult.parsedLead;
+        if (tenantClientId) {
+          await upsertLeadFromCapture({
+            tenantId: tenantClientId,
+            waId: updatedConversation.waId,
+            name: parsedLead?.name,
+            city: parsedLead?.city,
+            service: parsedLead?.serviceType,
+          });
+        }
         await persistEventSafe(
           "lead.captured",
           {
