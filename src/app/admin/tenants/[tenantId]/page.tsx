@@ -173,12 +173,20 @@ export default function TenantEditPage() {
             <h1 className="text-2xl font-bold">Editar tenant</h1>
             <p className="text-sm text-white/70 font-mono">{tenantId}</p>
           </div>
-          <Link
-            href="/admin/tenants"
-            className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-          >
-            Voltar
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/tenants/${encodeURIComponent(tenantId)}/inbox`}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Inbox
+            </Link>
+            <Link
+              href="/admin/tenants"
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Voltar
+            </Link>
+          </div>
         </header>
 
         <AdminConfigPanel

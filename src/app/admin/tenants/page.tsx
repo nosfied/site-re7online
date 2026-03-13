@@ -196,12 +196,20 @@ export default function TenantsSummaryPage() {
                   <td className="px-3 py-2">{item.counts.outbound.sent_template}</td>
                   <td className="px-3 py-2">{item.counts.outbound.failed}</td>
                   <td className="px-3 py-2">
-                    <Link
-                      href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
-                      className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                    >
-                      Edit
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
+                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                      >
+                        Edit
+                      </Link>
+                      <Link
+                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/inbox`}
+                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                      >
+                        Inbox
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
