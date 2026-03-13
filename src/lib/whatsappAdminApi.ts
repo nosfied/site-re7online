@@ -19,6 +19,36 @@ export type TenantSummaryItem = {
   };
 };
 
+export type InboxMessageItem = {
+  direction: "INBOUND" | "OUTBOUND";
+  type: string;
+  status: string;
+  intent: string | null;
+  bodyText: string | null;
+  templateName: string | null;
+  templateLang: string | null;
+  requestId: string | null;
+  messageId: string | null;
+  metaMessageId: string | null;
+  errorBody: string | null;
+  createdAt: string;
+};
+
+export type InboxConversationItem = {
+  waId: string;
+  lastMessage: {
+    direction: "INBOUND" | "OUTBOUND";
+    type: string;
+    status: string;
+    bodyText: string | null;
+    templateName: string | null;
+    createdAt: string;
+  } | null;
+  leadStatus: string | null;
+  leadName: string | null;
+  updatedAt: string;
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -211,6 +241,48 @@ export async function updateTenantById(
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+export async function fetchConversations(
+  connection: AdminConnection,
+  clientKey: string,
+  options?: { limit?: number }
+): Promise<{
+  ok: true;
+  count: number;
+  items: InboxConversationItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  return requestJson(connection, `/admin/conversations?${params.toString()}`);
+}
+
+export async function fetchConversation(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string,
+  options?: { limit?: number; order?: "asc" | "desc" }
+): Promise<{
+  ok: true;
+  waId: string;
+  count: number;
+  items: InboxMessageItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.order) {
+    params.set("order", options.order);
+  }
+  return requestJson(
+    connection,
+    `/admin/conversation/${encodeURIComponent(waId)}?${params.toString()}`
+  );
 }
 
 export function normalizeWaIdList(input: string) {

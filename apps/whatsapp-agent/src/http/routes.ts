@@ -238,6 +238,256 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/conversations") {
+      try {
+        const limitRaw = Number(query.limit ?? 100);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+
+        const conversations = await prisma.conversation.findMany({
+          where: { clientId: client.id },
+          orderBy: { updatedAt: "desc" },
+          take: limit,
+          select: {
+            waId: true,
+            updatedAt: true,
+          },
+        });
+        const waIds = Array.from(new Set(conversations.map((item) => item.waId)));
+        if (waIds.length === 0) {
+          json(res, 200, { ok: true, count: 0, items: [] });
+          return;
+        }
+
+        const [leads, inbound, outbound] = await Promise.all([
+          prisma.lead.findMany({
+            where: { tenantId: client.id, waId: { in: waIds } },
+            select: { waId: true, name: true, status: true },
+          }),
+          prisma.inboundMessage.findMany({
+            where: { clientId: client.id, waId: { in: waIds } },
+            orderBy: { createdAt: "desc" },
+            take: limit * 3,
+            select: {
+              waId: true,
+              type: true,
+              bodyText: true,
+              createdAt: true,
+            },
+          }),
+          prisma.outboundMessage.findMany({
+            where: { clientId: client.id, waId: { in: waIds } },
+            orderBy: { createdAt: "desc" },
+            take: limit * 3,
+            select: {
+              waId: true,
+              type: true,
+              status: true,
+              bodyText: true,
+              templateName: true,
+              createdAt: true,
+            },
+          }),
+        ]);
+
+        const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
+        const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
+        for (const item of inbound) {
+          if (!latestInboundByWaId.has(item.waId)) {
+            latestInboundByWaId.set(item.waId, item);
+          }
+        }
+        const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
+        for (const item of outbound) {
+          if (!latestOutboundByWaId.has(item.waId)) {
+            latestOutboundByWaId.set(item.waId, item);
+          }
+        }
+
+        const items = conversations.map((conversation) => {
+          const lead = leadByWaId.get(conversation.waId);
+          const latestInbound = latestInboundByWaId.get(conversation.waId);
+          const latestOutbound = latestOutboundByWaId.get(conversation.waId);
+          const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
+          const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
+          const lastMessage =
+            inboundAt >= outboundAt
+              ? latestInbound
+                ? {
+                  direction: "INBOUND",
+                  type: latestInbound.type,
+                  status: "RECEIVED",
+                  bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
+                  templateName: null,
+                  createdAt: latestInbound.createdAt,
+                }
+                : null
+              : latestOutbound
+                ? {
+                  direction: "OUTBOUND",
+                  type: latestOutbound.type,
+                  status: latestOutbound.status,
+                  bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
+                  templateName: latestOutbound.templateName ?? null,
+                  createdAt: latestOutbound.createdAt,
+                }
+                : null;
+
+          return {
+            waId: conversation.waId,
+            lastMessage,
+            leadStatus: lead?.status ?? null,
+            leadName: lead?.name ?? null,
+            updatedAt: conversation.updatedAt,
+          };
+        });
+
+        json(res, 200, {
+          ok: true,
+          count: items.length,
+          items,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/conversation/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const orderRaw = String(query.order ?? "asc").trim().toLowerCase();
+        const order = orderRaw === "desc" ? "desc" : "asc";
+        const limitRaw = Number(query.limit ?? 200);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
+        const includeRaw = String(query.includeRaw ?? "false") === "true";
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+
+        const [inbound, outbound] = await Promise.all([
+          prisma.inboundMessage.findMany({
+            where: { clientId: client.id, waId },
+            orderBy: { createdAt: order },
+            take: limit,
+            select: {
+              createdAt: true,
+              messageId: true,
+              type: true,
+              requestId: true,
+              bodyText: true,
+              rawPayload: includeRaw,
+            },
+          }),
+          prisma.outboundMessage.findMany({
+            where: { clientId: client.id, waId },
+            orderBy: { createdAt: order },
+            take: limit,
+            select: {
+              createdAt: true,
+              messageId: true,
+              type: true,
+              status: true,
+              requestId: true,
+              bodyText: true,
+              templateName: true,
+              templateLang: true,
+              metaMessageId: true,
+              errorBody: true,
+              rawPayload: includeRaw,
+            },
+          }),
+        ]);
+
+        const items = [
+          ...inbound.map((item) => ({
+            direction: "INBOUND",
+            type: item.type,
+            status: "RECEIVED",
+            intent: null,
+            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+            templateName: null,
+            templateLang: null,
+            requestId: item.requestId,
+            messageId: item.messageId,
+            metaMessageId: null,
+            errorBody: null,
+            createdAt: item.createdAt,
+            rawPayload: includeRaw ? item.rawPayload : undefined,
+          })),
+          ...outbound.map((item) => ({
+            direction: "OUTBOUND",
+            type: item.type,
+            status: item.status,
+            intent: null,
+            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+            templateName: item.templateName,
+            templateLang: item.templateLang,
+            requestId: item.requestId,
+            messageId: item.messageId,
+            metaMessageId: item.metaMessageId,
+            errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
+            createdAt: item.createdAt,
+            rawPayload: includeRaw ? item.rawPayload : undefined,
+          })),
+        ]
+          .sort((a, b) => {
+            const aTs =
+              a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
+            const bTs =
+              b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
+            const aValid = Number.isFinite(aTs);
+            const bValid = Number.isFinite(bTs);
+            if (!aValid && !bValid) return 0;
+            if (!aValid) return 1;
+            if (!bValid) return -1;
+            return order === "asc" ? aTs - bTs : bTs - aTs;
+          })
+          .slice(0, limit);
+
+        json(res, 200, {
+          ok: true,
+          waId,
+          count: items.length,
+          items,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversation.messages.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/admin/clients") {
       if (requireSuperadmin()) return;
       const clients = await prisma.client.findMany({
