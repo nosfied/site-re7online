@@ -55,6 +55,7 @@ model Client {
   outboundMessages OutboundMessage[]
   events        Event[]
   leads         Lead[]
+  leadNotes     LeadNote[]
   runtimeStates ConversationRuntimeState[]
 }
 
@@ -229,7 +230,22 @@ model Lead {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  notes     LeadNote[]
 
   @@unique([tenantId, waId])
+  @@index([tenantId, createdAt])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  tenantId  String   @db.Uuid
+  body      String
+  createdAt DateTime @default(now())
+
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  client    Client   @relation(fields: [tenantId], references: [id])
+
+  @@index([leadId, createdAt])
   @@index([tenantId, createdAt])
 }

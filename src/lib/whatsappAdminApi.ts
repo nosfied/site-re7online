@@ -44,9 +44,28 @@ export type InboxConversationItem = {
     templateName: string | null;
     createdAt: string;
   } | null;
+  leadId: string | null;
   leadStatus: string | null;
   leadName: string | null;
+  leadPhone: string | null;
+  leadCity: string | null;
+  leadService: string | null;
   updatedAt: string;
+};
+
+export type LeadStatus =
+  | "NEW"
+  | "QUALIFIED"
+  | "WAITING_ATTENDANT"
+  | "IN_ATTENDANCE"
+  | "CLOSED";
+
+export type LeadNoteItem = {
+  id: string;
+  leadId: string;
+  tenantId: string;
+  body: string;
+  createdAt: string;
 };
 
 export type TenantConfigResponse = {
@@ -282,6 +301,69 @@ export async function fetchConversation(
   return requestJson(
     connection,
     `/admin/conversation/${encodeURIComponent(waId)}?${params.toString()}`
+  );
+}
+
+export async function updateLeadStatus(
+  connection: AdminConnection,
+  clientKey: string,
+  leadId: string,
+  status: LeadStatus
+): Promise<{
+  ok: true;
+  lead: {
+    id: string;
+    status: LeadStatus;
+    updatedAt: string;
+  };
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/lead/${encodeURIComponent(leadId)}/status?${params.toString()}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }
+  );
+}
+
+export async function fetchLeadNotes(
+  connection: AdminConnection,
+  clientKey: string,
+  leadId: string
+): Promise<{
+  ok: true;
+  count: number;
+  items: LeadNoteItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/lead/${encodeURIComponent(leadId)}/notes?${params.toString()}`
+  );
+}
+
+export async function createLeadNote(
+  connection: AdminConnection,
+  clientKey: string,
+  leadId: string,
+  body: string
+): Promise<{
+  ok: true;
+  note: LeadNoteItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/lead/${encodeURIComponent(leadId)}/notes?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }
   );
 }
 

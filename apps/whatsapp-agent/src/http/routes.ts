@@ -271,7 +271,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const [leads, inbound, outbound] = await Promise.all([
           prisma.lead.findMany({
             where: { tenantId: client.id, waId: { in: waIds } },
-            select: { waId: true, name: true, status: true },
+            select: {
+              id: true,
+              waId: true,
+              name: true,
+              phone: true,
+              city: true,
+              service: true,
+              status: true,
+            },
           }),
           prisma.inboundMessage.findMany({
             where: { clientId: client.id, waId: { in: waIds } },
@@ -345,8 +353,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return {
             waId: conversation.waId,
             lastMessage,
+            leadId: lead?.id ?? null,
             leadStatus: lead?.status ?? null,
             leadName: lead?.name ?? null,
+            leadPhone: lead?.phone ?? null,
+            leadCity: lead?.city ?? null,
+            leadService: lead?.service ?? null,
             updatedAt: conversation.updatedAt,
           };
         });
@@ -480,6 +492,178 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.conversation.messages.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "PATCH" &&
+      pathname.startsWith("/admin/lead/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/status")
+    ) {
+      try {
+        const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!leadId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const status = String(body.status ?? "").trim().toUpperCase();
+        const allowed = new Set([
+          "NEW",
+          "QUALIFIED",
+          "WAITING_ATTENDANT",
+          "IN_ATTENDANCE",
+          "CLOSED",
+        ]);
+        if (!allowed.has(status)) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const existing = await prisma.lead.findFirst({
+          where: { id: leadId, tenantId: client.id },
+          select: { id: true },
+        });
+        if (!existing) {
+          json(res, 404, { error: "lead_not_found" });
+          return;
+        }
+        const lead = await prisma.lead.update({
+          where: { id: leadId },
+          data: { status },
+          select: { id: true, status: true, updatedAt: true },
+        });
+        json(res, 200, { ok: true, lead });
+      } catch (error) {
+        logger.error({
+          event: "admin.lead.status.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/lead/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/notes")
+    ) {
+      try {
+        const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!leadId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const lead = await prisma.lead.findFirst({
+          where: { id: leadId, tenantId: client.id },
+          select: { id: true },
+        });
+        if (!lead) {
+          json(res, 404, { error: "lead_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const noteBody = String(body.body ?? "").trim();
+        if (!noteBody) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const note = await prisma.leadNote.create({
+          data: {
+            leadId: lead.id,
+            tenantId: client.id,
+            body: noteBody,
+          },
+          select: {
+            id: true,
+            leadId: true,
+            tenantId: true,
+            body: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, { ok: true, note });
+      } catch (error) {
+        logger.error({
+          event: "admin.lead.notes.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/lead/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/notes")
+    ) {
+      try {
+        const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!leadId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const lead = await prisma.lead.findFirst({
+          where: { id: leadId, tenantId: client.id },
+          select: { id: true },
+        });
+        if (!lead) {
+          json(res, 404, { error: "lead_not_found" });
+          return;
+        }
+        const notes = await prisma.leadNote.findMany({
+          where: { leadId: lead.id, tenantId: client.id },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            leadId: true,
+            tenantId: true,
+            body: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          count: notes.length,
+          items: notes,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.lead.notes.list.error",
           message: (error as Error).message,
           requestId,
         });

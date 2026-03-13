@@ -6,16 +6,29 @@ import { useEffect, useMemo, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import {
   AdminConnection,
+  createLeadNote,
   fetchConversation,
   fetchConversations,
+  fetchLeadNotes,
   fetchTenantsSummary,
   formatDateTime,
   InboxConversationItem,
   InboxMessageItem,
+  LeadNoteItem,
+  LeadStatus,
   loadAdminConnection,
   saveAdminConnection,
   testAdminConnection,
+  updateLeadStatus,
 } from "@/lib/whatsappAdminApi";
+
+const LEAD_STATUS_OPTIONS: LeadStatus[] = [
+  "NEW",
+  "QUALIFIED",
+  "WAITING_ATTENDANT",
+  "IN_ATTENDANCE",
+  "CLOSED",
+];
 
 export default function TenantInboxPage() {
   const params = useParams<{ tenantId: string }>();
@@ -30,10 +43,17 @@ export default function TenantInboxPage() {
   const [conversations, setConversations] = useState<InboxConversationItem[]>([]);
   const [selectedWaId, setSelectedWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
+  const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
+  const [noteDraft, setNoteDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingLeadNotes, setLoadingLeadNotes] = useState(false);
+  const [savingLeadStatus, setSavingLeadStatus] = useState(false);
+  const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [leadError, setLeadError] = useState<string | null>(null);
 
   useEffect(() => {
     setConnection(loadAdminConnection());
@@ -65,6 +85,8 @@ export default function TenantInboxPage() {
         } else {
           setSelectedWaId(null);
           setMessages([]);
+          setLeadNotes([]);
+          setStatusDraft("");
         }
       } catch (err) {
         if (cancelled) return;
@@ -126,6 +148,87 @@ export default function TenantInboxPage() {
     () => conversations.find((item) => item.waId === selectedWaId) ?? null,
     [conversations, selectedWaId]
   );
+  const selectedLead = useMemo(() => {
+    if (!selectedConversation?.leadId) return null;
+    return {
+      id: selectedConversation.leadId,
+      name: selectedConversation.leadName,
+      phone: selectedConversation.leadPhone,
+      city: selectedConversation.leadCity,
+      service: selectedConversation.leadService,
+      status: selectedConversation.leadStatus as LeadStatus | null,
+    };
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    setStatusDraft((selectedLead?.status as LeadStatus | null) ?? "");
+  }, [selectedLead?.id, selectedLead?.status]);
+
+  useEffect(() => {
+    if (!selectedLead?.id) {
+      setLeadNotes([]);
+      setLeadError(null);
+      return;
+    }
+    if (!connection.baseUrl || !connection.adminToken) return;
+    let cancelled = false;
+    setLoadingLeadNotes(true);
+    setLeadError(null);
+    fetchLeadNotes(connection, clientKey, selectedLead.id)
+      .then((response) => {
+        if (cancelled) return;
+        setLeadNotes(response.items);
+      })
+      .catch((err: { status?: number; message?: string }) => {
+        if (cancelled) return;
+        setLeadError(err.message || "Falha ao carregar notas do lead.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingLeadNotes(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientKey, connection, selectedLead?.id]);
+
+  const handleSaveLeadStatus = async () => {
+    if (!selectedLead?.id || !statusDraft) return;
+    setSavingLeadStatus(true);
+    setLeadError(null);
+    try {
+      const response = await updateLeadStatus(connection, clientKey, selectedLead.id, statusDraft);
+      setConversations((prev) =>
+        prev.map((item) =>
+          item.leadId === response.lead.id ? { ...item, leadStatus: response.lead.status } : item
+        )
+      );
+    } catch (err) {
+      const typed = err as { message?: string };
+      setLeadError(typed.message || "Falha ao atualizar status do lead.");
+    } finally {
+      setSavingLeadStatus(false);
+    }
+  };
+
+  const handleAddLeadNote = async () => {
+    if (!selectedLead?.id) return;
+    const body = noteDraft.trim();
+    if (!body) return;
+    setSavingLeadNote(true);
+    setLeadError(null);
+    try {
+      const response = await createLeadNote(connection, clientKey, selectedLead.id, body);
+      setLeadNotes((prev) => [response.note, ...prev]);
+      setNoteDraft("");
+    } catch (err) {
+      const typed = err as { message?: string };
+      setLeadError(typed.message || "Falha ao registrar nota.");
+    } finally {
+      setSavingLeadNote(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setTestingConnection(true);
@@ -180,7 +283,7 @@ export default function TenantInboxPage() {
           </p>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-[340px_1fr]">
+        <section className="grid gap-4 md:grid-cols-[300px_1fr_340px]">
           <aside className="rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-semibold">Conversas</h2>
@@ -254,6 +357,113 @@ export default function TenantInboxPage() {
               </div>
             </div>
           </div>
+
+          <aside className="rounded-xl border border-white/10 bg-white/5">
+            <div className="border-b border-white/10 px-4 py-3">
+              <h2 className="text-sm font-semibold">Lead</h2>
+            </div>
+            <div className="space-y-4 p-4">
+              {!selectedLead ? (
+                <p className="text-sm text-white/70">
+                  Esta conversa ainda nao possui lead persistido.
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      <span className="text-white/70">Nome:</span> {selectedLead.name || "-"}
+                    </p>
+                    <p>
+                      <span className="text-white/70">Phone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
+                    </p>
+                    <p>
+                      <span className="text-white/70">Cidade:</span> {selectedLead.city || "-"}
+                    </p>
+                    <p>
+                      <span className="text-white/70">Servico:</span> {selectedLead.service || "-"}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/70">Status</span>
+                      <select
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2"
+                        value={statusDraft}
+                        onChange={(event) => setStatusDraft(event.target.value as LeadStatus)}
+                      >
+                        <option value="" disabled>
+                          Selecione
+                        </option>
+                        {LEAD_STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!statusDraft || savingLeadStatus}
+                      onClick={handleSaveLeadStatus}
+                      className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingLeadStatus ? "Salvando..." : "Salvar status"}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/70">Nota interna</span>
+                      <textarea
+                        className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                        value={noteDraft}
+                        onChange={(event) => setNoteDraft(event.target.value)}
+                        placeholder="Registrar observacao de atendimento..."
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!noteDraft.trim() || savingLeadNote}
+                      onClick={handleAddLeadNote}
+                      className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingLeadNote ? "Salvando..." : "Salvar nota"}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold">Notas</p>
+                    {loadingLeadNotes ? (
+                      <p className="text-xs text-white/70">Carregando notas...</p>
+                    ) : null}
+                    {!loadingLeadNotes && leadNotes.length === 0 ? (
+                      <p className="text-xs text-white/70">Sem notas para este lead.</p>
+                    ) : null}
+                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                      {leadNotes.map((note) => (
+                        <article
+                          key={note.id}
+                          className="rounded-md border border-white/15 bg-white/5 p-2"
+                        >
+                          <p className="text-xs text-white">{note.body}</p>
+                          <p className="mt-1 text-[11px] text-white/60">
+                            {formatDateTime(note.createdAt)}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {leadError ? (
+                <p className="rounded-md border border-red-400/30 bg-red-900/30 p-2 text-xs text-red-100">
+                  {leadError}
+                </p>
+              ) : null}
+            </div>
+          </aside>
         </section>
       </div>
     </main>
