@@ -10,6 +10,9 @@ import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
 import { getTenants, saveTenants } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
+import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
+import { isWindowOpen } from "../conversation/conversation.service.js";
+import { persistOutboundMessage } from "../db/persist.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -371,6 +374,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.conversations.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversation/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/send")
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const text = String(body.text ?? "").trim();
+        if (!text) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+
+        const result = await adminSendMessage({
+          waId,
+          text,
+          clientKey,
+          clientId: client.id,
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, result.statusCode, { error: result.error });
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          waId,
+          message: {
+            messageId: result.messageId,
+            status: result.status,
+            metaMessageId: result.metaMessageId,
+            createdAt: result.createdAt,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversation.send.error",
           message: (error as Error).message,
           requestId,
         });
@@ -2016,4 +2079,78 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
       resolve(null);
     });
   });
+}
+
+async function adminSendMessage(params: {
+  waId: string;
+  text: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+    }
+  | { ok: false; statusCode: number; error: string }
+> {
+  if (!env.outboundEnabled) {
+    return { ok: false, statusCode: 503, error: "outbound_disabled" };
+  }
+  const nowMs = Date.now();
+  const conversation = await jsonFileStorage.getConversation(params.waId, params.clientKey);
+  if (conversation && !isWindowOpen(conversation, nowMs)) {
+    return { ok: false, statusCode: 409, error: "window_closed" };
+  }
+
+  const sendResult = await sendTextMessage(params.waId, params.text);
+  const status = sendResult.ok ? "SENT" : "FAILED";
+  const messageId = `admin.send.${params.requestId}`;
+  const createdAt = new Date().toISOString();
+  const tenants = await getTenants();
+  const phoneNumberId = tenants[params.clientKey]?.metaPhoneNumberId || undefined;
+
+  await persistOutboundMessage({
+    clientId: params.clientId,
+    phoneNumberId,
+    waId: params.waId,
+    messageId,
+    type: "TEXT",
+    status,
+    bodyText: params.text,
+    requestId: params.requestId,
+    metaMessageId: sendResult.messageId ?? null,
+    errorBody: sendResult.errorBody ?? null,
+    rawPayload: {
+      source: "admin_inbox",
+      status: sendResult.status ?? null,
+      errorBody: sendResult.errorBody ?? null,
+    },
+  });
+
+  if (conversation) {
+    await jsonFileStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt,
+    });
+  }
+
+  logger.info({
+    event: sendResult.ok ? "admin.conversation.send.sent" : "admin.conversation.send.failed",
+    waId: maskWaId(params.waId),
+    clientKey: params.clientKey,
+    requestId: params.requestId,
+    status: sendResult.status ?? null,
+  });
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId: sendResult.messageId ?? null,
+    createdAt,
+  };
 }

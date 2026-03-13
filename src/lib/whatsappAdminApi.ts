@@ -304,6 +304,33 @@ export async function fetchConversation(
   );
 }
 
+export async function sendConversationMessage(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string,
+  text: string
+): Promise<{
+  ok: true;
+  waId: string;
+  message: {
+    messageId: string;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+  };
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/conversation/${encodeURIComponent(waId)}/send?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }
+  );
+}
+
 export async function updateLeadStatus(
   connection: AdminConnection,
   clientKey: string,
