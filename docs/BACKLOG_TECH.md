@@ -59,3 +59,14 @@ Observar e limpar logs do re7-admin-front para reduzir ruído operacional.
 ### Qualidade dos dados da Inbox
 leadName ainda não normalizado
 lastMessage pode vir nulo em alguns casos
+
+## Sprint 7
+
+### Normalização do nome do lead
+Remover prefixos duplicados como "Nome:".
+
+### Melhor captura de cidade
+Parser atual nem sempre extrai cidade corretamente.
+
+### Limpeza de logs do admin-front
+Erros de Server Action continuam aparecendo em logs.
