@@ -18,6 +18,7 @@ import {
   LeadStatus,
   loadAdminConnection,
   saveAdminConnection,
+  sendConversationMessage,
   testAdminConnection,
   updateLeadStatus,
 } from "@/lib/whatsappAdminApi";
@@ -51,6 +52,8 @@ export default function TenantInboxPage() {
   const [loadingLeadNotes, setLoadingLeadNotes] = useState(false);
   const [savingLeadStatus, setSavingLeadStatus] = useState(false);
   const [savingLeadNote, setSavingLeadNote] = useState(false);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
@@ -144,6 +147,11 @@ export default function TenantInboxPage() {
     };
   }, [clientKey, connection, selectedWaId]);
 
+  const refreshSelectedTimeline = async (waId: string) => {
+    const response = await fetchConversation(connection, clientKey, waId, { order: "asc", limit: 300 });
+    setMessages(response.items);
+  };
+
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.waId === selectedWaId) ?? null,
     [conversations, selectedWaId]
@@ -227,6 +235,46 @@ export default function TenantInboxPage() {
       setLeadError(typed.message || "Falha ao registrar nota.");
     } finally {
       setSavingLeadNote(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!selectedWaId) return;
+    const text = messageDraft.trim();
+    if (!text) return;
+    setSendingMessage(true);
+    setError(null);
+    try {
+      const response = await sendConversationMessage(connection, clientKey, selectedWaId, text);
+      setMessageDraft("");
+      await refreshSelectedTimeline(selectedWaId);
+      setConversations((prev) =>
+        prev.map((item) =>
+          item.waId === selectedWaId
+            ? {
+                ...item,
+                lastMessage: {
+                  direction: "OUTBOUND",
+                  type: "TEXT",
+                  status: response.message.status,
+                  bodyText: text,
+                  templateName: null,
+                  createdAt: response.message.createdAt,
+                },
+                updatedAt: response.message.createdAt,
+              }
+            : item
+        )
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 409) {
+        setError("Janela de conversa fechada para envio manual.");
+        return;
+      }
+      setError(typed.message || "Falha ao enviar mensagem manual.");
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -354,6 +402,28 @@ export default function TenantInboxPage() {
                     ) : null}
                   </article>
                 ))}
+              </div>
+            </div>
+            <div className="border-t border-white/10 p-4">
+              <label className="grid gap-2 text-sm">
+                <span className="text-white/70">Responder conversa</span>
+                <textarea
+                  className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={messageDraft}
+                  onChange={(event) => setMessageDraft(event.target.value)}
+                  placeholder="Digite a mensagem para enviar manualmente..."
+                  disabled={!selectedWaId || sendingMessage}
+                />
+              </label>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  disabled={!selectedWaId || !messageDraft.trim() || sendingMessage}
+                  onClick={handleSendMessage}
+                  className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingMessage ? "Enviando..." : "Enviar mensagem"}
+                </button>
               </div>
             </div>
           </div>
