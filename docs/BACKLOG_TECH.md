@@ -34,3 +34,28 @@ Status por evidencia atual:
 - Conversas/estado operacional passam por storage com uso de `.data` (json storage + scripts de backup/status).
 - Mensagens/metricas/admin usam Prisma/Postgres.
 - Ha dualidade de persistencia (estado conversacional vs dados operacionais) que deve ser consolidada/documentada como decisao arquitetural.
+
+## Sprint 5
+
+### lastMessage nulo em parte da Inbox
+A estrategia atual de derivacao de ultima mensagem nao cobre todos os casos historicos.
+
+### leadName nao normalizado
+Hoje o lead pode persistir com prefixos como "Nome:".
+
+### Ambiguidade entre rotas de conversa
+Documentar diferenca entre:
+- /admin/conversations/:waId
+- /admin/conversation/:waId
+
+## Sprint 6
+
+### Janela curta de indisponibilidade pós-reload
+Backend e frontend podem falhar na primeira checagem imediatamente após restart.
+
+### Erros antigos de Server Action no front
+Observar e limpar logs do re7-admin-front para reduzir ruído operacional.
+
+### Qualidade dos dados da Inbox
+leadName ainda não normalizado
+lastMessage pode vir nulo em alguns casos
