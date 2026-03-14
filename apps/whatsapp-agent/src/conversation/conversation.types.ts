@@ -47,4 +47,7 @@ export type ConversationState = {
   flow?: ConversationFlow;
   flowStep?: number;
   answers?: QuoteSiteAnswers;
+  mode?: "BOT" | "HUMAN";
+  assignedTo?: string | null;
+  assignedAt?: string | null;
 };

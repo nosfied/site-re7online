@@ -170,6 +170,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         handoff: conversation.handoff,
         flow: conversation.flow ?? null,
         flowStep: conversation.flowStep ?? null,
+        mode: conversation.mode ?? "BOT",
+        assignedTo: conversation.assignedTo ?? null,
+        assignedAt: conversation.assignedAt ?? null,
         lastInboundAt: conversation.lastInboundAt ?? null,
         lastOutboundAt: conversation.lastOutboundAt ?? null,
       });
@@ -309,6 +312,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             },
           }),
         ]);
+        const runtimeConversations = await Promise.all(
+          waIds.map(async (waId) => ({
+            waId,
+            conversation: await jsonFileStorage.getConversation(waId, clientKey),
+          }))
+        );
+        const runtimeByWaId = new Map(
+          runtimeConversations.map((item) => [item.waId, item.conversation])
+        );
 
         const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
         const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
@@ -328,6 +340,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const lead = leadByWaId.get(conversation.waId);
           const latestInbound = latestInboundByWaId.get(conversation.waId);
           const latestOutbound = latestOutboundByWaId.get(conversation.waId);
+          const runtimeState = runtimeByWaId.get(conversation.waId);
           const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
           const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
           const lastMessage =
@@ -362,6 +375,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             leadPhone: lead?.phone ?? null,
             leadCity: lead?.city ?? null,
             leadService: lead?.service ?? null,
+            mode: runtimeState?.mode ?? "BOT",
+            assignedTo: runtimeState?.assignedTo ?? null,
+            assignedAt: runtimeState?.assignedAt ?? null,
             updatedAt: conversation.updatedAt,
           };
         });
@@ -374,6 +390,96 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.conversations.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversation/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/claim")
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const assignedTo = resolveAssignedTo(adminAuth);
+        const assignedAt = new Date().toISOString();
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          assignedTo,
+          assignedAt,
+        };
+        await jsonFileStorage.upsertConversation(nextState);
+        json(res, 200, {
+          ok: true,
+          waId,
+          mode: nextState.mode,
+          assignedTo: nextState.assignedTo,
+          assignedAt: nextState.assignedAt,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversation.claim.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversation/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/release")
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const nextState = {
+          ...conversation,
+          mode: "BOT" as const,
+          assignedTo: null,
+          assignedAt: null,
+        };
+        await jsonFileStorage.upsertConversation(nextState);
+        json(res, 200, {
+          ok: true,
+          waId,
+          mode: nextState.mode,
+          assignedTo: nextState.assignedTo,
+          assignedAt: nextState.assignedAt,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversation.release.error",
           message: (error as Error).message,
           requestId,
         });
@@ -421,9 +527,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, result.statusCode, { error: result.error });
           return;
         }
+        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
         json(res, 200, {
           ok: true,
           waId,
+          mode: conversation?.mode ?? "BOT",
+          assignedTo: conversation?.assignedTo ?? null,
+          assignedAt: conversation?.assignedAt ?? null,
           message: {
             messageId: result.messageId,
             status: result.status,
@@ -465,6 +575,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "client_not_found" });
           return;
         }
+        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
 
         const [inbound, outbound] = await Promise.all([
           prisma.inboundMessage.findMany({
@@ -549,6 +660,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, {
           ok: true,
           waId,
+          mode: conversation?.mode ?? "BOT",
+          assignedTo: conversation?.assignedTo ?? null,
+          assignedAt: conversation?.assignedAt ?? null,
           count: items.length,
           items,
         });
@@ -2060,6 +2174,15 @@ async function resolveAdminAuth(
   });
   if (!client) return null;
   return { role: "tenant", clientId: client.id, clientKey: client.clientKey };
+}
+
+function resolveAssignedTo(
+  adminAuth: { role: "superadmin"; clientId: null; clientKey: null } | { role: "tenant"; clientId: string; clientKey: string }
+) {
+  if (adminAuth.role === "superadmin") {
+    return "superadmin";
+  }
+  return `tenant:${adminAuth.clientKey}`;
 }
 
 async function readJsonBody(req: IncomingMessage, res: ServerResponse) {

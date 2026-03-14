@@ -37,6 +37,9 @@ export async function getOrCreateConversation(
     intent: "unknown",
     handoff: { status: "none" },
     answers: {},
+    mode: "BOT",
+    assignedTo: null,
+    assignedAt: null,
   };
   await storage.upsertConversation(state);
   return state;
@@ -202,7 +205,8 @@ export function decideOutboundPolicy(params: {
 }
 
 export function shouldAutoReply(state: ConversationState) {
-  return state.handoff.status !== "active";
+  const mode = state.mode ?? "BOT";
+  return state.handoff.status !== "active" && mode !== "HUMAN";
 }
 
 export function getHandoffStatus(state: ConversationState) {
