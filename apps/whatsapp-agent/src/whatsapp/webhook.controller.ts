@@ -2148,10 +2148,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (!shouldAutoReply(updatedConversation)) {
+      const skipReason =
+        updatedConversation.mode === "HUMAN" ? "human_mode" : "handoff_active";
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
-        reason: "handoff_active",
+        reason: skipReason,
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,

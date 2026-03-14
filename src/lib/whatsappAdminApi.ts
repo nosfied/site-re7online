@@ -50,6 +50,9 @@ export type InboxConversationItem = {
   leadPhone: string | null;
   leadCity: string | null;
   leadService: string | null;
+  mode: "BOT" | "HUMAN";
+  assignedTo: string | null;
+  assignedAt: string | null;
   updatedAt: string;
 };
 
@@ -287,6 +290,9 @@ export async function fetchConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedTo: string | null;
+  assignedAt: string | null;
   count: number;
   items: InboxMessageItem[];
 }> {
@@ -301,6 +307,46 @@ export async function fetchConversation(
   return requestJson(
     connection,
     `/admin/conversation/${encodeURIComponent(waId)}?${params.toString()}`
+  );
+}
+
+export async function claimConversation(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string
+): Promise<{
+  ok: true;
+  waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedTo: string | null;
+  assignedAt: string | null;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/conversation/${encodeURIComponent(waId)}/claim?${params.toString()}`,
+    { method: "POST" }
+  );
+}
+
+export async function releaseConversation(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string
+): Promise<{
+  ok: true;
+  waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedTo: string | null;
+  assignedAt: string | null;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/conversation/${encodeURIComponent(waId)}/release?${params.toString()}`,
+    { method: "POST" }
   );
 }
 

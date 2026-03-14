@@ -328,6 +328,9 @@ export const jsonFileStorage: Storage = {
       flow: existing?.flow,
       flowStep: existing?.flowStep,
       answers: existing?.answers ?? {},
+      mode: existing?.mode ?? "BOT",
+      assignedTo: existing?.assignedTo ?? null,
+      assignedAt: existing?.assignedAt ?? null,
       handoff: existing?.handoff ?? { status: "none" },
       window: { isOpen: true, expiresAt },
     };
