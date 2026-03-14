@@ -828,6 +828,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
   };
+  const upsertConversationSafe = async (state: ConversationState) => {
+    const currentState = await storage.getConversation(state.waId, tenantClientKey);
+    const nextState =
+      currentState?.mode === "HUMAN" && state.mode !== "HUMAN"
+        ? {
+            ...state,
+            mode: "HUMAN" as const,
+            assignedTo: currentState.assignedTo ?? null,
+            assignedAt: currentState.assignedAt ?? null,
+          }
+        : state;
+    await storage.upsertConversation(nextState);
+  };
   const persistOutboundConversation = async (
     state: ConversationState,
     messageId?: string
@@ -837,7 +850,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       messageId,
       new Date().toISOString()
     );
-    await storage.upsertConversation(nextState);
+    await upsertConversationSafe(nextState);
     return nextState;
   };
 
@@ -1311,7 +1324,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastInboundAt: pastIso,
         window: { isOpen: false, expiresAt: pastIso },
       };
-      await storage.upsertConversation(closedWindowState);
+      await upsertConversationSafe(closedWindowState);
       logger.info({
         event: "admin.debug.closewindow",
         waId: maskNumber(targetWaId),
@@ -1324,7 +1337,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId,
         message.timestamp
       );
-      await storage.upsertConversation(updatedMeta);
+      await upsertConversationSafe(updatedMeta);
       await storage.saveIncomingMessage({
         ...message,
         status,
@@ -1377,7 +1390,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId,
           message.timestamp
         );
-        await storage.upsertConversation(updatedMeta);
+        await upsertConversationSafe(updatedMeta);
         await storage.saveIncomingMessage({
           ...message,
           status,
@@ -1407,7 +1420,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId,
           message.timestamp
         );
-        await storage.upsertConversation(updatedMeta);
+        await upsertConversationSafe(updatedMeta);
         await storage.saveIncomingMessage({
           ...message,
           status,
@@ -1454,7 +1467,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.messageId,
           message.timestamp
         );
-        await storage.upsertConversation(updatedMeta);
+        await upsertConversationSafe(updatedMeta);
         await storage.saveIncomingMessage({
           ...message,
           status,
@@ -1510,7 +1523,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             result.messageId
           )
         );
-        await storage.upsertConversation(clearedTarget);
+        await upsertConversationSafe(clearedTarget);
       } else {
         logger.error({
           event: "admin.template.error",
@@ -1533,7 +1546,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId,
         message.timestamp
       );
-      await storage.upsertConversation(updatedMeta);
+      await upsertConversationSafe(updatedMeta);
       await storage.saveIncomingMessage({
         ...message,
         status,
@@ -1554,7 +1567,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId,
         message.timestamp
       );
-      await storage.upsertConversation(updatedByAdmin);
+      await upsertConversationSafe(updatedByAdmin);
       if (adminResult.action === "pause") {
         logger.info({
           event: "bot.pause",
@@ -1600,7 +1613,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId,
         message.timestamp
       );
-      await storage.upsertConversation(blockedState);
+      await upsertConversationSafe(blockedState);
       await storage.saveIncomingMessage({
         ...message,
         status,
@@ -1685,7 +1698,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
       }
 
-      await storage.upsertConversation(updatedConversation);
+      await upsertConversationSafe(updatedConversation);
       logConversationWindow(updatedConversation, meta);
       logConversationIntent(updatedConversation, meta);
       await persistEventSafe(
@@ -1757,7 +1770,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           intent: updatedConversation.intent,
           lastInboundMessageId: message.messageId,
         });
-        await storage.upsertConversation(blockedConversation);
+        await upsertConversationSafe(blockedConversation);
         for (const event of decision.events ?? []) {
           if (event.event === "outbound.blocked.window_closed") {
             logger.warn({
@@ -2018,7 +2031,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (getHandoffStatus(updatedConversation) === "active") {
-      await storage.upsertConversation(updatedConversation);
+      await upsertConversationSafe(updatedConversation);
       await storage.saveIncomingMessage({
         ...message,
         status,
@@ -2077,7 +2090,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (flowResult.handled) {
       updatedConversation = flowResult.state ?? updatedConversation;
     }
-    await storage.upsertConversation(updatedConversation);
+    await upsertConversationSafe(updatedConversation);
     logConversationWindow(updatedConversation, meta);
     logConversationIntent(updatedConversation, meta);
     await persistEventSafe(
@@ -2284,7 +2297,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               demoUpdated = true;
             }
           }
-          await storage.upsertConversation(updatedConversation);
+          await upsertConversationSafe(updatedConversation);
           if (demoReplyText) {
             await sendOutboundText({
               toE164: message.from,
@@ -2313,7 +2326,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          await storage.upsertConversation(updatedConversation);
+          await upsertConversationSafe(updatedConversation);
           continue;
         }
       }
@@ -2379,7 +2392,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (leadUpdated || demoUpdated) {
-      await storage.upsertConversation(updatedConversation);
+      await upsertConversationSafe(updatedConversation);
     }
 
     const decision = decideOutboundPolicy({
@@ -2402,7 +2415,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         intent: updatedConversation.intent,
         lastInboundMessageId: message.messageId,
       });
-      await storage.upsertConversation(blockedConversation);
+      await upsertConversationSafe(blockedConversation);
       for (const event of decision.events ?? []) {
         if (event.event === "outbound.blocked.window_closed") {
           logger.warn({
