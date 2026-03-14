@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import {
   AdminConnection,
+  claimConversation,
   createLeadNote,
   fetchConversation,
   fetchConversations,
@@ -17,6 +18,7 @@ import {
   LeadNoteItem,
   LeadStatus,
   loadAdminConnection,
+  releaseConversation,
   saveAdminConnection,
   sendConversationMessage,
   testAdminConnection,
@@ -54,6 +56,7 @@ export default function TenantInboxPage() {
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [updatingMode, setUpdatingMode] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
@@ -65,6 +68,19 @@ export default function TenantInboxPage() {
   useEffect(() => {
     if (!connection.baseUrl && !connection.adminToken) return;
     saveAdminConnection(connection);
+  }, [connection]);
+
+  const refreshConversationList = useCallback(async (resolvedClientKey: string) => {
+    const result = await fetchConversations(connection, resolvedClientKey, { limit: 100 });
+    setConversations(result.items);
+    if (result.items.length === 0) {
+      setSelectedWaId(null);
+      setMessages([]);
+      setLeadNotes([]);
+      setStatusDraft("");
+      return;
+    }
+    setSelectedWaId((prev) => (prev && result.items.some((item) => item.waId === prev) ? prev : result.items[0].waId));
   }, [connection]);
 
   useEffect(() => {
@@ -80,17 +96,7 @@ export default function TenantInboxPage() {
         const resolvedClientKey = summary.find((item) => item.tenantId === tenantId)?.clientKey ?? tenantId;
         if (cancelled) return;
         setClientKey(resolvedClientKey);
-        const result = await fetchConversations(connection, resolvedClientKey, { limit: 100 });
-        if (cancelled) return;
-        setConversations(result.items);
-        if (result.items.length > 0) {
-          setSelectedWaId((prev) => prev ?? result.items[0].waId);
-        } else {
-          setSelectedWaId(null);
-          setMessages([]);
-          setLeadNotes([]);
-          setStatusDraft("");
-        }
+        await refreshConversationList(resolvedClientKey);
       } catch (err) {
         if (cancelled) return;
         const typed = err as { status?: number; message?: string };
@@ -113,7 +119,7 @@ export default function TenantInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [connection, tenantId]);
+  }, [connection, tenantId, refreshConversationList]);
 
   useEffect(() => {
     if (!selectedWaId) return;
@@ -127,6 +133,18 @@ export default function TenantInboxPage() {
       .then((response) => {
         if (cancelled) return;
         setMessages(response.items);
+        setConversations((prev) =>
+          prev.map((item) =>
+            item.waId === selectedWaId
+              ? {
+                  ...item,
+                  mode: response.mode,
+                  assignedTo: response.assignedTo,
+                  assignedAt: response.assignedAt,
+                }
+              : item
+          )
+        );
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -150,6 +168,18 @@ export default function TenantInboxPage() {
   const refreshSelectedTimeline = async (waId: string) => {
     const response = await fetchConversation(connection, clientKey, waId, { order: "asc", limit: 300 });
     setMessages(response.items);
+    setConversations((prev) =>
+      prev.map((item) =>
+        item.waId === waId
+          ? {
+              ...item,
+              mode: response.mode,
+              assignedTo: response.assignedTo,
+              assignedAt: response.assignedAt,
+            }
+          : item
+      )
+    );
   };
 
   const selectedConversation = useMemo(
@@ -291,6 +321,38 @@ export default function TenantInboxPage() {
     }
   };
 
+  const handleClaimConversation = async () => {
+    if (!selectedWaId) return;
+    setUpdatingMode(true);
+    setError(null);
+    try {
+      await claimConversation(connection, clientKey, selectedWaId);
+      await refreshConversationList(clientKey);
+      await refreshSelectedTimeline(selectedWaId);
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Falha ao assumir conversa.");
+    } finally {
+      setUpdatingMode(false);
+    }
+  };
+
+  const handleReleaseConversation = async () => {
+    if (!selectedWaId) return;
+    setUpdatingMode(true);
+    setError(null);
+    try {
+      await releaseConversation(connection, clientKey, selectedWaId);
+      await refreshConversationList(clientKey);
+      await refreshSelectedTimeline(selectedWaId);
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Falha ao liberar conversa.");
+    } finally {
+      setUpdatingMode(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
@@ -356,7 +418,7 @@ export default function TenantInboxPage() {
                   >
                     <p className="text-sm font-medium">{item.leadName || item.waId}</p>
                     <p className="mt-1 text-xs text-white/70">
-                      status: {item.leadStatus || "-"} • {formatDateTime(item.updatedAt)}
+                      {item.mode} • status: {item.leadStatus || "-"} • {formatDateTime(item.updatedAt)}
                     </p>
                   </button>
                 );
@@ -369,6 +431,13 @@ export default function TenantInboxPage() {
               <h2 className="text-sm font-semibold">
                 Timeline {selectedConversation ? `• ${selectedConversation.waId}` : ""}
               </h2>
+              {selectedConversation ? (
+                <p className="mt-1 text-xs text-white/70">
+                  modo: {selectedConversation.mode}
+                  {selectedConversation.assignedTo ? ` • atendente: ${selectedConversation.assignedTo}` : ""}
+                  {selectedConversation.assignedAt ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}` : ""}
+                </p>
+              ) : null}
             </div>
             <div className="max-h-[68vh] overflow-y-auto p-4">
               {!selectedWaId ? (
@@ -405,6 +474,27 @@ export default function TenantInboxPage() {
               </div>
             </div>
             <div className="border-t border-white/10 p-4">
+              <div className="mb-3 flex justify-end gap-2">
+                {selectedConversation?.mode === "HUMAN" ? (
+                  <button
+                    type="button"
+                    disabled={!selectedWaId || updatingMode}
+                    onClick={handleReleaseConversation}
+                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {updatingMode ? "Atualizando..." : "Liberar conversa"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!selectedWaId || updatingMode}
+                    onClick={handleClaimConversation}
+                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {updatingMode ? "Atualizando..." : "Assumir conversa"}
+                  </button>
+                )}
+              </div>
               <label className="grid gap-2 text-sm">
                 <span className="text-white/70">Responder conversa</span>
                 <textarea
