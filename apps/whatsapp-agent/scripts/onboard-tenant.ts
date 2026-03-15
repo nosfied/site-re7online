@@ -17,6 +17,9 @@ type Options = {
   force: boolean;
   forcePhoneId: boolean;
   baseUrl: string;
+  firstUserName: string;
+  firstUserEmail: string;
+  firstUserRole: string;
 };
 
 type TenantConfig = {
@@ -57,6 +60,9 @@ function parseArgs(argv: string[]): Options {
     force: false,
     forcePhoneId: false,
     baseUrl: process.env.BASE_URL?.trim() || "http://127.0.0.1:3001",
+    firstUserName: "",
+    firstUserEmail: "",
+    firstUserRole: "AGENT",
   };
 
   for (let index = 0; index < argv.length; ) {
@@ -117,6 +123,18 @@ function parseArgs(argv: string[]): Options {
         options.baseUrl = requireValue(current).trim();
         index += 2;
         break;
+      case "--first-user-name":
+        options.firstUserName = requireValue(current).trim();
+        index += 2;
+        break;
+      case "--first-user-email":
+        options.firstUserEmail = requireValue(current).trim().toLowerCase();
+        index += 2;
+        break;
+      case "--first-user-role":
+        options.firstUserRole = requireValue(current).trim().toUpperCase();
+        index += 2;
+        break;
       default:
         fail(`flag não reconhecida: ${current}`);
     }
@@ -127,6 +145,12 @@ function parseArgs(argv: string[]): Options {
   if (!options.clientKey) fail("--client-key é obrigatório");
   if (options.forcePhoneId && !options.force) {
     fail("--force-phone-id exige --force");
+  }
+  if ((options.firstUserName && !options.firstUserEmail) || (!options.firstUserName && options.firstUserEmail)) {
+    fail("--first-user-name e --first-user-email devem ser enviados juntos");
+  }
+  if (!options.firstUserRole) {
+    fail("--first-user-role inválido");
   }
 
   return options;
@@ -162,6 +186,9 @@ async function main() {
   const tenantUrl = `${options.baseUrl}/admin/tenants/${encodeURIComponent(options.tenantId)}`;
   let createdNewToken = false;
   let issuedAdminToken = "";
+  let firstUserResult:
+    | { action: "created" | "updated" | "existing"; id: string; name: string; email: string; role: string }
+    | null = null;
 
   try {
     log(`tenant=${options.tenantId} clientKey=${options.clientKey} baseUrl=${options.baseUrl}`);
@@ -320,6 +347,51 @@ async function main() {
       }
     }
 
+    if (options.firstUserName && options.firstUserEmail) {
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          clientId: client.id,
+          email: options.firstUserEmail,
+        },
+      });
+      if (!existingUser) {
+        const createdUser = await prisma.user.create({
+          data: {
+            clientId: client.id,
+            name: options.firstUserName,
+            email: options.firstUserEmail,
+            role: options.firstUserRole,
+          },
+          select: { id: true, name: true, email: true, role: true },
+        });
+        firstUserResult = { action: "created", ...createdUser };
+      } else {
+        const shouldUpdate =
+          options.force &&
+          (existingUser.name !== options.firstUserName || existingUser.role !== options.firstUserRole);
+        if (shouldUpdate) {
+          const updatedUser = await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: options.firstUserName,
+              role: options.firstUserRole,
+            },
+            select: { id: true, name: true, email: true, role: true },
+          });
+          firstUserResult = { action: "updated", ...updatedUser };
+        } else {
+          firstUserResult = {
+            action: "existing",
+            id: existingUser.id,
+            name: existingUser.name,
+            email: existingUser.email,
+            role: existingUser.role,
+          };
+        }
+      }
+      log(`first user ${firstUserResult.action} (${firstUserResult.email})`);
+    }
+
     const allowlistFinal = desiredTenant.allowlist;
     const validationWaId = allowlistFinal[0] ?? "<allowlist-first>";
 
@@ -330,12 +402,24 @@ async function main() {
     console.log(`adminToken=${issuedAdminToken}`);
     console.log(`adminTokenNew=${createdNewToken}`);
     console.log(`allowlist=${JSON.stringify(allowlistFinal)}`);
+    if (firstUserResult) {
+      console.log(
+        `firstUser=${JSON.stringify({
+          action: firstUserResult.action,
+          id: firstUserResult.id,
+          name: firstUserResult.name,
+          email: firstUserResult.email,
+          role: firstUserResult.role,
+        })}`
+      );
+    }
     console.log("ALERTA: salvar adminToken em local seguro.");
     console.log("");
     console.log("Comandos de validação:");
-    console.log(`curl -sS \"${options.baseUrl}/admin/messages?waId=${validationWaId}&limit=20\" -H \"X-Admin-Token: ${issuedAdminToken}\"`);
+    console.log(`curl -sS \"${options.baseUrl}/admin/messages?waId=${validationWaId}&clientKey=${options.clientKey}&limit=20\" -H \"X-Admin-Token: ${issuedAdminToken}\"`);
     console.log(`curl -sS -i \"${options.baseUrl}/admin/tenants\" -H \"X-Admin-Token: ${issuedAdminToken}\" | sed -n '1,20p'`);
-    console.log(`curl -sS \"${options.baseUrl}/admin/metrics?range=1h\" -H \"X-Admin-Token: ${adminToken}\" -H \"X-Client-Key: ${options.clientKey}\"`);
+    console.log(`curl -sS \"${options.baseUrl}/admin/metrics?range=1h&clientKey=${options.clientKey}\" -H \"X-Admin-Token: ${issuedAdminToken}\"`);
+    console.log(`curl -sS \"${options.baseUrl}/admin/users?clientKey=${options.clientKey}\" -H \"X-Admin-Token: ${issuedAdminToken}\"`);
   } finally {
     await prisma.$disconnect();
   }
