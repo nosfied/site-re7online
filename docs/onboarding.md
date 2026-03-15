@@ -58,7 +58,10 @@ cd /opt/re7online/site-re7online/apps/whatsapp-agent
   --client-key cliente-demo \
   --allowlist 558494786787 \
   --handoff-attendant-waid 558499049614 \
-  --manual-handoff-template re7_atendente_manual_v1
+  --manual-handoff-template re7_atendente_manual_v1 \
+  --first-user-name "Operador Demo" \
+  --first-user-email "operador@cliente-demo.com" \
+  --first-user-role AGENT
 ```
 
 Observações:
@@ -66,6 +69,7 @@ Observações:
 - cria/atualiza `Client` no DB
 - gera `adminToken` quando necessário
 - atualiza `tenants.json` via `PUT /admin/tenants/:tenantId`
+- cria o primeiro usuario do tenant quando `--first-user-name` e `--first-user-email` sao informados
 - preserva backup/atomic write/logs do caminho já validado
 - se o tenant já existir, exige `--force`
 - `metaPhoneNumberId` só muda com `--force --force-phone-id`

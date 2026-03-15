@@ -180,10 +180,13 @@ cd /opt/re7online/site-re7online/apps/whatsapp-agent
   --client-key <clientKey> \
   --allowlist <waid1,waid2> \
   --handoff-attendant-waid <waid_atendente> \
-  --manual-handoff-template <template_aprovado>
+  --manual-handoff-template <template_aprovado> \
+  --first-user-name "<Nome Operador>" \
+  --first-user-email <operador@cliente.com> \
+  --first-user-role AGENT
 ```
 
-O script usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env` e atualiza tenant config + client no DB.
+O script usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env`, atualiza tenant config + client no DB e pode criar o primeiro usuario do tenant.
 
 ## 11) WAIDs homologados
 Padrao operacional do gate:
