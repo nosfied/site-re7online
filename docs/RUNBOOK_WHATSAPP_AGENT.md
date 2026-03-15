@@ -123,6 +123,30 @@ curl -sS "http://127.0.0.1:3001/admin/messages?waId=<WAID>&limit=20&clientKey=re
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
+4. Diagnostico DB Docker (sem `psql` local)
+
+Quando `psql` nao estiver instalado na VPS, use o container Postgres da stack:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c '\d "User"'
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
+"SELECT column_name, data_type
+ FROM information_schema.columns
+ WHERE table_name='User' AND column_name='clientId';"
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
+"SELECT conname, pg_get_constraintdef(oid)
+ FROM pg_constraint
+ WHERE conrelid='\"User\"'::regclass;"
+```
+
+Resultado esperado:
+- `clientId` com tipo `uuid`
+- FK `User_clientId_fkey` apontando para `"Client"("id")`
+
 ## 9) Rollback
 Rollback minimo e seguro:
 1. voltar para commit/tag anterior na VPS
