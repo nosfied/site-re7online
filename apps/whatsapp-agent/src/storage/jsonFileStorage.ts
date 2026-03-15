@@ -126,6 +126,9 @@ function normalizeConversation(raw: LegacyConversationState): ConversationState 
     flow: raw.flow,
     flowStep: raw.flowStep,
     answers: raw.answers ?? {},
+    mode: raw.mode ?? "BOT",
+    assignedTo: raw.assignedTo ?? null,
+    assignedAt: raw.assignedAt ?? null,
     window: raw.window,
     handoff,
   };
