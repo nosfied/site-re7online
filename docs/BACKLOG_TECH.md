@@ -70,3 +70,17 @@ Parser atual nem sempre extrai cidade corretamente.
 
 ### Limpeza de logs do admin-front
 Erros de Server Action continuam aparecendo em logs.
+
+## Sprint 10
+
+### Autenticação por usuário individual
+Hoje a UI envia `userId`; ainda não existe login/sessão por usuário.
+
+### Claim concorrente
+Claim de conversa ainda é `last-write-wins`.
+
+### CRUD de usuários incompleto
+Existe criação e listagem, mas não edição/inativação/remoção.
+
+### Auditoria de usuário
+Ainda não há trilha de eventos detalhada por usuário.
