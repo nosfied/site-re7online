@@ -138,6 +138,78 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/users") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const users = await prisma.user.findMany({
+          where: { clientId: client.id },
+          orderBy: [{ createdAt: "desc" }],
+          select: { id: true, name: true, email: true, role: true, createdAt: true },
+        });
+        json(res, 200, { ok: true, count: users.length, items: users });
+      } catch (error) {
+        logger.error({
+          event: "admin.users.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/users") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const name = String(body.name ?? "").trim();
+        const email = String(body.email ?? "").trim().toLowerCase();
+        const role = String(body.role ?? "AGENT").trim().toUpperCase();
+        if (!name || !email) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const user = await prisma.user.create({
+          data: {
+            clientId: client.id,
+            name,
+            email,
+            role,
+          },
+          select: { id: true, name: true, email: true, role: true, createdAt: true },
+        });
+        json(res, 200, { ok: true, user });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(res, 409, { error: "user_already_exists" });
+          return;
+        }
+        logger.error({
+          event: "admin.users.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/conversations/") &&
@@ -155,6 +227,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const assignedUser =
+        conversation.assignedUserId
+          ? await prisma.user.findFirst({
+              where: { id: conversation.assignedUserId, client: { clientKey } },
+              select: { name: true },
+            })
+          : null;
       logger.info({
         event: "admin.conversation.inspect",
         waId: maskWaId(waId),
@@ -171,7 +250,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         flow: conversation.flow ?? null,
         flowStep: conversation.flowStep ?? null,
         mode: conversation.mode ?? "BOT",
+        assignedUserId: conversation.assignedUserId ?? null,
         assignedTo: conversation.assignedTo ?? null,
+        assignedUserName: assignedUser?.name ?? null,
         assignedAt: conversation.assignedAt ?? null,
         lastInboundAt: conversation.lastInboundAt ?? null,
         lastOutboundAt: conversation.lastOutboundAt ?? null,
@@ -321,6 +402,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const runtimeByWaId = new Map(
           runtimeConversations.map((item) => [item.waId, item.conversation])
         );
+        const assignedUserIds = Array.from(
+          new Set(
+            runtimeConversations
+              .map((item) => item.conversation?.assignedUserId ?? null)
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+        const assignedUsers = assignedUserIds.length
+          ? await prisma.user.findMany({
+              where: { clientId: client.id, id: { in: assignedUserIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+        const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
 
         const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
         const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
@@ -376,7 +471,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             leadCity: lead?.city ?? null,
             leadService: lead?.service ?? null,
             mode: runtimeState?.mode ?? "BOT",
+            assignedUserId: runtimeState?.assignedUserId ?? null,
             assignedTo: runtimeState?.assignedTo ?? null,
+            assignedUserName: runtimeState?.assignedUserId
+              ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+              : null,
             assignedAt: runtimeState?.assignedAt ?? null,
             updatedAt: conversation.updatedAt,
           };
@@ -419,10 +518,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const assignedTo = resolveAssignedTo(adminAuth);
         const assignedAt = new Date().toISOString();
+        const requestedUserId =
+          typeof query.userId === "string" ? query.userId.trim() : "";
+        const assignedUser = requestedUserId
+          ? await prisma.user.findFirst({
+              where: { id: requestedUserId, client: { clientKey } },
+              select: { id: true, name: true },
+            })
+          : null;
+        if (requestedUserId && !assignedUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
-          assignedTo,
+          assignedUserId: assignedUser?.id ?? null,
+          assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
         };
         await jsonFileStorage.upsertConversation(nextState);
@@ -430,7 +542,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           waId,
           mode: nextState.mode,
+          assignedUserId: nextState.assignedUserId,
           assignedTo: nextState.assignedTo,
+          assignedUserName: assignedUser?.name ?? null,
           assignedAt: nextState.assignedAt,
         });
       } catch (error) {
@@ -466,6 +580,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const nextState = {
           ...conversation,
           mode: "BOT" as const,
+          assignedUserId: null,
           assignedTo: null,
           assignedAt: null,
         };
@@ -474,7 +589,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           waId,
           mode: nextState.mode,
+          assignedUserId: nextState.assignedUserId,
           assignedTo: nextState.assignedTo,
+          assignedUserName: null,
           assignedAt: nextState.assignedAt,
         });
       } catch (error) {
@@ -528,11 +645,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const assignedUser =
+          conversation?.assignedUserId
+            ? await prisma.user.findFirst({
+                where: { id: conversation.assignedUserId, clientId: client.id },
+                select: { name: true },
+              })
+            : null;
         json(res, 200, {
           ok: true,
           waId,
           mode: conversation?.mode ?? "BOT",
+          assignedUserId: conversation?.assignedUserId ?? null,
           assignedTo: conversation?.assignedTo ?? null,
+          assignedUserName: assignedUser?.name ?? null,
           assignedAt: conversation?.assignedAt ?? null,
           message: {
             messageId: result.messageId,
@@ -576,6 +702,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const assignedUser =
+          conversation?.assignedUserId
+            ? await prisma.user.findFirst({
+                where: { id: conversation.assignedUserId, clientId: client.id },
+                select: { name: true },
+              })
+            : null;
 
         const [inbound, outbound] = await Promise.all([
           prisma.inboundMessage.findMany({
@@ -661,7 +794,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           waId,
           mode: conversation?.mode ?? "BOT",
+          assignedUserId: conversation?.assignedUserId ?? null,
           assignedTo: conversation?.assignedTo ?? null,
+          assignedUserName: assignedUser?.name ?? null,
           assignedAt: conversation?.assignedAt ?? null,
           count: items.length,
           items,

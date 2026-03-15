@@ -835,6 +835,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         ? {
             ...state,
             mode: "HUMAN" as const,
+            assignedUserId: currentState.assignedUserId ?? null,
             assignedTo: currentState.assignedTo ?? null,
             assignedAt: currentState.assignedAt ?? null,
           }

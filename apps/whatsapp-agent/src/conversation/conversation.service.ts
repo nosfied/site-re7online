@@ -38,6 +38,7 @@ export async function getOrCreateConversation(
     handoff: { status: "none" },
     answers: {},
     mode: "BOT",
+    assignedUserId: null,
     assignedTo: null,
     assignedAt: null,
   };
