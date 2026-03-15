@@ -51,9 +51,19 @@ export type InboxConversationItem = {
   leadCity: string | null;
   leadService: string | null;
   mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
   assignedTo: string | null;
+  assignedUserName: string | null;
   assignedAt: string | null;
   updatedAt: string;
+};
+
+export type AdminUserItem = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
 };
 
 export type LeadStatus =
@@ -291,7 +301,9 @@ export async function fetchConversation(
   ok: true;
   waId: string;
   mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
   assignedTo: string | null;
+  assignedUserName: string | null;
   assignedAt: string | null;
   count: number;
   items: InboxMessageItem[];
@@ -313,16 +325,22 @@ export async function fetchConversation(
 export async function claimConversation(
   connection: AdminConnection,
   clientKey: string,
-  waId: string
+  waId: string,
+  userId?: string
 ): Promise<{
   ok: true;
   waId: string;
   mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
   assignedTo: string | null;
+  assignedUserName: string | null;
   assignedAt: string | null;
 }> {
   const params = new URLSearchParams();
   params.set("clientKey", clientKey);
+  if (userId) {
+    params.set("userId", userId);
+  }
   return requestJson(
     connection,
     `/admin/conversation/${encodeURIComponent(waId)}/claim?${params.toString()}`,
@@ -338,7 +356,9 @@ export async function releaseConversation(
   ok: true;
   waId: string;
   mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
   assignedTo: string | null;
+  assignedUserName: string | null;
   assignedAt: string | null;
 }> {
   const params = new URLSearchParams();
@@ -348,6 +368,35 @@ export async function releaseConversation(
     `/admin/conversation/${encodeURIComponent(waId)}/release?${params.toString()}`,
     { method: "POST" }
   );
+}
+
+export async function fetchUsers(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminUserItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users?${params.toString()}`);
+}
+
+export async function createUser(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: { name: string; email: string; role?: string }
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function sendConversationMessage(

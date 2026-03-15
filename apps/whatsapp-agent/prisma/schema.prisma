@@ -56,7 +56,22 @@ model Client {
   events        Event[]
   leads         Lead[]
   leadNotes     LeadNote[]
+  users         User[]
   runtimeStates ConversationRuntimeState[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clientId  String
+  name      String
+  email     String
+  role      String   @default("AGENT")
+  createdAt DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, email])
+  @@index([clientId, createdAt])
 }
 
 model WaPhoneNumber {

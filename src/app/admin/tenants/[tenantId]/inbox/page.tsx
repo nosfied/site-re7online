@@ -5,9 +5,11 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import {
+  AdminUserItem,
   AdminConnection,
   claimConversation,
   createLeadNote,
+  fetchUsers,
   fetchConversation,
   fetchConversations,
   fetchLeadNotes,
@@ -46,6 +48,8 @@ export default function TenantInboxPage() {
   const [conversations, setConversations] = useState<InboxConversationItem[]>([]);
   const [selectedWaId, setSelectedWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
   const [noteDraft, setNoteDraft] = useState("");
@@ -97,6 +101,9 @@ export default function TenantInboxPage() {
         if (cancelled) return;
         setClientKey(resolvedClientKey);
         await refreshConversationList(resolvedClientKey);
+        const usersResponse = await fetchUsers(connection, resolvedClientKey);
+        if (cancelled) return;
+        setUsers(usersResponse.items);
       } catch (err) {
         if (cancelled) return;
         const typed = err as { status?: number; message?: string };
@@ -139,7 +146,9 @@ export default function TenantInboxPage() {
               ? {
                   ...item,
                   mode: response.mode,
+                  assignedUserId: response.assignedUserId,
                   assignedTo: response.assignedTo,
+                  assignedUserName: response.assignedUserName,
                   assignedAt: response.assignedAt,
                 }
               : item
@@ -174,7 +183,9 @@ export default function TenantInboxPage() {
           ? {
               ...item,
               mode: response.mode,
+              assignedUserId: response.assignedUserId,
               assignedTo: response.assignedTo,
+              assignedUserName: response.assignedUserName,
               assignedAt: response.assignedAt,
             }
           : item
@@ -186,6 +197,10 @@ export default function TenantInboxPage() {
     () => conversations.find((item) => item.waId === selectedWaId) ?? null,
     [conversations, selectedWaId]
   );
+
+  useEffect(() => {
+    setSelectedAssigneeId(selectedConversation?.assignedUserId ?? "");
+  }, [selectedConversation?.assignedUserId]);
   const selectedLead = useMemo(() => {
     if (!selectedConversation?.leadId) return null;
     return {
@@ -326,7 +341,7 @@ export default function TenantInboxPage() {
     setUpdatingMode(true);
     setError(null);
     try {
-      await claimConversation(connection, clientKey, selectedWaId);
+      await claimConversation(connection, clientKey, selectedWaId, selectedAssigneeId || undefined);
       await refreshConversationList(clientKey);
       await refreshSelectedTimeline(selectedWaId);
     } catch (err) {
@@ -434,7 +449,11 @@ export default function TenantInboxPage() {
               {selectedConversation ? (
                 <p className="mt-1 text-xs text-white/70">
                   modo: {selectedConversation.mode}
-                  {selectedConversation.assignedTo ? ` • atendente: ${selectedConversation.assignedTo}` : ""}
+                  {selectedConversation.assignedUserName
+                    ? ` • atendente: ${selectedConversation.assignedUserName}`
+                    : selectedConversation.assignedTo
+                      ? ` • atendente: ${selectedConversation.assignedTo}`
+                      : ""}
                   {selectedConversation.assignedAt ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}` : ""}
                 </p>
               ) : null}
@@ -475,6 +494,19 @@ export default function TenantInboxPage() {
             </div>
             <div className="border-t border-white/10 p-4">
               <div className="mb-3 flex justify-end gap-2">
+                <select
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                  value={selectedAssigneeId}
+                  onChange={(event) => setSelectedAssigneeId(event.target.value)}
+                  disabled={updatingMode || users.length === 0}
+                >
+                  <option value="">Sem usuario</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
                 {selectedConversation?.mode === "HUMAN" ? (
                   <button
                     type="button"
