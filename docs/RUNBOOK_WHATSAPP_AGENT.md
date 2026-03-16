@@ -123,6 +123,30 @@ curl -sS "http://127.0.0.1:3001/admin/messages?waId=<WAID>&limit=20&clientKey=re
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
+4. Diagnostico DB Docker (sem `psql` local)
+
+Quando `psql` nao estiver instalado na VPS, use o container Postgres da stack:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c '\d "User"'
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
+"SELECT column_name, data_type
+ FROM information_schema.columns
+ WHERE table_name='User' AND column_name='clientId';"
+
+docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
+"SELECT conname, pg_get_constraintdef(oid)
+ FROM pg_constraint
+ WHERE conrelid='\"User\"'::regclass;"
+```
+
+Resultado esperado:
+- `clientId` com tipo `uuid`
+- FK `User_clientId_fkey` apontando para `"Client"("id")`
+
 ## 9) Rollback
 Rollback minimo e seguro:
 1. voltar para commit/tag anterior na VPS
@@ -156,10 +180,13 @@ cd /opt/re7online/site-re7online/apps/whatsapp-agent
   --client-key <clientKey> \
   --allowlist <waid1,waid2> \
   --handoff-attendant-waid <waid_atendente> \
-  --manual-handoff-template <template_aprovado>
+  --manual-handoff-template <template_aprovado> \
+  --first-user-name "<Nome Operador>" \
+  --first-user-email <operador@cliente.com> \
+  --first-user-role AGENT
 ```
 
-O script usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env` e atualiza tenant config + client no DB.
+O script usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env`, atualiza tenant config + client no DB e pode criar o primeiro usuario do tenant.
 
 ## 11) WAIDs homologados
 Padrao operacional do gate:
