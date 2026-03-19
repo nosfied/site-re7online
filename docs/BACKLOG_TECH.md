@@ -1,3 +1,57 @@
+# CONTEXTO ATUAL DO PRODUTO
+
+- Produto validado em produção (cliente Justa)
+- Integração WhatsApp funcional (Cloud API)
+- Envio e recebimento de mensagens OK
+- Motor do agente em produção (quote → demo → lead → policy)
+- E2E validado (50/50)
+- Onboarding funcional via CLI / Embedded Signup
+- Webhook ativo e estável
+- App Review Meta em análise
+- Sistema já operando com cliente real
+
+---
+
+# BACKLOG ESTRATÉGICO (SaaS)
+
+## Fase atual
+Transição de sistema single-tenant → SaaS multi-tenant
+
+## Prioridades (ordem obrigatória)
+
+### 1. Multi-tenant
+- isolamento por clientId
+- contexto de execução por cliente
+- separação de dados (conversas, mensagens, eventos)
+- configuração por cliente (WABA, prompts, limites)
+
+### 2. Persistência
+- migrar JSON → Postgres (Prisma)
+- definir fonte única de verdade
+- eliminar duplicidade entre JSON e banco
+
+### 3. Observabilidade
+- logs estruturados
+- tracing por conversa
+- auditoria por cliente
+- métricas operacionais
+
+### 4. Produto (UX)
+- inbox profissional
+- painel do cliente
+- visualização de conversas
+- status de mensagens
+
+## Decisões arquiteturais
+
+- Remover whatsapp_business_manage_events do escopo atual
+- Motivo: não é necessário para runtime do agente
+- Status: adiado para fase futura de growth (ads / tracking)
+
+---
+
+# BACKLOG TÉCNICO (LEGADO / AJUSTES)
+
 # BACKLOG TÉCNICO — WhatsApp Agent
 
 ## Sprint 1
