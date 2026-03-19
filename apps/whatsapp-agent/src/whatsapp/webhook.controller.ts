@@ -44,7 +44,7 @@ import {
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
-import { resolveTenant } from "../tenancy/tenantResolver.js";
+import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { upsertLeadFromCapture } from "../crm/lead.service.js";
 import {
   persistConversationWindow,
@@ -796,11 +796,28 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
       "pt_BR";
   } catch (error) {
+    const reason =
+      error instanceof TenantResolutionError
+        ? error.code
+        : "tenant_resolution_failed";
     logger.error({
       event: "tenant.resolve.error",
       requestId: meta?.requestId,
+      route: meta?.route,
+      method: meta?.method,
+      phoneNumberId,
+      reason,
       message: (error as Error).message,
     });
+    logger.warn({
+      event: "webhook.message.discarded",
+      requestId: meta?.requestId,
+      route: meta?.route,
+      method: meta?.method,
+      phoneNumberId,
+      reason,
+    });
+    return;
   }
   const persistEventSafe = async (
     eventName: string,
