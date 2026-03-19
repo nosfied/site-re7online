@@ -39,6 +39,8 @@ export type Env = {
   CONV_STATE_DUAL_WRITE: boolean;
   CONV_STATE_SHADOW_COMPARE: boolean;
   CONV_STATE_DB_WRITE_STRICT: boolean;
+  STORAGE_MODE: "json" | "hybrid" | "postgres";
+  STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
   CLIENT_ID: string;
   OUTBOUND_TEMPLATES_BY_CLIENT: Record<
@@ -58,6 +60,14 @@ export function normalizeWaId(input: string): string {
 function toNumber(value: string | undefined, fallback: number) {
   const num = Number(value);
   return Number.isNaN(num) ? fallback : num;
+}
+
+function toStorageMode(value: string | undefined): "json" | "hybrid" | "postgres" {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "hybrid" || normalized === "postgres") {
+    return normalized;
+  }
+  return "json";
 }
 
 export function getEnv(): Env {
@@ -141,6 +151,8 @@ export function getEnv(): Env {
     (process.env.CONV_STATE_SHADOW_COMPARE ?? "false") === "true";
   const CONV_STATE_DB_WRITE_STRICT =
     (process.env.CONV_STATE_DB_WRITE_STRICT ?? "false") === "true";
+  const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
+  const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
   let OUTBOUND_TEMPLATE_INTENT_MAP: Record<string, { name: string; language?: string }> = {};
   const mapRaw = process.env.OUTBOUND_TEMPLATE_INTENT_MAP_JSON;
@@ -217,6 +229,8 @@ export function getEnv(): Env {
     CONV_STATE_DUAL_WRITE,
     CONV_STATE_SHADOW_COMPARE,
     CONV_STATE_DB_WRITE_STRICT,
+    STORAGE_MODE,
+    STORAGE_MODE_SET,
     CLIENT_KEY,
     CLIENT_ID,
     OUTBOUND_TEMPLATES_BY_CLIENT,
