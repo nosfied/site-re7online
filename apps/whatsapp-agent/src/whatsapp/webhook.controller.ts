@@ -2,8 +2,10 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
+import { NormalizedMessage } from "../domain/whatsapp/types.js";
 import { logger } from "../logger/logger.js";
 import { createStorage } from "../storage/storageFactory.js";
+import { StoredRecord } from "../storage/storage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
 import { acquireConversationMutex } from "./conversationMutex.js";
@@ -453,7 +455,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         type: "text",
         text: params.replyText,
         intent: params.intent ?? undefined,
-        clientKey: tenantClientKey ?? "default",
+        clientKey: tenantClientKey,
         status: "sent",
         allowlist: { enabled: false, hit: false },
         raw: {
@@ -487,7 +489,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         type: "text",
         text: params.replyText,
         intent: params.intent ?? undefined,
-        clientKey: tenantClientKey ?? "default",
+        clientKey: tenantClientKey,
         status: "failed",
         allowlist: { enabled: false, hit: false },
         raw: {
@@ -845,6 +847,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
   };
+  const toStoredIncomingMessage = (
+    message: NormalizedMessage,
+    status: "received" | "ignored" | "replied" | "sent" | "failed",
+    allowlistHit: boolean
+  ): StoredRecord => ({
+    ...message,
+    clientKey: tenantClientKey,
+    status,
+    allowlist: {
+      enabled: tenantAllowlist.length > 0,
+      hit: allowlistHit,
+    },
+  });
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
     const nextState =
@@ -1246,14 +1261,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           },
         });
 
-        await storage.saveIncomingMessage({
-          ...message,
-          status,
-          allowlist: {
-            enabled: allowlistEnabled,
-            hit: allowlistHit,
-          },
-        });
+        await storage.saveIncomingMessage(
+          toStoredIncomingMessage(message, status, allowlistHit)
+        );
 
         logger.info({
           event: "webhook.message",
@@ -1356,14 +1366,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(updatedMeta);
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
       if (env.outboundEnabled && !env.WHATSAPP_SANDBOX) {
         await sendTextMessage(
           normalizedFrom,
@@ -1409,14 +1414,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage({
-          ...message,
-          status,
-          allowlist: {
-            enabled: allowlistEnabled,
-            hit: allowlistHit,
-          },
-        });
+        await storage.saveIncomingMessage(
+          toStoredIncomingMessage(message, status, allowlistHit)
+        );
         continue;
       }
 
@@ -1439,14 +1439,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage({
-          ...message,
-          status,
-          allowlist: {
-            enabled: allowlistEnabled,
-            hit: allowlistHit,
-          },
-        });
+        await storage.saveIncomingMessage(
+          toStoredIncomingMessage(message, status, allowlistHit)
+        );
         continue;
       }
 
@@ -1486,14 +1481,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           message.timestamp
         );
         await upsertConversationSafe(updatedMeta);
-        await storage.saveIncomingMessage({
-          ...message,
-          status,
-          allowlist: {
-            enabled: allowlistEnabled,
-            hit: allowlistHit,
-          },
-        });
+        await storage.saveIncomingMessage(
+          toStoredIncomingMessage(message, status, allowlistHit)
+        );
         continue;
       }
 
@@ -1565,14 +1555,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(updatedMeta);
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
       continue;
     }
 
@@ -1605,14 +1590,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
       }
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
@@ -1632,14 +1612,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(blockedState);
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
       logger.info({
         event: "handoff.blocked",
         waId: maskNumber(normalizedFrom),
@@ -1743,14 +1718,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
       });
 
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
 
       logger.info({
         event: "webhook.message",
@@ -2050,14 +2020,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (getHandoffStatus(updatedConversation) === "active") {
       await upsertConversationSafe(updatedConversation);
-      await storage.saveIncomingMessage({
-        ...message,
-        status,
-        allowlist: {
-          enabled: allowlistEnabled,
-          hit: allowlistHit,
-        },
-      });
+      await storage.saveIncomingMessage(
+        toStoredIncomingMessage(message, status, allowlistHit)
+      );
       logger.info({
         event: "handoff.blocked",
         waId: maskNumber(normalizedFrom),
@@ -2135,14 +2100,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
     });
 
-    await storage.saveIncomingMessage({
-      ...message,
-      status,
-      allowlist: {
-        enabled: allowlistEnabled,
-        hit: allowlistHit,
-      },
-    });
+    await storage.saveIncomingMessage(
+      toStoredIncomingMessage(message, status, allowlistHit)
+    );
 
     logger.info({
       event: "webhook.message",
