@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
-import { jsonFileStorage } from "../storage/jsonFileStorage.js";
+import { runtimeStorage } from "../storage/runtimeStorage.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -105,7 +105,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         // ignore parse errors
       }
 
-      await jsonFileStorage.appendOutboundEvent({
+      await runtimeStorage.appendOutboundEvent({
         direction: "outbound",
         messageId: metaMessageId ?? params.messageId ?? params.rid ?? "",
         metaMessageId: metaMessageId ?? undefined,
@@ -148,7 +148,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     }
 
     const errorText = await response.text().catch(() => "");
-    await jsonFileStorage.appendOutboundEvent({
+    await runtimeStorage.appendOutboundEvent({
       direction: "outbound",
       messageId: params.messageId ?? params.rid ?? "",
       metaMessageId: undefined,

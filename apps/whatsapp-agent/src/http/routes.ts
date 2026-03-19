@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
-import { jsonFileStorage } from "../storage/jsonFileStorage.js";
+import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
@@ -222,7 +222,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const clientKey = await getScopedClientKey();
       if (!clientKey) return;
-      const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+      const conversation = await runtimeStorage.getConversation(waId, clientKey);
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -274,7 +274,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const clientKey = await getScopedClientKey();
       if (!clientKey) return;
-      await jsonFileStorage.deleteConversation(waId, clientKey);
+      await runtimeStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.conversation.reset",
         waId: maskWaId(waId),
@@ -314,7 +314,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, { ok: false, error: "bad_request" });
         return;
       }
-      await jsonFileStorage.deleteConversation(waId, clientKey);
+      await runtimeStorage.deleteConversation(waId, clientKey);
       logger.info({
         event: "admin.debug.reset_conversation",
         waId,
@@ -396,7 +396,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const runtimeConversations = await Promise.all(
           waIds.map(async (waId) => ({
             waId,
-            conversation: await jsonFileStorage.getConversation(waId, clientKey),
+            conversation: await runtimeStorage.getConversation(waId, clientKey),
           }))
         );
         const runtimeByWaId = new Map(
@@ -511,7 +511,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const conversation = await runtimeStorage.getConversation(waId, clientKey);
         if (!conversation) {
           json(res, 404, { error: "conversation_not_found" });
           return;
@@ -537,7 +537,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
         };
-        await jsonFileStorage.upsertConversation(nextState);
+        await runtimeStorage.upsertConversation(nextState);
         json(res, 200, {
           ok: true,
           waId,
@@ -572,7 +572,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const conversation = await runtimeStorage.getConversation(waId, clientKey);
         if (!conversation) {
           json(res, 404, { error: "conversation_not_found" });
           return;
@@ -584,7 +584,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedTo: null,
           assignedAt: null,
         };
-        await jsonFileStorage.upsertConversation(nextState);
+        await runtimeStorage.upsertConversation(nextState);
         json(res, 200, {
           ok: true,
           waId,
@@ -644,7 +644,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, result.statusCode, { error: result.error });
           return;
         }
-        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const conversation = await runtimeStorage.getConversation(waId, clientKey);
         const assignedUser =
           conversation?.assignedUserId
             ? await prisma.user.findFirst({
@@ -701,7 +701,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "client_not_found" });
           return;
         }
-        const conversation = await jsonFileStorage.getConversation(waId, clientKey);
+        const conversation = await runtimeStorage.getConversation(waId, clientKey);
         const assignedUser =
           conversation?.assignedUserId
             ? await prisma.user.findFirst({
@@ -2359,7 +2359,7 @@ async function adminSendMessage(params: {
     return { ok: false, statusCode: 503, error: "outbound_disabled" };
   }
   const nowMs = Date.now();
-  const conversation = await jsonFileStorage.getConversation(params.waId, params.clientKey);
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
     return { ok: false, statusCode: 409, error: "window_closed" };
   }
@@ -2390,7 +2390,7 @@ async function adminSendMessage(params: {
   });
 
   if (conversation) {
-    await jsonFileStorage.upsertConversation({
+    await runtimeStorage.upsertConversation({
       ...conversation,
       lastOutboundAt: createdAt,
     });
