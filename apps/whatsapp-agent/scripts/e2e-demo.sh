@@ -226,6 +226,7 @@ log_step "A: reset e2e state"
   if ! node "${ROOT_DIR}/scripts/reset-e2e-state.mjs" \
     --lead "${WAID}" \
     --attendant "${HANDOFF_ATTENDANT_WAID}" \
+    --tenant "${TENANT}" \
     --events; then
     echo "WARN: reset-e2e-state local falhou; seguindo com reset via admin API" >&2
   fi

@@ -2,9 +2,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const sanitizeClientKey = (value) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(process.cwd(), ".data");
+const CLIENT_KEY = process.env.CLIENT_KEY ? sanitizeClientKey(process.env.CLIENT_KEY) : "";
 const TTL_DAYS = Number(process.env.TTL_DAYS ?? "7");
-const eventsFile = path.join(DATA_DIR, "whatsapp-events.json");
+const eventsFile = CLIENT_KEY
+  ? path.join(DATA_DIR, CLIENT_KEY, "whatsapp-events.json")
+  : path.join(DATA_DIR, "whatsapp-events.json");
 
 const ttlMs = Number.isNaN(TTL_DAYS) ? 7 * 24 * 60 * 60 * 1000 : TTL_DAYS * 24 * 60 * 60 * 1000;
 const cutoff = Date.now() - ttlMs;

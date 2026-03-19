@@ -37,7 +37,8 @@ if [[ ! -d "${TMP_DIR}/.data" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${TMP_DIR}/.data/conversations.json" && ! -f "${TMP_DIR}/.data/whatsapp-events.json" ]]; then
+if [[ ! -f "${TMP_DIR}/.data/conversations.json" && ! -f "${TMP_DIR}/.data/whatsapp-events.json" ]] \
+  && ! find "${TMP_DIR}/.data" -mindepth 2 -maxdepth 2 \( -name 'conversations.json' -o -name 'whatsapp-events.json' \) | grep -q .; then
   log "ERROR: backup .data missing required files"
   exit 1
 fi

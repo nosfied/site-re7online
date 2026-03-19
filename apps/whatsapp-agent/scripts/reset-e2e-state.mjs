@@ -9,16 +9,22 @@ const getArg = (name) => {
   return args[idx + 1] ?? "";
 };
 
+const sanitizeClientKey = (value) => value.replace(/[^a-zA-Z0-9._-]/g, "_");
+
 const lead = getArg("--lead");
 const attendant = getArg("--attendant");
+const tenant = getArg("--tenant");
 const resetEvents = args.includes("--events");
 
 if (!lead || !attendant) {
-  console.error("FAIL: use --lead <waId> --attendant <waId> [--events]");
+  console.error("FAIL: use --lead <waId> --attendant <waId> [--tenant <clientKey>] [--events]");
   process.exit(1);
 }
 
-const dataDir = path.resolve(process.cwd(), ".data");
+const dataRootDir = path.resolve(process.cwd(), ".data");
+const dataDir = tenant
+  ? path.join(dataRootDir, sanitizeClientKey(tenant))
+  : dataRootDir;
 const conversationsFile = path.join(dataDir, "conversations.json");
 const eventsFile = path.join(dataDir, "whatsapp-events.json");
 const BACKUP_MIN_INTERVAL_MINUTES = Number(
