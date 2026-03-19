@@ -89,8 +89,25 @@ if [[ -z "${ADMIN_TOKEN:-}" ]]; then
   echo "FATAL: ADMIN_TOKEN vazio" >&2
   exit 2
 fi
+
+tenant_runtime_config="$(
+  node "${ROOT_DIR}/scripts/get-tenant-runtime-config.mjs" \
+    --tenant "${TENANT}" \
+    --base-url "${BASE_URL}"
+)"
+eval "$tenant_runtime_config"
+
+PHONE_NUMBER_ID="${META_PHONE_NUMBER_ID}"
+if [[ -n "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
+  HANDOFF_ATTENDANT_WAID="${HANDOFF_ATTENDANT_WAID}"
+fi
+if [[ -n "${MANUAL_HANDOFF_TEMPLATE:-}" ]]; then
+  HANDOFF_NOTIFY_TEMPLATE_NAME="${MANUAL_HANDOFF_TEMPLATE}"
+  HANDOFF_TEMPLATE_NAME="${MANUAL_HANDOFF_TEMPLATE}"
+fi
+
 if [[ "${HANDOFF_ENABLED:-}" == "true" && -z "${HANDOFF_ATTENDANT_WAID:-}" ]]; then
-  echo "FATAL: HANDOFF_ATTENDANT_WAID vazio" >&2
+  echo "FATAL: HANDOFF_ATTENDANT_WAID vazio para tenant=${TENANT}" >&2
   exit 2
 fi
 

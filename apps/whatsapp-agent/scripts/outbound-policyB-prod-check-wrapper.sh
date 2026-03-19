@@ -65,10 +65,6 @@ if [[ -z "$META_APP_SECRET" ]]; then
   echo "Erro: META_APP_SECRET ausente no .env" >&2
   exit 1
 fi
-if [[ -z "$PHONE_NUMBER_ID" ]]; then
-  echo "Erro: WHATSAPP_PHONE_NUMBER_ID ausente no .env" >&2
-  exit 1
-fi
 if [[ -z "$TARGET_WAID" ]]; then
   echo "Erro: --to <waId> é obrigatório" >&2
   exit 2
@@ -78,6 +74,14 @@ if [[ -z "$TARGET_WAID" ]]; then
   echo "Erro: waId inválido" >&2
   exit 2
 fi
+
+tenant_runtime_config="$(
+  node "${APP_DIR}/scripts/get-tenant-runtime-config.mjs" \
+    --tenant "${TENANT_ID}" \
+    --base-url "${BASE_URL}"
+)"
+eval "$tenant_runtime_config"
+PHONE_NUMBER_ID="${META_PHONE_NUMBER_ID}"
 
 wait_ready() {
   local timeout_s=12

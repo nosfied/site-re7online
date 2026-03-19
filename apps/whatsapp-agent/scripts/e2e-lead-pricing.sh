@@ -76,6 +76,14 @@ if [[ -z "$PHONE_NUMBER_ID" ]]; then
   exit 1
 fi
 
+tenant_runtime_config="$(
+  node "${ROOT_DIR}/scripts/get-tenant-runtime-config.mjs" \
+    --tenant "${TENANT}" \
+    --base-url "${BASE_URL}"
+)"
+eval "$tenant_runtime_config"
+PHONE_NUMBER_ID="${META_PHONE_NUMBER_ID}"
+
 "${ROOT_DIR}/scripts/wait-for-http.sh" "${BASE_URL}/health"
 
 log_step() {
