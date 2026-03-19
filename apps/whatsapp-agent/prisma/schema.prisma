@@ -197,7 +197,8 @@ model Event {
 
   @@index([requestId])
   @@index([messageId])
-  @@unique([eventName, requestId])
+  @@index([clientId, eventName, createdAt])
+  @@unique([clientId, eventName, requestId])
 }
 
 model ConversationRuntimeState {

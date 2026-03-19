@@ -1,5 +1,7 @@
 # Fase 0 — Backlog MVP (WhatsApp Agent)
 
+> Documento histórico do MVP inicial. O backlog técnico ativo e o fechamento das sprints atuais ficam em `docs/BACKLOG_TECH.md`.
+
 ## Visão de fases
 
 ### Fase 1 — Scaffolding
