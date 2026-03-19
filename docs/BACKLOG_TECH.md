@@ -7,40 +7,81 @@
 - E2E validado (50/50)
 - Onboarding funcional via CLI / Embedded Signup
 - Webhook ativo e estável
-- App Review Meta em análise
+- App Review Meta pendente
 - Sistema já operando com cliente real
 
 ---
 
 # BACKLOG ESTRATÉGICO (SaaS)
 
+## Sprint 12 — COMPLETED
+
+### Objetivo da sprint
+- concluir o backend multi-tenant real com isolamento seguro no runtime
+- endurecer a resolução de tenant no webhook
+- segmentar o storage JSON por tenant
+- eliminar escrita indevida em `.data/default`
+
+### Entregas realizadas
+- resolução de tenant segura, sem fallback automático para `default`
+- storage JSON segmentado por tenant em `.data/{clientKey}/`
+- correção do vazamento residual para `.data/default`
+- propagação consistente de `clientKey` no runtime do webhook
+
+### Validação em produção
+- deploy realizado e validado na VPS
+- `validate-agent.sh` verde para o tenant `re7online`
+- `re7online` operando corretamente em ambiente real
+
+### Riscos eliminados
+- mistura silenciosa de tenants por fallback inseguro
+- compartilhamento físico do runtime JSON entre tenants
+- escrita indevida no namespace `default` para tenant resolvido
+
+### Marco formal
+- Sprint 12 concluída
+- backend oficialmente multi-tenant
+- storage runtime isolado por tenant
+- base pronta para expansão SaaS incremental
+
 ## Fase atual
-Transição de sistema single-tenant → SaaS multi-tenant
+SaaS multi-tenant validado (Sprint 12)
 
 ## Prioridades (ordem obrigatória)
 
-### 1. Multi-tenant
-- isolamento por clientId
-- contexto de execução por cliente
-- separação de dados (conversas, mensagens, eventos)
-- configuração por cliente (WABA, prompts, limites)
-
-### 2. Persistência
+### 1. Persistência
 - migrar JSON → Postgres (Prisma)
 - definir fonte única de verdade
 - eliminar duplicidade entre JSON e banco
 
-### 3. Observabilidade
+### 2. Observabilidade
 - logs estruturados
 - tracing por conversa
 - auditoria por cliente
 - métricas operacionais
 
-### 4. Produto (UX)
+### 3. Produto (UX)
 - inbox profissional
 - painel do cliente
 - visualização de conversas
 - status de mensagens
+
+## Pós-Sprint 12 — Backlog Prioritário
+
+### 1. Event tenant-scoped uniqueness
+- incluir `clientId` na constraint/index
+- evitar colisão cross-tenant
+
+### 2. Padronização de naming
+- alinhar `tenantId` vs `clientId` em `Lead` / `LeadNote`
+
+### 3. E2E multi-tenant simultâneo
+- suportar execução com 2 tenants ativos
+- validar isolamento real
+
+### 4. Higiene operacional
+- revisar tenant `cliente-demo`
+- avaliar limpeza de `.data/default`
 
 ## Decisões arquiteturais
 
