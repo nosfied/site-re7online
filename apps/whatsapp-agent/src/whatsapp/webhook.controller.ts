@@ -4,7 +4,7 @@ import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
 import { logger } from "../logger/logger.js";
-import { createStorage } from "../storage/storageFactory.js";
+import { runtimeStorage as storage } from "../storage/runtimeStorage.js";
 import { StoredRecord } from "../storage/storage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
@@ -56,7 +56,6 @@ import {
 } from "../db/persist.js";
 
 const agentBrain = createAgentBrain();
-const storage = createStorage();
 const adminTemplateDedup = new Map<string, number>();
 const ADMIN_TEMPLATE_TTL_MS = 10 * 60 * 1000;
 const conversationVersionByWaId = new Map<string, { version: number; lastInboundAt?: string }>();
