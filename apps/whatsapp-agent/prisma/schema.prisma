@@ -205,20 +205,38 @@ model ConversationRuntimeState {
   id                  String        @id @default(uuid())
   clientId            String        @db.Uuid
   waId                String
+  conversationKey     String?
+  firstSeenAt         DateTime?
   windowIsOpen        Boolean       @default(true)
   windowExpiresAt     DateTime?
   lastInboundAt       DateTime?
   lastOutboundAt      DateTime?
+  lastInboundMessageId  String?
+  lastOutboundMessageId String?
   intent              String?
   handoffStatus       HandoffStatus @default(NONE)
   handoffRequestedAt  DateTime?
   handoffActivatedAt  DateTime?
   handoffReleasedAt   DateTime?
+  templateNeeded      Boolean       @default(false)
+  templateSuggested   String?
+  lastNeedAt          DateTime?
+  lastIntent          String?
   leadRequestedAt     DateTime?
   leadCapturedAt      DateTime?
   demoStatus          String?
   lastDemoRequestedAt DateTime?
   lastDemoScheduledAt DateTime?
+  demoPreferredSchedule String?
+  lastHandoffDemoScheduledKey String?
+  lastHandoffDemoScheduledAt  DateTime?
+  flow                String?
+  flowStep            Int?
+  answers             Json?
+  mode                String?
+  assignedUserId      String?
+  assignedTo          String?
+  assignedAt          DateTime?
   version             Int           @default(0)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
