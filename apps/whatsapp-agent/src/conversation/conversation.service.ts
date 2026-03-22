@@ -1,5 +1,6 @@
 import { logger } from "../logger/logger.js";
 import { Storage } from "../storage/storage.js";
+import { makeConversationKey } from "../storage/conversationKey.js";
 import {
   ConversationIntent,
   ConversationState,
@@ -30,6 +31,7 @@ export async function getOrCreateConversation(
     : new Date(Date.parse(timestamp)).toISOString();
   const state: ConversationState = {
     clientKey,
+    conversationKey: makeConversationKey(clientKey, waId),
     waId,
     firstSeenAt,
     lastInboundAt: firstSeenAt,
@@ -741,7 +743,7 @@ export function logConversationWindow(
   logger.info({
     event: "conversation.window",
     waId: maskNumber(state.waId),
-    conversationKey: state.conversationKey ?? null,
+    ...(state.conversationKey ? { conversationKey: state.conversationKey } : {}),
     isOpen: state.window.isOpen,
     expiresAt: state.window.expiresAt,
     route: meta?.route,
@@ -757,7 +759,7 @@ export function logConversationIntent(
   logger.info({
     event: "conversation.intent",
     waId: maskNumber(state.waId),
-    conversationKey: state.conversationKey ?? null,
+    ...(state.conversationKey ? { conversationKey: state.conversationKey } : {}),
     intent: state.intent ?? "unknown",
     route: meta?.route,
     method: meta?.method,
