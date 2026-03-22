@@ -1,3 +1,46 @@
+## FASE ATUAL DO PRODUTO
+
+Preparação para migração de persistência (JSON → Postgres) após validação multi-tenant.
+
+O sistema já possui:
+- multi-tenant real no runtime
+- storage desacoplado
+- base preparada para transição de storage
+
+---
+
+## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
+
+1. Observabilidade + Shadow Migration
+   - correlationId
+   - logging estruturado
+   - shadow write para Postgres
+   - validação silenciosa de consistência
+
+2. Migração controlada para Postgres
+   - troca da fonte de verdade
+   - fallback seguro
+   - zero downtime
+
+3. Produto (UX)
+   - inbox profissional
+   - painel do cliente
+
+---
+
+## DIRETRIZ IMPORTANTE
+
+A evolução deve priorizar:
+- consistência de dados
+- segurança de migração
+- estabilidade em produção
+
+ANTES de:
+- features de UI
+- expansão de produto
+
+---
+
 # CONTEXTO ATUAL DO PRODUTO
 
 - Produto validado em produção (cliente Justa)
@@ -13,6 +56,41 @@
 ---
 
 # BACKLOG ESTRATÉGICO (SaaS)
+
+## Sprint 13 — COMPLETED (TECHNICAL)
+
+### Objetivo da sprint
+- preparar a transição JSON -> Postgres com segurança, sem trocar a fonte de verdade atual
+- reduzir inconsistências de tenancy na persistência e no runtime
+- fechar a base técnica para validação multi-tenant honesta
+
+### Entregas realizadas
+- `Event` ajustado para tenant-scoped uniqueness
+- `STORAGE_MODE=json|hybrid|postgres` introduzido com default seguro
+- `runtimeStorage` centralizado e pontos críticos desacoplados de `jsonFileStorage`
+- scripts E2E tornados tenant-aware por config real do tenant
+
+### Validação técnica
+- tenant principal `re7online` validado integralmente em VPS
+- tenant `justa-advocacia` validado tecnicamente em config/admin/mapping/helper/logs/bootstrap
+- modo de storage resolvido em produção sem regressão funcional
+
+### Riscos eliminados
+- colisão cross-tenant indevida em `Event`
+- seleção implícita/ambígua do modo de storage
+- acoplamento direto dos pontos críticos ao `jsonFileStorage`
+- montagem de payload E2E com config global do tenant principal
+
+### Marco formal
+- Sprint 13 concluída tecnicamente
+- base pronta para preparar a próxima etapa da migração JSON -> Postgres
+- tenant principal validado e segundo tenant preparado tecnicamente
+
+### Pending external operational validation — Justa
+- onboarding técnico preparado
+- tenant configurado e reconhecido
+- helper/config/mapping prontos
+- execução fim a fim depende do avanço do App Review / Access Verification da Meta
 
 ## Sprint 12 — COMPLETED
 
@@ -45,7 +123,7 @@
 - base pronta para expansão SaaS incremental
 
 ## Fase atual
-SaaS multi-tenant validado (Sprint 12)
+SaaS multi-tenant validado tecnicamente (Sprint 13)
 
 ## Prioridades (ordem obrigatória)
 
@@ -68,16 +146,16 @@ SaaS multi-tenant validado (Sprint 12)
 
 ## Pós-Sprint 12 — Backlog Prioritário
 
-### 1. Event tenant-scoped uniqueness
-- incluir `clientId` na constraint/index
-- evitar colisão cross-tenant
+### 1. Retomar onboarding e E2E completo da Justa após avanço Meta
+- concluir validação fim a fim assim que App Review / Access Verification liberar o fluxo externo
+- confirmar operação ponta a ponta do segundo tenant em ambiente real
 
 ### 2. Padronização de naming
 - alinhar `tenantId` vs `clientId` em `Lead` / `LeadNote`
 
-### 3. E2E multi-tenant simultâneo
-- suportar execução com 2 tenants ativos
-- validar isolamento real
+### 3. Planejar próxima etapa de migração JSON → Postgres
+- definir a sequência segura de transição da fonte de verdade
+- consolidar contratos de storage e shadow state
 
 ### 4. Higiene operacional
 - revisar tenant `cliente-demo`
