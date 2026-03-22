@@ -1,4 +1,5 @@
 import { IncomingMessage, ServerResponse } from "node:http";
+import crypto from "node:crypto";
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { env, normalizeWaId } from "../config/env.js";
 import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
@@ -123,29 +124,36 @@ export function verifyWebhook(
 }
 
 export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
-  const prisma = getPrisma();
-  logger.info({
-    event: "webhook.received",
-    route: meta?.route,
-    method: meta?.method,
-    requestId: meta?.requestId,
-  });
+  return logger.withContext(
+    {
+      correlationId: crypto.randomUUID(),
+      clientKey: null,
+      waId: null,
+    },
+    async () => {
+      const prisma = getPrisma();
+      logger.info({
+        event: "webhook.received",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
 
-  let appliedTenantConfig = await getDefaultTenant();
-  let hasResolvedTenantConfig = false;
-  let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
-    .map((value: string) => normalizeWaId(value))
-    .filter(Boolean);
-  let tenantHandoffAttendantWaid =
-    appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
-  let tenantHandoffTemplateName =
-    appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
-  let tenantDefaultLanguage =
-    appliedTenantConfig?.defaultLanguage ||
-    env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
-    "pt_BR";
+      let appliedTenantConfig = await getDefaultTenant();
+      let hasResolvedTenantConfig = false;
+      let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
+        .map((value: string) => normalizeWaId(value))
+        .filter(Boolean);
+      let tenantHandoffAttendantWaid =
+        appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
+      let tenantHandoffTemplateName =
+        appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
+      let tenantDefaultLanguage =
+        appliedTenantConfig?.defaultLanguage ||
+        env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+        "pt_BR";
 
-  const attemptTemplateFallback = async (params: {
+      const attemptTemplateFallback = async (params: {
     waId: string;
     toE164: string;
     intent: ConversationIntent | undefined;
@@ -777,6 +785,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
     tenantClientKey = tenant.clientKey;
+    logger.updateContext({ clientKey: tenantClientKey });
     const resolvedTenantConfig = await getTenantByClientKeyOrPhoneNumberId(
       tenantClientKey,
       phoneNumberId
@@ -828,6 +837,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   ) => {
     try {
       const requestId = meta?.requestId ?? messageId ?? null;
+      const logContext = logger.getContext();
       if (!tenantClientId) return;
       await persistEvent({
         clientId: tenantClientId,
@@ -835,7 +845,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         messageId: messageId ?? null,
         requestId,
         eventName,
-        payloadJson,
+        payloadJson: {
+          ...(payloadJson && typeof payloadJson === "object" && !Array.isArray(payloadJson)
+            ? (payloadJson as Record<string, unknown>)
+            : { value: payloadJson }),
+          correlationId: logContext.correlationId ?? null,
+          clientKey: logContext.clientKey ?? tenantClientKey ?? null,
+          waId: logContext.waId ?? waId ?? null,
+        },
       });
     } catch (error) {
       logger.error({
@@ -1062,61 +1079,66 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
-  const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
-  const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
-  if (hasStatuses) {
-    logger.info({
-      event: "webhook.status.received",
-      route: meta?.route,
-      method: meta?.method,
-      requestId: meta?.requestId,
-      phone_number_id: phoneNumberId,
-      count: statuses.length,
-    });
-    await persistEventSafe(
-      "webhook.status.received",
-      { phone_number_id: phoneNumberId, count: statuses.length },
-      undefined,
-      undefined
-    );
-  }
+      const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
+      const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
+      if (hasStatuses) {
+        logger.info({
+          event: "webhook.status.received",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+          phone_number_id: phoneNumberId,
+          count: statuses.length,
+        });
+        await persistEventSafe(
+          "webhook.status.received",
+          { phone_number_id: phoneNumberId, count: statuses.length },
+          undefined,
+          undefined
+        );
+      }
 
-  if (normalized.messages.length === 0) {
-    if (!hasStatuses) {
-      logger.warn({
-        event: "webhook.no_messages",
-        reason: normalized.reason ?? "unknown",
+      if (normalized.messages.length === 0) {
+        if (!hasStatuses) {
+          logger.warn({
+            event: "webhook.no_messages",
+            reason: normalized.reason ?? "unknown",
+            route: meta?.route,
+            method: meta?.method,
+            requestId: meta?.requestId,
+            phone_number_id: phoneNumberId,
+          });
+        }
+        return;
+      }
+
+      logger.info({
+        event: "webhook.inbound",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,
         phone_number_id: phoneNumberId,
+        count: normalized.messages.length,
       });
-    }
-    return;
-  }
+      await persistEventSafe(
+        "webhook.inbound",
+        { phone_number_id: phoneNumberId, count: normalized.messages.length },
+        undefined,
+        undefined
+      );
 
-  logger.info({
-    event: "webhook.inbound",
-    route: meta?.route,
-    method: meta?.method,
-    requestId: meta?.requestId,
-    phone_number_id: phoneNumberId,
-    count: normalized.messages.length,
-  });
-  await persistEventSafe(
-    "webhook.inbound",
-    { phone_number_id: phoneNumberId, count: normalized.messages.length },
-    undefined,
-    undefined
-  );
-
-  for (const message of normalized.messages) {
-    const normalizedFrom = normalizeWaId(message.from);
-    const releaseConversationMutex = await acquireConversationMutex(
-      tenantClientKey,
-      normalizedFrom
-    );
-    try {
+      for (const message of normalized.messages) {
+        const normalizedFrom = normalizeWaId(message.from);
+        logger.updateContext({
+          correlationId: crypto.randomUUID(),
+          clientKey: tenantClientKey,
+          waId: normalizedFrom,
+        });
+        const releaseConversationMutex = await acquireConversationMutex(
+          tenantClientKey,
+          normalizedFrom
+        );
+        try {
       const existing = await storage.findByMessageId(message.messageId);
       if (existing?.status === "replied") {
         const repliedAt = existing.repliedAt ? Date.parse(existing.repliedAt) : 0;
@@ -2586,10 +2608,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           requestId: meta?.requestId,
         });
       });
-    } finally {
-      releaseConversationMutex();
+        } finally {
+          releaseConversationMutex();
+        }
+      }
     }
-  }
+  );
 }
 
 function maskNumber(number: string) {
