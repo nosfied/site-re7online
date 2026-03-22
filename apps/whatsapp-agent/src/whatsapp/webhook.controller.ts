@@ -6,6 +6,7 @@ import { normalizeWebhook } from "../domain/whatsapp/normalizeWebhook.js";
 import { NormalizedMessage } from "../domain/whatsapp/types.js";
 import { logger } from "../logger/logger.js";
 import { runtimeStorage as storage } from "../storage/runtimeStorage.js";
+import { makeConversationKey } from "../storage/conversationKey.js";
 import { StoredRecord } from "../storage/storage.js";
 import { WhatsAppWebhookPayload } from "./whatsapp.types.js";
 import { runFlowExecutor, runMidDemoFlowExecutor, runPostDemoFlowExecutor } from "./flowExecutor.js";
@@ -129,6 +130,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       correlationId: crypto.randomUUID(),
       clientKey: null,
       waId: null,
+      conversationKey: null,
     },
     async () => {
       const prisma = getPrisma();
@@ -1133,6 +1135,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           correlationId: crypto.randomUUID(),
           clientKey: tenantClientKey,
           waId: normalizedFrom,
+          conversationKey: makeConversationKey(tenantClientKey, normalizedFrom),
         });
         const releaseConversationMutex = await acquireConversationMutex(
           tenantClientKey,

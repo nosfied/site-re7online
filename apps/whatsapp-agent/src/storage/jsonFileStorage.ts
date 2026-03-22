@@ -240,6 +240,7 @@ async function readLegacyConversation(waId: string, clientKey: string) {
     event: "storage.conversation.legacy_fallback",
     clientKey,
     waId: maskWaId(waId),
+    conversationKey: found.conversationKey,
     legacyFile: legacyConversationFile,
     targetFile: getConversationsFile(clientKey),
   });
@@ -343,6 +344,7 @@ export const jsonFileStorage: Storage = {
           event: "storage.conversation.read",
           clientKey,
           waId: maskWaId(waId),
+          conversationKey: found.conversationKey,
           found: true,
           source: "legacy",
           targetFile,
@@ -353,6 +355,7 @@ export const jsonFileStorage: Storage = {
         event: "storage.conversation.read",
         clientKey,
         waId: maskWaId(waId),
+        conversationKey: found.conversationKey,
         found: false,
         targetFile,
       });
@@ -371,6 +374,7 @@ export const jsonFileStorage: Storage = {
         event: "storage.conversation.migrated",
         clientKey,
         waId: maskWaId(waId),
+        conversationKey: found.conversationKey,
         targetFile,
       });
     }
@@ -378,6 +382,7 @@ export const jsonFileStorage: Storage = {
       event: "storage.conversation.read",
       clientKey,
       waId: maskWaId(waId),
+      conversationKey: found.conversationKey,
       found: true,
       targetFile,
     });
@@ -404,6 +409,7 @@ export const jsonFileStorage: Storage = {
         event: "storage.conversation.migrated",
         clientKey,
         waId: maskWaId(state.waId),
+        conversationKey: found.conversationKey,
         targetFile,
       });
     }
@@ -411,6 +417,7 @@ export const jsonFileStorage: Storage = {
       event: "storage.conversation.write",
       clientKey,
       waId: maskWaId(state.waId),
+      conversationKey: found.conversationKey,
       targetFile,
     });
   },
@@ -439,6 +446,7 @@ export const jsonFileStorage: Storage = {
           event: "storage.conversation.legacy_fallback",
           clientKey,
           waId: maskWaId(waId),
+          conversationKey,
           legacyFile: legacyConversationFile,
           targetFile,
         });
@@ -449,6 +457,7 @@ export const jsonFileStorage: Storage = {
       event: "storage.conversation.write",
       clientKey,
       waId: maskWaId(waId),
+      conversationKey,
       targetFile,
     });
   },
@@ -508,6 +517,7 @@ export const jsonFileStorage: Storage = {
         event: "storage.conversation.migrated",
         clientKey,
         waId: maskWaId(waId),
+        conversationKey: found.conversationKey,
         targetFile,
       });
     }
@@ -515,6 +525,7 @@ export const jsonFileStorage: Storage = {
       event: "storage.conversation.write",
       clientKey,
       waId: maskWaId(waId),
+      conversationKey: found.conversationKey,
       targetFile,
     });
     return updated;

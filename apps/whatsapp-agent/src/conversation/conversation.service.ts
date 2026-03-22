@@ -741,6 +741,7 @@ export function logConversationWindow(
   logger.info({
     event: "conversation.window",
     waId: maskNumber(state.waId),
+    conversationKey: state.conversationKey ?? null,
     isOpen: state.window.isOpen,
     expiresAt: state.window.expiresAt,
     route: meta?.route,
@@ -756,6 +757,7 @@ export function logConversationIntent(
   logger.info({
     event: "conversation.intent",
     waId: maskNumber(state.waId),
+    conversationKey: state.conversationKey ?? null,
     intent: state.intent ?? "unknown",
     route: meta?.route,
     method: meta?.method,
