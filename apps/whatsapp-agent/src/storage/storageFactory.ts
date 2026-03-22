@@ -5,6 +5,7 @@ import { Storage } from "./storage.js";
 import { createDualWriteStorage } from "./dualWriteStorage.js";
 
 type EffectiveStorageMode = "json" | "hybrid";
+type EffectiveReadSource = "json" | "hybrid";
 
 function resolveStorageMode(): {
   requestedMode: "json" | "hybrid" | "postgres";
@@ -43,8 +44,46 @@ function resolveStorageMode(): {
   };
 }
 
+function resolveConversationReadSource(): {
+  requestedReadSource: "json" | "hybrid" | "postgres";
+  effectiveReadSource: EffectiveReadSource;
+  source: "default" | "legacy_flags" | "read_source";
+  fallbackReason?: "postgres_not_authoritative_yet";
+} {
+  if (env.CONV_STATE_READ_SOURCE_SET) {
+    if (env.CONV_STATE_READ_SOURCE === "postgres") {
+      return {
+        requestedReadSource: env.CONV_STATE_READ_SOURCE,
+        effectiveReadSource: "hybrid",
+        source: "read_source",
+        fallbackReason: "postgres_not_authoritative_yet",
+      };
+    }
+    return {
+      requestedReadSource: env.CONV_STATE_READ_SOURCE,
+      effectiveReadSource: env.CONV_STATE_READ_SOURCE,
+      source: "read_source",
+    };
+  }
+
+  if (env.CONV_STATE_SHADOW_COMPARE) {
+    return {
+      requestedReadSource: "hybrid",
+      effectiveReadSource: "hybrid",
+      source: "legacy_flags",
+    };
+  }
+
+  return {
+    requestedReadSource: "json",
+    effectiveReadSource: "json",
+    source: "default",
+  };
+}
+
 export function createStorage(): Storage {
   const mode = resolveStorageMode();
+  const readSource = resolveConversationReadSource();
   if (mode.fallbackReason) {
     logger.warn({
       event: "storage.mode.fallback",
@@ -61,8 +100,26 @@ export function createStorage(): Storage {
     });
   }
 
-  if (mode.effectiveMode === "hybrid") {
-    return createDualWriteStorage(jsonFileStorage);
+  if (readSource.fallbackReason) {
+    logger.warn({
+      event: "storage.read_source.fallback",
+      requestedReadSource: readSource.requestedReadSource,
+      effectiveReadSource: readSource.effectiveReadSource,
+      reason: readSource.fallbackReason,
+    });
+  } else {
+    logger.info({
+      event: "storage.read_source.resolved",
+      requestedReadSource: readSource.requestedReadSource,
+      effectiveReadSource: readSource.effectiveReadSource,
+      source: readSource.source,
+    });
+  }
+
+  if (mode.effectiveMode === "hybrid" || readSource.effectiveReadSource === "hybrid") {
+    return createDualWriteStorage(jsonFileStorage, {
+      readSource: readSource.effectiveReadSource,
+    });
   }
   return jsonFileStorage;
 }
