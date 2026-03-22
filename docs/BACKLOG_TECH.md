@@ -1,23 +1,26 @@
 ## FASE ATUAL DO PRODUTO
 
-Preparação para migração de persistência (JSON → Postgres) após validação multi-tenant.
+Validação de leitura híbrida (pré-migração JSON → Postgres).
 
 O sistema já possui:
 - multi-tenant real no runtime
 - storage desacoplado
-- base preparada para transição de storage
+- shadow completo do `ConversationState` validado
+- base preparada para transição segura de storage
+- Sprint 14 concluída (shadow completo validado)
+- Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Observabilidade + Shadow Migration
-   - correlationId
-   - logging estruturado
-   - shadow write para Postgres
-   - validação silenciosa de consistência
+1. Leitura híbrida (Sprint 15)
+   - `CONV_STATE_READ_SOURCE`
+   - leitura paralela via Postgres
+   - compare silencioso JSON vs Postgres
+   - divergência por tenant
 
-2. Migração controlada para Postgres
+2. Migração para Postgres (Sprint 16)
    - troca da fonte de verdade
    - fallback seguro
    - zero downtime

@@ -4,6 +4,7 @@ import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { Storage, StoredRecord, MessageStatus } from "./storage.js";
 import { ConversationState } from "../conversation/conversation.types.js";
+import { makeConversationKey } from "./conversationKey.js";
 
 type ShadowCompareFields = {
   conversationKey?: string | null;
@@ -16,6 +17,9 @@ type ShadowCompareFields = {
   lastOutboundMessageId?: string | null;
   intent?: string | null;
   handoffStatus?: HandoffStatus | null;
+  handoffRequestedAt?: string | null;
+  handoffActivatedAt?: string | null;
+  handoffReleasedAt?: string | null;
   templateNeeded?: boolean | null;
   templateSuggested?: string | null;
   lastNeedAt?: string | null;
@@ -74,6 +78,9 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     lastOutboundMessageId: state.lastOutboundMessageId ?? null,
     intent: state.intent ?? null,
     handoffStatus: toHandoffStatus(state.handoff?.status),
+    handoffRequestedAt: toIso(state.handoff?.requestedAt),
+    handoffActivatedAt: toIso(state.handoff?.activatedAt),
+    handoffReleasedAt: toIso(state.handoff?.releasedAt),
     templateNeeded: state.templateNeeded ?? false,
     templateSuggested: state.templateSuggested ?? null,
     lastNeedAt: toIso(state.lastNeedAt),
@@ -107,6 +114,9 @@ function mapDbToShadow(db: {
   lastOutboundMessageId: string | null;
   intent: string | null;
   handoffStatus: HandoffStatus | null;
+  handoffRequestedAt: Date | null;
+  handoffActivatedAt: Date | null;
+  handoffReleasedAt: Date | null;
   templateNeeded: boolean;
   templateSuggested: string | null;
   lastNeedAt: Date | null;
@@ -138,6 +148,15 @@ function mapDbToShadow(db: {
     lastOutboundMessageId: db.lastOutboundMessageId ?? null,
     intent: db.intent ?? null,
     handoffStatus: db.handoffStatus ?? null,
+    handoffRequestedAt: db.handoffRequestedAt
+      ? db.handoffRequestedAt.toISOString()
+      : null,
+    handoffActivatedAt: db.handoffActivatedAt
+      ? db.handoffActivatedAt.toISOString()
+      : null,
+    handoffReleasedAt: db.handoffReleasedAt
+      ? db.handoffReleasedAt.toISOString()
+      : null,
     templateNeeded: db.templateNeeded,
     templateSuggested: db.templateSuggested ?? null,
     lastNeedAt: db.lastNeedAt ? db.lastNeedAt.toISOString() : null,
@@ -183,11 +202,23 @@ function toHandoffStatus(value?: string | null): HandoffStatus {
   return HandoffStatus.NONE;
 }
 
-export function createDualWriteStorage(primary: Storage): Storage {
+type DualWriteOptions = {
+  readSource?: "json" | "hybrid";
+};
+
+export function createDualWriteStorage(
+  primary: Storage,
+  options: DualWriteOptions = {}
+): Storage {
   const prisma = getPrisma();
   const cachedClientIds = new Map<string, string>();
+  const readMismatchCounts = new Map<string, number>();
+  const readSource = options.readSource ?? "json";
 
-  async function getClientId(clientKeyFromState?: string | null) {
+  async function getClientId(
+    clientKeyFromState?: string | null,
+    operation: "read" | "write" | "delete" = "write"
+  ) {
     const clientKey = clientKeyFromState || env.CLIENT_KEY || env.CLIENT_ID || "default";
     const cached = cachedClientIds.get(clientKey);
     if (cached) return cached;
@@ -197,7 +228,12 @@ export function createDualWriteStorage(primary: Storage): Storage {
     });
     if (!client) {
       logger.warn({
-        event: "state.shadow.write_failed",
+        event:
+          operation === "read"
+            ? "state.shadow.read_compare_failed"
+            : operation === "delete"
+              ? "state.shadow.delete_failed"
+              : "state.shadow.write_failed",
         reason: "client_not_found",
         clientKey,
       });
@@ -207,8 +243,123 @@ export function createDualWriteStorage(primary: Storage): Storage {
     return client.id;
   }
 
+  function summarizeReadMismatch(
+    jsonState: ConversationState | null,
+    dbState: ShadowCompareFields | null
+  ) {
+    if (!jsonState && !dbState) {
+      return null;
+    }
+    if (!jsonState && dbState) {
+      return {
+        kind: "missing_in_json",
+        fields: Object.keys(dbState).filter(
+          (key) => (dbState as Record<string, unknown>)[key] != null
+        ),
+      };
+    }
+    if (jsonState && !dbState) {
+      const jsonView = mapStateToShadow(jsonState);
+      return {
+        kind: "missing_in_postgres",
+        fields: Object.keys(jsonView).filter(
+          (key) => (jsonView as Record<string, unknown>)[key] != null
+        ),
+      };
+    }
+    const jsonView = mapStateToShadow(jsonState as ConversationState);
+    const dbView = dbState as ShadowCompareFields;
+    const fields = diffShadow(jsonView, dbView);
+    if (fields.length === 0) {
+      return null;
+    }
+    return {
+      kind: "field_mismatch",
+      fields,
+    };
+  }
+
+  async function readShadowState(waId: string, clientKey?: string | null) {
+    const clientId = await getClientId(clientKey, "read");
+    if (!clientId) return null;
+    const db = await prisma.conversationRuntimeState.findUnique({
+      where: {
+        clientId_waId: { clientId, waId },
+      },
+      select: {
+        conversationKey: true,
+        firstSeenAt: true,
+        windowIsOpen: true,
+        windowExpiresAt: true,
+        lastInboundAt: true,
+        lastOutboundAt: true,
+        lastInboundMessageId: true,
+        lastOutboundMessageId: true,
+        intent: true,
+        handoffStatus: true,
+        handoffRequestedAt: true,
+        handoffActivatedAt: true,
+        handoffReleasedAt: true,
+        templateNeeded: true,
+        templateSuggested: true,
+        lastNeedAt: true,
+        lastIntent: true,
+        leadRequestedAt: true,
+        leadCapturedAt: true,
+        demoStatus: true,
+        lastDemoRequestedAt: true,
+        lastDemoScheduledAt: true,
+        demoPreferredSchedule: true,
+        lastHandoffDemoScheduledKey: true,
+        lastHandoffDemoScheduledAt: true,
+        flow: true,
+        flowStep: true,
+        answers: true,
+        mode: true,
+        assignedUserId: true,
+        assignedTo: true,
+        assignedAt: true,
+      },
+    });
+    return db ? { clientId, shadow: mapDbToShadow(db) } : { clientId, shadow: null };
+  }
+
+  function logShadowReadMismatch(
+    jsonState: ConversationState | null,
+    waId: string,
+    clientKey: string | undefined,
+    shadowResult: { clientId: string; shadow: ShadowCompareFields | null } | null
+  ) {
+    if (readSource !== "hybrid" || !shadowResult) return;
+    const clientKeyValue =
+      clientKey || jsonState?.clientKey || env.CLIENT_KEY || env.CLIENT_ID || "default";
+    const summary = summarizeReadMismatch(jsonState, shadowResult.shadow);
+    if (!summary) {
+      return;
+    }
+    const conversationKey =
+      jsonState?.conversationKey ??
+      shadowResult.shadow?.conversationKey ??
+      makeConversationKey(clientKeyValue, waId);
+    const tenantMismatchCount = (readMismatchCounts.get(clientKeyValue) ?? 0) + 1;
+    readMismatchCounts.set(clientKeyValue, tenantMismatchCount);
+    logger.warn({
+      event: "state.shadow.read_mismatch",
+      clientId: shadowResult.clientId,
+      clientKey: clientKeyValue,
+      waId,
+      conversationKey,
+      diff: {
+        kind: summary.kind,
+        fieldCount: summary.fields.length,
+        fields: summary.fields.slice(0, 12),
+      },
+      tenantMismatchCount,
+    });
+  }
+
   async function writeShadow(state: ConversationState) {
-    const clientId = await getClientId(state.clientKey);
+    const clientId = await getClientId(state.clientKey, "write");
     if (!clientId) {
       return;
     }
@@ -295,59 +446,6 @@ export function createDualWriteStorage(primary: Storage): Storage {
     });
   }
 
-  async function compareShadow(state: ConversationState) {
-    const clientId = await getClientId(state.clientKey);
-    if (!clientId) return;
-    const db = await prisma.conversationRuntimeState.findUnique({
-      where: {
-        clientId_waId: { clientId, waId: state.waId },
-      },
-      select: {
-        conversationKey: true,
-        firstSeenAt: true,
-        windowIsOpen: true,
-        windowExpiresAt: true,
-        lastInboundAt: true,
-        lastOutboundAt: true,
-        lastInboundMessageId: true,
-        lastOutboundMessageId: true,
-        intent: true,
-        handoffStatus: true,
-        templateNeeded: true,
-        templateSuggested: true,
-        lastNeedAt: true,
-        lastIntent: true,
-        leadRequestedAt: true,
-        leadCapturedAt: true,
-        demoStatus: true,
-        lastDemoRequestedAt: true,
-        lastDemoScheduledAt: true,
-        demoPreferredSchedule: true,
-        lastHandoffDemoScheduledKey: true,
-        lastHandoffDemoScheduledAt: true,
-        flow: true,
-        flowStep: true,
-        answers: true,
-        mode: true,
-        assignedUserId: true,
-        assignedTo: true,
-        assignedAt: true,
-      },
-    });
-    if (!db) return;
-    const jsonView = mapStateToShadow(state);
-    const dbView = mapDbToShadow(db);
-    const diffs = diffShadow(jsonView, dbView);
-    if (diffs.length > 0) {
-      logger.warn({
-        event: "state.shadow.mismatch",
-        waId: state.waId,
-        clientId,
-        fields: diffs,
-      });
-    }
-  }
-
   async function writeShadowSafe(state: ConversationState) {
     if (!env.CONV_STATE_DUAL_WRITE) return;
     try {
@@ -382,20 +480,30 @@ export function createDualWriteStorage(primary: Storage): Storage {
       await primary.updateMessage(messageId, patch);
     },
     async getConversation(waId: string, clientKey = "default") {
-      const state = await primary.getConversation(waId, clientKey);
-      if (state && env.CONV_STATE_SHADOW_COMPARE) {
-        try {
-          await compareShadow(state);
-        } catch (error) {
-          logger.warn({
-            event: "state.shadow.mismatch",
-            waId,
-            reason: "compare_failed",
-            error: (error as Error).message,
-          });
-        }
+      if (readSource !== "hybrid") {
+        return primary.getConversation(waId, clientKey);
       }
-      return state;
+      const primaryPromise = primary.getConversation(waId, clientKey);
+      const [stateResult, shadowResult] = await Promise.allSettled([
+        primaryPromise,
+        readShadowState(waId, clientKey),
+      ]);
+      if (stateResult.status === "rejected") {
+        throw stateResult.reason;
+      }
+      if (shadowResult.status === "rejected") {
+        logger.warn({
+          event: "state.shadow.read_compare_failed",
+          clientKey,
+          waId,
+          conversationKey: makeConversationKey(clientKey, waId),
+          reason: "compare_failed",
+          error: (shadowResult.reason as Error).message,
+        });
+      } else {
+        logShadowReadMismatch(stateResult.value, waId, clientKey, shadowResult.value);
+      }
+      return stateResult.value;
     },
     async upsertConversation(state: ConversationState) {
       await primary.upsertConversation(state);
@@ -412,7 +520,7 @@ export function createDualWriteStorage(primary: Storage): Storage {
     },
     async deleteConversation(waId: string, clientKey = "default") {
       await primary.deleteConversation(waId, clientKey);
-      const clientId = await getClientId(clientKey);
+      const clientId = await getClientId(clientKey, "delete");
       if (!clientId) return;
       try {
         await prisma.conversationRuntimeState.deleteMany({

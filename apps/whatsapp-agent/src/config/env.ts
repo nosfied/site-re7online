@@ -39,6 +39,8 @@ export type Env = {
   CONV_STATE_DUAL_WRITE: boolean;
   CONV_STATE_SHADOW_COMPARE: boolean;
   CONV_STATE_DB_WRITE_STRICT: boolean;
+  CONV_STATE_READ_SOURCE: "json" | "hybrid" | "postgres";
+  CONV_STATE_READ_SOURCE_SET: boolean;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -63,6 +65,16 @@ function toNumber(value: string | undefined, fallback: number) {
 }
 
 function toStorageMode(value: string | undefined): "json" | "hybrid" | "postgres" {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === "hybrid" || normalized === "postgres") {
+    return normalized;
+  }
+  return "json";
+}
+
+function toConversationReadSource(
+  value: string | undefined
+): "json" | "hybrid" | "postgres" {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "hybrid" || normalized === "postgres") {
     return normalized;
@@ -151,6 +163,12 @@ export function getEnv(): Env {
     (process.env.CONV_STATE_SHADOW_COMPARE ?? "false") === "true";
   const CONV_STATE_DB_WRITE_STRICT =
     (process.env.CONV_STATE_DB_WRITE_STRICT ?? "false") === "true";
+  const CONV_STATE_READ_SOURCE_SET = Boolean(
+    process.env.CONV_STATE_READ_SOURCE?.trim()
+  );
+  const CONV_STATE_READ_SOURCE = toConversationReadSource(
+    process.env.CONV_STATE_READ_SOURCE
+  );
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -229,6 +247,8 @@ export function getEnv(): Env {
     CONV_STATE_DUAL_WRITE,
     CONV_STATE_SHADOW_COMPARE,
     CONV_STATE_DB_WRITE_STRICT,
+    CONV_STATE_READ_SOURCE,
+    CONV_STATE_READ_SOURCE_SET,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,
