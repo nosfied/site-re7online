@@ -5,7 +5,7 @@ import { Storage } from "./storage.js";
 import { createDualWriteStorage } from "./dualWriteStorage.js";
 
 type EffectiveStorageMode = "json" | "hybrid";
-type EffectiveReadSource = "json" | "hybrid";
+type EffectiveReadSource = "json" | "hybrid" | "postgres";
 
 function resolveStorageMode(): {
   requestedMode: "json" | "hybrid" | "postgres";
@@ -48,17 +48,8 @@ function resolveConversationReadSource(): {
   requestedReadSource: "json" | "hybrid" | "postgres";
   effectiveReadSource: EffectiveReadSource;
   source: "default" | "legacy_flags" | "read_source";
-  fallbackReason?: "postgres_not_authoritative_yet";
 } {
   if (env.CONV_STATE_READ_SOURCE_SET) {
-    if (env.CONV_STATE_READ_SOURCE === "postgres") {
-      return {
-        requestedReadSource: env.CONV_STATE_READ_SOURCE,
-        effectiveReadSource: "hybrid",
-        source: "read_source",
-        fallbackReason: "postgres_not_authoritative_yet",
-      };
-    }
     return {
       requestedReadSource: env.CONV_STATE_READ_SOURCE,
       effectiveReadSource: env.CONV_STATE_READ_SOURCE,
@@ -100,23 +91,14 @@ export function createStorage(): Storage {
     });
   }
 
-  if (readSource.fallbackReason) {
-    logger.warn({
-      event: "storage.read_source.fallback",
-      requestedReadSource: readSource.requestedReadSource,
-      effectiveReadSource: readSource.effectiveReadSource,
-      reason: readSource.fallbackReason,
-    });
-  } else {
-    logger.info({
-      event: "storage.read_source.resolved",
-      requestedReadSource: readSource.requestedReadSource,
-      effectiveReadSource: readSource.effectiveReadSource,
-      source: readSource.source,
-    });
-  }
+  logger.info({
+    event: "storage.read_source.resolved",
+    requestedReadSource: readSource.requestedReadSource,
+    effectiveReadSource: readSource.effectiveReadSource,
+    source: readSource.source,
+  });
 
-  if (mode.effectiveMode === "hybrid" || readSource.effectiveReadSource === "hybrid") {
+  if (mode.effectiveMode === "hybrid" || readSource.effectiveReadSource !== "json") {
     return createDualWriteStorage(jsonFileStorage, {
       readSource: readSource.effectiveReadSource,
     });
