@@ -66,6 +66,92 @@ function stableJson(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
+function normalizeDemoStatus(value?: string | null) {
+  if (value === "requested" || value === "scheduled") {
+    return value;
+  }
+  return "none";
+}
+
+function getJsonFieldValue(view: ShadowCompareFields, field: string) {
+  return (view as Record<string, unknown>)[field] ?? null;
+}
+
+function getMostRecentJsonTimestamp(state: ConversationState | null) {
+  if (!state) return null;
+  const timestamps = [
+    state.assignedAt,
+    state.lastHandoffDemoScheduledAt,
+    state.lastDemoScheduledAt,
+    state.lastDemoRequestedAt,
+    state.leadCapturedAt,
+    state.leadRequestedAt,
+    state.lastNeedAt,
+    state.handoff?.releasedAt,
+    state.handoff?.activatedAt,
+    state.handoff?.requestedAt,
+    state.lastOutboundAt,
+    state.lastInboundAt,
+    state.firstSeenAt,
+  ]
+    .map((value) => toIso(value))
+    .filter(Boolean) as string[];
+  if (timestamps.length === 0) return null;
+  timestamps.sort((a, b) => Date.parse(b) - Date.parse(a));
+  return timestamps[0];
+}
+
+function getJsonUpdatedAt(state: ConversationState | null, field: string) {
+  if (!state) return null;
+  switch (field) {
+    case "demoStatus":
+    case "lastDemoRequestedAt":
+      return toIso(state.lastDemoRequestedAt) ?? getMostRecentJsonTimestamp(state);
+    case "lastDemoScheduledAt":
+    case "demoPreferredSchedule":
+      return toIso(state.lastDemoScheduledAt) ?? getMostRecentJsonTimestamp(state);
+    case "lastHandoffDemoScheduledKey":
+    case "lastHandoffDemoScheduledAt":
+      return toIso(state.lastHandoffDemoScheduledAt) ?? getMostRecentJsonTimestamp(state);
+    case "leadRequestedAt":
+      return toIso(state.leadRequestedAt) ?? getMostRecentJsonTimestamp(state);
+    case "leadCapturedAt":
+      return toIso(state.leadCapturedAt) ?? getMostRecentJsonTimestamp(state);
+    case "handoffStatus":
+    case "handoffRequestedAt":
+      return toIso(state.handoff?.requestedAt) ?? getMostRecentJsonTimestamp(state);
+    case "handoffActivatedAt":
+      return toIso(state.handoff?.activatedAt) ?? getMostRecentJsonTimestamp(state);
+    case "handoffReleasedAt":
+      return toIso(state.handoff?.releasedAt) ?? getMostRecentJsonTimestamp(state);
+    default:
+      return getMostRecentJsonTimestamp(state);
+  }
+}
+
+function getLastWriteEvent(state: ConversationState | null, field: string) {
+  if (!state) return "unknown";
+  switch (field) {
+    case "demoStatus":
+    case "lastDemoRequestedAt":
+      return normalizeDemoStatus(state.demoStatus) === "scheduled"
+        ? "lead.demo_scheduled"
+        : "lead.demo_requested";
+    case "lastDemoScheduledAt":
+    case "demoPreferredSchedule":
+      return "lead.demo_scheduled";
+    case "lastHandoffDemoScheduledKey":
+    case "lastHandoffDemoScheduledAt":
+      return "handoff.notify";
+    case "leadRequestedAt":
+      return "lead.capture_requested";
+    case "leadCapturedAt":
+      return "lead.captured";
+    default:
+      return "conversation.upsert";
+  }
+}
+
 function mapStateToShadow(state: ConversationState): ShadowCompareFields {
   return {
     conversationKey: state.conversationKey ?? null,
@@ -87,7 +173,7 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     lastIntent: state.lastIntent ?? null,
     leadRequestedAt: toIso(state.leadRequestedAt),
     leadCapturedAt: toIso(state.leadCapturedAt),
-    demoStatus: state.demoStatus ?? null,
+    demoStatus: normalizeDemoStatus(state.demoStatus),
     lastDemoRequestedAt: toIso(state.lastDemoRequestedAt),
     lastDemoScheduledAt: toIso(state.lastDemoScheduledAt),
     demoPreferredSchedule: state.demoPreferredSchedule ?? null,
@@ -163,7 +249,7 @@ function mapDbToShadow(db: {
     lastIntent: db.lastIntent ?? null,
     leadRequestedAt: db.leadRequestedAt ? db.leadRequestedAt.toISOString() : null,
     leadCapturedAt: db.leadCapturedAt ? db.leadCapturedAt.toISOString() : null,
-    demoStatus: db.demoStatus ?? null,
+    demoStatus: normalizeDemoStatus(db.demoStatus),
     lastDemoRequestedAt: db.lastDemoRequestedAt
       ? db.lastDemoRequestedAt.toISOString()
       : null,
@@ -287,6 +373,7 @@ export function createDualWriteStorage(
         clientId_waId: { clientId, waId },
       },
       select: {
+        updatedAt: true,
         conversationKey: true,
         firstSeenAt: true,
         windowIsOpen: true,
@@ -321,14 +408,26 @@ export function createDualWriteStorage(
         assignedAt: true,
       },
     });
-    return db ? { clientId, shadow: mapDbToShadow(db) } : { clientId, shadow: null };
+    return db
+      ? {
+          clientId,
+          shadow: mapDbToShadow(db),
+          dbUpdatedAt: db.updatedAt.toISOString(),
+        }
+      : {
+          clientId,
+          shadow: null,
+          dbUpdatedAt: null,
+        };
   }
 
   function logShadowReadMismatch(
     jsonState: ConversationState | null,
     waId: string,
     clientKey: string | undefined,
-    shadowResult: { clientId: string; shadow: ShadowCompareFields | null } | null
+    shadowResult:
+      | { clientId: string; shadow: ShadowCompareFields | null; dbUpdatedAt: string | null }
+      | null
   ) {
     if (readSource !== "hybrid" || !shadowResult) return;
     const clientKeyValue =
@@ -343,12 +442,35 @@ export function createDualWriteStorage(
       makeConversationKey(clientKeyValue, waId);
     const tenantMismatchCount = (readMismatchCounts.get(clientKeyValue) ?? 0) + 1;
     readMismatchCounts.set(clientKeyValue, tenantMismatchCount);
+    const jsonView = jsonState ? mapStateToShadow(jsonState) : {};
+    const primaryField = summary.fields[0] ?? "unknown";
+    const jsonUpdatedAt = getJsonUpdatedAt(jsonState, primaryField);
+    const dbUpdatedAt = shadowResult.dbUpdatedAt ?? null;
+    const lastWriteSource =
+      jsonUpdatedAt && dbUpdatedAt
+        ? Date.parse(jsonUpdatedAt) >= Date.parse(dbUpdatedAt)
+          ? "json"
+          : "db"
+        : jsonUpdatedAt
+          ? "json"
+          : dbUpdatedAt
+            ? "db"
+            : "unknown";
     logger.warn({
       event: "state.shadow.read_mismatch",
       clientId: shadowResult.clientId,
       clientKey: clientKeyValue,
       waId,
       conversationKey,
+      field: primaryField,
+      jsonValue: getJsonFieldValue(jsonView, primaryField),
+      dbValue: shadowResult.shadow
+        ? getJsonFieldValue(shadowResult.shadow, primaryField)
+        : null,
+      jsonUpdatedAt,
+      dbUpdatedAt,
+      lastWriteSource,
+      lastWriteEvent: getLastWriteEvent(jsonState, primaryField),
       diff: {
         kind: summary.kind,
         fieldCount: summary.fields.length,
@@ -389,7 +511,7 @@ export function createDualWriteStorage(
         lastIntent: state.lastIntent ?? null,
         leadRequestedAt: toDate(state.leadRequestedAt),
         leadCapturedAt: toDate(state.leadCapturedAt),
-        demoStatus: state.demoStatus ?? null,
+        demoStatus: normalizeDemoStatus(state.demoStatus),
         lastDemoRequestedAt: toDate(state.lastDemoRequestedAt),
         lastDemoScheduledAt: toDate(state.lastDemoScheduledAt),
         demoPreferredSchedule: state.demoPreferredSchedule ?? null,
@@ -423,7 +545,7 @@ export function createDualWriteStorage(
         lastIntent: state.lastIntent ?? null,
         leadRequestedAt: toDate(state.leadRequestedAt),
         leadCapturedAt: toDate(state.leadCapturedAt),
-        demoStatus: state.demoStatus ?? null,
+        demoStatus: normalizeDemoStatus(state.demoStatus),
         lastDemoRequestedAt: toDate(state.lastDemoRequestedAt),
         lastDemoScheduledAt: toDate(state.lastDemoScheduledAt),
         demoPreferredSchedule: state.demoPreferredSchedule ?? null,

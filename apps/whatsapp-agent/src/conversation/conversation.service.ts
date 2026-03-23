@@ -38,6 +38,7 @@ export async function getOrCreateConversation(
     window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },
     intent: "unknown",
     handoff: { status: "none" },
+    demoStatus: "none",
     answers: {},
     mode: "BOT",
     assignedUserId: null,
