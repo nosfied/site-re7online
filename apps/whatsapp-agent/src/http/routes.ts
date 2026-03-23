@@ -14,6 +14,7 @@ import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
+import { getCampaignById, runCampaign } from "../campaigns/campaignService.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1542,6 +1543,111 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.status.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      pathname.startsWith("/admin/campaigns/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!campaignId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const campaign = await getCampaignById(campaignId, client.id);
+        if (!campaign) {
+          json(res, 404, { error: "not_found" });
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          campaign: {
+            id: campaign.id,
+            clientId: campaign.clientId,
+            name: campaign.name,
+            templateName: campaign.templateName,
+            status: campaign.status,
+            totalRecipients: campaign.totalRecipients,
+            sentCount: campaign.sentCount,
+            blockedCount: campaign.blockedCount,
+            createdAt: campaign.createdAt,
+            updatedAt: campaign.updatedAt,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.campaign.get.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/campaigns/run") {
+      try {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const name = String(body.name ?? "").trim();
+        const templateName = String(body.templateName ?? "").trim();
+        const rawWaIds = Array.isArray(body.waIds) ? body.waIds : [];
+        const waIds = Array.from(
+          new Set(
+            rawWaIds
+              .map((value) => normalizeWaId(String(value ?? "").trim()))
+              .filter((value): value is string => Boolean(value))
+          )
+        );
+        if (!name || !templateName || waIds.length === 0) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+
+        const result = await runCampaign({
+          clientId: client.id,
+          clientKey,
+          name,
+          templateName,
+          waIds,
+        });
+
+        json(res, 200, {
+          ok: true,
+          campaign: result,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.campaign.run.error",
           message: (error as Error).message,
           requestId,
         });
