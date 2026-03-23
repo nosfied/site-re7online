@@ -1,5 +1,15 @@
 import { getPrisma } from "../db.js";
 
+export const CAMPAIGN_STATUSES = [
+  "draft",
+  "sending",
+  "completed",
+  "blocked",
+  "failed",
+] as const;
+
+export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
+
 export type CampaignTemplateComponents = Array<{
   type: "body";
   parameters: Array<{ type: "text"; text: string }>;
@@ -32,5 +42,17 @@ export async function getCampaignById(campaignId: string, clientId?: string) {
       id: campaignId,
       ...(clientId ? { clientId } : {}),
     },
+  });
+}
+
+export async function listCampaigns(params: {
+  clientId: string;
+  limit: number;
+}) {
+  const prisma = getPrisma();
+  return prisma.campaign.findMany({
+    where: { clientId: params.clientId },
+    orderBy: { createdAt: "desc" },
+    take: params.limit,
   });
 }

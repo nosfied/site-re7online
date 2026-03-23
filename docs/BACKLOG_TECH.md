@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Estabilização de campanhas.
+Produto operacional.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -13,27 +13,29 @@ O sistema já possui:
 - Sprint 17 concluída (Postgres como source of truth)
 - Sprint 18 concluída (controle de uso e monetização)
 - Sprint 19 concluída (campanhas v1)
+- Sprint 20 concluída (campanhas assíncronas)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Execução assíncrona (Sprint 20)
-   - desacoplar request HTTP da campanha
-   - manter previsibilidade operacional
+1. UX mínima (Sprint 21)
+   - operação assistida sem depender de terminal
+   - fluxos essenciais de campanha e consulta
 
-2. Retry simples
-   - reenvio controlado de falhas pontuais
-   - sem fila complexa nesta etapa
+2. Primeiros clientes reais
+   - onboarding operacional com uso real
+   - coleta de feedback e ajustes de produto
 
-3. Segmentação básica
-   - base para públicos e filtros comerciais
-   - suporte a campanhas futuras
+3. Validação comercial
+   - testar aderência do produto
+   - confirmar viabilidade de monetização
 
-4. UI administrativa
-   - acompanhamento operacional das campanhas
-   - consulta e disparo assistido
+Futuro
+   - fila distribuída
+   - retry automático
+   - scheduler
 
 ---
 

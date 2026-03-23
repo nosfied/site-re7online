@@ -14,7 +14,7 @@ import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
-import { createCampaign, getCampaignById } from "../campaigns/campaignService.js";
+import { createCampaign, getCampaignById, listCampaigns } from "../campaigns/campaignService.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -1552,6 +1552,37 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/campaigns") {
+      try {
+        const limitRaw = Number(query.limit ?? 50);
+        const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const campaigns = await listCampaigns({ clientId: client.id, limit });
+        json(res, 200, {
+          ok: true,
+          count: campaigns.length,
+          items: campaigns.map(serializeCampaign),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.campaign.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/campaigns/") &&
@@ -1580,18 +1611,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         json(res, 200, {
           ok: true,
-          campaign: {
-            id: campaign.id,
-            clientId: campaign.clientId,
-            name: campaign.name,
-            templateName: campaign.templateName,
-            status: campaign.status,
-            totalRecipients: campaign.totalRecipients,
-            sentCount: campaign.sentCount,
-            blockedCount: campaign.blockedCount,
-            createdAt: campaign.createdAt,
-            updatedAt: campaign.updatedAt,
-          },
+          campaign: serializeCampaign(campaign),
         });
       } catch (error) {
         logger.error({
@@ -1604,14 +1624,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    if (req.method === "POST" && pathname === "/admin/campaigns/run") {
+    if (
+      req.method === "POST" &&
+      (pathname === "/admin/campaigns" || pathname === "/admin/campaigns/run")
+    ) {
       try {
         const body = await readJsonBody(req, res);
         if (!body) return;
         const name = String(body.name ?? "").trim();
         const templateName = String(body.templateName ?? "").trim();
         const components = parseTemplateComponents(body.templateParams);
-        const rawWaIds = Array.isArray(body.waIds) ? body.waIds : [];
+        const rawWaIds = Array.isArray(body.recipients)
+          ? body.recipients
+          : Array.isArray(body.waIds)
+            ? body.waIds
+            : [];
         const waIds = Array.from(
           new Set(
             rawWaIds
@@ -1654,12 +1681,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, {
           ok: true,
           campaign: {
+            ...serializeCampaign(campaign),
             campaignId: campaign.id,
             campaignRunId,
-            status: "sending",
-            totalRecipients: waIds.length,
-            sentCount: campaign.sentCount,
-            blockedCount: campaign.blockedCount,
           },
         });
       } catch (error) {
@@ -2421,6 +2445,41 @@ function parseTemplateComponents(
     .map((text) => ({ type: "text" as const, text }));
   if (parameters.length === 0) return undefined;
   return [{ type: "body", parameters }];
+}
+
+function serializeCampaign(campaign: {
+  id: string;
+  clientId: string;
+  name: string;
+  templateName: string;
+  status: string;
+  totalRecipients: number;
+  sentCount: number;
+  blockedCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: campaign.id,
+    clientId: campaign.clientId,
+    name: campaign.name,
+    templateName: campaign.templateName,
+    status: campaign.status,
+    totalRecipients: campaign.totalRecipients,
+    sentCount: campaign.sentCount,
+    blockedCount: campaign.blockedCount,
+    createdAt: campaign.createdAt,
+    updatedAt: campaign.updatedAt,
+    progress: {
+      totalRecipients: campaign.totalRecipients,
+      sentCount: campaign.sentCount,
+      blockedCount: campaign.blockedCount,
+      pendingCount: Math.max(
+        campaign.totalRecipients - campaign.sentCount - campaign.blockedCount,
+        0
+      ),
+    },
+  };
 }
 
 function getAdminToken(req: IncomingMessage) {
