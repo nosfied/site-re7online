@@ -14,7 +14,8 @@ import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
-import { getCampaignById, runCampaign } from "../campaigns/campaignService.js";
+import { createCampaign, getCampaignById } from "../campaigns/campaignService.js";
+import { startCampaignRun } from "../campaigns/campaignRunner.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1634,7 +1635,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
-        const result = await runCampaign({
+        const campaign = await createCampaign({
+          clientId: client.id,
+          name,
+          templateName,
+          totalRecipients: waIds.length,
+        });
+        const campaignRunId = startCampaignRun({
+          campaignId: campaign.id,
           clientId: client.id,
           clientKey,
           name,
@@ -1645,7 +1653,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
         json(res, 200, {
           ok: true,
-          campaign: result,
+          campaign: {
+            campaignId: campaign.id,
+            campaignRunId,
+            status: "sending",
+            totalRecipients: waIds.length,
+            sentCount: campaign.sentCount,
+            blockedCount: campaign.blockedCount,
+          },
         });
       } catch (error) {
         logger.error({
