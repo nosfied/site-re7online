@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Produto funcional em produção + início de validação com cliente real + diagnóstico do frontend existente.
+Extensão do admin existente.
 
 O sistema já possui:
 - backend completo (campanhas, uso, multi-tenant)
@@ -17,17 +17,17 @@ O sistema já possui:
 - Sprint 20 concluída (campanhas assíncronas)
 - Sprint 21 concluída (operação de campanhas)
 - Sprint 22 concluída (operação assistida)
+- Auditoria do frontend concluída
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Validação com cliente real (uso assistido)
-2. Auditoria do frontend/admin existente (via Codex)
-3. Definição da próxima sprint de frontend baseada no que já existe
-4. Evolução de UX (campanhas → consumo → inbox)
-5. Robustez futura (fila, retry, scheduler)
+1. UI de campanhas (Sprint 23)
+2. Uso real com cliente
+3. Ajustes de UX
+4. Robustez futura
 
 ---
 
