@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Estabilização do novo source of truth e início de produto.
+Início de produto comercial.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -11,21 +11,21 @@ O sistema já possui:
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
 - Sprint 16 concluída (consistência total validada)
 - Sprint 17 concluída (Postgres como source of truth)
+- Sprint 18 concluída (controle de uso e monetização)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Controle de uso (Sprint 18)
-   - quotas e limites operacionais
-   - monitoramento por tenant
-   - base para billing e governança
-
-2. Módulo de campanhas
+1. Campanhas (Sprint 19)
    - disparos organizados por tenant
-   - segmentação e controle operacional
+   - controle operacional de envio
    - preparação para growth
+
+2. Segmentação de contatos
+   - base para públicos e filtros comerciais
+   - suporte a campanhas futuras
 
 3. Produto (UX)
    - inbox profissional
