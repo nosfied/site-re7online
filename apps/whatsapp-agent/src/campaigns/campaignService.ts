@@ -22,6 +22,10 @@ export type RunCampaignParams = {
   name: string;
   templateName: string;
   waIds: string[];
+  components?: Array<{
+    type: "body";
+    parameters: Array<{ type: "text"; text: string }>;
+  }>;
 };
 
 export type CampaignRunResult = {
@@ -114,6 +118,7 @@ export async function runCampaign(params: RunCampaignParams): Promise<CampaignRu
           intent: undefined,
           templateName: params.templateName,
           lang: language,
+          components: params.components,
           requestId,
           rid: campaignRunId,
           messageId,
@@ -169,6 +174,7 @@ export async function runCampaign(params: RunCampaignParams): Promise<CampaignRu
             campaignId: campaign.id,
             campaignRunId,
             templateName: params.templateName,
+            components: params.components ?? null,
           },
         });
         await persistEvent({
@@ -184,6 +190,7 @@ export async function runCampaign(params: RunCampaignParams): Promise<CampaignRu
             waId,
             status: result.status ?? null,
             errorBody: result.errorBody ?? null,
+            components: params.components ?? null,
           },
         });
 
