@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Início de produto comercial.
+Estabilização de campanhas.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -12,24 +12,28 @@ O sistema já possui:
 - Sprint 16 concluída (consistência total validada)
 - Sprint 17 concluída (Postgres como source of truth)
 - Sprint 18 concluída (controle de uso e monetização)
+- Sprint 19 concluída (campanhas v1)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Campanhas (Sprint 19)
-   - disparos organizados por tenant
-   - controle operacional de envio
-   - preparação para growth
+1. Execução assíncrona (Sprint 20)
+   - desacoplar request HTTP da campanha
+   - manter previsibilidade operacional
 
-2. Segmentação de contatos
+2. Retry simples
+   - reenvio controlado de falhas pontuais
+   - sem fila complexa nesta etapa
+
+3. Segmentação básica
    - base para públicos e filtros comerciais
    - suporte a campanhas futuras
 
-3. Produto (UX)
-   - inbox profissional
-   - painel do cliente
+4. UI administrativa
+   - acompanhamento operacional das campanhas
+   - consulta e disparo assistido
 
 ---
 
