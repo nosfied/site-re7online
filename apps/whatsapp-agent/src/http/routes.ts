@@ -1609,6 +1609,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!body) return;
         const name = String(body.name ?? "").trim();
         const templateName = String(body.templateName ?? "").trim();
+        const components = parseTemplateComponents(body.templateParams);
         const rawWaIds = Array.isArray(body.waIds) ? body.waIds : [];
         const waIds = Array.from(
           new Set(
@@ -1639,6 +1640,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name,
           templateName,
           waIds,
+          components,
         });
 
         json(res, 200, {
@@ -2388,6 +2390,22 @@ function json(res: ServerResponse, status: number, payload: unknown) {
 function maskWaId(waId: string) {
   const tail = waId.slice(-4);
   return `***${tail}`;
+}
+
+function parseTemplateComponents(
+  input: unknown
+): Array<{
+  type: "body";
+  parameters: Array<{ type: "text"; text: string }>;
+}> | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (!Array.isArray(input)) return undefined;
+  const parameters = input
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => value.length > 0)
+    .map((text) => ({ type: "text" as const, text }));
+  if (parameters.length === 0) return undefined;
+  return [{ type: "body", parameters }];
 }
 
 function getAdminToken(req: IncomingMessage) {
