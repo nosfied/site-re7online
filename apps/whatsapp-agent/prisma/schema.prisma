@@ -58,6 +58,7 @@ model Client {
   leadNotes     LeadNote[]
   users         User[]
   runtimeStates ConversationRuntimeState[]
+  campaigns     Campaign[]
 }
 
 model User {
@@ -245,6 +246,24 @@ model ConversationRuntimeState {
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
+}
+
+model Campaign {
+  id              String   @id @default(uuid())
+  clientId        String   @db.Uuid
+  name            String
+  templateName    String
+  status          String
+  totalRecipients Int      @default(0)
+  sentCount       Int      @default(0)
+  blockedCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([clientId, status, createdAt])
 }
 
 model Lead {
