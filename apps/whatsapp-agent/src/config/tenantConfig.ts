@@ -10,6 +10,8 @@ export type TenantConfig = {
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
+  planName?: string;
+  messagesLimit?: number;
   quotaMonthlyConversations?: number;
   quotaWarnAtPct?: number;
   quotaBlockedReplyText?: string;
@@ -128,6 +130,20 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (typeof tenant.defaultLanguage !== "string" || !tenant.defaultLanguage.trim()) {
       throw new Error(`invalid_tenant_language:${key}`);
+    }
+    if (
+      tenant.planName !== undefined &&
+      (typeof tenant.planName !== "string" || !tenant.planName.trim())
+    ) {
+      throw new Error(`invalid_tenant_plan_name:${key}`);
+    }
+    if (
+      tenant.messagesLimit !== undefined &&
+      (typeof tenant.messagesLimit !== "number" ||
+        !Number.isFinite(tenant.messagesLimit) ||
+        tenant.messagesLimit < 0)
+    ) {
+      throw new Error(`invalid_tenant_messages_limit:${key}`);
     }
     if (
       tenant.quotaMonthlyConversations !== undefined &&

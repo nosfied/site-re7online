@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
+import { checkUsageGate } from "../usage/usageGate.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -27,6 +28,7 @@ export type SendTemplateResult = {
   status?: number;
   metaMessageId?: string;
   errorBody?: string;
+  blockedByUsage?: boolean;
 };
 
 export async function sendTemplate(params: OutboundTemplateParams): Promise<SendTemplateResult> {
@@ -80,6 +82,37 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     rid: params.rid,
     messageId: params.messageId,
   });
+
+  if (params.clientId && params.clientKey) {
+    const usageGate = await checkUsageGate({
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      messageType: "template",
+      requestId: params.requestId,
+      waId: params.waId,
+    });
+    if (!usageGate.allowed) {
+      logger.warn({
+        event: "outbound.template.failed",
+        waId: maskNumber(params.waId),
+        to: maskNumber(params.toE164),
+        intent: params.intent ?? "unknown",
+        template: params.templateName,
+        language: resolvedLang,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        requestId: params.requestId,
+        rid: params.rid,
+        messageId: params.messageId,
+        reason: "usage_limit_reached",
+        planName: usageGate.planName,
+        messagesSent: usageGate.usage.messagesSent,
+        messagesLimit: usageGate.usage.messagesLimit,
+        period: usageGate.usage.period,
+      });
+      return { ok: false, errorBody: "usage_limit_reached", blockedByUsage: true };
+    }
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);

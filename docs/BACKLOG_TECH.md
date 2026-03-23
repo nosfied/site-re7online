@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Migração de source of truth para Postgres.
+Estabilização do novo source of truth e início de produto.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -10,21 +10,22 @@ O sistema já possui:
 - Sprint 14 concluída (shadow completo validado)
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
 - Sprint 16 concluída (consistência total validada)
+- Sprint 17 concluída (Postgres como source of truth)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Migração controlada (Sprint 17)
-   - troca da fonte de verdade para Postgres
-   - fallback seguro
-   - zero downtime
+1. Controle de uso (Sprint 18)
+   - quotas e limites operacionais
+   - monitoramento por tenant
+   - base para billing e governança
 
-2. Remoção gradual do JSON
-   - redução controlada da dependência operacional
-   - desativação progressiva do fallback
-   - cleanup da camada legada
+2. Módulo de campanhas
+   - disparos organizados por tenant
+   - segmentação e controle operacional
+   - preparação para growth
 
 3. Produto (UX)
    - inbox profissional

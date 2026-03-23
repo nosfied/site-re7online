@@ -56,6 +56,7 @@ import {
   persistInboundMessage,
   persistOutboundMessage,
 } from "../db/persist.js";
+import { checkUsageGate } from "../usage/usageGate.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -428,6 +429,40 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }) => {
     if (!shouldSendOutbound(params.waId, params.guard, params.messageId)) {
       return { ok: false, errorBody: "late_reply_dropped" };
+    }
+    if (tenantClientId && tenantClientKey) {
+      const usageGate = await checkUsageGate({
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        messageType: "text",
+        requestId: meta?.requestId,
+        waId: params.waId,
+      });
+      if (!usageGate.allowed) {
+        logger.warn({
+          event: "outbound.text.failed",
+          waId: maskNumber(params.waId),
+          to: maskNumber(params.toE164),
+          intent: params.intent ?? "unknown",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          requestId: meta?.requestId,
+          rid: params.messageId,
+          messageId: params.messageId,
+          reason: "usage_limit_reached",
+          planName: usageGate.planName,
+          messagesSent: usageGate.usage.messagesSent,
+          messagesLimit: usageGate.usage.messagesLimit,
+          period: usageGate.usage.period,
+        });
+        return {
+          ok: false,
+          status: 429,
+          messageId: undefined,
+          errorBody: "usage_limit_reached",
+          blockedByUsage: true,
+        };
+      }
     }
     logger.info({
       event: "outbound.text.sending",
