@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Correção de consistência antes da migração para Postgres.
+Migração de source of truth para Postgres.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -9,21 +9,22 @@ O sistema já possui:
 - base preparada para transição segura de storage
 - Sprint 14 concluída (shadow completo validado)
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
+- Sprint 16 concluída (consistência total validada)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Consistência total (Sprint 16)
-   - correção das divergências JSON vs Postgres
-   - alinhamento final do shadow state
-   - estabilização pré-cutover
-
-2. Migração para Postgres (Sprint 17)
-   - troca da fonte de verdade
+1. Migração controlada (Sprint 17)
+   - troca da fonte de verdade para Postgres
    - fallback seguro
    - zero downtime
+
+2. Remoção gradual do JSON
+   - redução controlada da dependência operacional
+   - desativação progressiva do fallback
+   - cleanup da camada legada
 
 3. Produto (UX)
    - inbox profissional
