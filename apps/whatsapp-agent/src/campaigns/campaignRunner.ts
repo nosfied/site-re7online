@@ -87,6 +87,20 @@ async function runCampaignInBackground(
 
       for (let index = 0; index < waIds.length; index += 1) {
         const waId = waIds[index];
+        const campaignState = await prisma.campaign.findUnique({
+          where: { id: params.campaignId },
+          select: { status: true },
+        });
+        if (campaignState?.status === "cancelled") {
+          logger.info({
+            event: "campaign.cancelled",
+            campaignId: params.campaignId,
+            campaignRunId,
+            clientId: params.clientId,
+            clientKey: params.clientKey,
+          });
+          return;
+        }
         logger.updateContext({
           waId,
           conversationKey: makeConversationKey(params.clientKey, waId),

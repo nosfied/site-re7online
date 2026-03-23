@@ -14,8 +14,14 @@ import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
-import { createCampaign, getCampaignById, listCampaigns } from "../campaigns/campaignService.js";
+import {
+  cancelCampaign,
+  createCampaign,
+  getCampaignById,
+  listCampaigns,
+} from "../campaigns/campaignService.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
+import { httpError } from "../utils/httpError.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1591,7 +1597,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
         if (!campaignId) {
-          json(res, 400, { error: "bad_request" });
+          json(res, 400, httpError("bad_request", "Campaign id is required"));
           return;
         }
         const clientKey = await getScopedClientKey();
@@ -1601,12 +1607,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true },
         });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const campaign = await getCampaignById(campaignId, client.id);
         if (!campaign) {
-          json(res, 404, { error: "not_found" });
+          json(res, 404, httpError("campaign_not_found", "Campaign not found"));
           return;
         }
         json(res, 200, {
@@ -1620,6 +1626,59 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
         json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/campaigns/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/cancel")
+    ) {
+      try {
+        const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!campaignId) {
+          json(res, 400, httpError("bad_request", "Campaign id is required"));
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const campaign = await getCampaignById(campaignId, client.id);
+        if (!campaign) {
+          json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+          return;
+        }
+        if (campaign.status !== "sending") {
+          json(
+            res,
+            409,
+            httpError("campaign_not_cancelable", "Campaign is not cancelable", {
+              status: campaign.status,
+            })
+          );
+          return;
+        }
+        const cancelled = await cancelCampaign({ campaignId, clientId: client.id });
+        json(res, 200, {
+          ok: true,
+          campaign: serializeCampaign(cancelled),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.campaign.cancel.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -1646,8 +1705,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               .filter((value): value is string => Boolean(value))
           )
         );
-        if (!name || !templateName || waIds.length === 0) {
-          json(res, 400, { error: "bad_request" });
+        if (!name) {
+          json(res, 400, httpError("bad_request", "Campaign name is required"));
+          return;
+        }
+        if (!templateName) {
+          json(res, 400, httpError("invalid_template_name", "Template name is required"));
+          return;
+        }
+        if (!Array.isArray(rawWaIds) || rawWaIds.length === 0) {
+          json(res, 400, httpError("invalid_recipients", "Recipients must be a non-empty array"));
+          return;
+        }
+        if (rawWaIds.some((value) => String(value ?? "").trim().length <= 5)) {
+          json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+          return;
+        }
+        if (waIds.length === 0) {
+          json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+          return;
+        }
+        if (waIds.length > 1000) {
+          json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
           return;
         }
 
@@ -1658,7 +1737,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true },
         });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
 
@@ -1678,21 +1757,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           components,
         });
 
-        json(res, 200, {
-          ok: true,
-          campaign: {
-            ...serializeCampaign(campaign),
+        if (pathname === "/admin/campaigns") {
+          json(res, 200, {
             campaignId: campaign.id,
-            campaignRunId,
-          },
-        });
+            status: "sending",
+            totalRecipients: waIds.length,
+          });
+        } else {
+          json(res, 200, {
+            ok: true,
+            campaign: {
+              ...serializeCampaign(campaign),
+              campaignId: campaign.id,
+              campaignRunId,
+            },
+          });
+        }
       } catch (error) {
         logger.error({
           event: "admin.campaign.run.error",
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }

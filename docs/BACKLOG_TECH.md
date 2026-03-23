@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Produto operacional.
+Produto utilizável.
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -14,28 +14,28 @@ O sistema já possui:
 - Sprint 18 concluída (controle de uso e monetização)
 - Sprint 19 concluída (campanhas v1)
 - Sprint 20 concluída (campanhas assíncronas)
+- Sprint 21 concluída (operação de campanhas)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. UX mínima (Sprint 21)
+1. Uso real com cliente
+   - operação assistida em ambiente real
+   - coleta de feedback de uso
+
+2. Ajustes operacionais (Sprint 22)
+   - refinamentos de execução, observabilidade e suporte
+   - correções a partir do uso real
+
+3. UI mínima
    - operação assistida sem depender de terminal
    - fluxos essenciais de campanha e consulta
 
-2. Primeiros clientes reais
-   - onboarding operacional com uso real
-   - coleta de feedback e ajustes de produto
-
-3. Validação comercial
-   - testar aderência do produto
-   - confirmar viabilidade de monetização
-
-Futuro
+4. Robustez (fila/retry)
    - fila distribuída
    - retry automático
-   - scheduler
 
 ---
 

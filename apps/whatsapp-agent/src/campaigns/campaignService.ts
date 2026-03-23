@@ -6,6 +6,7 @@ export const CAMPAIGN_STATUSES = [
   "completed",
   "blocked",
   "failed",
+  "cancelled",
 ] as const;
 
 export type CampaignStatus = (typeof CAMPAIGN_STATUSES)[number];
@@ -42,6 +43,14 @@ export async function getCampaignById(campaignId: string, clientId?: string) {
       id: campaignId,
       ...(clientId ? { clientId } : {}),
     },
+  });
+}
+
+export async function cancelCampaign(params: { campaignId: string; clientId: string }) {
+  const prisma = getPrisma();
+  return prisma.campaign.update({
+    where: { id: params.campaignId },
+    data: { status: "cancelled" },
   });
 }
 
