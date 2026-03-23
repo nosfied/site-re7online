@@ -13,6 +13,7 @@ import { checkRateLimit } from "./rateLimit.js";
 import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistOutboundMessage } from "../db/persist.js";
+import { checkUsageGate } from "../usage/usageGate.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -2258,6 +2259,8 @@ function diffTenantFields(
   compareField("allowlist");
   compareField("handoffAttendantWaid");
   compareField("defaultLanguage");
+  compareField("planName");
+  compareField("messagesLimit");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
   compareField("quotaBlockedReplyText");
@@ -2362,6 +2365,16 @@ async function adminSendMessage(params: {
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
     return { ok: false, statusCode: 409, error: "window_closed" };
+  }
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
   }
 
   const sendResult = await sendTextMessage(params.waId, params.text);
