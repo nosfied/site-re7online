@@ -1,12 +1,13 @@
 ## FASE ATUAL DO PRODUTO
 
-Produto utilizável.
+Extensão do admin existente.
 
 O sistema já possui:
-- multi-tenant real no runtime
-- storage desacoplado
-- shadow completo do `ConversationState` validado
-- base preparada para transição segura de storage
+- backend completo (campanhas, uso, multi-tenant)
+- execução assíncrona
+- controle de limite
+- operação via API admin
+- Postgres como source of truth
 - Sprint 14 concluída (shadow completo validado)
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
 - Sprint 16 concluída (consistência total validada)
@@ -15,40 +16,32 @@ O sistema já possui:
 - Sprint 19 concluída (campanhas v1)
 - Sprint 20 concluída (campanhas assíncronas)
 - Sprint 21 concluída (operação de campanhas)
+- Sprint 22 concluída (operação assistida)
+- Auditoria do frontend concluída
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Uso real com cliente
-   - operação assistida em ambiente real
-   - coleta de feedback de uso
-
-2. Ajustes operacionais (Sprint 22)
-   - refinamentos de execução, observabilidade e suporte
-   - correções a partir do uso real
-
-3. UI mínima
-   - operação assistida sem depender de terminal
-   - fluxos essenciais de campanha e consulta
-
-4. Robustez (fila/retry)
-   - fila distribuída
-   - retry automático
+1. UI de campanhas (Sprint 23)
+2. Uso real com cliente
+3. Ajustes de UX
+4. Robustez futura
 
 ---
 
 ## DIRETRIZ IMPORTANTE
 
-A evolução deve priorizar:
-- consistência de dados
-- segurança de migração
-- estabilidade em produção
+Evitar:
+- desenvolvimento de frontend sem diagnóstico prévio
+- reimplementação de funcionalidades já existentes
+- overengineering antes da validação com cliente
 
-ANTES de:
-- features de UI
-- expansão de produto
+Priorizar:
+- uso real do sistema
+- reaproveitamento do que já existe
+- evolução incremental
 
 ---
 
