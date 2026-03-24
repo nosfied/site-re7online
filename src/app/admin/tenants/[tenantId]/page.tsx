@@ -25,7 +25,13 @@ type TenantFormState = {
 
 export default function TenantEditPage() {
   const params = useParams<{ tenantId: string }>();
-  const tenantId = decodeURIComponent(params.tenantId);
+  const tenantId = useMemo(() => {
+    const rawTenantId = params?.tenantId;
+    if (Array.isArray(rawTenantId)) {
+      return rawTenantId[0] ? decodeURIComponent(rawTenantId[0]) : "";
+    }
+    return rawTenantId ? decodeURIComponent(rawTenantId) : "";
+  }, [params]);
 
   const [connection, setConnection] = useState<AdminConnection>({
     baseUrl: "",
@@ -51,6 +57,7 @@ export default function TenantEditPage() {
   }, [connection]);
 
   useEffect(() => {
+    if (!tenantId) return;
     if (!connection.baseUrl || !connection.adminToken) return;
 
     let cancelled = false;
@@ -202,6 +209,7 @@ export default function TenantEditPage() {
           testingConnection={testingConnection}
         />
 
+        {!tenantId ? <p className="text-sm text-white/70">Carregando tenant...</p> : null}
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
         {error ? (
           <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{error}</p>
