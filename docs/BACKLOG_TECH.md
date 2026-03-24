@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Extensão do admin existente.
+Produto operável em produção.
 
 O sistema já possui:
 - backend completo (campanhas, uso, multi-tenant)
@@ -18,15 +18,16 @@ O sistema já possui:
 - Sprint 21 concluída (operação de campanhas)
 - Sprint 22 concluída (operação assistida)
 - Auditoria do frontend concluída
+- Sprint 23 concluída (UI operacional de campanhas)
 - Sprint 13.1 em standby (Meta)
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. UI de campanhas (Sprint 23)
-2. Uso real com cliente
-3. Ajustes de UX
+1. UX operacional (Sprint 24)
+2. Validação com cliente real
+3. Campanhas avançadas
 4. Robustez futura
 
 ---

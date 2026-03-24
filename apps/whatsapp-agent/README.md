@@ -265,10 +265,15 @@ Deploy padrão:
 ```bash
 cd /opt/re7online/site-re7online
 git pull --ff-only
-cd apps/whatsapp-agent
-npm ci --include=dev
+bash apps/whatsapp-agent/scripts/deploy-vps.sh
+```
+
+Deploy do frontend admin:
+```bash
+cd /opt/re7online/site-re7online
+npm ci
 npm run build
-pm2 reload re7-whatsapp-agent --update-env
+pm2 restart re7-admin-front
 ```
 
 ADMIN_TOKEN (sem imprimir o valor):

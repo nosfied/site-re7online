@@ -26,7 +26,7 @@ Evidencia: `apps/whatsapp-agent/src/whatsapp/webhook.controller.ts`.
 ## 3) Pre-requisitos
 - Repositorio em `/opt/re7online/site-re7online`
 - Node + npm instalados
-- PM2 instalado e processo do agent ativo
+- PM2 instalado e processos `re7-whatsapp-agent` e `re7-admin-front` ativos
 - `.env` configurado em `apps/whatsapp-agent/.env`
 - Banco acessivel (`DATABASE_URL`)
 
@@ -46,6 +46,26 @@ O script executa:
 5. `pm2 reload "${PM2_ID:-0}" --update-env` (ou start fallback)
 6. `pm2 flush`
 7. health check em `http://127.0.0.1:${PORT:-3001}/health`
+
+## 4.1) Deploy do frontend admin
+
+O frontend admin roda na raiz do repo e e servido pelo processo PM2 `re7-admin-front`.
+
+Comando canonico:
+
+```bash
+cd /opt/re7online/site-re7online
+npm ci
+npm run build
+pm2 restart re7-admin-front
+```
+
+Checks minimos:
+
+```bash
+pm2 list
+curl -I http://127.0.0.1:3000
+```
 
 ## 5) Gate obrigatorio pre-deploy
 Script oficial:
