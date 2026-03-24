@@ -1,13 +1,14 @@
 ## FASE ATUAL DO PRODUTO
 
-Produto operável em produção.
+Validação real multi-tenant com onboarding oficial da Meta habilitado.
 
 O sistema já possui:
-- backend completo (campanhas, uso, multi-tenant)
-- execução assíncrona
-- controle de limite
-- operação via API admin
+- multi-tenant real no runtime
 - Postgres como source of truth
+- campanhas operacionais com execução assíncrona
+- controle de uso por tenant
+- UI administrativa funcional
+- onboarding oficial via Embedded Signup liberado pela Meta
 - Sprint 14 concluída (shadow completo validado)
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
 - Sprint 16 concluída (consistência total validada)
@@ -23,26 +24,43 @@ O sistema já possui:
 
 ---
 
+## PRIORIDADE ATUAL
+
+Executar onboarding real de cliente (JUSTA) e validar operação completa multi-tenant.
+
+---
+
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. UX operacional (Sprint 24)
-2. Validação com cliente real
-3. Campanhas avançadas
-4. Robustez futura
+1. Onboarding real + validação multi-tenant (Sprint 25)
+   - Embedded Signup
+   - conexão de número real
+   - execução de campanhas
+   - validação de isolamento entre tenants
+
+2. Uso real com cliente
+   - operação assistida
+   - coleta de feedback
+   - identificação de fricções
+
+3. Ajustes baseados em uso
+   - melhorias de UX
+   - pequenos ajustes operacionais
+   - correções pontuais
 
 ---
 
 ## DIRETRIZ IMPORTANTE
 
-Evitar:
-- desenvolvimento de frontend sem diagnóstico prévio
-- reimplementação de funcionalidades já existentes
-- overengineering antes da validação com cliente
-
 Priorizar:
-- uso real do sistema
-- reaproveitamento do que já existe
-- evolução incremental
+- uso real do produto
+- validação com cliente
+- estabilidade operacional
+
+ANTES de:
+- novas features
+- refatorações
+- otimizações de escala
 
 ---
 
