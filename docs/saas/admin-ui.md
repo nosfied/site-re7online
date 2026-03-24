@@ -4,6 +4,8 @@
 
 - `/admin/tenants`
 - `/admin/tenants/[tenantId]`
+- `/admin/tenants/[tenantId]/inbox`
+- `/admin/tenants/[tenantId]/campaigns`
 
 ## Conexao
 
@@ -15,6 +17,24 @@ Obter token na VPS:
 
 ```bash
 pm2 env 0 | awk -F': ' '/^ADMIN_TOKEN:/{print $2; exit}'
+```
+
+## Deploy do frontend admin
+
+O frontend admin e servido pelo processo PM2 `re7-admin-front` e o build roda na raiz do repo na VPS:
+
+```bash
+cd /opt/re7online/site-re7online
+npm ci
+npm run build
+pm2 restart re7-admin-front
+```
+
+Checks rapidos:
+
+```bash
+pm2 list
+curl -I http://127.0.0.1:3000
 ```
 
 ## Contrato de quota (resumo)
@@ -74,3 +94,5 @@ Na UI:
 3. Testar conexao (botao usa `GET /admin/health`, esperado `{ \"ok\": true }`)
 4. Trocar range e validar `quota/lastMessageAt`
 5. Abrir `Edit` e salvar alteracoes do tenant
+6. Abrir `Inbox`
+7. Abrir `Campanhas`
