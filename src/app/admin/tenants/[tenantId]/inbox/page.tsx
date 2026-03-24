@@ -381,6 +381,12 @@ export default function TenantInboxPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
+              href={`/admin/tenants/${encodeURIComponent(tenantId)}/campaigns`}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Campanhas
+            </Link>
+            <Link
               href={`/admin/tenants/${encodeURIComponent(tenantId)}`}
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
             >

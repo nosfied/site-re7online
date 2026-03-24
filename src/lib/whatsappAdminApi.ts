@@ -81,6 +81,25 @@ export type LeadNoteItem = {
   createdAt: string;
 };
 
+export type CampaignItem = {
+  id: string;
+  clientId: string;
+  name: string;
+  templateName: string;
+  status: string;
+  totalRecipients: number;
+  sentCount: number;
+  blockedCount: number;
+  createdAt: string;
+  updatedAt: string;
+  progress: {
+    totalRecipients: number;
+    sentCount: number;
+    blockedCount: number;
+    pendingCount: number;
+  };
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -486,6 +505,78 @@ export async function createLeadNote(
       method: "POST",
       body: JSON.stringify({ body }),
     }
+  );
+}
+
+export async function listCampaigns(
+  connection: AdminConnection,
+  clientKey: string,
+  options?: { limit?: number }
+): Promise<{
+  ok: true;
+  count: number;
+  items: CampaignItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  return requestJson(connection, `/admin/campaigns?${params.toString()}`);
+}
+
+export async function getCampaign(
+  connection: AdminConnection,
+  clientKey: string,
+  campaignId: string
+): Promise<{
+  ok: true;
+  campaign: CampaignItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/campaigns/${encodeURIComponent(campaignId)}?${params.toString()}`
+  );
+}
+
+export async function createCampaign(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: {
+    name: string;
+    templateName: string;
+    recipients: string[];
+    templateParams?: string[];
+  }
+): Promise<{
+  campaignId: string;
+  status: string;
+  totalRecipients: number;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/campaigns?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function cancelCampaign(
+  connection: AdminConnection,
+  clientKey: string,
+  campaignId: string
+): Promise<{
+  ok: true;
+  campaign: CampaignItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/campaigns/${encodeURIComponent(campaignId)}/cancel?${params.toString()}`,
+    { method: "POST" }
   );
 }
 
