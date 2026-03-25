@@ -4,11 +4,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const APP_ID = "2074361376674006";
 const CONFIG_ID = "1261464002116286";
-const DEFAULT_ONBOARDING_URL = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${APP_ID}&config_id=${CONFIG_ID}`;
+
+declare global {
+  interface Window {
+    FB?: {
+      init: (params: Record<string, unknown>) => void;
+      login: (
+        callback: (response: unknown) => void,
+        options?: Record<string, unknown>
+      ) => void;
+    };
+    fbAsyncInit?: () => void;
+  }
+}
 
 type CapturedEntry = {
   timestamp: string;
-  source: "query" | "postMessage" | "fb.login" | "window.focus" | "window.blur" | "popup.closed";
+  source:
+    | "query"
+    | "fb.postMessage"
+    | "fb.callback"
+    | "window.focus"
+    | "window.blur"
+    | "popup.closed";
   raw: unknown;
   parsed: unknown;
   origin?: string;
@@ -26,10 +44,12 @@ function safeParseEventData(input: unknown) {
 }
 
 export default function MetaEmbeddedSignupDebugPage() {
-  const popupRef = useRef<Window | null>(null);
+  const popupCheckRef = useRef<number | null>(null);
   const [entries, setEntries] = useState<CapturedEntry[]>([]);
   const [starting, setStarting] = useState(false);
   const [runtimeUrl, setRuntimeUrl] = useState("");
+  const [sdkReady, setSdkReady] = useState(false);
+  const [sdkError, setSdkError] = useState<string | null>(null);
   const [popupOpened, setPopupOpened] = useState(false);
   const [popupClosed, setPopupClosed] = useState(false);
   const [messagesReceived, setMessagesReceived] = useState(0);
@@ -95,18 +115,19 @@ export default function MetaEmbeddedSignupDebugPage() {
   );
 
   useEffect(() => {
-    const defaultRuntimeUrl = DEFAULT_ONBOARDING_URL;
+    const defaultRuntimeUrl = `${window.location.origin}/admin/meta-embedded-signup`;
     setRuntimeUrl(defaultRuntimeUrl);
     refreshLocationState("query");
   }, [refreshLocationState]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      if (!event.origin.includes("facebook.com")) return;
       const parsed = safeParseEventData(event.data);
       setMessagesReceived((count) => count + 1);
       appendEntry({
         timestamp: new Date().toISOString(),
-        source: "postMessage",
+        source: "fb.postMessage",
         raw: event.data,
         parsed,
         origin: event.origin,
@@ -115,6 +136,23 @@ export default function MetaEmbeddedSignupDebugPage() {
 
     const onFocus = () => {
       setWindowFocused(true);
+      if (popupOpened && !popupClosed) {
+        setPopupClosed(true);
+        appendEntry({
+          timestamp: new Date().toISOString(),
+          source: "popup.closed",
+          raw: {
+            href: window.location.href,
+            search: window.location.search,
+            reason: "window.focus",
+          },
+          parsed: {
+            href: window.location.href,
+            search: window.location.search,
+            reason: "window.focus",
+          },
+        });
+      }
       refreshLocationState("window.focus");
     };
 
@@ -142,60 +180,85 @@ export default function MetaEmbeddedSignupDebugPage() {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
     };
-  }, [appendEntry, refreshLocationState]);
+  }, [appendEntry, popupClosed, popupOpened, refreshLocationState]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      const popup = popupRef.current;
-      if (!popup || popupClosed) return;
-      if (popup.closed) {
-        setPopupClosed(true);
-        popupRef.current = null;
-        appendEntry({
-          timestamp: new Date().toISOString(),
-          source: "popup.closed",
-          raw: {
-            href: window.location.href,
-            search: window.location.search,
-          },
-          parsed: {
-            href: window.location.href,
-            search: window.location.search,
-          },
-        });
-        refreshLocationState("query");
-      }
-    }, 1000);
+    if (window.FB) {
+      setSdkReady(true);
+      return;
+    }
 
-    return () => window.clearInterval(interval);
-  }, [appendEntry, popupClosed, refreshLocationState]);
+    const scriptId = "facebook-jssdk";
+    const existingScript = document.getElementById(scriptId);
+
+    window.fbAsyncInit = function () {
+      try {
+        window.FB?.init({
+          appId: APP_ID,
+          cookie: true,
+          xfbml: false,
+          version: "v19.0",
+        });
+        setSdkReady(true);
+        setSdkError(null);
+      } catch (error) {
+        setSdkError((error as Error).message);
+      }
+    };
+
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = "anonymous";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.onerror = () => setSdkError("Falha ao carregar Facebook SDK.");
+      document.body.appendChild(script);
+    }
+  }, []);
 
   const startEmbeddedSignup = useCallback(() => {
+    if (!window.FB) {
+      setSdkError("Facebook SDK ainda nao carregou.");
+      return;
+    }
+
     setStarting(true);
-    const effectiveRuntimeUrl = runtimeUrl.trim() || DEFAULT_ONBOARDING_URL;
-    const popup = window.open(
-      effectiveRuntimeUrl,
-      "meta-embedded-signup",
-      "popup=yes,width=720,height=820,resizable=yes,scrollbars=yes"
-    );
-    popupRef.current = popup;
-    setPopupOpened(Boolean(popup));
+    setSdkError(null);
+    setPopupOpened(true);
     setPopupClosed(false);
 
-    appendEntry({
-      timestamp: new Date().toISOString(),
-      source: "fb.login",
-      raw: {
-        onboardingUrl: effectiveRuntimeUrl,
-        popupOpened: Boolean(popup),
+    if (popupCheckRef.current) {
+      window.clearTimeout(popupCheckRef.current);
+    }
+    popupCheckRef.current = window.setTimeout(() => {
+      setPopupClosed(true);
+      refreshLocationState("query");
+    }, 60000);
+
+    window.FB.login(
+      (response) => {
+        appendEntry({
+          timestamp: new Date().toISOString(),
+          source: "fb.callback",
+          raw: response,
+          parsed: response,
+        });
+        setStarting(false);
+        setPopupClosed(true);
+        refreshLocationState("query");
       },
-      parsed: {
-        onboardingUrl: effectiveRuntimeUrl,
-        popupOpened: Boolean(popup),
-      },
-    });
-    setStarting(false);
-  }, [appendEntry, runtimeUrl]);
+      {
+        config_id: CONFIG_ID,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+        },
+      }
+    );
+  }, [appendEntry, refreshLocationState]);
 
   const rawEntries = useMemo(() => JSON.stringify(entries, null, 2), [entries]);
 
@@ -203,21 +266,21 @@ export default function MetaEmbeddedSignupDebugPage() {
     <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-4">
         <header>
-          <h1 className="text-2xl font-bold">Meta Embedded Signup Debug</h1>
+          <h1 className="text-2xl font-bold">Meta Embedded Signup Debug v2</h1>
           <p className="mt-1 text-sm text-white/70">
-            app_id={APP_ID} • config_id={CONFIG_ID} • direct onboarding URL
+            app_id={APP_ID} • config_id={CONFIG_ID} • SDK v19.0
           </p>
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="grid gap-3">
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Onboarding URL</span>
+              <span className="text-white/70">Runtime / Return URL</span>
               <input
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={runtimeUrl}
                 onChange={(event) => setRuntimeUrl(event.target.value)}
-                placeholder={DEFAULT_ONBOARDING_URL}
+                placeholder="https://admin.re7online.com/admin/meta-embedded-signup"
               />
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -230,12 +293,19 @@ export default function MetaEmbeddedSignupDebugPage() {
                 {starting ? "Abrindo..." : "Iniciar Embedded Signup"}
               </button>
               <span
-                className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200"
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  sdkReady ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"
+                }`}
               >
-                abertura direta via popup
+                SDK {sdkReady ? "carregado" : "pendente"}
               </span>
             </div>
           </div>
+          {sdkError ? (
+            <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+              {sdkError}
+            </p>
+          ) : null}
         </section>
 
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
