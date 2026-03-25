@@ -43,6 +43,7 @@ export default function MetaEmbeddedSignupDebugPage() {
   const [sdkReady, setSdkReady] = useState(false);
   const [starting, setStarting] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
+  const [runtimeUrl, setRuntimeUrl] = useState("");
   const [queryData, setQueryData] = useState({
     code: "",
     state: "",
@@ -62,6 +63,9 @@ export default function MetaEmbeddedSignupDebugPage() {
   }, []);
 
   useEffect(() => {
+    const defaultRuntimeUrl = `${window.location.origin}/admin/meta-embedded-signup`;
+    setRuntimeUrl(defaultRuntimeUrl);
+
     const params = new URLSearchParams(window.location.search);
     const nextQueryData = {
       code: params.get("code") ?? "",
@@ -77,11 +81,13 @@ export default function MetaEmbeddedSignupDebugPage() {
         code: nextQueryData.code || null,
         state: nextQueryData.state || null,
         error: nextQueryData.error || null,
+        runtimeUrl: defaultRuntimeUrl,
       },
       parsed: {
         code: nextQueryData.code || null,
         state: nextQueryData.state || null,
         error: nextQueryData.error || null,
+        runtimeUrl: defaultRuntimeUrl,
       },
     });
   }, [appendEntry]);
@@ -148,13 +154,18 @@ export default function MetaEmbeddedSignupDebugPage() {
 
     setStarting(true);
     setSdkError(null);
+    const effectiveRuntimeUrl = runtimeUrl.trim() || `${window.location.origin}/admin/meta-embedded-signup`;
+    const statePayload = {
+      runtimeUrl: effectiveRuntimeUrl,
+      startedAt: new Date().toISOString(),
+    };
     window.FB.login(
       (response) => {
         appendEntry({
           timestamp: new Date().toISOString(),
           source: "fb.login",
-          raw: response,
-          parsed: response,
+          raw: { response, runtimeUrl: effectiveRuntimeUrl, state: statePayload },
+          parsed: { response, runtimeUrl: effectiveRuntimeUrl, state: statePayload },
         });
         setStarting(false);
       },
@@ -166,9 +177,10 @@ export default function MetaEmbeddedSignupDebugPage() {
           feature: "whatsapp_embedded_signup",
           sessionInfoVersion: 3,
         },
+        state: JSON.stringify(statePayload),
       }
     );
-  }, [appendEntry]);
+  }, [appendEntry, runtimeUrl]);
 
   const rawEntries = useMemo(() => JSON.stringify(entries, null, 2), [entries]);
 
@@ -183,22 +195,33 @@ export default function MetaEmbeddedSignupDebugPage() {
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={startEmbeddedSignup}
-              disabled={!sdkReady || starting}
-              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {starting ? "Abrindo..." : "Iniciar Embedded Signup"}
-            </button>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                sdkReady ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"
-              }`}
-            >
-              SDK {sdkReady ? "carregado" : "pendente"}
-            </span>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Runtime / Return URL</span>
+              <input
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={runtimeUrl}
+                onChange={(event) => setRuntimeUrl(event.target.value)}
+                placeholder="https://admin.re7online.com/admin/meta-embedded-signup"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={startEmbeddedSignup}
+                disabled={!sdkReady || starting}
+                className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {starting ? "Abrindo..." : "Iniciar Embedded Signup"}
+              </button>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  sdkReady ? "bg-emerald-500/20 text-emerald-200" : "bg-amber-500/20 text-amber-200"
+                }`}
+              >
+                SDK {sdkReady ? "carregado" : "pendente"}
+              </span>
+            </div>
           </div>
           {sdkError ? (
             <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
