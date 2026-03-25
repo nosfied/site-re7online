@@ -7,8 +7,19 @@ type SendResult = {
   errorBody?: string;
 };
 
-export async function sendTextMessage(to: string, body: string): Promise<SendResult> {
-  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+type TenantSendCredentials = {
+  accessToken?: string;
+  phoneNumberId?: string;
+};
+
+export async function sendTextMessage(
+  to: string,
+  body: string,
+  credentials?: TenantSendCredentials
+): Promise<SendResult> {
+  const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -24,7 +35,7 @@ export async function sendTextMessage(to: string, body: string): Promise<SendRes
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -54,9 +65,12 @@ export async function sendTextMessage(to: string, body: string): Promise<SendRes
 export async function sendTemplateMessage(
   to: string,
   templateName: string,
-  languageCode = "en_US"
+  languageCode = "en_US",
+  credentials?: TenantSendCredentials
 ): Promise<SendResult> {
-  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",
     to,
@@ -75,7 +89,7 @@ export async function sendTemplateMessage(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

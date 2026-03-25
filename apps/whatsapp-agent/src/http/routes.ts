@@ -26,6 +26,7 @@ import {
   exchangeEmbeddedSignupCode,
   MetaOnboardingExchangeError,
 } from "../meta/onboarding.service.js";
+import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -2889,12 +2890,30 @@ async function adminSendMessage(params: {
     return { ok: false, statusCode: 429, error: "usage_limit_reached" };
   }
 
-  const sendResult = await sendTextMessage(params.waId, params.text);
+  const credentials = await resolveTenantOutboundCredentials({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+  });
+  if (!credentials) {
+    logger.error({
+      event: "admin.conversation.send.credentials_missing",
+      waId: maskWaId(params.waId),
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+    });
+    return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
+  }
+
+  const sendResult = await sendTextMessage(params.waId, params.text, {
+    accessToken: credentials.accessToken,
+    phoneNumberId: credentials.phoneNumberId,
+  });
   const status = sendResult.ok ? "SENT" : "FAILED";
   const messageId = `admin.send.${params.requestId}`;
   const createdAt = new Date().toISOString();
   const tenants = await getTenants();
-  const phoneNumberId = tenants[params.clientKey]?.metaPhoneNumberId || undefined;
+  const phoneNumberId =
+    credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
 
   await persistOutboundMessage({
     clientId: params.clientId,
@@ -2927,6 +2946,8 @@ async function adminSendMessage(params: {
     clientKey: params.clientKey,
     requestId: params.requestId,
     status: sendResult.status ?? null,
+    resolvedPhoneNumberId: credentials.phoneNumberId,
+    credentialSource: credentials.source,
   });
 
   return {
