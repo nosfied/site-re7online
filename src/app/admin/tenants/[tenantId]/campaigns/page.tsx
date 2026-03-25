@@ -11,11 +11,13 @@ import {
   createCampaign,
   fetchTenantsSummary,
   formatDateTime,
+  formatPct,
   getCampaign,
   listCampaigns,
   loadAdminConnection,
   normalizeWaIdList,
   saveAdminConnection,
+  TenantSummaryItem,
   testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 
@@ -78,6 +80,41 @@ function getStatusClasses(status: string) {
   }
 }
 
+function getStatusLabel(status: string) {
+  switch (status) {
+    case "sending":
+      return "Enviando...";
+    case "completed":
+      return "Concluída";
+    case "blocked":
+      return "Bloqueada por limite";
+    case "cancelled":
+      return "Cancelada";
+    case "failed":
+      return "Erro";
+    default:
+      return status || "Status desconhecido";
+  }
+}
+
+function formatRelativeTime(date: string) {
+  const value = new Date(date).getTime();
+  if (!Number.isFinite(value)) return formatDateTime(date);
+  const diffSeconds = Math.max(Math.floor((Date.now() - value) / 1000), 0);
+  if (diffSeconds < 60) return `há ${diffSeconds} segundo${diffSeconds === 1 ? "" : "s"}`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `há ${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `há ${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+  return formatDateTime(date);
+}
+
+function getProgressPct(campaign: CampaignItem) {
+  if (!campaign.totalRecipients || campaign.totalRecipients <= 0) return 0;
+  const completed = campaign.sentCount + campaign.blockedCount;
+  return Math.max(0, Math.min(Math.round((completed / campaign.totalRecipients) * 100), 100));
+}
+
 export default function TenantCampaignsPage() {
   const params = useParams<{ tenantId: string }>();
   const tenantId = useMemo(() => {
@@ -94,6 +131,7 @@ export default function TenantCampaignsPage() {
     rememberToken: false,
   });
   const [clientKey, setClientKey] = useState(tenantId);
+  const [tenantSummary, setTenantSummary] = useState<TenantSummaryItem | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
@@ -149,9 +187,10 @@ export default function TenantCampaignsPage() {
     (async () => {
       try {
         const summary = await fetchTenantsSummary(connection, "24h");
-        const resolvedClientKey =
-          summary.find((item) => item.tenantId === tenantId)?.clientKey ?? tenantId;
+        const resolvedTenantSummary = summary.find((item) => item.tenantId === tenantId) ?? null;
+        const resolvedClientKey = resolvedTenantSummary?.clientKey ?? tenantId;
         if (cancelled) return;
+        setTenantSummary(resolvedTenantSummary);
         setClientKey(resolvedClientKey);
         await refreshCampaigns(resolvedClientKey);
       } catch (err) {
@@ -165,7 +204,7 @@ export default function TenantCampaignsPage() {
           setError("Tenant nao encontrado para campanhas.");
           return;
         }
-        setError(typed.message || "Falha ao carregar campanhas.");
+        setError("Erro ao carregar campanhas.");
       } finally {
         if (!cancelled) setLoadingList(false);
       }
@@ -218,11 +257,19 @@ export default function TenantCampaignsPage() {
 
   const filteredCampaigns = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return campaigns.filter((campaign) => {
-      const matchesStatus = statusFilter === "all" || campaign.status === statusFilter;
-      const matchesSearch = !query || campaign.name.toLowerCase().includes(query);
-      return matchesStatus && matchesSearch;
-    });
+    return campaigns
+      .filter((campaign) => {
+        const campaignName = (campaign.name || "").toLowerCase();
+        const matchesStatus = statusFilter === "all" || campaign.status === statusFilter;
+        const matchesSearch = !query || campaignName.includes(query);
+        return matchesStatus && matchesSearch;
+      })
+      .sort((a, b) => {
+        const aSending = a.status === "sending" ? 1 : 0;
+        const bSending = b.status === "sending" ? 1 : 0;
+        if (aSending !== bSending) return bSending - aSending;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
   }, [campaigns, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / PAGE_SIZE));
@@ -329,7 +376,7 @@ export default function TenantCampaignsPage() {
       window.setTimeout(() => setToast(null), 3000);
     } catch (err) {
       const typed = err as { message?: string };
-      setFormError(`Erro ao criar campanha: ${typed.message || "falha inesperada."}`);
+      setFormError("Erro ao criar campanha. Verifique template e destinatarios.");
     } finally {
       setCreating(false);
     }
@@ -337,6 +384,7 @@ export default function TenantCampaignsPage() {
 
   const handleCancelCampaign = async () => {
     if (!selectedCampaign) return;
+    if (!window.confirm("Tem certeza que deseja cancelar esta campanha?")) return;
     setCancelling(true);
     setDetailError(null);
     try {
@@ -346,8 +394,7 @@ export default function TenantCampaignsPage() {
       setToast("Campanha cancelada.");
       window.setTimeout(() => setToast(null), 3000);
     } catch (err) {
-      const typed = err as { message?: string };
-      setDetailError(typed.message || "Falha ao cancelar campanha.");
+      setDetailError("Erro ao cancelar campanha. Tente novamente.");
     } finally {
       setCancelling(false);
     }
@@ -401,6 +448,26 @@ export default function TenantCampaignsPage() {
           <p className="rounded-md border border-emerald-400/30 bg-emerald-900/30 p-3 text-sm text-emerald-100">
             {toast}
           </p>
+        ) : null}
+        {tenantSummary ? (
+          <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-white/70">Uso:</span>
+              <span className="font-semibold">
+                {tenantSummary.quota.used} / {tenantSummary.quota.limit ?? "-"} mensagens
+              </span>
+              {tenantSummary.quota.pct !== null ? (
+                <span className="rounded-full bg-white/10 px-2 py-1 text-xs text-white/80">
+                  {formatPct(tenantSummary.quota.pct)}
+                </span>
+              ) : null}
+              {tenantSummary.quota.warning ? (
+                <span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-200">
+                  limite em alerta
+                </span>
+              ) : null}
+            </div>
+          </section>
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-[340px_1fr]">
@@ -529,34 +596,53 @@ export default function TenantCampaignsPage() {
                   {!loadingList && filteredCampaigns.length === 0 ? (
                     <tr>
                       <td className="px-3 py-4 text-white/70" colSpan={6}>
-                        Nenhuma campanha encontrada para os filtros atuais.
+                        {campaigns.length === 0
+                          ? "Você ainda não criou nenhuma campanha."
+                          : "Nenhuma campanha corresponde ao filtro."}
                       </td>
                     </tr>
                   ) : null}
                   {paginatedCampaigns.map((campaign) => {
                     const isSelected = campaign.id === selectedCampaignId;
+                    const isSending = campaign.status === "sending";
                     return (
                       <tr
                         key={campaign.id}
                         className={`cursor-pointer border-t border-white/10 ${
-                          isSelected ? "bg-re7-sky/10" : "hover:bg-white/5"
+                          isSelected
+                            ? "bg-re7-sky/10"
+                            : isSending
+                              ? "bg-amber-500/10 hover:bg-amber-500/15"
+                              : "hover:bg-white/5"
                         }`}
                         onClick={() => setSelectedCampaignId(campaign.id)}
                       >
-                        <td className="px-3 py-2">{campaign.name}</td>
+                        <td className="px-3 py-2">{campaign.name || "(sem nome)"}</td>
                         <td className="px-3 py-2">
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(
-                              campaign.status
-                            )}`}
-                          >
-                            {campaign.status}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(
+                                campaign.status
+                              )}`}
+                            >
+                              {campaign.status}
+                            </span>
+                            <span className="text-xs text-white/60">
+                              {getStatusLabel(campaign.status)}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-3 py-2">{campaign.sentCount}</td>
                         <td className="px-3 py-2">{campaign.totalRecipients}</td>
-                        <td className="px-3 py-2">{campaign.templateName}</td>
-                        <td className="px-3 py-2">{formatDateTime(campaign.createdAt)}</td>
+                        <td className="px-3 py-2">{campaign.templateName || "(sem template)"}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-1">
+                            <span>{formatDateTime(campaign.createdAt)}</span>
+                            <span className="text-xs text-white/60">
+                              {formatRelativeTime(campaign.createdAt)}
+                            </span>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -615,6 +701,9 @@ export default function TenantCampaignsPage() {
                         >
                           {selectedCampaign.status}
                         </p>
+                        <p className="mt-2 text-xs text-white/60">
+                          {getStatusLabel(selectedCampaign.status)}
+                        </p>
                       </div>
                       <div className="rounded-md border border-white/10 bg-white/5 p-3">
                         <p className="text-xs uppercase tracking-wide text-white/60">Sent</p>
@@ -630,12 +719,29 @@ export default function TenantCampaignsPage() {
                       </div>
                     </div>
 
+                    <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs uppercase tracking-wide text-white/60">Progresso</p>
+                        <p className="text-sm font-semibold">
+                          {getProgressPct(selectedCampaign)}%
+                        </p>
+                      </div>
+                      <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-re7-sky transition-all duration-300"
+                          style={{ width: `${getProgressPct(selectedCampaign)}%` }}
+                        />
+                      </div>
+                    </div>
+
                     <div className="grid gap-2 md:grid-cols-2">
                       <p>
-                        <span className="text-white/70">Nome:</span> {selectedCampaign.name}
+                        <span className="text-white/70">Nome:</span>{" "}
+                        {selectedCampaign.name || "(sem nome)"}
                       </p>
                       <p>
-                        <span className="text-white/70">Template:</span> {selectedCampaign.templateName}
+                        <span className="text-white/70">Template:</span>{" "}
+                        {selectedCampaign.templateName || "(sem template)"}
                       </p>
                       <p>
                         <span className="text-white/70">Total recipients:</span>{" "}
@@ -644,10 +750,16 @@ export default function TenantCampaignsPage() {
                       <p>
                         <span className="text-white/70">Atualizada em:</span>{" "}
                         {formatDateTime(selectedCampaign.updatedAt)}
+                        <span className="ml-2 text-xs text-white/60">
+                          ({formatRelativeTime(selectedCampaign.updatedAt)})
+                        </span>
                       </p>
                       <p>
                         <span className="text-white/70">Criada em:</span>{" "}
                         {formatDateTime(selectedCampaign.createdAt)}
+                        <span className="ml-2 text-xs text-white/60">
+                          ({formatRelativeTime(selectedCampaign.createdAt)})
+                        </span>
                       </p>
                     </div>
 
