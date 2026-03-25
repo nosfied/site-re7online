@@ -3,6 +3,7 @@ import { logger } from "../logger/logger.js";
 import { ConversationIntent } from "../conversation/conversation.types.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { checkUsageGate } from "../usage/usageGate.js";
+import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 
 export type OutboundTemplateParams = {
   toE164: string;
@@ -55,7 +56,17 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     });
     return { ok: false, errorBody: "language_missing" };
   }
-  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const credentials =
+    params.clientId && params.clientKey
+      ? await resolveTenantOutboundCredentials({
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+        })
+      : null;
+  const resolvedPhoneNumberId = credentials?.phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
+  const resolvedAccessToken = credentials?.accessToken || env.WHATSAPP_ACCESS_TOKEN;
+  const credentialSource = credentials?.source ?? "env";
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${resolvedPhoneNumberId}/messages`;
   const payload = {
     messaging_product: "whatsapp",
     to: params.toE164,
@@ -81,6 +92,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
     requestId: params.requestId,
     rid: params.rid,
     messageId: params.messageId,
+    resolvedPhoneNumberId,
+    credentialSource,
   });
 
   if (params.clientId && params.clientKey) {
@@ -122,7 +135,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${resolvedAccessToken}`,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -154,7 +167,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         status: "sent",
         allowlist: { enabled: false, hit: false },
         raw: {
-          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+          senderPhoneNumberId: resolvedPhoneNumberId,
           requestId: params.requestId,
           rid: params.rid,
           metaMessageId,
@@ -176,6 +189,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         rid: params.rid,
         messageId: params.messageId,
         metaMessageId,
+        resolvedPhoneNumberId,
+        credentialSource,
       });
       return { ok: true, status: response.status, metaMessageId };
     }
@@ -197,7 +212,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       status: "failed",
       allowlist: { enabled: false, hit: false },
       raw: {
-        senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+        senderPhoneNumberId: resolvedPhoneNumberId,
         requestId: params.requestId,
         rid: params.rid,
         errorBody: errorText.slice(0, 500),
@@ -219,6 +234,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       messageId: params.messageId,
       errorBody: errorText.slice(0, 500),
       status: response.status,
+      resolvedPhoneNumberId,
+      credentialSource,
     });
     return { ok: false, status: response.status, errorBody: errorText.slice(0, 500) };
   } catch (error) {
@@ -238,6 +255,8 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
       rid: params.rid,
       messageId: params.messageId,
       errorMessage: (error as Error).message,
+      resolvedPhoneNumberId,
+      credentialSource,
     });
     return { ok: false, errorBody: (error as Error).message };
   }

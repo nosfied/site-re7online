@@ -44,6 +44,7 @@ import {
   sendTemplate,
   shouldRetryWithFallback,
 } from "../services/outboundTemplateService.js";
+import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
 import {
   ConversationIntent,
   ConversationState,
@@ -501,6 +502,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return true;
   };
 
+  const resolveCurrentTenantCredentials = () => {
+    if (!tenantClientId || !tenantClientKey) return Promise.resolve(null);
+    if (!tenantCredentialsPromise) {
+      tenantCredentialsPromise = resolveTenantOutboundCredentials({
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+      });
+    }
+    return tenantCredentialsPromise;
+  };
+
   const sendOutboundText = async (params: {
     toE164: string;
     waId: string;
@@ -546,6 +558,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         };
       }
     }
+    const credentials = await resolveCurrentTenantCredentials();
+    const resolvedPhoneNumberId = credentials?.phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
+    const credentialSource = credentials?.source ?? "env";
     logger.info({
       event: "outbound.text.sending",
       waId: maskNumber(params.waId),
@@ -556,8 +571,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       requestId: meta?.requestId,
       rid: params.messageId,
       messageId: params.messageId,
+      resolvedPhoneNumberId,
+      credentialSource,
     });
-    const result = await sendTextMessage(params.toE164, params.replyText);
+    const result = await sendTextMessage(params.toE164, params.replyText, credentials ?? undefined);
     if (result.ok) {
       logger.info({
         event: "outbound.text.sent",
@@ -570,6 +587,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         rid: params.messageId,
         messageId: params.messageId,
         metaMessageId: result.messageId,
+        resolvedPhoneNumberId,
+        credentialSource,
       });
       await storage.appendOutboundEvent({
         direction: "outbound",
@@ -585,7 +604,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         status: "sent",
         allowlist: { enabled: false, hit: false },
         raw: {
-          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+          senderPhoneNumberId: resolvedPhoneNumberId,
           requestId: meta?.requestId,
           rid: params.messageId,
           metaMessageId: result.messageId,
@@ -604,6 +623,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         messageId: params.messageId,
         status: result.status,
         errorBody: result.errorBody,
+        resolvedPhoneNumberId,
+        credentialSource,
       });
       await storage.appendOutboundEvent({
         direction: "outbound",
@@ -619,7 +640,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         status: "failed",
         allowlist: { enabled: false, hit: false },
         raw: {
-          senderPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+          senderPhoneNumberId: resolvedPhoneNumberId,
           requestId: meta?.requestId,
           rid: params.messageId,
           errorBody: result.errorBody,
@@ -954,6 +975,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }
   let tenantClientId = "";
   let tenantClientKey = env.CLIENT_ID;
+  let tenantCredentialsPromise:
+    | Promise<Awaited<ReturnType<typeof resolveTenantOutboundCredentials>>>
+    | null = null;
   try {
     const tenant = await resolveTenant(phoneNumberId, meta);
     tenantClientId = tenant.clientId;
@@ -1578,9 +1602,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         toStoredIncomingMessage(message, status, allowlistHit)
       );
       if (env.outboundEnabled && !env.WHATSAPP_SANDBOX) {
+        const credentials = await resolveCurrentTenantCredentials();
         await sendTextMessage(
           normalizedFrom,
-          `Janela 24h fechada para ${targetWaId}.`
+          `Janela 24h fechada para ${targetWaId}.`,
+          credentials ?? undefined
         );
       }
       continue;
@@ -1711,7 +1737,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const result = await sendTemplateMessage(
         targetWaId,
         templateConfig.name,
-        templateConfig.language
+        templateConfig.language,
+        (await resolveCurrentTenantCredentials()) ?? undefined
       );
 
       if (result.ok) {
@@ -2081,7 +2108,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           ? sendTemplateMessage(
               toForReply,
               decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
-              decision.templateLanguage ?? "pt_BR"
+              decision.templateLanguage ?? "pt_BR",
+              (await resolveCurrentTenantCredentials()) ?? undefined
             )
           : sendOutboundText({
               toE164: toForReply,
@@ -2739,7 +2767,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         ? sendTemplateMessage(
             toForReply,
             decision.templateName ?? env.WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
-            decision.templateLanguage ?? "pt_BR"
+            decision.templateLanguage ?? "pt_BR",
+            (await resolveCurrentTenantCredentials()) ?? undefined
           )
         : sendOutboundText({
             toE164: toForReply,
