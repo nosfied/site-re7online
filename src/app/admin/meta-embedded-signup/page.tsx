@@ -1,51 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-const APP_ID = "2074361376674006";
-const CONFIG_ID = "1261464002116286";
-
-declare global {
-  interface Window {
-    FB?: {
-      init: (params: Record<string, unknown>) => void;
-      login: (
-        callback: (response: unknown) => void,
-        options?: Record<string, unknown>
-      ) => void;
-    };
-    fbAsyncInit?: () => void;
-  }
-}
-
-type CapturedEntry = {
-  timestamp: string;
-  source:
-    | "query"
-    | "fb.postMessage"
-    | "fb.callback"
-    | "window.focus"
-    | "window.blur"
-    | "popup.closed";
-  raw: unknown;
-  parsed: unknown;
-  origin?: string;
-};
-
-function safeParseEventData(input: unknown) {
-  if (typeof input === "string") {
-    try {
-      return JSON.parse(input);
-    } catch {
-      return input;
-    }
-  }
-  return input;
-}
+import {
+  EmbeddedSignupCaptureEntry,
+  META_EMBEDDED_SIGNUP_APP_ID,
+  META_EMBEDDED_SIGNUP_CONFIG_ID,
+  loadMetaEmbeddedSignupSdk,
+  readEmbeddedSignupQuery,
+  safeParseEventData,
+  startMetaEmbeddedSignup,
+} from "@/lib/metaEmbeddedSignup";
 
 export default function MetaEmbeddedSignupDebugPage() {
   const popupCheckRef = useRef<number | null>(null);
-  const [entries, setEntries] = useState<CapturedEntry[]>([]);
+  const [entries, setEntries] = useState<EmbeddedSignupCaptureEntry[]>([]);
   const [starting, setStarting] = useState(false);
   const [runtimeUrl, setRuntimeUrl] = useState("");
   const [sdkReady, setSdkReady] = useState(false);
@@ -64,7 +32,7 @@ export default function MetaEmbeddedSignupDebugPage() {
     error: "",
   });
 
-  const appendEntry = useCallback((entry: CapturedEntry) => {
+  const appendEntry = useCallback((entry: EmbeddedSignupCaptureEntry) => {
     setEntries((prev) => [entry, ...prev].slice(0, 30));
     console.log("[embedded-signup-debug]", entry);
     fetch("/api/debug/embedded-signup", {
@@ -77,16 +45,16 @@ export default function MetaEmbeddedSignupDebugPage() {
   }, []);
 
   const refreshLocationState = useCallback(
-    (source: CapturedEntry["source"]) => {
-      const params = new URLSearchParams(window.location.search);
+    (source: EmbeddedSignupCaptureEntry["source"]) => {
+      const params = readEmbeddedSignupQuery(window);
       const nextQueryData = {
-        code: params.get("code") ?? "",
-        state: params.get("state") ?? "",
-        error: params.get("error") ?? "",
+        code: params.code,
+        state: params.state,
+        error: params.error,
       };
       const nextLocationSnapshot = {
-        href: window.location.href,
-        search: window.location.search,
+        href: params.href,
+        search: params.search,
       };
 
       setQueryData(nextQueryData);
@@ -183,39 +151,14 @@ export default function MetaEmbeddedSignupDebugPage() {
   }, [appendEntry, popupClosed, popupOpened, refreshLocationState]);
 
   useEffect(() => {
-    if (window.FB) {
-      setSdkReady(true);
-      return;
-    }
-
-    const scriptId = "facebook-jssdk";
-    const existingScript = document.getElementById(scriptId);
-
-    window.fbAsyncInit = function () {
-      try {
-        window.FB?.init({
-          appId: APP_ID,
-          cookie: true,
-          xfbml: false,
-          version: "v19.0",
-        });
+    loadMetaEmbeddedSignupSdk()
+      .then(() => {
         setSdkReady(true);
         setSdkError(null);
-      } catch (error) {
+      })
+      .catch((error) => {
         setSdkError((error as Error).message);
-      }
-    };
-
-    if (!existingScript) {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.async = true;
-      script.defer = true;
-      script.crossOrigin = "anonymous";
-      script.src = "https://connect.facebook.net/en_US/sdk.js";
-      script.onerror = () => setSdkError("Falha ao carregar Facebook SDK.");
-      document.body.appendChild(script);
-    }
+      });
   }, []);
 
   const startEmbeddedSignup = useCallback(() => {
@@ -237,8 +180,8 @@ export default function MetaEmbeddedSignupDebugPage() {
       refreshLocationState("query");
     }, 60000);
 
-    window.FB.login(
-      (response) => {
+    startMetaEmbeddedSignup()
+      .then((response) => {
         appendEntry({
           timestamp: new Date().toISOString(),
           source: "fb.callback",
@@ -248,16 +191,11 @@ export default function MetaEmbeddedSignupDebugPage() {
         setStarting(false);
         setPopupClosed(true);
         refreshLocationState("query");
-      },
-      {
-        config_id: CONFIG_ID,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-        },
-      }
-    );
+      })
+      .catch((error) => {
+        setSdkError((error as Error).message);
+        setStarting(false);
+      });
   }, [appendEntry, refreshLocationState]);
 
   const rawEntries = useMemo(() => JSON.stringify(entries, null, 2), [entries]);
@@ -268,7 +206,7 @@ export default function MetaEmbeddedSignupDebugPage() {
         <header>
           <h1 className="text-2xl font-bold">Meta Embedded Signup Debug v2</h1>
           <p className="mt-1 text-sm text-white/70">
-            app_id={APP_ID} • config_id={CONFIG_ID} • SDK v19.0
+            app_id={META_EMBEDDED_SIGNUP_APP_ID} • config_id={META_EMBEDDED_SIGNUP_CONFIG_ID} • SDK v19.0
           </p>
         </header>
 

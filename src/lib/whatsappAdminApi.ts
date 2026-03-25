@@ -100,6 +100,17 @@ export type CampaignItem = {
   };
 };
 
+export type TenantOnboardingExchangePayload = {
+  code: string;
+  embeddedSignup?: {
+    businessId?: string | null;
+    businessPortfolioId?: string | null;
+    wabaId?: string | null;
+    phoneNumberId?: string | null;
+    raw?: unknown;
+  };
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -577,6 +588,28 @@ export async function cancelCampaign(
     connection,
     `/admin/campaigns/${encodeURIComponent(campaignId)}/cancel?${params.toString()}`,
     { method: "POST" }
+  );
+}
+
+export async function onboardingExchangeCode(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: TenantOnboardingExchangePayload
+): Promise<{
+  success: true;
+  businessTokenStored: boolean;
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  businessId: string | null;
+  businessPortfolioId: string | null;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/exchange-code`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
   );
 }
 
