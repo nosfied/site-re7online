@@ -1,6 +1,6 @@
 ## FASE ATUAL DO PRODUTO
 
-Validação real multi-tenant com onboarding oficial da Meta habilitado.
+Produto SaaS operacional validado com:
 
 O sistema já possui:
 - multi-tenant real no runtime
@@ -8,7 +8,7 @@ O sistema já possui:
 - campanhas operacionais com execução assíncrona
 - controle de uso por tenant
 - UI administrativa funcional
-- onboarding oficial via Embedded Signup liberado pela Meta
+- onboarding validado via Meta (Embedded Signup)
 - Sprint 14 concluída (shadow completo validado)
 - Sprint 15 concluída (leitura híbrida validada com divergência detectada)
 - Sprint 16 concluída (consistência total validada)
@@ -24,43 +24,60 @@ O sistema já possui:
 
 ---
 
+## ESTADO ATUAL
+
+O sistema já é utilizável em produção, porém o onboarding ainda exige intervenção manual.
+
+---
+
 ## PRIORIDADE ATUAL
 
-Executar onboarding real de cliente (JUSTA) e validar operação completa multi-tenant.
+Melhorar eficiência operacional interna antes de expor onboarding ao cliente.
 
 ---
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
-1. Onboarding real + validação multi-tenant (Sprint 25)
-   - Embedded Signup
-   - conexão de número real
-   - execução de campanhas
-   - validação de isolamento entre tenants
+1. Onboarding interno assistido (Sprint 26)
+   - automatizar exchange do code
+   - eliminar uso de curl
+   - persistir dados Meta
+   - criar UI interna de apoio
+   - reduzir esforço manual
 
 2. Uso real com cliente
+   - execução de campanhas
    - operação assistida
    - coleta de feedback
-   - identificação de fricções
 
 3. Ajustes baseados em uso
    - melhorias de UX
-   - pequenos ajustes operacionais
-   - correções pontuais
+   - correções operacionais
+   - refinamento da interface
+
+---
+
+## FUTURO (NÃO PRIORITÁRIO AGORA)
+
+- onboarding self-service para cliente
+- fila persistente (Redis/Bull)
+- retry automático
+- scheduler de campanhas
+- segmentação avançada
 
 ---
 
 ## DIRETRIZ IMPORTANTE
 
 Priorizar:
-- uso real do produto
-- validação com cliente
+- eficiência interna
+- operação real
 - estabilidade operacional
 
 ANTES de:
 - novas features
-- refatorações
-- otimizações de escala
+- refatorações complexas
+- escalabilidade prematura
 
 ---
 
