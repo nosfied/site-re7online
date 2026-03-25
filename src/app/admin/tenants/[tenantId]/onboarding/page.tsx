@@ -231,7 +231,13 @@ export default function TenantOnboardingPage() {
   };
 
   const handleProcess = async () => {
+    if (processing) return;
     if (!tenantId) return;
+    if (!connection.baseUrl || !connection.adminToken) {
+      setStatus("error");
+      setErrorMessage("Configure a conexao admin antes de processar.");
+      return;
+    }
     if (!code.trim()) {
       setStatus("error");
       setErrorMessage("Informe o code antes de processar.");
@@ -349,7 +355,7 @@ export default function TenantOnboardingPage() {
               <button
                 type="button"
                 onClick={handleProcess}
-                disabled={processing}
+                disabled={processing || !code.trim()}
                 className="rounded-md border border-white/20 px-4 py-2 text-sm text-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {processing ? "Processando..." : "Processar conexao"}
@@ -436,6 +442,7 @@ export default function TenantOnboardingPage() {
                 <p><span className="text-white/70">wabaId:</span> {resultSnapshot?.wabaId || wabaId || "-"}</p>
                 <p><span className="text-white/70">businessId:</span> {resultSnapshot?.businessId || businessId || "-"}</p>
                 <p><span className="text-white/70">businessPortfolioId:</span> {resultSnapshot?.businessPortfolioId || businessPortfolioId || "-"}</p>
+                <p><span className="text-white/70">token salvo:</span> {resultSnapshot ? (resultSnapshot.businessTokenStored ? "sim" : "nao") : "-"}</p>
               </div>
             </div>
             <div>

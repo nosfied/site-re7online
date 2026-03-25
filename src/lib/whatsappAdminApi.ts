@@ -144,7 +144,17 @@ const SESSION_TOKEN_KEY = "wa_admin_token_session_v1";
 const LOCAL_TOKEN_KEY = "wa_admin_token_local_v1";
 
 function getDefaultBaseUrl() {
-  return process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "http://127.0.0.1:3001";
+  return process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api";
+}
+
+function shouldReplaceStoredBaseUrl(baseUrl: string) {
+  if (typeof window === "undefined") return false;
+  const normalized = normalizeBaseUrl(baseUrl);
+  if (!normalized.startsWith("http://127.0.0.1:") && !normalized.startsWith("http://localhost:")) {
+    return false;
+  }
+  const hostname = window.location.hostname;
+  return hostname !== "127.0.0.1" && hostname !== "localhost";
 }
 
 export function normalizeBaseUrl(input: string) {
@@ -176,8 +186,11 @@ export function loadAdminConnection(): AdminConnection {
     const localToken = localStorage.getItem(LOCAL_TOKEN_KEY) || "";
     const adminToken = rememberToken ? localToken : sessionToken;
 
+    const storedBaseUrl = normalizeBaseUrl(String(parsed?.baseUrl || getDefaultBaseUrl()));
     return {
-      baseUrl: normalizeBaseUrl(String(parsed?.baseUrl || getDefaultBaseUrl())),
+      baseUrl: shouldReplaceStoredBaseUrl(storedBaseUrl)
+        ? getDefaultBaseUrl()
+        : storedBaseUrl,
       adminToken: adminToken.trim(),
       rememberToken,
     };
