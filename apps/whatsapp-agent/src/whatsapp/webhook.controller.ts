@@ -74,6 +74,88 @@ type RequestMeta = {
   method: string;
 };
 
+type PartnerOnboardingPayload = {
+  event: string | null;
+  whatsappBusinessAccountId: string | null;
+  businessPortfolioId: string | null;
+  businessId: string | null;
+  phoneNumberId: string | null;
+  displayPhoneNumber: string | null;
+  rawKeys: string[];
+};
+
+function collectStringCandidates(
+  input: unknown,
+  matchers: RegExp[],
+  acc = new Set<string>(),
+  depth = 0
+): string[] {
+  if (depth > 4 || input == null) return Array.from(acc);
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      collectStringCandidates(item, matchers, acc, depth + 1);
+    }
+    return Array.from(acc);
+  }
+  if (typeof input !== "object") return Array.from(acc);
+
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (typeof value === "string" && matchers.some((matcher) => matcher.test(key))) {
+      const trimmed = value.trim();
+      if (trimmed) acc.add(trimmed);
+    }
+    if (value && typeof value === "object") {
+      collectStringCandidates(value, matchers, acc, depth + 1);
+    }
+  }
+  return Array.from(acc);
+}
+
+function extractPartnerOnboardingPayload(value: unknown): PartnerOnboardingPayload {
+  const typedValue = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const rawKeys = Object.keys(typedValue).sort();
+
+  const wabaCandidates = collectStringCandidates(value, [
+    /^waba(_id)?$/i,
+    /^whatsapp_?business_?account_?id$/i,
+    /^whatsappBusinessAccountId$/i,
+  ]);
+  const businessPortfolioCandidates = collectStringCandidates(value, [
+    /^business_?portfolio_?id$/i,
+    /^businessPortfolioId$/i,
+  ]);
+  const businessIdCandidates = collectStringCandidates(value, [
+    /^business_?id$/i,
+    /^businessId$/i,
+  ]);
+  const phoneNumberCandidates = collectStringCandidates(value, [
+    /^phone_?number_?id$/i,
+    /^display_?phone_?number$/i,
+    /^displayPhoneNumber$/i,
+  ]);
+
+  return {
+    event:
+      typeof typedValue.event === "string" && typedValue.event.trim()
+        ? typedValue.event.trim()
+        : null,
+    whatsappBusinessAccountId: wabaCandidates[0] ?? null,
+    businessPortfolioId: businessPortfolioCandidates[0] ?? null,
+    businessId: businessIdCandidates[0] ?? null,
+    phoneNumberId:
+      (typeof typedValue.metadata === "object" &&
+      typedValue.metadata &&
+      typeof (typedValue.metadata as Record<string, unknown>).phone_number_id === "string"
+        ? String((typedValue.metadata as Record<string, unknown>).phone_number_id)
+        : null) ??
+      phoneNumberCandidates.find((item) => /^\d+$/.test(item)) ??
+      null,
+    displayPhoneNumber:
+      phoneNumberCandidates.find((item) => !/^\d+$/.test(item)) ?? null,
+    rawKeys,
+  };
+}
+
 export function verifyWebhook(
   req: IncomingMessage,
   res: ServerResponse,
@@ -816,6 +898,60 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
     typedPayload.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+  const receivedChanges = (typedPayload.entry ?? []).flatMap((entry) => entry.changes ?? []);
+  const partnerChangesToPersist: Array<{
+    field: string;
+    valueEvent: string | null;
+    payload: PartnerOnboardingPayload;
+  }> = [];
+
+  for (const change of receivedChanges) {
+    const typedChange = change as { field?: string; value?: unknown };
+    const field = typeof typedChange.field === "string" ? typedChange.field : "unknown";
+    const typedValue =
+      typedChange.value && typeof typedChange.value === "object"
+        ? (typedChange.value as Record<string, unknown>)
+        : {};
+    const valueEvent =
+      typeof typedValue.event === "string" && typedValue.event.trim()
+        ? typedValue.event.trim()
+        : null;
+    const changePhoneNumberId =
+      typeof typedValue.metadata === "object" &&
+      typedValue.metadata &&
+      typeof (typedValue.metadata as Record<string, unknown>).phone_number_id === "string"
+        ? String((typedValue.metadata as Record<string, unknown>).phone_number_id)
+        : phoneNumberId ?? null;
+
+    logger.info({
+      event: "webhook.change.received",
+      field,
+      requestId: meta?.requestId,
+      phoneNumberId: changePhoneNumberId,
+      valueEvent,
+    });
+
+    if (field === "account_update" || field === "partner_solutions") {
+      const partnerPayload = extractPartnerOnboardingPayload(typedChange.value);
+      logger.info({
+        event: "webhook.partner_event",
+        field,
+        valueEvent,
+        requestId: meta?.requestId,
+        phoneNumberId: partnerPayload.phoneNumberId ?? changePhoneNumberId,
+        whatsappBusinessAccountId: partnerPayload.whatsappBusinessAccountId,
+        businessPortfolioId: partnerPayload.businessPortfolioId,
+        businessId: partnerPayload.businessId,
+        displayPhoneNumber: partnerPayload.displayPhoneNumber,
+        rawKeys: partnerPayload.rawKeys,
+      });
+      partnerChangesToPersist.push({
+        field,
+        valueEvent,
+        payload: partnerPayload,
+      });
+    }
+  }
   let tenantClientId = "";
   let tenantClientKey = env.CLIENT_ID;
   try {
@@ -946,6 +1082,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     undefined,
     undefined
   );
+
+  for (const partnerEvent of partnerChangesToPersist) {
+    await persistEventSafe(
+      "webhook.partner_event",
+      {
+        field: partnerEvent.field,
+        valueEvent: partnerEvent.valueEvent,
+        ...partnerEvent.payload,
+      } as Prisma.InputJsonValue,
+      undefined,
+      undefined
+    );
+  }
 
   const persistInboundSafe = async (params: {
     waId: string;
