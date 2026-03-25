@@ -59,6 +59,7 @@ model Client {
   users         User[]
   runtimeStates ConversationRuntimeState[]
   campaigns     Campaign[]
+  metaConfig    TenantMetaConfig?
 }
 
 model User {
@@ -301,4 +302,22 @@ model LeadNote {
 
   @@index([leadId, createdAt])
   @@index([tenantId, createdAt])
+}
+
+model TenantMetaConfig {
+  id                  String   @id @default(uuid())
+  clientId            String   @unique @db.Uuid
+  businessToken       String?
+  businessId          String?
+  businessPortfolioId String?
+  wabaId              String?
+  phoneNumberId       String?
+  rawPayload          Json
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([phoneNumberId])
+  @@index([wabaId])
 }

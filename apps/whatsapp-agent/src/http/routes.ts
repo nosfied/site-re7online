@@ -22,6 +22,10 @@ import {
 } from "../campaigns/campaignService.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
 import { httpError } from "../utils/httpError.js";
+import {
+  exchangeEmbeddedSignupCode,
+  MetaOnboardingExchangeError,
+} from "../meta/onboarding.service.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1328,6 +1332,176 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/onboarding/exchange-code")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const code = String(body.code ?? "").trim();
+      if (!code) {
+        json(res, 400, httpError("bad_request", "Code is required"));
+        return;
+      }
+      const embeddedSignupInput =
+        body.embeddedSignup && typeof body.embeddedSignup === "object"
+          ? (body.embeddedSignup as Record<string, unknown>)
+          : null;
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      logger.info({
+        event: "onboarding.started",
+        tenantId,
+        clientKey: client.clientKey,
+        requestId,
+      });
+
+      try {
+        const exchange = await exchangeEmbeddedSignupCode({ code });
+        const finalBusinessId =
+          normalizeOptionalString(embeddedSignupInput?.businessId) ?? exchange.businessId;
+        const finalBusinessPortfolioId =
+          normalizeOptionalString(embeddedSignupInput?.businessPortfolioId) ??
+          exchange.businessPortfolioId;
+        const finalWabaId =
+          normalizeOptionalString(embeddedSignupInput?.wabaId) ?? exchange.wabaId;
+        const finalPhoneNumberId =
+          normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
+          exchange.phoneNumberId;
+        const rawPayload = {
+          exchange: exchange.rawPayload,
+          embeddedSignup: embeddedSignupInput
+            ? {
+                businessId: normalizeOptionalString(embeddedSignupInput.businessId),
+                businessPortfolioId: normalizeOptionalString(
+                  embeddedSignupInput.businessPortfolioId
+                ),
+                wabaId: normalizeOptionalString(embeddedSignupInput.wabaId),
+                phoneNumberId: normalizeOptionalString(embeddedSignupInput.phoneNumberId),
+                raw: embeddedSignupInput.raw ?? null,
+              }
+            : null,
+        };
+
+        await prisma.tenantMetaConfig.upsert({
+          where: { clientId: client.id },
+          update: {
+            businessToken: exchange.businessToken ?? undefined,
+            businessId: finalBusinessId ?? undefined,
+            businessPortfolioId: finalBusinessPortfolioId ?? undefined,
+            wabaId: finalWabaId ?? undefined,
+            phoneNumberId: finalPhoneNumberId ?? undefined,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+          create: {
+            clientId: client.id,
+            businessToken: exchange.businessToken ?? undefined,
+            businessId: finalBusinessId ?? undefined,
+            businessPortfolioId: finalBusinessPortfolioId ?? undefined,
+            wabaId: finalWabaId ?? undefined,
+            phoneNumberId: finalPhoneNumberId ?? undefined,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+        });
+
+        let phoneMappingAction: "created" | "existing" | null = null;
+        let tenantUpdate:
+          | { backupPath: string; fieldsChanged: string[]; tenant: Record<string, unknown> }
+          | undefined;
+
+        if (finalPhoneNumberId) {
+          const syncResult = await syncTenantPhoneNumberMapping({
+            clientId: client.id,
+            phoneNumberId: finalPhoneNumberId,
+          });
+          phoneMappingAction = syncResult.action;
+          tenantUpdate = await saveTenantPatch(tenantId, {
+            metaPhoneNumberId: finalPhoneNumberId,
+          });
+        }
+
+        logger.info({
+          event: "onboarding.exchange.success",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          phoneNumberId: finalPhoneNumberId,
+          wabaId: finalWabaId,
+          businessId: finalBusinessId,
+          businessPortfolioId: finalBusinessPortfolioId,
+          businessTokenStored: Boolean(exchange.businessToken),
+          phoneMappingAction,
+          fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
+        });
+
+        json(res, 200, {
+          success: true,
+          businessTokenStored: Boolean(exchange.businessToken),
+          phoneNumberId: finalPhoneNumberId,
+          wabaId: finalWabaId,
+          businessId: finalBusinessId,
+          businessPortfolioId: finalBusinessPortfolioId,
+        });
+      } catch (error) {
+        logger.error({
+          event: "onboarding.exchange.failed",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          message: (error as Error).message,
+          ...(error instanceof MetaOnboardingExchangeError
+            ? {
+                status: error.status ?? null,
+                errorBody: error.errorBody ?? null,
+              }
+            : {}),
+        });
+
+        if (error instanceof MetaOnboardingExchangeError) {
+          json(
+            res,
+            error.status && error.status >= 400 && error.status < 600 ? error.status : 502,
+            httpError("meta_exchange_failed", error.message, {
+              status: error.status ?? null,
+              errorBody: error.errorBody ?? null,
+            })
+          );
+          return;
+        }
+
+        if ((error as Error).message.includes("already mapped")) {
+          json(res, 409, httpError("phone_number_conflict", (error as Error).message));
+          return;
+        }
+
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
       req.method === "PUT" &&
       pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 4
@@ -1341,24 +1515,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       try {
-        const currentTenants = await getTenants();
-        const previousTenant = currentTenants[tenantId];
-        const nextTenant = {
-          ...(previousTenant ?? {}),
-          ...body,
-          id: String((body.id ?? tenantId)).trim() || tenantId,
-        };
-        const nextTenants = {
-          ...currentTenants,
-          [tenantId]: nextTenant,
-        };
-        const fieldsChanged = diffTenantFields(previousTenant, nextTenant);
-        const saved = await saveTenants(nextTenants);
+        const saved = await saveTenantPatch(tenantId, body as Record<string, unknown>);
         logger.info({
           event: "admin.tenant.update",
           tenantId,
           authSource: authToken.source,
-          fieldsChanged,
+          fieldsChanged: saved.fieldsChanged,
           backupPath: saved.backupPath,
           requestId,
         });
@@ -1366,8 +1528,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           tenantId,
           backupPath: saved.backupPath,
-          fieldsChanged,
-          tenant: saved.tenants[tenantId],
+          fieldsChanged: saved.fieldsChanged,
+          tenant: saved.tenant,
         });
       } catch (error) {
         logger.warn({
@@ -2506,6 +2668,71 @@ function diffTenantFields(
     fieldsChanged.push("templates.manualHandoff");
   }
   return fieldsChanged;
+}
+
+async function saveTenantPatch(tenantId: string, body: Record<string, unknown>) {
+  const currentTenants = await getTenants();
+  const previousTenant = currentTenants[tenantId];
+  const nextTenant = {
+    ...(previousTenant ?? {}),
+    ...body,
+    id: String((body.id ?? tenantId)).trim() || tenantId,
+  };
+  const nextTenants = {
+    ...currentTenants,
+    [tenantId]: nextTenant,
+  };
+  const fieldsChanged = diffTenantFields(previousTenant, nextTenant);
+  const saved = await saveTenants(nextTenants);
+  return {
+    backupPath: saved.backupPath,
+    fieldsChanged,
+    tenant: saved.tenants[tenantId],
+  };
+}
+
+async function syncTenantPhoneNumberMapping(params: {
+  clientId: string;
+  phoneNumberId: string;
+}) {
+  const prisma = getPrisma();
+  const existingPhone = await prisma.waPhoneNumber.findUnique({
+    where: { phoneNumberId: params.phoneNumberId },
+    include: {
+      client: {
+        select: { clientKey: true },
+      },
+    },
+  });
+
+  if (!existingPhone) {
+    await prisma.waPhoneNumber.create({
+      data: {
+        clientId: params.clientId,
+        phoneNumberId: params.phoneNumberId,
+        display: params.phoneNumberId,
+      },
+    });
+    return { action: "created" as const };
+  }
+
+  if (existingPhone.clientId !== params.clientId) {
+    throw new Error(
+      `phoneNumberId ${params.phoneNumberId} already mapped to ${existingPhone.client?.clientKey ?? existingPhone.clientId}`
+    );
+  }
+
+  await prisma.waPhoneNumber.update({
+    where: { phoneNumberId: params.phoneNumberId },
+    data: { display: params.phoneNumberId },
+  });
+  return { action: "existing" as const };
+}
+
+function normalizeOptionalString(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {
