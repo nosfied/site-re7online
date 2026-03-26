@@ -2374,6 +2374,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    if (appliedTenantConfig?.disableAutoReply) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "tenant_auto_reply_disabled",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
     if (!shouldAutoReply(updatedConversation)) {
       const skipReason =
         updatedConversation.mode === "HUMAN" ? "human_mode" : "handoff_active";

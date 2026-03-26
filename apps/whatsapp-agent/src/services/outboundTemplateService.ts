@@ -1,6 +1,12 @@
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
-import { ConversationIntent } from "../conversation/conversation.types.js";
+import {
+  ConversationIntent,
+} from "../conversation/conversation.types.js";
+import {
+  getOrCreateConversation,
+  updateOutbound,
+} from "../conversation/conversation.service.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
@@ -144,6 +150,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
 
     if (response.ok) {
       let metaMessageId: string | undefined;
+      const sentAt = new Date().toISOString();
       try {
         const json = (await response.json()) as { messages?: Array<{ id?: string }> };
         metaMessageId = json.messages?.[0]?.id;
@@ -157,7 +164,7 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
         metaMessageId: metaMessageId ?? undefined,
         from: params.toE164,
         to: params.toE164,
-        timestamp: new Date().toISOString(),
+        timestamp: sentAt,
         type: "template",
         text: null,
         templateName: params.templateName,
@@ -173,6 +180,21 @@ export async function sendTemplate(params: OutboundTemplateParams): Promise<Send
           metaMessageId,
         },
       });
+
+      if (params.clientKey && params.waId) {
+        const conversation = await getOrCreateConversation(
+          runtimeStorage,
+          params.clientKey,
+          params.waId,
+          sentAt
+        );
+        const nextConversation = updateOutbound(
+          conversation,
+          metaMessageId ?? params.messageId ?? params.rid,
+          sentAt
+        );
+        await runtimeStorage.upsertConversation(nextConversation);
+      }
 
       logger.info({
         event: "outbound.template.sent",
