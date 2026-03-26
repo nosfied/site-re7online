@@ -10,6 +10,7 @@ export type TenantConfig = {
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
+  disableAutoReply?: boolean;
   planName?: string;
   messagesLimit?: number;
   quotaMonthlyConversations?: number;
@@ -87,6 +88,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     const tenant = value as Record<string, unknown>;
     const nextTenant: Record<string, unknown> = { ...tenant };
+    if (tenant.disableAutoReply === undefined && (key === "justa-advocacia" || tenant.id === "justa-advocacia")) {
+      nextTenant.disableAutoReply = true;
+    }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
         typeof waId === "string" ? waId.replace(/\D/g, "") : waId
@@ -130,6 +134,9 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (typeof tenant.defaultLanguage !== "string" || !tenant.defaultLanguage.trim()) {
       throw new Error(`invalid_tenant_language:${key}`);
+    }
+    if (tenant.disableAutoReply !== undefined && typeof tenant.disableAutoReply !== "boolean") {
+      throw new Error(`invalid_tenant_disable_auto_reply:${key}`);
     }
     if (
       tenant.planName !== undefined &&

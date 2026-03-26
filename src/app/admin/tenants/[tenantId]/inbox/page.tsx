@@ -181,7 +181,7 @@ export default function TenantInboxPage() {
     };
   }, [clientKey, connection, selectedWaId]);
 
-  const refreshSelectedTimeline = async (waId: string) => {
+  const refreshSelectedTimeline = useCallback(async (waId: string) => {
     const response = await fetchConversation(connection, clientKey, waId, { order: "asc", limit: 300 });
     setMessages(response.items);
     setConversations((prev) =>
@@ -198,7 +198,7 @@ export default function TenantInboxPage() {
           : item
       )
     );
-  };
+  }, [clientKey, connection]);
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.waId === selectedWaId) ?? null,
@@ -252,6 +252,37 @@ export default function TenantInboxPage() {
       cancelled = true;
     };
   }, [clientKey, connection, selectedLead?.id]);
+
+  useEffect(() => {
+    if (!connection.baseUrl || !connection.adminToken || !clientKey) return;
+
+    let polling = false;
+    const interval = window.setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        await refreshConversationList(clientKey);
+        if (selectedWaId) {
+          await refreshSelectedTimeline(selectedWaId);
+        }
+      } catch {
+        // polling is best-effort; keep existing UI state until the next cycle
+      } finally {
+        polling = false;
+      }
+    }, 10000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    clientKey,
+    connection.adminToken,
+    connection.baseUrl,
+    refreshConversationList,
+    refreshSelectedTimeline,
+    selectedWaId,
+  ]);
 
   const handleSaveLeadStatus = async () => {
     if (!selectedLead?.id || !statusDraft) return;
