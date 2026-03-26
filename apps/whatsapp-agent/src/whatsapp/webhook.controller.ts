@@ -1289,9 +1289,41 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  const serializeWebhookStatuses = (input: unknown) => {
+    if (!Array.isArray(input)) return [];
+    return input.map((item) => {
+      const status =
+        item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+      return {
+        id: typeof status.id === "string" ? status.id : null,
+        status: typeof status.status === "string" ? status.status : null,
+        timestamp:
+          typeof status.timestamp === "string" || typeof status.timestamp === "number"
+            ? String(status.timestamp)
+            : null,
+        conversation:
+          status.conversation && typeof status.conversation === "object"
+            ? (status.conversation as Record<string, unknown>)
+            : null,
+        pricing:
+          status.pricing && typeof status.pricing === "object"
+            ? (status.pricing as Record<string, unknown>)
+            : null,
+        errors: Array.isArray(status.errors) ? status.errors : null,
+        status_detail:
+          typeof status.status_detail === "string" ? status.status_detail : null,
+        error_data:
+          status.error_data && typeof status.error_data === "object"
+            ? (status.error_data as Record<string, unknown>)
+            : null,
+      };
+    });
+  };
+
       const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
       const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
       if (hasStatuses) {
+        const serializedStatuses = serializeWebhookStatuses(statuses);
         logger.info({
           event: "webhook.status.received",
           route: meta?.route,
@@ -1302,7 +1334,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         await persistEventSafe(
           "webhook.status.received",
-          { phone_number_id: phoneNumberId, count: statuses.length },
+          {
+            phone_number_id: phoneNumberId,
+            count: statuses.length,
+            statuses: serializedStatuses,
+          } as Prisma.InputJsonValue,
           undefined,
           undefined
         );
