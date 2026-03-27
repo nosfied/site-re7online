@@ -1320,10 +1320,170 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
   };
 
+  const summarizeWebhookStatuses = (
+    statuses: Array<{
+      id: string | null;
+      status: string | null;
+      timestamp: string | null;
+      conversation: Record<string, unknown> | null;
+      pricing: Record<string, unknown> | null;
+      errors: unknown[] | null;
+      status_detail: string | null;
+      error_data: Record<string, unknown> | null;
+    }>
+  ) => {
+    const metaMessageIds = Array.from(
+      new Set(statuses.map((item) => item.id).filter((value): value is string => Boolean(value)))
+    );
+    const pricingCategories = Array.from(
+      new Set(
+        statuses
+          .map((item) =>
+            typeof item.pricing?.category === "string" ? item.pricing.category : null
+          )
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const pricingModels = Array.from(
+      new Set(
+        statuses
+          .map((item) =>
+            typeof item.pricing?.pricing_model === "string" ? item.pricing.pricing_model : null
+          )
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const conversationIds = Array.from(
+      new Set(
+        statuses
+          .map((item) =>
+            typeof item.conversation?.id === "string" ? item.conversation.id : null
+          )
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const conversationOriginTypes = Array.from(
+      new Set(
+        statuses
+          .map((item) => {
+            const origin = item.conversation?.origin;
+            if (!origin || typeof origin !== "object") return null;
+            return typeof (origin as Record<string, unknown>).type === "string"
+              ? String((origin as Record<string, unknown>).type)
+              : null;
+          })
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    const billableValues = Array.from(
+      new Set(
+        statuses
+          .map((item) =>
+            typeof item.pricing?.billable === "boolean" ? item.pricing.billable : null
+          )
+          .filter((value): value is boolean => value !== null)
+      )
+    );
+
+    return {
+      metaMessageIds,
+      pricingCategories,
+      pricingBillable:
+        billableValues.length === 1 ? billableValues[0] : billableValues.length === 0 ? null : billableValues,
+      pricingModels,
+      conversationIds,
+      conversationOriginTypes,
+    };
+  };
+
+  const correlateOutboundMetaStatuses = async (
+    statuses: Array<{
+      id: string | null;
+      status: string | null;
+      timestamp: string | null;
+      conversation: Record<string, unknown> | null;
+      pricing: Record<string, unknown> | null;
+      errors: unknown[] | null;
+      status_detail: string | null;
+      error_data: Record<string, unknown> | null;
+    }>
+  ) => {
+    if (!tenantClientId || statuses.length === 0) return;
+    const prisma = getPrisma();
+
+    for (const item of statuses) {
+      if (!item.id) continue;
+      try {
+        const outbound = await prisma.outboundMessage.findFirst({
+          where: {
+            clientId: tenantClientId,
+            metaMessageId: item.id,
+          },
+          select: {
+            id: true,
+            rawPayload: true,
+          },
+        });
+        if (!outbound) continue;
+
+        const currentRaw =
+          outbound.rawPayload && typeof outbound.rawPayload === "object" && !Array.isArray(outbound.rawPayload)
+            ? (outbound.rawPayload as Record<string, unknown>)
+            : outbound.rawPayload !== null && outbound.rawPayload !== undefined
+              ? { value: outbound.rawPayload }
+              : {};
+
+        const origin = item.conversation?.origin;
+        const conversationOriginType =
+          origin && typeof origin === "object" && typeof (origin as Record<string, unknown>).type === "string"
+            ? String((origin as Record<string, unknown>).type)
+            : null;
+        const pricingCategory =
+          typeof item.pricing?.category === "string" ? item.pricing.category : null;
+        const pricingBillable =
+          typeof item.pricing?.billable === "boolean" ? item.pricing.billable : null;
+        const pricingModel =
+          typeof item.pricing?.pricing_model === "string" ? item.pricing.pricing_model : null;
+
+        await prisma.outboundMessage.update({
+          where: { id: outbound.id },
+          data: {
+            rawPayload: {
+              ...currentRaw,
+              metaStatus: {
+                lastStatus: item.status,
+                conversationId:
+                  typeof item.conversation?.id === "string" ? item.conversation.id : null,
+                conversationOriginType,
+                pricingCategory,
+                pricingBillable,
+                pricingModel,
+                lastStatusAt: item.timestamp,
+                statusDetail: item.status_detail,
+                errorData: item.error_data,
+                errors: item.errors,
+                metaMessageId: item.id,
+              },
+            } as Prisma.InputJsonValue,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "db.persist.error",
+          target: "outbound_meta_status",
+          message: (error as Error).message,
+          requestId: meta?.requestId,
+          metaMessageId: item.id,
+        });
+      }
+    }
+  };
+
       const statuses = typedPayload.entry?.[0]?.changes?.[0]?.value?.statuses;
       const hasStatuses = Array.isArray(statuses) && statuses.length > 0;
       if (hasStatuses) {
         const serializedStatuses = serializeWebhookStatuses(statuses);
+        const statusSummary = summarizeWebhookStatuses(serializedStatuses);
         logger.info({
           event: "webhook.status.received",
           route: meta?.route,
@@ -1338,10 +1498,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             phone_number_id: phoneNumberId,
             count: statuses.length,
             statuses: serializedStatuses,
+            ...statusSummary,
           } as Prisma.InputJsonValue,
           undefined,
           undefined
         );
+        await correlateOutboundMetaStatuses(serializedStatuses);
       }
 
       if (normalized.messages.length === 0) {
