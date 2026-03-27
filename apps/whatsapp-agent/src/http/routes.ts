@@ -1952,6 +1952,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : {};
+        const extractMetaStatus = (rawPayload: unknown) => {
+          const typed =
+            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+              ? (rawPayload as Record<string, unknown>)
+              : null;
+          const metaStatus =
+            typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
+              ? (typed.metaStatus as Record<string, unknown>)
+              : null;
+          return {
+            lastStatus:
+              typeof metaStatus?.lastStatus === "string" ? metaStatus.lastStatus : null,
+            pricingCategory:
+              typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
+            pricingBillable:
+              typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
+            pricingModel:
+              typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
+            conversationId:
+              typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
+            statusDetail:
+              typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
+            errorData:
+              metaStatus?.errorData && typeof metaStatus.errorData === "object"
+                ? metaStatus.errorData
+                : null,
+            errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
+          };
+        };
         const failed = await prisma.outboundMessage.findMany({
           where: { ...tenantWhere, status: "FAILED" },
           orderBy: { createdAt: "desc" },
@@ -1966,6 +1995,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             requestId: true,
             errorBody: true,
             metaMessageId: true,
+            rawPayload: true,
+          },
+        });
+        const recent = await prisma.outboundMessage.findMany({
+          where: {
+            ...tenantWhere,
+            type: "TEMPLATE",
+          },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: {
+            createdAt: true,
+            waId: true,
+            type: true,
+            templateName: true,
+            templateLang: true,
+            status: true,
+            requestId: true,
+            errorBody: true,
+            metaMessageId: true,
+            rawPayload: true,
           },
         });
         const [breakdown24h, breakdown7d] = await Promise.all([
@@ -2055,6 +2105,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             requestId: item.requestId,
             errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
             metaMessageId: item.metaMessageId,
+            ...extractMetaStatus(item.rawPayload),
+          })),
+          recent: recent.map((item) => ({
+            createdAt: item.createdAt,
+            waId: maskWaId(item.waId),
+            type: item.type,
+            templateName: item.templateName,
+            templateLang: item.templateLang,
+            status: item.status,
+            requestId: item.requestId,
+            errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
+            metaMessageId: item.metaMessageId,
+            ...extractMetaStatus(item.rawPayload),
           })),
           breakdown24h: normalizeBreakdown(breakdown24h),
           breakdown7d: normalizeBreakdown(breakdown7d),
