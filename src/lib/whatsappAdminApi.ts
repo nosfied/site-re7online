@@ -100,6 +100,26 @@ export type CampaignItem = {
   };
 };
 
+export type TemplateObservabilityItem = {
+  createdAt: string;
+  waId: string;
+  type: string;
+  templateName: string | null;
+  templateLang: string | null;
+  status: string;
+  requestId: string | null;
+  errorBody: string | null;
+  metaMessageId: string | null;
+  lastStatus: string | null;
+  pricingCategory: string | null;
+  pricingBillable: boolean | null;
+  pricingModel: string | null;
+  conversationId: string | null;
+  statusDetail: string | null;
+  errorData: Record<string, unknown> | null;
+  errors: unknown[] | null;
+};
+
 export type TenantOnboardingExchangePayload = {
   code: string;
   embeddedSignup?: {
@@ -602,6 +622,29 @@ export async function cancelCampaign(
     `/admin/campaigns/${encodeURIComponent(campaignId)}/cancel?${params.toString()}`,
     { method: "POST" }
   );
+}
+
+export async function fetchTemplatesObservability(
+  connection: AdminConnection
+): Promise<{
+  defaultTemplate: { name: string; language: string };
+  fallback: { enabled: boolean; name: string; language: string };
+  failed: TemplateObservabilityItem[];
+  recent: TemplateObservabilityItem[];
+  breakdown24h: Array<{
+    templateName: string | null;
+    templateLang: string | null;
+    count: number;
+    topWaIds: Array<{ waId: string; count: number }>;
+  }>;
+  breakdown7d: Array<{
+    templateName: string | null;
+    templateLang: string | null;
+    count: number;
+    topWaIds: Array<{ waId: string; count: number }>;
+  }>;
+}> {
+  return requestJson(connection, "/admin/templates");
 }
 
 export async function onboardingExchangeCode(
