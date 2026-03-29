@@ -1410,6 +1410,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   ) => {
     if (!tenantClientId || statuses.length === 0) return;
     const prisma = getPrisma();
+    const getMetaStatusPriority = (status: string | null) => {
+      switch ((status || "").trim().toLowerCase()) {
+        case "read":
+          return 3;
+        case "delivered":
+          return 2;
+        case "sent":
+          return 1;
+        case "failed":
+          return 0;
+        default:
+          return -1;
+      }
+    };
 
     for (const item of statuses) {
       if (!item.id) continue;
@@ -1432,6 +1446,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             : outbound.rawPayload !== null && outbound.rawPayload !== undefined
               ? { value: outbound.rawPayload }
               : {};
+        const currentMetaStatus =
+          currentRaw.metaStatus &&
+          typeof currentRaw.metaStatus === "object" &&
+          !Array.isArray(currentRaw.metaStatus)
+            ? (currentRaw.metaStatus as Record<string, unknown>)
+            : null;
+        const currentStatus =
+          typeof currentMetaStatus?.lastStatus === "string" ? currentMetaStatus.lastStatus : null;
+        const currentPriority = getMetaStatusPriority(currentStatus);
+        const nextPriority = getMetaStatusPriority(item.status);
+        if (currentPriority > nextPriority) {
+          continue;
+        }
 
         const origin = item.conversation?.origin;
         const conversationOriginType =
