@@ -1736,10 +1736,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const campaigns = await listCampaigns({ clientId: client.id, limit });
+        const campaignIds = new Set(campaigns.map((item) => item.id));
+        const oldestCreatedAt = campaigns.reduce<Date | null>((min, item) => {
+          if (!min || item.createdAt < min) return item.createdAt;
+          return min;
+        }, null);
+        const outboundMessages =
+          oldestCreatedAt && campaignIds.size > 0
+            ? await prisma.outboundMessage.findMany({
+                where: {
+                  clientId: client.id,
+                  type: "TEMPLATE",
+                  createdAt: { gte: oldestCreatedAt },
+                },
+                select: {
+                  waId: true,
+                  templateName: true,
+                  status: true,
+                  errorBody: true,
+                  rawPayload: true,
+                },
+              })
+            : [];
+        const campaignMetaMap = new Map<string, CampaignMetaSummary>();
+        for (const outbound of outboundMessages) {
+          const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+          if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
+          const nextItem = buildCampaignMetaStatusItem(outbound);
+          const current = campaignMetaMap.get(outboundCampaignId) ?? {
+            totalSent: 0,
+            totalDelivered: 0,
+            totalRead: 0,
+            totalFailed: 0,
+          };
+          switch (nextItem.status) {
+            case "read":
+              current.totalRead += 1;
+              break;
+            case "delivered":
+              current.totalDelivered += 1;
+              break;
+            case "failed":
+              current.totalFailed += 1;
+              break;
+            case "sent":
+            default:
+              current.totalSent += 1;
+              break;
+          }
+          campaignMetaMap.set(outboundCampaignId, current);
+        }
         json(res, 200, {
           ok: true,
           count: campaigns.length,
-          items: campaigns.map(serializeCampaign),
+          items: campaigns.map((campaign) => ({
+            ...serializeCampaign(campaign),
+            metaSummary: campaignMetaMap.get(campaign.id) ?? {
+              totalSent: 0,
+              totalDelivered: 0,
+              totalRead: 0,
+              totalFailed: 0,
+            },
+          })),
         });
       } catch (error) {
         logger.error({
@@ -1778,9 +1836,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("campaign_not_found", "Campaign not found"));
           return;
         }
+        const outboundMessages = await prisma.outboundMessage.findMany({
+          where: {
+            clientId: client.id,
+            type: "TEMPLATE",
+            createdAt: { gte: campaign.createdAt },
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            waId: true,
+            templateName: true,
+            status: true,
+            errorBody: true,
+            rawPayload: true,
+          },
+        });
+        const messagesMetaStatus = outboundMessages
+          .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
+          .map(buildCampaignMetaStatusItem);
         json(res, 200, {
           ok: true,
-          campaign: serializeCampaign(campaign),
+          campaign: {
+            ...serializeCampaign(campaign),
+            metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
+            messagesMetaStatus,
+          },
         });
       } catch (error) {
         logger.error({
@@ -1952,35 +2032,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         const tenantWhere = tenantAdmin ? { clientId: adminAuth.clientId } : {};
-        const extractMetaStatus = (rawPayload: unknown) => {
-          const typed =
-            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
-              ? (rawPayload as Record<string, unknown>)
-              : null;
-          const metaStatus =
-            typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
-              ? (typed.metaStatus as Record<string, unknown>)
-              : null;
-          return {
-            lastStatus:
-              typeof metaStatus?.lastStatus === "string" ? metaStatus.lastStatus : null,
-            pricingCategory:
-              typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
-            pricingBillable:
-              typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
-            pricingModel:
-              typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
-            conversationId:
-              typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
-            statusDetail:
-              typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
-            errorData:
-              metaStatus?.errorData && typeof metaStatus.errorData === "object"
-                ? metaStatus.errorData
-                : null,
-            errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
-          };
-        };
         const failed = await prisma.outboundMessage.findMany({
           where: { ...tenantWhere, status: "FAILED" },
           orderBy: { createdAt: "desc" },
@@ -2858,6 +2909,139 @@ function serializeCampaign(campaign: {
       ),
     },
   };
+}
+
+type CampaignMetaStatus = {
+  waId: string;
+  templateName: string | null;
+  status: "sent" | "delivered" | "read" | "failed";
+  pricingCategory: string | null;
+  pricingBillable: boolean | null;
+  pricingModel: string | null;
+  conversationId: string | null;
+  error: string | null;
+};
+
+type CampaignMetaSummary = {
+  totalSent: number;
+  totalDelivered: number;
+  totalRead: number;
+  totalFailed: number;
+};
+
+function extractMetaStatus(rawPayload: unknown) {
+  const typed =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? (rawPayload as Record<string, unknown>)
+      : null;
+  const metaStatus =
+    typed?.metaStatus && typeof typed.metaStatus === "object" && !Array.isArray(typed.metaStatus)
+      ? (typed.metaStatus as Record<string, unknown>)
+      : null;
+  return {
+    lastStatus: typeof metaStatus?.lastStatus === "string" ? metaStatus.lastStatus : null,
+    pricingCategory:
+      typeof metaStatus?.pricingCategory === "string" ? metaStatus.pricingCategory : null,
+    pricingBillable:
+      typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
+    pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
+    conversationId:
+      typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
+    statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
+    errorData:
+      metaStatus?.errorData && typeof metaStatus.errorData === "object" ? metaStatus.errorData : null,
+    errors: Array.isArray(metaStatus?.errors) ? metaStatus.errors : null,
+  };
+}
+
+function extractCampaignIdFromRawPayload(rawPayload: unknown) {
+  const typed =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? (rawPayload as Record<string, unknown>)
+      : null;
+  return typeof typed?.campaignId === "string" ? typed.campaignId : null;
+}
+
+function normalizeCampaignMessageStatus(
+  lastStatus: string | null,
+  fallbackStatus: string
+): CampaignMetaStatus["status"] {
+  const value = (lastStatus || fallbackStatus || "").trim().toLowerCase();
+  switch (value) {
+    case "read":
+      return "read";
+    case "delivered":
+      return "delivered";
+    case "failed":
+      return "failed";
+    case "sent":
+    default:
+      return fallbackStatus === "FAILED" ? "failed" : "sent";
+  }
+}
+
+function stringifyCampaignError(value: unknown) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function buildCampaignMetaStatusItem(item: {
+  waId: string;
+  templateName: string | null;
+  status: string;
+  errorBody: string | null;
+  rawPayload: Prisma.JsonValue | null;
+}): CampaignMetaStatus {
+  const metaStatus = extractMetaStatus(item.rawPayload);
+  const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
+  return {
+    waId: item.waId,
+    templateName: item.templateName,
+    status,
+    pricingCategory: metaStatus.pricingCategory,
+    pricingBillable: metaStatus.pricingBillable,
+    pricingModel: metaStatus.pricingModel,
+    conversationId: metaStatus.conversationId,
+    error:
+      item.errorBody ||
+      metaStatus.statusDetail ||
+      stringifyCampaignError(metaStatus.errorData) ||
+      stringifyCampaignError(metaStatus.errors),
+  };
+}
+
+function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
+  return items.reduce<CampaignMetaSummary>(
+    (acc, item) => {
+      switch (item.status) {
+        case "read":
+          acc.totalRead += 1;
+          break;
+        case "delivered":
+          acc.totalDelivered += 1;
+          break;
+        case "failed":
+          acc.totalFailed += 1;
+          break;
+        case "sent":
+        default:
+          acc.totalSent += 1;
+          break;
+      }
+      return acc;
+    },
+    {
+      totalSent: 0,
+      totalDelivered: 0,
+      totalRead: 0,
+      totalFailed: 0,
+    }
+  );
 }
 
 function getAdminToken(req: IncomingMessage) {

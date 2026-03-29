@@ -115,6 +115,66 @@ function getProgressPct(campaign: CampaignItem) {
   return Math.max(0, Math.min(Math.round((completed / campaign.totalRecipients) * 100), 100));
 }
 
+function getMetaStatusClasses(status: string) {
+  switch (status) {
+    case "read":
+      return "bg-emerald-500/20 text-emerald-200";
+    case "delivered":
+      return "bg-sky-500/20 text-sky-200";
+    case "failed":
+      return "bg-red-500/20 text-red-200";
+    case "sent":
+    default:
+      return "bg-slate-500/20 text-slate-200";
+  }
+}
+
+function getMetaStatusLabel(status: string) {
+  switch (status) {
+    case "read":
+      return "Lida";
+    case "delivered":
+      return "Entregue";
+    case "failed":
+      return "Falha";
+    case "sent":
+    default:
+      return "Enviada";
+  }
+}
+
+function getCampaignConfidence(campaign: CampaignItem) {
+  const totalRecipients = campaign.totalRecipients || 0;
+  const metaSummary = campaign.metaSummary;
+  const deliveredOrRead = (metaSummary?.totalDelivered ?? 0) + (metaSummary?.totalRead ?? 0);
+  const failed = metaSummary?.totalFailed ?? 0;
+
+  if (totalRecipients > 0 && failed >= totalRecipients) {
+    return {
+      label: "Falha na campanha",
+      icon: "X",
+      classes: "border-red-400/30 bg-red-900/30 text-red-100",
+    };
+  }
+  if (totalRecipients > 0 && deliveredOrRead >= totalRecipients) {
+    return {
+      label: `Entregue para ${totalRecipients}/${totalRecipients} destinatarios`,
+      icon: "OK",
+      classes: "border-emerald-400/30 bg-emerald-900/20 text-emerald-100",
+    };
+  }
+  return {
+    label: "Entrega parcial",
+    icon: "!",
+    classes: "border-amber-400/30 bg-amber-900/20 text-amber-100",
+  };
+}
+
+function formatBillingValue(value: boolean | null) {
+  if (value === null) return "-";
+  return value ? "sim" : "nao";
+}
+
 export default function TenantCampaignsPage() {
   const params = useParams<{ tenantId: string }>();
   const tenantId = useMemo(() => {
@@ -719,6 +779,46 @@ export default function TenantCampaignsPage() {
                       </div>
                     </div>
 
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-wide text-white/60">Enviadas</p>
+                        <p className="mt-1 font-semibold text-slate-100">
+                          {selectedCampaign.metaSummary?.totalSent ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-wide text-white/60">Entregues</p>
+                        <p className="mt-1 font-semibold text-sky-200">
+                          {selectedCampaign.metaSummary?.totalDelivered ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-wide text-white/60">Lidas</p>
+                        <p className="mt-1 font-semibold text-emerald-200">
+                          {selectedCampaign.metaSummary?.totalRead ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs uppercase tracking-wide text-white/60">Falhas</p>
+                        <p className="mt-1 font-semibold text-red-200">
+                          {selectedCampaign.metaSummary?.totalFailed ?? 0}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`rounded-md border p-3 text-sm ${getCampaignConfidence(selectedCampaign).classes}`}
+                    >
+                      <p className="font-semibold">
+                        {getCampaignConfidence(selectedCampaign).icon}{" "}
+                        {getCampaignConfidence(selectedCampaign).label}
+                      </p>
+                    </div>
+
+                    <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
+                      Status da campanha e baseado na confirmacao da Meta (sent, delivered, read).
+                    </div>
+
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs uppercase tracking-wide text-white/60">Progresso</p>
@@ -761,6 +861,57 @@ export default function TenantCampaignsPage() {
                           ({formatRelativeTime(selectedCampaign.createdAt)})
                         </span>
                       </p>
+                    </div>
+
+                    <div className="rounded-md border border-white/10 bg-white/5">
+                      <div className="border-b border-white/10 px-4 py-3">
+                        <h3 className="text-sm font-semibold">Status real por mensagem</h3>
+                      </div>
+                      {selectedCampaign.messagesMetaStatus?.length ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[780px] text-sm">
+                            <thead className="bg-white/10 text-left">
+                              <tr>
+                                <th className="px-3 py-2">Telefone</th>
+                                <th className="px-3 py-2">Status</th>
+                                <th className="px-3 py-2">Categoria</th>
+                                <th className="px-3 py-2">Cobranca</th>
+                                <th className="px-3 py-2">Erro</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedCampaign.messagesMetaStatus.map((item, index) => (
+                                <tr
+                                  key={`${item.waId}-${item.conversationId ?? "conversation"}-${index}`}
+                                  className="border-t border-white/10"
+                                >
+                                  <td className="px-3 py-2 font-mono text-xs">{item.waId}</td>
+                                  <td className="px-3 py-2">
+                                    <span
+                                      className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(
+                                        item.status
+                                      )}`}
+                                    >
+                                      {getMetaStatusLabel(item.status)}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2">{item.pricingCategory || "-"}</td>
+                                  <td className="px-3 py-2">
+                                    {formatBillingValue(item.pricingBillable)}
+                                  </td>
+                                  <td className="px-3 py-2 text-white/70">
+                                    {item.error || "-"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="px-4 py-3 text-sm text-white/70">
+                          Nenhum status detalhado da Meta disponivel ainda para esta campanha.
+                        </p>
+                      )}
                     </div>
 
                     {selectedCampaign.status === "sending" ? (
