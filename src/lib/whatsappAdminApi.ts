@@ -98,6 +98,22 @@ export type CampaignItem = {
     blockedCount: number;
     pendingCount: number;
   };
+  metaSummary?: {
+    totalSent: number;
+    totalDelivered: number;
+    totalRead: number;
+    totalFailed: number;
+  };
+  messagesMetaStatus?: Array<{
+    waId: string;
+    templateName: string | null;
+    status: "sent" | "delivered" | "read" | "failed";
+    pricingCategory: string | null;
+    pricingBillable: boolean | null;
+    pricingModel: string | null;
+    conversationId: string | null;
+    error: string | null;
+  }>;
 };
 
 export type TemplateObservabilityItem = {

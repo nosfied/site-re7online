@@ -50,6 +50,22 @@ Diretriz:
 
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
 
+### 0. Observabilidade unificada de campanhas (Sprint 28)
+
+- integrar status real da Meta na tela de campanhas
+- exibir delivered / read / failed
+- exibir billing (pricingCategory, billable)
+- correlacionar mensagens com metaMessageId
+- eliminar ambiguidade de "sent vs entregue"
+
+Motivo:
+
+- aumentar confiança operacional
+- reduzir diagnósticos manuais
+- evitar falsas conclusões sobre falha de envio
+
+---
+
 ### 1. Uso real com clientes
 
 - execução de campanhas
@@ -120,6 +136,7 @@ ANTES de:
 
 # BACKLOG LATENTE (RETOMAR QUANDO NECESSÁRIO)
 
+- validação onboarding assistido
 - validação real do onboarding (novo cliente)
 - padronização tenantId vs clientId
 - limpeza de `.data/default`
