@@ -27,6 +27,7 @@ import {
   MetaOnboardingExchangeError,
 } from "../meta/onboarding.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
+import { issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -41,6 +42,84 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "GET" && pathname === "/") {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("whatsapp-agent running");
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/login") {
+    const prisma = getPrisma();
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const email = String(body.email ?? "").trim().toLowerCase();
+      const password = String(body.password ?? "");
+      if (!email || !password) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const users = await prisma.user.findMany({
+        where: { email },
+        take: 2,
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          email: true,
+          role: true,
+          passwordHash: true,
+          client: {
+            select: {
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (users.length === 0) {
+        json(res, 401, { error: "invalid_credentials" });
+        return;
+      }
+      if (users.length > 1) {
+        json(res, 409, { error: "ambiguous_login" });
+        return;
+      }
+
+      const user = users[0];
+      if (user.client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (!verifyPassword(password, user.passwordHash)) {
+        json(res, 401, { error: "invalid_credentials" });
+        return;
+      }
+
+      const token = issueClientAuthToken({
+        id: user.id,
+        clientId: user.clientId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      });
+
+      json(res, 200, {
+        ok: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          clientId: user.clientId,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.login.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
     return;
   }
 

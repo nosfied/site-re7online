@@ -1,0 +1,121 @@
+import crypto from "node:crypto";
+import { env } from "../config/env.js";
+
+const TOKEN_VERSION = 1;
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+type ClientAuthTokenPayload = {
+  sub: string;
+  clientId: string;
+  email: string;
+  name: string;
+  role: string;
+  iat: number;
+  exp: number;
+  typ: "client-auth";
+  ver: number;
+};
+
+export type ClientAuthUser = {
+  id: string;
+  clientId: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+function getClientAuthSecret() {
+  return env.APP_AUTH_SECRET || env.ADMIN_TOKEN;
+}
+
+function toBase64Url(input: string | Buffer) {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(input: string) {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = (4 - (normalized.length % 4 || 4)) % 4;
+  return Buffer.from(`${normalized}${"=".repeat(padding)}`, "base64");
+}
+
+function signTokenPart(unsignedToken: string) {
+  const secret = getClientAuthSecret();
+  if (!secret) {
+    throw new Error("client_auth_secret_missing");
+  }
+  return toBase64Url(crypto.createHmac("sha256", secret).update(unsignedToken).digest());
+}
+
+export function hashPassword(password: string) {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
+
+export function verifyPassword(password: string, passwordHash: string | null | undefined) {
+  if (!passwordHash) return false;
+  const [algorithm, saltHex, hashHex] = passwordHash.split("$");
+  if (algorithm !== "scrypt" || !saltHex || !hashHex) return false;
+  try {
+    const actual = Buffer.from(hashHex, "hex");
+    const expected = crypto.scryptSync(password, Buffer.from(saltHex, "hex"), actual.length);
+    if (actual.length !== expected.length) return false;
+    return crypto.timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
+export function issueClientAuthToken(user: ClientAuthUser) {
+  const now = Math.floor(Date.now() / 1000);
+  const payload: ClientAuthTokenPayload = {
+    sub: user.id,
+    clientId: user.clientId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    iat: now,
+    exp: now + TOKEN_TTL_SECONDS,
+    typ: "client-auth",
+    ver: TOKEN_VERSION,
+  };
+  const header = { alg: "HS256", typ: "JWT" };
+  const encodedHeader = toBase64Url(JSON.stringify(header));
+  const encodedPayload = toBase64Url(JSON.stringify(payload));
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+  return `${unsignedToken}.${signTokenPart(unsignedToken)}`;
+}
+
+export function verifyClientAuthToken(token: string) {
+  const [encodedHeader, encodedPayload, signature] = token.split(".");
+  if (!encodedHeader || !encodedPayload || !signature) return null;
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+  const expectedSignature = signTokenPart(unsignedToken);
+  const actualSignature = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSignature);
+  if (actualSignature.length !== expectedSignatureBuffer.length) return null;
+  if (!crypto.timingSafeEqual(actualSignature, expectedSignatureBuffer)) return null;
+  try {
+    const payload = JSON.parse(fromBase64Url(encodedPayload).toString("utf8")) as ClientAuthTokenPayload;
+    if (
+      payload.typ !== "client-auth" ||
+      payload.ver !== TOKEN_VERSION ||
+      !payload.sub ||
+      !payload.clientId ||
+      !payload.email ||
+      !payload.name ||
+      !payload.role
+    ) {
+      return null;
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp <= now) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
