@@ -13,12 +13,13 @@ Produto SaaS operacional validado com:
 - UI administrativa funcional
 - onboarding via Meta validado (Embedded Signup)
 - onboarding interno assistido implementado (Sprint 26)
+- observabilidade real da Meta integrada na UI de campanhas (Sprint 28)
 
 ---
 
 ## ESTADO ATUAL
 
-O sistema é utilizável em produção com cliente real.
+Produto operacional com observabilidade real da Meta.
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
@@ -48,21 +49,23 @@ Diretriz:
 
 ---
 
+## SPRINT 28 — OBSERVABILIDADE META (COMPLETED)
+
+- status real da Meta integrado na UI de campanhas
+- delivered / read / failed visíveis
+- billing visível por mensagem
+- correção de regressão de status (prioridade)
+- consistência UI = banco validada
+
+Impacto:
+
+- elimina ambiguidade operacional
+- aumenta confiança do operador
+- permite operação profissional com cliente real
+
+---
+
 ## PRÓXIMAS ETAPAS (ORDEM ESTRATÉGICA)
-
-### 0. Observabilidade unificada de campanhas (Sprint 28)
-
-- integrar status real da Meta na tela de campanhas
-- exibir delivered / read / failed
-- exibir billing (pricingCategory, billable)
-- correlacionar mensagens com metaMessageId
-- eliminar ambiguidade de "sent vs entregue"
-
-Motivo:
-
-- aumentar confiança operacional
-- reduzir diagnósticos manuais
-- evitar falsas conclusões sobre falha de envio
 
 ---
 

@@ -67,6 +67,7 @@ model User {
   clientId  String   @db.Uuid
   name      String
   email     String
+  passwordHash String?
   role      String   @default("AGENT")
   createdAt DateTime @default(now())
 

@@ -35,6 +35,7 @@ export type Env = {
   HANDOFF_TEMPLATE_LANG: string;
   HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE: boolean;
   ADMIN_TOKEN: string;
+  APP_AUTH_SECRET: string;
   ALLOW_ADMIN_DEBUG_IN_PROD: boolean;
   CONV_STATE_DUAL_WRITE: boolean;
   CONV_STATE_SHADOW_COMPARE: boolean;
@@ -155,6 +156,7 @@ export function getEnv(): Env {
   const HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE =
     (process.env.HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE ?? "true") === "true";
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
+  const APP_AUTH_SECRET = process.env.APP_AUTH_SECRET ?? "";
   const ALLOW_ADMIN_DEBUG_IN_PROD =
     (process.env.ALLOW_ADMIN_DEBUG_IN_PROD ?? "false") === "true";
   const CONV_STATE_DUAL_WRITE =
@@ -243,6 +245,7 @@ export function getEnv(): Env {
     HANDOFF_TEMPLATE_LANG,
     HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE,
     ADMIN_TOKEN,
+    APP_AUTH_SECRET,
     ALLOW_ADMIN_DEBUG_IN_PROD,
     CONV_STATE_DUAL_WRITE,
     CONV_STATE_SHADOW_COMPARE,
