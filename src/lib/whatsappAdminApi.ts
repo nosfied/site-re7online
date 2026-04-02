@@ -114,6 +114,12 @@ export type CampaignItem = {
     conversationId: string | null;
     error: string | null;
   }>;
+  draftSeed?: {
+    name: string;
+    templateName: string;
+    recipients: string[];
+    templateParams: string[];
+  };
 };
 
 export type TemplateObservabilityItem = {
