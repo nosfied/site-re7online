@@ -28,12 +28,14 @@ import {
 } from "../meta/onboarding.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
+import { requireClientAuth } from "../auth/clientAuthMiddleware.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
   const parsedUrl = new URL(url, `http://${req.headers.host ?? "localhost"}`);
   const pathname = parsedUrl.pathname;
+  const query = parseQuery(parsedUrl);
 
   if (req.method === "GET" && pathname === "/health") {
     return healthRoute(res);
@@ -123,6 +125,378 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/conversations") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const limitRaw = Number(query.limit ?? 100);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const result = await buildConversationListPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        limit,
+        includeAssignedUserName: false,
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.conversations.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const orderRaw = String(query.order ?? "asc").trim().toLowerCase();
+      const order = orderRaw === "desc" ? "desc" : "asc";
+      const limitRaw = Number(query.limit ?? 200);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
+      const includeRaw = String(query.includeRaw ?? "false") === "true";
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const result = await buildConversationDetailPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId,
+        order,
+        limit,
+        includeRaw,
+        includeAssignedUserName: false,
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.messages.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/send")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const text = String(body.text ?? "").trim();
+      if (!text) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const result = await adminSendMessage({
+        waId,
+        text,
+        clientKey: client.clientKey,
+        clientId: client.id,
+        requestId,
+      });
+      if (!result.ok) {
+        json(res, result.statusCode, { error: result.error });
+        return;
+      }
+      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      json(res, 200, {
+        ok: true,
+        waId,
+        mode: conversation?.mode ?? "BOT",
+        assignedUserId: conversation?.assignedUserId ?? null,
+        assignedTo: conversation?.assignedTo ?? null,
+        assignedUserName: null,
+        assignedAt: conversation?.assignedAt ?? null,
+        message: {
+          messageId: result.messageId,
+          status: result.status,
+          metaMessageId: result.metaMessageId,
+          createdAt: result.createdAt,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.send.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/campaigns") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const limitRaw = Number(query.limit ?? 50);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const result = await buildCampaignListPayload(prisma, {
+        clientId: client.id,
+        limit,
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const result = await buildCampaignDetailPayload(prisma, {
+        clientId: client.id,
+        campaignId,
+      });
+      if (!result) {
+        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        return;
+      }
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/cancel")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const cancelled = await cancelScopedCampaign(prisma, {
+        clientId: client.id,
+        campaignId,
+      });
+      if (!cancelled) {
+        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        return;
+      }
+      if (cancelled === "not_cancelable") {
+        json(
+          res,
+          409,
+          httpError("campaign_not_cancelable", "Campaign is not cancelable", {
+            status: "not_sending",
+          })
+        );
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        campaign: serializeCampaign(cancelled),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.cancel.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/campaigns") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const name = String(body.name ?? "").trim();
+      const templateName = String(body.templateName ?? "").trim();
+      const components = parseTemplateComponents(body.templateParams);
+      const rawWaIds = Array.isArray(body.recipients)
+        ? body.recipients
+        : Array.isArray(body.waIds)
+          ? body.waIds
+          : [];
+      const waIds = Array.from(
+        new Set(
+          rawWaIds
+            .map((value) => normalizeWaId(String(value ?? "").trim()))
+            .filter((value): value is string => Boolean(value))
+        )
+      );
+      if (!name) {
+        json(res, 400, httpError("bad_request", "Campaign name is required"));
+        return;
+      }
+      if (!templateName) {
+        json(res, 400, httpError("invalid_template_name", "Template name is required"));
+        return;
+      }
+      if (!Array.isArray(rawWaIds) || rawWaIds.length === 0) {
+        json(res, 400, httpError("invalid_recipients", "Recipients must be a non-empty array"));
+        return;
+      }
+      if (rawWaIds.some((value) => String(value ?? "").trim().length <= 5)) {
+        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+        return;
+      }
+      if (waIds.length === 0) {
+        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+        return;
+      }
+      if (waIds.length > 1000) {
+        json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const created = await createScopedCampaign({
+        clientId: client.id,
+        clientKey: client.clientKey,
+        name,
+        templateName,
+        waIds,
+        components,
+      });
+
+      json(res, 200, {
+        ok: true,
+        campaign: {
+          ...serializeCampaign(created.campaign),
+          campaignId: created.campaign.id,
+          campaignRunId: created.campaignRunId,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.run.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/debug/env" && process.env.NODE_ENV !== "production") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
@@ -158,7 +532,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
   if (pathname.startsWith("/admin")) {
     const prisma = getPrisma();
-    const query = parseQuery(parsedUrl);
     const authToken = getAdminToken(req);
     const adminAuth = await resolveAdminAuth(prisma, authToken.token);
     if (!adminAuth) {
@@ -3121,6 +3494,435 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
       totalFailed: 0,
     }
   );
+}
+
+type ScopedClientRecord = {
+  id: string;
+  clientKey: string;
+  status: "ACTIVE" | "INACTIVE";
+};
+
+async function getScopedClientById(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+): Promise<ScopedClientRecord | null> {
+  return prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, clientKey: true, status: true },
+  });
+}
+
+async function buildConversationListPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    limit: number;
+    includeAssignedUserName: boolean;
+  }
+) {
+  const conversations = await prisma.conversation.findMany({
+    where: { clientId: params.clientId },
+    orderBy: { updatedAt: "desc" },
+    take: params.limit,
+    select: {
+      waId: true,
+      updatedAt: true,
+    },
+  });
+  const waIds = Array.from(new Set(conversations.map((item) => item.waId)));
+  if (waIds.length === 0) {
+    return { ok: true, count: 0, items: [] };
+  }
+
+  const [leads, inbound, outbound] = await Promise.all([
+    prisma.lead.findMany({
+      where: { tenantId: params.clientId, waId: { in: waIds } },
+      select: {
+        id: true,
+        waId: true,
+        name: true,
+        phone: true,
+        city: true,
+        service: true,
+        status: true,
+      },
+    }),
+    prisma.inboundMessage.findMany({
+      where: { clientId: params.clientId, waId: { in: waIds } },
+      orderBy: { createdAt: "desc" },
+      take: params.limit * 3,
+      select: {
+        waId: true,
+        type: true,
+        bodyText: true,
+        createdAt: true,
+      },
+    }),
+    prisma.outboundMessage.findMany({
+      where: { clientId: params.clientId, waId: { in: waIds } },
+      orderBy: { createdAt: "desc" },
+      take: params.limit * 3,
+      select: {
+        waId: true,
+        type: true,
+        status: true,
+        bodyText: true,
+        templateName: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+  const runtimeConversations = await Promise.all(
+    waIds.map(async (waId) => ({
+      waId,
+      conversation: await runtimeStorage.getConversation(waId, params.clientKey),
+    }))
+  );
+  const runtimeByWaId = new Map(runtimeConversations.map((item) => [item.waId, item.conversation]));
+  const assignedUserIds = params.includeAssignedUserName
+    ? Array.from(
+        new Set(
+          runtimeConversations
+            .map((item) => item.conversation?.assignedUserId ?? null)
+            .filter((value): value is string => Boolean(value))
+        )
+      )
+    : [];
+  const assignedUsers =
+    params.includeAssignedUserName && assignedUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { clientId: params.clientId, id: { in: assignedUserIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
+
+  const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
+  const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
+  for (const item of inbound) {
+    if (!latestInboundByWaId.has(item.waId)) {
+      latestInboundByWaId.set(item.waId, item);
+    }
+  }
+  const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
+  for (const item of outbound) {
+    if (!latestOutboundByWaId.has(item.waId)) {
+      latestOutboundByWaId.set(item.waId, item);
+    }
+  }
+
+  const items = conversations.map((conversation) => {
+    const lead = leadByWaId.get(conversation.waId);
+    const latestInbound = latestInboundByWaId.get(conversation.waId);
+    const latestOutbound = latestOutboundByWaId.get(conversation.waId);
+    const runtimeState = runtimeByWaId.get(conversation.waId);
+    const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
+    const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
+    const lastMessage =
+      inboundAt >= outboundAt
+        ? latestInbound
+          ? {
+              direction: "INBOUND",
+              type: latestInbound.type,
+              status: "RECEIVED",
+              bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
+              templateName: null,
+              createdAt: latestInbound.createdAt,
+            }
+          : null
+        : latestOutbound
+          ? {
+              direction: "OUTBOUND",
+              type: latestOutbound.type,
+              status: latestOutbound.status,
+              bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
+              templateName: latestOutbound.templateName ?? null,
+              createdAt: latestOutbound.createdAt,
+            }
+          : null;
+
+    return {
+      waId: conversation.waId,
+      lastMessage,
+      leadId: lead?.id ?? null,
+      leadStatus: lead?.status ?? null,
+      leadName: lead?.name ?? null,
+      leadPhone: lead?.phone ?? null,
+      leadCity: lead?.city ?? null,
+      leadService: lead?.service ?? null,
+      mode: runtimeState?.mode ?? "BOT",
+      assignedUserId: runtimeState?.assignedUserId ?? null,
+      assignedTo: runtimeState?.assignedTo ?? null,
+      assignedUserName:
+        params.includeAssignedUserName && runtimeState?.assignedUserId
+          ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+          : null,
+      assignedAt: runtimeState?.assignedAt ?? null,
+      updatedAt: conversation.updatedAt,
+    };
+  });
+
+  return {
+    ok: true,
+    count: items.length,
+    items,
+  };
+}
+
+async function buildConversationDetailPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    waId: string;
+    order: "asc" | "desc";
+    limit: number;
+    includeRaw: boolean;
+    includeAssignedUserName: boolean;
+  }
+) {
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  const assignedUser =
+    params.includeAssignedUserName && conversation?.assignedUserId
+      ? await prisma.user.findFirst({
+          where: { id: conversation.assignedUserId, clientId: params.clientId },
+          select: { name: true },
+        })
+      : null;
+
+  const [inbound, outbound] = await Promise.all([
+    prisma.inboundMessage.findMany({
+      where: { clientId: params.clientId, waId: params.waId },
+      orderBy: { createdAt: params.order },
+      take: params.limit,
+      select: {
+        createdAt: true,
+        messageId: true,
+        type: true,
+        requestId: true,
+        bodyText: true,
+        rawPayload: params.includeRaw,
+      },
+    }),
+    prisma.outboundMessage.findMany({
+      where: { clientId: params.clientId, waId: params.waId },
+      orderBy: { createdAt: params.order },
+      take: params.limit,
+      select: {
+        createdAt: true,
+        messageId: true,
+        type: true,
+        status: true,
+        requestId: true,
+        bodyText: true,
+        templateName: true,
+        templateLang: true,
+        metaMessageId: true,
+        errorBody: true,
+        rawPayload: params.includeRaw,
+      },
+    }),
+  ]);
+
+  const items = [
+    ...inbound.map((item) => ({
+      direction: "INBOUND",
+      type: item.type,
+      status: "RECEIVED",
+      intent: null,
+      bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+      templateName: null,
+      templateLang: null,
+      requestId: item.requestId,
+      messageId: item.messageId,
+      metaMessageId: null,
+      errorBody: null,
+      createdAt: item.createdAt,
+      rawPayload: params.includeRaw ? item.rawPayload : undefined,
+    })),
+    ...outbound.map((item) => ({
+      direction: "OUTBOUND",
+      type: item.type,
+      status: item.status,
+      intent: null,
+      bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+      templateName: item.templateName,
+      templateLang: item.templateLang,
+      requestId: item.requestId,
+      messageId: item.messageId,
+      metaMessageId: item.metaMessageId,
+      errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
+      createdAt: item.createdAt,
+      rawPayload: params.includeRaw ? item.rawPayload : undefined,
+    })),
+  ]
+    .sort((a, b) => {
+      const aTs = a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
+      const bTs = b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
+      const aValid = Number.isFinite(aTs);
+      const bValid = Number.isFinite(bTs);
+      if (!aValid && !bValid) return 0;
+      if (!aValid) return 1;
+      if (!bValid) return -1;
+      return params.order === "asc" ? aTs - bTs : bTs - aTs;
+    })
+    .slice(0, params.limit);
+
+  return {
+    ok: true,
+    waId: params.waId,
+    mode: conversation?.mode ?? "BOT",
+    assignedUserId: conversation?.assignedUserId ?? null,
+    assignedTo: conversation?.assignedTo ?? null,
+    assignedUserName: assignedUser?.name ?? null,
+    assignedAt: conversation?.assignedAt ?? null,
+    count: items.length,
+    items,
+  };
+}
+
+async function buildCampaignListPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; limit: number }
+) {
+  const campaigns = await listCampaigns({ clientId: params.clientId, limit: params.limit });
+  const campaignIds = new Set(campaigns.map((item) => item.id));
+  const oldestCreatedAt = campaigns.reduce<Date | null>((min, item) => {
+    if (!min || item.createdAt < min) return item.createdAt;
+    return min;
+  }, null);
+  const outboundMessages =
+    oldestCreatedAt && campaignIds.size > 0
+      ? await prisma.outboundMessage.findMany({
+          where: {
+            clientId: params.clientId,
+            type: "TEMPLATE",
+            createdAt: { gte: oldestCreatedAt },
+          },
+          select: {
+            waId: true,
+            templateName: true,
+            status: true,
+            errorBody: true,
+            rawPayload: true,
+          },
+        })
+      : [];
+  const campaignMetaMap = new Map<string, CampaignMetaSummary>();
+  for (const outbound of outboundMessages) {
+    const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+    if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
+    const nextItem = buildCampaignMetaStatusItem(outbound);
+    const current = campaignMetaMap.get(outboundCampaignId) ?? {
+      totalSent: 0,
+      totalDelivered: 0,
+      totalRead: 0,
+      totalFailed: 0,
+    };
+    switch (nextItem.status) {
+      case "read":
+        current.totalRead += 1;
+        break;
+      case "delivered":
+        current.totalDelivered += 1;
+        break;
+      case "failed":
+        current.totalFailed += 1;
+        break;
+      case "sent":
+      default:
+        current.totalSent += 1;
+        break;
+    }
+    campaignMetaMap.set(outboundCampaignId, current);
+  }
+  return {
+    ok: true,
+    count: campaigns.length,
+    items: campaigns.map((campaign) => ({
+      ...serializeCampaign(campaign),
+      metaSummary: campaignMetaMap.get(campaign.id) ?? {
+        totalSent: 0,
+        totalDelivered: 0,
+        totalRead: 0,
+        totalFailed: 0,
+      },
+    })),
+  };
+}
+
+async function buildCampaignDetailPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string }
+) {
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return null;
+  const outboundMessages = await prisma.outboundMessage.findMany({
+    where: {
+      clientId: params.clientId,
+      type: "TEMPLATE",
+      createdAt: { gte: campaign.createdAt },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      waId: true,
+      templateName: true,
+      status: true,
+      errorBody: true,
+      rawPayload: true,
+    },
+  });
+  const messagesMetaStatus = outboundMessages
+    .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
+    .map(buildCampaignMetaStatusItem);
+  return {
+    ok: true,
+    campaign: {
+      ...serializeCampaign(campaign),
+      metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
+      messagesMetaStatus,
+    },
+  };
+}
+
+async function createScopedCampaign(params: {
+  clientId: string;
+  clientKey: string;
+  name: string;
+  templateName: string;
+  waIds: string[];
+  components: Array<{
+    type: "body";
+    parameters: Array<{ type: "text"; text: string }>;
+  }> | undefined;
+}) {
+  const campaign = await createCampaign({
+    clientId: params.clientId,
+    name: params.name,
+    templateName: params.templateName,
+    totalRecipients: params.waIds.length,
+  });
+  const campaignRunId = startCampaignRun({
+    campaignId: campaign.id,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    name: params.name,
+    templateName: params.templateName,
+    waIds: params.waIds,
+    components: params.components,
+  });
+  return { campaign, campaignRunId };
+}
+
+async function cancelScopedCampaign(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string }
+) {
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) return null;
+  if (campaign.status !== "sending") return "not_cancelable" as const;
+  return cancelCampaign({ campaignId: params.campaignId, clientId: params.clientId });
 }
 
 function getAdminToken(req: IncomingMessage) {
