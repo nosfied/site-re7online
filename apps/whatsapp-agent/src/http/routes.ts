@@ -12,7 +12,7 @@ import { getTenants, saveTenants } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
-import { persistOutboundMessage } from "../db/persist.js";
+import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import {
   cancelCampaign,
@@ -2609,37 +2609,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
-        const campaign = await getCampaignById(campaignId, client.id);
-        if (!campaign) {
+        const result = await buildCampaignDetailPayload(prisma, {
+          clientId: client.id,
+          campaignId,
+        });
+        if (!result) {
           json(res, 404, httpError("campaign_not_found", "Campaign not found"));
           return;
         }
-        const outboundMessages = await prisma.outboundMessage.findMany({
-          where: {
-            clientId: client.id,
-            type: "TEMPLATE",
-            createdAt: { gte: campaign.createdAt },
-          },
-          orderBy: { createdAt: "asc" },
-          select: {
-            waId: true,
-            templateName: true,
-            status: true,
-            errorBody: true,
-            rawPayload: true,
-          },
-        });
-        const messagesMetaStatus = outboundMessages
-          .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
-          .map(buildCampaignMetaStatusItem);
-        json(res, 200, {
-          ok: true,
-          campaign: {
-            ...serializeCampaign(campaign),
-            metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
-            messagesMetaStatus,
-          },
-        });
+        json(res, 200, result);
       } catch (error) {
         logger.error({
           event: "admin.campaign.get.error",
@@ -2762,14 +2740,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
-        const campaign = await createCampaign({
-          clientId: client.id,
-          name,
-          templateName,
-          totalRecipients: waIds.length,
-        });
-        const campaignRunId = startCampaignRun({
-          campaignId: campaign.id,
+        const created = await createScopedCampaign({
           clientId: client.id,
           clientKey,
           name,
@@ -2780,7 +2751,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
         if (pathname === "/admin/campaigns") {
           json(res, 200, {
-            campaignId: campaign.id,
+            campaignId: created.campaign.id,
             status: "sending",
             totalRecipients: waIds.length,
           });
@@ -2788,9 +2759,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 200, {
             ok: true,
             campaign: {
-              ...serializeCampaign(campaign),
-              campaignId: campaign.id,
-              campaignRunId,
+              ...serializeCampaign(created.campaign),
+              campaignId: created.campaign.id,
+              campaignRunId: created.campaignRunId,
             },
           });
         }
@@ -3707,6 +3678,13 @@ type CampaignMetaSummary = {
   totalFailed: number;
 };
 
+type CampaignDraftSeed = {
+  name: string;
+  templateName: string;
+  recipients: string[];
+  templateParams: string[];
+};
+
 function extractMetaStatus(rawPayload: unknown) {
   const typed =
     rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
@@ -3738,6 +3716,48 @@ function extractCampaignIdFromRawPayload(rawPayload: unknown) {
       ? (rawPayload as Record<string, unknown>)
       : null;
   return typeof typed?.campaignId === "string" ? typed.campaignId : null;
+}
+
+function extractTemplateParamsFromComponents(components: unknown): string[] {
+  if (!Array.isArray(components)) return [];
+  const firstBody = components.find((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    return (item as Record<string, unknown>).type === "body";
+  });
+  if (!firstBody || typeof firstBody !== "object" || Array.isArray(firstBody)) return [];
+  const parameters = (firstBody as Record<string, unknown>).parameters;
+  if (!Array.isArray(parameters)) return [];
+  return parameters
+    .map((parameter) => {
+      if (!parameter || typeof parameter !== "object" || Array.isArray(parameter)) return null;
+      const typed = parameter as Record<string, unknown>;
+      return typeof typed.text === "string" ? typed.text : null;
+    })
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const typed = rawPayload as Record<string, unknown>;
+  const name = typeof typed.name === "string" ? typed.name : null;
+  const templateName = typeof typed.templateName === "string" ? typed.templateName : null;
+  const recipients = Array.isArray(typed.recipients)
+    ? typed.recipients
+        .map((value) => (typeof value === "string" ? normalizeWaId(value) : ""))
+        .filter((value): value is string => Boolean(value))
+    : [];
+  const templateParams = Array.isArray(typed.templateParams)
+    ? typed.templateParams
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value): value is string => Boolean(value))
+    : [];
+  if (!name || !templateName) return null;
+  return {
+    name,
+    templateName,
+    recipients,
+    templateParams,
+  };
 }
 
 function normalizeCampaignMessageStatus(
@@ -4214,12 +4234,20 @@ async function buildCampaignDetailPayload(
   const messagesMetaStatus = outboundMessages
     .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
     .map(buildCampaignMetaStatusItem);
+  const draftSeed = await buildCampaignDraftSeed(prisma, {
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    templateName: campaign.templateName,
+    outboundMessages,
+  });
   return {
     ok: true,
     campaign: {
       ...serializeCampaign(campaign),
       metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
       messagesMetaStatus,
+      draftSeed,
     },
   };
 }
@@ -4250,6 +4278,14 @@ async function createScopedCampaign(params: {
     waIds: params.waIds,
     components: params.components,
   });
+  await persistCampaignDraftSeed({
+    clientId: params.clientId,
+    campaignId: campaign.id,
+    name: params.name,
+    templateName: params.templateName,
+    waIds: params.waIds,
+    components: params.components,
+  });
   return { campaign, campaignRunId };
 }
 
@@ -4261,6 +4297,88 @@ async function cancelScopedCampaign(
   if (!campaign) return null;
   if (campaign.status !== "sending") return "not_cancelable" as const;
   return cancelCampaign({ campaignId: params.campaignId, clientId: params.clientId });
+}
+
+async function persistCampaignDraftSeed(params: {
+  clientId: string;
+  campaignId: string;
+  name: string;
+  templateName: string;
+  waIds: string[];
+  components?: Array<{
+    type: "body";
+    parameters: Array<{ type: "text"; text: string }>;
+  }>;
+}) {
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: params.campaignId,
+    requestId: `campaign-seed:${params.campaignId}`,
+    eventName: "campaign.seed.saved",
+    payloadJson: {
+      campaignId: params.campaignId,
+      name: params.name,
+      templateName: params.templateName,
+      recipients: params.waIds,
+      templateParams: extractTemplateParamsFromComponents(params.components ?? null),
+    },
+  });
+}
+
+async function buildCampaignDraftSeed(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    campaignId: string;
+    campaignName: string;
+    templateName: string;
+    outboundMessages: Array<{
+      waId: string;
+      templateName: string | null;
+      status: string;
+      errorBody: string | null;
+      rawPayload: Prisma.JsonValue | null;
+    }>;
+  }
+): Promise<CampaignDraftSeed> {
+  const persistedSeed = await prisma.event.findFirst({
+    where: {
+      clientId: params.clientId,
+      eventName: "campaign.seed.saved",
+      messageId: params.campaignId,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  const parsedSeed = extractCampaignDraftSeed(persistedSeed?.payloadJson);
+  if (parsedSeed) {
+    return parsedSeed;
+  }
+
+  const matchingOutbound = params.outboundMessages.filter(
+    (item) => extractCampaignIdFromRawPayload(item.rawPayload) === params.campaignId
+  );
+  const recipients = Array.from(new Set(matchingOutbound.map((item) => item.waId).filter(Boolean)));
+  const rawPayloadWithComponents = matchingOutbound.find((item) => {
+    if (!item.rawPayload || typeof item.rawPayload !== "object" || Array.isArray(item.rawPayload)) {
+      return false;
+    }
+    return "components" in (item.rawPayload as Record<string, unknown>);
+  })?.rawPayload;
+  const templateParams = extractTemplateParamsFromComponents(
+    rawPayloadWithComponents &&
+      typeof rawPayloadWithComponents === "object" &&
+      !Array.isArray(rawPayloadWithComponents)
+      ? (rawPayloadWithComponents as Record<string, unknown>).components ?? null
+      : null
+  );
+
+  return {
+    name: params.campaignName,
+    templateName: params.templateName,
+    recipients,
+    templateParams,
+  };
 }
 
 function getAdminToken(req: IncomingMessage) {

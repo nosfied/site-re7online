@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
+import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
   AppSession,
   cancelAppCampaign,
@@ -416,6 +417,20 @@ export default function AppCampaignsPage() {
     }
   };
 
+  const selectedCampaignError = useMemo(() => {
+    const rawError =
+      selectedCampaign?.messagesMetaStatus?.find((item) => Boolean(item.error))?.error ?? null;
+    return getFriendlyCampaignError(rawError);
+  }, [selectedCampaign]);
+
+  const handleReuseSelectedCampaign = () => {
+    if (!selectedCampaign) return;
+    setForm(buildReplayFormFromCampaign(selectedCampaign));
+    setFormError(null);
+    setToast("Formulario preenchido com os dados da campanha selecionada.");
+    window.setTimeout(() => setToast(null), 3000);
+  };
+
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
   }
@@ -636,6 +651,15 @@ export default function AppCampaignsPage() {
               ) : null}
               {selectedCampaign ? (
                 <>
+                  {selectedCampaignError ? (
+                    <div className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3 text-sm text-amber-100">
+                      <p className="font-semibold">{selectedCampaignError.summary}</p>
+                      {selectedCampaignError.detail ? (
+                        <p className="mt-1 text-xs text-amber-50/90">{selectedCampaignError.detail}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
@@ -709,6 +733,16 @@ export default function AppCampaignsPage() {
                     </p>
                   </div>
 
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleReuseSelectedCampaign}
+                      className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+                    >
+                      Reaproveitar campanha
+                    </button>
+                  </div>
+
                   <div className="rounded-md border border-white/10 bg-white/5">
                     <div className="border-b border-white/10 px-4 py-3">
                       <h3 className="text-sm font-semibold">Status real por mensagem</h3>
@@ -736,7 +770,14 @@ export default function AppCampaignsPage() {
                                 </td>
                                 <td className="px-3 py-2">{item.pricingCategory || "-"}</td>
                                 <td className="px-3 py-2">{formatBillingValue(item.pricingBillable)}</td>
-                                <td className="px-3 py-2 text-white/70">{item.error || "-"}</td>
+                                <td className="px-3 py-2 text-white/70">
+                                  {getFriendlyCampaignError(item.error)?.summary || "-"}
+                                  {getFriendlyCampaignError(item.error)?.detail ? (
+                                    <div className="mt-1 text-xs text-white/50">
+                                      {getFriendlyCampaignError(item.error)?.detail}
+                                    </div>
+                                  ) : null}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
