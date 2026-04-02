@@ -1,5 +1,32 @@
 import { getPrisma } from "../db.js";
 
+export async function ensureLeadForConversation(params: {
+  tenantId: string;
+  waId: string;
+}) {
+  const prisma = getPrisma();
+
+  const existing = await prisma.lead.findFirst({
+    where: {
+      tenantId: params.tenantId,
+      waId: params.waId,
+    },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.lead.create({
+    data: {
+      tenantId: params.tenantId,
+      waId: params.waId,
+      phone: params.waId,
+      status: "NEW",
+    },
+  });
+}
+
 export async function upsertLeadFromCapture(params: {
   tenantId: string;
   waId: string;
