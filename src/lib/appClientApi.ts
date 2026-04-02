@@ -1,4 +1,11 @@
-import type { CampaignItem, InboxConversationItem, InboxMessageItem } from "@/lib/whatsappAdminApi";
+import type {
+  AdminUserItem,
+  CampaignItem,
+  InboxConversationItem,
+  InboxMessageItem,
+  LeadNoteItem,
+  LeadStatus,
+} from "@/lib/whatsappAdminApi";
 
 export type AppSessionUser = {
   id: string;
@@ -232,6 +239,95 @@ export async function sendAppConversationMessage(
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send`, {
     method: "POST",
     body: JSON.stringify({ text }),
+  });
+}
+
+export async function claimAppConversation(
+  session: AppSession,
+  waId: string,
+  userId?: string
+): Promise<{
+  ok: true;
+  waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+}> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/claim`, {
+    method: "POST",
+    body: JSON.stringify(userId ? { userId } : {}),
+  });
+}
+
+export async function releaseAppConversation(
+  session: AppSession,
+  waId: string
+): Promise<{
+  ok: true;
+  waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+}> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/release`, {
+    method: "POST",
+  });
+}
+
+export async function fetchAppUsers(
+  session: AppSession
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminUserItem[];
+}> {
+  return requestAppJson(session, "/app/users");
+}
+
+export async function updateAppLeadStatus(
+  session: AppSession,
+  leadId: string,
+  status: LeadStatus
+): Promise<{
+  ok: true;
+  lead: {
+    id: string;
+    status: LeadStatus;
+    updatedAt: string;
+  };
+}> {
+  return requestAppJson(session, `/app/lead/${encodeURIComponent(leadId)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function fetchAppLeadNotes(
+  session: AppSession,
+  leadId: string
+): Promise<{
+  ok: true;
+  count: number;
+  items: LeadNoteItem[];
+}> {
+  return requestAppJson(session, `/app/lead/${encodeURIComponent(leadId)}/notes`);
+}
+
+export async function createAppLeadNote(
+  session: AppSession,
+  leadId: string,
+  body: string
+): Promise<{
+  ok: true;
+  note: LeadNoteItem;
+}> {
+  return requestAppJson(session, `/app/lead/${encodeURIComponent(leadId)}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
   });
 }
 

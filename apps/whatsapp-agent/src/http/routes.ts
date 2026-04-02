@@ -145,7 +145,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         clientKey: client.clientKey,
         limit,
-        includeAssignedUserName: false,
+        includeAssignedUserName: true,
       });
       json(res, 200, result);
     } catch (error) {
@@ -195,7 +195,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         order,
         limit,
         includeRaw,
-        includeAssignedUserName: false,
+        includeAssignedUserName: true,
       });
       json(res, 200, result);
     } catch (error) {
@@ -260,7 +260,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         mode: conversation?.mode ?? "BOT",
         assignedUserId: conversation?.assignedUserId ?? null,
         assignedTo: conversation?.assignedTo ?? null,
-        assignedUserName: null,
+        assignedUserName:
+          conversation?.assignedUserId
+            ? await findAssignedUserName(prisma, client.id, conversation.assignedUserId)
+            : null,
         assignedAt: conversation?.assignedAt ?? null,
         message: {
           messageId: result.messageId,
@@ -272,6 +275,329 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.conversation.send.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/users") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const users = await prisma.user.findMany({
+        where: { clientId: client.id },
+        orderBy: [{ createdAt: "desc" }],
+        select: { id: true, name: true, email: true, role: true, createdAt: true },
+      });
+      json(res, 200, { ok: true, count: users.length, items: users });
+    } catch (error) {
+      logger.error({
+        event: "app.users.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/claim")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+      const assignedUser = requestedUserId
+        ? await prisma.user.findFirst({
+            where: { id: requestedUserId, clientId: client.id },
+            select: { id: true, name: true },
+          })
+        : null;
+      if (requestedUserId && !assignedUser) {
+        json(res, 404, { error: "user_not_found" });
+        return;
+      }
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        assignedUserId: assignedUser?.id ?? clientAuth.userId,
+        assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
+        assignedAt: new Date().toISOString(),
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      json(res, 200, {
+        ok: true,
+        waId,
+        mode: nextState.mode,
+        assignedUserId: nextState.assignedUserId,
+        assignedTo: nextState.assignedTo,
+        assignedUserName:
+          assignedUser?.name ??
+          (nextState.assignedUserId
+            ? await findAssignedUserName(prisma, client.id, nextState.assignedUserId)
+            : null),
+        assignedAt: nextState.assignedAt,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.claim.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/release")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const nextState = {
+        ...conversation,
+        mode: "BOT" as const,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      json(res, 200, {
+        ok: true,
+        waId,
+        mode: nextState.mode,
+        assignedUserId: nextState.assignedUserId,
+        assignedTo: nextState.assignedTo,
+        assignedUserName: null,
+        assignedAt: nextState.assignedAt,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.release.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "PATCH" &&
+    pathname.startsWith("/app/lead/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/status")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const status = String(body.status ?? "").trim().toUpperCase();
+      const allowed = new Set(["NEW", "QUALIFIED", "WAITING_ATTENDANT", "IN_ATTENDANCE", "CLOSED"]);
+      if (!allowed.has(status)) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const existing = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId: client.id },
+        select: { id: true },
+      });
+      if (!existing) {
+        json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      const lead = await prisma.lead.update({
+        where: { id: leadId },
+        data: { status },
+        select: { id: true, status: true, updatedAt: true },
+      });
+      json(res, 200, { ok: true, lead });
+    } catch (error) {
+      logger.error({
+        event: "app.lead.status.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/lead/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/notes")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId: client.id },
+        select: { id: true },
+      });
+      if (!lead) {
+        json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const noteBody = String(body.body ?? "").trim();
+      if (!noteBody) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const note = await prisma.leadNote.create({
+        data: { leadId: lead.id, tenantId: client.id, body: noteBody },
+        select: { id: true, leadId: true, tenantId: true, body: true, createdAt: true },
+      });
+      json(res, 200, { ok: true, note });
+    } catch (error) {
+      logger.error({
+        event: "app.lead.notes.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/lead/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/notes")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId: client.id },
+        select: { id: true },
+      });
+      if (!lead) {
+        json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      const notes = await prisma.leadNote.findMany({
+        where: { leadId: lead.id, tenantId: client.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, leadId: true, tenantId: true, body: true, createdAt: true },
+      });
+      json(res, 200, { ok: true, count: notes.length, items: notes });
+    } catch (error) {
+      logger.error({
+        event: "app.lead.notes.list.error",
         message: (error as Error).message,
         requestId,
       });
@@ -3510,6 +3836,18 @@ async function getScopedClientById(
     where: { id: clientId },
     select: { id: true, clientKey: true, status: true },
   });
+}
+
+async function findAssignedUserName(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string,
+  assignedUserId: string
+) {
+  const user = await prisma.user.findFirst({
+    where: { id: assignedUserId, clientId },
+    select: { name: true },
+  });
+  return user?.name ?? null;
 }
 
 async function buildConversationListPayload(
