@@ -5,14 +5,35 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/app/AppShell";
 import {
   AppSession,
+  claimAppConversation,
   clearAppSession,
+  createAppLeadNote,
   fetchAppConversation,
   fetchAppConversations,
+  fetchAppLeadNotes,
+  fetchAppUsers,
   loadAppSession,
+  releaseAppConversation,
   saveAppSession,
   sendAppConversationMessage,
+  updateAppLeadStatus,
 } from "@/lib/appClientApi";
-import { formatDateTime, InboxConversationItem, InboxMessageItem } from "@/lib/whatsappAdminApi";
+import {
+  AdminUserItem,
+  formatDateTime,
+  InboxConversationItem,
+  InboxMessageItem,
+  LeadNoteItem,
+  LeadStatus,
+} from "@/lib/whatsappAdminApi";
+
+const LEAD_STATUS_OPTIONS: LeadStatus[] = [
+  "NEW",
+  "QUALIFIED",
+  "WAITING_ATTENDANT",
+  "IN_ATTENDANCE",
+  "CLOSED",
+];
 
 function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || item.waId;
@@ -24,11 +45,21 @@ export default function AppInboxPage() {
   const [conversations, setConversations] = useState<InboxConversationItem[]>([]);
   const [selectedWaId, setSelectedWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
+  const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
+  const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
+  const [noteDraft, setNoteDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingLeadNotes, setLoadingLeadNotes] = useState(false);
+  const [savingLeadStatus, setSavingLeadStatus] = useState(false);
+  const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [updatingMode, setUpdatingMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [leadError, setLeadError] = useState<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -81,7 +112,11 @@ export default function AppInboxPage() {
     setLoadingConversations(true);
     setError(null);
 
-    refreshConversationList(session)
+    Promise.all([refreshConversationList(session), fetchAppUsers(session)])
+      .then(([, usersResponse]) => {
+        if (cancelled) return;
+        setUsers(usersResponse.items);
+      })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (err.status === 401) {
@@ -169,6 +204,101 @@ export default function AppInboxPage() {
     [conversations, selectedWaId]
   );
 
+  useEffect(() => {
+    setSelectedAssigneeId(selectedConversation?.assignedUserId ?? "");
+  }, [selectedConversation?.assignedUserId]);
+
+  const selectedLead = useMemo(() => {
+    if (!selectedConversation?.leadId) return null;
+    return {
+      id: selectedConversation.leadId,
+      name: selectedConversation.leadName,
+      phone: selectedConversation.leadPhone,
+      city: selectedConversation.leadCity,
+      service: selectedConversation.leadService,
+      status: selectedConversation.leadStatus as LeadStatus | null,
+    };
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    setStatusDraft((selectedLead?.status as LeadStatus | null) ?? "");
+  }, [selectedLead?.id, selectedLead?.status]);
+
+  useEffect(() => {
+    if (!session || !selectedLead?.id) {
+      setLeadNotes([]);
+      setLeadError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingLeadNotes(true);
+    setLeadError(null);
+    fetchAppLeadNotes(session, selectedLead.id)
+      .then((response) => {
+        if (cancelled) return;
+        setLeadNotes(response.items);
+      })
+      .catch((err: { status?: number; message?: string }) => {
+        if (cancelled) return;
+        if (err.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setLeadError(err.message || "Falha ao carregar notas do lead.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingLeadNotes(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [handleUnauthorized, selectedLead?.id, session]);
+
+  const handleSaveLeadStatus = async () => {
+    if (!session || !selectedLead?.id || !statusDraft) return;
+    setSavingLeadStatus(true);
+    setLeadError(null);
+    try {
+      const response = await updateAppLeadStatus(session, selectedLead.id, statusDraft);
+      setConversations((prev) =>
+        prev.map((item) =>
+          item.leadId === response.lead.id ? { ...item, leadStatus: response.lead.status } : item
+        )
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setLeadError(typed.message || "Falha ao atualizar status do lead.");
+    } finally {
+      setSavingLeadStatus(false);
+    }
+  };
+
+  const handleAddLeadNote = async () => {
+    if (!session || !selectedLead?.id) return;
+    const body = noteDraft.trim();
+    if (!body) return;
+    setSavingLeadNote(true);
+    setLeadError(null);
+    try {
+      const response = await createAppLeadNote(session, selectedLead.id, body);
+      setLeadNotes((prev) => [response.note, ...prev]);
+      setNoteDraft("");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setLeadError(typed.message || "Falha ao registrar nota.");
+    } finally {
+      setSavingLeadNote(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!session || !selectedWaId) return;
     const text = messageDraft.trim();
@@ -213,6 +343,46 @@ export default function AppInboxPage() {
     }
   };
 
+  const handleClaimConversation = async () => {
+    if (!session || !selectedWaId) return;
+    setUpdatingMode(true);
+    setError(null);
+    try {
+      await claimAppConversation(session, selectedWaId, selectedAssigneeId || undefined);
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, selectedWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao assumir conversa.");
+    } finally {
+      setUpdatingMode(false);
+    }
+  };
+
+  const handleReleaseConversation = async () => {
+    if (!session || !selectedWaId) return;
+    setUpdatingMode(true);
+    setError(null);
+    try {
+      await releaseAppConversation(session, selectedWaId);
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, selectedWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao liberar conversa.");
+    } finally {
+      setUpdatingMode(false);
+    }
+  };
+
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
   }
@@ -225,7 +395,7 @@ export default function AppInboxPage() {
         </p>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-[300px_1fr]">
+      <section className="grid gap-4 md:grid-cols-[300px_1fr_340px]">
         <aside className="rounded-xl border border-white/10 bg-white/5">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Conversas</h2>
@@ -276,7 +446,14 @@ export default function AppInboxPage() {
             {selectedConversation ? (
               <p className="mt-1 text-xs text-white/70">
                 modo: {selectedConversation.mode}
-                {selectedConversation.assignedTo ? ` • atendente: ${selectedConversation.assignedTo}` : ""}
+                {selectedConversation.assignedUserName
+                  ? ` • atendente: ${selectedConversation.assignedUserName}`
+                  : selectedConversation.assignedTo
+                    ? ` • atendente: ${selectedConversation.assignedTo}`
+                    : ""}
+                {selectedConversation.assignedAt
+                  ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}`
+                  : ""}
               </p>
             ) : null}
           </div>
@@ -315,6 +492,40 @@ export default function AppInboxPage() {
             </div>
           </div>
           <div className="border-t border-white/10 p-4">
+            <div className="mb-3 flex justify-end gap-2">
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                value={selectedAssigneeId}
+                onChange={(event) => setSelectedAssigneeId(event.target.value)}
+                disabled={updatingMode || users.length === 0}
+              >
+                <option value="">Sem usuario</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+              {selectedConversation?.mode === "HUMAN" ? (
+                <button
+                  type="button"
+                  disabled={!selectedWaId || updatingMode}
+                  onClick={handleReleaseConversation}
+                  className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {updatingMode ? "Atualizando..." : "Liberar conversa"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!selectedWaId || updatingMode}
+                  onClick={handleClaimConversation}
+                  className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {updatingMode ? "Atualizando..." : "Assumir conversa"}
+                </button>
+              )}
+            </div>
             <label className="grid gap-2 text-sm">
               <span className="text-white/70">Responder conversa</span>
               <textarea
@@ -337,6 +548,106 @@ export default function AppInboxPage() {
             </div>
           </div>
         </div>
+
+        <aside className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold">Lead</h2>
+          </div>
+          <div className="space-y-4 p-4">
+            {!selectedLead ? (
+              <p className="text-sm text-white/70">Esta conversa ainda nao possui lead persistido.</p>
+            ) : (
+              <>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="text-white/70">Nome:</span> {selectedLead.name || "-"}
+                  </p>
+                  <p>
+                    <span className="text-white/70">Phone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
+                  </p>
+                  <p>
+                    <span className="text-white/70">Cidade:</span> {selectedLead.city || "-"}
+                  </p>
+                  <p>
+                    <span className="text-white/70">Servico:</span> {selectedLead.service || "-"}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-white/70">Status</span>
+                    <select
+                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2"
+                      value={statusDraft}
+                      onChange={(event) => setStatusDraft(event.target.value as LeadStatus)}
+                    >
+                      <option value="" disabled>
+                        Selecione
+                      </option>
+                      {LEAD_STATUS_OPTIONS.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!statusDraft || savingLeadStatus}
+                    onClick={handleSaveLeadStatus}
+                    className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingLeadStatus ? "Salvando..." : "Salvar status"}
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-white/70">Nota interna</span>
+                    <textarea
+                      className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      value={noteDraft}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                      placeholder="Registrar observacao de atendimento..."
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!noteDraft.trim() || savingLeadNote}
+                    onClick={handleAddLeadNote}
+                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingLeadNote ? "Salvando..." : "Salvar nota"}
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold">Notas</p>
+                  {loadingLeadNotes ? (
+                    <p className="text-xs text-white/70">Carregando notas...</p>
+                  ) : null}
+                  {!loadingLeadNotes && leadNotes.length === 0 ? (
+                    <p className="text-xs text-white/70">Sem notas para este lead.</p>
+                  ) : null}
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {leadNotes.map((note) => (
+                      <article key={note.id} className="rounded-md border border-white/15 bg-white/5 p-2">
+                        <p className="text-xs text-white">{note.body}</p>
+                        <p className="mt-1 text-[11px] text-white/60">{formatDateTime(note.createdAt)}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {leadError ? (
+              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-2 text-xs text-red-100">
+                {leadError}
+              </p>
+            ) : null}
+          </div>
+        </aside>
       </section>
     </AppShell>
   );
