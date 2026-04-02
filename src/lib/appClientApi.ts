@@ -1,0 +1,279 @@
+import type { CampaignItem, InboxConversationItem, InboxMessageItem } from "@/lib/whatsappAdminApi";
+
+export type AppSessionUser = {
+  id: string;
+  name: string;
+  email: string;
+  clientId: string;
+};
+
+export type AppSession = {
+  baseUrl: string;
+  token: string;
+  user: AppSessionUser;
+};
+
+export type AppApiError = Error & { status?: number };
+
+const SESSION_KEY = "wa_app_session_session_v1";
+const LOCAL_KEY = "wa_app_session_local_v1";
+
+function getDefaultBaseUrl() {
+  return process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api";
+}
+
+function normalizeBaseUrl(input: string) {
+  const value = input.trim().replace(/\/+$/, "");
+  if (!value) return "";
+  if (value.startsWith("/")) return value;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function parseStoredSession(raw: string | null): AppSession | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AppSession>;
+    if (!parsed?.token || !parsed?.user?.id || !parsed.user.clientId || !parsed.user.email) {
+      return null;
+    }
+    return {
+      baseUrl: normalizeBaseUrl(String(parsed.baseUrl || getDefaultBaseUrl())),
+      token: String(parsed.token),
+      user: {
+        id: String(parsed.user.id),
+        name: String(parsed.user.name || ""),
+        email: String(parsed.user.email),
+        clientId: String(parsed.user.clientId),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function loadAppSession(): AppSession | null {
+  if (typeof window === "undefined") return null;
+  return (
+    parseStoredSession(sessionStorage.getItem(SESSION_KEY)) ||
+    parseStoredSession(localStorage.getItem(LOCAL_KEY))
+  );
+}
+
+export function saveAppSession(session: AppSession) {
+  if (typeof window === "undefined") return;
+  const payload = JSON.stringify({
+    ...session,
+    baseUrl: normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl(),
+  });
+  sessionStorage.setItem(SESSION_KEY, payload);
+  localStorage.setItem(LOCAL_KEY, payload);
+}
+
+export function clearAppSession() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(LOCAL_KEY);
+}
+
+async function requestAppJson<T>(session: AppSession, path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = session.token.trim();
+  if (!token) {
+    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    error.status = 401;
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AppApiError;
+    error.status = 0;
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message || body.error || message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AppApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+
+  return (await res.json()) as T;
+}
+
+export async function loginAppUser(email: string, password: string): Promise<{ ok: true; token: string; user: AppSessionUser; }> {
+  const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AppApiError;
+    error.status = 0;
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Login failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message || body.error || message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AppApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Email ou senha invalidos.";
+    if (res.status === 409) error.message = "Email ambiguo entre clientes.";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+
+  return (await res.json()) as { ok: true; token: string; user: AppSessionUser };
+}
+
+export async function fetchAppConversations(
+  session: AppSession,
+  options?: { limit?: number }
+): Promise<{ ok: true; count: number; items: InboxConversationItem[] }> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/conversations${suffix}`);
+}
+
+export async function fetchAppConversation(
+  session: AppSession,
+  waId: string,
+  options?: { limit?: number; order?: "asc" | "desc" }
+): Promise<{
+  ok: true;
+  waId: string;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+  count: number;
+  items: InboxMessageItem[];
+}> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.order) {
+    params.set("order", options.order);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}${suffix}`);
+}
+
+export async function sendAppConversationMessage(
+  session: AppSession,
+  waId: string,
+  text: string
+): Promise<{
+  ok: true;
+  waId: string;
+  message: {
+    messageId: string;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+  };
+}> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function listAppCampaigns(
+  session: AppSession,
+  options?: { limit?: number }
+): Promise<{ ok: true; count: number; items: CampaignItem[] }> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/campaigns${suffix}`);
+}
+
+export async function getAppCampaign(
+  session: AppSession,
+  campaignId: string
+): Promise<{ ok: true; campaign: CampaignItem }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}`);
+}
+
+export async function createAppCampaign(
+  session: AppSession,
+  payload: {
+    name: string;
+    templateName: string;
+    recipients: string[];
+    templateParams?: string[];
+  }
+): Promise<{ ok: true; campaign: CampaignItem & { campaignId: string; campaignRunId: string } }> {
+  return requestAppJson(session, "/app/campaigns", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function cancelAppCampaign(
+  session: AppSession,
+  campaignId: string
+): Promise<{ ok: true; campaign: CampaignItem }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/cancel`, {
+    method: "POST",
+  });
+}
