@@ -30,6 +30,14 @@ export function getFriendlyCampaignError(error: string | null) {
     };
   }
 
+  if (code === 131049) {
+    return {
+      summary: "A Meta bloqueou esta entrega por politica de qualidade e engajamento.",
+      detail: details || message,
+      raw: error,
+    };
+  }
+
   if (details || message) {
     return {
       summary: message || details || error,

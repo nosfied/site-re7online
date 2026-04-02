@@ -50,7 +50,7 @@ import {
   ConversationState,
 } from "../conversation/conversation.types.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
-import { upsertLeadFromCapture } from "../crm/lead.service.js";
+import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import {
   persistConversationWindow,
   persistEvent,
@@ -1836,6 +1836,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       }
       continue;
     }
+
+    if (tenantClientId) {
+      await ensureLeadForConversation({
+        tenantId: tenantClientId,
+        waId: normalizedFrom,
+      });
+    }
+
     const templateCommand = parseTemplateCommand(message.text);
     if (templateCommand) {
       const now = Date.now();

@@ -555,7 +555,9 @@ export default function AppInboxPage() {
           </div>
           <div className="space-y-4 p-4">
             {!selectedLead ? (
-              <p className="text-sm text-white/70">Esta conversa ainda nao possui lead persistido.</p>
+              <p className="text-sm text-white/70">
+                Ha conversa persistida, mas esta conversa ainda nao entrou no fluxo de captura de lead.
+              </p>
             ) : (
               <>
                 <div className="space-y-1 text-sm">
