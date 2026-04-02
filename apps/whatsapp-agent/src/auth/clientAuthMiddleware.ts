@@ -1,0 +1,49 @@
+import { IncomingMessage, ServerResponse } from "node:http";
+import { verifyClientAuthToken } from "./clientAuth.js";
+
+export type ClientAuthContext = {
+  userId: string;
+  clientId: string;
+  role: string;
+  email: string;
+};
+
+function getBearerToken(req: IncomingMessage) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return "";
+  const [scheme, token] = authHeader.split(" ");
+  if (!scheme || !token || scheme.toLowerCase() !== "bearer") {
+    return "";
+  }
+  return token.trim();
+}
+
+function json(res: ServerResponse, status: number, payload: unknown) {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(payload));
+}
+
+export function resolveClientAuth(req: IncomingMessage): ClientAuthContext | null {
+  const token = getBearerToken(req);
+  if (!token) return null;
+  const payload = verifyClientAuthToken(token);
+  if (!payload) return null;
+  return {
+    userId: payload.sub,
+    clientId: payload.clientId,
+    role: payload.role,
+    email: payload.email,
+  };
+}
+
+export function requireClientAuth(
+  req: IncomingMessage,
+  res: ServerResponse
+): ClientAuthContext | null {
+  const auth = resolveClientAuth(req);
+  if (!auth) {
+    json(res, 401, { error: "unauthorized" });
+    return null;
+  }
+  return auth;
+}
