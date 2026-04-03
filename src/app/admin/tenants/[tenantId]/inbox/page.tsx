@@ -477,7 +477,8 @@ export default function TenantInboxPage() {
                       isActive ? "bg-re7-sky/20" : "hover:bg-white/10"
                     }`}
                   >
-                    <p className="text-sm font-medium">{item.leadName || item.waId}</p>
+                    <p className="text-sm font-medium">{item.leadName || "Sem nome"}</p>
+                    <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
                     <p className="mt-1 text-xs text-white/70">
                       {item.mode} • status: {item.leadStatus || "-"} • {formatDateTime(item.updatedAt)}
                     </p>

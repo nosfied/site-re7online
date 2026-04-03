@@ -36,7 +36,7 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 function getConversationLabel(item: InboxConversationItem) {
-  return item.leadName || item.leadPhone || item.waId;
+  return item.leadName || item.leadPhone || "Sem nome";
 }
 
 export default function AppInboxPage() {
@@ -426,6 +426,7 @@ export default function AppInboxPage() {
                   }`}
                 >
                   <p className="text-sm font-medium">{getConversationLabel(item)}</p>
+                  <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
                   <p className="mt-1 text-xs text-white/70">
                     {item.mode} • {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
                   </p>
