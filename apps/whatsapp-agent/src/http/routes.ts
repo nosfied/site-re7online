@@ -2139,7 +2139,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "tenant_not_found" });
         return;
       }
-      json(res, 200, { ok: true, tenantId, tenant });
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true, status: true },
+      });
+      json(res, 200, { ok: true, tenantId, tenant, client });
       return;
     }
 
