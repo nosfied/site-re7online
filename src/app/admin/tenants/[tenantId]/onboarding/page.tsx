@@ -6,10 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import {
   AdminConnection,
+  createUser,
   fetchTenantById,
   loadAdminConnection,
   onboardingExchangeCode,
   saveAdminConnection,
+  TenantConfigResponse,
   testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 import {
@@ -22,6 +24,17 @@ import {
 } from "@/lib/metaEmbeddedSignup";
 
 type OnboardingStatus = "idle" | "processing" | "success" | "error";
+type UserFormState = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+const EMPTY_USER_FORM: UserFormState = {
+  name: "",
+  email: "",
+  password: "",
+};
 
 export default function TenantOnboardingPage() {
   const params = useParams<{ tenantId: string }>();
@@ -52,6 +65,7 @@ export default function TenantOnboardingPage() {
   const [status, setStatus] = useState<OnboardingStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [tenantSnapshot, setTenantSnapshot] = useState<TenantConfigResponse | null>(null);
   const [code, setCode] = useState("");
   const [wabaId, setWabaId] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
@@ -65,6 +79,10 @@ export default function TenantOnboardingPage() {
     businessPortfolioId: string | null;
     businessTokenStored: boolean;
   } | null>(null);
+  const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [userSuccess, setUserSuccess] = useState<string | null>(null);
 
   const appendEntry = useCallback((entry: EmbeddedSignupCaptureEntry) => {
     setEntries((prev) => [entry, ...prev].slice(0, 30));
@@ -118,6 +136,11 @@ export default function TenantOnboardingPage() {
     setErrorMessage(null);
 
     fetchTenantById(connection, tenantId)
+      .then((response) => {
+        if (cancelled) return;
+        setTenantSnapshot(response);
+        setPhoneNumberId((current) => current || response.tenant.metaPhoneNumberId || "");
+      })
       .catch((error: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (error.status === 404) {
@@ -227,6 +250,39 @@ export default function TenantOnboardingPage() {
       setErrorMessage((error as Error).message);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!tenantId) return;
+    if (!userForm.name.trim() || !userForm.email.trim() || !userForm.password.trim()) {
+      setUserError("Preencha nome, email e senha.");
+      return;
+    }
+    const emailUsed = userForm.email.trim().toLowerCase();
+    const passwordUsed = userForm.password;
+    setCreatingUser(true);
+    setUserError(null);
+    setUserSuccess(null);
+    try {
+      await createUser(connection, tenantId, {
+        name: userForm.name.trim(),
+        email: emailUsed,
+        password: passwordUsed,
+        role: "AGENT",
+      });
+      setUserForm(EMPTY_USER_FORM);
+      setUserSuccess(
+        `Usuario criado com sucesso.\n\nLogin: ${emailUsed}\nSenha: ${passwordUsed}\nAcesso: /app/login`
+      );
+    } catch (error) {
+      const typed = error as { message?: string };
+      const message = typed.message || "Erro ao criar usuario.";
+      setUserError(
+        /user_already_exists|unique/i.test(message) ? "Email ja existe." : message
+      );
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -341,7 +397,43 @@ export default function TenantOnboardingPage() {
           </p>
         ) : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">
+            Status do tenant
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Nome</p>
+              <p className="mt-2 text-sm font-semibold">
+                {tenantSnapshot?.tenant.name || "-"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Client ID</p>
+              <p className="mt-2 break-all font-mono text-sm">
+                {tenantSnapshot?.client?.id || "-"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">phoneNumberId</p>
+              <p className="mt-2 break-all font-mono text-sm">
+                {resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || "-"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
+              <p className="mt-2 text-sm font-semibold">
+                {tenantSnapshot?.client?.status || (tenantSnapshot?.tenant.metaPhoneNumberId ? "CONNECTED" : "PENDING")}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">
+            Conexao Meta
+          </h2>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <article className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -454,6 +546,60 @@ export default function TenantOnboardingPage() {
               </pre>
             </div>
           </article>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">
+            Criar usuario
+          </h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Nome</span>
+              <input
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.name}
+                onChange={(event) => setUserForm((prev) => ({ ...prev, name: event.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Email</span>
+              <input
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.email}
+                onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1 text-sm md:col-span-2">
+              <span className="text-white/70">Senha</span>
+              <input
+                type="password"
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.password}
+                onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
+              />
+            </label>
+          </div>
+          {userError ? (
+            <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+              {userError}
+            </p>
+          ) : null}
+          {userSuccess ? (
+            <p className="mt-3 rounded-md border border-emerald-400/30 bg-emerald-900/30 p-3 text-sm text-emerald-100">
+              {userSuccess}
+            </p>
+          ) : null}
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              disabled={creatingUser}
+              onClick={handleCreateUser}
+              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {creatingUser ? "Criando..." : "CRIAR ACESSO AO CLIENTE"}
+            </button>
+          </div>
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">

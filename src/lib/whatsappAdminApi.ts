@@ -156,6 +156,11 @@ export type TenantOnboardingExchangePayload = {
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
+  client?: {
+    id: string;
+    clientKey: string;
+    status: string;
+  } | null;
   tenant: {
     id: string;
     name: string;
@@ -471,7 +476,7 @@ export async function fetchUsers(
 export async function createUser(
   connection: AdminConnection,
   clientKey: string,
-  payload: { name: string; email: string; role?: string }
+  payload: { name: string; email: string; password?: string; role?: string }
 ): Promise<{
   ok: true;
   user: AdminUserItem;
