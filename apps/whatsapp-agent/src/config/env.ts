@@ -157,6 +157,9 @@ export function getEnv(): Env {
     (process.env.HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE ?? "true") === "true";
   const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
   const APP_AUTH_SECRET = process.env.APP_AUTH_SECRET ?? "";
+  if (process.env.NODE_ENV === "production" && !APP_AUTH_SECRET.trim()) {
+    throw new Error("APP_AUTH_SECRET is required in production");
+  }
   const ALLOW_ADMIN_DEBUG_IN_PROD =
     (process.env.ALLOW_ADMIN_DEBUG_IN_PROD ?? "false") === "true";
   const CONV_STATE_DUAL_WRITE =
