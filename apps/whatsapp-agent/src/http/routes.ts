@@ -27,7 +27,7 @@ import {
   MetaOnboardingExchangeError,
 } from "../meta/onboarding.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
-import { issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
+import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import { requireClientAuth } from "../auth/clientAuthMiddleware.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -969,9 +969,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!body) return;
         const name = String(body.name ?? "").trim();
         const email = String(body.email ?? "").trim().toLowerCase();
+        const password = typeof body.password === "string" ? body.password : "";
         const role = String(body.role ?? "AGENT").trim().toUpperCase();
         if (!name || !email) {
           json(res, 400, { error: "bad_request" });
+          return;
+        }
+        if (password && password.length < 6) {
+          json(res, 400, { error: "weak_password" });
           return;
         }
         const user = await prisma.user.create({
@@ -979,6 +984,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             clientId: client.id,
             name,
             email,
+            ...(password ? { passwordHash: hashPassword(password) } : {}),
             role,
           },
           select: { id: true, name: true, email: true, role: true, createdAt: true },
@@ -994,6 +1000,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         logger.error({
           event: "admin.users.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/users/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/reset-password")
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!userId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const password = typeof body.password === "string" ? body.password : "";
+        if (!password || password.length < 6) {
+          json(res, 400, { error: "weak_password" });
+          return;
+        }
+        const existingUser = await prisma.user.findFirst({
+          where: { id: userId, clientId: client.id },
+          select: { id: true, email: true, name: true },
+        });
+        if (!existingUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { passwordHash: hashPassword(password) },
+        });
+        json(res, 200, {
+          ok: true,
+          user: {
+            id: existingUser.id,
+            email: existingUser.email,
+            name: existingUser.name,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.users.reset_password.error",
           message: (error as Error).message,
           requestId,
         });
