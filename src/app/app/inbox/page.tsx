@@ -36,7 +36,7 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 function getConversationLabel(item: InboxConversationItem) {
-  return item.leadName || item.leadPhone || item.waId;
+  return item.leadName || item.leadPhone || "Sem nome";
 }
 
 export default function AppInboxPage() {
@@ -395,8 +395,8 @@ export default function AppInboxPage() {
         </p>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-[300px_1fr_340px]">
-        <aside className="rounded-xl border border-white/10 bg-white/5">
+      <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Conversas</h2>
             <button
@@ -407,7 +407,7 @@ export default function AppInboxPage() {
               Atualizar
             </button>
           </div>
-          <div className="max-h-[72vh] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
               <p className="px-4 py-3 text-sm text-white/70">Carregando conversas...</p>
             ) : null}
@@ -426,6 +426,7 @@ export default function AppInboxPage() {
                   }`}
                 >
                   <p className="text-sm font-medium">{getConversationLabel(item)}</p>
+                  <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
                   <p className="mt-1 text-xs text-white/70">
                     {item.mode} • {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
                   </p>
@@ -438,7 +439,7 @@ export default function AppInboxPage() {
           </div>
         </aside>
 
-        <div className="rounded-xl border border-white/10 bg-white/5">
+        <div className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">
               Timeline {selectedConversation ? `• ${selectedConversation.waId}` : ""}
@@ -457,7 +458,7 @@ export default function AppInboxPage() {
               </p>
             ) : null}
           </div>
-          <div className="max-h-[72vh] overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {!selectedWaId ? (
               <p className="text-sm text-white/70">Selecione uma conversa para ver a timeline.</p>
             ) : null}
@@ -491,7 +492,7 @@ export default function AppInboxPage() {
               ))}
             </div>
           </div>
-          <div className="border-t border-white/10 p-4">
+          <div className="border-t border-white/10 bg-re7-navy/30 p-4">
             <div className="mb-3 flex justify-end gap-2">
               <select
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
@@ -549,11 +550,11 @@ export default function AppInboxPage() {
           </div>
         </div>
 
-        <aside className="rounded-xl border border-white/10 bg-white/5">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Lead</h2>
           </div>
-          <div className="space-y-4 p-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             {!selectedLead ? (
               <p className="text-sm text-white/70">
                 Ha conversa persistida, mas esta conversa ainda nao entrou no fluxo de captura de lead.

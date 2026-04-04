@@ -545,12 +545,13 @@ export default function TenantCampaignsPage() {
           </section>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-[340px_1fr]">
-          <aside className="rounded-xl border border-white/10 bg-white/5">
+        <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-semibold">Criar campanha</h2>
             </div>
-            <form className="grid gap-3 p-4" onSubmit={handleSubmit}>
+            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+              <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Nome</span>
                 <input
@@ -598,18 +599,21 @@ export default function TenantCampaignsPage() {
                   {formError}
                 </p>
               ) : null}
+              </div>
+              <div className="border-t border-white/10 bg-re7-navy/30 p-4">
               <button
                 type="submit"
                 disabled={creating}
-                className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creating ? "Criando campanha..." : "Criar campanha"}
               </button>
+              </div>
             </form>
           </aside>
 
-          <div className="grid gap-4">
-            <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+          <div className="grid min-h-0 gap-4 xl:grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-sm font-semibold">Campanhas</h2>
@@ -649,6 +653,7 @@ export default function TenantCampaignsPage() {
                   </label>
                 </div>
               </div>
+              <div className="min-h-0 flex-1 overflow-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-white/10 text-left">
                   <tr>
@@ -723,6 +728,7 @@ export default function TenantCampaignsPage() {
                   })}
                 </tbody>
               </table>
+              </div>
               <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-sm">
                 <p className="text-white/70">
                   Pagina {currentPage} de {totalPages}
@@ -748,11 +754,11 @@ export default function TenantCampaignsPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/5">
+            <section className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-4 py-3">
                 <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
               </div>
-              <div className="grid gap-3 p-4 text-sm">
+              <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 text-sm">
                 {!selectedCampaignId ? (
                   <p className="text-white/70">Selecione uma campanha para ver o detalhe.</p>
                 ) : null}
@@ -887,7 +893,7 @@ export default function TenantCampaignsPage() {
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-white/10 bg-re7-navy px-4 py-3">
                       <button
                         type="button"
                         onClick={handleReuseSelectedCampaign}
@@ -954,7 +960,7 @@ export default function TenantCampaignsPage() {
                     </div>
 
                     {selectedCampaign.status === "sending" ? (
-                      <div className="flex items-center justify-end">
+                      <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-end border-t border-white/10 bg-re7-navy px-4 py-3">
                         <button
                           type="button"
                           disabled={cancelling}
