@@ -33,7 +33,7 @@ export function getFriendlyCampaignError(error: string | null) {
 
   if (code === 132000) {
     return {
-      summary: "Quantidade de parametros do template nao confere.",
+      summary: "Quantidade de parametros do template nao confere. Ref. 132000.",
       detail: details || message,
       raw: error,
     };
@@ -41,7 +41,7 @@ export function getFriendlyCampaignError(error: string | null) {
 
   if (code === 131049) {
     return {
-      summary: "A Meta bloqueou esta entrega para preservar a qualidade do ecossistema.",
+      summary: "A Meta bloqueou esta entrega para preservar a qualidade do ecossistema. Ref. 131049.",
       detail: details || message,
       raw: error,
     };
@@ -49,7 +49,7 @@ export function getFriendlyCampaignError(error: string | null) {
 
   if (details || message) {
     return {
-      summary: message || details || error,
+      summary: code ? `${message || details || error} Ref. ${code}.` : message || details || error,
       detail: details && details !== message ? details : null,
       raw: error,
     };

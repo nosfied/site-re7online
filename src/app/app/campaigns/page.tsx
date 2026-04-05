@@ -417,12 +417,6 @@ export default function AppCampaignsPage() {
     }
   };
 
-  const selectedCampaignError = useMemo(() => {
-    const rawError =
-      selectedCampaign?.messagesMetaStatus?.find((item) => Boolean(item.error))?.error ?? null;
-    return getFriendlyCampaignError(rawError);
-  }, [selectedCampaign]);
-
   const handleReuseCampaign = (campaign: CampaignItem) => {
     setForm(buildReplayFormFromCampaign(campaign));
     setFormError(null);
@@ -672,15 +666,6 @@ export default function AppCampaignsPage() {
               ) : null}
               {selectedCampaign ? (
                 <>
-                  {selectedCampaignError ? (
-                    <div className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3 text-sm text-amber-100">
-                      <p className="font-semibold">{selectedCampaignError.summary}</p>
-                      {selectedCampaignError.detail ? (
-                        <p className="mt-1 text-xs text-amber-50/90">{selectedCampaignError.detail}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
