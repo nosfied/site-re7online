@@ -467,9 +467,8 @@ export default function TenantCampaignsPage() {
     return getFriendlyCampaignError(rawError);
   }, [selectedCampaign]);
 
-  const handleReuseSelectedCampaign = () => {
-    if (!selectedCampaign) return;
-    setForm(buildReplayFormFromCampaign(selectedCampaign));
+  const handleReuseCampaign = (campaign: CampaignItem) => {
+    setForm(buildReplayFormFromCampaign(campaign));
     setFormError(null);
     setToast("Formulario preenchido com os dados da campanha selecionada.");
     window.setTimeout(() => setToast(null), 3000);
@@ -657,6 +656,7 @@ export default function TenantCampaignsPage() {
               <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-white/10 text-left">
                   <tr>
+                    <th className="px-3 py-2">Replay</th>
                     <th className="px-3 py-2">Name</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Sent</th>
@@ -668,14 +668,14 @@ export default function TenantCampaignsPage() {
                 <tbody>
                   {loadingList ? (
                     <tr>
-                      <td className="px-3 py-4 text-white/70" colSpan={6}>
+                      <td className="px-3 py-4 text-white/70" colSpan={7}>
                         Carregando campanhas...
                       </td>
                     </tr>
                   ) : null}
                   {!loadingList && filteredCampaigns.length === 0 ? (
                     <tr>
-                      <td className="px-3 py-4 text-white/70" colSpan={6}>
+                      <td className="px-3 py-4 text-white/70" colSpan={7}>
                         {campaigns.length === 0
                           ? "Você ainda não criou nenhuma campanha."
                           : "Nenhuma campanha corresponde ao filtro."}
@@ -697,6 +697,21 @@ export default function TenantCampaignsPage() {
                         }`}
                         onClick={() => setSelectedCampaignId(campaign.id)}
                       >
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedCampaignId(campaign.id);
+                              handleReuseCampaign(campaign);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/20 text-sm text-white/80 hover:bg-white/10"
+                            title="Reaproveitar campanha"
+                            aria-label={`Reaproveitar campanha ${campaign.name || campaign.id}`}
+                          >
+                            ↺
+                          </button>
+                        </td>
                         <td className="px-3 py-2">{campaign.name || "(sem nome)"}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-col gap-1">
@@ -891,16 +906,6 @@ export default function TenantCampaignsPage() {
                           ({formatRelativeTime(selectedCampaign.createdAt)})
                         </span>
                       </p>
-                    </div>
-
-                    <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-white/10 bg-re7-navy px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={handleReuseSelectedCampaign}
-                        className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
-                      >
-                        Reaproveitar campanha
-                      </button>
                     </div>
 
                     <div className="rounded-md border border-white/10 bg-white/5">

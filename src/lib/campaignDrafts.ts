@@ -12,9 +12,18 @@ export function getFriendlyCampaignError(error: string | null) {
   };
 
   const parsed = parseJson(error);
-  const errorNode = parsed && typeof parsed.error === "object" && parsed.error && !Array.isArray(parsed.error)
-    ? (parsed.error as Record<string, unknown>)
-    : null;
+  const parsedArrayItem =
+    Array.isArray(parsed) && parsed.length > 0 && parsed[0] && typeof parsed[0] === "object"
+      ? (parsed[0] as Record<string, unknown>)
+      : null;
+  const parsedObject =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  const errorNode =
+    parsedObject && typeof parsedObject.error === "object" && parsedObject.error && !Array.isArray(parsedObject.error)
+      ? (parsedObject.error as Record<string, unknown>)
+      : parsedArrayItem;
   const code = typeof errorNode?.code === "number" ? errorNode.code : null;
   const message = typeof errorNode?.message === "string" ? errorNode.message : null;
   const errorData = errorNode && typeof errorNode.error_data === "object" && errorNode.error_data && !Array.isArray(errorNode.error_data)
@@ -32,7 +41,7 @@ export function getFriendlyCampaignError(error: string | null) {
 
   if (code === 131049) {
     return {
-      summary: "A Meta bloqueou esta entrega por politica de qualidade e engajamento.",
+      summary: "A Meta bloqueou esta entrega para preservar a qualidade do ecossistema.",
       detail: details || message,
       raw: error,
     };
