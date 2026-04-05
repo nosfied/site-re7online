@@ -5,6 +5,8 @@
 /* ===== Base global ===== */
 html {
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.45) rgba(255, 255, 255, 0.06);
 }
 
 @layer base {
@@ -21,4 +23,37 @@ html {
 /* ===== Helpers ===== */
 ::selection {
   background: rgba(252, 108, 22, 0.35); /* re7 orange */
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.45) rgba(255, 255, 255, 0.06);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(96, 165, 250, 0.6),
+    rgba(37, 99, 235, 0.55)
+  );
+  border: 2px solid rgba(10, 26, 47, 0.9);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(252, 108, 22, 0.7),
+    rgba(96, 165, 250, 0.7)
+  );
 }

@@ -14,12 +14,13 @@ Produto SaaS operacional validado com:
 - onboarding via Meta validado (Embedded Signup)
 - onboarding interno assistido implementado (Sprint 26)
 - observabilidade real da Meta integrada na UI de campanhas (Sprint 28)
+- área do cliente operacional com login próprio e auto-scope (Sprint 29)
 
 ---
 
 ## ESTADO ATUAL
 
-Produto operacional com observabilidade real da Meta.
+Produto operacional com observabilidade real da Meta e área do cliente funcional.
 
 O onboarding interno foi implementado, porém ainda não validado com novo tenant via UI.
 
@@ -62,6 +63,34 @@ Impacto:
 - elimina ambiguidade operacional
 - aumenta confiança do operador
 - permite operação profissional com cliente real
+
+---
+
+## SPRINT 29 — ÁREA DO CLIENTE (COMPLETED)
+
+- login por usuário implementado
+- auto-scope via token (`clientId`)
+- rotas `/app/*` criadas
+- inbox operacional com claim/release, status e notas
+- campanhas completas com criação, cancelamento e replay
+- criação de usuário via UI implementada
+- reset de senha via API implementado
+- onboarding interno consolidado
+- fluxo completo sem script validado
+- login e acesso do cliente funcional
+- isolamento total por tenant
+- isolamento por tenant validado
+- uso independente sem admin validado
+
+Impacto:
+
+- sistema passou a ser utilizável pelo cliente final
+- elimina dependência do `/admin`
+- transforma a plataforma em SaaS real
+- elimina dependência técnica no onboarding
+- permite criação de clientes em minutos
+- habilita operação com múltiplos tenants
+- sistema passa a ser operacional em escala inicial
 
 ---
 
@@ -134,6 +163,8 @@ ANTES de:
 - Sprint 24 -> refinamento de UX
 - Sprint 25 -> onboarding real validado (JUSTA)
 - Sprint 26 -> onboarding interno assistido
+- Sprint 28 -> observabilidade Meta
+- Sprint 29 -> área do cliente
 
 ---
 
