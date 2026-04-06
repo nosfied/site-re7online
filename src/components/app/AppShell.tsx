@@ -45,6 +45,9 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
             <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
               Campanhas
             </Link>
+            <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
+              Templates
+            </Link>
             <button
               type="button"
               onClick={handleLogout}
