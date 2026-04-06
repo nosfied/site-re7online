@@ -59,6 +59,8 @@ model Client {
   users         User[]
   runtimeStates ConversationRuntimeState[]
   campaigns     Campaign[]
+  templates     Template[]
+  templateRequests TemplateRequest[]
   metaConfig    TenantMetaConfig?
 }
 
@@ -266,6 +268,44 @@ model Campaign {
 
   @@index([clientId, createdAt])
   @@index([clientId, status, createdAt])
+}
+
+model Template {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  name            String
+  category        String
+  language        String
+  status          String
+  content         String
+  variables       Json?
+  metaTemplateId  String?
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, name])
+  @@index([clientId, status])
+  @@index([clientId, name])
+}
+
+model TemplateRequest {
+  id        String   @id @default(cuid())
+  clientId  String   @db.Uuid
+  name      String
+  content   String
+  variables Json?
+  category  String
+  status    String
+  notes     String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, status])
 }
 
 model Lead {
