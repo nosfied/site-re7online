@@ -22,6 +22,32 @@ export type AppSession = {
 
 export type AppApiError = Error & { status?: number };
 
+export type AppTemplateItem = {
+  id: string;
+  name: string;
+  category: string;
+  language: string;
+  status: string;
+  content: string;
+  variables: unknown;
+  metaTemplateId: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppTemplateRequestItem = {
+  id: string;
+  name: string;
+  content: string;
+  variables: unknown;
+  category: string;
+  status: string;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
 const SESSION_KEY = "wa_app_session_session_v1";
 const LOCAL_KEY = "wa_app_session_local_v1";
 
@@ -371,5 +397,32 @@ export async function cancelAppCampaign(
 ): Promise<{ ok: true; campaign: CampaignItem }> {
   return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/cancel`, {
     method: "POST",
+  });
+}
+
+export async function listAppTemplates(
+  session: AppSession
+): Promise<{ ok: true; count: number; items: AppTemplateItem[] }> {
+  return requestAppJson(session, "/app/templates");
+}
+
+export async function listAppTemplateRequests(
+  session: AppSession
+): Promise<{ ok: true; count: number; items: AppTemplateRequestItem[] }> {
+  return requestAppJson(session, "/app/templates/requests");
+}
+
+export async function createAppTemplateRequest(
+  session: AppSession,
+  payload: {
+    name: string;
+    content: string;
+    variables?: unknown;
+    category: string;
+  }
+): Promise<{ ok: true; request: AppTemplateRequestItem }> {
+  return requestAppJson(session, "/app/templates/request", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }

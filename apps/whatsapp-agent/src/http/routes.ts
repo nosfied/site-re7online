@@ -159,6 +159,170 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/app/templates/request") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const name = String(body.name ?? "").trim();
+      const content = String(body.content ?? "").trim();
+      const category = String(body.category ?? "").trim();
+      if (!name || !content || !category) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const created = await prisma.templateRequest.create({
+        data: {
+          clientId: client.id,
+          name,
+          content,
+          category,
+          status: "pending",
+          createdBy: clientAuth.userId,
+          ...(body.variables !== undefined
+            ? { variables: body.variables as Prisma.InputJsonValue }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          content: true,
+          variables: true,
+          category: true,
+          status: true,
+          notes: true,
+          createdBy: true,
+          createdAt: true,
+        },
+      });
+
+      json(res, 200, {
+        ok: true,
+        request: created,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.request.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/templates/requests") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const items = await prisma.templateRequest.findMany({
+        where: { clientId: client.id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          content: true,
+          variables: true,
+          category: true,
+          status: true,
+          notes: true,
+          createdBy: true,
+          createdAt: true,
+        },
+      });
+
+      json(res, 200, {
+        ok: true,
+        count: items.length,
+        items,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.request.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/templates") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const items = await prisma.template.findMany({
+        where: {
+          clientId: client.id,
+          status: "approved",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          language: true,
+          status: true,
+          content: true,
+          variables: true,
+          metaTemplateId: true,
+          rejectionReason: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      json(res, 200, {
+        ok: true,
+        count: items.length,
+        items,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (
     req.method === "GET" &&
     pathname.startsWith("/app/conversation/") &&
@@ -2995,6 +3159,257 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.templates.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/templates/requests") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const items = await prisma.templateRequest.findMany({
+          where: { clientId: client.id },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          count: items.length,
+          items,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.requests.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/approve")
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const templateRequest = await prisma.templateRequest.findFirst({
+          where: { id: templateRequestId, clientId: client.id },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+          },
+        });
+        if (!templateRequest) {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+          const template = await tx.template.create({
+            data: {
+              clientId: templateRequest.clientId,
+              name: templateRequest.name,
+              content: templateRequest.content,
+              category: templateRequest.category,
+              language: "pt_BR",
+              status: "approved",
+              ...(templateRequest.variables !== null && templateRequest.variables !== undefined
+                ? {
+                    variables: templateRequest.variables as Prisma.InputJsonValue,
+                  }
+                : {}),
+            },
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              content: true,
+              variables: true,
+              category: true,
+              language: true,
+              status: true,
+              metaTemplateId: true,
+              rejectionReason: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+          await tx.templateRequest.update({
+            where: { id: templateRequest.id },
+            data: { status: "approved" },
+          });
+          return template;
+        });
+
+        json(res, 200, {
+          ok: true,
+          template: result,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.requests.approve.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/reject")
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const notes =
+          typeof body.notes === "string" && body.notes.trim().length > 0
+            ? body.notes.trim()
+            : undefined;
+        const updated = await prisma.templateRequest.updateMany({
+          where: { id: templateRequestId, clientId: client.id },
+          data: {
+            status: "rejected",
+            ...(notes ? { notes } : {}),
+          },
+        });
+        if (updated.count === 0) {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        json(res, 200, { ok: true });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.requests.reject.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/templates") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const name = String(body.name ?? "").trim();
+        const content = String(body.content ?? "").trim();
+        const category = String(body.category ?? "").trim();
+        const language = String(body.language ?? "").trim();
+        if (!name || !content || !category || !language) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+
+        const created = await prisma.template.create({
+          data: {
+            clientId: client.id,
+            name,
+            content,
+            category,
+            language,
+            status: "approved",
+            ...(body.variables !== undefined
+              ? { variables: body.variables as Prisma.InputJsonValue }
+              : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            language: true,
+            status: true,
+            metaTemplateId: true,
+            rejectionReason: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        json(res, 200, {
+          ok: true,
+          template: created,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.create.error",
           message: (error as Error).message,
           requestId,
         });
