@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/app/AppShell";
 import {
   AppSession,
@@ -39,6 +39,80 @@ function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
 }
 
+type InboxReadState = {
+  lastReadAtByWaId: Record<string, string>;
+};
+
+const EMPTY_READ_STATE: InboxReadState = {
+  lastReadAtByWaId: {},
+};
+
+function getConversationActivityAt(item: InboxConversationItem) {
+  // Activity priority stays explicit: last visible message, then conversation update timestamp.
+  return item.lastMessage?.createdAt ?? item.updatedAt;
+}
+
+function getConversationActivityTimestamp(item: InboxConversationItem) {
+  const activityAt = getConversationActivityAt(item);
+  const timestamp = Date.parse(activityAt);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function sortConversationsByRecent(items: InboxConversationItem[]) {
+  return [...items].sort((a, b) => {
+    const aTs = getConversationActivityTimestamp(a);
+    const bTs = getConversationActivityTimestamp(b);
+    if (aTs === null && bTs === null) return 0;
+    if (aTs === null) return 1;
+    if (bTs === null) return -1;
+    return bTs - aTs;
+  });
+}
+
+function loadReadState(storageKey: string): InboxReadState {
+  if (typeof window === "undefined") return EMPTY_READ_STATE;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return EMPTY_READ_STATE;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const lastReadAtByWaId =
+      parsed && typeof parsed === "object"
+        ? parsed.lastReadAtByWaId ?? parsed.lastOpenedAtByWaId ?? {}
+        : {};
+    const normalizedReadState =
+      lastReadAtByWaId && typeof lastReadAtByWaId === "object"
+        ? Object.fromEntries(
+            Object.entries(lastReadAtByWaId).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+          )
+        : {};
+    return {
+      lastReadAtByWaId: normalizedReadState,
+    };
+  } catch {
+    return EMPTY_READ_STATE;
+  }
+}
+
+function saveReadState(storageKey: string, state: InboxReadState) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(storageKey, JSON.stringify(state));
+}
+
+function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
+  if (item.lastMessage?.direction !== "INBOUND") return false;
+  const activityAt = getConversationActivityTimestamp(item);
+  const lastReadAt = Date.parse(state.lastReadAtByWaId[item.waId] ?? "");
+  if (activityAt === null) return false;
+  if (!Number.isFinite(lastReadAt)) return true;
+  return activityAt > lastReadAt;
+}
+
+function getLatestMessageSignature(items: InboxMessageItem[]) {
+  if (items.length === 0) return null;
+  const latest = items[items.length - 1];
+  return `${latest.createdAt}:${latest.messageId ?? latest.metaMessageId ?? latest.requestId ?? latest.direction}`;
+}
+
 export default function AppInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -60,6 +134,15 @@ export default function AppInboxPage() {
   const [updatingMode, setUpdatingMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
+  const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToBottomRef = useRef(false);
+  const lastSelectedWaIdRef = useRef<string | null>(null);
+  const lastMessageSignatureRef = useRef<string | null>(null);
+  const unreadStorageKey = useMemo(
+    () => (session ? `wa_app_inbox_read_state_v1:${session.user.clientId}` : null),
+    [session]
+  );
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -76,35 +159,90 @@ export default function AppInboxPage() {
     saveAppSession(stored);
   }, [router]);
 
+  useEffect(() => {
+    if (!unreadStorageKey) return;
+    setReadState(loadReadState(unreadStorageKey));
+  }, [unreadStorageKey]);
+
+  useEffect(() => {
+    if (!unreadStorageKey) return;
+    saveReadState(unreadStorageKey, readState);
+  }, [readState, unreadStorageKey]);
+
+  useEffect(() => {
+    if (!unreadStorageKey) return;
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== unreadStorageKey) return;
+      setReadState(loadReadState(unreadStorageKey));
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [unreadStorageKey]);
+
+  const scrollTimelineToBottom = useCallback(() => {
+    if (!timelineRef.current) return;
+    timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+  }, []);
+
+  const markConversationAsRead = useCallback((waId: string, activityAt?: string | null) => {
+    if (!activityAt) return;
+    setReadState((prev) => {
+      if (prev.lastReadAtByWaId[waId] === activityAt) return prev;
+      return {
+        lastReadAtByWaId: {
+          ...prev.lastReadAtByWaId,
+          [waId]: activityAt,
+        },
+      };
+    });
+  }, []);
+
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });
-    setConversations(response.items);
+    const sortedItems = sortConversationsByRecent(response.items);
+    setConversations(sortedItems);
     if (response.items.length === 0) {
       setSelectedWaId(null);
       setMessages([]);
       return;
     }
-    setSelectedWaId((prev) => (prev && response.items.some((item) => item.waId === prev) ? prev : response.items[0].waId));
-  }, []);
+    setSelectedWaId((prev) =>
+      prev && sortedItems.some((item) => item.waId === prev) ? prev : sortedItems[0].waId
+    );
+
+    if (document.visibilityState !== "visible") return;
+    if (!selectedWaId) return;
+    const activeConversation = sortedItems.find((item) => item.waId === selectedWaId);
+    if (activeConversation) {
+      markConversationAsRead(selectedWaId, getConversationActivityAt(activeConversation));
+    }
+  }, [markConversationAsRead, selectedWaId]);
 
   const refreshSelectedTimeline = useCallback(async (activeSession: AppSession, waId: string) => {
     const response = await fetchAppConversation(activeSession, waId, { order: "asc", limit: 300 });
     setMessages(response.items);
     setConversations((prev) =>
-      prev.map((item) =>
-        item.waId === waId
-          ? {
-              ...item,
-              mode: response.mode,
-              assignedUserId: response.assignedUserId,
-              assignedTo: response.assignedTo,
-              assignedUserName: response.assignedUserName,
-              assignedAt: response.assignedAt,
-            }
-          : item
+      sortConversationsByRecent(
+        prev.map((item) =>
+          item.waId === waId
+            ? {
+                ...item,
+                mode: response.mode,
+                assignedUserId: response.assignedUserId,
+                assignedTo: response.assignedTo,
+                assignedUserName: response.assignedUserName,
+                assignedAt: response.assignedAt,
+              }
+            : item
+        )
       )
     );
-  }, []);
+    const latestActivityAt =
+      response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
+    if (document.visibilityState === "visible") {
+      markConversationAsRead(waId, latestActivityAt);
+    }
+  }, [markConversationAsRead]);
 
   useEffect(() => {
     if (!session) return;
@@ -145,19 +283,26 @@ export default function AppInboxPage() {
         if (cancelled) return;
         setMessages(response.items);
         setConversations((prev) =>
-          prev.map((item) =>
-            item.waId === selectedWaId
-              ? {
-                  ...item,
-                  mode: response.mode,
-                  assignedUserId: response.assignedUserId,
-                  assignedTo: response.assignedTo,
-                  assignedUserName: response.assignedUserName,
-                  assignedAt: response.assignedAt,
-                }
-              : item
+          sortConversationsByRecent(
+            prev.map((item) =>
+              item.waId === selectedWaId
+                ? {
+                    ...item,
+                    mode: response.mode,
+                    assignedUserId: response.assignedUserId,
+                    assignedTo: response.assignedTo,
+                    assignedUserName: response.assignedUserName,
+                    assignedAt: response.assignedAt,
+                  }
+                : item
+            )
           )
         );
+        const latestActivityAt =
+          response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
+        if (latestActivityAt) {
+          markConversationAsRead(selectedWaId, latestActivityAt);
+        }
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -174,7 +319,29 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, selectedWaId, session]);
+  }, [handleUnauthorized, markConversationAsRead, selectedWaId, session]);
+
+  useEffect(() => {
+    const selectedChanged = lastSelectedWaIdRef.current !== selectedWaId;
+    if (selectedChanged) {
+      lastSelectedWaIdRef.current = selectedWaId;
+      lastMessageSignatureRef.current = null;
+      shouldScrollToBottomRef.current = Boolean(selectedWaId);
+    }
+
+    const latestSignature = getLatestMessageSignature(messages);
+    if (!selectedChanged && latestSignature && latestSignature !== lastMessageSignatureRef.current) {
+      shouldScrollToBottomRef.current = true;
+    }
+    lastMessageSignatureRef.current = latestSignature;
+
+    if (!selectedWaId || !shouldScrollToBottomRef.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      scrollTimelineToBottom();
+      shouldScrollToBottomRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, scrollTimelineToBottom, selectedWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -203,6 +370,15 @@ export default function AppInboxPage() {
     () => conversations.find((item) => item.waId === selectedWaId) ?? null,
     [conversations, selectedWaId]
   );
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible" || !selectedConversation) return;
+      markConversationAsRead(selectedConversation.waId, getConversationActivityAt(selectedConversation));
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [markConversationAsRead, selectedConversation]);
 
   useEffect(() => {
     setSelectedAssigneeId(selectedConversation?.assignedUserId ?? "");
@@ -308,25 +484,29 @@ export default function AppInboxPage() {
     try {
       const response = await sendAppConversationMessage(session, selectedWaId, text);
       setMessageDraft("");
+      shouldScrollToBottomRef.current = true;
       await refreshSelectedTimeline(session, selectedWaId);
       setConversations((prev) =>
-        prev.map((item) =>
-          item.waId === selectedWaId
-            ? {
-                ...item,
-                lastMessage: {
-                  direction: "OUTBOUND",
-                  type: "TEXT",
-                  status: response.message.status,
-                  bodyText: text,
-                  templateName: null,
-                  createdAt: response.message.createdAt,
-                },
-                updatedAt: response.message.createdAt,
-              }
-            : item
+        sortConversationsByRecent(
+          prev.map((item) =>
+            item.waId === selectedWaId
+              ? {
+                  ...item,
+                  lastMessage: {
+                    direction: "OUTBOUND",
+                    type: "TEXT",
+                    status: response.message.status,
+                    bodyText: text,
+                    templateName: null,
+                    createdAt: response.message.createdAt,
+                  },
+                  updatedAt: response.message.createdAt,
+                }
+              : item
+          )
         )
       );
+      markConversationAsRead(selectedWaId, response.message.createdAt);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
@@ -416,22 +596,39 @@ export default function AppInboxPage() {
             ) : null}
             {conversations.map((item) => {
               const isActive = item.waId === selectedWaId;
+              const unread = !isActive && isConversationUnread(item, readState);
               return (
                 <button
                   key={item.waId}
                   type="button"
-                  onClick={() => setSelectedWaId(item.waId)}
+                  onClick={() => {
+                    shouldScrollToBottomRef.current = true;
+                    setSelectedWaId(item.waId);
+                    markConversationAsRead(item.waId, getConversationActivityAt(item));
+                  }}
                   className={`w-full border-b border-white/10 px-4 py-3 text-left transition ${
                     isActive ? "bg-re7-sky/20" : "hover:bg-white/10"
                   }`}
                 >
-                  <p className="text-sm font-medium">{getConversationLabel(item)}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className={`text-sm font-medium ${unread ? "text-white" : ""}`}>
+                      {getConversationLabel(item)}
+                    </p>
+                    {unread ? (
+                      <span
+                        aria-label="mensagem nao lida"
+                        className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#20b15a]"
+                      />
+                    ) : null}
+                  </div>
                   <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
                   <p className="mt-1 text-xs text-white/70">
                     {item.mode} • {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
                   </p>
                   {item.lastMessage?.bodyText ? (
-                    <p className="mt-2 line-clamp-2 text-xs text-white/60">{item.lastMessage.bodyText}</p>
+                    <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-white/85" : "text-white/60"}`}>
+                      {item.lastMessage.bodyText}
+                    </p>
                   ) : null}
                 </button>
               );
@@ -458,7 +655,7 @@ export default function AppInboxPage() {
               </p>
             ) : null}
           </div>
-          <div className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto p-4">
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto p-4">
             {!selectedWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
