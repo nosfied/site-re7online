@@ -203,12 +203,6 @@ export default function TenantsSummaryPage() {
                       >
                         Edit
                       </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/inbox`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Inbox
-                      </Link>
                     </div>
                   </td>
                 </tr>
