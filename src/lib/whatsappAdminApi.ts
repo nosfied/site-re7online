@@ -142,6 +142,34 @@ export type TemplateObservabilityItem = {
   errors: unknown[] | null;
 };
 
+export type AdminTemplateCatalogItem = {
+  id: string;
+  clientId: string;
+  clientKey: string;
+  clientName: string;
+  name: string;
+  category: string;
+  language: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminTemplateRequestItem = {
+  id: string;
+  clientId: string;
+  clientKey: string;
+  clientName: string;
+  name: string;
+  content: string;
+  variables: unknown;
+  category: string;
+  status: string;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
 export type TenantOnboardingExchangePayload = {
   code: string;
   embeddedSignup?: {
@@ -658,6 +686,7 @@ export async function fetchTemplatesObservability(
   fallback: { enabled: boolean; name: string; language: string };
   failed: TemplateObservabilityItem[];
   recent: TemplateObservabilityItem[];
+  catalog: AdminTemplateCatalogItem[];
   breakdown24h: Array<{
     templateName: string | null;
     templateLang: string | null;
@@ -672,6 +701,38 @@ export async function fetchTemplatesObservability(
   }>;
 }> {
   return requestJson(connection, "/admin/templates");
+}
+
+export async function fetchAdminTemplateRequests(
+  connection: AdminConnection
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminTemplateRequestItem[];
+}> {
+  return requestJson(connection, "/admin/templates/requests");
+}
+
+export async function approveAdminTemplateRequest(
+  connection: AdminConnection,
+  requestId: string
+): Promise<{
+  ok: true;
+  template: AdminTemplateCatalogItem;
+}> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function rejectAdminTemplateRequest(
+  connection: AdminConnection,
+  requestId: string
+): Promise<{ ok: true }> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/reject`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export async function onboardingExchangeCode(

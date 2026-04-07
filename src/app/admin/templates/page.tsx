@@ -59,7 +59,10 @@ function renderTable(items: TemplateObservabilityItem[], emptyText: string) {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={`${item.metaMessageId ?? item.requestId ?? item.createdAt}-${item.waId}`} className="border-t border-white/10">
+            <tr
+              key={`${item.metaMessageId ?? item.requestId ?? item.createdAt}-${item.waId}`}
+              className="border-t border-white/10"
+            >
               <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
               <td className="px-3 py-2 font-mono text-xs">{item.waId}</td>
               <td className="px-3 py-2">
@@ -70,7 +73,9 @@ function renderTable(items: TemplateObservabilityItem[], emptyText: string) {
               </td>
               <td className="px-3 py-2">
                 <div className="flex flex-col gap-1">
-                  <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.lastStatus ?? item.status)}`}>
+                  <span
+                    className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.lastStatus ?? item.status)}`}
+                  >
                     {item.lastStatus ?? item.status}
                   </span>
                   <span className="text-xs text-white/60">{item.statusDetail ?? "-"}</span>
@@ -82,7 +87,12 @@ function renderTable(items: TemplateObservabilityItem[], emptyText: string) {
               <td className="px-3 py-2 font-mono text-xs">{item.conversationId ?? "-"}</td>
               <td className="px-3 py-2">
                 <div className="max-w-xs whitespace-pre-wrap text-xs text-white/80">
-                  {item.errorBody ?? (item.errorData ? JSON.stringify(item.errorData) : item.errors ? JSON.stringify(item.errors) : "-")}
+                  {item.errorBody ??
+                    (item.errorData
+                      ? JSON.stringify(item.errorData)
+                      : item.errors
+                        ? JSON.stringify(item.errors)
+                        : "-")}
                 </div>
               </td>
               <td className="px-3 py-2 font-mono text-xs">{item.metaMessageId ?? "-"}</td>
@@ -165,12 +175,20 @@ export default function TemplatesAdminPage() {
             <h1 className="text-2xl font-bold">Outbound observability</h1>
             <p className="text-sm text-white/70">Templates e status real da Meta</p>
           </div>
-          <Link
-            href="/admin/tenants"
-            className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-          >
-            Voltar
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/templates/manage"
+              className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20"
+            >
+              Gestao de templates
+            </Link>
+            <Link
+              href="/admin/tenants"
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Voltar
+            </Link>
+          </div>
         </header>
 
         <AdminConfigPanel

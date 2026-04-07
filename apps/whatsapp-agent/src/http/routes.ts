@@ -3119,6 +3119,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             count: item._count.templateName,
             topWaIds: topTemplateGroups[`${item.templateName ?? "unknown"}::${item.templateLang ?? ""}`] ?? [],
           }));
+        const catalogWhere = tenantAdmin
+          ? { clientId: adminAuth.clientId }
+          : requestedClientKey
+            ? { client: { clientKey: requestedClientKey } }
+            : {};
+        const catalog = await prisma.template.findMany({
+          where: catalogWhere,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            category: true,
+            language: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            client: {
+              select: {
+                clientKey: true,
+                name: true,
+              },
+            },
+          },
+        });
+
         json(res, 200, {
           defaultTemplate: {
             name: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
@@ -3155,6 +3181,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           })),
           breakdown24h: normalizeBreakdown(breakdown24h),
           breakdown7d: normalizeBreakdown(breakdown7d),
+          catalog: catalog.map((item) => ({
+            id: item.id,
+            clientId: item.clientId,
+            clientKey: item.client.clientKey,
+            clientName: item.client.name,
+            name: item.name,
+            category: item.category,
+            language: item.language,
+            status: item.status,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          })),
         });
       } catch (error) {
         logger.error({
@@ -3169,18 +3207,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/templates/requests") {
       try {
-        const clientKey = await getScopedClientKey();
-        if (!clientKey) return;
-        const client = await prisma.client.findUnique({
-          where: { clientKey },
-          select: { id: true },
-        });
-        if (!client) {
-          json(res, 404, { error: "client_not_found" });
-          return;
-        }
+        const where = tenantAdmin
+          ? { clientId: adminAuth.clientId }
+          : requestedClientKey
+            ? { client: { clientKey: requestedClientKey } }
+            : {};
         const items = await prisma.templateRequest.findMany({
-          where: { clientId: client.id },
+          where,
           orderBy: { createdAt: "desc" },
           select: {
             id: true,
@@ -3193,12 +3226,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             notes: true,
             createdBy: true,
             createdAt: true,
+            client: {
+              select: {
+                clientKey: true,
+                name: true,
+              },
+            },
           },
         });
         json(res, 200, {
           ok: true,
           count: items.length,
-          items,
+          items: items.map((item) => ({
+            id: item.id,
+            clientId: item.clientId,
+            clientKey: item.client.clientKey,
+            clientName: item.client.name,
+            name: item.name,
+            content: item.content,
+            variables: item.variables,
+            category: item.category,
+            status: item.status,
+            notes: item.notes,
+            createdBy: item.createdBy,
+            createdAt: item.createdAt,
+          })),
         });
       } catch (error) {
         logger.error({
@@ -3218,23 +3270,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/approve")
     ) {
       try {
-        const clientKey = await getScopedClientKey();
-        if (!clientKey) return;
-        const client = await prisma.client.findUnique({
-          where: { clientKey },
-          select: { id: true },
-        });
-        if (!client) {
-          json(res, 404, { error: "client_not_found" });
-          return;
-        }
         const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
         if (!templateRequestId) {
           json(res, 400, { error: "bad_request" });
           return;
         }
         const templateRequest = await prisma.templateRequest.findFirst({
-          where: { id: templateRequestId, clientId: client.id },
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
           select: {
             id: true,
             clientId: true,
@@ -3308,16 +3353,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/reject")
     ) {
       try {
-        const clientKey = await getScopedClientKey();
-        if (!clientKey) return;
-        const client = await prisma.client.findUnique({
-          where: { clientKey },
-          select: { id: true },
-        });
-        if (!client) {
-          json(res, 404, { error: "client_not_found" });
-          return;
-        }
         const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
         if (!templateRequestId) {
           json(res, 400, { error: "bad_request" });
@@ -3330,7 +3365,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? body.notes.trim()
             : undefined;
         const updated = await prisma.templateRequest.updateMany({
-          where: { id: templateRequestId, clientId: client.id },
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
           data: {
             status: "rejected",
             ...(notes ? { notes } : {}),
