@@ -380,6 +380,7 @@ export async function createAppCampaign(
   session: AppSession,
   payload: {
     name: string;
+    templateId?: string;
     templateName: string;
     recipients: string[];
     templateParams?: string[];

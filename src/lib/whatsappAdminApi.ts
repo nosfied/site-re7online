@@ -84,6 +84,7 @@ export type LeadNoteItem = {
 export type CampaignItem = {
   id: string;
   clientId: string;
+  templateId?: string | null;
   name: string;
   templateName: string;
   status: string;
@@ -645,12 +646,14 @@ export async function createCampaign(
   clientKey: string,
   payload: {
     name: string;
+    templateId?: string;
     templateName: string;
     recipients: string[];
     templateParams?: string[];
   }
 ): Promise<{
   campaignId: string;
+  templateId?: string | null;
   status: string;
   totalRecipients: number;
 }> {

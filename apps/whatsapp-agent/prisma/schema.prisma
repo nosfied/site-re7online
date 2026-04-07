@@ -255,6 +255,7 @@ model ConversationRuntimeState {
 model Campaign {
   id              String   @id @default(uuid())
   clientId        String   @db.Uuid
+  templateId      String?
   name            String
   templateName    String
   status          String
@@ -265,9 +266,11 @@ model Campaign {
   updatedAt       DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  template Template? @relation(fields: [templateId], references: [id])
 
   @@index([clientId, createdAt])
   @@index([clientId, status, createdAt])
+  @@index([templateId])
 }
 
 model Template {
@@ -285,6 +288,7 @@ model Template {
   updatedAt       DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
 
   @@unique([clientId, name])
   @@index([clientId, status])

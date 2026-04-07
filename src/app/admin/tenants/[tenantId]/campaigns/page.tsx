@@ -6,9 +6,11 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import {
   AdminConnection,
+  AdminTemplateCatalogItem,
   CampaignItem,
   cancelCampaign,
   createCampaign,
+  fetchTemplatesObservability,
   fetchTenantsSummary,
   formatDateTime,
   formatPct,
@@ -24,6 +26,7 @@ import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/cam
 
 type CampaignFormState = {
   name: string;
+  templateId: string;
   templateName: string;
   templateParamsInput: string;
   recipientsInput: string;
@@ -40,6 +43,7 @@ type CampaignStatusFilter =
 
 const EMPTY_FORM: CampaignFormState = {
   name: "",
+  templateId: "",
   templateName: "",
   templateParamsInput: "",
   recipientsInput: "",
@@ -194,6 +198,7 @@ export default function TenantCampaignsPage() {
   const [clientKey, setClientKey] = useState(tenantId);
   const [tenantSummary, setTenantSummary] = useState<TenantSummaryItem | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
+  const [templates, setTemplates] = useState<AdminTemplateCatalogItem[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
@@ -233,6 +238,18 @@ export default function TenantCampaignsPage() {
     [connection]
   );
 
+  const refreshTemplates = useCallback(
+    async (resolvedClientKey: string) => {
+      const response = await fetchTemplatesObservability(connection);
+      const approvedTemplates = response.catalog.filter(
+        (item) => item.status === "approved" && item.clientKey === resolvedClientKey
+      );
+      setTemplates(approvedTemplates);
+      return approvedTemplates;
+    },
+    [connection]
+  );
+
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, search]);
@@ -253,7 +270,7 @@ export default function TenantCampaignsPage() {
         if (cancelled) return;
         setTenantSummary(resolvedTenantSummary);
         setClientKey(resolvedClientKey);
-        await refreshCampaigns(resolvedClientKey);
+        await Promise.all([refreshCampaigns(resolvedClientKey), refreshTemplates(resolvedClientKey)]);
       } catch (err) {
         if (cancelled) return;
         const typed = err as { status?: number; message?: string };
@@ -274,7 +291,18 @@ export default function TenantCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [connection, refreshCampaigns, tenantId]);
+  }, [connection, refreshCampaigns, refreshTemplates, tenantId]);
+
+  useEffect(() => {
+    if (!form.templateName || form.templateId) return;
+    const matchedTemplate = templates.find((item) => item.name === form.templateName);
+    if (!matchedTemplate) return;
+    setForm((prev) => ({
+      ...prev,
+      templateId: matchedTemplate.id,
+      templateName: matchedTemplate.name,
+    }));
+  }, [form.templateId, form.templateName, templates]);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -397,6 +425,7 @@ export default function TenantCampaignsPage() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const name = form.name.trim();
+    const templateId = form.templateId.trim();
     const templateName = form.templateName.trim();
     const recipients = normalizeWaIdList(form.recipientsInput);
     const templateParams = normalizeTemplateParams(form.templateParamsInput);
@@ -405,8 +434,8 @@ export default function TenantCampaignsPage() {
       setFormError("Erro ao criar campanha: informe o nome da campanha.");
       return;
     }
-    if (!templateName) {
-      setFormError("Erro ao criar campanha: informe o template.");
+    if (!templateId && !templateName) {
+      setFormError("Erro ao criar campanha: selecione um template.");
       return;
     }
     if (recipients.length === 0) {
@@ -421,6 +450,7 @@ export default function TenantCampaignsPage() {
     try {
       const created = await createCampaign(connection, clientKey, {
         name,
+        ...(templateId ? { templateId } : {}),
         templateName,
         recipients,
         ...(templateParams.length > 0 ? { templateParams } : {}),
@@ -462,7 +492,10 @@ export default function TenantCampaignsPage() {
   };
 
   const handleReuseCampaign = (campaign: CampaignItem) => {
-    setForm(buildReplayFormFromCampaign(campaign));
+    setForm({
+      templateId: "",
+      ...buildReplayFormFromCampaign(campaign),
+    });
     setFormError(null);
     setToast("Formulario preenchido com os dados da campanha selecionada.");
     window.setTimeout(() => setToast(null), 3000);
@@ -556,14 +589,37 @@ export default function TenantCampaignsPage() {
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Template</span>
-                <input
+                <select
                   className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                  value={form.templateName}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, templateName: event.target.value }))
-                  }
-                  placeholder="re7_atendente_manual_v1"
-                />
+                  value={form.templateId}
+                  disabled={templates.length === 0}
+                  onChange={(event) => {
+                    const nextTemplateId = event.target.value;
+                    const selectedTemplate =
+                      templates.find((item) => item.id === nextTemplateId) ?? null;
+                    setForm((prev) => ({
+                      ...prev,
+                      templateId: nextTemplateId,
+                      templateName: selectedTemplate?.name ?? "",
+                    }));
+                  }}
+                >
+                  <option value="">
+                    {templates.length === 0
+                      ? "Nenhum template aprovado disponivel"
+                      : "Selecione um template aprovado"}
+                  </option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} - {template.category}
+                    </option>
+                  ))}
+                </select>
+                {form.templateName && !form.templateId ? (
+                  <span className="text-xs text-amber-200">
+                    Template reaproveitado de campanha antiga. Selecione o equivalente aprovado para vincular.
+                  </span>
+                ) : null}
               </label>
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Template params (um por linha)</span>

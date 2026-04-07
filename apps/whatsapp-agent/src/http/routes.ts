@@ -910,7 +910,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = String(body.name ?? "").trim();
-      const templateName = String(body.templateName ?? "").trim();
+      const templateId =
+        typeof body.templateId === "string" && body.templateId.trim().length > 0
+          ? body.templateId.trim()
+          : null;
+      const requestedTemplateName = String(body.templateName ?? "").trim();
       const components = parseTemplateComponents(body.templateParams);
       const rawWaIds = Array.isArray(body.recipients)
         ? body.recipients
@@ -928,7 +932,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("bad_request", "Campaign name is required"));
         return;
       }
-      if (!templateName) {
+      if (!templateId && !requestedTemplateName) {
         json(res, 400, httpError("invalid_template_name", "Template name is required"));
         return;
       }
@@ -959,11 +963,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+        clientId: client.id,
+        templateId,
+        templateName: requestedTemplateName,
+      });
+      if ("error" in resolvedTemplate) {
+        json(res, resolvedTemplate.status, httpError(resolvedTemplate.error, resolvedTemplate.message));
+        return;
+      }
+
       const created = await createScopedCampaign({
         clientId: client.id,
         clientKey: client.clientKey,
         name,
-        templateName,
+        templateId: resolvedTemplate.templateId,
+        templateName: resolvedTemplate.templateName,
         waIds,
         components,
       });
@@ -2924,7 +2939,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const body = await readJsonBody(req, res);
         if (!body) return;
         const name = String(body.name ?? "").trim();
-        const templateName = String(body.templateName ?? "").trim();
+        const templateId =
+          typeof body.templateId === "string" && body.templateId.trim().length > 0
+            ? body.templateId.trim()
+            : null;
+        const requestedTemplateName = String(body.templateName ?? "").trim();
         const components = parseTemplateComponents(body.templateParams);
         const rawWaIds = Array.isArray(body.recipients)
           ? body.recipients
@@ -2942,7 +2961,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 400, httpError("bad_request", "Campaign name is required"));
           return;
         }
-        if (!templateName) {
+        if (!templateId && !requestedTemplateName) {
           json(res, 400, httpError("invalid_template_name", "Template name is required"));
           return;
         }
@@ -2974,11 +2993,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
+        const resolvedTemplate = await resolveCampaignTemplateInput(prisma, {
+          clientId: client.id,
+          templateId,
+          templateName: requestedTemplateName,
+        });
+        if ("error" in resolvedTemplate) {
+          json(res, resolvedTemplate.status, httpError(resolvedTemplate.error, resolvedTemplate.message));
+          return;
+        }
+
         const created = await createScopedCampaign({
           clientId: client.id,
           clientKey,
           name,
-          templateName,
+          templateId: resolvedTemplate.templateId,
+          templateName: resolvedTemplate.templateName,
           waIds,
           components,
         });
@@ -2986,6 +3016,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (pathname === "/admin/campaigns") {
           json(res, 200, {
             campaignId: created.campaign.id,
+            templateId: created.campaign.templateId,
             status: "sending",
             totalRecipients: waIds.length,
           });
@@ -4151,6 +4182,7 @@ function parseTemplateComponents(
 function serializeCampaign(campaign: {
   id: string;
   clientId: string;
+  templateId: string | null;
   name: string;
   templateName: string;
   status: string;
@@ -4163,6 +4195,7 @@ function serializeCampaign(campaign: {
   return {
     id: campaign.id,
     clientId: campaign.clientId,
+    templateId: campaign.templateId,
     name: campaign.name,
     templateName: campaign.templateName,
     status: campaign.status,
@@ -4379,6 +4412,53 @@ async function getScopedClientById(
     where: { id: clientId },
     select: { id: true, clientKey: true, status: true },
   });
+}
+
+async function resolveCampaignTemplateInput(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    templateId: string | null;
+    templateName: string;
+  }
+): Promise<
+  | { templateId: string | null; templateName: string; language: string | null }
+  | { status: 400 | 404; error: string; message: string }
+> {
+  if (!params.templateId) {
+    return {
+      templateId: null,
+      templateName: params.templateName,
+      language: null,
+    };
+  }
+
+  const template = await prisma.template.findFirst({
+    where: {
+      id: params.templateId,
+      clientId: params.clientId,
+      status: "approved",
+    },
+    select: {
+      id: true,
+      name: true,
+      language: true,
+    },
+  });
+
+  if (!template) {
+    return {
+      status: 404,
+      error: "template_not_found",
+      message: "Approved template not found",
+    };
+  }
+
+  return {
+    templateId: template.id,
+    templateName: template.name,
+    language: template.language,
+  };
 }
 
 async function findAssignedUserName(
@@ -4778,6 +4858,7 @@ async function buildCampaignDetailPayload(
 async function createScopedCampaign(params: {
   clientId: string;
   clientKey: string;
+  templateId?: string | null;
   name: string;
   templateName: string;
   waIds: string[];
@@ -4788,6 +4869,7 @@ async function createScopedCampaign(params: {
 }) {
   const campaign = await createCampaign({
     clientId: params.clientId,
+    templateId: params.templateId ?? null,
     name: params.name,
     templateName: params.templateName,
     totalRecipients: params.waIds.length,
