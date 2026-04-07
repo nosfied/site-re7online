@@ -488,7 +488,7 @@ export default function TenantInboxPage() {
             </div>
           </aside>
 
-          <div className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
+          <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
             <div className="border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-semibold">
                 Timeline {selectedConversation ? `• ${selectedConversation.waId}` : ""}
@@ -505,44 +505,46 @@ export default function TenantInboxPage() {
                 </p>
               ) : null}
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto p-4">
               {!selectedWaId ? (
-                <p className="text-sm text-white/70">Selecione uma conversa para ver a timeline.</p>
+                <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
               ) : null}
               {selectedWaId && loadingMessages ? (
-                <p className="text-sm text-white/70">Carregando mensagens...</p>
+                <p className="text-sm text-slate-700/80">Carregando mensagens...</p>
               ) : null}
               {selectedWaId && !loadingMessages && messages.length === 0 ? (
-                <p className="text-sm text-white/70">Sem mensagens para esta conversa.</p>
+                <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
               ) : null}
               <div className="space-y-3">
                 {messages.map((item, index) => (
-                  <article
+                  <div
                     key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
-                    className={`rounded-md border p-3 ${
-                      item.direction === "INBOUND"
-                        ? "border-re7-sky/40 bg-re7-sky/10"
-                        : "border-white/20 bg-white/10"
-                    }`}
+                    className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                   >
-                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-white/70">
-                      <span className="font-semibold text-white">{item.direction}</span>
+                    <article
+                      className={`wa-bubble ${
+                        item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
+                      }`}
+                    >
+                    <div className="wa-bubble-meta mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-slate-900">{item.direction}</span>
                       <span>{item.type}</span>
                       <span>{item.status}</span>
                       <span>{formatDateTime(item.createdAt)}</span>
                     </div>
-                    {item.bodyText ? <p className="text-sm text-white">{item.bodyText}</p> : null}
+                    {item.bodyText ? <p className="text-sm leading-relaxed">{item.bodyText}</p> : null}
                     {item.templateName ? (
-                      <p className="mt-1 text-xs text-white/70">template: {item.templateName}</p>
+                      <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
                     ) : null}
-                  </article>
+                    </article>
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="border-t border-white/10 bg-re7-navy/30 p-4">
+            <div className="wa-composer-shell border-t border-black/5 p-4 text-slate-900">
               <div className="mb-3 flex justify-end gap-2">
                 <select
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                  className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm"
                   value={selectedAssigneeId}
                   onChange={(event) => setSelectedAssigneeId(event.target.value)}
                   disabled={updatingMode || users.length === 0}
@@ -559,7 +561,7 @@ export default function TenantInboxPage() {
                     type="button"
                     disabled={!selectedWaId || updatingMode}
                     onClick={handleReleaseConversation}
-                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {updatingMode ? "Atualizando..." : "Liberar conversa"}
                   </button>
@@ -568,16 +570,16 @@ export default function TenantInboxPage() {
                     type="button"
                     disabled={!selectedWaId || updatingMode}
                     onClick={handleClaimConversation}
-                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {updatingMode ? "Atualizando..." : "Assumir conversa"}
                   </button>
                 )}
               </div>
               <label className="grid gap-2 text-sm">
-                <span className="text-white/70">Responder conversa</span>
+                <span className="text-slate-700">Responder conversa</span>
                 <textarea
-                  className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-h-24 rounded-[1.1rem] border border-[#d4c7b5] bg-white/92 px-4 py-3 text-slate-900 outline-none focus:border-[#7cbf69]"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
                   placeholder="Digite a mensagem para enviar manualmente..."
@@ -589,7 +591,7 @@ export default function TenantInboxPage() {
                   type="button"
                   disabled={!selectedWaId || !messageDraft.trim() || sendingMessage}
                   onClick={handleSendMessage}
-                  className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sendingMessage ? "Enviando..." : "Enviar mensagem"}
                 </button>
