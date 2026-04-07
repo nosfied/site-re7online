@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
+  AppTemplateItem,
   AppSession,
   cancelAppCampaign,
   clearAppSession,
   createAppCampaign,
   getAppCampaign,
   listAppCampaigns,
+  listAppTemplates,
   loadAppSession,
   saveAppSession,
 } from "@/lib/appClientApi";
@@ -18,7 +20,9 @@ import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappA
 
 type CampaignFormState = {
   name: string;
+  templateId: string;
   templateName: string;
+  templateVariables: string[];
   templateParamsInput: string;
   recipientsInput: string;
 };
@@ -34,7 +38,9 @@ type CampaignStatusFilter =
 
 const EMPTY_FORM: CampaignFormState = {
   name: "",
+  templateId: "",
   templateName: "",
+  templateVariables: [],
   templateParamsInput: "",
   recipientsInput: "",
 };
@@ -55,6 +61,37 @@ function normalizeTemplateParams(input: string) {
     .split(/\n+/)
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function getTemplateVariableLabels(variables: unknown): string[] {
+  if (!Array.isArray(variables)) return [];
+  return variables
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (!item || typeof item !== "object" || Array.isArray(item)) return "";
+      const typed = item as Record<string, unknown>;
+      const raw =
+        typeof typed.label === "string"
+          ? typed.label
+          : typeof typed.key === "string"
+            ? typed.key
+            : typeof typed.name === "string"
+              ? typed.name
+              : "";
+      return raw.trim();
+    })
+    .filter(Boolean);
+}
+
+function syncTemplateVariables(values: string[], total: number) {
+  return Array.from({ length: total }, (_, index) => values[index] ?? "");
+}
+
+function buildTemplatePreview(content: string, values: string[]) {
+  return values.reduce(
+    (acc, value, index) => acc.replaceAll(`{{${index + 1}}}`, value || `{{${index + 1}}}`),
+    content
+  );
 }
 
 function getStatusClasses(status: string) {
@@ -173,6 +210,7 @@ export default function AppCampaignsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
+  const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
@@ -217,6 +255,31 @@ export default function AppCampaignsPage() {
     []
   );
 
+  const refreshTemplates = useCallback(async (activeSession: AppSession) => {
+    const response = await listAppTemplates(activeSession);
+    const approvedTemplates = response.items.filter((item) => item.status === "approved");
+    setTemplates(approvedTemplates);
+    return approvedTemplates;
+  }, []);
+
+  const selectedTemplate = useMemo(
+    () =>
+      templates.find((item) => item.id === form.templateId) ??
+      templates.find((item) => item.name === form.templateName) ??
+      null,
+    [form.templateId, form.templateName, templates]
+  );
+
+  const templateVariableLabels = useMemo(
+    () => getTemplateVariableLabels(selectedTemplate?.variables),
+    [selectedTemplate]
+  );
+
+  const templatePreview = useMemo(() => {
+    if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
+    return buildTemplatePreview(selectedTemplate.content, form.templateVariables);
+  }, [form.templateVariables, selectedTemplate, templateVariableLabels.length]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [search, statusFilter]);
@@ -227,7 +290,7 @@ export default function AppCampaignsPage() {
     setLoadingList(true);
     setError(null);
 
-    refreshCampaigns(session)
+    Promise.all([refreshCampaigns(session), refreshTemplates(session)])
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (err.status === 401) {
@@ -243,7 +306,24 @@ export default function AppCampaignsPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, refreshCampaigns, session]);
+  }, [handleUnauthorized, refreshCampaigns, refreshTemplates, session]);
+
+  useEffect(() => {
+    if (!form.templateName || form.templateId) return;
+    const matchedTemplate = templates.find((item) => item.name === form.templateName);
+    if (!matchedTemplate) return;
+    setForm((prev) => ({
+      ...prev,
+      templateId: matchedTemplate.id,
+      templateName: matchedTemplate.name,
+      templateVariables: syncTemplateVariables(
+        prev.templateVariables.length > 0
+          ? prev.templateVariables
+          : normalizeTemplateParams(prev.templateParamsInput),
+        getTemplateVariableLabels(matchedTemplate.variables).length
+      ),
+    }));
+  }, [form.templateId, form.templateName, templates]);
 
   useEffect(() => {
     if (!session || !selectedCampaignId) {
@@ -344,16 +424,20 @@ export default function AppCampaignsPage() {
     event.preventDefault();
     if (!session) return;
     const name = form.name.trim();
+    const templateId = form.templateId.trim();
     const templateName = form.templateName.trim();
     const recipients = normalizeWaIdList(form.recipientsInput);
-    const templateParams = normalizeTemplateParams(form.templateParamsInput);
+    const templateParams =
+      templateVariableLabels.length > 0
+        ? form.templateVariables.map((value) => value.trim())
+        : normalizeTemplateParams(form.templateParamsInput);
 
     if (!name) {
       setFormError("Erro ao criar campanha: informe o nome da campanha.");
       return;
     }
-    if (!templateName) {
-      setFormError("Erro ao criar campanha: informe o template.");
+    if (!templateId && !templateName) {
+      setFormError("Erro ao criar campanha: selecione um template.");
       return;
     }
     if (recipients.length === 0) {
@@ -368,6 +452,7 @@ export default function AppCampaignsPage() {
     try {
       const created = await createAppCampaign(session, {
         name,
+        ...(templateId ? { templateId } : {}),
         templateName,
         recipients,
         ...(templateParams.length > 0 ? { templateParams } : {}),
@@ -418,7 +503,12 @@ export default function AppCampaignsPage() {
   };
 
   const handleReuseCampaign = (campaign: CampaignItem) => {
-    setForm(buildReplayFormFromCampaign(campaign));
+    const replayForm = buildReplayFormFromCampaign(campaign);
+    setForm({
+      templateId: "",
+      templateVariables: normalizeTemplateParams(replayForm.templateParamsInput),
+      ...replayForm,
+    });
     setFormError(null);
     setToast("Formulario preenchido com os dados da campanha selecionada.");
     window.setTimeout(() => setToast(null), 3000);
@@ -459,22 +549,88 @@ export default function AppCampaignsPage() {
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Template</span>
-              <input
+              <select
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                value={form.templateName}
-                onChange={(event) => setForm((prev) => ({ ...prev, templateName: event.target.value }))}
-                placeholder="re7_atendente_manual_v1"
-              />
+                value={form.templateId}
+                disabled={templates.length === 0}
+                onChange={(event) => {
+                  const nextTemplateId = event.target.value;
+                  const selectedTemplate = templates.find((item) => item.id === nextTemplateId) ?? null;
+                  setForm((prev) => ({
+                    ...prev,
+                    templateId: nextTemplateId,
+                    templateName: selectedTemplate?.name ?? "",
+                    templateVariables: syncTemplateVariables(
+                      prev.templateVariables,
+                      getTemplateVariableLabels(selectedTemplate?.variables).length
+                    ),
+                  }));
+                }}
+              >
+                <option value="">
+                  {templates.length === 0
+                    ? "Nenhum template aprovado disponivel"
+                    : "Selecione um template aprovado"}
+                </option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} - {template.category}
+                  </option>
+                ))}
+              </select>
+              {form.templateName && !form.templateId ? (
+                <span className="text-xs text-amber-200">
+                  Template reaproveitado de campanha antiga. Selecione o equivalente aprovado para vincular.
+                </span>
+              ) : null}
             </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Template params (um por linha)</span>
-              <textarea
-                className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                value={form.templateParamsInput}
-                onChange={(event) => setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))}
-                placeholder={"Cliente teste\nCampanha marco\nHoje 15h"}
-              />
-            </label>
+            {templateVariableLabels.length > 0 ? (
+              <div className="grid gap-3">
+                <span className="text-sm text-white/70">Variaveis do template</span>
+                {templateVariableLabels.map((label, index) => (
+                  <label key={`${label}-${index}`} className="grid gap-1 text-sm">
+                    <span className="text-white/70">{label}</span>
+                    <input
+                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      value={form.templateVariables[index] ?? ""}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          templateVariables: prev.templateVariables.map((value, valueIndex) =>
+                            valueIndex === index ? event.target.value : value
+                          ),
+                          templateParamsInput: syncTemplateVariables(
+                            prev.templateVariables.map((value, valueIndex) =>
+                              valueIndex === index ? event.target.value : value
+                            ),
+                            templateVariableLabels.length
+                          ).join("\n"),
+                        }))
+                      }
+                      placeholder={`Informe ${label.toLowerCase()}`}
+                    />
+                  </label>
+                ))}
+                {templatePreview ? (
+                  <div className="rounded-md border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
+                    <p className="mb-1 text-xs uppercase tracking-wide text-white/50">Preview</p>
+                    <p>{templatePreview}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Template params (um por linha)</span>
+                <textarea
+                  className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={form.templateParamsInput}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
+                  }
+                  placeholder={"Cliente teste\nCampanha marco\nHoje 15h"}
+                />
+              </label>
+            )}
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Recipients (um waId por linha)</span>
               <textarea

@@ -18,6 +18,7 @@ export type CampaignTemplateComponents = Array<{
 
 export type CreateCampaignParams = {
   clientId: string;
+  templateId?: string | null;
   name: string;
   templateName: string;
   totalRecipients: number;
@@ -28,6 +29,7 @@ export async function createCampaign(params: CreateCampaignParams) {
   return prisma.campaign.create({
     data: {
       clientId: params.clientId,
+      templateId: params.templateId ?? null,
       name: params.name,
       templateName: params.templateName,
       status: "sending",
