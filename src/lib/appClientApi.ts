@@ -442,6 +442,7 @@ export async function createAppTemplateRequest(
     content: string;
     variables?: unknown;
     category: string;
+    autoSubmit?: boolean;
   }
 ): Promise<{ ok: true; request: AppTemplateRequestItem }> {
   return requestAppJson(session, "/app/templates/request", {
