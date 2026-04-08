@@ -336,6 +336,24 @@ export async function updateAppLeadStatus(
   });
 }
 
+export async function updateAppLead(
+  session: AppSession,
+  leadId: string,
+  payload: { name?: string | null }
+): Promise<{
+  ok: true;
+  lead: {
+    id: string;
+    name: string | null;
+    updatedAt: string;
+  };
+}> {
+  return requestAppJson(session, `/app/lead/${encodeURIComponent(leadId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchAppLeadNotes(
   session: AppSession,
   leadId: string

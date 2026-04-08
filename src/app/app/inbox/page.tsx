@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import {
   AppSession,
@@ -11,6 +11,7 @@ import {
   fetchAppConversation,
   fetchAppConversations,
   fetchAppLeadNotes,
+  updateAppLead,
   fetchAppUsers,
   loadAppSession,
   releaseAppConversation,
@@ -37,6 +38,39 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 
 function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
+}
+
+function getTimelineAuthorLabel(params: {
+  direction: InboxMessageItem["direction"];
+  sessionUserName: string;
+  conversation: InboxConversationItem | null;
+}) {
+  if (params.direction === "OUTBOUND") {
+    return params.sessionUserName || "Voce";
+  }
+  return (
+    params.conversation?.leadName ||
+    params.conversation?.leadPhone ||
+    params.conversation?.waId ||
+    "Contato"
+  );
+}
+
+function getMessageContentLabel(item: InboxMessageItem) {
+  switch (item.type) {
+    case "AUDIO":
+      return "Audio";
+    case "IMAGE":
+      return "Imagem";
+    case "VIDEO":
+      return "Video";
+    case "DOCUMENT":
+      return "Documento";
+    case "TEMPLATE":
+      return "Template";
+    default:
+      return "Mensagem";
+  }
 }
 
 function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waIdCanonical">) {
@@ -143,11 +177,13 @@ export default function AppInboxPage() {
   const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
+  const [leadNameDraft, setLeadNameDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingLeadNotes, setLoadingLeadNotes] = useState(false);
   const [savingLeadStatus, setSavingLeadStatus] = useState(false);
+  const [savingLeadName, setSavingLeadName] = useState(false);
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -454,6 +490,10 @@ export default function AppInboxPage() {
   }, [selectedLead?.id, selectedLead?.status]);
 
   useEffect(() => {
+    setLeadNameDraft(selectedLead?.name ?? "");
+  }, [selectedLead?.id, selectedLead?.name]);
+
+  useEffect(() => {
     if (!session || !selectedLead?.id) {
       setLeadNotes([]);
       setLeadError(null);
@@ -528,6 +568,29 @@ export default function AppInboxPage() {
     }
   };
 
+  const handleSaveLeadName = async () => {
+    if (!session || !selectedLead?.id) return;
+    setSavingLeadName(true);
+    setLeadError(null);
+    try {
+      const response = await updateAppLead(session, selectedLead.id, { name: leadNameDraft.trim() || null });
+      setConversations((prev) =>
+        prev.map((item) =>
+          item.leadId === response.lead.id ? { ...item, leadName: response.lead.name } : item
+        )
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setLeadError(typed.message || "Falha ao salvar nome do contato.");
+    } finally {
+      setSavingLeadName(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
     const text = messageDraft.trim();
@@ -579,6 +642,13 @@ export default function AppInboxPage() {
     } finally {
       setSendingMessage(false);
     }
+  };
+
+  const handleComposerKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (!messageDraft.trim() || sendingMessage || !selectedConversationWaId) return;
+    await handleSendMessage();
   };
 
   const handleClaimConversation = async () => {
@@ -702,11 +772,14 @@ export default function AppInboxPage() {
 
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
           <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold">
-              Timeline {selectedConversation ? `• ${selectedConversation.waId}` : ""}
+            <h2 className="text-sm font-semibold text-slate-900">
+              Timeline{" "}
+              {selectedConversation
+                ? `• ${selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId}`
+                : ""}
             </h2>
             {selectedConversation ? (
-              <p className="mt-1 text-xs text-white/70">
+              <p className="mt-1 text-xs text-slate-700">
                 modo: {selectedConversation.mode}
                 {selectedConversation.assignedUserName
                   ? ` • atendente: ${selectedConversation.assignedUserName}`
@@ -741,12 +814,22 @@ export default function AppInboxPage() {
                     }`}
                   >
                   <div className="wa-bubble-meta mb-1 flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="font-semibold text-slate-900">{item.direction}</span>
+                    <span className="font-semibold text-slate-900">
+                      {getTimelineAuthorLabel({
+                        direction: item.direction,
+                        sessionUserName: session.user.name,
+                        conversation: selectedConversation,
+                      })}
+                    </span>
                     <span>{item.type}</span>
                     <span>{item.status}</span>
                     <span>{formatDateTime(item.createdAt)}</span>
                   </div>
-                  {item.bodyText ? <p className="text-sm leading-relaxed">{item.bodyText}</p> : null}
+                  {item.bodyText ? (
+                    <p className="text-sm leading-relaxed">{item.bodyText}</p>
+                  ) : (
+                    <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
+                  )}
                   {item.templateName ? (
                     <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
                   ) : null}
@@ -796,6 +879,7 @@ export default function AppInboxPage() {
                 className="min-h-24 rounded-[1.1rem] border border-[#d4c7b5] bg-white/92 px-4 py-3 text-slate-900 outline-none focus:border-[#7cbf69]"
                 value={messageDraft}
                 onChange={(event) => setMessageDraft(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
                 placeholder="Digite a mensagem para enviar manualmente..."
                 disabled={!selectedConversationWaId || sendingMessage}
               />
@@ -825,9 +909,25 @@ export default function AppInboxPage() {
             ) : (
               <>
                 <div className="space-y-1 text-sm">
-                  <p>
-                    <span className="text-white/70">Nome:</span> {selectedLead.name || "-"}
-                  </p>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-white/70">Nome / apelido</span>
+                    <div className="flex gap-2">
+                      <input
+                        className="min-w-0 flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                        value={leadNameDraft}
+                        onChange={(event) => setLeadNameDraft(event.target.value)}
+                        placeholder="Como este contato deve aparecer no inbox"
+                      />
+                      <button
+                        type="button"
+                        disabled={savingLeadName}
+                        onClick={handleSaveLeadName}
+                        className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingLeadName ? "Salvando..." : "Salvar"}
+                      </button>
+                    </div>
+                  </label>
                   <p>
                     <span className="text-white/70">Phone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
                   </p>
