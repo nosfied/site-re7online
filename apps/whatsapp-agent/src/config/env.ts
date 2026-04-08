@@ -1,3 +1,5 @@
+import { normalizeWaIdDigits } from "../utils/waid.js";
+
 export type Env = {
   PORT: number;
   ENV: string;
@@ -57,7 +59,7 @@ export type Env = {
 };
 
 export function normalizeWaId(input: string): string {
-  return input.replace(/\D/g, "");
+  return normalizeWaIdDigits(input);
 }
 
 function toNumber(value: string | undefined, fallback: number) {

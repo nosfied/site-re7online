@@ -7,6 +7,7 @@ import {
   getClientKeyFromConversationKey,
   makeConversationKey,
 } from "./conversationKey.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 const dataDir = path.resolve(process.cwd(), ".data");
 const legacyEventsFile = path.join(dataDir, "whatsapp-events.json");
@@ -139,6 +140,7 @@ function normalizeConversation(raw: LegacyConversationState): ConversationState 
     clientKey: derivedClientKey,
     conversationKey: raw.conversationKey,
     waId: raw.waId,
+    waIdCanonical: raw.waIdCanonical ?? canonicalizeBrazilWaId(raw.waId),
     firstSeenAt: raw.firstSeenAt,
     lastInboundAt: raw.lastInboundAt,
     lastOutboundAt: raw.lastOutboundAt,
@@ -366,6 +368,7 @@ export const jsonFileStorage: Storage = {
       ...current,
       clientKey,
       conversationKey: found.conversationKey,
+      waIdCanonical: current.waIdCanonical ?? canonicalizeBrazilWaId(current.waId),
     };
     if (found.migrated) {
       conversations[found.index] = nextState;
@@ -397,6 +400,7 @@ export const jsonFileStorage: Storage = {
       ...state,
       clientKey,
       conversationKey: found.conversationKey,
+      waIdCanonical: state.waIdCanonical ?? canonicalizeBrazilWaId(state.waId),
     };
     if (found.index >= 0) {
       conversations[found.index] = { ...conversations[found.index], ...nextState };
@@ -476,6 +480,7 @@ export const jsonFileStorage: Storage = {
       clientKey,
       conversationKey: found.conversationKey,
       waId,
+      waIdCanonical: existing?.waIdCanonical ?? canonicalizeBrazilWaId(waId),
       firstSeenAt: existing?.firstSeenAt ?? lastInboundAt,
       lastInboundAt,
       lastInboundMessageId: existing?.lastInboundMessageId,

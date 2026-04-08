@@ -24,6 +24,7 @@ export type ConversationState = {
   clientKey?: string;
   conversationKey?: string;
   waId: string;
+  waIdCanonical?: string;
   firstSeenAt: string;
   lastInboundAt: string;
   lastOutboundAt?: string;

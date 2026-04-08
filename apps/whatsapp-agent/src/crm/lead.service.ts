@@ -1,4 +1,5 @@
 import { getPrisma } from "../db.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 export async function ensureLeadForConversation(params: {
   tenantId: string;
@@ -21,6 +22,7 @@ export async function ensureLeadForConversation(params: {
     data: {
       tenantId: params.tenantId,
       waId: params.waId,
+      waIdCanonical: canonicalizeBrazilWaId(params.waId),
       phone: params.waId,
       status: "NEW",
     },
@@ -49,6 +51,7 @@ export async function upsertLeadFromCapture(params: {
       data: {
         name: params.name ?? existing.name,
         phone: existing.phone ?? params.waId,
+        waIdCanonical: existing.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
         city: params.city ?? existing.city,
         service: params.service ?? existing.service,
         status: "QUALIFIED",
@@ -60,6 +63,7 @@ export async function upsertLeadFromCapture(params: {
     data: {
       tenantId: params.tenantId,
       waId: params.waId,
+      waIdCanonical: canonicalizeBrazilWaId(params.waId),
       name: params.name,
       phone: params.waId,
       city: params.city,

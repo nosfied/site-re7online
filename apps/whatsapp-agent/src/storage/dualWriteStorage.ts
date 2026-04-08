@@ -5,6 +5,7 @@ import { logger } from "../logger/logger.js";
 import { Storage, StoredRecord, MessageStatus } from "./storage.js";
 import { ConversationState } from "../conversation/conversation.types.js";
 import { makeConversationKey } from "./conversationKey.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 type ShadowCompareFields = {
   conversationKey?: string | null;
@@ -346,6 +347,7 @@ export function createDualWriteStorage(
     clientKey: string;
     waId: string;
     db: {
+      waIdCanonical: string | null;
       conversationKey: string | null;
       firstSeenAt: Date | null;
       windowIsOpen: boolean;
@@ -389,6 +391,7 @@ export function createDualWriteStorage(
       conversationKey:
         params.db.conversationKey ?? makeConversationKey(params.clientKey, params.waId),
       waId: params.waId,
+      waIdCanonical: params.db.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
       firstSeenAt: params.db.firstSeenAt?.toISOString() ?? "",
       lastInboundAt: params.db.lastInboundAt?.toISOString() ?? "",
       lastOutboundAt: params.db.lastOutboundAt?.toISOString() ?? undefined,
@@ -507,6 +510,7 @@ export function createDualWriteStorage(
       },
       select: {
         updatedAt: true,
+        waIdCanonical: true,
         conversationKey: true,
         firstSeenAt: true,
         windowIsOpen: true,
@@ -654,6 +658,7 @@ export function createDualWriteStorage(
       create: {
         clientId,
         waId: state.waId,
+        waIdCanonical: state.waIdCanonical ?? canonicalizeBrazilWaId(state.waId),
         conversationKey: state.conversationKey ?? null,
         firstSeenAt: toDate(state.firstSeenAt),
         windowIsOpen: Boolean(state.window?.isOpen),
@@ -689,6 +694,7 @@ export function createDualWriteStorage(
       },
       update: {
         conversationKey: state.conversationKey ?? null,
+        waIdCanonical: state.waIdCanonical ?? canonicalizeBrazilWaId(state.waId),
         firstSeenAt: toDate(state.firstSeenAt),
         windowIsOpen: Boolean(state.window?.isOpen),
         windowExpiresAt: toDate(state.window?.expiresAt),

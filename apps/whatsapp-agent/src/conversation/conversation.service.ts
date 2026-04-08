@@ -7,6 +7,7 @@ import {
   HandoffState,
   QuoteSiteAnswers,
 } from "./conversation.types.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 const WINDOW_HOURS = 24;
 
@@ -33,6 +34,7 @@ export async function getOrCreateConversation(
     clientKey,
     conversationKey: makeConversationKey(clientKey, waId),
     waId,
+    waIdCanonical: canonicalizeBrazilWaId(waId),
     firstSeenAt,
     lastInboundAt: firstSeenAt,
     window: { isOpen: true, expiresAt: addHoursIso(firstSeenAt, WINDOW_HOURS) },

@@ -58,6 +58,7 @@ import {
   persistOutboundMessage,
 } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -1564,6 +1565,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
       for (const message of normalized.messages) {
         const normalizedFrom = normalizeWaId(message.from);
+        const canonicalWaId = canonicalizeBrazilWaId(normalizedFrom);
+        if (canonicalWaId !== normalizedFrom) {
+          logger.info({
+            event: "waid.canonical.generated",
+            clientKey: tenantClientKey,
+            waId: normalizedFrom,
+            waIdCanonical: canonicalWaId,
+            requestId: meta?.requestId,
+          });
+        }
         logger.updateContext({
           correlationId: crypto.randomUUID(),
           clientKey: tenantClientKey,
