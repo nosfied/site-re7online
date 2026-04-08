@@ -29,6 +29,11 @@ import {
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import { requireClientAuth } from "../auth/clientAuthMiddleware.js";
+import {
+  buildWaIdLookup,
+  canonicalizeBrazilWaId,
+  compareConversationLookupPriority,
+} from "../utils/waid.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -360,6 +365,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         limit,
         includeRaw,
         includeAssignedUserName: true,
+        requestId,
+        source: "app_conversation_detail",
       });
       json(res, 200, result);
     } catch (error) {
@@ -406,8 +413,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_send",
+      });
       const result = await adminSendMessage({
-        waId,
+        waId: resolvedConversation.resolvedWaId,
         text,
         clientKey: client.clientKey,
         clientId: client.id,
@@ -417,10 +431,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, result.statusCode, { error: result.error });
         return;
       }
-      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
       json(res, 200, {
         ok: true,
-        waId,
+        waId: conversation?.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
         mode: conversation?.mode ?? "BOT",
         assignedUserId: conversation?.assignedUserId ?? null,
         assignedTo: conversation?.assignedTo ?? null,
@@ -502,7 +520,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
-      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_claim",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -530,7 +558,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       await runtimeStorage.upsertConversation(nextState);
       json(res, 200, {
         ok: true,
-        waId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         mode: nextState.mode,
         assignedUserId: nextState.assignedUserId,
         assignedTo: nextState.assignedTo,
@@ -576,7 +605,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
-      const conversation = await runtimeStorage.getConversation(waId, client.clientKey);
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_release",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -591,7 +630,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       await runtimeStorage.upsertConversation(nextState);
       json(res, 200, {
         ok: true,
-        waId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         mode: nextState.mode,
         assignedUserId: nextState.assignedUserId,
         assignedTo: nextState.assignedTo,
@@ -1259,7 +1299,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const clientKey = await getScopedClientKey();
       if (!clientKey) return;
-      const conversation = await runtimeStorage.getConversation(waId, clientKey);
+      const client = await prisma.client.findUnique({
+        where: { clientKey },
+        select: { id: true },
+      });
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "admin_conversation_inspect",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        clientKey
+      );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -1280,6 +1338,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       json(res, 200, {
         waId: conversation.waId,
+        waIdCanonical: conversation.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         intent: conversation.intent ?? null,
         demoStatus: conversation.demoStatus ?? "none",
         demoPreferredSchedule: conversation.demoPreferredSchedule ?? null,
@@ -1311,7 +1370,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const clientKey = await getScopedClientKey();
       if (!clientKey) return;
-      await runtimeStorage.deleteConversation(waId, clientKey);
+      const client = await prisma.client.findUnique({
+        where: { clientKey },
+        select: { id: true },
+      });
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "admin_conversation_reset",
+      });
+      await runtimeStorage.deleteConversation(resolvedConversation.resolvedWaId, clientKey);
       logger.info({
         event: "admin.conversation.reset",
         waId: maskWaId(waId),
@@ -1319,7 +1393,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         authSource: authToken.source,
         requestId,
       });
-      json(res, 200, { ok: true, waId });
+      json(res, 200, {
+        ok: true,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+      });
       return;
     }
 
@@ -1377,152 +1455,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
-        const conversations = await prisma.conversation.findMany({
-          where: { clientId: client.id },
-          orderBy: { updatedAt: "desc" },
-          take: limit,
-          select: {
-            waId: true,
-            updatedAt: true,
-          },
+        const result = await buildConversationListPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          limit,
+          includeAssignedUserName: true,
         });
-        const waIds = Array.from(new Set(conversations.map((item) => item.waId)));
-        if (waIds.length === 0) {
-          json(res, 200, { ok: true, count: 0, items: [] });
-          return;
-        }
-
-        const [leads, inbound, outbound] = await Promise.all([
-          prisma.lead.findMany({
-            where: { tenantId: client.id, waId: { in: waIds } },
-            select: {
-              id: true,
-              waId: true,
-              name: true,
-              phone: true,
-              city: true,
-              service: true,
-              status: true,
-            },
-          }),
-          prisma.inboundMessage.findMany({
-            where: { clientId: client.id, waId: { in: waIds } },
-            orderBy: { createdAt: "desc" },
-            take: limit * 3,
-            select: {
-              waId: true,
-              type: true,
-              bodyText: true,
-              createdAt: true,
-            },
-          }),
-          prisma.outboundMessage.findMany({
-            where: { clientId: client.id, waId: { in: waIds } },
-            orderBy: { createdAt: "desc" },
-            take: limit * 3,
-            select: {
-              waId: true,
-              type: true,
-              status: true,
-              bodyText: true,
-              templateName: true,
-              createdAt: true,
-            },
-          }),
-        ]);
-        const runtimeConversations = await Promise.all(
-          waIds.map(async (waId) => ({
-            waId,
-            conversation: await runtimeStorage.getConversation(waId, clientKey),
-          }))
-        );
-        const runtimeByWaId = new Map(
-          runtimeConversations.map((item) => [item.waId, item.conversation])
-        );
-        const assignedUserIds = Array.from(
-          new Set(
-            runtimeConversations
-              .map((item) => item.conversation?.assignedUserId ?? null)
-              .filter((value): value is string => Boolean(value))
-          )
-        );
-        const assignedUsers = assignedUserIds.length
-          ? await prisma.user.findMany({
-              where: { clientId: client.id, id: { in: assignedUserIds } },
-              select: { id: true, name: true },
-            })
-          : [];
-        const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
-
-        const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
-        const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
-        for (const item of inbound) {
-          if (!latestInboundByWaId.has(item.waId)) {
-            latestInboundByWaId.set(item.waId, item);
-          }
-        }
-        const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
-        for (const item of outbound) {
-          if (!latestOutboundByWaId.has(item.waId)) {
-            latestOutboundByWaId.set(item.waId, item);
-          }
-        }
-
-        const items = conversations.map((conversation) => {
-          const lead = leadByWaId.get(conversation.waId);
-          const latestInbound = latestInboundByWaId.get(conversation.waId);
-          const latestOutbound = latestOutboundByWaId.get(conversation.waId);
-          const runtimeState = runtimeByWaId.get(conversation.waId);
-          const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
-          const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
-          const lastMessage =
-            inboundAt >= outboundAt
-              ? latestInbound
-                ? {
-                  direction: "INBOUND",
-                  type: latestInbound.type,
-                  status: "RECEIVED",
-                  bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
-                  templateName: null,
-                  createdAt: latestInbound.createdAt,
-                }
-                : null
-              : latestOutbound
-                ? {
-                  direction: "OUTBOUND",
-                  type: latestOutbound.type,
-                  status: latestOutbound.status,
-                  bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
-                  templateName: latestOutbound.templateName ?? null,
-                  createdAt: latestOutbound.createdAt,
-                }
-                : null;
-
-          return {
-            waId: conversation.waId,
-            lastMessage,
-            leadId: lead?.id ?? null,
-            leadStatus: lead?.status ?? null,
-            leadName: lead?.name ?? null,
-            leadPhone: lead?.phone ?? null,
-            leadCity: lead?.city ?? null,
-            leadService: lead?.service ?? null,
-            mode: runtimeState?.mode ?? "BOT",
-            assignedUserId: runtimeState?.assignedUserId ?? null,
-            assignedTo: runtimeState?.assignedTo ?? null,
-            assignedUserName: runtimeState?.assignedUserId
-              ? assignedUserById.get(runtimeState.assignedUserId) ?? null
-              : null,
-            assignedAt: runtimeState?.assignedAt ?? null,
-            updatedAt: conversation.updatedAt,
-          };
-        });
-
-        json(res, 200, {
-          ok: true,
-          count: items.length,
-          items,
-        });
+        json(res, 200, result);
       } catch (error) {
         logger.error({
           event: "admin.conversations.error",
@@ -1548,7 +1487,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const conversation = await runtimeStorage.getConversation(waId, clientKey);
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversation_claim",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
         if (!conversation) {
           json(res, 404, { error: "conversation_not_found" });
           return;
@@ -1577,7 +1534,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         await runtimeStorage.upsertConversation(nextState);
         json(res, 200, {
           ok: true,
-          waId,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
           mode: nextState.mode,
           assignedUserId: nextState.assignedUserId,
           assignedTo: nextState.assignedTo,
@@ -1609,7 +1567,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
-        const conversation = await runtimeStorage.getConversation(waId, clientKey);
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversation_release",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
         if (!conversation) {
           json(res, 404, { error: "conversation_not_found" });
           return;
@@ -1624,7 +1600,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         await runtimeStorage.upsertConversation(nextState);
         json(res, 200, {
           ok: true,
-          waId,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
           mode: nextState.mode,
           assignedUserId: nextState.assignedUserId,
           assignedTo: nextState.assignedTo,
@@ -1670,8 +1647,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversation_send",
+        });
         const result = await adminSendMessage({
-          waId,
+          waId: resolvedConversation.resolvedWaId,
           text,
           clientKey,
           clientId: client.id,
@@ -1681,7 +1665,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, result.statusCode, { error: result.error });
           return;
         }
-        const conversation = await runtimeStorage.getConversation(waId, clientKey);
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
         const assignedUser =
           conversation?.assignedUserId
             ? await prisma.user.findFirst({
@@ -1691,7 +1678,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : null;
         json(res, 200, {
           ok: true,
-          waId,
+          waId: conversation?.waId ?? resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
           mode: conversation?.mode ?? "BOT",
           assignedUserId: conversation?.assignedUserId ?? null,
           assignedTo: conversation?.assignedTo ?? null,
@@ -1738,106 +1726,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "client_not_found" });
           return;
         }
-        const conversation = await runtimeStorage.getConversation(waId, clientKey);
-        const assignedUser =
-          conversation?.assignedUserId
-            ? await prisma.user.findFirst({
-                where: { id: conversation.assignedUserId, clientId: client.id },
-                select: { name: true },
-              })
-            : null;
-
-        const [inbound, outbound] = await Promise.all([
-          prisma.inboundMessage.findMany({
-            where: { clientId: client.id, waId },
-            orderBy: { createdAt: order },
-            take: limit,
-            select: {
-              createdAt: true,
-              messageId: true,
-              type: true,
-              requestId: true,
-              bodyText: true,
-              rawPayload: includeRaw,
-            },
-          }),
-          prisma.outboundMessage.findMany({
-            where: { clientId: client.id, waId },
-            orderBy: { createdAt: order },
-            take: limit,
-            select: {
-              createdAt: true,
-              messageId: true,
-              type: true,
-              status: true,
-              requestId: true,
-              bodyText: true,
-              templateName: true,
-              templateLang: true,
-              metaMessageId: true,
-              errorBody: true,
-              rawPayload: includeRaw,
-            },
-          }),
-        ]);
-
-        const items = [
-          ...inbound.map((item) => ({
-            direction: "INBOUND",
-            type: item.type,
-            status: "RECEIVED",
-            intent: null,
-            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
-            templateName: null,
-            templateLang: null,
-            requestId: item.requestId,
-            messageId: item.messageId,
-            metaMessageId: null,
-            errorBody: null,
-            createdAt: item.createdAt,
-            rawPayload: includeRaw ? item.rawPayload : undefined,
-          })),
-          ...outbound.map((item) => ({
-            direction: "OUTBOUND",
-            type: item.type,
-            status: item.status,
-            intent: null,
-            bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
-            templateName: item.templateName,
-            templateLang: item.templateLang,
-            requestId: item.requestId,
-            messageId: item.messageId,
-            metaMessageId: item.metaMessageId,
-            errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
-            createdAt: item.createdAt,
-            rawPayload: includeRaw ? item.rawPayload : undefined,
-          })),
-        ]
-          .sort((a, b) => {
-            const aTs =
-              a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));
-            const bTs =
-              b.createdAt instanceof Date ? b.createdAt.getTime() : Date.parse(String(b.createdAt));
-            const aValid = Number.isFinite(aTs);
-            const bValid = Number.isFinite(bTs);
-            if (!aValid && !bValid) return 0;
-            if (!aValid) return 1;
-            if (!bValid) return -1;
-            return order === "asc" ? aTs - bTs : bTs - aTs;
-          })
-          .slice(0, limit);
-
-        json(res, 200, {
-          ok: true,
+        const result = await buildConversationDetailPayload(prisma, {
+          clientId: client.id,
+          clientKey,
           waId,
-          mode: conversation?.mode ?? "BOT",
-          assignedUserId: conversation?.assignedUserId ?? null,
-          assignedTo: conversation?.assignedTo ?? null,
-          assignedUserName: assignedUser?.name ?? null,
-          assignedAt: conversation?.assignedAt ?? null,
-          count: items.length,
-          items,
+          order,
+          limit,
+          includeRaw,
+          includeAssignedUserName: true,
+          requestId,
+          source: "admin_conversation_detail",
         });
+        json(res, 200, result);
       } catch (error) {
         logger.error({
           event: "admin.conversation.messages.error",
@@ -4473,6 +4373,64 @@ async function findAssignedUserName(
   return user?.name ?? null;
 }
 
+function buildScopedWaIdWhere(rawWaId: string) {
+  const lookup = buildWaIdLookup(rawWaId);
+  return {
+    OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
+  };
+}
+
+function getWaIdGroupKey(waId: string, waIdCanonical?: string | null) {
+  return waIdCanonical ?? canonicalizeBrazilWaId(waId);
+}
+
+async function resolveConversationTarget(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    rawWaId: string;
+    requestId: string;
+    source: string;
+  }
+) {
+  const lookup = buildWaIdLookup(params.rawWaId);
+  const matches = await prisma.conversation.findMany({
+    where: {
+      clientId: params.clientId,
+      ...buildScopedWaIdWhere(lookup.raw),
+    },
+    select: {
+      waId: true,
+      waIdCanonical: true,
+      updatedAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+    },
+  });
+  const sortedMatches = matches.sort((left, right) => compareConversationLookupPriority(left, right));
+  if (sortedMatches.length > 1) {
+    logger.warn({
+      event: "waid.canonical.collision",
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: params.rawWaId,
+      waIdCanonical: lookup.canonical,
+      matchCount: sortedMatches.length,
+      source: params.source,
+      requestId: params.requestId,
+    });
+  }
+  const winner = sortedMatches[0] ?? null;
+  return {
+    lookup,
+    winner,
+    resolvedWaId: winner?.waId ?? lookup.raw,
+    resolvedWaIdCanonical: winner?.waIdCanonical ?? lookup.canonical,
+    matchedWaIds: Array.from(new Set(sortedMatches.map((item) => item.waId))),
+  };
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -4482,50 +4440,97 @@ async function buildConversationListPayload(
     includeAssignedUserName: boolean;
   }
 ) {
+  const conversationFetchLimit = Math.min(params.limit * 3, 600);
+  const messageFetchLimit = Math.min(params.limit * 6, 1200);
   const conversations = await prisma.conversation.findMany({
     where: { clientId: params.clientId },
     orderBy: { updatedAt: "desc" },
-    take: params.limit,
+    take: conversationFetchLimit,
     select: {
       waId: true,
+      waIdCanonical: true,
       updatedAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
     },
   });
-  const waIds = Array.from(new Set(conversations.map((item) => item.waId)));
-  if (waIds.length === 0) {
+  if (conversations.length === 0) {
     return { ok: true, count: 0, items: [] };
   }
 
+  const groupedConversations = new Map<
+    string,
+    {
+      waId: string;
+      waIdCanonical: string;
+      updatedAt: Date;
+      lastInboundAt: Date | null;
+      lastOutboundAt: Date | null;
+    }
+  >();
+  for (const conversation of conversations) {
+    const key = getWaIdGroupKey(conversation.waId, conversation.waIdCanonical);
+    const current = groupedConversations.get(key);
+    if (!current || compareConversationLookupPriority(conversation, current) < 0) {
+      groupedConversations.set(key, {
+        waId: conversation.waId,
+        waIdCanonical: key,
+        updatedAt: conversation.updatedAt,
+        lastInboundAt: conversation.lastInboundAt,
+        lastOutboundAt: conversation.lastOutboundAt,
+      });
+    }
+  }
+  const winners = Array.from(groupedConversations.values())
+    .sort((left, right) => compareConversationLookupPriority(left, right))
+    .slice(0, params.limit);
+  const waIds = Array.from(new Set(winners.map((item) => item.waId)));
+  const canonicalWaIds = Array.from(new Set(winners.map((item) => item.waIdCanonical)));
+
   const [leads, inbound, outbound] = await Promise.all([
     prisma.lead.findMany({
-      where: { tenantId: params.clientId, waId: { in: waIds } },
+      where: {
+        tenantId: params.clientId,
+        OR: [{ waIdCanonical: { in: canonicalWaIds } }, { waId: { in: waIds } }],
+      },
       select: {
         id: true,
         waId: true,
+        waIdCanonical: true,
         name: true,
         phone: true,
         city: true,
         service: true,
         status: true,
+        updatedAt: true,
+        createdAt: true,
       },
     }),
     prisma.inboundMessage.findMany({
-      where: { clientId: params.clientId, waId: { in: waIds } },
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: canonicalWaIds } }, { waId: { in: waIds } }],
+      },
       orderBy: { createdAt: "desc" },
-      take: params.limit * 3,
+      take: messageFetchLimit,
       select: {
         waId: true,
+        waIdCanonical: true,
         type: true,
         bodyText: true,
         createdAt: true,
       },
     }),
     prisma.outboundMessage.findMany({
-      where: { clientId: params.clientId, waId: { in: waIds } },
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: canonicalWaIds } }, { waId: { in: waIds } }],
+      },
       orderBy: { createdAt: "desc" },
-      take: params.limit * 3,
+      take: messageFetchLimit,
       select: {
         waId: true,
+        waIdCanonical: true,
         type: true,
         status: true,
         bodyText: true,
@@ -4535,12 +4540,14 @@ async function buildConversationListPayload(
     }),
   ]);
   const runtimeConversations = await Promise.all(
-    waIds.map(async (waId) => ({
-      waId,
-      conversation: await runtimeStorage.getConversation(waId, params.clientKey),
+    winners.map(async (item) => ({
+      waIdCanonical: item.waIdCanonical,
+      conversation: await runtimeStorage.getConversation(item.waId, params.clientKey),
     }))
   );
-  const runtimeByWaId = new Map(runtimeConversations.map((item) => [item.waId, item.conversation]));
+  const runtimeByWaId = new Map(
+    runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
+  );
   const assignedUserIds = params.includeAssignedUserName
     ? Array.from(
         new Set(
@@ -4559,25 +4566,49 @@ async function buildConversationListPayload(
       : [];
   const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
 
-  const leadByWaId = new Map(leads.map((item) => [item.waId, item]));
+  const leadByWaId = new Map<string, (typeof leads)[number]>();
+  for (const item of leads) {
+    const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    const current = leadByWaId.get(key);
+    if (
+      !current ||
+      compareConversationLookupPriority(
+        {
+          updatedAt: item.updatedAt,
+          lastInboundAt: item.updatedAt,
+          lastOutboundAt: item.createdAt,
+        },
+        {
+          updatedAt: current.updatedAt,
+          lastInboundAt: current.updatedAt,
+          lastOutboundAt: current.createdAt,
+        }
+      ) < 0
+    ) {
+      leadByWaId.set(key, item);
+    }
+  }
   const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
   for (const item of inbound) {
-    if (!latestInboundByWaId.has(item.waId)) {
-      latestInboundByWaId.set(item.waId, item);
+    const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!latestInboundByWaId.has(key)) {
+      latestInboundByWaId.set(key, item);
     }
   }
   const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
   for (const item of outbound) {
-    if (!latestOutboundByWaId.has(item.waId)) {
-      latestOutboundByWaId.set(item.waId, item);
+    const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!latestOutboundByWaId.has(key)) {
+      latestOutboundByWaId.set(key, item);
     }
   }
 
-  const items = conversations.map((conversation) => {
-    const lead = leadByWaId.get(conversation.waId);
-    const latestInbound = latestInboundByWaId.get(conversation.waId);
-    const latestOutbound = latestOutboundByWaId.get(conversation.waId);
-    const runtimeState = runtimeByWaId.get(conversation.waId);
+  const items = winners.map((conversation) => {
+    const key = conversation.waIdCanonical;
+    const lead = leadByWaId.get(key);
+    const latestInbound = latestInboundByWaId.get(key);
+    const latestOutbound = latestOutboundByWaId.get(key);
+    const runtimeState = runtimeByWaId.get(key);
     const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
     const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
     const lastMessage =
@@ -4605,6 +4636,7 @@ async function buildConversationListPayload(
 
     return {
       waId: conversation.waId,
+      waIdCanonical: conversation.waIdCanonical,
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -4641,9 +4673,18 @@ async function buildConversationDetailPayload(
     limit: number;
     includeRaw: boolean;
     includeAssignedUserName: boolean;
+    requestId: string;
+    source: string;
   }
 ) {
-  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  const resolved = await resolveConversationTarget(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    rawWaId: params.waId,
+    requestId: params.requestId,
+    source: params.source,
+  });
+  const conversation = await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey);
   const assignedUser =
     params.includeAssignedUserName && conversation?.assignedUserId
       ? await prisma.user.findFirst({
@@ -4654,7 +4695,13 @@ async function buildConversationDetailPayload(
 
   const [inbound, outbound] = await Promise.all([
     prisma.inboundMessage.findMany({
-      where: { clientId: params.clientId, waId: params.waId },
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waIdCanonical: resolved.resolvedWaIdCanonical },
+          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
+        ],
+      },
       orderBy: { createdAt: params.order },
       take: params.limit,
       select: {
@@ -4667,7 +4714,13 @@ async function buildConversationDetailPayload(
       },
     }),
     prisma.outboundMessage.findMany({
-      where: { clientId: params.clientId, waId: params.waId },
+      where: {
+        clientId: params.clientId,
+        OR: [
+          { waIdCanonical: resolved.resolvedWaIdCanonical },
+          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
+        ],
+      },
       orderBy: { createdAt: params.order },
       take: params.limit,
       select: {
@@ -4732,7 +4785,8 @@ async function buildConversationDetailPayload(
 
   return {
     ok: true,
-    waId: params.waId,
+    waId: conversation?.waId ?? resolved.resolvedWaId,
+    waIdCanonical: resolved.resolvedWaIdCanonical,
     mode: conversation?.mode ?? "BOT",
     assignedUserId: conversation?.assignedUserId ?? null,
     assignedTo: conversation?.assignedTo ?? null,
