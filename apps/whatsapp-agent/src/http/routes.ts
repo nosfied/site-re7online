@@ -33,6 +33,7 @@ import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
+  normalizeWaIdDigits,
 } from "../utils/waid.js";
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -961,13 +962,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         : Array.isArray(body.waIds)
           ? body.waIds
           : [];
-      const waIds = Array.from(
-        new Set(
-          rawWaIds
-            .map((value) => normalizeWaId(String(value ?? "").trim()))
-            .filter((value): value is string => Boolean(value))
-        )
-      );
       if (!name) {
         json(res, 400, httpError("bad_request", "Campaign name is required"));
         return;
@@ -984,15 +978,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
         return;
       }
-      if (waIds.length === 0) {
-        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
-        return;
-      }
-      if (waIds.length > 1000) {
-        json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
-        return;
-      }
-
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -1000,6 +985,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const waIds = dedupeCampaignRecipients(rawWaIds, {
+        source: "app_campaign_create",
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+      });
+      if (waIds.length === 0) {
+        json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+        return;
+      }
+      if (waIds.length > 1000) {
+        json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
         return;
       }
 
@@ -2850,13 +2849,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           : Array.isArray(body.waIds)
             ? body.waIds
             : [];
-        const waIds = Array.from(
-          new Set(
-            rawWaIds
-              .map((value) => normalizeWaId(String(value ?? "").trim()))
-              .filter((value): value is string => Boolean(value))
-          )
-        );
         if (!name) {
           json(res, 400, httpError("bad_request", "Campaign name is required"));
           return;
@@ -2873,15 +2865,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
           return;
         }
-        if (waIds.length === 0) {
-          json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
-          return;
-        }
-        if (waIds.length > 1000) {
-          json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
-          return;
-        }
-
         const clientKey = await getScopedClientKey();
         if (!clientKey) return;
         const client = await prisma.client.findUnique({
@@ -2890,6 +2873,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         if (!client) {
           json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const dedupedWaIds = dedupeCampaignRecipients(rawWaIds, {
+          source: "admin_campaign_create",
+          clientId: client.id,
+          clientKey,
+          requestId,
+        });
+        if (dedupedWaIds.length === 0) {
+          json(res, 400, httpError("invalid_recipients", "Recipients must contain valid waIds"));
+          return;
+        }
+        if (dedupedWaIds.length > 1000) {
+          json(res, 400, httpError("too_many_recipients", "Recipients limit exceeded", { limit: 1000 }));
           return;
         }
 
@@ -2909,7 +2906,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name,
           templateId: resolvedTemplate.templateId,
           templateName: resolvedTemplate.templateName,
-          waIds,
+          waIds: dedupedWaIds,
           components,
         });
 
@@ -2918,7 +2915,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             campaignId: created.campaign.id,
             templateId: created.campaign.templateId,
             status: "sending",
-            totalRecipients: waIds.length,
+            totalRecipients: dedupedWaIds.length,
           });
         } else {
           json(res, 200, {
@@ -4429,6 +4426,52 @@ async function resolveConversationTarget(
     resolvedWaIdCanonical: winner?.waIdCanonical ?? lookup.canonical,
     matchedWaIds: Array.from(new Set(sortedMatches.map((item) => item.waId))),
   };
+}
+
+function dedupeCampaignRecipients(
+  recipients: unknown[],
+  params: {
+    source: "app_campaign_create" | "admin_campaign_create";
+    clientId?: string | null;
+    clientKey?: string | null;
+    requestId: string;
+  }
+) {
+  // Map preserves insertion order, so the first valid raw waId wins for each canonical key.
+  const canonicalToRaw = new Map<string, string>();
+  const canonicalToOriginals = new Map<string, string[]>();
+
+  for (const value of recipients) {
+    const normalized = normalizeWaIdDigits(String(value ?? "").trim());
+    if (!normalized) continue;
+    const canonical = canonicalizeBrazilWaId(normalized);
+    if (!canonical) continue;
+
+    const originals = canonicalToOriginals.get(canonical) ?? [];
+    originals.push(normalized);
+    canonicalToOriginals.set(canonical, originals);
+
+    if (!canonicalToRaw.has(canonical)) {
+      canonicalToRaw.set(canonical, normalized);
+    }
+  }
+
+  for (const [canonical, originals] of canonicalToOriginals.entries()) {
+    const uniqueOriginals = Array.from(new Set(originals));
+    if (uniqueOriginals.length > 1) {
+      logger.info({
+        event: "campaign.recipient.deduped",
+        canonical,
+        originals: uniqueOriginals,
+        clientId: params.clientId ?? null,
+        clientKey: params.clientKey ?? null,
+        source: params.source,
+        requestId: params.requestId,
+      });
+    }
+  }
+
+  return Array.from(canonicalToRaw.values());
 }
 
 async function buildConversationListPayload(
