@@ -1,10 +1,12 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { getPrisma } from "../db.js";
+import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 export async function persistInboundMessage(params: {
   clientId: string;
   phoneNumberId?: string;
   waId: string;
+  waIdCanonical?: string | null;
   messageId: string;
   type: MessageType;
   bodyText?: string | null;
@@ -20,6 +22,7 @@ export async function persistInboundMessage(params: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
         waId: params.waId,
+        waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
         messageId: params.messageId,
         type: params.type,
         bodyText: params.bodyText ?? undefined,
@@ -39,6 +42,7 @@ export async function persistInboundMessage(params: {
 export async function persistConversationWindow(params: {
   clientId: string;
   waId: string;
+  waIdCanonical?: string | null;
   phoneNumberId?: string;
   windowIsOpen: boolean;
   windowExpiresAt?: Date | null;
@@ -55,6 +59,7 @@ export async function persistConversationWindow(params: {
       },
     },
     update: {
+      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
@@ -64,6 +69,7 @@ export async function persistConversationWindow(params: {
     create: {
       clientId: params.clientId,
       waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
@@ -77,6 +83,7 @@ export async function persistOutboundMessage(params: {
   clientId: string;
   phoneNumberId?: string;
   waId: string;
+  waIdCanonical?: string | null;
   messageId?: string | null;
   type: MessageType;
   status: MessageStatus;
@@ -95,6 +102,7 @@ export async function persistOutboundMessage(params: {
       clientId: params.clientId,
       phoneNumberId: params.phoneNumberId,
       waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
       messageId: params.messageId ?? undefined,
       type: params.type,
       status: params.status,
@@ -132,6 +140,7 @@ export async function persistEvent(params: {
   clientId: string;
   conversationId?: string | null;
   waId?: string | null;
+  waIdCanonical?: string | null;
   messageId?: string | null;
   requestId?: string | null;
   eventName: string;
@@ -146,6 +155,8 @@ export async function persistEvent(params: {
         clientId: params.clientId,
         conversationId: params.conversationId ?? undefined,
         waId: params.waId ?? undefined,
+        waIdCanonical:
+          params.waIdCanonical ?? (params.waId ? canonicalizeBrazilWaId(params.waId) : undefined),
         messageId: params.messageId ?? undefined,
         requestId: requestId ?? undefined,
         eventName: params.eventName,
