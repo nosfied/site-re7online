@@ -30,6 +30,7 @@ import {
   submitTemplateToMeta,
   MetaTemplateServiceError,
   MetaTemplateValidationError,
+  syncTemplateStatus,
 } from "../meta/template.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
@@ -463,6 +464,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           createdAt: true,
           updatedAt: true,
         },
+      });
+
+      triggerTemplateStatusSync({
+        templateIds: await findTemplatesNeedingSync(prisma, { clientId: client.id }),
+        source: "app.templates",
+        requestId,
       });
 
       json(res, 200, {
@@ -3276,6 +3283,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
         });
 
+        const syncWhere = tenantAdmin
+          ? { clientId: adminAuth.clientId }
+          : requestedClientKey
+            ? { client: { clientKey: requestedClientKey } }
+            : undefined;
+
+        triggerTemplateStatusSync({
+          templateIds: await findTemplatesNeedingSync(prisma, syncWhere),
+          source: "admin.templates",
+          requestId,
+        });
+
         json(res, 200, {
           defaultTemplate: {
             name: env.OUTBOUND_TEMPLATE_DEFAULT_NAME,
@@ -4112,6 +4131,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   json(res, 404, { error: "not_found" });
+}
+
+async function findTemplatesNeedingSync(
+  prisma: { template: { findMany: (...args: any[]) => Promise<Array<{ id: string }>> } },
+  where:
+    | { clientId: string }
+    | { client: { clientKey: string } }
+    | undefined
+) {
+  const items = await prisma.template.findMany({
+    where: {
+      ...(where ?? {}),
+      status: { in: ["submitting", "PENDING"] },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 5,
+    select: { id: true },
+  });
+  return items.map((item) => item.id);
+}
+
+function triggerTemplateStatusSync(params: {
+  templateIds: string[];
+  source: string;
+  requestId: string;
+}) {
+  if (params.templateIds.length === 0) return;
+
+  void Promise.allSettled(params.templateIds.map((templateId) => syncTemplateStatus(templateId))).then(
+    (results) => {
+      for (let index = 0; index < results.length; index += 1) {
+        const result = results[index];
+        if (result.status === "rejected") {
+          logger.warn({
+            event: "template.status.sync.failed",
+            templateId: params.templateIds[index],
+            source: params.source,
+            requestId: params.requestId,
+            message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          });
+        }
+      }
+    }
+  );
 }
 
 function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {

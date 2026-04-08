@@ -1,3 +1,6 @@
+import { getPrisma } from "../db.js";
+import { logger } from "../logger/logger.js";
+
 type TenantMetaTemplateConfig = {
   businessToken?: string | null;
   wabaId?: string | null;
@@ -59,7 +62,10 @@ export class MetaTemplateServiceError extends Error {
     public readonly code:
       | "meta_config_missing"
       | "meta_template_submit_failed"
-      | "meta_template_submit_invalid_json",
+      | "meta_template_submit_invalid_json"
+      | "meta_template_sync_not_found"
+      | "meta_template_sync_invalid_json"
+      | "meta_template_sync_failed",
     public readonly status?: number,
     public readonly errorBody?: string
   ) {
@@ -254,5 +260,175 @@ export async function submitTemplateToMeta(params: {
     status,
     errorMessage: null,
     rawResponse: rawResponse ?? {},
+  };
+}
+
+function normalizeMetaTemplateSyncStatus(input: unknown): "approved" | "rejected" | null {
+  if (typeof input !== "string") return null;
+  const normalized = input.trim().toUpperCase();
+  if (normalized === "APPROVED") return "approved";
+  if (normalized === "REJECTED") return "rejected";
+  return null;
+}
+
+function extractMetaRejectionReason(input: Record<string, unknown> | null) {
+  if (!input) return null;
+  const directFields = ["rejection_reason", "rejected_reason", "reason"];
+  for (const field of directFields) {
+    if (typeof input[field] === "string" && String(input[field]).trim()) {
+      return String(input[field]).trim();
+    }
+  }
+  if (
+    input.rejection_reason != null &&
+    typeof input.rejection_reason === "object" &&
+    typeof (input.rejection_reason as Record<string, unknown>).reason === "string"
+  ) {
+    return String((input.rejection_reason as Record<string, unknown>).reason).trim();
+  }
+  return null;
+}
+
+export async function syncTemplateStatus(templateId: string) {
+  const prisma = getPrisma();
+  const template = await prisma.template.findUnique({
+    where: { id: templateId },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      language: true,
+      status: true,
+      metaTemplateId: true,
+      client: {
+        select: {
+          clientKey: true,
+          metaConfig: {
+            select: {
+              businessToken: true,
+              wabaId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!template) {
+    throw new MetaTemplateServiceError("meta_template_sync_not_found", "meta_template_sync_not_found", 404);
+  }
+
+  const businessToken = normalizeOptionalString(template.client.metaConfig?.businessToken);
+  const wabaId = normalizeOptionalString(template.client.metaConfig?.wabaId);
+  if (!businessToken || !wabaId) {
+    throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
+  }
+
+  const params = new URLSearchParams({ name: template.name });
+  const url = `https://graph.facebook.com/${META_TEMPLATE_API_VERSION}/${wabaId}/message_templates?${params.toString()}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${businessToken}`,
+    },
+  });
+
+  const rawText = await response.text();
+  let rawResponse: Record<string, unknown> | null = null;
+  if (rawText) {
+    try {
+      rawResponse = JSON.parse(rawText) as Record<string, unknown>;
+    } catch {
+      throw new MetaTemplateServiceError(
+        "meta_template_sync_invalid_json",
+        "meta_template_sync_invalid_json",
+        response.status,
+        rawText.slice(0, 2000)
+      );
+    }
+  }
+
+  if (!response.ok) {
+    throw new MetaTemplateServiceError(
+      "meta_template_sync_failed",
+      "meta_template_sync_failed",
+      response.status,
+      rawText.slice(0, 2000)
+    );
+  }
+
+  const items = Array.isArray(rawResponse?.data) ? rawResponse.data : [];
+  const matched =
+    items.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      const typed = item as Record<string, unknown>;
+      if (template.metaTemplateId && typeof typed.id === "string" && typed.id === template.metaTemplateId) {
+        return true;
+      }
+      return (
+        typed.name === template.name &&
+        (typeof typed.language === "string" ? typed.language === template.language : true)
+      );
+    }) ?? null;
+
+  if (!matched || typeof matched !== "object") {
+    logger.info({
+      event: "template.status.not_found",
+      templateId: template.id,
+      clientKey: template.client.clientKey,
+      templateName: template.name,
+      wabaId,
+    });
+    return {
+      ok: false as const,
+      templateId: template.id,
+      status: template.status,
+      rejectionReason: null,
+      updated: false,
+    };
+  }
+
+  const typedMatch = matched as Record<string, unknown>;
+  const nextStatus = normalizeMetaTemplateSyncStatus(typedMatch.status);
+  const rejectionReason = extractMetaRejectionReason(typedMatch);
+
+  if (!nextStatus) {
+    return {
+      ok: true as const,
+      templateId: template.id,
+      status: template.status,
+      rejectionReason,
+      updated: false,
+    };
+  }
+
+  const updated = await prisma.template.update({
+    where: { id: template.id },
+    data: {
+      status: nextStatus,
+      rejectionReason: nextStatus === "rejected" ? rejectionReason ?? undefined : null,
+    },
+    select: {
+      id: true,
+      status: true,
+      rejectionReason: true,
+    },
+  });
+
+  logger.info({
+    event: "template.status.synced",
+    templateId: updated.id,
+    clientKey: template.client.clientKey,
+    previousStatus: template.status,
+    nextStatus: updated.status,
+  });
+
+  return {
+    ok: true as const,
+    templateId: updated.id,
+    status: updated.status,
+    rejectionReason: updated.rejectionReason,
+    updated: true,
   };
 }
