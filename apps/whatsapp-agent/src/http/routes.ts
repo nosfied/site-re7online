@@ -653,6 +653,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (
     req.method === "PATCH" &&
     pathname.startsWith("/app/lead/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const leadId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+      const existing = await prisma.lead.findFirst({
+        where: { id: leadId, tenantId: client.id },
+        select: { id: true },
+      });
+      if (!existing) {
+        json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      const lead = await prisma.lead.update({
+        where: { id: leadId },
+        data: { name: name || null },
+        select: { id: true, name: true, updatedAt: true },
+      });
+      json(res, 200, { ok: true, lead });
+    } catch (error) {
+      logger.error({
+        event: "app.lead.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "PATCH" &&
+    pathname.startsWith("/app/lead/") &&
     pathname.split("/").length === 5 &&
     pathname.endsWith("/status")
   ) {
