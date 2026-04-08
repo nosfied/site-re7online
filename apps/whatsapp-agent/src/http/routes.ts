@@ -4437,6 +4437,7 @@ function dedupeCampaignRecipients(
     requestId: string;
   }
 ) {
+  // Map preserves insertion order, so the first valid raw waId wins for each canonical key.
   const canonicalToRaw = new Map<string, string>();
   const canonicalToOriginals = new Map<string, string[]>();
 
