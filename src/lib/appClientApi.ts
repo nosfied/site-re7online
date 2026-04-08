@@ -229,6 +229,7 @@ export async function fetchAppConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  waIdCanonical?: string | null;
   mode: "BOT" | "HUMAN";
   assignedUserId: string | null;
   assignedTo: string | null;
@@ -255,6 +256,7 @@ export async function sendAppConversationMessage(
 ): Promise<{
   ok: true;
   waId: string;
+  waIdCanonical?: string | null;
   message: {
     messageId: string;
     status: string;
@@ -275,6 +277,7 @@ export async function claimAppConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  waIdCanonical?: string | null;
   mode: "BOT" | "HUMAN";
   assignedUserId: string | null;
   assignedTo: string | null;
@@ -293,6 +296,7 @@ export async function releaseAppConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  waIdCanonical?: string | null;
   mode: "BOT" | "HUMAN";
   assignedUserId: string | null;
   assignedTo: string | null;

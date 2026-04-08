@@ -36,6 +36,7 @@ export type InboxMessageItem = {
 
 export type InboxConversationItem = {
   waId: string;
+  waIdCanonical?: string | null;
   lastMessage: {
     direction: "INBOUND" | "OUTBOUND";
     type: string;
