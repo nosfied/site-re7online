@@ -21,6 +21,7 @@ type TemplateRequestFormState = {
   content: string;
   variables: string;
   category: string;
+  autoSubmit: boolean;
 };
 
 const EMPTY_FORM: TemplateRequestFormState = {
@@ -28,19 +29,39 @@ const EMPTY_FORM: TemplateRequestFormState = {
   content: "",
   variables: "",
   category: "MARKETING",
+  autoSubmit: true,
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
 
 function getStatusClasses(status: string) {
   switch (status.toLowerCase()) {
+    case "submitting":
+      return "bg-amber-500/20 text-amber-200";
     case "approved":
       return "bg-emerald-500/20 text-emerald-200";
+    case "failed":
     case "rejected":
       return "bg-red-500/20 text-red-200";
     case "pending":
     default:
       return "bg-amber-500/20 text-amber-200";
+  }
+}
+
+function getStatusLabel(status: string) {
+  switch (status.toLowerCase()) {
+    case "submitting":
+    case "pending":
+      return "Em analise";
+    case "approved":
+      return "Aprovado";
+    case "rejected":
+      return "Rejeitado";
+    case "failed":
+      return "Falha";
+    default:
+      return status;
   }
 }
 
@@ -145,12 +166,15 @@ export default function AppTemplatesPage() {
         name,
         content,
         category,
+        autoSubmit: form.autoSubmit,
         ...(variables !== undefined ? { variables } : {}),
       });
       await loadData(session);
       setForm(EMPTY_FORM);
       setSuccess(
-        "Template solicitado com sucesso. Nossa equipe ira revisar e aprovar antes do uso em campanhas."
+        form.autoSubmit
+          ? "Template enviado para aprovacao."
+          : "Template solicitado com sucesso. Nossa equipe ira revisar antes do uso em campanhas."
       );
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -182,7 +206,7 @@ export default function AppTemplatesPage() {
       <div className="grid gap-4 xl:grid-cols-[1fr_1fr_0.9fr]">
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold">Templates aprovados</h2>
+            <h2 className="text-sm font-semibold">Catalogo de templates</h2>
           </div>
           {templates.length === 0 ? (
             <p className="p-4 text-sm text-white/70">Nenhum template aprovado encontrado.</p>
@@ -194,7 +218,8 @@ export default function AppTemplatesPage() {
                     <th className="px-3 py-2">Name</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Category</th>
-                    <th className="px-3 py-2">Language</th>
+                    <th className="px-3 py-2">Atualizado</th>
+                    <th className="px-3 py-2">Motivo</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -205,11 +230,12 @@ export default function AppTemplatesPage() {
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}
                         >
-                          {item.status}
+                          {getStatusLabel(item.status)}
                         </span>
                       </td>
                       <td className="px-3 py-2">{item.category}</td>
-                      <td className="px-3 py-2">{item.language}</td>
+                      <td className="px-3 py-2">{formatDateTime(item.updatedAt)}</td>
+                      <td className="px-3 py-2">{item.rejectionReason || "-"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -243,7 +269,7 @@ export default function AppTemplatesPage() {
                         <span
                           className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}
                         >
-                          {item.status}
+                          {getStatusLabel(item.status)}
                         </span>
                       </td>
                       <td className="px-3 py-2">{item.notes || "-"}</td>
@@ -301,6 +327,17 @@ export default function AppTemplatesPage() {
                 placeholder='{"items":["nome","cidade"]}'
                 className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
+            </label>
+            <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-white/80">
+              <input
+                type="checkbox"
+                checked={form.autoSubmit}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, autoSubmit: event.target.checked }))
+                }
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-re7-navy text-re7-orange"
+              />
+              <span>Enviar automaticamente para aprovacao (Meta)</span>
             </label>
 
             {formError ? (
