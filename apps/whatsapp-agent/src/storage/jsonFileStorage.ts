@@ -7,7 +7,11 @@ import {
   getClientKeyFromConversationKey,
   makeConversationKey,
 } from "./conversationKey.js";
-import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import {
+  buildWaIdLookup,
+  canonicalizeBrazilWaId,
+  compareConversationLookupPriority,
+} from "../utils/waid.js";
 
 const dataDir = path.resolve(process.cwd(), ".data");
 const legacyEventsFile = path.join(dataDir, "whatsapp-events.json");
@@ -191,27 +195,47 @@ function maskWaId(waId: string) {
   return `***${waId.slice(-4)}`;
 }
 
+function matchesConversationLookup(
+  item: ConversationState,
+  clientKey: string,
+  waId: string
+) {
+  const lookup = buildWaIdLookup(waId);
+  const itemCanonical = item.waIdCanonical ?? canonicalizeBrazilWaId(item.waId);
+  return (
+    item.conversationKey === makeConversationKey(clientKey, lookup.raw) ||
+    (item.clientKey === clientKey &&
+      (item.waId === lookup.raw || itemCanonical === lookup.canonical)) ||
+    (!item.conversationKey && (item.waId === lookup.raw || itemCanonical === lookup.canonical))
+  );
+}
+
 function findConversationIndex(
   conversations: ConversationState[],
   clientKey: string,
   waId: string
 ) {
-  const conversationKey = makeConversationKey(clientKey, waId);
-  const scopedIndex = conversations.findIndex(
-    (item) =>
-      item.conversationKey === conversationKey ||
-      (item.clientKey === clientKey && item.waId === waId)
-  );
-  if (scopedIndex >= 0) {
-    return { index: scopedIndex, conversationKey, migrated: false };
+  const matches = conversations
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => matchesConversationLookup(item, clientKey, waId))
+    .sort((left, right) => compareConversationLookupPriority(left.item, right.item));
+
+  if (matches.length === 0) {
+    return {
+      index: -1,
+      conversationKey: makeConversationKey(clientKey, buildWaIdLookup(waId).raw),
+      migrated: false,
+      collisionCount: 0,
+    };
   }
-  const legacyIndex = conversations.findIndex(
-    (item) => !item.conversationKey && item.waId === waId
-  );
-  if (legacyIndex >= 0) {
-    return { index: legacyIndex, conversationKey, migrated: true };
-  }
-  return { index: -1, conversationKey, migrated: false };
+
+  const winner = matches[0];
+  return {
+    index: winner.index,
+    conversationKey: winner.item.conversationKey ?? makeConversationKey(clientKey, winner.item.waId),
+    migrated: !winner.item.conversationKey,
+    collisionCount: matches.length,
+  };
 }
 
 async function readTenantConversations(clientKey: string) {
@@ -237,6 +261,17 @@ async function readLegacyConversation(waId: string, clientKey: string) {
   const found = findConversationIndex(conversations, clientKey, waId);
   if (found.index < 0) {
     return null;
+  }
+  if (found.collisionCount > 1) {
+    logger.warn({
+      event: "waid.canonical.collision",
+      clientId: null,
+      clientKey,
+      waId: maskWaId(waId),
+      waIdCanonical: canonicalizeBrazilWaId(waId),
+      matchCount: found.collisionCount,
+      source: "json_storage_legacy",
+    });
   }
   logger.info({
     event: "storage.conversation.legacy_fallback",
@@ -364,10 +399,22 @@ export const jsonFileStorage: Storage = {
       return null;
     }
     const current = conversations[found.index];
+    if (found.collisionCount > 1) {
+      logger.warn({
+        event: "waid.canonical.collision",
+        clientId: null,
+        clientKey,
+        waId: maskWaId(waId),
+        waIdCanonical: canonicalizeBrazilWaId(waId),
+        matchCount: found.collisionCount,
+        source: "json_storage",
+      });
+    }
     const nextState: ConversationState = {
       ...current,
       clientKey,
-      conversationKey: found.conversationKey,
+      conversationKey:
+        current.conversationKey ?? found.conversationKey ?? makeConversationKey(clientKey, current.waId),
       waIdCanonical: current.waIdCanonical ?? canonicalizeBrazilWaId(current.waId),
     };
     if (found.migrated) {
@@ -427,23 +474,15 @@ export const jsonFileStorage: Storage = {
   },
   async deleteConversation(waId: string, clientKey = "default") {
     const targetFile = getConversationsFile(clientKey);
-    const conversationKey = makeConversationKey(clientKey, waId);
+    const conversationKey = makeConversationKey(clientKey, buildWaIdLookup(waId).raw);
     const conversations = await readConversationFile(targetFile);
-    const filtered = conversations.filter(
-      (item) =>
-        item.conversationKey !== conversationKey &&
-        !(item.clientKey === clientKey && item.waId === waId) &&
-        !(!item.conversationKey && item.waId === waId)
-    );
+    const filtered = conversations.filter((item) => !matchesConversationLookup(item, clientKey, waId));
     if (filtered.length !== conversations.length) {
       await writeConversationFile(targetFile, filtered);
     } else if (await pathExists(legacyConversationFile)) {
       const legacyConversations = await readConversationFile(legacyConversationFile);
       const legacyFiltered = legacyConversations.filter(
-        (item) =>
-          item.conversationKey !== conversationKey &&
-          !(item.clientKey === clientKey && item.waId === waId) &&
-          !(!item.conversationKey && item.waId === waId)
+        (item) => !matchesConversationLookup(item, clientKey, waId)
       );
       if (legacyFiltered.length !== legacyConversations.length) {
         logger.info({

@@ -5,7 +5,11 @@ import { logger } from "../logger/logger.js";
 import { Storage, StoredRecord, MessageStatus } from "./storage.js";
 import { ConversationState } from "../conversation/conversation.types.js";
 import { makeConversationKey } from "./conversationKey.js";
-import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import {
+  buildWaIdLookup,
+  canonicalizeBrazilWaId,
+  compareConversationLookupPriority,
+} from "../utils/waid.js";
 
 type ShadowCompareFields = {
   conversationKey?: string | null;
@@ -322,7 +326,7 @@ export function createDualWriteStorage(
     if (!state.handoff || !["none", "pending", "active"].includes(state.handoff.status)) {
       return { ok: false, reason: "invalid_handoff" };
     }
-    if (state.conversationKey !== makeConversationKey(clientKey, waId)) {
+    if (state.conversationKey !== makeConversationKey(clientKey, state.waId || waId)) {
       return { ok: false, reason: "invalid_conversation_key" };
     }
     return { ok: true, state };
@@ -347,6 +351,7 @@ export function createDualWriteStorage(
     clientKey: string;
     waId: string;
     db: {
+      waId: string;
       waIdCanonical: string | null;
       conversationKey: string | null;
       firstSeenAt: Date | null;
@@ -389,9 +394,9 @@ export function createDualWriteStorage(
     return {
       clientKey: params.clientKey,
       conversationKey:
-        params.db.conversationKey ?? makeConversationKey(params.clientKey, params.waId),
-      waId: params.waId,
-      waIdCanonical: params.db.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+        params.db.conversationKey ?? makeConversationKey(params.clientKey, params.db.waId),
+      waId: params.db.waId,
+      waIdCanonical: params.db.waIdCanonical ?? canonicalizeBrazilWaId(params.db.waId),
       firstSeenAt: params.db.firstSeenAt?.toISOString() ?? "",
       lastInboundAt: params.db.lastInboundAt?.toISOString() ?? "",
       lastOutboundAt: params.db.lastOutboundAt?.toISOString() ?? undefined,
@@ -504,12 +509,15 @@ export function createDualWriteStorage(
     const clientId = await getClientId(clientKey, "read");
     if (!clientId) return null;
     const safeClientKey = clientKey || env.CLIENT_KEY || env.CLIENT_ID || "default";
-    const db = await prisma.conversationRuntimeState.findUnique({
+    const lookup = buildWaIdLookup(waId);
+    const rows = await prisma.conversationRuntimeState.findMany({
       where: {
-        clientId_waId: { clientId, waId },
+        clientId,
+        OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
       },
       select: {
         updatedAt: true,
+        waId: true,
         waIdCanonical: true,
         conversationKey: true,
         firstSeenAt: true,
@@ -545,6 +553,18 @@ export function createDualWriteStorage(
         assignedAt: true,
       },
     });
+    const [db] = rows.sort((left, right) => compareConversationLookupPriority(left, right));
+    if (rows.length > 1) {
+      logger.warn({
+        event: "waid.canonical.collision",
+        clientId,
+        clientKey: safeClientKey,
+        waId,
+        waIdCanonical: lookup.canonical,
+        matchCount: rows.length,
+        source: "runtime_shadow",
+      });
+    }
     return db
       ? {
           clientId,
