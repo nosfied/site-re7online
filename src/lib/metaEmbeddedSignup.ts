@@ -46,6 +46,31 @@ export type EmbeddedSignupCapturedData = {
   raw: unknown;
 };
 
+function readCodeFromString(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  const parseParams = (value: string) => {
+    const params = new URLSearchParams(value.startsWith("?") ? value.slice(1) : value);
+    return params.get("code")?.trim() || "";
+  };
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    try {
+      const url = new URL(trimmed);
+      return url.searchParams.get("code")?.trim() || "";
+    } catch {
+      return "";
+    }
+  }
+
+  if (trimmed.includes("code=") && (trimmed.includes("&") || trimmed.includes("=") || trimmed.startsWith("?"))) {
+    return parseParams(trimmed);
+  }
+
+  return "";
+}
+
 export function safeParseEventData(input: unknown) {
   if (typeof input === "string") {
     try {
@@ -99,9 +124,21 @@ function firstCandidate(input: unknown, matchers: RegExp[]) {
   return collectStringCandidates(input, matchers)[0] ?? "";
 }
 
+export function extractMetaCodeFromUnknownPayload(input: unknown): string | null {
+  const parsed = safeParseEventData(input);
+
+  if (typeof parsed === "string") {
+    const fromString = readCodeFromString(parsed);
+    return fromString || null;
+  }
+
+  const fromObject = firstCandidate(parsed, [/^code$/i]);
+  return fromObject || null;
+}
+
 export function extractEmbeddedSignupData(input: unknown): EmbeddedSignupCapturedData {
   return {
-    code: firstCandidate(input, [/^code$/i]),
+    code: extractMetaCodeFromUnknownPayload(input) ?? "",
     wabaId: firstCandidate(input, [/^waba(_id)?$/i, /^whatsapp_?business_?account_?id$/i]),
     phoneNumberId: firstCandidate(input, [/^phone_?number_?id$/i, /^phoneNumberId$/i]),
     businessId: firstCandidate(input, [/^business_?id$/i, /^businessId$/i]),

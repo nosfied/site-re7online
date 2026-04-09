@@ -16,6 +16,7 @@ import {
 } from "@/lib/whatsappAdminApi";
 import {
   EmbeddedSignupCaptureEntry,
+  extractMetaCodeFromUnknownPayload,
   extractEmbeddedSignupData,
   loadMetaEmbeddedSignupSdk,
   readEmbeddedSignupQuery,
@@ -35,6 +36,92 @@ const EMPTY_USER_FORM: UserFormState = {
   email: "",
   password: "",
 };
+
+function debugLog(event: string, payload?: Record<string, unknown>) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.info(`[tenant-onboarding] ${event}`, payload ?? {});
+}
+
+function maskSensitiveValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 8) return "***";
+  return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+}
+
+function sanitizeDebugValue(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeDebugValue(item));
+  }
+
+  if (!input || typeof input !== "object") {
+    return input;
+  }
+
+  const sensitiveKeys = new Set([
+    "accessToken",
+    "access_token",
+    "signedRequest",
+    "signed_request",
+    "token",
+    "accessTokenData",
+  ]);
+
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (sensitiveKeys.has(key) && typeof value === "string") {
+      next[key] = maskSensitiveValue(value);
+      continue;
+    }
+    next[key] = sanitizeDebugValue(value);
+  }
+  return next;
+}
+
+function buildDebugPayload(input: unknown, origin?: string) {
+  const parsed = safeParseEventData(input);
+  const extracted = extractEmbeddedSignupData(parsed);
+  const typed =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  const authResponse =
+    typed?.authResponse && typeof typed.authResponse === "object"
+      ? (typed.authResponse as Record<string, unknown>)
+      : null;
+  const tokenCandidate =
+    typeof typed?.accessToken === "string"
+      ? typed.accessToken
+      : typeof authResponse?.accessToken === "string"
+        ? authResponse.accessToken
+        : typeof authResponse?.access_token === "string"
+          ? authResponse.access_token
+          : "";
+  const signedRequestCandidate =
+    typeof typed?.signedRequest === "string"
+      ? typed.signedRequest
+      : typeof authResponse?.signedRequest === "string"
+        ? authResponse.signedRequest
+        : "";
+  const statusCandidate =
+    typeof typed?.status === "string"
+      ? typed.status
+      : typeof authResponse?.status === "string"
+        ? authResponse.status
+        : "";
+
+  return {
+    code: extracted.code || null,
+    wabaId: extracted.wabaId || null,
+    phoneNumberId: extracted.phoneNumberId || null,
+    businessId: extracted.businessId || null,
+    businessPortfolioId: extracted.businessPortfolioId || null,
+    status: statusCandidate || null,
+    accessToken: tokenCandidate ? maskSensitiveValue(tokenCandidate) : null,
+    signedRequest: signedRequestCandidate ? maskSensitiveValue(signedRequestCandidate) : null,
+    origin: origin ?? null,
+  };
+}
 
 export default function TenantOnboardingPage() {
   const params = useParams<{ tenantId: string }>();
@@ -86,36 +173,55 @@ export default function TenantOnboardingPage() {
 
   const appendEntry = useCallback((entry: EmbeddedSignupCaptureEntry) => {
     setEntries((prev) => [entry, ...prev].slice(0, 30));
-    console.log("[tenant-onboarding]", entry);
-    fetch("/api/debug/embedded-signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry),
-    }).catch((error) => {
-      console.warn("[tenant-onboarding] persist failed", error);
+    debugLog("capture", {
+      source: entry.source,
+      code:
+        entry.parsed && typeof entry.parsed === "object" && !Array.isArray(entry.parsed)
+          ? (entry.parsed as Record<string, unknown>).code ?? null
+          : null,
+      origin: entry.origin ?? null,
     });
+    if (process.env.NODE_ENV === "development") {
+      fetch("/api/debug/embedded-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      }).catch((error) => {
+        console.warn("[tenant-onboarding] persist failed", error);
+      });
+    }
   }, []);
 
   const applyCapturedData = useCallback((input: unknown) => {
     const extracted = extractEmbeddedSignupData(input);
     if (extracted.code) setCode(extracted.code);
-    if (extracted.wabaId) setWabaId(extracted.wabaId);
-    if (extracted.phoneNumberId) setPhoneNumberId(extracted.phoneNumberId);
-    if (extracted.businessId) setBusinessId(extracted.businessId);
-    if (extracted.businessPortfolioId) setBusinessPortfolioId(extracted.businessPortfolioId);
+    if (extracted.wabaId) setWabaId((current) => current || extracted.wabaId);
+    if (extracted.phoneNumberId) setPhoneNumberId((current) => current || extracted.phoneNumberId);
+    if (extracted.businessId) setBusinessId((current) => current || extracted.businessId);
+    if (extracted.businessPortfolioId) {
+      setBusinessPortfolioId((current) => current || extracted.businessPortfolioId);
+    }
     if (input != null) setRawPayload(input);
   }, []);
 
   const refreshLocationState = useCallback(
     (source: EmbeddedSignupCaptureEntry["source"]) => {
       const querySnapshot = readEmbeddedSignupQuery(window);
+      const parsed = {
+        ...querySnapshot,
+        ...buildDebugPayload(querySnapshot),
+      };
       appendEntry({
         timestamp: new Date().toISOString(),
         source,
         raw: querySnapshot,
-        parsed: querySnapshot,
+        parsed,
       });
       applyCapturedData(querySnapshot);
+      const capturedCode = extractMetaCodeFromUnknownPayload(querySnapshot);
+      if (capturedCode) {
+        debugLog("code captured via query", { code: maskSensitiveValue(capturedCode) });
+      }
     },
     [appendEntry, applyCapturedData]
   );
@@ -166,36 +272,49 @@ export default function TenantOnboardingPage() {
     const onMessage = (event: MessageEvent) => {
       if (!event.origin.includes("facebook.com")) return;
       const parsed = safeParseEventData(event.data);
+      const debugPayload = buildDebugPayload(parsed, event.origin);
       setMessagesReceived((count) => count + 1);
       appendEntry({
         timestamp: new Date().toISOString(),
         source: "fb.postMessage",
         raw: event.data,
-        parsed,
+        parsed: debugPayload,
         origin: event.origin,
       });
       applyCapturedData(parsed);
+      const capturedCode = extractMetaCodeFromUnknownPayload(parsed);
+      if (capturedCode) {
+        debugLog("code captured via postMessage", { code: maskSensitiveValue(capturedCode) });
+      }
     };
 
     const onFocus = () => {
       if (popupOpened && !popupClosed) {
         setPopupClosed(true);
+        const queryState = readEmbeddedSignupQuery(window);
         appendEntry({
           timestamp: new Date().toISOString(),
           source: "popup.closed",
-          raw: readEmbeddedSignupQuery(window),
-          parsed: readEmbeddedSignupQuery(window),
+          raw: queryState,
+          parsed: {
+            ...queryState,
+            ...buildDebugPayload(queryState),
+          },
         });
       }
       refreshLocationState("window.focus");
     };
 
     const onBlur = () => {
+      const queryState = readEmbeddedSignupQuery(window);
       appendEntry({
         timestamp: new Date().toISOString(),
         source: "window.blur",
-        raw: readEmbeddedSignupQuery(window),
-        parsed: readEmbeddedSignupQuery(window),
+        raw: queryState,
+        parsed: {
+          ...queryState,
+          ...buildDebugPayload(queryState),
+        },
       });
     };
 
@@ -237,13 +356,18 @@ export default function TenantOnboardingPage() {
 
     try {
       const response = await startMetaEmbeddedSignup();
+      const debugPayload = buildDebugPayload(response);
       appendEntry({
         timestamp: new Date().toISOString(),
         source: "fb.callback",
         raw: response,
-        parsed: response,
+        parsed: debugPayload,
       });
       applyCapturedData(response);
+      const capturedCode = extractMetaCodeFromUnknownPayload(response);
+      if (capturedCode) {
+        debugLog("code captured via callback", { code: maskSensitiveValue(capturedCode) });
+      }
       setPopupClosed(true);
       refreshLocationState("query");
     } catch (error) {
@@ -304,6 +428,12 @@ export default function TenantOnboardingPage() {
     setStatus("processing");
     setErrorMessage(null);
     setSuccessMessage(null);
+    debugLog("processing started", {
+      tenantId,
+      hasCode: Boolean(code.trim()),
+      hasWabaId: Boolean(wabaId.trim()),
+      hasPhoneNumberId: Boolean(phoneNumberId.trim()),
+    });
 
     try {
       const response = await onboardingExchangeCode(connection, tenantId, {
@@ -322,11 +452,14 @@ export default function TenantOnboardingPage() {
       if (response.businessId) setBusinessId(response.businessId);
       if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
       setStatus("success");
-      setSuccessMessage("Numero conectado com sucesso.");
+      setSuccessMessage("Conexao Meta processada com sucesso. Credenciais do tenant salvas.");
     } catch (error) {
-      const typed = error as { message?: string };
+      const typed = error as { message?: string; status?: number };
       setStatus("error");
-      setErrorMessage(typed.message || "Falha ao processar conexao.");
+      setErrorMessage(
+        typed.message ||
+          (typed.status ? `Falha ao processar conexao (${typed.status}).` : "Falha ao processar conexao.")
+      );
     } finally {
       setProcessing(false);
     }
@@ -343,10 +476,13 @@ export default function TenantOnboardingPage() {
     }
   };
 
-  const rawEntries = useMemo(() => JSON.stringify(entries, null, 2), [entries]);
   const rawPayloadJson = useMemo(
-    () => (rawPayload == null ? "-" : JSON.stringify(rawPayload, null, 2)),
+    () => (rawPayload == null ? "-" : JSON.stringify(sanitizeDebugValue(rawPayload), null, 2)),
     [rawPayload]
+  );
+  const sanitizedEntriesJson = useMemo(
+    () => JSON.stringify(sanitizeDebugValue(entries), null, 2),
+    [entries]
   );
 
   return (
@@ -433,8 +569,18 @@ export default function TenantOnboardingPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">
             Conexao Meta
           </h2>
-          <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
           <article className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="grid gap-2 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
+              <p>
+                <span className="font-semibold text-white">Passo 1: Iniciar conexao</span> -
+                captura o code e os dados retornados pela Meta. Ainda nao salva nada no sistema.
+              </p>
+              <p>
+                <span className="font-semibold text-white">Passo 2: Processar conexao</span> -
+                envia o code ao backend e persiste o TenantMetaConfig do tenant.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -461,43 +607,50 @@ export default function TenantOnboardingPage() {
               </span>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-sm">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Code</span>
                 <input
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
                 />
+                {!code.trim() ? (
+                  <span className="text-xs text-amber-200">
+                    Conclua o fluxo da Meta para capturar o codigo de conexao.
+                  </span>
+                ) : (
+                  <span className="text-xs text-emerald-200">Codigo capturado e pronto para processar.</span>
+                )}
               </label>
-              <label className="grid gap-1 text-sm">
+              <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">phoneNumberId (manual opcional)</span>
                 <input
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={phoneNumberId}
                   onChange={(event) => setPhoneNumberId(event.target.value)}
                 />
               </label>
-              <label className="grid gap-1 text-sm">
+              <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">WABA ID</span>
                 <input
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={wabaId}
                   onChange={(event) => setWabaId(event.target.value)}
                 />
               </label>
-              <label className="grid gap-1 text-sm">
+              <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Business ID</span>
                 <input
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={businessId}
                   onChange={(event) => setBusinessId(event.target.value)}
                 />
               </label>
-              <label className="grid gap-1 text-sm md:col-span-2">
+              <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
                 <span className="text-white/70">Business Portfolio ID</span>
                 <input
-                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={businessPortfolioId}
                   onChange={(event) => setBusinessPortfolioId(event.target.value)}
                 />
@@ -607,7 +760,7 @@ export default function TenantOnboardingPage() {
             Eventos capturados
           </h2>
           <pre className="mt-3 max-h-[40vh] overflow-auto rounded-md border border-white/10 bg-re7-navy/60 p-3 text-xs text-white/80">
-            {rawEntries}
+            {sanitizedEntriesJson}
           </pre>
         </section>
       </div>
