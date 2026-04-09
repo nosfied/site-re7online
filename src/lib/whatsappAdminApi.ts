@@ -750,6 +750,7 @@ export async function onboardingExchangeCode(
   wabaId: string | null;
   businessId: string | null;
   businessPortfolioId: string | null;
+  warning?: string | null;
 }> {
   return requestJson(
     connection,

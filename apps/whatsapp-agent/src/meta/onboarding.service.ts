@@ -23,6 +23,16 @@ export type MetaOnboardingExchangeResult = {
   phoneNumberId: string | null;
 };
 
+type MetaGraphPayload = Record<string, unknown>;
+
+type EnrichOnboardingParams = {
+  businessToken: string | null;
+  businessId?: string | null;
+  businessPortfolioId?: string | null;
+  wabaId?: string | null;
+  phoneNumberId?: string | null;
+};
+
 export class MetaOnboardingExchangeError extends Error {
   constructor(
     message: string,
@@ -85,6 +95,127 @@ function summarizeExchangePayload(payload: ExchangeResponse) {
     businessPortfolioId: businessPortfolioCandidates[0] ?? null,
     wabaId: wabaCandidates[0] ?? null,
     phoneNumberId: phoneNumberCandidates[0] ?? null,
+  };
+}
+
+async function fetchMetaGraphJson(params: {
+  path: string;
+  accessToken: string;
+  query?: Record<string, string>;
+}): Promise<MetaGraphPayload> {
+  const query = new URLSearchParams(params.query ?? {});
+  const queryString = query.toString();
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${params.path}${queryString ? `?${queryString}` : ""}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+
+  const rawText = await response.text();
+  let payload: MetaGraphPayload;
+  try {
+    payload = JSON.parse(rawText) as MetaGraphPayload;
+  } catch {
+    throw new MetaOnboardingExchangeError(
+      "Meta returned non-JSON payload during onboarding enrich",
+      response.status,
+      rawText.slice(0, 1000)
+    );
+  }
+
+  if (!response.ok) {
+    throw new MetaOnboardingExchangeError(
+      "Meta onboarding enrich failed",
+      response.status,
+      JSON.stringify(payload).slice(0, 1000)
+    );
+  }
+
+  return payload;
+}
+
+export async function enrichMetaOnboardingResult(
+  params: EnrichOnboardingParams
+): Promise<{
+  businessId: string | null;
+  businessPortfolioId: string | null;
+  wabaId: string | null;
+  phoneNumberId: string | null;
+  rawPayload: Record<string, unknown>;
+}> {
+  const accessToken = params.businessToken?.trim() || "";
+  if (!accessToken) {
+    return {
+      businessId: params.businessId ?? null,
+      businessPortfolioId: params.businessPortfolioId ?? null,
+      wabaId: params.wabaId ?? null,
+      phoneNumberId: params.phoneNumberId ?? null,
+      rawPayload: {},
+    };
+  }
+
+  let businessId = params.businessId ?? null;
+  let businessPortfolioId = params.businessPortfolioId ?? null;
+  let wabaId = params.wabaId ?? null;
+  const phoneNumberId = params.phoneNumberId ?? null;
+  const rawPayload: Record<string, unknown> = {};
+
+  if (phoneNumberId && (!wabaId || !businessId || !businessPortfolioId)) {
+    const phonePayload = await fetchMetaGraphJson({
+      path: phoneNumberId,
+      accessToken,
+      query: {
+        fields: [
+          "id",
+          "display_phone_number",
+          "verified_name",
+          "name_status",
+          "new_name_status",
+          "code_verification_status",
+          "account_mode",
+          "quality_rating",
+          "platform_type",
+          "throughput",
+          "whatsapp_business_account",
+        ].join(","),
+      },
+    });
+    rawPayload.phoneNumber = phonePayload;
+    const summary = summarizeExchangePayload(phonePayload);
+    wabaId = wabaId ?? summary.wabaId;
+    businessId = businessId ?? summary.businessId;
+    businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+  }
+
+  if (wabaId && (!businessId || !businessPortfolioId)) {
+    const wabaPayload = await fetchMetaGraphJson({
+      path: wabaId,
+      accessToken,
+      query: {
+        fields: [
+          "id",
+          "name",
+          "account_review_status",
+          "business_verification_status",
+          "owner_business_info",
+        ].join(","),
+      },
+    });
+    rawPayload.waba = wabaPayload;
+    const summary = summarizeExchangePayload(wabaPayload);
+    businessId = businessId ?? summary.businessId;
+    businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+  }
+
+  return {
+    businessId,
+    businessPortfolioId,
+    wabaId,
+    phoneNumberId,
+    rawPayload,
   };
 }
 

@@ -23,6 +23,7 @@ import {
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
 import { httpError } from "../utils/httpError.js";
 import {
+  enrichMetaOnboardingResult,
   exchangeEmbeddedSignupCode,
   MetaOnboardingExchangeError,
 } from "../meta/onboarding.service.js";
@@ -2517,18 +2518,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
       try {
         const exchange = await exchangeEmbeddedSignupCode({ code });
+        const manualBusinessId = normalizeOptionalString(embeddedSignupInput?.businessId);
+        const manualBusinessPortfolioId = normalizeOptionalString(
+          embeddedSignupInput?.businessPortfolioId
+        );
+        const manualWabaId = normalizeOptionalString(embeddedSignupInput?.wabaId);
+        const candidatePhoneNumberId =
+          normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
+          exchange.phoneNumberId;
+        const enriched =
+          exchange.businessToken &&
+          (!exchange.wabaId || !exchange.businessId || !exchange.businessPortfolioId) &&
+          candidatePhoneNumberId
+            ? await enrichMetaOnboardingResult({
+                businessToken: exchange.businessToken,
+                businessId: exchange.businessId,
+                businessPortfolioId: exchange.businessPortfolioId,
+                wabaId: exchange.wabaId,
+                phoneNumberId: candidatePhoneNumberId,
+              })
+            : null;
         const finalBusinessId =
-          normalizeOptionalString(embeddedSignupInput?.businessId) ?? exchange.businessId;
+          manualBusinessId ?? enriched?.businessId ?? exchange.businessId;
         const finalBusinessPortfolioId =
-          normalizeOptionalString(embeddedSignupInput?.businessPortfolioId) ??
+          manualBusinessPortfolioId ??
+          enriched?.businessPortfolioId ??
           exchange.businessPortfolioId;
         const finalWabaId =
-          normalizeOptionalString(embeddedSignupInput?.wabaId) ?? exchange.wabaId;
+          manualWabaId ?? enriched?.wabaId ?? exchange.wabaId;
         const finalPhoneNumberId =
           normalizeOptionalString(embeddedSignupInput?.phoneNumberId) ??
+          enriched?.phoneNumberId ??
           exchange.phoneNumberId;
         const rawPayload = {
           exchange: exchange.rawPayload,
+          enrich: enriched?.rawPayload ?? null,
           embeddedSignup: embeddedSignupInput
             ? {
                 businessId: normalizeOptionalString(embeddedSignupInput.businessId),
@@ -2589,6 +2613,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessId: finalBusinessId,
           businessPortfolioId: finalBusinessPortfolioId,
           businessTokenStored: Boolean(exchange.businessToken),
+          partialMetaConfig: Boolean(exchange.businessToken) && !finalWabaId,
           phoneMappingAction,
           fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
         });
@@ -2600,6 +2625,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           wabaId: finalWabaId,
           businessId: finalBusinessId,
           businessPortfolioId: finalBusinessPortfolioId,
+          warning:
+            Boolean(exchange.businessToken) && !finalWabaId
+              ? "Conexao parcial: token salvo, mas WABA ID nao foi resolvido. Self-service de templates continuara indisponivel."
+              : null,
         });
       } catch (error) {
         logger.error({
