@@ -20,7 +20,12 @@ export type AppSession = {
   user: AppSessionUser;
 };
 
-export type AppApiError = Error & { status?: number };
+export type AppApiError = Error & {
+  status?: number;
+  errorCode?: string;
+  details?: string;
+  payload?: unknown;
+};
 
 export type AppTemplateItem = {
   id: string;
@@ -150,17 +155,32 @@ async function requestAppJson<T>(session: AppSession, path: string, init?: Reque
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
+    let errorCode: string | undefined;
+    let details: string | undefined;
+    let payload: unknown;
     try {
-      const body = (await res.json()) as { error?: string; message?: string };
+      const body = (await res.json()) as {
+        error?: string;
+        message?: string;
+        details?: string;
+      };
+      payload = body;
+      errorCode = typeof body.error === "string" ? body.error : undefined;
+      details = typeof body.details === "string" ? body.details : undefined;
       message = body.message || body.error || message;
     } catch {
       // noop
     }
     const error = new Error(message) as AppApiError;
     error.status = res.status;
+    error.errorCode = errorCode;
+    error.details = details;
+    error.payload = payload;
     if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
     if (res.status === 403) error.message = "Sem permissao (403).";
-    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    if (res.status >= 500 && !errorCode && !details) {
+      error.message = "Erro no servidor (5xx).";
+    }
     throw error;
   }
 
@@ -444,9 +464,32 @@ export async function createAppTemplateRequest(
     category: string;
     autoSubmit?: boolean;
   }
-): Promise<{ ok: true; request: AppTemplateRequestItem }> {
+): Promise<{
+  ok: true;
+  request: AppTemplateRequestItem;
+  submission?: {
+    attempted: boolean;
+    submitted: boolean;
+    mode: "assisted" | "self_service";
+    templateId: string | null;
+    status: string | null;
+    errorMessage: string | null;
+  };
+}> {
   return requestAppJson(session, "/app/templates/request", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function syncAppTemplate(
+  session: AppSession,
+  templateId: string
+): Promise<{
+  ok: true;
+  template: Pick<AppTemplateItem, "id" | "name" | "status" | "rejectionReason" | "updatedAt">;
+}> {
+  return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/sync`, {
+    method: "POST",
   });
 }
