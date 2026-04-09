@@ -353,6 +353,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
 
           try {
+            logger.info({
+              event: "template.submit.started",
+              requestId,
+              clientId: client.id,
+              clientKey: client.clientKey,
+              templateId: template.id,
+              templateName: template.name,
+            });
+
             if (!tenantMetaConfig) {
               throw new MetaTemplateServiceError(
                 "meta_config_missing",
@@ -387,6 +396,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 status: updated.status,
                 errorMessage: null,
               };
+
+              logger.info({
+                event: "template.submit.success",
+                requestId,
+                clientId: client.id,
+                clientKey: client.clientKey,
+                templateId: updated.id,
+                templateName: template.name,
+                metaTemplateId: result.metaTemplateId,
+                status: updated.status,
+              });
             } else {
               const updated = await prisma.template.update({
                 where: { id: template.id },
@@ -408,6 +428,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 status: updated.status,
                 errorMessage: result.errorMessage,
               };
+
+              logger.warn({
+                event: "template.submit.failed",
+                requestId,
+                clientId: client.id,
+                clientKey: client.clientKey,
+                templateId: updated.id,
+                templateName: template.name,
+                status: updated.status,
+                message: result.errorMessage,
+              });
 
               json(res, 400, {
                 error: "meta_error",
@@ -445,6 +476,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               status: updated.status,
               errorMessage,
             };
+
+            logger.warn({
+              event: isTimeoutLikeError(error)
+                ? "template.submit.timeout_like"
+                : "template.submit.failed",
+              requestId,
+              clientId: client.id,
+              clientKey: client.clientKey,
+              templateId: updated.id,
+              templateName: template.name,
+              status: updated.status,
+              message: errorMessage,
+            });
 
             if (error instanceof MetaTemplateValidationError) {
               json(res, 400, {
@@ -4522,6 +4566,13 @@ function summarizeMetaErrorMessage(input: string) {
 function isTemplatePendingLike(status: string | null | undefined) {
   const normalized = String(status || "").trim().toLowerCase();
   return normalized === "pending" || normalized === "submitting";
+}
+
+function isTimeoutLikeError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /timeout|timed out|abort|network|fetch failed|econnreset|etimedout|und_err/i.test(
+    message.toLowerCase()
+  );
 }
 
 function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {

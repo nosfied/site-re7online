@@ -119,7 +119,11 @@ export function clearAppSession() {
   localStorage.removeItem(LOCAL_KEY);
 }
 
-async function requestAppJson<T>(session: AppSession, path: string, init?: RequestInit): Promise<T> {
+async function requestAppJson<T>(
+  session: AppSession,
+  path: string,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<T> {
   const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
   const token = session.token.trim();
   if (!token) {
@@ -129,15 +133,17 @@ async function requestAppJson<T>(session: AppSession, path: string, init?: Reque
   }
 
   const controller = new AbortController();
-  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 10000;
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
   let res: Response;
   try {
     res = await fetch(`${baseUrl}${path}`, {
-      ...init,
+      ...requestInit,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
-        ...(init?.headers ?? {}),
+        ...(requestInit.headers ?? {}),
       },
       cache: "no-store",
       signal: controller.signal,
@@ -146,8 +152,10 @@ async function requestAppJson<T>(session: AppSession, path: string, init?: Reque
     globalThis.clearTimeout(timeout);
     const error = new Error("Sem resposta do servidor.") as AppApiError;
     error.status = 0;
+    error.errorCode = "network_error";
     if ((fetchError as Error).name === "AbortError") {
       error.message = "Timeout de conexao com o servidor.";
+      error.errorCode = "network_timeout";
     }
     throw error;
   }
@@ -479,6 +487,7 @@ export async function createAppTemplateRequest(
   return requestAppJson(session, "/app/templates/request", {
     method: "POST",
     body: JSON.stringify(payload),
+    timeoutMs: 25000,
   });
 }
 

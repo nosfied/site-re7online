@@ -189,6 +189,10 @@ function getSubmissionMessage(submission?: {
   }
 }
 
+function isNetworkTimeoutLikeError(error: AppApiError) {
+  return error.errorCode === "network_timeout" || error.errorCode === "network_error" || error.status === 0;
+}
+
 export default function AppTemplatesPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -215,8 +219,14 @@ export default function AppTemplatesPage() {
         listAppTemplates(activeSession),
         listAppTemplateRequests(activeSession),
       ]);
-      setTemplates(sortTemplates(templatesResponse.items));
-      setRequests(requestsResponse.items);
+      const nextTemplates = sortTemplates(templatesResponse.items);
+      const nextRequests = requestsResponse.items;
+      setTemplates(nextTemplates);
+      setRequests(nextRequests);
+      return {
+        templates: nextTemplates,
+        requests: nextRequests,
+      };
     },
     []
   );
@@ -315,8 +325,36 @@ export default function AppTemplatesPage() {
             submission?: { templateId?: string | null };
           }
         | null;
-      if (payload?.request || payload?.submission?.templateId) {
-        await loadData(session);
+      let recoveredAfterReload = false;
+      let reloadResult:
+        | {
+            templates: AppTemplateItem[];
+            requests: AppTemplateRequestItem[];
+          }
+        | undefined;
+      if (payload?.request || payload?.submission?.templateId || isNetworkTimeoutLikeError(typed)) {
+        reloadResult = await loadData(session);
+        if (isNetworkTimeoutLikeError(typed)) {
+          const reloadedName = normalizeTemplateName(name);
+          recoveredAfterReload =
+            (reloadResult?.templates ?? []).some(
+              (item) => normalizeTemplateName(item.name) === reloadedName
+            ) ||
+            (reloadResult?.requests ?? []).some(
+              (item) => normalizeTemplateName(item.name) === reloadedName
+            );
+        }
+      }
+      if (recoveredAfterReload) {
+        setForm(EMPTY_FORM);
+        setSuccess("Template enviado para a Meta e em analise.");
+        return;
+      }
+      if (isNetworkTimeoutLikeError(typed)) {
+        setFormError(
+          "O envio pode ter sido concluido. Atualizando a lista para verificar o status..."
+        );
+        return;
       }
       if (typed.errorCode === "template_already_pending") {
         setFormError("Ja existe um template com esse nome em analise.");
