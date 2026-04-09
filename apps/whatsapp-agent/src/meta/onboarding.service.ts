@@ -164,50 +164,71 @@ export async function enrichMetaOnboardingResult(
   const rawPayload: Record<string, unknown> = {};
 
   if (phoneNumberId && (!wabaId || !businessId || !businessPortfolioId)) {
-    const phonePayload = await fetchMetaGraphJson({
-      path: phoneNumberId,
-      accessToken,
-      query: {
-        fields: [
-          "id",
-          "display_phone_number",
-          "verified_name",
-          "name_status",
-          "new_name_status",
-          "code_verification_status",
-          "account_mode",
-          "quality_rating",
-          "platform_type",
-          "throughput",
-          "whatsapp_business_account",
-        ].join(","),
-      },
-    });
-    rawPayload.phoneNumber = phonePayload;
-    const summary = summarizeExchangePayload(phonePayload);
-    wabaId = wabaId ?? summary.wabaId;
-    businessId = businessId ?? summary.businessId;
-    businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+    try {
+      const phonePayload = await fetchMetaGraphJson({
+        path: phoneNumberId,
+        accessToken,
+        query: {
+          fields: [
+            "id",
+            "display_phone_number",
+            "verified_name",
+            "name_status",
+            "new_name_status",
+            "code_verification_status",
+            "account_mode",
+            "quality_rating",
+            "platform_type",
+            "throughput",
+          ].join(","),
+        },
+      });
+      rawPayload.phoneNumber = phonePayload;
+      const summary = summarizeExchangePayload(phonePayload);
+      wabaId = wabaId ?? summary.wabaId;
+      businessId = businessId ?? summary.businessId;
+      businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+    } catch (error) {
+      rawPayload.phoneNumberError =
+        error instanceof MetaOnboardingExchangeError
+          ? {
+              message: error.message,
+              status: error.status ?? null,
+              errorBody: error.errorBody ?? null,
+            }
+          : { message: (error as Error).message };
+    }
   }
 
   if (wabaId && (!businessId || !businessPortfolioId)) {
-    const wabaPayload = await fetchMetaGraphJson({
-      path: wabaId,
-      accessToken,
-      query: {
-        fields: [
-          "id",
-          "name",
-          "account_review_status",
-          "business_verification_status",
-          "owner_business_info",
-        ].join(","),
-      },
-    });
-    rawPayload.waba = wabaPayload;
-    const summary = summarizeExchangePayload(wabaPayload);
-    businessId = businessId ?? summary.businessId;
-    businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+    try {
+      const wabaPayload = await fetchMetaGraphJson({
+        path: wabaId,
+        accessToken,
+        query: {
+          fields: [
+            "id",
+            "name",
+            "account_review_status",
+            "business_verification_status",
+            "owner_business_info",
+          ].join(","),
+        },
+      });
+      rawPayload.waba = wabaPayload;
+      const summary = summarizeExchangePayload(wabaPayload);
+      businessId = businessId ?? summary.businessId;
+      businessPortfolioId = businessPortfolioId ?? summary.businessPortfolioId;
+    } catch (error) {
+      rawPayload.wabaError =
+        error instanceof MetaOnboardingExchangeError
+          ? {
+              message: error.message,
+              status: error.status ?? null,
+              errorBody: error.errorBody ?? null,
+            }
+          : { message: (error as Error).message };
+    }
   }
 
   return {

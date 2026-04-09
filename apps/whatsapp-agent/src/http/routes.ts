@@ -2627,7 +2627,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessPortfolioId: finalBusinessPortfolioId,
           warning:
             Boolean(exchange.businessToken) && !finalWabaId
-              ? "Conexao parcial: token salvo, mas WABA ID nao foi resolvido. Self-service de templates continuara indisponivel."
+              ? "Conexao parcial: token salvo, mas WABA ID nao foi resolvido automaticamente. Informe o WABA ID para habilitar templates self-service."
               : null,
         });
       } catch (error) {
