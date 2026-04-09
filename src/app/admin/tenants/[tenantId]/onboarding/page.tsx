@@ -165,6 +165,7 @@ export default function TenantOnboardingPage() {
     businessId: string | null;
     businessPortfolioId: string | null;
     businessTokenStored: boolean;
+    warning?: string | null;
   } | null>(null);
   const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -452,7 +453,10 @@ export default function TenantOnboardingPage() {
       if (response.businessId) setBusinessId(response.businessId);
       if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
       setStatus("success");
-      setSuccessMessage("Conexao Meta processada com sucesso. Credenciais do tenant salvas.");
+      setSuccessMessage(
+        response.warning ||
+          "Conexao Meta processada com sucesso. Credenciais do tenant salvas."
+      );
     } catch (error) {
       const typed = error as { message?: string; status?: number };
       setStatus("error");
