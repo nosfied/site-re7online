@@ -570,7 +570,7 @@ export default function TenantOnboardingPage() {
             Conexao Meta
           </h2>
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-          <article className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+          <article className="grid min-w-0 gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="grid gap-2 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
               <p>
                 <span className="font-semibold text-white">Passo 1: Iniciar conexao</span> -
@@ -694,7 +694,7 @@ export default function TenantOnboardingPage() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-white/80">
                 Raw payload
               </h2>
-              <pre className="mt-3 max-h-72 overflow-auto rounded-md border border-white/10 bg-re7-navy/60 p-3 text-xs text-white/80">
+              <pre className="mt-3 w-full max-w-full overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-white/10 bg-re7-navy/60 p-3 text-xs text-white/80">
                 {rawPayloadJson}
               </pre>
             </div>
