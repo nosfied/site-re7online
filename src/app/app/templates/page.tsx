@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import {
@@ -35,6 +35,17 @@ const EMPTY_FORM: TemplateRequestFormState = {
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
+
+type CatalogItem = {
+  id: string;
+  templateId: string | null;
+  name: string;
+  category: string;
+  status: string;
+  updatedAt: string;
+  rejectionReason: string | null;
+  syncable: boolean;
+};
 
 function getStatusClasses(status: string) {
   switch (status.toLowerCase()) {
@@ -85,6 +96,54 @@ function sortTemplates(items: AppTemplateItem[]) {
   return [...items].sort((left, right) => {
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
+}
+
+function sortRequests(items: AppTemplateRequestItem[]) {
+  return [...items].sort((left, right) => {
+    return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  });
+}
+
+function sortCatalogItems(items: CatalogItem[]) {
+  return [...items].sort((left, right) => {
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+}
+
+function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRequestItem[]) {
+  const itemsByName = new Map<string, CatalogItem>();
+
+  for (const request of sortRequests(requests)) {
+    const key = normalizeTemplateName(request.name);
+    if (!key || itemsByName.has(key)) continue;
+    itemsByName.set(key, {
+      id: `request:${request.id}`,
+      templateId: null,
+      name: request.name,
+      category: request.category,
+      status: request.status,
+      updatedAt: request.createdAt,
+      rejectionReason: request.notes,
+      syncable: false,
+    });
+  }
+
+  for (const template of sortTemplates(templates)) {
+    const key = normalizeTemplateName(template.name);
+    if (!key) continue;
+    itemsByName.set(key, {
+      id: template.id,
+      templateId: template.id,
+      name: template.name,
+      category: template.category,
+      status: template.status,
+      updatedAt: template.updatedAt,
+      rejectionReason: template.rejectionReason,
+      syncable: true,
+    });
+  }
+
+  return sortCatalogItems(Array.from(itemsByName.values()));
 }
 
 function getTemplateReason(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
@@ -138,6 +197,7 @@ export default function AppTemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -203,7 +263,7 @@ export default function AppTemplatesPage() {
       setFormError("Preencha nome, conteudo e categoria.");
       return;
     }
-    if (templates.some((item) => normalizeTemplateName(item.name) === normalizeTemplateName(name))) {
+    if (catalogItems.some((item) => normalizeTemplateName(item.name) === normalizeTemplateName(name))) {
       setFormError("Ja existe um template com esse nome.");
       return;
     }
@@ -299,7 +359,7 @@ export default function AppTemplatesPage() {
     <AppShell
       session={session}
       title="Templates"
-      subtitle="Catalogo aprovado e solicitacoes de novos templates do cliente."
+      subtitle="Catalogo unificado de templates e status de aprovacao do cliente."
     >
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
       {error ? (
@@ -308,12 +368,12 @@ export default function AppTemplatesPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_1fr_0.9fr]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(20rem,0.9fr)]">
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Catalogo de templates</h2>
           </div>
-          {templates.length === 0 ? (
+          {catalogItems.length === 0 ? (
             <p className="p-4 text-sm text-white/70">Nenhum template encontrado.</p>
           ) : (
             <div className="max-h-[34rem] overflow-auto">
@@ -329,10 +389,10 @@ export default function AppTemplatesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {templates.map((item) => (
+                  {catalogItems.map((item) => (
                     <tr
                       key={item.id}
-                      className={`border-t border-white/10 ${highlightedTemplateId === item.id ? "bg-emerald-500/10" : ""}`}
+                      className={`border-t border-white/10 ${highlightedTemplateId === item.templateId ? "bg-emerald-500/10" : ""}`}
                     >
                       <td className="px-3 py-2">{item.name}</td>
                       <td className="px-3 py-2">
@@ -346,59 +406,26 @@ export default function AppTemplatesPage() {
                       <td className="px-3 py-2">{formatDateTime(item.updatedAt)}</td>
                       <td className="px-3 py-2">{getTemplateReason(item)}</td>
                       <td className="px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSyncTemplate(item.id)}
-                          disabled={
-                            syncingTemplateId === item.id || item.status.toLowerCase() === "approved"
-                          }
-                          className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {item.status.toLowerCase() === "approved"
-                            ? "Aprovado"
-                            : syncingTemplateId === item.id
-                              ? "Atualizando..."
-                              : "Atualizar status"}
-                        </button>
+                        {item.syncable && item.templateId ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSyncTemplate(item.templateId as string)}
+                            disabled={
+                              syncingTemplateId === item.templateId ||
+                              item.status.toLowerCase() === "approved"
+                            }
+                            className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {item.status.toLowerCase() === "approved"
+                              ? "Aprovado"
+                              : syncingTemplateId === item.templateId
+                                ? "Atualizando..."
+                                : "Atualizar status"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-white/50">Aguardando revisao</span>
+                        )}
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold">Solicitacoes</h2>
-          </div>
-          {requests.length === 0 ? (
-            <p className="p-4 text-sm text-white/70">Nenhuma solicitacao cadastrada.</p>
-          ) : (
-            <div className="max-h-[34rem] overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-white/10 text-left">
-                  <tr>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Notes</th>
-                    <th className="px-3 py-2">Criado em</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((item) => (
-                    <tr key={item.id} className="border-t border-white/10">
-                      <td className="px-3 py-2">{item.name}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}
-                        >
-                          {getStatusLabel(item.status)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">{item.notes || "-"}</td>
-                      <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
