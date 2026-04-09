@@ -92,6 +92,11 @@ function normalizeTemplateName(input: string) {
   return input.trim().toLowerCase();
 }
 
+function isTemplateRequestPendingLike(status: string) {
+  const normalized = status.trim().toLowerCase();
+  return normalized === "pending" || normalized === "submitting";
+}
+
 function sortTemplates(items: AppTemplateItem[]) {
   return [...items].sort((left, right) => {
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
@@ -263,7 +268,17 @@ export default function AppTemplatesPage() {
       setFormError("Preencha nome, conteudo e categoria.");
       return;
     }
-    if (catalogItems.some((item) => normalizeTemplateName(item.name) === normalizeTemplateName(name))) {
+    const normalizedName = normalizeTemplateName(name);
+    const hasPendingRequest = requests.some(
+      (item) =>
+        normalizeTemplateName(item.name) === normalizedName &&
+        isTemplateRequestPendingLike(item.status)
+    );
+    if (hasPendingRequest) {
+      setFormError("Ja existe um template com esse nome em analise.");
+      return;
+    }
+    if (templates.some((item) => normalizeTemplateName(item.name) === normalizedName)) {
       setFormError("Ja existe um template com esse nome.");
       return;
     }
@@ -302,6 +317,14 @@ export default function AppTemplatesPage() {
         | null;
       if (payload?.request || payload?.submission?.templateId) {
         await loadData(session);
+      }
+      if (typed.errorCode === "template_already_pending") {
+        setFormError("Ja existe um template com esse nome em analise.");
+        return;
+      }
+      if (typed.errorCode === "template_name_exists") {
+        setFormError("Ja existe um template com esse nome.");
+        return;
       }
       setFormError(
         typed.message ||

@@ -201,6 +201,75 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const existingPendingRequest = await prisma.templateRequest.findFirst({
+        where: {
+          clientId: client.id,
+          name: {
+            equals: name,
+            mode: "insensitive",
+          },
+          status: { in: ["pending", "submitting"] },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      if (existingPendingRequest) {
+        logger.warn({
+          event: "app.templates.request.pending_conflict",
+          requestId,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          templateName: name,
+          source: "template_request",
+        });
+        json(res, 409, {
+          error: "template_already_pending",
+          message: "Ja existe um template com esse nome em analise.",
+        });
+        return;
+      }
+
+      const existingTemplateByName = await prisma.template.findFirst({
+        where: {
+          clientId: client.id,
+          name: {
+            equals: name,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+        },
+      });
+
+      if (existingTemplateByName) {
+        const isPendingLike = isTemplatePendingLike(existingTemplateByName.status);
+        logger.warn({
+          event: isPendingLike
+            ? "app.templates.request.pending_conflict"
+            : "app.templates.request.conflict",
+          requestId,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          templateId: existingTemplateByName.id,
+          templateName: existingTemplateByName.name,
+          source: "template",
+          status: existingTemplateByName.status,
+        });
+        json(res, 409, {
+          error: isPendingLike ? "template_already_pending" : "template_name_exists",
+          message: isPendingLike
+            ? "Ja existe um template com esse nome em analise."
+            : "Ja existe um template com esse nome.",
+        });
+        return;
+      }
+
       const created = await prisma.templateRequest.create({
         data: {
           clientId: client.id,
@@ -261,36 +330,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             errorMessage: "meta_config_missing",
           };
         } else {
-          const existingTemplate = await prisma.template.findFirst({
-            where: {
-              clientId: client.id,
-              name: {
-                equals: name,
-                mode: "insensitive",
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-            },
-          });
-
-          if (existingTemplate) {
-            logger.warn({
-              event: "app.templates.request.conflict",
-              clientId: client.id,
-              clientKey: client.clientKey,
-              templateId: existingTemplate.id,
-              templateName: existingTemplate.name,
-              requestId,
-            });
-            json(res, 409, {
-              error: "template_name_exists",
-              message: "Ja existe um template com esse nome.",
-            });
-            return;
-          }
-
           const template = await prisma.template.create({
             data: {
               clientId: client.id,
@@ -4478,6 +4517,11 @@ function summarizeMetaErrorMessage(input: string) {
     // noop
   }
   return value.length > 500 ? `${value.slice(0, 497)}...` : value;
+}
+
+function isTemplatePendingLike(status: string | null | undefined) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return normalized === "pending" || normalized === "submitting";
 }
 
 function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
