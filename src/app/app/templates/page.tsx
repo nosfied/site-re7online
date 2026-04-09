@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import {
+  AppApiError,
   AppSession,
   AppTemplateItem,
   AppTemplateRequestItem,
@@ -13,6 +14,7 @@ import {
   listAppTemplates,
   loadAppSession,
   saveAppSession,
+  syncAppTemplate,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -75,6 +77,54 @@ function parseVariablesInput(input: string) {
   }
 }
 
+function normalizeTemplateName(input: string) {
+  return input.trim().toLowerCase();
+}
+
+function sortTemplates(items: AppTemplateItem[]) {
+  return [...items].sort((left, right) => {
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+}
+
+function getTemplateReason(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
+  if (item.rejectionReason) return item.rejectionReason;
+  const normalizedStatus = item.status.toLowerCase();
+  if (normalizedStatus === "submitting" || normalizedStatus === "pending") {
+    return "Em analise pela Meta";
+  }
+  if (normalizedStatus === "failed") {
+    return "Falha ao enviar para analise";
+  }
+  return "-";
+}
+
+function getSubmissionMessage(submission?: {
+  mode: "assisted" | "self_service";
+  status: string | null;
+}) {
+  if (!submission) {
+    return "Template solicitado com sucesso.";
+  }
+  if (submission.mode === "assisted") {
+    return "Sua conta Meta ainda nao esta conectada. O template foi enviado para revisao interna.";
+  }
+
+  switch ((submission.status || "").toLowerCase()) {
+    case "approved":
+      return "Template aprovado e pronto para uso em campanhas.";
+    case "rejected":
+      return "Template rejeitado pela Meta.";
+    case "failed":
+      return "Nao foi possivel enviar o template para analise.";
+    case "submitting":
+    case "pending":
+    case "pending_review":
+    default:
+      return "Seu template foi enviado para a Meta e esta em analise.";
+  }
+}
+
 export default function AppTemplatesPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -83,6 +133,8 @@ export default function AppTemplatesPage() {
   const [form, setForm] = useState<TemplateRequestFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [syncingTemplateId, setSyncingTemplateId] = useState<string | null>(null);
+  const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -98,7 +150,7 @@ export default function AppTemplatesPage() {
         listAppTemplates(activeSession),
         listAppTemplateRequests(activeSession),
       ]);
-      setTemplates(templatesResponse.items);
+      setTemplates(sortTemplates(templatesResponse.items));
       setRequests(requestsResponse.items);
     },
     []
@@ -151,6 +203,10 @@ export default function AppTemplatesPage() {
       setFormError("Preencha nome, conteudo e categoria.");
       return;
     }
+    if (templates.some((item) => normalizeTemplateName(item.name) === normalizeTemplateName(name))) {
+      setFormError("Ja existe um template com esse nome.");
+      return;
+    }
 
     let variables: unknown;
     try {
@@ -162,7 +218,7 @@ export default function AppTemplatesPage() {
 
     setSubmitting(true);
     try {
-      await createAppTemplateRequest(session, {
+      const response = await createAppTemplateRequest(session, {
         name,
         content,
         category,
@@ -171,22 +227,71 @@ export default function AppTemplatesPage() {
       });
       await loadData(session);
       setForm(EMPTY_FORM);
-      setSuccess(
-        form.autoSubmit
-          ? "Template enviado para aprovacao."
-          : "Template solicitado com sucesso. Nossa equipe ira revisar antes do uso em campanhas."
-      );
+      setSuccess(getSubmissionMessage(response.submission));
     } catch (err) {
-      const typed = err as { status?: number; message?: string };
+      const typed = err as AppApiError;
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setFormError(typed.message || "Erro ao solicitar template.");
+      const payload = (typed.payload ?? null) as
+        | {
+            request?: AppTemplateRequestItem;
+            submission?: { templateId?: string | null };
+          }
+        | null;
+      if (payload?.request || payload?.submission?.templateId) {
+        await loadData(session);
+      }
+      setFormError(
+        typed.message ||
+          typed.details ||
+          "Nao foi possivel processar o template. Tente novamente."
+      );
     } finally {
       setSubmitting(false);
     }
   };
+
+  const handleSyncTemplate = useCallback(
+    async (templateId: string) => {
+      if (!session) return;
+      setError(null);
+      setFormError(null);
+      setSuccess(null);
+      setSyncingTemplateId(templateId);
+      try {
+        const response = await syncAppTemplate(session, templateId);
+        setTemplates((current) =>
+          sortTemplates(
+            current.map((item) =>
+              item.id === response.template.id
+                ? {
+                    ...item,
+                    status: response.template.status,
+                    rejectionReason: response.template.rejectionReason,
+                    updatedAt: response.template.updatedAt,
+                  }
+                : item
+            )
+          )
+        );
+        setHighlightedTemplateId(response.template.id);
+        setSuccess("Status atualizado com sucesso.");
+        window.setTimeout(() => setHighlightedTemplateId((current) => (current === response.template.id ? null : current)), 2500);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(typed.message || typed.details || "Erro ao atualizar status do template.");
+      } finally {
+        setSyncingTemplateId(null);
+      }
+    },
+    [handleUnauthorized, session]
+  );
 
   if (!session) return null;
 
@@ -209,7 +314,7 @@ export default function AppTemplatesPage() {
             <h2 className="text-sm font-semibold">Catalogo de templates</h2>
           </div>
           {templates.length === 0 ? (
-            <p className="p-4 text-sm text-white/70">Nenhum template aprovado encontrado.</p>
+            <p className="p-4 text-sm text-white/70">Nenhum template encontrado.</p>
           ) : (
             <div className="max-h-[34rem] overflow-auto">
               <table className="w-full text-sm">
@@ -220,11 +325,15 @@ export default function AppTemplatesPage() {
                     <th className="px-3 py-2">Category</th>
                     <th className="px-3 py-2">Atualizado</th>
                     <th className="px-3 py-2">Motivo</th>
+                    <th className="px-3 py-2">Acao</th>
                   </tr>
                 </thead>
                 <tbody>
                   {templates.map((item) => (
-                    <tr key={item.id} className="border-t border-white/10">
+                    <tr
+                      key={item.id}
+                      className={`border-t border-white/10 ${highlightedTemplateId === item.id ? "bg-emerald-500/10" : ""}`}
+                    >
                       <td className="px-3 py-2">{item.name}</td>
                       <td className="px-3 py-2">
                         <span
@@ -235,7 +344,23 @@ export default function AppTemplatesPage() {
                       </td>
                       <td className="px-3 py-2">{item.category}</td>
                       <td className="px-3 py-2">{formatDateTime(item.updatedAt)}</td>
-                      <td className="px-3 py-2">{item.rejectionReason || "-"}</td>
+                      <td className="px-3 py-2">{getTemplateReason(item)}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSyncTemplate(item.id)}
+                          disabled={
+                            syncingTemplateId === item.id || item.status.toLowerCase() === "approved"
+                          }
+                          className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {item.status.toLowerCase() === "approved"
+                            ? "Aprovado"
+                            : syncingTemplateId === item.id
+                              ? "Atualizando..."
+                              : "Atualizar status"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

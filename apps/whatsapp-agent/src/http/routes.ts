@@ -184,7 +184,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const category = String(body.category ?? "").trim();
       const autoSubmit = body.autoSubmit === true;
       if (!name || !content || !category) {
-        json(res, 400, { error: "bad_request" });
+        json(res, 400, {
+          error: "validation_error",
+          message: "Preencha nome, conteudo e categoria.",
+        });
         return;
       }
 
@@ -258,6 +261,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             errorMessage: "meta_config_missing",
           };
         } else {
+          const existingTemplate = await prisma.template.findFirst({
+            where: {
+              clientId: client.id,
+              name: {
+                equals: name,
+                mode: "insensitive",
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+            },
+          });
+
+          if (existingTemplate) {
+            logger.warn({
+              event: "app.templates.request.conflict",
+              clientId: client.id,
+              clientKey: client.clientKey,
+              templateId: existingTemplate.id,
+              templateName: existingTemplate.name,
+              requestId,
+            });
+            json(res, 409, {
+              error: "template_name_exists",
+              message: "Ja existe um template com esse nome.",
+            });
+            return;
+          }
+
           const template = await prisma.template.create({
             data: {
               clientId: client.id,
@@ -336,6 +369,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 status: updated.status,
                 errorMessage: result.errorMessage,
               };
+
+              json(res, 400, {
+                error: "meta_error",
+                message: "Nao foi possivel enviar o template para a Meta.",
+                details: summarizeMetaErrorMessage(result.errorMessage),
+                request: created,
+                submission,
+              });
+              return;
             }
           } catch (error) {
             const errorMessage =
@@ -364,6 +406,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               status: updated.status,
               errorMessage,
             };
+
+            if (error instanceof MetaTemplateValidationError) {
+              json(res, 400, {
+                error: "validation_error",
+                message: mapTemplateValidationMessage(error.message),
+                details: error.message,
+                request: created,
+                submission,
+              });
+              return;
+            }
+
+            if (error instanceof MetaTemplateServiceError) {
+              if (error.code === "meta_config_missing") {
+                json(res, 400, {
+                  error: "meta_config_missing",
+                  message: "Conecte seu WhatsApp antes de enviar templates.",
+                  details: error.message,
+                  request: created,
+                  submission,
+                });
+                return;
+              }
+
+              json(res, 400, {
+                error: "meta_error",
+                message: "Nao foi possivel enviar o template para a Meta.",
+                details: summarizeMetaErrorMessage(error.errorBody || error.message),
+                request: created,
+                submission,
+              });
+              return;
+            }
+
+            throw error;
           }
         }
       }
@@ -374,6 +451,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...(submission ? { submission } : {}),
       });
     } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        logger.warn({
+          event: "app.templates.request.conflict",
+          clientId: clientAuth.clientId,
+          requestId,
+          target: error.meta?.target,
+        });
+        json(res, 409, {
+          error: "template_name_exists",
+          message: "Ja existe um template com esse nome.",
+        });
+        return;
+      }
       logger.error({
         event: "app.templates.request.create.error",
         message: (error as Error).message,
@@ -449,9 +542,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const items = await prisma.template.findMany({
         where: {
           clientId: client.id,
-          status: "approved",
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { updatedAt: "desc" },
         select: {
           id: true,
           name: true,
@@ -481,6 +573,142 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.templates.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    /^\/app\/templates\/[^/]+\/sync$/.test(pathname)
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const templateId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!templateId) {
+        json(res, 404, {
+          error: "template_not_found",
+          message: "Template nao encontrado.",
+        });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const existingTemplate = await prisma.template.findUnique({
+        where: { id: templateId },
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+        },
+      });
+
+      if (!existingTemplate) {
+        json(res, 404, {
+          error: "template_not_found",
+          message: "Template nao encontrado.",
+        });
+        return;
+      }
+
+      if (existingTemplate.clientId !== client.id) {
+        json(res, 403, {
+          error: "forbidden",
+          message: "Acesso negado.",
+        });
+        return;
+      }
+
+      logger.info({
+        event: "template.sync.manual.started",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        templateId: existingTemplate.id,
+        templateName: existingTemplate.name,
+      });
+
+      await syncTemplateStatus(existingTemplate.id);
+
+      const updatedTemplate = await prisma.template.findUnique({
+        where: { id: existingTemplate.id },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          rejectionReason: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!updatedTemplate) {
+        json(res, 404, {
+          error: "template_not_found",
+          message: "Template nao encontrado.",
+        });
+        return;
+      }
+
+      logger.info({
+        event: "template.sync.manual.success",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        templateId: updatedTemplate.id,
+        templateName: updatedTemplate.name,
+        status: updatedTemplate.status,
+      });
+
+      json(res, 200, {
+        ok: true,
+        template: updatedTemplate,
+      });
+    } catch (error) {
+      logger.warn({
+        event: "template.sync.manual.failed",
+        requestId,
+        clientId: clientAuth.clientId,
+        message: (error as Error).message,
+      });
+      if (error instanceof MetaTemplateServiceError) {
+        if (error.code === "meta_template_sync_not_found") {
+          json(res, 404, {
+            error: "template_not_found",
+            message: "Template nao encontrado.",
+          });
+          return;
+        }
+        if (error.code === "meta_config_missing") {
+          json(res, 400, {
+            error: "meta_config_missing",
+            message: "Conecte seu WhatsApp antes de enviar templates.",
+            details: error.message,
+          });
+          return;
+        }
+        json(res, 400, {
+          error: "meta_error",
+          message: "Nao foi possivel atualizar o status do template.",
+          details: summarizeMetaErrorMessage(error.errorBody || error.message),
+        });
+        return;
+      }
+      logger.error({
+        event: "app.templates.sync.error",
         message: (error as Error).message,
         requestId,
       });
@@ -4204,6 +4432,52 @@ function triggerTemplateStatusSync(params: {
       }
     }
   );
+}
+
+function mapTemplateValidationMessage(code: string) {
+  switch (code) {
+    case "template_name_required":
+      return "Informe o nome do template.";
+    case "template_name_invalid":
+      return "Use apenas letras minusculas, numeros e underscore no nome do template.";
+    case "template_category_invalid":
+      return "Selecione uma categoria valida.";
+    case "template_language_required":
+      return "Idioma do template obrigatorio.";
+    case "template_language_invalid":
+      return "Idioma invalido. Use o formato pt_BR.";
+    case "template_content_required":
+      return "Informe o conteudo do template.";
+    case "template_content_too_long":
+      return "O conteudo do template excede o limite permitido pela Meta.";
+    case "template_variables_invalid":
+      return "Revise as variaveis do template. Os placeholders devem ser sequenciais e coerentes.";
+    default:
+      return "Nao foi possivel validar o template.";
+  }
+}
+
+function summarizeMetaErrorMessage(input: string) {
+  const value = String(input || "").trim();
+  if (!value) return "Erro nao detalhado pela Meta.";
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const nestedError =
+      parsed.error && typeof parsed.error === "object"
+        ? (parsed.error as Record<string, unknown>)
+        : null;
+    const nestedMessage =
+      nestedError && typeof nestedError.message === "string"
+        ? nestedError.message.trim()
+        : "";
+    if (nestedMessage) return nestedMessage;
+    if (typeof parsed.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    // noop
+  }
+  return value.length > 500 ? `${value.slice(0, 497)}...` : value;
 }
 
 function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
