@@ -67,6 +67,19 @@ export type AdminUserItem = {
   createdAt: string;
 };
 
+export type AdminClientItem = {
+  id: string;
+  name: string;
+  clientKey: string;
+  createdAt: string;
+  updatedAt: string;
+  phoneNumbers?: Array<{
+    id?: string;
+    phoneNumberId: string;
+    display?: string;
+  }>;
+};
+
 export type LeadStatus =
   | "NEW"
   | "QUALIFIED"
@@ -373,6 +386,32 @@ export async function fetchTenantsSummary(
     tenants: TenantSummaryItem[];
   }>(connection, `/admin/tenants/summary?range=${range}`);
   return response.tenants;
+}
+
+export async function fetchAdminClients(
+  connection: AdminConnection
+): Promise<{
+  items: AdminClientItem[];
+}> {
+  return requestJson(connection, "/admin/clients");
+}
+
+export async function createAdminClient(
+  connection: AdminConnection,
+  payload: {
+    name: string;
+    clientKey: string;
+    phoneNumberId: string;
+  }
+): Promise<AdminClientItem> {
+  return requestJson(connection, "/admin/clients", {
+    method: "POST",
+    body: JSON.stringify({
+      name: payload.name,
+      clientKey: payload.clientKey,
+      phone_number_id: payload.phoneNumberId,
+    }),
+  });
 }
 
 export async function fetchTenantById(
