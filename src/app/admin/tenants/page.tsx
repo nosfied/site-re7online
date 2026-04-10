@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
+  createAdminClient,
+  fetchAdminClients,
   fetchTenantsSummary,
   formatDateTime,
   formatPct,
   SummaryRange,
   TenantSummaryItem,
+  updateTenantById,
 } from "@/lib/whatsappAdminApi";
 
 const ranges: SummaryRange[] = ["1h", "24h", "7d", "30d"];
@@ -40,14 +43,32 @@ function getTenantActivityStatus(lastMessageAt: string | null) {
   };
 }
 
+function normalizeClientKeyInput(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+}
+
 export default function TenantsSummaryPage() {
   const { connection } = useAdminConsole();
   const [range, setRange] = useState<SummaryRange>("24h");
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<TenantSummaryItem[]>([]);
+  const [existingClientKeys, setExistingClientKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedClientKey, setCopiedClientKey] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [createdTenant, setCreatedTenant] = useState<{ tenantId: string; clientKey: string } | null>(null);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    clientKey: "",
+    phoneNumberId: "",
+  });
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -56,9 +77,13 @@ export default function TenantsSummaryPage() {
     setLoading(true);
     setError(null);
 
-    fetchTenantsSummary(connection, range)
-      .then((result) => {
-        if (!cancelled) setItems(result);
+    Promise.all([fetchTenantsSummary(connection, range), fetchAdminClients(connection)])
+      .then(([summaryResult, clientsResult]) => {
+        if (cancelled) return;
+        setItems(summaryResult);
+        setExistingClientKeys(
+          clientsResult.items.map((item) => item.clientKey.trim().toLowerCase())
+        );
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -86,6 +111,98 @@ export default function TenantsSummaryPage() {
     });
   }, [items, search]);
 
+  const reloadSummary = async () => {
+    const [summaryResult, clientsResult] = await Promise.all([
+      fetchTenantsSummary(connection, range),
+      fetchAdminClients(connection),
+    ]);
+    setItems(summaryResult);
+    setExistingClientKeys(
+      clientsResult.items.map((item) => item.clientKey.trim().toLowerCase())
+    );
+  };
+
+  const handleCreateTenant = async () => {
+    const name = createForm.name.trim();
+    const clientKey = normalizeClientKeyInput(createForm.clientKey);
+    const phoneNumberId = createForm.phoneNumberId.trim();
+
+    setCreateError(null);
+    setCreateSuccess(null);
+    setCreatedTenant(null);
+
+    if (!name) {
+      setCreateError("Informe o nome do cliente.");
+      return;
+    }
+    if (!clientKey) {
+      setCreateError("Informe o client key.");
+      return;
+    }
+    if (!/^[a-z0-9-]+$/.test(clientKey)) {
+      setCreateError("Use apenas letras minusculas, numeros e hifen no client key.");
+      return;
+    }
+    if (!phoneNumberId) {
+      setCreateError("Informe o phoneNumberId inicial.");
+      return;
+    }
+    if (existingClientKeys.includes(clientKey)) {
+      setCreateError("Ja existe um tenant com esse client key.");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await createAdminClient(connection, {
+        name,
+        clientKey,
+        phoneNumberId,
+      });
+
+      try {
+        await updateTenantById(connection, clientKey, {
+          id: clientKey,
+          name,
+          metaPhoneNumberId: phoneNumberId,
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          templates: {
+            manualHandoff: "",
+          },
+        });
+      } catch {
+        setCreatedTenant({ tenantId: clientKey, clientKey });
+        setCreateError("Tenant criado, mas falha ao inicializar configuracao.");
+        return;
+      }
+
+      await reloadSummary();
+      setCreateSuccess("Tenant criado com sucesso. Prossiga para o onboarding.");
+      setCreatedTenant({ tenantId: clientKey, clientKey });
+      setCreateForm({ name: "", clientKey: "", phoneNumberId: "" });
+      setShowCreateForm(false);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 409 && typed.message === "phone_number_conflict") {
+        setCreateError("Este phoneNumberId ja esta vinculado a outro tenant.");
+        return;
+      }
+      if (typed.status === 409) {
+        setCreateError("Ja existe um tenant com esse client key.");
+        return;
+      }
+      if (typed.status && typed.status < 500) {
+        setCreateError(typed.message || "Nao foi possivel criar o tenant.");
+        return;
+      }
+      setCreateError("Nao foi possivel criar o tenant.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
@@ -101,6 +218,126 @@ export default function TenantsSummaryPage() {
             Voltar ao site
           </Link>
         </header>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Criacao rapida
+              </h2>
+              <p className="mt-1 text-sm text-white/70">
+                Crie o client relacional e o tenant base sem sair do hub.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowCreateForm((current) => !current);
+                setCreateError(null);
+                setCreateSuccess(null);
+              }}
+              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+            >
+              {showCreateForm ? "Fechar" : "Novo tenant"}
+            </button>
+          </div>
+
+          {showCreateForm ? (
+            <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-re7-navy/40 p-4 md:grid-cols-3">
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Nome do cliente</span>
+                <input
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={createForm.name}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  placeholder="Justa Advocacia"
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Client key</span>
+                <input
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={createForm.clientKey}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      clientKey: normalizeClientKeyInput(event.target.value),
+                    }))
+                  }
+                  placeholder="justa-advocacia"
+                />
+                <span className="text-xs text-white/50">
+                  clientKey final: {normalizeClientKeyInput(createForm.clientKey) || "-"}
+                </span>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">phoneNumberId inicial</span>
+                <input
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={createForm.phoneNumberId}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      phoneNumberId: event.target.value.trim(),
+                    }))
+                  }
+                  placeholder="1052978311228316"
+                />
+              </label>
+              <div className="md:col-span-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCreateTenant}
+                  disabled={creating}
+                  className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {creating ? "Criando..." : "Criar tenant"}
+                </button>
+                <p className="text-xs text-white/50">
+                  Contrato atual do backend exige: `name`, `clientKey` e `phone_number_id`.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {createError ? (
+            <p className="mt-4 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+              {createError}
+            </p>
+          ) : null}
+          {createSuccess ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
+              <span>{createSuccess}</span>
+              {createdTenant ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(createdTenant.clientKey);
+                    }}
+                    className="rounded-md border border-emerald-300/30 px-3 py-1 text-xs hover:bg-emerald-900/30"
+                  >
+                    Copiar clientKey
+                  </button>
+                  <Link
+                    href={`/admin/tenants/${encodeURIComponent(createdTenant.tenantId)}`}
+                    className="rounded-md border border-emerald-300/30 px-3 py-1 text-xs hover:bg-emerald-900/30"
+                  >
+                    Abrir tenant
+                  </Link>
+                  <Link
+                    href={`/admin/tenants/${encodeURIComponent(createdTenant.tenantId)}/onboarding`}
+                    className="rounded-md border border-emerald-300/30 px-3 py-1 text-xs hover:bg-emerald-900/30"
+                  >
+                    Ir para onboarding
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="grid gap-3 md:grid-cols-3">
