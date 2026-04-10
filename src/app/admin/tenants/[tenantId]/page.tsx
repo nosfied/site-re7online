@@ -33,10 +33,14 @@ export default function TenantEditPage() {
   const [form, setForm] = useState<TenantFormState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [clientSnapshot, setClientSnapshot] = useState<TenantConfigResponse["client"] | null>(null);
   const [tenantSnapshot, setTenantSnapshot] = useState<TenantConfigResponse["tenant"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{ fieldsChanged?: string[]; backupPath?: string } | null>(null);
+  const templatesHref = clientSnapshot?.clientKey
+    ? `/admin/templates/manage?tenantId=${encodeURIComponent(tenantId)}&clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
+    : "/admin/templates/manage";
 
   useEffect(() => {
     if (!tenantId) return;
@@ -50,6 +54,7 @@ export default function TenantEditPage() {
       .then((response) => {
         if (cancelled) return;
         const tenant = response.tenant;
+        setClientSnapshot(response.client ?? null);
         setTenantSnapshot(tenant);
         setForm({
           allowlistInput: (tenant.allowlist ?? []).join("\n"),
@@ -146,15 +151,33 @@ export default function TenantEditPage() {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold">Editar tenant</h1>
-            <p className="text-sm text-white/70 font-mono">{tenantId}</p>
+            <h1 className="text-2xl font-bold">Tenant</h1>
+            <p className="text-sm font-mono text-white/70">{tenantId}</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/tenants/${encodeURIComponent(tenantId)}/onboarding`}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Onboarding Meta
+            </Link>
+            <Link
+              href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Usuarios
+            </Link>
             <Link
               href={`/admin/tenants/${encodeURIComponent(tenantId)}/campaigns`}
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
             >
               Campanhas
+            </Link>
+            <Link
+              href={templatesHref}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Templates
             </Link>
             <Link
               href="/admin/tenants"
@@ -173,6 +196,89 @@ export default function TenantEditPage() {
         {toast ? (
           <p className="rounded-md border border-emerald-400/30 bg-emerald-900/30 p-3 text-sm text-emerald-100">{toast}</p>
         ) : null}
+
+        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">Resumo do tenant</h2>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Nome</p>
+                <p className="mt-2 text-sm font-medium">{tenantSnapshot?.name ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Client key</p>
+                <p className="mt-2 font-mono text-xs">{clientSnapshot?.clientKey ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Client status</p>
+                <p className="mt-2 text-sm font-medium">{clientSnapshot?.status ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Idioma padrao</p>
+                <p className="mt-2 text-sm font-medium">{tenantSnapshot?.defaultLanguage ?? "-"}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">Operacao</h2>
+            <div className="mt-4 flex flex-col gap-3">
+              <Link
+                href={`/admin/tenants/${encodeURIComponent(tenantId)}/onboarding`}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Conexao Meta e onboarding
+              </Link>
+              <Link
+                href={`/admin/tenants/${encodeURIComponent(tenantId)}/campaigns`}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Campanhas do tenant
+              </Link>
+              <Link
+                href={templatesHref}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Templates por tenant
+              </Link>
+              <Link
+                href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Usuarios do tenant
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">Conexao Meta</h2>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Phone number id</p>
+                <p className="mt-2 font-mono text-xs">{tenantSnapshot?.metaPhoneNumberId ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Template manual handoff</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.templates?.manualHandoff ?? "-"}</p>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">Configuracoes</h2>
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Allowlist</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.allowlist?.length ?? 0} itens</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Quota mensal</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.quotaMonthlyConversations ?? "-"}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {form ? (
           <form className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4" onSubmit={handleSubmit}>
