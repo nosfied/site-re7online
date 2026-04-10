@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
@@ -28,12 +29,15 @@ function getStatusClasses(status: string) {
 
 export default function ManageTemplatesAdminPage() {
   const { connection } = useAdminConsole();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
   const [catalog, setCatalog] = useState<AdminTemplateCatalogItem[]>([]);
+  const clientKeyFilter = searchParams.get("clientKey")?.trim() ?? "";
+  const tenantIdFilter = searchParams.get("tenantId")?.trim() ?? "";
 
   const loadData = useCallback(async (activeConnection: typeof connection) => {
     const [requestsResponse, templatesResponse] = await Promise.all([
@@ -99,6 +103,13 @@ export default function ManageTemplatesAdminPage() {
     }
   };
 
+  const visibleRequests = clientKeyFilter
+    ? requests.filter((item) => item.clientKey === clientKeyFilter)
+    : requests;
+  const visibleCatalog = clientKeyFilter
+    ? catalog.filter((item) => item.clientKey === clientKeyFilter)
+    : catalog;
+
   return (
     <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
@@ -106,6 +117,11 @@ export default function ManageTemplatesAdminPage() {
           <div>
             <h1 className="text-2xl font-bold">Gestao de templates</h1>
             <p className="text-sm text-white/70">Aprovacao de requests e catalogo aprovado.</p>
+            {clientKeyFilter ? (
+              <p className="mt-1 text-xs text-white/50">
+                Templates do tenant: {tenantIdFilter || clientKeyFilter}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -134,12 +150,25 @@ export default function ManageTemplatesAdminPage() {
             {feedback}
           </p>
         ) : null}
+        {clientKeyFilter ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-re7-sky/30 bg-re7-sky/10 px-3 py-1 text-xs text-white">
+              Tenant filtrado
+            </span>
+            <Link
+              href="/admin/templates/manage"
+              className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10"
+            >
+              Limpar filtro
+            </Link>
+          </div>
+        ) : null}
 
         <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Template requests</h2>
           </div>
-          {requests.length === 0 ? (
+          {visibleRequests.length === 0 ? (
             <p className="p-4 text-sm text-white/70">Nenhuma solicitacao encontrada.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -154,7 +183,7 @@ export default function ManageTemplatesAdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map((item) => (
+                  {visibleRequests.map((item) => (
                     <tr key={item.id} className="border-t border-white/10">
                       <td className="px-3 py-2">{item.name}</td>
                       <td className="px-3 py-2">{item.clientName || item.clientId}</td>
@@ -198,7 +227,7 @@ export default function ManageTemplatesAdminPage() {
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Template catalog</h2>
           </div>
-          {catalog.length === 0 ? (
+          {visibleCatalog.length === 0 ? (
             <p className="p-4 text-sm text-white/70">Nenhum template aprovado encontrado.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -212,7 +241,7 @@ export default function ManageTemplatesAdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {catalog.map((item) => (
+                  {visibleCatalog.map((item) => (
                     <tr key={item.id} className="border-t border-white/10">
                       <td className="px-3 py-2">{item.name}</td>
                       <td className="px-3 py-2">{item.clientName || item.clientId}</td>
