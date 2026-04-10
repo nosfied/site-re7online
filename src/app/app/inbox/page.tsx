@@ -208,6 +208,32 @@ function getMessageStatusTicks(item: InboxMessageItem) {
   return null;
 }
 
+function renderMessageStatusTicks(item: InboxMessageItem) {
+  const ticks = getMessageStatusTicks(item);
+  if (!ticks) return null;
+  if (ticks.label === "!") {
+    return (
+      <span aria-label={ticks.ariaLabel} className={`font-semibold ${ticks.className}`}>
+        !
+      </span>
+    );
+  }
+
+  const glyphs = ticks.label.split("");
+  return (
+    <span aria-label={ticks.ariaLabel} className={`inline-flex items-center ${ticks.className}`}>
+      {glyphs.map((glyph, index) => (
+        <span
+          key={`${ticks.ariaLabel}-${index}`}
+          className={index === 0 ? "" : "-ml-0.5"}
+        >
+          {glyph}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function getLatestMessageSignature(items: InboxMessageItem[]) {
   if (items.length === 0) return null;
   const latest = items[items.length - 1];
@@ -894,7 +920,7 @@ export default function AppInboxPage() {
             ) : null}
             <div className="space-y-3">
               {messages.map((item, index) => {
-                const ticks = getMessageStatusTicks(item);
+                const statusTicks = renderMessageStatusTicks(item);
                 return (
                   <div
                     key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
@@ -914,15 +940,6 @@ export default function AppInboxPage() {
                         })}
                       </span>
                       <span>{item.type}</span>
-                      <span>{formatDateTime(item.createdAt)}</span>
-                      {ticks ? (
-                        <span
-                          aria-label={ticks.ariaLabel}
-                          className={`font-semibold tracking-[-0.12em] ${ticks.className}`}
-                        >
-                          {ticks.label}
-                        </span>
-                      ) : null}
                     </div>
                     {item.bodyText ? (
                       <p className="text-sm leading-relaxed">{item.bodyText}</p>
@@ -932,6 +949,10 @@ export default function AppInboxPage() {
                     {item.templateName ? (
                       <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
                     ) : null}
+                    <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
+                      <span>{formatDateTime(item.createdAt)}</span>
+                      {statusTicks}
+                    </div>
                     </article>
                   </div>
                 );
