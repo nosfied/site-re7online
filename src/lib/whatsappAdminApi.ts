@@ -565,6 +565,31 @@ export async function createUser(
   });
 }
 
+export async function resetUserPassword(
+  connection: AdminConnection,
+  userId: string,
+  clientKey: string,
+  password: string
+): Promise<{
+  ok: true;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/users/${encodeURIComponent(userId)}/reset-password?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }
+  );
+}
+
 export async function sendConversationMessage(
   connection: AdminConnection,
   clientKey: string,
