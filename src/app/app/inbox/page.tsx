@@ -237,6 +237,7 @@ export default function AppInboxPage() {
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
@@ -288,6 +289,13 @@ export default function AppInboxPage() {
   const scrollTimelineToBottom = useCallback(() => {
     if (!timelineRef.current) return;
     timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+  }, []);
+
+  const focusComposer = useCallback(() => {
+    if (!composerRef.current) return;
+    composerRef.current.focus();
+    const caretPosition = composerRef.current.value.length;
+    composerRef.current.setSelectionRange(caretPosition, caretPosition);
   }, []);
 
   const markConversationAsRead = useCallback((conversationKey: string, activityAt?: string | null) => {
@@ -522,6 +530,23 @@ export default function AppInboxPage() {
   );
 
   useEffect(() => {
+    if (!selectedConversationWaId || selectedConversation?.mode !== "HUMAN" || sendingMessage || updatingMode) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      focusComposer();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    focusComposer,
+    selectedConversation?.mode,
+    selectedConversationKey,
+    selectedConversationWaId,
+    sendingMessage,
+    updatingMode,
+  ]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible" || !selectedConversation) return;
       markConversationAsRead(
@@ -705,6 +730,7 @@ export default function AppInboxPage() {
       setError(typed.message || "Falha ao enviar mensagem.");
     } finally {
       setSendingMessage(false);
+      focusComposer();
     }
   };
 
@@ -867,46 +893,49 @@ export default function AppInboxPage() {
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
             ) : null}
             <div className="space-y-3">
-              {messages.map((item, index) => (
-                <div
-                  key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
-                  className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
-                >
-                  <article
-                    className={`wa-bubble ${
-                      item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
-                    }`}
+              {messages.map((item, index) => {
+                const ticks = getMessageStatusTicks(item);
+                return (
+                  <div
+                    key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
+                    className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                   >
-                  <div className="wa-bubble-meta mb-1 flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="font-semibold text-slate-900">
-                      {getTimelineAuthorLabel({
-                        direction: item.direction,
-                        sessionUserName: session.user.name,
-                        conversation: selectedConversation,
-                      })}
-                    </span>
-                    <span>{item.type}</span>
-                    <span>{formatDateTime(item.createdAt)}</span>
-                    {getMessageStatusTicks(item) ? (
-                      <span
-                        aria-label={getMessageStatusTicks(item)?.ariaLabel}
-                        className={`font-semibold tracking-[-0.12em] ${getMessageStatusTicks(item)?.className}`}
-                      >
-                        {getMessageStatusTicks(item)?.label}
+                    <article
+                      className={`wa-bubble ${
+                        item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
+                      }`}
+                    >
+                    <div className="wa-bubble-meta mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="font-semibold text-slate-900">
+                        {getTimelineAuthorLabel({
+                          direction: item.direction,
+                          sessionUserName: session.user.name,
+                          conversation: selectedConversation,
+                        })}
                       </span>
+                      <span>{item.type}</span>
+                      <span>{formatDateTime(item.createdAt)}</span>
+                      {ticks ? (
+                        <span
+                          aria-label={ticks.ariaLabel}
+                          className={`font-semibold tracking-[-0.12em] ${ticks.className}`}
+                        >
+                          {ticks.label}
+                        </span>
+                      ) : null}
+                    </div>
+                    {item.bodyText ? (
+                      <p className="text-sm leading-relaxed">{item.bodyText}</p>
+                    ) : (
+                      <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
+                    )}
+                    {item.templateName ? (
+                      <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
                     ) : null}
+                    </article>
                   </div>
-                  {item.bodyText ? (
-                    <p className="text-sm leading-relaxed">{item.bodyText}</p>
-                  ) : (
-                    <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
-                  )}
-                  {item.templateName ? (
-                    <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
-                  ) : null}
-                  </article>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div className="wa-composer-shell border-t border-black/5 p-4 text-slate-900">
@@ -950,7 +979,10 @@ export default function AppInboxPage() {
                 <button
                   key={emoji}
                   type="button"
-                  onClick={() => setMessageDraft((current) => `${current}${emoji}`)}
+                  onClick={() => {
+                    setMessageDraft((current) => `${current}${emoji}`);
+                    focusComposer();
+                  }}
                   disabled={!selectedConversationWaId || sendingMessage}
                   className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-lg leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -960,6 +992,7 @@ export default function AppInboxPage() {
             </div>
             <label className="grid gap-2 text-sm">
               <textarea
+                ref={composerRef}
                 className="min-h-24 rounded-[1.1rem] border border-[#d4c7b5] bg-white/92 px-4 py-3 text-slate-900 outline-none focus:border-[#7cbf69]"
                 value={messageDraft}
                 onChange={(event) => setMessageDraft(event.target.value)}

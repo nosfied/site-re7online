@@ -4912,6 +4912,10 @@ function normalizeCampaignMessageStatus(
   }
 }
 
+function normalizeInboxMessageStatus(lastStatus: string | null, fallbackStatus: string) {
+  return normalizeCampaignMessageStatus(lastStatus, fallbackStatus).toUpperCase();
+}
+
 function stringifyCampaignError(value: unknown) {
   if (!value) return null;
   if (typeof value === "string") return value;
@@ -5259,6 +5263,7 @@ async function buildConversationListPayload(
         status: true,
         bodyText: true,
         templateName: true,
+        rawPayload: true,
         createdAt: true,
       },
     }),
@@ -5351,7 +5356,10 @@ async function buildConversationListPayload(
           ? {
               direction: "OUTBOUND",
               type: latestOutbound.type,
-              status: latestOutbound.status,
+              status: normalizeInboxMessageStatus(
+                extractMetaStatus(latestOutbound.rawPayload).lastStatus,
+                latestOutbound.status
+              ),
               bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
               templateName: latestOutbound.templateName ?? null,
               createdAt: latestOutbound.createdAt,
@@ -5479,21 +5487,28 @@ async function buildConversationDetailPayload(
       createdAt: item.createdAt,
       rawPayload: params.includeRaw ? item.rawPayload : undefined,
     })),
-    ...outbound.map((item) => ({
-      direction: "OUTBOUND",
-      type: item.type,
-      status: item.status,
-      intent: null,
-      bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
-      templateName: item.templateName,
-      templateLang: item.templateLang,
-      requestId: item.requestId,
-      messageId: item.messageId,
-      metaMessageId: item.metaMessageId,
-      errorBody: item.errorBody ? item.errorBody.slice(0, 2000) : null,
-      createdAt: item.createdAt,
-      rawPayload: params.includeRaw ? item.rawPayload : undefined,
-    })),
+    ...outbound.map((item) => {
+      const metaStatus = extractMetaStatus(item.rawPayload);
+      return {
+        direction: "OUTBOUND",
+        type: item.type,
+        status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
+        intent: null,
+        bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+        templateName: item.templateName,
+        templateLang: item.templateLang,
+        requestId: item.requestId,
+        messageId: item.messageId,
+        metaMessageId: item.metaMessageId,
+        errorBody:
+          item.errorBody?.slice(0, 2000) ||
+          metaStatus.statusDetail ||
+          stringifyCampaignError(metaStatus.errorData) ||
+          stringifyCampaignError(metaStatus.errors),
+        createdAt: item.createdAt,
+        rawPayload: params.includeRaw ? item.rawPayload : undefined,
+      };
+    }),
   ]
     .sort((a, b) => {
       const aTs = a.createdAt instanceof Date ? a.createdAt.getTime() : Date.parse(String(a.createdAt));

@@ -175,7 +175,10 @@ function getTemplateRecategorizationLabel(
   if (!item.wasRecategorized || !item.submittedCategory || item.submittedCategory === item.category) {
     return null;
   }
-  return `${item.submittedCategory} -> ${item.category}`;
+  return {
+    badge: "Recategorizado pela Meta",
+    detail: `${item.submittedCategory} -> ${item.category}`,
+  };
 }
 
 function getSubmissionMessage(submission?: {
@@ -480,7 +483,9 @@ export default function AppTemplatesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {catalogItems.map((item) => (
+                  {catalogItems.map((item) => {
+                    const recategorizationInfo = getTemplateRecategorizationLabel(item);
+                    return (
                     <tr
                       key={item.id}
                       className={`border-t border-white/10 ${highlightedTemplateId === item.templateId ? "bg-emerald-500/10" : ""}`}
@@ -496,10 +501,15 @@ export default function AppTemplatesPage() {
                       <td className="px-3 py-2">
                         <div className="flex flex-col gap-1">
                           <span>{item.category}</span>
-                          {getTemplateRecategorizationLabel(item) ? (
-                            <span className="text-xs text-amber-200">
-                              {getTemplateRecategorizationLabel(item)}
-                            </span>
+                          {recategorizationInfo ? (
+                            <>
+                              <span className="inline-flex w-fit rounded-full border border-amber-300/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                                {recategorizationInfo.badge}
+                              </span>
+                              <span className="text-xs text-amber-200">
+                                {recategorizationInfo.detail}
+                              </span>
+                            </>
                           ) : null}
                         </div>
                       </td>
@@ -524,7 +534,8 @@ export default function AppTemplatesPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
