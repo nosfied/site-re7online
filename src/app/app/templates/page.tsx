@@ -41,6 +41,8 @@ type CatalogItem = {
   templateId: string | null;
   name: string;
   category: string;
+  submittedCategory: string | null;
+  wasRecategorized: boolean;
   status: string;
   updatedAt: string;
   rejectionReason: string | null;
@@ -126,6 +128,8 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       templateId: null,
       name: request.name,
       category: request.category,
+      submittedCategory: request.category,
+      wasRecategorized: false,
       status: request.status,
       updatedAt: request.createdAt,
       rejectionReason: request.notes,
@@ -141,6 +145,8 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       templateId: template.id,
       name: template.name,
       category: template.category,
+      submittedCategory: template.submittedCategory,
+      wasRecategorized: template.wasRecategorized,
       status: template.status,
       updatedAt: template.updatedAt,
       rejectionReason: template.rejectionReason,
@@ -161,6 +167,15 @@ function getTemplateReason(item: Pick<AppTemplateItem, "status" | "rejectionReas
     return "Falha ao enviar para analise";
   }
   return "-";
+}
+
+function getTemplateRecategorizationLabel(
+  item: Pick<CatalogItem, "category" | "submittedCategory" | "wasRecategorized">
+) {
+  if (!item.wasRecategorized || !item.submittedCategory || item.submittedCategory === item.category) {
+    return null;
+  }
+  return `${item.submittedCategory} -> ${item.category}`;
 }
 
 function getSubmissionMessage(submission?: {
@@ -383,12 +398,21 @@ export default function AppTemplatesPage() {
       setSyncingTemplateId(templateId);
       try {
         const response = await syncAppTemplate(session, templateId);
+        const previousTemplate = templates.find((item) => item.id === response.template.id) ?? null;
+        const categoryChanged = Boolean(
+          previousTemplate &&
+            (previousTemplate.category !== response.template.category ||
+              previousTemplate.wasRecategorized !== response.template.wasRecategorized)
+        );
         setTemplates((current) =>
           sortTemplates(
             current.map((item) =>
               item.id === response.template.id
                 ? {
                     ...item,
+                    category: response.template.category,
+                    submittedCategory: response.template.submittedCategory,
+                    wasRecategorized: response.template.wasRecategorized,
                     status: response.template.status,
                     rejectionReason: response.template.rejectionReason,
                     updatedAt: response.template.updatedAt,
@@ -398,7 +422,11 @@ export default function AppTemplatesPage() {
           )
         );
         setHighlightedTemplateId(response.template.id);
-        setSuccess("Status atualizado com sucesso.");
+        setSuccess(
+          categoryChanged
+            ? "Status atualizado. A Meta recategorizou este template."
+            : "Status atualizado com sucesso."
+        );
         window.setTimeout(() => setHighlightedTemplateId((current) => (current === response.template.id ? null : current)), 2500);
       } catch (err) {
         const typed = err as AppApiError;
@@ -411,7 +439,7 @@ export default function AppTemplatesPage() {
         setSyncingTemplateId(null);
       }
     },
-    [handleUnauthorized, session]
+    [handleUnauthorized, session, templates]
   );
 
   if (!session) return null;
@@ -463,7 +491,16 @@ export default function AppTemplatesPage() {
                           {getStatusLabel(item.status)}
                         </span>
                       </td>
-                      <td className="px-3 py-2">{item.category}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-col gap-1">
+                          <span>{item.category}</span>
+                          {getTemplateRecategorizationLabel(item) ? (
+                            <span className="text-xs text-amber-200">
+                              {getTemplateRecategorizationLabel(item)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="px-3 py-2">{formatDateTime(item.updatedAt)}</td>
                       <td className="px-3 py-2">{getTemplateReason(item)}</td>
                       <td className="px-3 py-2">

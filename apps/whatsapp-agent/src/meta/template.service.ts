@@ -271,6 +271,12 @@ function normalizeMetaTemplateSyncStatus(input: unknown): "approved" | "rejected
   return null;
 }
 
+function normalizeMetaTemplateCategory(input: unknown) {
+  if (typeof input !== "string") return null;
+  const normalized = input.trim().toUpperCase();
+  return normalized || null;
+}
+
 function extractMetaRejectionReason(input: Record<string, unknown> | null) {
   if (!input) return null;
   const directFields = ["rejection_reason", "rejected_reason", "reason"];
@@ -297,6 +303,9 @@ export async function syncTemplateStatus(templateId: string) {
       id: true,
       clientId: true,
       name: true,
+      category: true,
+      submittedCategory: true,
+      wasRecategorized: true,
       language: true,
       status: true,
       metaTemplateId: true,
@@ -391,26 +400,53 @@ export async function syncTemplateStatus(templateId: string) {
 
   const typedMatch = matched as Record<string, unknown>;
   const nextStatus = normalizeMetaTemplateSyncStatus(typedMatch.status);
+  const metaCategory = normalizeMetaTemplateCategory(typedMatch.category);
   const rejectionReason = extractMetaRejectionReason(typedMatch);
+  const submittedCategory = normalizeMetaTemplateCategory(template.submittedCategory);
+  const nextCategory = metaCategory ?? template.category;
+  const nextWasRecategorized = Boolean(
+    submittedCategory && metaCategory && metaCategory !== submittedCategory
+  );
 
-  if (!nextStatus) {
+  if (!nextStatus && nextCategory === template.category && nextWasRecategorized === template.wasRecategorized) {
     return {
       ok: true as const,
       templateId: template.id,
+      category: template.category,
+      submittedCategory,
+      wasRecategorized: template.wasRecategorized,
       status: template.status,
       rejectionReason,
       updated: false,
     };
   }
 
+  if (metaCategory && metaCategory !== template.category) {
+    logger.info({
+      event: "template.sync.recategorized",
+      templateId: template.id,
+      clientId: template.clientId,
+      clientKey: template.client.clientKey,
+      templateName: template.name,
+      previousCategory: template.category,
+      metaCategory,
+    });
+  }
+
   const updated = await prisma.template.update({
     where: { id: template.id },
     data: {
-      status: nextStatus,
+      category: nextCategory,
+      submittedCategory: submittedCategory ?? undefined,
+      wasRecategorized: nextWasRecategorized,
+      status: nextStatus ?? template.status,
       rejectionReason: nextStatus === "rejected" ? rejectionReason ?? undefined : null,
     },
     select: {
       id: true,
+      category: true,
+      submittedCategory: true,
+      wasRecategorized: true,
       status: true,
       rejectionReason: true,
     },
@@ -422,11 +458,16 @@ export async function syncTemplateStatus(templateId: string) {
     clientKey: template.client.clientKey,
     previousStatus: template.status,
     nextStatus: updated.status,
+    previousCategory: template.category,
+    nextCategory: updated.category,
   });
 
   return {
     ok: true as const,
     templateId: updated.id,
+    category: updated.category,
+    submittedCategory: updated.submittedCategory,
+    wasRecategorized: updated.wasRecategorized,
     status: updated.status,
     rejectionReason: updated.rejectionReason,
     updated: true,
