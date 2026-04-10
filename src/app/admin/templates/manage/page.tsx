@@ -2,19 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   AdminTemplateCatalogItem,
   AdminTemplateRequestItem,
   approveAdminTemplateRequest,
   fetchAdminTemplateRequests,
   fetchTemplatesObservability,
   formatDateTime,
-  loadAdminConnection,
   rejectAdminTemplateRequest,
-  saveAdminConnection,
-  testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 
 function getStatusClasses(status: string) {
@@ -31,29 +27,15 @@ function getStatusClasses(status: string) {
 }
 
 export default function ManageTemplatesAdminPage() {
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [loading, setLoading] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
   const [catalog, setCatalog] = useState<AdminTemplateCatalogItem[]>([]);
 
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
-
-  const loadData = useCallback(async (activeConnection: AdminConnection) => {
+  const loadData = useCallback(async (activeConnection: typeof connection) => {
     const [requestsResponse, templatesResponse] = await Promise.all([
       fetchAdminTemplateRequests(activeConnection),
       fetchTemplatesObservability(activeConnection),
@@ -81,19 +63,6 @@ export default function ManageTemplatesAdminPage() {
       cancelled = true;
     };
   }, [connection, loadData]);
-
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setError(null);
-    try {
-      await testAdminConnection(connection);
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Falha ao testar conexao.");
-    } finally {
-      setTestingConnection(false);
-    }
-  };
 
   const handleApprove = async (requestId: string) => {
     if (!window.confirm("Deseja aprovar este template?")) {
@@ -131,7 +100,7 @@ export default function ManageTemplatesAdminPage() {
   };
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -153,13 +122,6 @@ export default function ManageTemplatesAdminPage() {
             </Link>
           </div>
         </header>
-
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
 
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
         {error ? (
@@ -264,6 +226,6 @@ export default function ManageTemplatesAdminPage() {
           )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

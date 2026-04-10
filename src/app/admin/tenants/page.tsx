@@ -2,42 +2,24 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   fetchTenantsSummary,
   formatDateTime,
   formatPct,
-  loadAdminConnection,
-  saveAdminConnection,
   SummaryRange,
-  testAdminConnection,
   TenantSummaryItem,
 } from "@/lib/whatsappAdminApi";
 
 const ranges: SummaryRange[] = ["1h", "24h", "7d", "30d"];
 
 export default function TenantsSummaryPage() {
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [range, setRange] = useState<SummaryRange>("24h");
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<TenantSummaryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -76,22 +58,8 @@ export default function TenantsSummaryPage() {
     });
   }, [items, search]);
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setError(null);
-    try {
-      await testAdminConnection(connection);
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Falha ao testar conexao.");
-      return;
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -107,13 +75,6 @@ export default function TenantsSummaryPage() {
             Voltar ao site
           </Link>
         </header>
-
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="grid gap-3 md:grid-cols-3">
@@ -218,6 +179,6 @@ export default function TenantsSummaryPage() {
           </table>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

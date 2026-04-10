@@ -3,16 +3,12 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   createUser,
   fetchTenantById,
-  loadAdminConnection,
   onboardingExchangeCode,
-  saveAdminConnection,
   TenantConfigResponse,
-  testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 import {
   EmbeddedSignupCaptureEntry,
@@ -134,17 +130,12 @@ export default function TenantOnboardingPage() {
   }, [params]);
 
   const popupCheckRef = useRef<number | null>(null);
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [loadingTenant, setLoadingTenant] = useState(false);
   const [starting, setStarting] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [popupOpened, setPopupOpened] = useState(false);
   const [popupClosed, setPopupClosed] = useState(false);
   const [messagesReceived, setMessagesReceived] = useState(0);
@@ -226,15 +217,6 @@ export default function TenantOnboardingPage() {
     },
     [appendEntry, applyCapturedData]
   );
-
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -469,17 +451,6 @@ export default function TenantOnboardingPage() {
     }
   };
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    try {
-      await testAdminConnection(connection);
-    } catch (error) {
-      setErrorMessage((error as Error).message);
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   const rawPayloadJson = useMemo(
     () => (rawPayload == null ? "-" : JSON.stringify(sanitizeDebugValue(rawPayload), null, 2)),
     [rawPayload]
@@ -490,7 +461,7 @@ export default function TenantOnboardingPage() {
   );
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -512,13 +483,6 @@ export default function TenantOnboardingPage() {
             </Link>
           </div>
         </header>
-
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
 
         {loadingTenant ? <p className="text-sm text-white/70">Carregando tenant...</p> : null}
         {sdkError ? (
@@ -768,6 +732,6 @@ export default function TenantOnboardingPage() {
           </pre>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

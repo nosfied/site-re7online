@@ -292,6 +292,13 @@ export function saveAdminConnection(connection: AdminConnection) {
   }
 }
 
+export function clearAdminConnection() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LOCAL_TOKEN_KEY);
+  sessionStorage.removeItem(SESSION_TOKEN_KEY);
+}
+
 async function requestJson<T>(
   connection: AdminConnection,
   path: string,
