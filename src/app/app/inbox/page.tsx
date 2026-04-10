@@ -12,7 +12,6 @@ import {
   fetchAppConversations,
   fetchAppLeadNotes,
   updateAppLead,
-  fetchAppUsers,
   loadAppSession,
   releaseAppConversation,
   saveAppSession,
@@ -20,7 +19,6 @@ import {
   updateAppLeadStatus,
 } from "@/lib/appClientApi";
 import {
-  AdminUserItem,
   formatDateTime,
   InboxConversationItem,
   InboxMessageItem,
@@ -79,11 +77,15 @@ function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waI
 
 type InboxReadState = {
   lastReadAtByConversationKey: Record<string, string>;
+  manuallyUnreadByConversationKey: Record<string, boolean>;
 };
 
 const EMPTY_READ_STATE: InboxReadState = {
   lastReadAtByConversationKey: {},
+  manuallyUnreadByConversationKey: {},
 };
+
+const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
@@ -117,6 +119,8 @@ function loadReadState(storageKey: string): InboxReadState {
       parsed && typeof parsed === "object"
         ? parsed.lastReadAtByConversationKey ?? parsed.lastReadAtByWaId ?? parsed.lastOpenedAtByWaId ?? {}
         : {};
+    const manuallyUnreadByConversationKey =
+      parsed && typeof parsed === "object" ? parsed.manuallyUnreadByConversationKey ?? {} : {};
     const normalizedReadState =
       lastReadAtByConversationKey && typeof lastReadAtByConversationKey === "object"
         ? Object.fromEntries(
@@ -125,8 +129,17 @@ function loadReadState(storageKey: string): InboxReadState {
             )
           )
         : {};
+    const normalizedUnreadOverrides =
+      manuallyUnreadByConversationKey && typeof manuallyUnreadByConversationKey === "object"
+        ? Object.fromEntries(
+            Object.entries(manuallyUnreadByConversationKey).filter(
+              (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
+            )
+          )
+        : {};
     return {
       lastReadAtByConversationKey: normalizedReadState,
+      manuallyUnreadByConversationKey: normalizedUnreadOverrides,
     };
   } catch {
     return EMPTY_READ_STATE;
@@ -150,6 +163,7 @@ function saveReadState(storageKey: string, state: InboxReadState) {
 }
 
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
+  if (state.manuallyUnreadByConversationKey[getConversationIdentity(item)]) return true;
   if (item.lastMessage?.direction !== "INBOUND") return false;
   const activityAt = getConversationActivityTimestamp(item);
   const lastReadAt = Date.parse(
@@ -158,6 +172,40 @@ function isConversationUnread(item: InboxConversationItem, state: InboxReadState
   if (activityAt === null) return false;
   if (!Number.isFinite(lastReadAt)) return true;
   return activityAt > lastReadAt;
+}
+
+function getMessageStatusTicks(item: InboxMessageItem) {
+  if (item.direction !== "OUTBOUND") return null;
+  const normalized = item.status.trim().toUpperCase();
+  if (normalized === "READ") {
+    return {
+      label: "✓✓",
+      className: "text-sky-600",
+      ariaLabel: "lida",
+    };
+  }
+  if (normalized === "DELIVERED") {
+    return {
+      label: "✓✓",
+      className: "text-slate-500",
+      ariaLabel: "entregue",
+    };
+  }
+  if (normalized === "SENT") {
+    return {
+      label: "✓",
+      className: "text-slate-500",
+      ariaLabel: "enviada",
+    };
+  }
+  if (normalized === "FAILED") {
+    return {
+      label: "!",
+      className: "text-red-600",
+      ariaLabel: "falhou",
+    };
+  }
+  return null;
 }
 
 function getLatestMessageSignature(items: InboxMessageItem[]) {
@@ -173,8 +221,6 @@ export default function AppInboxPage() {
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
-  const [users, setUsers] = useState<AdminUserItem[]>([]);
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState("");
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
   const [leadNameDraft, setLeadNameDraft] = useState("");
@@ -247,14 +293,29 @@ export default function AppInboxPage() {
   const markConversationAsRead = useCallback((conversationKey: string, activityAt?: string | null) => {
     if (!activityAt) return;
     setReadState((prev) => {
-      if (prev.lastReadAtByConversationKey[conversationKey] === activityAt) return prev;
+      const alreadyRead = prev.lastReadAtByConversationKey[conversationKey] === activityAt;
+      const alreadyNotUnread = !prev.manuallyUnreadByConversationKey[conversationKey];
+      if (alreadyRead && alreadyNotUnread) return prev;
+      const nextUnread = { ...prev.manuallyUnreadByConversationKey };
+      delete nextUnread[conversationKey];
       return {
         lastReadAtByConversationKey: {
           ...prev.lastReadAtByConversationKey,
           [conversationKey]: activityAt,
         },
+        manuallyUnreadByConversationKey: nextUnread,
       };
     });
+  }, []);
+
+  const markConversationAsUnread = useCallback((conversationKey: string) => {
+    setReadState((prev) => ({
+      lastReadAtByConversationKey: prev.lastReadAtByConversationKey,
+      manuallyUnreadByConversationKey: {
+        ...prev.manuallyUnreadByConversationKey,
+        [conversationKey]: true,
+      },
+    }));
   }, []);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
@@ -267,15 +328,22 @@ export default function AppInboxPage() {
       setMessages([]);
       return;
     }
-    const selectedItem = selectedConversationKey
-      ? (sortedItems.find((item) => getConversationIdentity(item) === selectedConversationKey) ??
-        sortedItems[0])
-      : sortedItems[0];
+    if (!selectedConversationKey) {
+      return;
+    }
+    const selectedItem = sortedItems.find(
+      (item) => getConversationIdentity(item) === selectedConversationKey
+    );
+    if (!selectedItem) {
+      setSelectedConversationKey(null);
+      setSelectedConversationWaId(null);
+      setMessages([]);
+      return;
+    }
     setSelectedConversationKey(getConversationIdentity(selectedItem));
     setSelectedConversationWaId(selectedItem.waId);
 
     if (document.visibilityState !== "visible") return;
-    if (!selectedConversationKey) return;
     const activeConversation = sortedItems.find(
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
@@ -324,11 +392,7 @@ export default function AppInboxPage() {
     setLoadingConversations(true);
     setError(null);
 
-    Promise.all([refreshConversationList(session), fetchAppUsers(session)])
-      .then(([, usersResponse]) => {
-        if (cancelled) return;
-        setUsers(usersResponse.items);
-      })
+    refreshConversationList(session)
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (err.status === 401) {
@@ -469,10 +533,6 @@ export default function AppInboxPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [markConversationAsRead, selectedConversation]);
 
-  useEffect(() => {
-    setSelectedAssigneeId(selectedConversation?.assignedUserId ?? "");
-  }, [selectedConversation?.assignedUserId]);
-
   const selectedLead = useMemo(() => {
     if (!selectedConversation?.leadId) return null;
     return {
@@ -593,6 +653,10 @@ export default function AppInboxPage() {
 
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
+    if (selectedConversation.mode !== "HUMAN") {
+      setError("Assuma a conversa antes de responder manualmente.");
+      return;
+    }
     const text = messageDraft.trim();
     if (!text) return;
     setSendingMessage(true);
@@ -659,7 +723,7 @@ export default function AppInboxPage() {
       const response = await claimAppConversation(
         session,
         selectedConversationWaId,
-        selectedAssigneeId || undefined
+        session.user.id
       );
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
@@ -822,8 +886,15 @@ export default function AppInboxPage() {
                       })}
                     </span>
                     <span>{item.type}</span>
-                    <span>{item.status}</span>
                     <span>{formatDateTime(item.createdAt)}</span>
+                    {getMessageStatusTicks(item) ? (
+                      <span
+                        aria-label={getMessageStatusTicks(item)?.ariaLabel}
+                        className={`font-semibold tracking-[-0.12em] ${getMessageStatusTicks(item)?.className}`}
+                      >
+                        {getMessageStatusTicks(item)?.label}
+                      </span>
+                    ) : null}
                   </div>
                   {item.bodyText ? (
                     <p className="text-sm leading-relaxed">{item.bodyText}</p>
@@ -839,20 +910,21 @@ export default function AppInboxPage() {
             </div>
           </div>
           <div className="wa-composer-shell border-t border-black/5 p-4 text-slate-900">
-            <div className="mb-3 flex justify-end gap-2">
-              <select
-                className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm"
-                value={selectedAssigneeId}
-                onChange={(event) => setSelectedAssigneeId(event.target.value)}
-                disabled={updatingMode || users.length === 0}
-              >
-                <option value="">Sem usuario</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
+            <div className="mb-3 flex flex-wrap justify-end gap-2">
+              {selectedConversation ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    markConversationAsUnread(getConversationIdentity(selectedConversation));
+                    setSelectedConversationKey(null);
+                    setSelectedConversationWaId(null);
+                    setMessages([]);
+                  }}
+                  className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white"
+                >
+                  Marcar como nao lida
+                </button>
+              ) : null}
               {selectedConversation?.mode === "HUMAN" ? (
                 <button
                   type="button"
@@ -873,21 +945,46 @@ export default function AppInboxPage() {
                 </button>
               )}
             </div>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setMessageDraft((current) => `${current}${emoji}`)}
+                  disabled={!selectedConversationWaId || sendingMessage}
+                  className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-lg leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
             <label className="grid gap-2 text-sm">
-              <span className="text-slate-700">Responder conversa</span>
               <textarea
                 className="min-h-24 rounded-[1.1rem] border border-[#d4c7b5] bg-white/92 px-4 py-3 text-slate-900 outline-none focus:border-[#7cbf69]"
                 value={messageDraft}
                 onChange={(event) => setMessageDraft(event.target.value)}
                 onKeyDown={handleComposerKeyDown}
-                placeholder="Digite a mensagem para enviar manualmente..."
-                disabled={!selectedConversationWaId || sendingMessage}
+                placeholder={
+                  selectedConversation?.mode === "HUMAN"
+                    ? "Digite a mensagem..."
+                    : "Assuma a conversa para responder manualmente..."
+                }
+                disabled={
+                  !selectedConversationWaId ||
+                  sendingMessage ||
+                  selectedConversation?.mode !== "HUMAN"
+                }
               />
             </label>
             <div className="mt-2 flex justify-end">
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !messageDraft.trim() || sendingMessage}
+                disabled={
+                  !selectedConversationWaId ||
+                  !messageDraft.trim() ||
+                  sendingMessage ||
+                  selectedConversation?.mode !== "HUMAN"
+                }
                 onClick={handleSendMessage}
                 className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >

@@ -39,19 +39,19 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
             <p className="mt-1 text-xs text-white/50">{session.user.name || session.user.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
-              Inbox
+            <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
+              Templates
             </Link>
             <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
               Campanhas
             </Link>
-            <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
-              Templates
+            <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
+              Inbox
             </Link>
             <button
               type="button"
               onClick={handleLogout}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              className="rounded-md border border-red-400/30 bg-red-900/20 px-3 py-2 text-sm text-red-100 hover:bg-red-900/30"
             >
               Sair
             </button>
