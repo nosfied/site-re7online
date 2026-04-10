@@ -3,15 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   fetchTenantById,
-  loadAdminConnection,
   normalizeWaIdList,
-  saveAdminConnection,
   TenantConfigResponse,
-  testAdminConnection,
   updateTenantById,
 } from "@/lib/whatsappAdminApi";
 
@@ -33,28 +29,14 @@ export default function TenantEditPage() {
     return rawTenantId ? decodeURIComponent(rawTenantId) : "";
   }, [params]);
 
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [form, setForm] = useState<TenantFormState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [tenantSnapshot, setTenantSnapshot] = useState<TenantConfigResponse["tenant"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<{ fieldsChanged?: string[]; backupPath?: string } | null>(null);
-
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -159,21 +141,8 @@ export default function TenantEditPage() {
     }
   };
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setError(null);
-    try {
-      await testAdminConnection(connection);
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Falha ao testar conexao.");
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -195,13 +164,6 @@ export default function TenantEditPage() {
             </Link>
           </div>
         </header>
-
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
 
         {!tenantId ? <p className="text-sm text-white/70">Carregando tenant...</p> : null}
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
@@ -304,6 +266,6 @@ export default function TenantEditPage() {
           </form>
         ) : null}
       </div>
-    </main>
+    </div>
   );
 }

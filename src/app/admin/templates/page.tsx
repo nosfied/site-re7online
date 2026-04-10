@@ -2,15 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   fetchTemplatesObservability,
   formatDateTime,
-  loadAdminConnection,
-  saveAdminConnection,
   TemplateObservabilityItem,
-  testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 
 function getStatusClasses(status: string) {
@@ -105,27 +101,13 @@ function renderTable(items: TemplateObservabilityItem[], emptyText: string) {
 }
 
 export default function TemplatesAdminPage() {
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [loading, setLoading] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{
     recent: TemplateObservabilityItem[];
     failed: TemplateObservabilityItem[];
   } | null>(null);
-
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -154,21 +136,8 @@ export default function TemplatesAdminPage() {
     };
   }, [connection]);
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setError(null);
-    try {
-      await testAdminConnection(connection);
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Falha ao testar conexao.");
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -191,13 +160,6 @@ export default function TemplatesAdminPage() {
           </div>
         </header>
 
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
-
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
         {error ? (
           <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -219,6 +181,6 @@ export default function TemplatesAdminPage() {
           {renderTable(data?.failed ?? [], "Nenhuma falha recente encontrada.")}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

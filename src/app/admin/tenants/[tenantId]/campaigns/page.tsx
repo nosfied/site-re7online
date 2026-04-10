@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
+import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
-  AdminConnection,
   AdminTemplateCatalogItem,
   CampaignItem,
   cancelCampaign,
@@ -16,11 +15,8 @@ import {
   formatPct,
   getCampaign,
   listCampaigns,
-  loadAdminConnection,
   normalizeWaIdList,
-  saveAdminConnection,
   TenantSummaryItem,
-  testAdminConnection,
 } from "@/lib/whatsappAdminApi";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 
@@ -190,11 +186,7 @@ export default function TenantCampaignsPage() {
     return rawTenantId ? decodeURIComponent(rawTenantId) : "";
   }, [params]);
 
-  const [connection, setConnection] = useState<AdminConnection>({
-    baseUrl: "",
-    adminToken: "",
-    rememberToken: false,
-  });
+  const { connection } = useAdminConsole();
   const [clientKey, setClientKey] = useState(tenantId);
   const [tenantSummary, setTenantSummary] = useState<TenantSummaryItem | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
@@ -209,20 +201,10 @@ export default function TenantCampaignsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [testingConnection, setTestingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    setConnection(loadAdminConnection());
-  }, []);
-
-  useEffect(() => {
-    if (!connection.baseUrl && !connection.adminToken) return;
-    saveAdminConnection(connection);
-  }, [connection]);
 
   const refreshCampaigns = useCallback(
     async (resolvedClientKey: string, keepSelectedId?: string | null) => {
@@ -409,19 +391,6 @@ export default function TenantCampaignsPage() {
     );
   }, [selectedCampaign, selectedCampaignId]);
 
-  const handleTestConnection = async () => {
-    setTestingConnection(true);
-    setError(null);
-    try {
-      await testAdminConnection(connection);
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Falha ao testar conexao.");
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const name = form.name.trim();
@@ -502,7 +471,7 @@ export default function TenantCampaignsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -530,13 +499,6 @@ export default function TenantCampaignsPage() {
             </Link>
           </div>
         </header>
-
-        <AdminConfigPanel
-          connection={connection}
-          onChange={setConnection}
-          onTestConnection={handleTestConnection}
-          testingConnection={testingConnection}
-        />
 
         {!tenantId ? <p className="text-sm text-white/70">Carregando tenant...</p> : null}
 
@@ -1024,6 +986,6 @@ export default function TenantCampaignsPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
