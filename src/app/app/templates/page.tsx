@@ -425,6 +425,8 @@ export default function AppTemplatesPage() {
         setSuccess(
           categoryChanged
             ? "Status atualizado. A Meta recategorizou este template."
+            : response.template.status.toLowerCase() === "approved"
+              ? "Template reconciliado com a Meta."
             : "Status atualizado com sucesso."
         );
         window.setTimeout(() => setHighlightedTemplateId((current) => (current === response.template.id ? null : current)), 2500);
@@ -508,17 +510,14 @@ export default function AppTemplatesPage() {
                           <button
                             type="button"
                             onClick={() => handleSyncTemplate(item.templateId as string)}
-                            disabled={
-                              syncingTemplateId === item.templateId ||
-                              item.status.toLowerCase() === "approved"
-                            }
+                            disabled={syncingTemplateId === item.templateId}
                             className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {item.status.toLowerCase() === "approved"
-                              ? "Aprovado"
-                              : syncingTemplateId === item.templateId
+                            {syncingTemplateId === item.templateId
                                 ? "Atualizando..."
-                                : "Atualizar status"}
+                                : item.status.toLowerCase() === "approved"
+                                  ? "Revalidar"
+                                  : "Atualizar status"}
                           </button>
                         ) : (
                           <span className="text-xs text-white/50">Aguardando revisao</span>
