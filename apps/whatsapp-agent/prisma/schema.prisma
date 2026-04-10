@@ -288,6 +288,8 @@ model Template {
   clientId        String   @db.Uuid
   name            String
   category        String
+  submittedCategory String?
+  wasRecategorized Boolean  @default(false)
   language        String
   status          String
   content         String

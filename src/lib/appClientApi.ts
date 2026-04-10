@@ -31,6 +31,8 @@ export type AppTemplateItem = {
   id: string;
   name: string;
   category: string;
+  submittedCategory: string | null;
+  wasRecategorized: boolean;
   language: string;
   status: string;
   content: string;
@@ -496,7 +498,10 @@ export async function syncAppTemplate(
   templateId: string
 ): Promise<{
   ok: true;
-  template: Pick<AppTemplateItem, "id" | "name" | "status" | "rejectionReason" | "updatedAt">;
+  template: Pick<
+    AppTemplateItem,
+    "id" | "name" | "category" | "submittedCategory" | "wasRecategorized" | "status" | "rejectionReason" | "updatedAt"
+  >;
 }> {
   return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/sync`, {
     method: "POST",

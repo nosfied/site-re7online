@@ -336,6 +336,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               name,
               content,
               category,
+              submittedCategory: category,
+              wasRecategorized: false,
               language: "pt_BR",
               status: "submitting",
               ...(body.variables !== undefined
@@ -380,10 +382,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 data: {
                   metaTemplateId: result.metaTemplateId ?? undefined,
                   status: result.status || "PENDING",
+                  submittedCategory: category,
+                  wasRecategorized: false,
                   rejectionReason: null,
                 },
                 select: {
                   id: true,
+                  category: true,
+                  submittedCategory: true,
+                  wasRecategorized: true,
                   status: true,
                 },
               });
@@ -631,6 +638,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           id: true,
           name: true,
           category: true,
+          submittedCategory: true,
+          wasRecategorized: true,
           language: true,
           status: true,
           content: true,
@@ -732,6 +741,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         select: {
           id: true,
           name: true,
+          category: true,
+          submittedCategory: true,
+          wasRecategorized: true,
           status: true,
           rejectionReason: true,
           updatedAt: true,
@@ -754,6 +766,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         templateId: updatedTemplate.id,
         templateName: updatedTemplate.name,
         status: updatedTemplate.status,
+        category: updatedTemplate.category,
       });
 
       json(res, 200, {
@@ -3791,6 +3804,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               name: templateRequest.name,
               content: templateRequest.content,
               category: templateRequest.category,
+              submittedCategory: templateRequest.category,
+              wasRecategorized: false,
               language: "pt_BR",
               status: "approved",
               ...(templateRequest.variables !== null && templateRequest.variables !== undefined
@@ -3909,6 +3924,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             name,
             content,
             category,
+            submittedCategory: category,
+            wasRecategorized: false,
             language,
             status: "approved",
             ...(body.variables !== undefined
