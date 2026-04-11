@@ -38,22 +38,6 @@ function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
 }
 
-function getTimelineAuthorLabel(params: {
-  direction: InboxMessageItem["direction"];
-  sessionUserName: string;
-  conversation: InboxConversationItem | null;
-}) {
-  if (params.direction === "OUTBOUND") {
-    return params.sessionUserName || "Voce";
-  }
-  return (
-    params.conversation?.leadName ||
-    params.conversation?.leadPhone ||
-    params.conversation?.waId ||
-    "Contato"
-  );
-}
-
 function getMessageContentLabel(item: InboxMessageItem) {
   switch (item.type) {
     case "AUDIO":
@@ -931,16 +915,6 @@ export default function AppInboxPage() {
                         item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
                       }`}
                     >
-                    <div className="wa-bubble-meta mb-1 flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="font-semibold text-slate-900">
-                        {getTimelineAuthorLabel({
-                          direction: item.direction,
-                          sessionUserName: session.user.name,
-                          conversation: selectedConversation,
-                        })}
-                      </span>
-                      <span>{item.type}</span>
-                    </div>
                     {item.bodyText ? (
                       <p className="text-sm leading-relaxed">{item.bodyText}</p>
                     ) : (

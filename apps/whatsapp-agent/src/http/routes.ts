@@ -5466,7 +5466,7 @@ async function buildConversationDetailPayload(
         templateLang: true,
         metaMessageId: true,
         errorBody: true,
-        rawPayload: params.includeRaw,
+        rawPayload: true,
       },
     }),
   ]);
