@@ -99,6 +99,22 @@ function isTemplateRequestPendingLike(status: string) {
   return normalized === "pending" || normalized === "submitting";
 }
 
+function isRetryableLocalTemplateFailure(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
+  const normalizedStatus = item.status.trim().toLowerCase();
+  const normalizedReason = String(item.rejectionReason || "").trim().toLowerCase();
+  if (normalizedStatus !== "failed") return false;
+  return (
+    normalizedReason === "template_name_required" ||
+    normalizedReason === "template_name_invalid" ||
+    normalizedReason === "template_category_invalid" ||
+    normalizedReason === "template_language_required" ||
+    normalizedReason === "template_language_invalid" ||
+    normalizedReason === "template_content_required" ||
+    normalizedReason === "template_content_too_long" ||
+    normalizedReason === "template_variables_invalid"
+  );
+}
+
 function sortTemplates(items: AppTemplateItem[]) {
   return [...items].sort((left, right) => {
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
@@ -297,16 +313,22 @@ export default function AppTemplatesPage() {
       return;
     }
     const normalizedName = normalizeTemplateName(name);
+    const conflictingTemplate = templates.find(
+      (item) => normalizeTemplateName(item.name) === normalizedName
+    );
+    const canReuseFailedTemplate = conflictingTemplate
+      ? isRetryableLocalTemplateFailure(conflictingTemplate)
+      : false;
     const hasPendingRequest = requests.some(
       (item) =>
         normalizeTemplateName(item.name) === normalizedName &&
         isTemplateRequestPendingLike(item.status)
     );
-    if (hasPendingRequest) {
+    if (hasPendingRequest && !canReuseFailedTemplate) {
       setFormError("Ja existe um template com esse nome em analise.");
       return;
     }
-    if (templates.some((item) => normalizeTemplateName(item.name) === normalizedName)) {
+    if (conflictingTemplate && !canReuseFailedTemplate) {
       setFormError("Ja existe um template com esse nome.");
       return;
     }

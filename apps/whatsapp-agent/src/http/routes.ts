@@ -32,6 +32,7 @@ import {
   MetaTemplateServiceError,
   MetaTemplateValidationError,
   syncTemplateStatus,
+  validateTemplateForMeta,
 } from "../meta/template.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
@@ -201,6 +202,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      if (autoSubmit) {
+        try {
+          validateTemplateForMeta({
+            name,
+            content,
+            category,
+            language: "pt_BR",
+            ...(body.variables !== undefined ? { variables: body.variables } : {}),
+          });
+        } catch (error) {
+          if (error instanceof MetaTemplateValidationError) {
+            json(res, 400, {
+              error: "validation_error",
+              message: mapTemplateValidationMessage(error.message),
+              details: error.message,
+            });
+            return;
+          }
+          throw error;
+        }
+      }
+
+      const existingTemplateByName = await prisma.template.findFirst({
+        where: {
+          clientId: client.id,
+          name: {
+            equals: name,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          rejectionReason: true,
+        },
+      });
+      const canReuseFailedTemplate = isRetryableLocalTemplateFailure(
+        existingTemplateByName?.status,
+        existingTemplateByName?.rejectionReason
+      );
+
+      if (existingTemplateByName && canReuseFailedTemplate) {
+        await prisma.$transaction([
+          prisma.template.delete({
+            where: { id: existingTemplateByName.id },
+          }),
+          prisma.templateRequest.deleteMany({
+            where: {
+              clientId: client.id,
+              name: {
+                equals: name,
+                mode: "insensitive",
+              },
+              status: { in: ["pending", "submitting"] },
+            },
+          }),
+        ]);
+      }
+
       const existingPendingRequest = await prisma.templateRequest.findFirst({
         where: {
           clientId: client.id,
@@ -232,22 +293,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const existingTemplateByName = await prisma.template.findFirst({
-        where: {
-          clientId: client.id,
-          name: {
-            equals: name,
-            mode: "insensitive",
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-        },
-      });
-
-      if (existingTemplateByName) {
+      if (existingTemplateByName && !canReuseFailedTemplate) {
         const isPendingLike = isTemplatePendingLike(existingTemplateByName.status);
         logger.warn({
           event: isPendingLike
@@ -5195,6 +5241,25 @@ function summarizeMetaErrorMessage(input: string) {
 function isTemplatePendingLike(status: string | null | undefined) {
   const normalized = String(status || "").trim().toLowerCase();
   return normalized === "pending" || normalized === "submitting";
+}
+
+function isRetryableLocalTemplateFailure(
+  status: string | null | undefined,
+  rejectionReason: string | null | undefined
+) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  const normalizedReason = String(rejectionReason || "").trim().toLowerCase();
+  if (normalizedStatus !== "failed") return false;
+  return (
+    normalizedReason === "template_name_required" ||
+    normalizedReason === "template_name_invalid" ||
+    normalizedReason === "template_category_invalid" ||
+    normalizedReason === "template_language_required" ||
+    normalizedReason === "template_language_invalid" ||
+    normalizedReason === "template_content_required" ||
+    normalizedReason === "template_content_too_long" ||
+    normalizedReason === "template_variables_invalid"
+  );
 }
 
 function isTimeoutLikeError(error: unknown) {
