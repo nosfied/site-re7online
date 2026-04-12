@@ -36,7 +36,7 @@ import {
 } from "../meta/template.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
-import { requireClientAuth } from "../auth/clientAuthMiddleware.js";
+import { normalizeUserRole, requireClientAuth } from "../auth/clientAuthMiddleware.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
@@ -961,8 +961,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (
         currentConversation.mode !== "HUMAN" ||
-        currentConversation.assignedUserId !== clientAuth.userId
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
       ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
         json(res, 409, {
           error: "conversation_not_assigned",
           message: "Assuma a conversa antes de responder manualmente.",
@@ -1091,11 +1100,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
-      if (requestedUserId && requestedUserId !== clientAuth.userId) {
+      if (
+        requestedUserId &&
+        requestedUserId !== clientAuth.userId &&
+        !canManageAnyConversation(clientAuth.role)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "assign_other_user_without_privilege",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
         json(res, 403, { error: "forbidden", message: "Voce so pode assumir para si." });
         return;
       }
-      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
+      if (
+        conversation.assignedUserId &&
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
         json(res, 409, {
           error: "conversation_already_assigned",
           message: "A conversa ja esta atribuida a outro atendente.",
@@ -1207,10 +1241,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
-      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
-        json(res, 409, {
-          error: "conversation_already_assigned",
-          message: "A conversa ja esta atribuida a outro atendente.",
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/release",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode liberar conversas atribuidas a voce.",
         });
         return;
       }
@@ -1307,7 +1352,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
-      if (conversation.assignedUserId !== clientAuth.userId) {
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
         json(res, 403, {
           error: "forbidden",
           message: "Voce so pode transferir conversas atribuidas a voce.",
@@ -1414,7 +1470,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
-      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
         json(res, 403, {
           error: "forbidden",
           message: "Voce so pode atualizar status de conversas atribuidas a voce.",
@@ -1494,10 +1561,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!existing) {
         json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      if (!(await canManageLead(prisma, client, clientAuth, existing, requestId, "app_lead_update"))) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: existing.waIdCanonical ?? existing.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode editar leads de conversas atribuidas a voce.",
+        });
         return;
       }
       const lead = await prisma.lead.update({
@@ -1551,10 +1635,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!existing) {
         json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      if (!(await canManageLead(prisma, client, clientAuth, existing, requestId, "app_lead_status"))) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: existing.waIdCanonical ?? existing.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode alterar o status de leads de conversas atribuidas a voce.",
+        });
         return;
       }
       const lead = await prisma.lead.update({
@@ -1600,10 +1701,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!lead) {
         json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      if (
+        !(await canManageLead(prisma, client, clientAuth, lead, requestId, "app_lead_notes_create"))
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id/notes",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: lead.waIdCanonical ?? lead.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode adicionar notas em leads de conversas atribuidas a voce.",
+        });
         return;
       }
       const body = await readJsonBody(req, res);
@@ -5951,6 +6071,83 @@ async function loadConversationOperationalLookups(
   departmentById.set(params.defaults.department.id, params.defaults.department.name);
   queueById.set(params.defaults.queue.id, params.defaults.queue.name);
   return { departmentById, queueById };
+}
+
+function isAgentRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "AGENT";
+}
+
+function isSupervisorRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "SUPERVISOR";
+}
+
+function isAdminRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "ADMIN";
+}
+
+function canManageAnyConversation(role: string | null | undefined) {
+  return isSupervisorRole(role) || isAdminRole(role);
+}
+
+function canManageOwnedConversation(
+  role: string | null | undefined,
+  assignedUserId: string | null | undefined,
+  currentUserId: string
+) {
+  if (canManageAnyConversation(role)) return true;
+  if (!assignedUserId) return false;
+  return assignedUserId === currentUserId;
+}
+
+async function canManageLead(
+  prisma: ReturnType<typeof getPrisma>,
+  client: { id: string; clientKey: string },
+  clientAuth: { userId: string; role: string },
+  lead: { waId: string; waIdCanonical?: string | null },
+  requestId: string,
+  source: string
+) {
+  if (!isAgentRole(clientAuth.role)) return true;
+  const resolvedConversation = await resolveConversationTarget(prisma, {
+    clientId: client.id,
+    clientKey: client.clientKey,
+    rawWaId: lead.waIdCanonical ?? lead.waId,
+    requestId,
+    source,
+  });
+  const conversation = await runtimeStorage.getConversation(
+    resolvedConversation.resolvedWaId,
+    client.clientKey
+  );
+  return canManageOwnedConversation(
+    clientAuth.role,
+    conversation?.assignedUserId ?? null,
+    clientAuth.userId
+  );
+}
+
+function logAppRbacDenied(params: {
+  requestId: string;
+  route: string;
+  userId: string;
+  clientId: string;
+  role: string;
+  reason: string;
+  waId?: string | null;
+  leadId?: string | null;
+}) {
+  logger.warn({
+    event: "rbac.denied",
+    scope: "app",
+    requestId: params.requestId,
+    route: params.route,
+    userId: params.userId,
+    clientId: params.clientId,
+    role: normalizeUserRole(params.role),
+    reason: params.reason,
+    waId: params.waId ?? null,
+    leadId: params.leadId ?? null,
+  });
 }
 
 function serializeConversationOperationalFields(params: {

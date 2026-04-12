@@ -8,6 +8,13 @@ export type ClientAuthContext = {
   email: string;
 };
 
+export function normalizeUserRole(role: string | null | undefined) {
+  const normalized = String(role || "").trim().toUpperCase();
+  if (normalized === "ADMIN") return "ADMIN" as const;
+  if (normalized === "SUPERVISOR") return "SUPERVISOR" as const;
+  return "AGENT" as const;
+}
+
 function getBearerToken(req: IncomingMessage) {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return "";
@@ -31,7 +38,7 @@ export function resolveClientAuth(req: IncomingMessage): ClientAuthContext | nul
   return {
     userId: payload.sub,
     clientId: payload.clientId,
-    role: payload.role,
+    role: normalizeUserRole(payload.role),
     email: payload.email,
   };
 }
