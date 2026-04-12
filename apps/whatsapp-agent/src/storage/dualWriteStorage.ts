@@ -1,4 +1,4 @@
-import { HandoffStatus } from "@prisma/client";
+import { ConversationOperationalStatus, HandoffStatus } from "@prisma/client";
 import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
@@ -44,6 +44,10 @@ type ShadowCompareFields = {
   assignedUserId?: string | null;
   assignedTo?: string | null;
   assignedAt?: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  status?: ConversationOperationalStatus | null;
+  closedAt?: string | null;
 };
 
 function toIso(value?: string | null) {
@@ -86,6 +90,7 @@ function getMostRecentJsonTimestamp(state: ConversationState | null) {
   if (!state) return null;
   const timestamps = [
     state.assignedAt,
+    state.closedAt,
     state.lastHandoffDemoScheduledAt,
     state.lastDemoScheduledAt,
     state.lastDemoRequestedAt,
@@ -191,6 +196,10 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     assignedUserId: state.assignedUserId ?? null,
     assignedTo: state.assignedTo ?? null,
     assignedAt: toIso(state.assignedAt),
+    departmentId: state.departmentId ?? null,
+    queueId: state.queueId ?? null,
+    status: toConversationOperationalStatus(state.status),
+    closedAt: toIso(state.closedAt),
   };
 }
 
@@ -227,6 +236,10 @@ function mapDbToShadow(db: {
   assignedUserId: string | null;
   assignedTo: string | null;
   assignedAt: Date | null;
+  departmentId: string | null;
+  queueId: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: Date | null;
 }): ShadowCompareFields {
   return {
     conversationKey: db.conversationKey ?? null,
@@ -273,6 +286,10 @@ function mapDbToShadow(db: {
     assignedUserId: db.assignedUserId ?? null,
     assignedTo: db.assignedTo ?? null,
     assignedAt: db.assignedAt ? db.assignedAt.toISOString() : null,
+    departmentId: db.departmentId ?? null,
+    queueId: db.queueId ?? null,
+    status: db.status ?? null,
+    closedAt: db.closedAt ? db.closedAt.toISOString() : null,
   };
 }
 
@@ -291,6 +308,21 @@ function toHandoffStatus(value?: string | null): HandoffStatus {
   if (normalized === "pending") return HandoffStatus.PENDING;
   if (normalized === "active") return HandoffStatus.ACTIVE;
   return HandoffStatus.NONE;
+}
+
+function toConversationOperationalStatus(value?: string | null): ConversationOperationalStatus | null {
+  switch ((value ?? "").toUpperCase()) {
+    case "WAITING":
+      return ConversationOperationalStatus.WAITING;
+    case "IN_PROGRESS":
+      return ConversationOperationalStatus.IN_PROGRESS;
+    case "WAITING_USER":
+      return ConversationOperationalStatus.WAITING_USER;
+    case "CLOSED":
+      return ConversationOperationalStatus.CLOSED;
+    default:
+      return null;
+  }
 }
 
 type DualWriteOptions = {
@@ -385,6 +417,10 @@ export function createDualWriteStorage(
       assignedUserId: string | null;
       assignedTo: string | null;
       assignedAt: Date | null;
+      departmentId: string | null;
+      queueId: string | null;
+      status: ConversationOperationalStatus | null;
+      closedAt: Date | null;
     };
   }): ConversationState {
     const answers =
@@ -438,6 +474,10 @@ export function createDualWriteStorage(
       assignedUserId: params.db.assignedUserId ?? null,
       assignedTo: params.db.assignedTo ?? null,
       assignedAt: params.db.assignedAt?.toISOString() ?? null,
+      departmentId: params.db.departmentId ?? null,
+      queueId: params.db.queueId ?? null,
+      status: params.db.status ?? null,
+      closedAt: params.db.closedAt?.toISOString() ?? null,
     };
   }
 
@@ -551,6 +591,10 @@ export function createDualWriteStorage(
         assignedUserId: true,
         assignedTo: true,
         assignedAt: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+        closedAt: true,
       },
     });
     const [db] = rows.sort((left, right) => compareConversationLookupPriority(left, right));
@@ -711,6 +755,10 @@ export function createDualWriteStorage(
         assignedUserId: state.assignedUserId ?? null,
         assignedTo: state.assignedTo ?? null,
         assignedAt: toDate(state.assignedAt),
+        departmentId: state.departmentId ?? null,
+        queueId: state.queueId ?? null,
+        status: toConversationOperationalStatus(state.status),
+        closedAt: toDate(state.closedAt),
       },
       update: {
         conversationKey: state.conversationKey ?? null,
@@ -746,6 +794,10 @@ export function createDualWriteStorage(
         assignedUserId: state.assignedUserId ?? null,
         assignedTo: state.assignedTo ?? null,
         assignedAt: toDate(state.assignedAt),
+        departmentId: state.departmentId ?? null,
+        queueId: state.queueId ?? null,
+        status: toConversationOperationalStatus(state.status),
+        closedAt: toDate(state.closedAt),
         version: { increment: 1 },
       },
     });

@@ -1076,16 +1076,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   });
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
+    const baseState = {
+      ...state,
+      departmentId: state.departmentId ?? currentState?.departmentId ?? null,
+      queueId: state.queueId ?? currentState?.queueId ?? null,
+      status: state.status ?? currentState?.status ?? null,
+      closedAt: state.closedAt ?? currentState?.closedAt ?? null,
+    };
     const nextState =
       currentState?.mode === "HUMAN" && state.mode !== "HUMAN"
         ? {
-            ...state,
+            ...baseState,
             mode: "HUMAN" as const,
             assignedUserId: currentState.assignedUserId ?? null,
             assignedTo: currentState.assignedTo ?? null,
             assignedAt: currentState.assignedAt ?? null,
           }
-        : state;
+        : baseState;
     await storage.upsertConversation(nextState);
   };
   const persistOutboundConversation = async (

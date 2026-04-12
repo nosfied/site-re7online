@@ -11,19 +11,24 @@ import {
   fetchAppConversation,
   fetchAppConversations,
   fetchAppLeadNotes,
+  fetchAppUsers,
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
   saveAppSession,
   sendAppConversationMessage,
+  transferAppConversation,
+  updateAppConversationStatus,
   updateAppLeadStatus,
 } from "@/lib/appClientApi";
 import {
+  ConversationOperationalStatus,
   formatDateTime,
   InboxConversationItem,
   InboxMessageItem,
   LeadNoteItem,
   LeadStatus,
+  AdminUserItem,
 } from "@/lib/whatsappAdminApi";
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = [
@@ -70,10 +75,21 @@ const EMPTY_READ_STATE: InboxReadState = {
 };
 
 const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
+const CONVERSATION_FILTERS = [
+  { value: "ALL", label: "Todas" },
+  { value: "WAITING", label: "Aguardando" },
+  { value: "IN_PROGRESS", label: "Em atendimento" },
+  { value: "WAITING_USER", label: "Aguardando cliente" },
+  { value: "CLOSED", label: "Finalizadas" },
+  { value: "MINE", label: "Minhas" },
+  { value: "UNASSIGNED", label: "Nao atribuidas" },
+] as const;
+
+type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
 
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
-  return item.lastMessage?.createdAt ?? item.updatedAt;
+  return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
 }
 
 function getConversationActivityTimestamp(item: InboxConversationItem) {
@@ -224,10 +240,132 @@ function getLatestMessageSignature(items: InboxMessageItem[]) {
   return `${latest.createdAt}:${latest.messageId ?? latest.metaMessageId ?? latest.requestId ?? latest.direction}`;
 }
 
+function applyConversationOperationalPayload(
+  item: InboxConversationItem,
+  payload: {
+    waId?: string | null;
+    waIdCanonical?: string | null;
+    mode: "BOT" | "HUMAN";
+    assignedUserId: string | null;
+    assignedTo: string | null;
+    assignedUserName: string | null;
+    assignedAt: string | null;
+    departmentId: string | null;
+    departmentName: string | null;
+    queueId: string | null;
+    queueName: string | null;
+    status: ConversationOperationalStatus | null;
+    closedAt: string | null;
+    lastInboundAt: string | null;
+    lastOutboundAt: string | null;
+    isUnassigned: boolean;
+  }
+) {
+  return {
+    ...item,
+    waId: payload.waId ?? item.waId,
+    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
+    mode: payload.mode,
+    assignedUserId: payload.assignedUserId,
+    assignedTo: payload.assignedTo,
+    assignedUserName: payload.assignedUserName,
+    assignedAt: payload.assignedAt,
+    departmentId: payload.departmentId,
+    departmentName: payload.departmentName,
+    queueId: payload.queueId,
+    queueName: payload.queueName,
+    status: payload.status,
+    closedAt: payload.closedAt,
+    lastInboundAt: payload.lastInboundAt,
+    lastOutboundAt: payload.lastOutboundAt,
+    isUnassigned: payload.isUnassigned,
+  };
+}
+
+function getConversationOperationalStatus(item: Pick<InboxConversationItem, "status" | "mode" | "assignedUserId">) {
+  if (item.status) return item.status;
+  if (item.mode === "HUMAN") {
+    return item.assignedUserId ? "IN_PROGRESS" : "WAITING";
+  }
+  return null;
+}
+
+function getConversationStatusLabel(status: ConversationOperationalStatus | null) {
+  switch (status) {
+    case "WAITING":
+      return "Aguardando";
+    case "IN_PROGRESS":
+      return "Em atendimento";
+    case "WAITING_USER":
+      return "Aguardando cliente";
+    case "CLOSED":
+      return "Finalizada";
+    default:
+      return "Sem status";
+  }
+}
+
+function getConversationStatusClass(status: ConversationOperationalStatus | null) {
+  switch (status) {
+    case "WAITING":
+      return "bg-amber-500/20 text-amber-100";
+    case "IN_PROGRESS":
+      return "bg-sky-500/20 text-sky-100";
+    case "WAITING_USER":
+      return "bg-violet-500/20 text-violet-100";
+    case "CLOSED":
+      return "bg-white/10 text-white/75";
+    default:
+      return "bg-white/10 text-white/65";
+  }
+}
+
+function formatRelativeTime(value?: string | null) {
+  if (!value) return "-";
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "-";
+  const diffMs = timestamp - Date.now();
+  const diffMinutes = Math.round(diffMs / 60000);
+  const formatter = new Intl.RelativeTimeFormat("pt-BR", { numeric: "auto" });
+  if (Math.abs(diffMinutes) < 60) {
+    return formatter.format(diffMinutes, "minute");
+  }
+  const diffHours = Math.round(diffMinutes / 60);
+  if (Math.abs(diffHours) < 24) {
+    return formatter.format(diffHours, "hour");
+  }
+  const diffDays = Math.round(diffHours / 24);
+  return formatter.format(diffDays, "day");
+}
+
+function canReplyToConversation(
+  item: Pick<InboxConversationItem, "mode" | "assignedUserId" | "status"> | null,
+  currentUserId: string
+) {
+  if (!item) return false;
+  const status = getConversationOperationalStatus(item);
+  return item.mode === "HUMAN" && item.assignedUserId === currentUserId && status !== "CLOSED";
+}
+
+function isConversationAssignedToAnotherUser(
+  item: Pick<InboxConversationItem, "assignedUserId"> | null,
+  currentUserId: string
+) {
+  return Boolean(item?.assignedUserId && item.assignedUserId !== currentUserId);
+}
+
+function isConversationAssignedToCurrentUser(
+  item: Pick<InboxConversationItem, "assignedUserId"> | null,
+  currentUserId: string
+) {
+  return Boolean(item?.assignedUserId && item.assignedUserId === currentUserId);
+}
+
 export default function AppInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [conversations, setConversations] = useState<InboxConversationItem[]>([]);
+  const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
@@ -243,7 +381,10 @@ export default function AppInboxPage() {
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [updatingMode, setUpdatingMode] = useState(false);
+  const [conversationAction, setConversationAction] = useState<string | null>(null);
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
+  const [statusActionDraft, setStatusActionDraft] = useState<ConversationOperationalStatus | "">("");
+  const [transferUserId, setTransferUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
@@ -383,16 +524,7 @@ export default function AppInboxPage() {
       sortConversationsByRecent(
         prev.map((item) =>
           getConversationIdentity(item) === responseConversationKey
-            ? {
-                ...item,
-                waId: response.waId ?? item.waId,
-                waIdCanonical: response.waIdCanonical ?? item.waIdCanonical,
-                mode: response.mode,
-                assignedUserId: response.assignedUserId,
-                assignedTo: response.assignedTo,
-                assignedUserName: response.assignedUserName,
-                assignedAt: response.assignedAt,
-              }
+            ? applyConversationOperationalPayload(item, response)
             : item
         )
       )
@@ -403,6 +535,25 @@ export default function AppInboxPage() {
       markConversationAsRead(responseConversationKey, latestActivityAt);
     }
   }, [markConversationAsRead]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    fetchAppUsers(session)
+      .then((response) => {
+        if (cancelled) return;
+        setUsers(response.items);
+      })
+      .catch((err: { status?: number; message?: string }) => {
+        if (cancelled) return;
+        if (err.status === 401) {
+          handleUnauthorized();
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [handleUnauthorized, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -445,16 +596,7 @@ export default function AppInboxPage() {
           sortConversationsByRecent(
             prev.map((item) =>
               getConversationIdentity(item) === responseConversationKey
-                ? {
-                    ...item,
-                    waId: response.waId ?? item.waId,
-                    waIdCanonical: response.waIdCanonical ?? item.waIdCanonical,
-                    mode: response.mode,
-                    assignedUserId: response.assignedUserId,
-                    assignedTo: response.assignedTo,
-                    assignedUserName: response.assignedUserName,
-                    assignedAt: response.assignedAt,
-                  }
+                ? applyConversationOperationalPayload(item, response)
                 : item
             )
           )
@@ -539,8 +681,70 @@ export default function AppInboxPage() {
     [conversations, selectedConversationKey]
   );
 
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((item) => {
+      const status = getConversationOperationalStatus(item);
+      switch (conversationFilter) {
+        case "WAITING":
+        case "IN_PROGRESS":
+        case "WAITING_USER":
+        case "CLOSED":
+          return status === conversationFilter;
+        case "MINE":
+          return item.assignedUserId === session?.user.id;
+        case "UNASSIGNED":
+          return !item.assignedUserId;
+        default:
+          return true;
+      }
+    });
+  }, [conversationFilter, conversations, session?.user.id]);
+
+  const canReply = useMemo(
+    () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
+    [selectedConversation, session]
+  );
+
+  const isSelectedConversationLocked = useMemo(
+    () => (session ? isConversationAssignedToAnotherUser(selectedConversation, session.user.id) : false),
+    [selectedConversation, session]
+  );
+
+  const isSelectedConversationOwnedByCurrentUser = useMemo(
+    () =>
+      (session
+        ? isConversationAssignedToCurrentUser(selectedConversation, session.user.id)
+        : false),
+    [selectedConversation, session]
+  );
+
+  const canManageSelectedConversation = useMemo(
+    () => Boolean(selectedConversationWaId) && isSelectedConversationOwnedByCurrentUser,
+    [isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+  );
+
+  const canTransferSelectedConversation = useMemo(
+    () => Boolean(selectedConversationWaId) && isSelectedConversationOwnedByCurrentUser,
+    [isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+  );
+
   useEffect(() => {
-    if (!selectedConversationWaId || selectedConversation?.mode !== "HUMAN" || sendingMessage || updatingMode) {
+    if (!selectedConversation) {
+      setStatusActionDraft("");
+      setTransferUserId("");
+      return;
+    }
+    const currentStatus = getConversationOperationalStatus(selectedConversation);
+    setStatusActionDraft(
+      currentStatus && ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(currentStatus)
+        ? currentStatus
+        : ""
+    );
+    setTransferUserId(selectedConversation.assignedUserId ?? "");
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversationWaId || !canReply || sendingMessage || conversationAction) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
@@ -549,11 +753,11 @@ export default function AppInboxPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [
     focusComposer,
-    selectedConversation?.mode,
+    canReply,
     selectedConversationKey,
     selectedConversationWaId,
     sendingMessage,
-    updatingMode,
+    conversationAction,
   ]);
 
   useEffect(() => {
@@ -620,6 +824,10 @@ export default function AppInboxPage() {
 
   const handleSaveLeadStatus = async () => {
     if (!session || !selectedLead?.id || !statusDraft) return;
+    if (!isSelectedConversationOwnedByCurrentUser) {
+      setLeadError("Assuma a conversa para editar os dados do CRM.");
+      return;
+    }
     setSavingLeadStatus(true);
     setLeadError(null);
     try {
@@ -643,6 +851,10 @@ export default function AppInboxPage() {
 
   const handleAddLeadNote = async () => {
     if (!session || !selectedLead?.id) return;
+    if (!isSelectedConversationOwnedByCurrentUser) {
+      setLeadError("Assuma a conversa para editar os dados do CRM.");
+      return;
+    }
     const body = noteDraft.trim();
     if (!body) return;
     setSavingLeadNote(true);
@@ -665,6 +877,10 @@ export default function AppInboxPage() {
 
   const handleSaveLeadName = async () => {
     if (!session || !selectedLead?.id) return;
+    if (!isSelectedConversationOwnedByCurrentUser) {
+      setLeadError("Assuma a conversa para editar os dados do CRM.");
+      return;
+    }
     setSavingLeadName(true);
     setLeadError(null);
     try {
@@ -688,8 +904,8 @@ export default function AppInboxPage() {
 
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
-    if (selectedConversation.mode !== "HUMAN") {
-      setError("Assuma a conversa antes de responder manualmente.");
+    if (!canReply) {
+      setError("Assuma a conversa para responder manualmente.");
       return;
     }
     const text = messageDraft.trim();
@@ -706,9 +922,7 @@ export default function AppInboxPage() {
           prev.map((item) =>
             getConversationIdentity(item) === getConversationIdentity(selectedConversation)
               ? {
-                  ...item,
-                  waId: response.waId ?? item.waId,
-                  waIdCanonical: response.waIdCanonical ?? item.waIdCanonical,
+                  ...applyConversationOperationalPayload(item, response),
                   lastMessage: {
                     direction: "OUTBOUND",
                     type: "TEXT",
@@ -734,7 +948,7 @@ export default function AppInboxPage() {
         return;
       }
       if (typed.status === 409) {
-        setError("Janela de conversa fechada para envio manual.");
+        setError(typed.message || "Assuma a conversa para responder manualmente.");
         return;
       }
       setError(typed.message || "Falha ao enviar mensagem.");
@@ -753,7 +967,7 @@ export default function AppInboxPage() {
 
   const handleClaimConversation = async () => {
     if (!session || !selectedConversationWaId) return;
-    setUpdatingMode(true);
+    setConversationAction("claim");
     setError(null);
     try {
       const response = await claimAppConversation(
@@ -771,13 +985,13 @@ export default function AppInboxPage() {
       }
       setError(typed.message || "Falha ao assumir conversa.");
     } finally {
-      setUpdatingMode(false);
+      setConversationAction(null);
     }
   };
 
   const handleReleaseConversation = async () => {
     if (!session || !selectedConversationWaId) return;
-    setUpdatingMode(true);
+    setConversationAction("release");
     setError(null);
     try {
       const response = await releaseAppConversation(session, selectedConversationWaId);
@@ -791,7 +1005,54 @@ export default function AppInboxPage() {
       }
       setError(typed.message || "Falha ao liberar conversa.");
     } finally {
-      setUpdatingMode(false);
+      setConversationAction(null);
+    }
+  };
+
+  const handleTransferConversation = async () => {
+    if (!session || !selectedConversationWaId || !transferUserId) return;
+    setConversationAction("transfer");
+    setError(null);
+    try {
+      const response = await transferAppConversation(session, selectedConversationWaId, transferUserId);
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao transferir conversa.");
+    } finally {
+      setConversationAction(null);
+    }
+  };
+
+  const handleUpdateConversationStatus = async (nextStatus: ConversationOperationalStatus) => {
+    if (!session || !selectedConversationWaId) return;
+    setConversationAction("status");
+    setError(null);
+    try {
+      const response = await updateAppConversationStatus(
+        session,
+        selectedConversationWaId,
+        nextStatus
+      );
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setStatusActionDraft(
+        selectedConversation ? getConversationOperationalStatus(selectedConversation) ?? "" : ""
+      );
+      setError(typed.message || "Falha ao atualizar status da conversa.");
+    } finally {
+      setConversationAction(null);
     }
   };
 
@@ -819,17 +1080,36 @@ export default function AppInboxPage() {
               Atualizar
             </button>
           </div>
+          <div className="border-b border-white/10 px-4 py-3">
+            <div className="flex flex-wrap gap-2">
+              {CONVERSATION_FILTERS.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setConversationFilter(filter.value)}
+                  className={`rounded-full px-3 py-1 text-xs transition ${
+                    conversationFilter === filter.value
+                      ? "bg-re7-sky/30 text-white"
+                      : "bg-white/5 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
               <p className="px-4 py-3 text-sm text-white/70">Carregando conversas...</p>
             ) : null}
-            {!loadingConversations && conversations.length === 0 ? (
+            {!loadingConversations && filteredConversations.length === 0 ? (
               <p className="px-4 py-3 text-sm text-white/70">Nenhuma conversa encontrada.</p>
             ) : null}
-            {conversations.map((item) => {
+            {filteredConversations.map((item) => {
               const conversationIdentity = getConversationIdentity(item);
               const isActive = conversationIdentity === selectedConversationKey;
               const unread = !isActive && isConversationUnread(item, readState);
+              const status = getConversationOperationalStatus(item);
               return (
                 <button
                   key={conversationIdentity}
@@ -856,8 +1136,16 @@ export default function AppInboxPage() {
                     ) : null}
                   </div>
                   <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
-                  <p className="mt-1 text-xs text-white/70">
-                    {item.mode} • {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                    <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
+                      {getConversationStatusLabel(status)}
+                    </span>
+                    <span>{item.assignedUserName || (item.assignedUserId ? item.assignedTo : "nao atribuida")}</span>
+                    <span>{formatRelativeTime(getConversationActivityAt(item))}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-white/60">
+                    {item.departmentName || "Atendimento"} • {item.queueName || "Fila Geral"} •{" "}
+                    {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
                   </p>
                   {item.lastMessage?.bodyText ? (
                     <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-white/85" : "text-white/60"}`}>
@@ -880,7 +1168,8 @@ export default function AppInboxPage() {
             </h2>
             {selectedConversation ? (
               <p className="mt-1 text-xs text-slate-700">
-                modo: {selectedConversation.mode}
+                modo: {selectedConversation.mode} • status:{" "}
+                {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
                 {selectedConversation.assignedUserName
                   ? ` • atendente: ${selectedConversation.assignedUserName}`
                   : selectedConversation.assignedTo
@@ -889,6 +1178,8 @@ export default function AppInboxPage() {
                 {selectedConversation.assignedAt
                   ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}`
                   : ""}
+                {selectedConversation.departmentName ? ` • depto: ${selectedConversation.departmentName}` : ""}
+                {selectedConversation.queueName ? ` • fila: ${selectedConversation.queueName}` : ""}
               </p>
             ) : null}
           </div>
@@ -934,7 +1225,31 @@ export default function AppInboxPage() {
             </div>
           </div>
           <div className="wa-composer-shell border-t border-black/5 p-4 text-slate-900">
-            <div className="mb-3 flex flex-wrap justify-end gap-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={statusActionDraft}
+                  onChange={async (event) => {
+                    const nextStatus = event.target.value as ConversationOperationalStatus | "";
+                    setStatusActionDraft(nextStatus);
+                    if (!nextStatus) return;
+                    await handleUpdateConversationStatus(nextStatus);
+                  }}
+                  disabled={!canManageSelectedConversation || Boolean(conversationAction)}
+                  className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>
+                    Alterar status
+                  </option>
+                  {CONVERSATION_FILTERS.filter((item) =>
+                    ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
+                  ).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {selectedConversation ? (
                 <button
                   type="button"
@@ -949,25 +1264,52 @@ export default function AppInboxPage() {
                   Marcar como nao lida
                 </button>
               ) : null}
-              {selectedConversation?.mode === "HUMAN" ? (
+              {selectedConversation?.assignedUserId === session.user.id ? (
                 <button
                   type="button"
-                  disabled={!selectedConversationWaId || updatingMode}
+                  disabled={!selectedConversationWaId || Boolean(conversationAction)}
                   onClick={handleReleaseConversation}
                   className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {updatingMode ? "Atualizando..." : "Liberar conversa"}
+                  {conversationAction === "release" ? "Atualizando..." : "Liberar para fila"}
                 </button>
               ) : (
                 <button
                   type="button"
-                  disabled={!selectedConversationWaId || updatingMode}
+                  disabled={
+                    !selectedConversationWaId ||
+                    Boolean(conversationAction) ||
+                    isSelectedConversationLocked
+                  }
                   onClick={handleClaimConversation}
                   className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {updatingMode ? "Atualizando..." : "Assumir conversa"}
+                  {conversationAction === "claim" ? "Atualizando..." : "Assumir conversa"}
                 </button>
               )}
+            </div>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select
+                value={transferUserId}
+                onChange={(event) => setTransferUserId(event.target.value)}
+                disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
+                className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Selecionar atendente</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
+                onClick={handleTransferConversation}
+                className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
+              </button>
             </div>
             <div className="mb-3 flex flex-wrap gap-2">
               {QUICK_EMOJIS.map((emoji) => (
@@ -993,14 +1335,14 @@ export default function AppInboxPage() {
                 onChange={(event) => setMessageDraft(event.target.value)}
                 onKeyDown={handleComposerKeyDown}
                 placeholder={
-                  selectedConversation?.mode === "HUMAN"
+                  canReply
                     ? "Digite a mensagem..."
                     : "Assuma a conversa para responder manualmente..."
                 }
                 disabled={
                   !selectedConversationWaId ||
                   sendingMessage ||
-                  selectedConversation?.mode !== "HUMAN"
+                  !canReply
                 }
               />
             </label>
@@ -1011,7 +1353,7 @@ export default function AppInboxPage() {
                   !selectedConversationWaId ||
                   !messageDraft.trim() ||
                   sendingMessage ||
-                  selectedConversation?.mode !== "HUMAN"
+                  !canReply
                 }
                 onClick={handleSendMessage}
                 className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1042,10 +1384,11 @@ export default function AppInboxPage() {
                         value={leadNameDraft}
                         onChange={(event) => setLeadNameDraft(event.target.value)}
                         placeholder="Como este contato deve aparecer no inbox"
+                        disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
                       />
                       <button
                         type="button"
-                        disabled={savingLeadName}
+                        disabled={savingLeadName || !isSelectedConversationOwnedByCurrentUser}
                         onClick={handleSaveLeadName}
                         className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1071,6 +1414,7 @@ export default function AppInboxPage() {
                       className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2"
                       value={statusDraft}
                       onChange={(event) => setStatusDraft(event.target.value as LeadStatus)}
+                      disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadStatus}
                     >
                       <option value="" disabled>
                         Selecione
@@ -1084,7 +1428,7 @@ export default function AppInboxPage() {
                   </label>
                   <button
                     type="button"
-                    disabled={!statusDraft || savingLeadStatus}
+                    disabled={!statusDraft || savingLeadStatus || !isSelectedConversationOwnedByCurrentUser}
                     onClick={handleSaveLeadStatus}
                     className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -1100,11 +1444,12 @@ export default function AppInboxPage() {
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
                       placeholder="Registrar observacao de atendimento..."
+                      disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadNote}
                     />
                   </label>
                   <button
                     type="button"
-                    disabled={!noteDraft.trim() || savingLeadNote}
+                    disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
                     onClick={handleAddLeadNote}
                     className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >

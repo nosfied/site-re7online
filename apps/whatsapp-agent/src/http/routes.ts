@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
@@ -905,6 +905,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send",
       });
+      const currentConversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!currentConversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        currentConversation.assignedUserId !== clientAuth.userId
+      ) {
+        json(res, 409, {
+          error: "conversation_not_assigned",
+          message: "Assuma a conversa antes de responder manualmente.",
+        });
+        return;
+      }
       const result = await adminSendMessage({
         waId: resolvedConversation.resolvedWaId,
         text,
@@ -916,22 +934,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, result.statusCode, { error: result.error });
         return;
       }
-      const conversation = await runtimeStorage.getConversation(
-        resolvedConversation.resolvedWaId,
-        client.clientKey
-      );
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const conversation = await ensureConversationOperationalState(prisma, {
+        clientId: client.id,
+        defaults,
+        conversation: {
+          ...currentConversation,
+          mode: "HUMAN" as const,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        },
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation,
+      });
       json(res, 200, {
-        ok: true,
-        waId: conversation?.waId ?? resolvedConversation.resolvedWaId,
-        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
-        mode: conversation?.mode ?? "BOT",
-        assignedUserId: conversation?.assignedUserId ?? null,
-        assignedTo: conversation?.assignedTo ?? null,
-        assignedUserName:
-          conversation?.assignedUserId
-            ? await findAssignedUserName(prisma, client.id, conversation.assignedUserId)
-            : null,
-        assignedAt: conversation?.assignedAt ?? null,
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         message: {
           messageId: result.messageId,
           status: result.status,
@@ -985,7 +1007,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
-    pathname.endsWith("/claim")
+    (pathname.endsWith("/claim") || pathname.endsWith("/assign"))
   ) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -1023,6 +1045,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+      if (requestedUserId && requestedUserId !== clientAuth.userId) {
+        json(res, 403, { error: "forbidden", message: "Voce so pode assumir para si." });
+        return;
+      }
+      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
+        json(res, 409, {
+          error: "conversation_already_assigned",
+          message: "A conversa ja esta atribuida a outro atendente.",
+        });
+        return;
+      }
       const assignedUser = requestedUserId
         ? await prisma.user.findFirst({
             where: { id: requestedUserId, clientId: client.id },
@@ -1033,27 +1066,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "user_not_found" });
         return;
       }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const assignedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
         mode: "HUMAN" as const,
         assignedUserId: assignedUser?.id ?? clientAuth.userId,
         assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
-        assignedAt: new Date().toISOString(),
+        assignedAt,
+        departmentId: conversation.departmentId ?? defaults.department.id,
+        queueId: conversation.queueId ?? defaults.queue.id,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
-      json(res, 200, {
-        ok: true,
+      await recordConversationAssignment(prisma, {
+        clientId: client.id,
         waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: nextState.mode,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: nextState.assignedUserId ?? null,
+        assignedAt,
+      });
+      logger.info({
+        event: "conversation.assigned",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
         assignedUserId: nextState.assignedUserId,
-        assignedTo: nextState.assignedTo,
+        fromUserId: conversation.assignedUserId ?? null,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
         assignedUserName:
           assignedUser?.name ??
           (nextState.assignedUserId
             ? await findAssignedUserName(prisma, client.id, nextState.assignedUserId)
             : null),
-        assignedAt: nextState.assignedAt,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
       logger.error({
@@ -1105,27 +1161,257 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
+        json(res, 409, {
+          error: "conversation_already_assigned",
+          message: "A conversa ja esta atribuida a outro atendente.",
+        });
+        return;
+      }
       const nextState = {
         ...conversation,
-        mode: "BOT" as const,
+        mode: "HUMAN" as const,
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
-      json(res, 200, {
-        ok: true,
-        waId: nextState.waId,
-        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: nextState.mode,
-        assignedUserId: nextState.assignedUserId,
-        assignedTo: nextState.assignedTo,
+      logger.info({
+        event: "conversation.released",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
         assignedUserName: null,
-        assignedAt: nextState.assignedAt,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
       logger.error({
         event: "app.conversation.release.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/transfer")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const toUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+      if (!toUserId) {
+        json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const assignedUser = await prisma.user.findFirst({
+        where: { id: toUserId, clientId: client.id },
+        select: { id: true, name: true },
+      });
+      if (!assignedUser) {
+        json(res, 404, { error: "user_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_transfer",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (conversation.assignedUserId !== clientAuth.userId) {
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode transferir conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const assignedAt = new Date().toISOString();
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        assignedUserId: assignedUser.id,
+        assignedTo: `user:${assignedUser.id}`,
+        assignedAt,
+        departmentId: conversation.departmentId ?? defaults.department.id,
+        queueId: conversation.queueId ?? defaults.queue.id,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await recordConversationAssignment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: assignedUser.id,
+        assignedAt,
+      });
+      logger.info({
+        event: "conversation.transferred",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: assignedUser.id,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: assignedUser.name,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.transfer.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/status")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const nextStatus = normalizeConversationOperationalStatus(
+        typeof body.status === "string" ? body.status.trim() : ""
+      );
+      if (!nextStatus || !CONVERSATION_OPERATIONAL_STATUS_VALUES.includes(nextStatus)) {
+        json(res, 400, { error: "bad_request", message: "Status operacional invalido." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_status",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (conversation.assignedUserId && conversation.assignedUserId !== clientAuth.userId) {
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode atualizar status de conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const nextState = {
+        ...conversation,
+        mode:
+          nextStatus === ConversationOperationalStatus.CLOSED
+            ? (conversation.mode ?? "HUMAN")
+            : "HUMAN" as const,
+        departmentId: conversation.departmentId ?? defaults.department.id,
+        queueId: conversation.queueId ?? defaults.queue.id,
+        status: nextStatus,
+        closedAt:
+          nextStatus === ConversationOperationalStatus.CLOSED
+            ? new Date().toISOString()
+            : null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      logger.info({
+        event: "conversation.status_changed",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        status: nextStatus,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.status.error",
         message: (error as Error).message,
         requestId,
       });
@@ -2009,9 +2295,302 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (
       req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/assign$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+        if (!requestedUserId) {
+          json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+          return;
+        }
+        const assignedUser = await prisma.user.findFirst({
+          where: { id: requestedUserId, client: { clientKey } },
+          select: { id: true, name: true },
+        });
+        if (!assignedUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_assign",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const assignedAt = new Date().toISOString();
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          assignedUserId: assignedUser.id,
+          assignedTo: `user:${assignedUser.id}`,
+          assignedAt,
+          departmentId: conversation.departmentId ?? defaults.department.id,
+          queueId: conversation.queueId ?? defaults.queue.id,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.assigned",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          assignedUserId: assignedUser.id,
+          fromUserId: conversation.assignedUserId ?? null,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: assignedUser.name,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.assign.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/transfer$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+        if (!requestedUserId) {
+          json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+          return;
+        }
+        const assignedUser = await prisma.user.findFirst({
+          where: { id: requestedUserId, client: { clientKey } },
+          select: { id: true, name: true },
+        });
+        if (!assignedUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_transfer",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const assignedAt = new Date().toISOString();
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          assignedUserId: assignedUser.id,
+          assignedTo: `user:${assignedUser.id}`,
+          assignedAt,
+          departmentId: conversation.departmentId ?? defaults.department.id,
+          queueId: conversation.queueId ?? defaults.queue.id,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.transferred",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: assignedUser.name,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.transfer.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/status$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const nextStatus = normalizeConversationOperationalStatus(
+          typeof body.status === "string" ? body.status.trim() : ""
+        );
+        if (!nextStatus || !CONVERSATION_OPERATIONAL_STATUS_VALUES.includes(nextStatus)) {
+          json(res, 400, { error: "bad_request", message: "Status operacional invalido." });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_status",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const nextState = {
+          ...conversation,
+          mode:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? (conversation.mode ?? "HUMAN")
+              : "HUMAN" as const,
+          departmentId: conversation.departmentId ?? defaults.department.id,
+          queueId: conversation.queueId ?? defaults.queue.id,
+          status: nextStatus,
+          closedAt:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? new Date().toISOString()
+              : null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        logger.info({
+          event: "conversation.status_changed",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          status: nextStatus,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.status.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
       pathname.startsWith("/admin/conversation/") &&
       pathname.split("/").length === 5 &&
-      pathname.endsWith("/claim")
+      (pathname.endsWith("/claim") || pathname.endsWith("/assign"))
     ) {
       try {
         const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
@@ -2058,23 +2637,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "user_not_found" });
           return;
         }
+        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const previousAssignedUserId = conversation.assignedUserId ?? null;
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
           assignedUserId: assignedUser?.id ?? null,
           assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
+          departmentId: conversation.departmentId ?? defaults.department.id,
+          queueId: conversation.queueId ?? defaults.queue.id,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
-        json(res, 200, {
-          ok: true,
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
           waId: nextState.waId,
-          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-          mode: nextState.mode,
+          fromUserId: previousAssignedUserId,
+          toUserId: nextState.assignedUserId ?? null,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.assigned",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
           assignedUserId: nextState.assignedUserId,
-          assignedTo: nextState.assignedTo,
+          fromUserId: previousAssignedUserId,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
           assignedUserName: assignedUser?.name ?? null,
-          assignedAt: nextState.assignedAt,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         });
       } catch (error) {
         logger.error({
@@ -2126,21 +2728,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const nextState = {
           ...conversation,
-          mode: "BOT" as const,
+          mode: "HUMAN" as const,
           assignedUserId: null,
           assignedTo: null,
           assignedAt: null,
+          status: ConversationOperationalStatus.WAITING,
+          closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
-        json(res, 200, {
-          ok: true,
-          waId: nextState.waId,
-          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-          mode: nextState.mode,
-          assignedUserId: nextState.assignedUserId,
-          assignedTo: nextState.assignedTo,
+        logger.info({
+          event: "conversation.released",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
           assignedUserName: null,
-          assignedAt: nextState.assignedAt,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         });
       } catch (error) {
         logger.error({
@@ -5055,6 +5667,311 @@ async function findAssignedUserName(
   return user?.name ?? null;
 }
 
+const CONVERSATION_OPERATIONAL_STATUS_VALUES = [
+  ConversationOperationalStatus.WAITING,
+  ConversationOperationalStatus.IN_PROGRESS,
+  ConversationOperationalStatus.WAITING_USER,
+  ConversationOperationalStatus.CLOSED,
+] as const;
+
+function normalizeConversationOperationalStatus(
+  value?: string | ConversationOperationalStatus | null
+): ConversationOperationalStatus | null {
+  switch (String(value ?? "").toUpperCase()) {
+    case "WAITING":
+      return ConversationOperationalStatus.WAITING;
+    case "IN_PROGRESS":
+      return ConversationOperationalStatus.IN_PROGRESS;
+    case "WAITING_USER":
+      return ConversationOperationalStatus.WAITING_USER;
+    case "CLOSED":
+      return ConversationOperationalStatus.CLOSED;
+    default:
+      return null;
+  }
+}
+
+function isConversationInHumanFlow(conversation: {
+  mode?: string | null;
+  handoff?: { status?: string | null };
+  assignedUserId?: string | null;
+  assignedAt?: string | null;
+}) {
+  return (
+    conversation.mode === "HUMAN" ||
+    conversation.handoff?.status === "active" ||
+    conversation.handoff?.status === "pending" ||
+    Boolean(conversation.assignedUserId) ||
+    Boolean(conversation.assignedAt)
+  );
+}
+
+function deriveConversationOperationalStatus(conversation: {
+  mode?: string | null;
+  handoff?: { status?: string | null };
+  assignedUserId?: string | null;
+  assignedAt?: string | null;
+}) {
+  if (!isConversationInHumanFlow(conversation)) return null;
+  return conversation.assignedUserId
+    ? ConversationOperationalStatus.IN_PROGRESS
+    : ConversationOperationalStatus.WAITING;
+}
+
+async function ensureDefaultDepartmentAndQueue(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+) {
+  const department = await prisma.department.upsert({
+    where: { clientId_name: { clientId, name: "Atendimento" } },
+    update: {},
+    create: { clientId, name: "Atendimento" },
+    select: { id: true, name: true },
+  });
+  const queue = await prisma.queue.upsert({
+    where: {
+      clientId_departmentId_name: {
+        clientId,
+        departmentId: department.id,
+        name: "Fila Geral",
+      },
+    },
+    update: {},
+    create: {
+      clientId,
+      departmentId: department.id,
+      name: "Fila Geral",
+    },
+    select: { id: true, name: true, departmentId: true },
+  });
+  return { department, queue };
+}
+
+async function ensureConversationOperationalState(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>;
+    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+  }
+) {
+  const conversation = materializeConversationOperationalState(
+    params.conversation,
+    params.defaults
+  );
+  if (!conversation) return null;
+  const original = params.conversation;
+  const shouldPersist =
+    (original?.departmentId ?? null) !== (conversation.departmentId ?? null) ||
+    (original?.queueId ?? null) !== (conversation.queueId ?? null) ||
+    (normalizeConversationOperationalStatus(original?.status) ?? null) !==
+      (normalizeConversationOperationalStatus(conversation.status) ?? null) ||
+    (original?.closedAt ?? null) !== (conversation.closedAt ?? null);
+  if (!shouldPersist) return conversation;
+  await runtimeStorage.upsertConversation(conversation);
+  return conversation;
+}
+
+function materializeConversationOperationalState(
+  conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>,
+  defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>
+) {
+  if (!conversation) return null;
+  if (!isConversationInHumanFlow(conversation)) {
+    return conversation;
+  }
+  const explicitStatus = normalizeConversationOperationalStatus(conversation.status);
+  const derivedStatus = explicitStatus
+    ? null
+    : deriveConversationOperationalStatus(conversation);
+  const resolvedStatus = explicitStatus ?? derivedStatus ?? null;
+  return {
+    ...conversation,
+    departmentId: conversation.departmentId ?? defaults.department.id,
+    queueId: conversation.queueId ?? defaults.queue.id,
+    status: resolvedStatus,
+    closedAt:
+      resolvedStatus === ConversationOperationalStatus.CLOSED
+        ? conversation.closedAt ?? new Date().toISOString()
+        : null,
+  };
+}
+
+async function recordConversationAssignment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waId: string;
+    fromUserId?: string | null;
+    toUserId?: string | null;
+    assignedAt: string;
+  }
+) {
+  if (!params.toUserId) return;
+  const runtimeState = await prisma.conversationRuntimeState.findUnique({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    select: { id: true },
+  });
+  if (!runtimeState) {
+    logger.warn({
+      event: "conversation.assignment.skipped",
+      clientId: params.clientId,
+      waId: params.waId,
+      reason: "runtime_state_not_found",
+    });
+    return;
+  }
+  await prisma.conversationAssignment.create({
+    data: {
+      conversationId: runtimeState.id,
+      fromUserId: params.fromUserId ?? null,
+      toUserId: params.toUserId,
+      assignedAt: new Date(params.assignedAt),
+    },
+  });
+}
+
+async function loadConversationOperationalLookups(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    states: Array<
+      | {
+          departmentId?: string | null;
+          queueId?: string | null;
+        }
+      | null
+      | undefined
+    >;
+    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+  }
+) {
+  const departmentIds = Array.from(
+    new Set(
+      params.states
+        .map((item) => item?.departmentId ?? null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const queueIds = Array.from(
+    new Set(
+      params.states
+        .map((item) => item?.queueId ?? null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const [departments, queues] = await Promise.all([
+    departmentIds.length > 0
+      ? prisma.department.findMany({
+          where: { clientId: params.clientId, id: { in: departmentIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    queueIds.length > 0
+      ? prisma.queue.findMany({
+          where: { clientId: params.clientId, id: { in: queueIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const departmentById = new Map(departments.map((item) => [item.id, item.name]));
+  const queueById = new Map(queues.map((item) => [item.id, item.name]));
+  departmentById.set(params.defaults.department.id, params.defaults.department.name);
+  queueById.set(params.defaults.queue.id, params.defaults.queue.name);
+  return { departmentById, queueById };
+}
+
+function serializeConversationOperationalFields(params: {
+  conversation: {
+    mode?: string | null;
+    assignedUserId?: string | null;
+    assignedTo?: string | null;
+    assignedAt?: string | null;
+    departmentId?: string | null;
+    queueId?: string | null;
+    status?: string | ConversationOperationalStatus | null;
+    closedAt?: string | null;
+    lastInboundAt?: string | null;
+    lastOutboundAt?: string | null;
+  } | null;
+  assignedUserName: string | null;
+  departmentName: string | null;
+  queueName: string | null;
+}) {
+  const conversation = params.conversation;
+  return {
+    mode: conversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
+    assignedUserId: conversation?.assignedUserId ?? null,
+    assignedTo: conversation?.assignedTo ?? null,
+    assignedUserName: params.assignedUserName,
+    assignedAt: conversation?.assignedAt ?? null,
+    departmentId: conversation?.departmentId ?? null,
+    departmentName: params.departmentName,
+    queueId: conversation?.queueId ?? null,
+    queueName: params.queueName,
+    status: normalizeConversationOperationalStatus(conversation?.status),
+    closedAt: conversation?.closedAt ?? null,
+    lastInboundAt: conversation?.lastInboundAt ?? null,
+    lastOutboundAt: conversation?.lastOutboundAt ?? null,
+    isUnassigned: !conversation?.assignedUserId,
+  };
+}
+
+async function buildConversationActionPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>;
+    assignedUserName?: string | null;
+  }
+) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const conversation = materializeConversationOperationalState(params.conversation, defaults);
+  const assignedUserName =
+    params.assignedUserName ??
+    (conversation?.assignedUserId
+      ? await findAssignedUserName(prisma, params.clientId, conversation.assignedUserId)
+      : null);
+  const departmentName =
+    conversation?.departmentId === defaults.department.id || !conversation?.departmentId
+      ? defaults.department.name
+      : (
+          await prisma.department.findFirst({
+            where: { clientId: params.clientId, id: conversation.departmentId },
+            select: { name: true },
+          })
+        )?.name ?? null;
+  const queueName =
+    conversation?.queueId === defaults.queue.id || !conversation?.queueId
+      ? defaults.queue.name
+      : (
+          await prisma.queue.findFirst({
+            where: { clientId: params.clientId, id: conversation.queueId },
+            select: { name: true },
+          })
+        )?.name ?? null;
+
+  return {
+    ok: true,
+    waId: conversation?.waId ?? null,
+    waIdCanonical: conversation?.waIdCanonical ?? null,
+    ...serializeConversationOperationalFields({
+      conversation,
+      assignedUserName,
+      departmentName,
+      queueName,
+    }),
+  };
+}
+
 function buildScopedWaIdWhere(rawWaId: string) {
   const lookup = buildWaIdLookup(rawWaId);
   return {
@@ -5168,6 +6085,7 @@ async function buildConversationListPayload(
     includeAssignedUserName: boolean;
   }
 ) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
   const conversationFetchLimit = Math.min(params.limit * 3, 600);
   const messageFetchLimit = Math.min(params.limit * 6, 1200);
   const conversations = await prisma.conversation.findMany({
@@ -5269,10 +6187,16 @@ async function buildConversationListPayload(
     }),
   ]);
   const runtimeConversations = await Promise.all(
-    winners.map(async (item) => ({
-      waIdCanonical: item.waIdCanonical,
-      conversation: await runtimeStorage.getConversation(item.waId, params.clientKey),
-    }))
+    winners.map(async (item) => {
+      const conversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(item.waId, params.clientKey),
+        defaults
+      );
+      return {
+        waIdCanonical: item.waIdCanonical,
+        conversation,
+      };
+    })
   );
   const runtimeByWaId = new Map(
     runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
@@ -5294,6 +6218,11 @@ async function buildConversationListPayload(
         })
       : [];
   const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
+  const operationalLookups = await loadConversationOperationalLookups(prisma, {
+    clientId: params.clientId,
+    states: runtimeConversations.map((item) => item.conversation),
+    defaults,
+  });
 
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
@@ -5376,14 +6305,19 @@ async function buildConversationListPayload(
       leadPhone: lead?.phone ?? null,
       leadCity: lead?.city ?? null,
       leadService: lead?.service ?? null,
-      mode: runtimeState?.mode ?? "BOT",
-      assignedUserId: runtimeState?.assignedUserId ?? null,
-      assignedTo: runtimeState?.assignedTo ?? null,
-      assignedUserName:
-        params.includeAssignedUserName && runtimeState?.assignedUserId
-          ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+      ...serializeConversationOperationalFields({
+        conversation: runtimeState ?? null,
+        assignedUserName:
+          params.includeAssignedUserName && runtimeState?.assignedUserId
+            ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+            : null,
+        departmentName: runtimeState?.departmentId
+          ? operationalLookups.departmentById.get(runtimeState.departmentId) ?? null
           : null,
-      assignedAt: runtimeState?.assignedAt ?? null,
+        queueName: runtimeState?.queueId
+          ? operationalLookups.queueById.get(runtimeState.queueId) ?? null
+          : null,
+      }),
       updatedAt: conversation.updatedAt,
     };
   });
@@ -5409,6 +6343,7 @@ async function buildConversationDetailPayload(
     source: string;
   }
 ) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
   const resolved = await resolveConversationTarget(prisma, {
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -5416,7 +6351,10 @@ async function buildConversationDetailPayload(
     requestId: params.requestId,
     source: params.source,
   });
-  const conversation = await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey);
+  const conversation = materializeConversationOperationalState(
+    await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
+    defaults
+  );
   const assignedUser =
     params.includeAssignedUserName && conversation?.assignedUserId
       ? await prisma.user.findFirst({
@@ -5470,6 +6408,11 @@ async function buildConversationDetailPayload(
       },
     }),
   ]);
+  const operationalLookups = await loadConversationOperationalLookups(prisma, {
+    clientId: params.clientId,
+    states: [conversation],
+    defaults,
+  });
 
   const items = [
     ...inbound.map((item) => ({
@@ -5526,11 +6469,16 @@ async function buildConversationDetailPayload(
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
-    mode: conversation?.mode ?? "BOT",
-    assignedUserId: conversation?.assignedUserId ?? null,
-    assignedTo: conversation?.assignedTo ?? null,
-    assignedUserName: assignedUser?.name ?? null,
-    assignedAt: conversation?.assignedAt ?? null,
+    ...serializeConversationOperationalFields({
+      conversation,
+      assignedUserName: assignedUser?.name ?? null,
+      departmentName: conversation?.departmentId
+        ? operationalLookups.departmentById.get(conversation.departmentId) ?? null
+        : null,
+      queueName: conversation?.queueId
+        ? operationalLookups.queueById.get(conversation.queueId) ?? null
+        : null,
+    }),
     count: items.length,
     items,
   };

@@ -1,6 +1,7 @@
 import type {
   AdminUserItem,
   CampaignItem,
+  ConversationOperationalStatus,
   InboxConversationItem,
   InboxMessageItem,
   LeadNoteItem,
@@ -25,6 +26,26 @@ export type AppApiError = Error & {
   errorCode?: string;
   details?: string;
   payload?: unknown;
+};
+
+type AppConversationOperationalPayload = {
+  ok: true;
+  waId: string;
+  waIdCanonical?: string | null;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  isUnassigned: boolean;
 };
 
 export type AppTemplateItem = {
@@ -256,15 +277,7 @@ export async function fetchAppConversation(
   session: AppSession,
   waId: string,
   options?: { limit?: number; order?: "asc" | "desc" }
-): Promise<{
-  ok: true;
-  waId: string;
-  waIdCanonical?: string | null;
-  mode: "BOT" | "HUMAN";
-  assignedUserId: string | null;
-  assignedTo: string | null;
-  assignedUserName: string | null;
-  assignedAt: string | null;
+): Promise<AppConversationOperationalPayload & {
   count: number;
   items: InboxMessageItem[];
 }> {
@@ -283,10 +296,7 @@ export async function sendAppConversationMessage(
   session: AppSession,
   waId: string,
   text: string
-): Promise<{
-  ok: true;
-  waId: string;
-  waIdCanonical?: string | null;
+): Promise<AppConversationOperationalPayload & {
   message: {
     messageId: string;
     status: string;
@@ -304,16 +314,7 @@ export async function claimAppConversation(
   session: AppSession,
   waId: string,
   userId?: string
-): Promise<{
-  ok: true;
-  waId: string;
-  waIdCanonical?: string | null;
-  mode: "BOT" | "HUMAN";
-  assignedUserId: string | null;
-  assignedTo: string | null;
-  assignedUserName: string | null;
-  assignedAt: string | null;
-}> {
+): Promise<AppConversationOperationalPayload> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/claim`, {
     method: "POST",
     body: JSON.stringify(userId ? { userId } : {}),
@@ -323,18 +324,31 @@ export async function claimAppConversation(
 export async function releaseAppConversation(
   session: AppSession,
   waId: string
-): Promise<{
-  ok: true;
-  waId: string;
-  waIdCanonical?: string | null;
-  mode: "BOT" | "HUMAN";
-  assignedUserId: string | null;
-  assignedTo: string | null;
-  assignedUserName: string | null;
-  assignedAt: string | null;
-}> {
+): Promise<AppConversationOperationalPayload> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/release`, {
     method: "POST",
+  });
+}
+
+export async function transferAppConversation(
+  session: AppSession,
+  waId: string,
+  userId: string
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/transfer`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function updateAppConversationStatus(
+  session: AppSession,
+  waId: string,
+  status: ConversationOperationalStatus
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/status`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
   });
 }
 

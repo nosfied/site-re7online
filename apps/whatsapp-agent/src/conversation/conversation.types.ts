@@ -1,5 +1,10 @@
 export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
 export type ConversationFlow = "quote_site";
+export type ConversationOperationalStatus =
+  | "WAITING"
+  | "IN_PROGRESS"
+  | "WAITING_USER"
+  | "CLOSED";
 
 export type HandoffState = {
   status: "none" | "pending" | "active";
@@ -52,4 +57,8 @@ export type ConversationState = {
   assignedUserId?: string | null;
   assignedTo?: string | null;
   assignedAt?: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  status?: ConversationOperationalStatus | null;
+  closedAt?: string | null;
 };

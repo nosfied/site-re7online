@@ -56,8 +56,23 @@ export type InboxConversationItem = {
   assignedTo: string | null;
   assignedUserName: string | null;
   assignedAt: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  isUnassigned: boolean;
   updatedAt: string;
 };
+
+export type ConversationOperationalStatus =
+  | "WAITING"
+  | "IN_PROGRESS"
+  | "WAITING_USER"
+  | "CLOSED";
 
 export type AdminUserItem = {
   id: string;

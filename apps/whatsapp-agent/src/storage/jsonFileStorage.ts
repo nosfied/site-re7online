@@ -170,6 +170,10 @@ function normalizeConversation(raw: LegacyConversationState): ConversationState 
     assignedUserId: raw.assignedUserId ?? null,
     assignedTo: raw.assignedTo ?? null,
     assignedAt: raw.assignedAt ?? null,
+    departmentId: raw.departmentId ?? null,
+    queueId: raw.queueId ?? null,
+    status: raw.status ?? null,
+    closedAt: raw.closedAt ?? null,
     window: raw.window,
     handoff,
   };
@@ -545,6 +549,10 @@ export const jsonFileStorage: Storage = {
       assignedUserId: existing?.assignedUserId ?? null,
       assignedTo: existing?.assignedTo ?? null,
       assignedAt: existing?.assignedAt ?? null,
+      departmentId: existing?.departmentId ?? null,
+      queueId: existing?.queueId ?? null,
+      status: existing?.status ?? null,
+      closedAt: existing?.closedAt ?? null,
       handoff: existing?.handoff ?? { status: "none" },
       window: { isOpen: true, expiresAt },
     };
