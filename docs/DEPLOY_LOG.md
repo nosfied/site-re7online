@@ -19,3 +19,12 @@ Preencher a cada deploy:
 - executado por: deifson
 - resultado: ok
 - observacoes: deploy Sprint 37 em producao
+
+## 2026-04-12 18:22 BRT
+
+- branch: flow-executor-quote-hardening
+- commit: 9ec1e47
+- migration: nao
+- executado por: deifson
+- resultado: ok
+- observacoes: correcao do fluxo de templates para evitar registros fantasmas apos falha local de validacao
