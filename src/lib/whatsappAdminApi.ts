@@ -605,6 +605,23 @@ export async function resetUserPassword(
   );
 }
 
+export async function updateUserRole(
+  connection: AdminConnection,
+  userId: string,
+  clientKey: string,
+  role: string
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users/${encodeURIComponent(userId)}?${params.toString()}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
 export async function sendConversationMessage(
   connection: AdminConnection,
   clientKey: string,

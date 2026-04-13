@@ -2176,12 +2176,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const email = String(body.email ?? "").trim().toLowerCase();
         const password = typeof body.password === "string" ? body.password : "";
         const role = String(body.role ?? "AGENT").trim().toUpperCase();
+        const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
         if (!name || !email) {
           json(res, 400, { error: "bad_request" });
           return;
         }
         if (password && password.length < 6) {
           json(res, 400, { error: "weak_password" });
+          return;
+        }
+        if (!allowedRoles.has(role)) {
+          json(res, 400, { error: "invalid_role" });
           return;
         }
         const user = await prisma.user.create({
@@ -2205,6 +2210,60 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         logger.error({
           event: "admin.users.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "PATCH" &&
+      pathname.startsWith("/admin/users/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!userId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const role = String(body.role ?? "").trim().toUpperCase();
+        const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
+        if (!allowedRoles.has(role)) {
+          json(res, 400, { error: "invalid_role" });
+          return;
+        }
+        const existingUser = await prisma.user.findFirst({
+          where: { id: userId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!existingUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        const user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: { role },
+          select: { id: true, name: true, email: true, role: true, createdAt: true },
+        });
+        json(res, 200, { ok: true, user });
+      } catch (error) {
+        logger.error({
+          event: "admin.users.update.error",
           message: (error as Error).message,
           requestId,
         });
