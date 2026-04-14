@@ -37,3 +37,12 @@ Preencher a cada deploy:
 - executado por: deifson
 - resultado: ok
 - observacoes: deploy do RBAC backend da Sprint 38 com enforcement em conversas e CRM
+
+## 2026-04-14 21:31 BRT
+
+- branch: flow-executor-quote-hardening
+- commit: 91921ae
+- migration: sim
+- executado por: deifson
+- resultado: ok
+- observacoes: deploy das Sprints 39 e 40 com metricas, SLA, relatorios, export CSV, health enriquecido e logs estruturados; agrupamento por atendente ainda dependia do owner atual

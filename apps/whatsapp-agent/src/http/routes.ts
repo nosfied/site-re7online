@@ -2395,6 +2395,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               select: {
                 waId: true,
                 assignedUserId: true,
+                assignments: {
+                  select: {
+                    toUserId: true,
+                  },
+                },
               },
             })
           : [];
@@ -2405,10 +2410,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             resolutionTimeLimitSec: true,
           },
         });
-        const stateByWaId = new Map(runtimeStates.map((item) => [item.waId, item]));
+        const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
         const filteredMetrics = requestedUserId
           ? metrics.filter(
-              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserId === requestedUserId
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserIds.includes(requestedUserId)
             )
           : metrics;
         const totalConversations = filteredMetrics.length;
@@ -2447,18 +2452,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
         >();
         for (const item of filteredMetrics) {
-          const assignedUserId = stateByWaId.get(item.conversation.waId)?.assignedUserId ?? null;
-          if (!assignedUserId) continue;
-          const current = byAgentMap.get(assignedUserId) ?? {
-            userId: assignedUserId,
-            conversations: 0,
-            totalResponseTimeSec: 0,
-            responseCount: 0,
-          };
-          current.conversations += 1;
-          current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
-          current.responseCount += item.responseCount ?? 0;
-          byAgentMap.set(assignedUserId, current);
+          const assignedUserIds = stateByWaId.get(item.conversation.waId)?.assignedUserIds ?? [];
+          for (const assignedUserId of assignedUserIds) {
+            const current = byAgentMap.get(assignedUserId) ?? {
+              userId: assignedUserId,
+              conversations: 0,
+              totalResponseTimeSec: 0,
+              responseCount: 0,
+            };
+            current.conversations += 1;
+            current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+            current.responseCount += item.responseCount ?? 0;
+            byAgentMap.set(assignedUserId, current);
+          }
         }
 
         json(res, 200, {
@@ -2535,13 +2541,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 waId: true,
                 assignedUserId: true,
                 status: true,
+                assignments: {
+                  select: {
+                    toUserId: true,
+                  },
+                },
               },
             })
           : [];
-        const stateByWaId = new Map(runtimeStates.map((item) => [item.waId, item]));
+        const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
         const filteredMetrics = requestedUserId
           ? metrics.filter(
-              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserId === requestedUserId
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserIds.includes(requestedUserId)
             )
           : metrics;
         const lines = [
@@ -2560,7 +2571,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             return [
               csvCell(item.conversationId),
               csvCell(item.conversation.waId),
-              csvCell(runtimeState?.assignedUserId ?? null),
+              csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
               csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
               csvCell(item.firstResponseTimeSec),
               csvCell(item.resolutionTimeSec),
@@ -5761,6 +5772,36 @@ function parseConversationReportRange(rawValue: string | undefined) {
     default:
       return null;
   }
+}
+
+function buildReportRuntimeStateMap(
+  runtimeStates: Array<{
+    waId: string;
+    assignedUserId: string | null;
+    status?: string | null;
+    assignments?: Array<{ toUserId: string | null }>;
+  }>
+) {
+  return new Map(
+    runtimeStates.map((item) => {
+      const assignedUserIds = Array.from(
+        new Set(
+          [
+            item.assignedUserId ?? null,
+            ...(item.assignments?.map((assignment) => assignment.toUserId ?? null) ?? []),
+          ].filter((value): value is string => typeof value === "string" && value.length > 0)
+        )
+      );
+      return [
+        item.waId,
+        {
+          assignedUserId: item.assignedUserId ?? null,
+          assignedUserIds,
+          status: item.status ?? null,
+        },
+      ] as const;
+    })
+  );
 }
 
 function csvCell(value: string | number | null | undefined) {
