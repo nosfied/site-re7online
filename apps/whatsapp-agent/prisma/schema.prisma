@@ -70,6 +70,8 @@ model Client {
   campaigns     Campaign[]
   templates     Template[]
   templateRequests TemplateRequest[]
+  slaConfig      SLAConfig?
+  conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
 }
 
@@ -119,17 +121,24 @@ model Conversation {
   phoneNumberId    String?
   windowIsOpen     Boolean  @default(true)
   windowExpiresAt  DateTime?
+  firstAssignedAt  DateTime?
+  firstResponseAt  DateTime?
+  lastResponseAt   DateTime?
+  closedAt         DateTime?
   lastInboundAt    DateTime?
   lastOutboundAt   DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  client   Client    @relation(fields: [clientId], references: [id])
+  client   Client                 @relation(fields: [clientId], references: [id])
   messages Message[]
+  metrics  ConversationMetrics?
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
+  @@index([clientId, closedAt])
+  @@index([clientId, firstAssignedAt])
 }
 
 model Message {
@@ -321,6 +330,39 @@ model ConversationAssignment {
   conversation ConversationRuntimeState @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, assignedAt])
+}
+
+model ConversationMetrics {
+  id                   String   @id @default(cuid())
+  conversationId       String   @unique // 1:1 seguro para upsert por conversa
+  clientId             String
+  firstResponseTimeSec Int?
+  totalResponseTimeSec Int?
+  responseCount        Int      @default(0)
+  avgResponseTimeSec   Int?
+  resolutionTimeSec    Int?
+  totalMessages        Int      @default(0)
+  totalAgentMessages   Int      @default(0)
+  startedAt            DateTime // primeiro inbound da conversa
+  closedAt             DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, startedAt])
+  @@index([clientId, closedAt])
+}
+
+model SLAConfig {
+  id                     String   @id @default(cuid())
+  clientId               String   @unique
+  firstResponseLimitSec  Int
+  resolutionTimeLimitSec Int
+  createdAt              DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model Campaign {

@@ -95,6 +95,25 @@ export type AdminClientItem = {
   }>;
 };
 
+export type ConversationReportRange = "1d" | "7d" | "30d";
+
+export type ConversationReportByAgentItem = {
+  userId: string;
+  conversations: number;
+  avgResponseTimeSec: number | null;
+};
+
+export type ConversationReportResponse = {
+  ok: true;
+  range: ConversationReportRange;
+  userId: string | null;
+  totalConversations: number;
+  avgFirstResponseTimeSec: number | null;
+  avgResolutionTimeSec: number | null;
+  slaBreaches: number;
+  byAgent: ConversationReportByAgentItem[];
+};
+
 export type LeadStatus =
   | "NEW"
   | "QUALIFIED"
@@ -372,8 +391,17 @@ async function requestJson<T>(
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
-      const body = (await res.json()) as { error?: string; message?: string };
-      message = body.message || body.error || message;
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string };
+        message?: string;
+      };
+      message =
+        (typeof body.error === "object" && body.error && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        body.message ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
     } catch {
       // noop
     }
@@ -386,6 +414,75 @@ async function requestJson<T>(
   }
 
   return (await res.json()) as T;
+}
+
+async function requestText(
+  connection: AdminConnection,
+  path: string,
+  init?: RequestInit
+): Promise<string> {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  if (!baseUrl) {
+    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const adminToken = connection.adminToken.trim();
+  if (!adminToken) {
+    const error = new Error("Informe o X-Admin-Token.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: {
+        "X-Admin-Token": adminToken,
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AdminApiError;
+    error.status = 0;
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string };
+        message?: string;
+      };
+      message =
+        (typeof body.error === "object" && body.error && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        body.message ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AdminApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Token invalido (401).";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+
+  return res.text();
 }
 
 export async function testAdminConnection(connection: AdminConnection) {
@@ -409,6 +506,42 @@ export async function fetchAdminClients(
   items: AdminClientItem[];
 }> {
   return requestJson(connection, "/admin/clients");
+}
+
+export async function fetchConversationReport(
+  connection: AdminConnection,
+  params: {
+    clientKey: string;
+    range: ConversationReportRange;
+    userId?: string | null;
+  }
+): Promise<ConversationReportResponse> {
+  const query = new URLSearchParams({
+    clientKey: params.clientKey,
+    range: params.range,
+  });
+  if (params.userId) {
+    query.set("userId", params.userId);
+  }
+  return requestJson(connection, `/admin/reports/conversations?${query.toString()}`);
+}
+
+export async function exportConversationReportCsv(
+  connection: AdminConnection,
+  params: {
+    clientKey: string;
+    range: ConversationReportRange;
+    userId?: string | null;
+  }
+) {
+  const query = new URLSearchParams({
+    clientKey: params.clientKey,
+    range: params.range,
+  });
+  if (params.userId) {
+    query.set("userId", params.userId);
+  }
+  return requestText(connection, `/admin/reports/conversations/export?${query.toString()}`);
 }
 
 export async function createAdminClient(

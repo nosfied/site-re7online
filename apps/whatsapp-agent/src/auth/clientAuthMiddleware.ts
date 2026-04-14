@@ -27,6 +27,30 @@ function getBearerToken(req: IncomingMessage) {
 
 function json(res: ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
+  if (
+    status >= 400 &&
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    typeof (payload as { error?: unknown }).error === "string"
+  ) {
+    const typed = payload as { error: string; message?: unknown; details?: unknown };
+    res.end(
+      JSON.stringify({
+        error: {
+          code: typed.error,
+          message:
+            typeof typed.message === "string" && typed.message.trim()
+              ? typed.message
+              : typed.error,
+        },
+        ...(typeof typed.details === "string" && typed.details.trim()
+          ? { details: typed.details }
+          : {}),
+      })
+    );
+    return;
+  }
   res.end(JSON.stringify(payload));
 }
 

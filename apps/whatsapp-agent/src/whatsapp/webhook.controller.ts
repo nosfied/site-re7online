@@ -59,6 +59,7 @@ import {
 } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -85,6 +86,14 @@ type PartnerOnboardingPayload = {
   displayPhoneNumber: string | null;
   rawKeys: string[];
 };
+
+function parseWebhookTimestampToDate(rawTimestamp: string | null | undefined) {
+  const parsed = Number(rawTimestamp);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return new Date(parsed * 1000);
+  }
+  return new Date();
+}
 
 function collectStringCandidates(
   input: unknown,
@@ -1134,11 +1143,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     type: MessageType;
     bodyText?: string | null;
     allowlistHit: boolean;
+    occurredAt?: Date;
     rawPayload?: Prisma.InputJsonValue;
   }) => {
     try {
       if (!tenantClientId) return;
-      await persistInboundMessage({
+      const inserted = await persistInboundMessage({
         clientId: tenantClientId,
         phoneNumberId: phoneNumberId ?? undefined,
         waId: params.waId,
@@ -1148,6 +1158,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         allowlistHit: params.allowlistHit,
         requestId: meta?.requestId,
         rawPayload: params.rawPayload,
+      });
+      await recordConversationInboundMetrics({
+        prisma: getPrisma(),
+        clientId: tenantClientId,
+        waId: params.waId,
+        occurredAt: params.occurredAt ?? new Date(),
+        wasInserted: inserted,
       });
     } catch (error) {
       logger.error({
@@ -1729,6 +1746,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           type: mapMessageType(message.type),
           bodyText: message.text,
           allowlistHit,
+          occurredAt: parseWebhookTimestampToDate(message.timestamp),
           rawPayload: {
             ...message.raw,
             text: message.text,
@@ -2614,6 +2632,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       type: mapMessageType(message.type),
       bodyText: message.text,
       allowlistHit,
+      occurredAt: parseWebhookTimestampToDate(message.timestamp),
       rawPayload: {
         ...message.raw,
         text: message.text,

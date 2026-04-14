@@ -21,7 +21,14 @@ function redact(obj: Record<string, unknown>) {
 
 function log(level: LogLevel, data: Record<string, unknown>) {
   const context = logContextStorage.getStore() ?? {};
-  const output = JSON.stringify(redact({ ...context, ...data }));
+  const output = JSON.stringify(
+    redact({
+      timestamp: new Date().toISOString(),
+      requestId: null,
+      ...context,
+      ...data,
+    })
+  );
   console[level](output);
 }
 

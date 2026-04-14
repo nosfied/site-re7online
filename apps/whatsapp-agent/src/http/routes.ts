@@ -38,11 +38,17 @@ import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import { normalizeUserRole, requireClientAuth } from "../auth/clientAuthMiddleware.js";
 import {
+  recordConversationAgentOutboundMetrics,
+  recordConversationClosedMetrics,
+} from "../metrics/conversationMetrics.js";
+import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
   normalizeWaIdDigits,
 } from "../utils/waid.js";
+
+const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1504,6 +1510,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : null,
       };
       await runtimeStorage.upsertConversation(nextState);
+      if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
+        await recordConversationClosedMetrics({
+          prisma,
+          clientId: client.id,
+          waId: nextState.waId,
+          closedAt: new Date(nextState.closedAt),
+          assignedUserId: nextState.assignedUserId ?? null,
+          requestId,
+        });
+      }
       logger.info({
         event: "conversation.status_changed",
         requestId,
@@ -2332,6 +2348,243 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/reports/conversations") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const range = parseConversationReportRange(query.range);
+        if (!range) {
+          json(res, 400, { error: "invalid_range" });
+          return;
+        }
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const metrics = await prisma.conversationMetrics.findMany({
+          where: {
+            clientId: client.id,
+            startedAt: { gte: range.since },
+          },
+          select: {
+            conversationId: true,
+            firstResponseTimeSec: true,
+            totalResponseTimeSec: true,
+            responseCount: true,
+            avgResponseTimeSec: true,
+            resolutionTimeSec: true,
+            conversation: {
+              select: {
+                waId: true,
+              },
+            },
+          },
+        });
+        const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+        const runtimeStates = waIds.length
+          ? await prisma.conversationRuntimeState.findMany({
+              where: {
+                clientId: client.id,
+                waId: { in: waIds },
+              },
+              select: {
+                waId: true,
+                assignedUserId: true,
+              },
+            })
+          : [];
+        const slaConfig = await prisma.sLAConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            firstResponseLimitSec: true,
+            resolutionTimeLimitSec: true,
+          },
+        });
+        const stateByWaId = new Map(runtimeStates.map((item) => [item.waId, item]));
+        const filteredMetrics = requestedUserId
+          ? metrics.filter(
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserId === requestedUserId
+            )
+          : metrics;
+        const totalConversations = filteredMetrics.length;
+        const firstResponseValues = filteredMetrics
+          .map((item) => item.firstResponseTimeSec)
+          .filter((value): value is number => typeof value === "number");
+        const resolutionValues = filteredMetrics
+          .map((item) => item.resolutionTimeSec)
+          .filter((value): value is number => typeof value === "number");
+        const avgFirstResponseTimeSec =
+          firstResponseValues.length > 0
+            ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+            : null;
+        const avgResolutionTimeSec =
+          resolutionValues.length > 0
+            ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+            : null;
+        const firstResponseLimitSec =
+          slaConfig && slaConfig.firstResponseLimitSec > 0 ? slaConfig.firstResponseLimitSec : null;
+        const resolutionTimeLimitSec =
+          slaConfig && slaConfig.resolutionTimeLimitSec > 0 ? slaConfig.resolutionTimeLimitSec : null;
+        const slaBreaches = filteredMetrics.reduce((count, item) => {
+          const firstResponseBreached =
+            firstResponseLimitSec !== null &&
+            item.firstResponseTimeSec !== null &&
+            item.firstResponseTimeSec > firstResponseLimitSec;
+          const resolutionBreached =
+            resolutionTimeLimitSec !== null &&
+            item.resolutionTimeSec !== null &&
+            item.resolutionTimeSec > resolutionTimeLimitSec;
+          return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+        }, 0);
+
+        const byAgentMap = new Map<
+          string,
+          { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
+        >();
+        for (const item of filteredMetrics) {
+          const assignedUserId = stateByWaId.get(item.conversation.waId)?.assignedUserId ?? null;
+          if (!assignedUserId) continue;
+          const current = byAgentMap.get(assignedUserId) ?? {
+            userId: assignedUserId,
+            conversations: 0,
+            totalResponseTimeSec: 0,
+            responseCount: 0,
+          };
+          current.conversations += 1;
+          current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+          current.responseCount += item.responseCount ?? 0;
+          byAgentMap.set(assignedUserId, current);
+        }
+
+        json(res, 200, {
+          ok: true,
+          range: range.key,
+          userId: requestedUserId || null,
+          totalConversations,
+          avgFirstResponseTimeSec,
+          avgResolutionTimeSec,
+          slaBreaches,
+          byAgent: Array.from(byAgentMap.values()).map((item) => ({
+            userId: item.userId,
+            conversations: item.conversations,
+            avgResponseTimeSec:
+              item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+          })),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.reports.conversations.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/reports/conversations/export") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const range = parseConversationReportRange(query.range);
+        if (!range) {
+          json(res, 400, { error: "invalid_range" });
+          return;
+        }
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const metrics = await prisma.conversationMetrics.findMany({
+          where: {
+            clientId: client.id,
+            startedAt: { gte: range.since },
+          },
+          orderBy: { startedAt: "desc" },
+          select: {
+            conversationId: true,
+            firstResponseTimeSec: true,
+            resolutionTimeSec: true,
+            startedAt: true,
+            closedAt: true,
+            conversation: {
+              select: {
+                waId: true,
+              },
+            },
+          },
+        });
+        const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+        const runtimeStates = waIds.length
+          ? await prisma.conversationRuntimeState.findMany({
+              where: {
+                clientId: client.id,
+                waId: { in: waIds },
+              },
+              select: {
+                waId: true,
+                assignedUserId: true,
+                status: true,
+              },
+            })
+          : [];
+        const stateByWaId = new Map(runtimeStates.map((item) => [item.waId, item]));
+        const filteredMetrics = requestedUserId
+          ? metrics.filter(
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserId === requestedUserId
+            )
+          : metrics;
+        const lines = [
+          [
+            "conversationId",
+            "waId",
+            "assignedUserId",
+            "status",
+            "firstResponseTimeSec",
+            "resolutionTimeSec",
+            "createdAt",
+            "closedAt",
+          ].join(","),
+          ...filteredMetrics.map((item) => {
+            const runtimeState = stateByWaId.get(item.conversation.waId);
+            return [
+              csvCell(item.conversationId),
+              csvCell(item.conversation.waId),
+              csvCell(runtimeState?.assignedUserId ?? null),
+              csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
+              csvCell(item.firstResponseTimeSec),
+              csvCell(item.resolutionTimeSec),
+              csvCell(item.startedAt.toISOString()),
+              csvCell(item.closedAt ? item.closedAt.toISOString() : null),
+            ].join(",");
+          }),
+        ];
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"conversation-report-${clientKey}-${range.key}.csv\"`,
+        });
+        res.end(lines.join("\n"));
+      } catch (error) {
+        logger.error({
+          event: "admin.reports.conversations_export.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/conversations/") &&
@@ -2782,6 +3035,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               : null,
         };
         await runtimeStorage.upsertConversation(nextState);
+        if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
+          await recordConversationClosedMetrics({
+            prisma,
+            clientId: client.id,
+            waId: nextState.waId,
+            closedAt: new Date(nextState.closedAt),
+            assignedUserId: nextState.assignedUserId ?? null,
+            requestId,
+          });
+        }
         logger.info({
           event: "conversation.status_changed",
           requestId,
@@ -5232,28 +5495,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           process.env.NODE_ENV === "production" && env.META_APP_SECRET.length > 0;
 
         if (requireSignature) {
-          if (!signatureHeader) {
-            logger.warn({
-              event: "webhook.signature.missing",
-              route: "/webhook",
-              method: "POST",
-              requestId,
-            });
-            res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden", reason: "signature_missing" }));
-            return;
-          }
           const signature = validateMetaSignature(rawBody, signatureHeader, env.META_APP_SECRET);
           if (!signature.ok) {
-            logger.warn({
-              event: "webhook.signature.invalid",
-              route: "/webhook",
-              method: "POST",
-              requestId,
-              reason: signature.reason,
+            logNoisyWarn(
+              `webhook.signature.invalid:${signature.reason}:${req.socket.remoteAddress ?? "unknown"}`,
+              {
+                event: "webhook.signature.invalid",
+                clientId: null,
+                conversationId: null,
+                userId: null,
+                route: "/webhook",
+                method: "POST",
+                requestId,
+                reason: signature.reason,
+                ip: getRequestIp(req),
+                userAgent: getUserAgent(req),
+              }
+            );
+            json(res, 403, {
+              error: "forbidden",
+              message: "Webhook signature rejected.",
             });
-            res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden", reason: "signature_invalid" }));
             return;
           }
           logger.info({
@@ -5278,13 +5540,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         } catch (error) {
           logger.warn({
             event: "webhook.invalid",
+            clientId: null,
+            conversationId: null,
+            userId: null,
             route: "/webhook",
             method: "POST",
             requestId,
             error: (error as Error).message,
           });
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "invalid_json" }));
+          json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
           return;
         }
 
@@ -5312,13 +5576,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }).catch((error: Error) => {
         logger.error({
           event: "webhook.read_error",
+          clientId: null,
+          conversationId: null,
+          userId: null,
           route: "/webhook",
           method: "POST",
           requestId,
           error: error.message,
         });
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "invalid_body" }));
+        json(res, 400, { error: "invalid_body", message: "Invalid request body." });
       });
       return;
     }
@@ -5462,12 +5728,46 @@ function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
   });
 }
 
+function getRequestIp(req: IncomingMessage) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+  }
+  return req.socket.remoteAddress || null;
+}
+
+function getUserAgent(req: IncomingMessage) {
+  const userAgent = req.headers["user-agent"];
+  return typeof userAgent === "string" && userAgent.trim() ? userAgent.trim() : null;
+}
+
 function parseQuery(parsed: URL) {
   const query: Record<string, string> = {};
   for (const [key, value] of parsed.searchParams.entries()) {
     query[key] = value;
   }
   return query;
+}
+
+function parseConversationReportRange(rawValue: string | undefined) {
+  switch (String(rawValue ?? "").trim()) {
+    case "1d":
+      return { key: "1d" as const, since: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+    case "30d":
+      return { key: "30d" as const, since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) };
+    case "7d":
+    case "":
+      return { key: "7d" as const, since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+    default:
+      return null;
+  }
+}
+
+function csvCell(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, "\"\"")}"`;
 }
 
 function getRequestedClientKey(req: IncomingMessage, query: Record<string, string>) {
@@ -5589,7 +5889,98 @@ function normalizeOptionalString(value: unknown) {
 
 function json(res: ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(payload));
+  res.end(JSON.stringify(normalizeJsonPayload(status, payload)));
+}
+
+function defaultErrorMessage(code: string, status: number) {
+  switch (code) {
+    case "bad_request":
+    case "invalid_json":
+    case "invalid_body":
+      return "Bad request.";
+    case "unauthorized":
+    case "invalid_credentials":
+      return "Unauthorized.";
+    case "forbidden":
+    case "client_inactive":
+      return "Forbidden.";
+    case "not_found":
+    case "client_not_found":
+    case "conversation_not_found":
+    case "lead_not_found":
+    case "user_not_found":
+      return "Not found.";
+    case "server_error":
+    case "internal_error":
+      return "Internal server error.";
+    default:
+      return status >= 500 ? "Internal server error." : `Request failed (${status}).`;
+  }
+}
+
+function normalizeJsonPayload(status: number, payload: unknown) {
+  if (
+    status < 400 ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
+    return payload;
+  }
+
+  const typed = payload as Record<string, unknown>;
+  if (
+    typed.error &&
+    typeof typed.error === "object" &&
+    !Array.isArray(typed.error) &&
+    typeof (typed.error as Record<string, unknown>).code === "string" &&
+    typeof (typed.error as Record<string, unknown>).message === "string"
+  ) {
+    return payload;
+  }
+
+  if (typeof typed.error === "string") {
+    const code = typed.error;
+    const message =
+      typeof typed.message === "string" && typed.message.trim()
+        ? typed.message
+        : defaultErrorMessage(code, status);
+    return {
+      error: { code, message },
+      ...(typeof typed.details === "string" && typed.details.trim()
+        ? { details: typed.details }
+        : {}),
+    };
+  }
+
+  if (typeof typed.code === "string" && typeof typed.message === "string") {
+    return {
+      error: {
+        code: typed.code,
+        message: typed.message,
+      },
+      ...(typeof typed.details === "string" && typed.details.trim()
+        ? { details: typed.details }
+        : {}),
+    };
+  }
+
+  return payload;
+}
+
+function logNoisyWarn(key: string, data: Record<string, unknown>, windowMs = 60_000) {
+  const now = Date.now();
+  const state = noisyLogState.get(key);
+  if (!state || now - state.lastLoggedAt >= windowMs) {
+    logger.warn({
+      ...data,
+      suppressedCount: state?.suppressedCount ?? 0,
+    });
+    noisyLogState.set(key, { lastLoggedAt: now, suppressedCount: 0 });
+    return;
+  }
+  state.suppressedCount += 1;
+  noisyLogState.set(key, state);
 }
 
 function maskWaId(waId: string) {
@@ -6062,11 +6453,16 @@ async function recordConversationAssignment(
     select: { id: true },
   });
   if (!runtimeState) {
-    logger.warn({
+    logNoisyWarn(`conversation.assignment.skipped:${params.clientId}:${params.waId}`, {
       event: "conversation.assignment.skipped",
       clientId: params.clientId,
+      conversationId: null,
+      userId: params.toUserId ?? params.fromUserId ?? null,
+      requestId: logger.getContext().requestId ?? null,
       waId: params.waId,
-      reason: "runtime_state_not_found",
+      storageMode: env.STORAGE_MODE,
+      readSource: env.CONV_STATE_READ_SOURCE,
+      reason: "runtime_state_not_found_shadow_row_missing",
     });
     return;
   }
@@ -7094,13 +7490,11 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
         const parsed = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
         resolve(parsed);
       } catch {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "invalid_json" }));
+        json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
         resolve(null);
       }
     }).catch(() => {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "invalid_body" }));
+      json(res, 400, { error: "invalid_body", message: "Invalid request body." });
       resolve(null);
     });
   });
@@ -7166,7 +7560,7 @@ async function adminSendMessage(params: {
   const phoneNumberId =
     credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
 
-  await persistOutboundMessage({
+  const outboundInserted = await persistOutboundMessage({
     clientId: params.clientId,
     phoneNumberId,
     waId: params.waId,
@@ -7188,6 +7582,16 @@ async function adminSendMessage(params: {
     await runtimeStorage.upsertConversation({
       ...conversation,
       lastOutboundAt: createdAt,
+    });
+    await recordConversationAgentOutboundMetrics({
+      prisma: getPrisma(),
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: new Date(createdAt),
+      wasInserted: outboundInserted && sendResult.ok,
+      assignedAt: conversation.assignedAt ?? null,
+      assignedUserId: conversation.assignedUserId ?? null,
+      requestId: params.requestId,
     });
   }
 

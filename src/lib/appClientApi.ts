@@ -191,14 +191,27 @@ async function requestAppJson<T>(
     let payload: unknown;
     try {
       const body = (await res.json()) as {
-        error?: string;
+        error?: string | { code?: string; message?: string; details?: string };
         message?: string;
         details?: string;
       };
       payload = body;
-      errorCode = typeof body.error === "string" ? body.error : undefined;
-      details = typeof body.details === "string" ? body.details : undefined;
-      message = body.message || body.error || message;
+      if (typeof body.error === "string") {
+        errorCode = body.error;
+      } else if (body.error && typeof body.error === "object") {
+        errorCode = typeof body.error.code === "string" ? body.error.code : undefined;
+        if (typeof body.error.details === "string") {
+          details = body.error.details;
+        }
+        if (typeof body.error.message === "string" && body.error.message.trim()) {
+          message = body.error.message;
+        }
+      }
+      details = details || (typeof body.details === "string" ? body.details : undefined);
+      message =
+        (typeof body.message === "string" && body.message.trim() ? body.message : "") ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
     } catch {
       // noop
     }
@@ -245,8 +258,17 @@ export async function loginAppUser(email: string, password: string): Promise<{ o
   if (!res.ok) {
     let message = `Login failed (${res.status})`;
     try {
-      const body = (await res.json()) as { error?: string; message?: string };
-      message = body.message || body.error || message;
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string };
+        message?: string;
+      };
+      message =
+        (typeof body.error === "object" && body.error && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        body.message ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
     } catch {
       // noop
     }
