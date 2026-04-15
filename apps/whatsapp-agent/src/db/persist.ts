@@ -2,6 +2,24 @@ import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { getPrisma } from "../db.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
+export async function getDefaultDepartment(
+  clientId: string,
+  prisma = getPrisma()
+) {
+  if (!clientId) return null;
+  return prisma.department.findFirst({
+    where: {
+      clientId,
+      isActive: true,
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+}
+
 export async function persistInboundMessage(params: {
   clientId: string;
   phoneNumberId?: string;
@@ -55,6 +73,7 @@ export async function persistConversationWindow(params: {
   waId: string;
   waIdCanonical?: string | null;
   phoneNumberId?: string;
+  departmentId?: string | null;
   windowIsOpen: boolean;
   windowExpiresAt?: Date | null;
   lastInboundAt?: Date | null;
@@ -62,6 +81,22 @@ export async function persistConversationWindow(params: {
 }) {
   if (!params.clientId) return;
   const prisma = getPrisma();
+  const existing = await prisma.conversation.findUnique({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    select: {
+      departmentId: true,
+    },
+  });
+  const resolvedDepartmentId =
+    params.departmentId ??
+    existing?.departmentId ??
+    (await getDefaultDepartment(params.clientId, prisma))?.id ??
+    null;
   await prisma.conversation.upsert({
     where: {
       clientId_waId: {
@@ -76,6 +111,7 @@ export async function persistConversationWindow(params: {
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
       lastOutboundAt: params.lastOutboundAt ?? undefined,
+      departmentId: existing?.departmentId ? undefined : resolvedDepartmentId ?? undefined,
     },
     create: {
       clientId: params.clientId,
@@ -86,6 +122,7 @@ export async function persistConversationWindow(params: {
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
       lastOutboundAt: params.lastOutboundAt ?? undefined,
+      departmentId: resolvedDepartmentId ?? undefined,
     },
   });
 }

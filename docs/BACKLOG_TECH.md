@@ -172,6 +172,7 @@ ANTES de:
 
 - validação onboarding assistido
 - validação real do onboarding (novo cliente)
+- relatorios por atendente com historico persistido em Postgres para producao em `STORAGE_MODE=json`
 - padronização tenantId vs clientId
 - limpeza de `.data/default`
 - revisão do tenant `cliente-demo`

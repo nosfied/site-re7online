@@ -52,6 +52,7 @@ import {
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import {
+  getDefaultDepartment,
   persistConversationWindow,
   persistEvent,
   persistInboundMessage,
@@ -1083,11 +1084,27 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       hit: allowlistHit,
     },
   });
+  let resolvedDefaultDepartment:
+    | {
+        id: string;
+        name: string;
+      }
+    | null
+    | undefined;
+  const loadDefaultDepartment = async () => {
+    if (!tenantClientId) return null;
+    if (resolvedDefaultDepartment !== undefined) return resolvedDefaultDepartment;
+    resolvedDefaultDepartment = await getDefaultDepartment(tenantClientId);
+    return resolvedDefaultDepartment;
+  };
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
+    const appliedDefaultDepartment =
+      !state.departmentId && !currentState?.departmentId ? await loadDefaultDepartment() : null;
     const baseState = {
       ...state,
-      departmentId: state.departmentId ?? currentState?.departmentId ?? null,
+      departmentId:
+        state.departmentId ?? currentState?.departmentId ?? appliedDefaultDepartment?.id ?? null,
       queueId: state.queueId ?? currentState?.queueId ?? null,
       status: state.status ?? currentState?.status ?? null,
       closedAt: state.closedAt ?? currentState?.closedAt ?? null,
@@ -1103,6 +1120,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           }
         : baseState;
     await storage.upsertConversation(nextState);
+    if (appliedDefaultDepartment) {
+      logger.info({
+        event: "conversation.department.assigned_default",
+        clientId: tenantClientId,
+        conversationId: state.waId,
+        waId: state.waId,
+        departmentId: appliedDefaultDepartment.id,
+        requestId: meta?.requestId ?? null,
+      });
+    }
   };
   const persistOutboundConversation = async (
     state: ConversationState,
@@ -1176,13 +1203,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
-  const persistConversationSafe = async (state: { waId: string; windowIsOpen: boolean; windowExpiresAt?: string; lastInboundAt?: string | null; lastOutboundAt?: string | null; }) => {
+  const persistConversationSafe = async (state: {
+    waId: string;
+    windowIsOpen: boolean;
+    windowExpiresAt?: string;
+    lastInboundAt?: string | null;
+    lastOutboundAt?: string | null;
+    departmentId?: string | null;
+  }) => {
     try {
       if (!tenantClientId) return;
       await persistConversationWindow({
         clientId: tenantClientId,
         waId: state.waId,
         phoneNumberId: phoneNumberId ?? undefined,
+        departmentId: state.departmentId ?? null,
         windowIsOpen: state.windowIsOpen,
         windowExpiresAt: state.windowExpiresAt ? new Date(state.windowExpiresAt) : null,
         lastInboundAt: state.lastInboundAt ? new Date(state.lastInboundAt) : null,

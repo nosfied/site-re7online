@@ -78,6 +78,7 @@ model Client {
 model User {
   id        String   @id @default(cuid())
   clientId  String   @db.Uuid
+  departmentId String?
   name      String
   email     String
   passwordHash String?
@@ -85,9 +86,11 @@ model User {
   createdAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
+  @@index([clientId, departmentId])
 }
 
 model WaPhoneNumber {
@@ -116,6 +119,7 @@ model Contact {
 model Conversation {
   id               String   @id @default(uuid())
   clientId         String
+  departmentId     String?
   waId             String
   waIdCanonical    String?
   phoneNumberId    String?
@@ -131,6 +135,7 @@ model Conversation {
   updatedAt        DateTime @updatedAt
 
   client   Client                 @relation(fields: [clientId], references: [id])
+  department Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   messages Message[]
   metrics  ConversationMetrics?
 
@@ -138,6 +143,7 @@ model Conversation {
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
   @@index([clientId, closedAt])
+  @@index([clientId, departmentId])
   @@index([clientId, firstAssignedAt])
 }
 
@@ -294,9 +300,12 @@ model Department {
   id        String   @id @default(cuid())
   name      String
   clientId  String   @db.Uuid
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  users  User[]
+  conversations Conversation[]
   queues Queue[]
   runtimeStates ConversationRuntimeState[]
 

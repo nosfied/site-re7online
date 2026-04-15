@@ -161,12 +161,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, { ok: true, count: 0, items: [] });
+        return;
+      }
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         limit,
         includeAssignedUserName: true,
       });
+      if (departmentAccess.requiresDepartmentScope) {
+        result.items = result.items.filter(
+          (item) => (item.departmentId ?? null) === departmentAccess.departmentId
+        );
+        result.count = result.items.length;
+      }
       json(res, 200, result);
     } catch (error) {
       logger.error({
@@ -893,6 +908,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_detail_department_check",
+      });
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
 
       const result = await buildConversationDetailPayload(prisma, {
         clientId: client.id,
@@ -963,6 +1018,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!currentConversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
         return;
       }
       if (
@@ -1101,6 +1185,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
         return;
       }
       const body = await readJsonBody(req, res);
@@ -1247,6 +1360,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/release",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
       if (
         !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
       ) {
@@ -1356,6 +1498,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
         return;
       }
       if (
@@ -1474,6 +1645,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       );
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
         return;
       }
       if (
@@ -2789,7 +2989,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       try {
         const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
-          json(res, 400, { error: "bad_request" });
+          json(res, 400, {
+            error: {
+              code: "bad_request",
+              message: "Informe uma conversa valida.",
+            },
+          });
           return;
         }
         const clientKey = await getScopedClientKey();
@@ -2978,6 +3183,122 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.conversations.transfer.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/transfer-department$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const nextDepartmentId =
+          typeof body.departmentId === "string" ? body.departmentId.trim() : "";
+        if (!nextDepartmentId) {
+          json(res, 400, {
+            error: {
+              code: "bad_request",
+              message: "Informe o departmentId de destino.",
+            },
+          });
+          return;
+        }
+        const department = await prisma.department.findFirst({
+          where: {
+            id: nextDepartmentId,
+            clientId: client.id,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        });
+        if (!department) {
+          json(res, 404, { error: "department_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_transfer_department",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+
+        const previousDepartmentId = conversation.departmentId ?? null;
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          departmentId: department.id,
+          assignedUserId: null,
+          assignedTo: null,
+          assignedAt: null,
+          status: ConversationOperationalStatus.WAITING,
+          closedAt: null,
+        };
+
+        await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: department.id,
+        });
+
+        logger.info({
+          event: "conversation.department.transferred",
+          clientId: client.id,
+          conversationId: nextState.waId,
+          waId: nextState.waId,
+          fromDepartmentId: previousDepartmentId,
+          toDepartmentId: department.id,
+          userId: resolveAssignedTo(adminAuth),
+          requestId,
+        });
+
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: null,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.transfer_department.error",
           message: (error as Error).message,
           requestId,
         });
@@ -6517,6 +6838,35 @@ async function recordConversationAssignment(
   });
 }
 
+async function persistConversationDepartment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    departmentId: string | null;
+  }
+) {
+  await prisma.conversation.upsert({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    update: {
+      departmentId: params.departmentId,
+      waIdCanonical: params.waIdCanonical ?? undefined,
+    },
+    create: {
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? undefined,
+      departmentId: params.departmentId,
+    },
+  });
+}
+
 async function loadConversationOperationalLookups(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -6593,6 +6943,62 @@ function canManageOwnedConversation(
   if (canManageAnyConversation(role)) return true;
   if (!assignedUserId) return false;
   return assignedUserId === currentUserId;
+}
+
+async function loadAppDepartmentAccess(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string;
+    role: string;
+  }
+) {
+  if (isAdminRole(params.role)) {
+    return { requiresDepartmentScope: false, departmentId: null as string | null };
+  }
+  if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) {
+    return { requiresDepartmentScope: false, departmentId: null as string | null };
+  }
+  const user = await prisma.user.findFirst({
+    where: { id: params.userId, clientId: params.clientId },
+    select: { departmentId: true },
+  });
+  return {
+    requiresDepartmentScope: true,
+    departmentId: user?.departmentId ?? null,
+  };
+}
+
+function hasConversationDepartmentAccess(params: {
+  role: string;
+  userDepartmentId: string | null;
+  conversationDepartmentId: string | null | undefined;
+}) {
+  if (isAdminRole(params.role)) return true;
+  if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) return true;
+  if (!params.userDepartmentId) return false;
+  return params.userDepartmentId === (params.conversationDepartmentId ?? null);
+}
+
+function logAppDepartmentDenied(params: {
+  requestId: string;
+  userId: string;
+  clientId: string;
+  departmentId: string | null;
+  conversationDepartmentId: string | null | undefined;
+  waId?: string | null;
+  route: string;
+}) {
+  logger.warn({
+    event: "rbac.department.denied",
+    requestId: params.requestId,
+    userId: params.userId,
+    clientId: params.clientId,
+    departmentId: params.departmentId,
+    conversationDepartmentId: params.conversationDepartmentId ?? null,
+    waId: params.waId ?? null,
+    route: params.route,
+  });
 }
 
 async function canManageLead(
