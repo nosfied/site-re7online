@@ -12,6 +12,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx src/db/seed.ts",
+    "db:seed:departments": "tsx scripts/seed-departments.ts",
     "dev:webhook": "node scripts/send-signed-webhook.mjs",
     "dev:webhook:file": "WEBHOOK_BODY_FILE=scripts/payload.sample.json node scripts/send-signed-webhook.mjs",
     "dev:webhook:allow": "FROM=558499049614 node scripts/send-signed-webhook.mjs",

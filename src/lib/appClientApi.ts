@@ -13,6 +13,7 @@ export type AppSessionUser = {
   name: string;
   email: string;
   clientId: string;
+  role: string;
 };
 
 export type AppSession = {
@@ -96,22 +97,50 @@ function normalizeBaseUrl(input: string) {
   }
 }
 
+function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return {};
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const parsed = JSON.parse(atob(normalized)) as Partial<{
+      sub: string;
+      name: string;
+      email: string;
+      clientId: string;
+      role: string;
+    }>;
+    return {
+      id: typeof parsed.sub === "string" ? parsed.sub : undefined,
+      name: typeof parsed.name === "string" ? parsed.name : undefined,
+      email: typeof parsed.email === "string" ? parsed.email : undefined,
+      clientId: typeof parsed.clientId === "string" ? parsed.clientId : undefined,
+      role: typeof parsed.role === "string" ? parsed.role : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function parseStoredSession(raw: string | null): AppSession | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<AppSession>;
-    if (!parsed?.token || !parsed?.user?.id || !parsed.user.clientId || !parsed.user.email) {
+    const token = String(parsed?.token || "");
+    const tokenUser = decodeClientAuthToken(token);
+    const resolvedUser = {
+      id: String(parsed?.user?.id || tokenUser.id || ""),
+      name: String(parsed?.user?.name || tokenUser.name || ""),
+      email: String(parsed?.user?.email || tokenUser.email || ""),
+      clientId: String(parsed?.user?.clientId || tokenUser.clientId || ""),
+      role: String(parsed?.user?.role || tokenUser.role || ""),
+    };
+    if (!token || !resolvedUser.id || !resolvedUser.clientId || !resolvedUser.email) {
       return null;
     }
     return {
       baseUrl: normalizeBaseUrl(String(parsed.baseUrl || getDefaultBaseUrl())),
-      token: String(parsed.token),
-      user: {
-        id: String(parsed.user.id),
-        name: String(parsed.user.name || ""),
-        email: String(parsed.user.email),
-        clientId: String(parsed.user.clientId),
-      },
+      token,
+      user: resolvedUser,
     };
   } catch {
     return null;
@@ -231,7 +260,10 @@ async function requestAppJson<T>(
   return (await res.json()) as T;
 }
 
-export async function loginAppUser(email: string, password: string): Promise<{ ok: true; token: string; user: AppSessionUser; }> {
+export async function loginAppUser(
+  email: string,
+  password: string
+): Promise<{ ok: true; token: string; user: AppSessionUser }> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
@@ -280,7 +312,19 @@ export async function loginAppUser(email: string, password: string): Promise<{ o
     throw error;
   }
 
-  return (await res.json()) as { ok: true; token: string; user: AppSessionUser };
+  const payload = (await res.json()) as { ok: true; token: string; user: AppSessionUser };
+  const tokenUser = decodeClientAuthToken(payload.token);
+  return {
+    ...payload,
+    user: {
+      ...payload.user,
+      id: payload.user.id || tokenUser.id || "",
+      name: payload.user.name || tokenUser.name || "",
+      email: payload.user.email || tokenUser.email || "",
+      clientId: payload.user.clientId || tokenUser.clientId || "",
+      role: payload.user.role || tokenUser.role || "",
+    },
+  };
 }
 
 export async function fetchAppConversations(

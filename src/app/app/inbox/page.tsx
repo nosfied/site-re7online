@@ -29,6 +29,12 @@ import {
   LeadNoteItem,
   LeadStatus,
   AdminUserItem,
+  AdminConnection,
+  AdminDepartmentItem,
+  fetchAdminClients,
+  fetchDepartments,
+  loadAdminConnection,
+  transferConversationDepartment,
 } from "@/lib/whatsappAdminApi";
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = [
@@ -86,6 +92,12 @@ const CONVERSATION_FILTERS = [
 ] as const;
 
 type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
+type DepartmentFilter = "ALL" | string;
+
+type DepartmentOption = {
+  id: string;
+  name: string;
+};
 
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
@@ -361,11 +373,18 @@ function isConversationAssignedToCurrentUser(
   return Boolean(item?.assignedUserId && item.assignedUserId === currentUserId);
 }
 
+function isAppAdmin(session: AppSession | null) {
+  return session?.user.role === "ADMIN";
+}
+
 export default function AppInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [conversations, setConversations] = useState<InboxConversationItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [adminConnection, setAdminConnection] = useState<AdminConnection | null>(null);
+  const [adminClientKey, setAdminClientKey] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
@@ -383,8 +402,10 @@ export default function AppInboxPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
   const [statusActionDraft, setStatusActionDraft] = useState<ConversationOperationalStatus | "">("");
   const [transferUserId, setTransferUserId] = useState("");
+  const [transferDepartmentId, setTransferDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
@@ -416,6 +437,57 @@ export default function AppInboxPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    if (!isAppAdmin(session)) {
+      setAdminConnection(null);
+      setAdminClientKey(null);
+      return;
+    }
+    setAdminConnection(loadAdminConnection());
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !isAppAdmin(session) || !adminConnection?.adminToken.trim()) {
+      setAdminClientKey(null);
+      setDepartments([]);
+      return;
+    }
+    let cancelled = false;
+    fetchAdminClients(adminConnection)
+      .then((response) => {
+        if (cancelled) return;
+        const match = response.items.find((item) => item.id === session.user.clientId);
+        setAdminClientKey(match?.clientKey ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAdminClientKey(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminConnection, session]);
+
+  useEffect(() => {
+    if (!adminConnection || !adminClientKey || session?.user.role !== "ADMIN") {
+      setDepartments([]);
+      return;
+    }
+    let cancelled = false;
+    fetchDepartments(adminConnection, adminClientKey)
+      .then((response) => {
+        if (cancelled) return;
+        setDepartments(response.items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDepartments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminClientKey, adminConnection, session?.user.role]);
 
   useEffect(() => {
     if (!unreadStorageKey) return;
@@ -681,8 +753,32 @@ export default function AppInboxPage() {
     [conversations, selectedConversationKey]
   );
 
+  const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
+
+  const departmentOptions = useMemo<DepartmentOption[]>(() => {
+    if (departments.length > 0) {
+      return departments.map((department) => ({
+        id: department.id,
+        name: department.name,
+      }));
+    }
+    const items = new Map<string, string>();
+    conversations.forEach((item) => {
+      if (!item.departmentId) return;
+      items.set(item.departmentId, item.departmentName || item.departmentId);
+    });
+    return Array.from(items.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [conversations, departments]);
+
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
+      if (isAdminUser && departmentFilter !== "ALL") {
+        if ((item.departmentId ?? null) !== departmentFilter) {
+          return false;
+        }
+      }
       const status = getConversationOperationalStatus(item);
       switch (conversationFilter) {
         case "WAITING":
@@ -698,7 +794,7 @@ export default function AppInboxPage() {
           return true;
       }
     });
-  }, [conversationFilter, conversations, session?.user.id]);
+  }, [conversationFilter, conversations, departmentFilter, isAdminUser, session?.user.id]);
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
@@ -728,10 +824,23 @@ export default function AppInboxPage() {
     [isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
   );
 
+  const canTransferDepartment = useMemo(
+    () =>
+      Boolean(
+        isAdminUser &&
+          selectedConversationWaId &&
+          adminClientKey &&
+          adminConnection?.baseUrl.trim() &&
+          adminConnection.adminToken.trim()
+      ),
+    [adminClientKey, adminConnection, isAdminUser, selectedConversationWaId]
+  );
+
   useEffect(() => {
     if (!selectedConversation) {
       setStatusActionDraft("");
       setTransferUserId("");
+      setTransferDepartmentId("");
       return;
     }
     const currentStatus = getConversationOperationalStatus(selectedConversation);
@@ -741,6 +850,7 @@ export default function AppInboxPage() {
         : ""
     );
     setTransferUserId(selectedConversation.assignedUserId ?? "");
+    setTransferDepartmentId(selectedConversation.departmentId ?? "");
   }, [selectedConversation]);
 
   useEffect(() => {
@@ -1029,6 +1139,35 @@ export default function AppInboxPage() {
     }
   };
 
+  const handleTransferDepartment = async () => {
+    if (
+      !session ||
+      !selectedConversationWaId ||
+      !transferDepartmentId ||
+      !adminConnection ||
+      !adminClientKey
+    ) {
+      return;
+    }
+    setConversationAction("transfer-department");
+    setError(null);
+    try {
+      const response = await transferConversationDepartment(
+        adminConnection,
+        adminClientKey,
+        selectedConversationWaId,
+        transferDepartmentId
+      );
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      setError(typed.message || "Falha ao transferir conversa de setor.");
+    } finally {
+      setConversationAction(null);
+    }
+  };
+
   const handleUpdateConversationStatus = async (nextStatus: ConversationOperationalStatus) => {
     if (!session || !selectedConversationWaId) return;
     setConversationAction("status");
@@ -1097,6 +1236,25 @@ export default function AppInboxPage() {
                 </button>
               ))}
             </div>
+            {isAdminUser ? (
+              <div className="mt-3">
+                <label className="grid gap-1 text-xs text-white/70">
+                  <span>Filtrar por setor</span>
+                  <select
+                    value={departmentFilter}
+                    onChange={(event) => setDepartmentFilter(event.target.value)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
+                  >
+                    <option value="ALL">Todos os setores</option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
@@ -1140,12 +1298,15 @@ export default function AppInboxPage() {
                     <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/80">
+                      setor: {item.departmentName || "Sem setor"}
+                    </span>
                     <span>{item.assignedUserName || (item.assignedUserId ? item.assignedTo : "nao atribuida")}</span>
                     <span>{formatRelativeTime(getConversationActivityAt(item))}</span>
                   </div>
                   <p className="mt-1 text-xs text-white/60">
-                    {item.departmentName || "Atendimento"} • {item.queueName || "Fila Geral"} •{" "}
-                    {item.leadStatus || "sem status"} • {formatDateTime(item.updatedAt)}
+                    {item.queueName || "Fila Geral"} • {item.leadStatus || "sem status"} •{" "}
+                    {formatDateTime(item.updatedAt)}
                   </p>
                   {item.lastMessage?.bodyText ? (
                     <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-white/85" : "text-white/60"}`}>
@@ -1178,7 +1339,7 @@ export default function AppInboxPage() {
                 {selectedConversation.assignedAt
                   ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}`
                   : ""}
-                {selectedConversation.departmentName ? ` • depto: ${selectedConversation.departmentName}` : ""}
+                {` • setor: ${selectedConversation.departmentName || "Sem setor"}`}
                 {selectedConversation.queueName ? ` • fila: ${selectedConversation.queueName}` : ""}
               </p>
             ) : null}
@@ -1311,6 +1472,49 @@ export default function AppInboxPage() {
                 {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
               </button>
             </div>
+            {isAdminUser ? (
+              <div className="mb-3 rounded-2xl border border-[#d4c7b5] bg-white/50 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={transferDepartmentId}
+                    onChange={(event) => setTransferDepartmentId(event.target.value)}
+                    disabled={
+                      !canTransferDepartment ||
+                      departmentOptions.length === 0 ||
+                      Boolean(conversationAction)
+                    }
+                    className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                  >
+                    <option value="">Selecionar setor</option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={
+                      !canTransferDepartment ||
+                      !transferDepartmentId ||
+                      transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
+                      Boolean(conversationAction)
+                    }
+                    onClick={handleTransferDepartment}
+                    className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "transfer-department"
+                      ? "Transferindo setor..."
+                      : "Transferir para outro setor"}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-700">
+                  {canTransferDepartment
+                    ? "A transferencia de setor limpa atribuicao e devolve a conversa para waiting."
+                    : "Conecte o console admin neste navegador para transferir a conversa entre setores."}
+                </p>
+              </div>
+            ) : null}
             <div className="mb-3 flex flex-wrap gap-2">
               {QUICK_EMOJIS.map((emoji) => (
                 <button

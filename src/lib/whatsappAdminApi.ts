@@ -82,6 +82,13 @@ export type AdminUserItem = {
   createdAt: string;
 };
 
+export type AdminDepartmentItem = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
 export type AdminClientItem = {
   id: string;
   name: string;
@@ -684,6 +691,42 @@ export async function releaseConversation(
   );
 }
 
+export async function transferConversationDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string,
+  departmentId: string
+): Promise<{
+  ok: true;
+  waId: string;
+  waIdCanonical?: string | null;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  isUnassigned: boolean;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/conversations/${encodeURIComponent(waId)}/transfer-department?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ departmentId }),
+    }
+  );
+}
+
 export async function fetchUsers(
   connection: AdminConnection,
   clientKey: string
@@ -695,6 +738,60 @@ export async function fetchUsers(
   const params = new URLSearchParams();
   params.set("clientKey", clientKey);
   return requestJson(connection, `/admin/users?${params.toString()}`);
+}
+
+export async function fetchDepartments(
+  connection: AdminConnection,
+  clientKey: string,
+  options?: { includeInactive?: boolean }
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminDepartmentItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  if (options?.includeInactive) {
+    params.set("includeInactive", "true");
+  }
+  return requestJson(connection, `/admin/departments?${params.toString()}`);
+}
+
+export async function createDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: { name: string }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/departments?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  departmentId: string,
+  payload: { name?: string; isActive?: boolean }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/departments/${encodeURIComponent(departmentId)}?${params.toString()}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export async function createUser(

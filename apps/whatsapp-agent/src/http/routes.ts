@@ -2796,6 +2796,175 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/departments") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const includeInactive = parsedUrl.searchParams.get("includeInactive") === "true";
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const departments = await prisma.department.findMany({
+          where: {
+            clientId: client.id,
+            ...(includeInactive ? {} : { isActive: true }),
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          count: departments.length,
+          items: departments,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.departments.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/departments") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          json(res, 400, httpError("bad_request", "Department name is required"));
+          return;
+        }
+        const department = await prisma.department.create({
+          data: {
+            clientId: client.id,
+            name,
+          },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, { ok: true, department });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(res, 409, httpError("department_name_conflict", "Department name already exists"));
+          return;
+        }
+        logger.error({
+          event: "admin.departments.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "PATCH" &&
+      pathname.startsWith("/admin/departments/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const departmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!departmentId) {
+          json(res, 400, httpError("bad_request", "Department id is required"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const hasName = typeof body.name === "string";
+        const hasActive = typeof body.isActive === "boolean";
+        if (!hasName && !hasActive) {
+          json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+          return;
+        }
+        const name = hasName ? String(body.name ?? "").trim() : undefined;
+        if (hasName && !name) {
+          json(res, 400, httpError("bad_request", "Department name is required"));
+          return;
+        }
+        const existing = await prisma.department.findFirst({
+          where: {
+            id: departmentId,
+            clientId: client.id,
+          },
+          select: { id: true },
+        });
+        if (!existing) {
+          json(res, 404, httpError("department_not_found", "Department not found"));
+          return;
+        }
+        const department = await prisma.department.update({
+          where: { id: existing.id },
+          data: {
+            ...(hasName ? { name } : {}),
+            ...(hasActive ? { isActive: Boolean(body.isActive) } : {}),
+          },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, { ok: true, department });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(res, 409, httpError("department_name_conflict", "Department name already exists"));
+          return;
+        }
+        logger.error({
+          event: "admin.departments.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/conversations/") &&
