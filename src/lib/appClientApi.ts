@@ -80,6 +80,20 @@ export type AppTemplateRequestItem = {
   createdAt: string;
 };
 
+export type AppChatbotFlowItem = {
+  id: string;
+  clientId: string;
+  name: string;
+  isActive: boolean;
+  entryPoint: boolean;
+  definition: {
+    start: string;
+    nodes: Record<string, unknown>;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
 const SESSION_KEY = "wa_app_session_session_v1";
 const LOCAL_KEY = "wa_app_session_local_v1";
 
@@ -567,6 +581,59 @@ export async function fetchAppDepartments(
   items: AdminDepartmentItem[];
 }> {
   return requestAppJson(session, "/app/departments");
+}
+
+export async function fetchAppChatbotFlows(
+  session: AppSession
+): Promise<{
+  ok: true;
+  count: number;
+  items: AppChatbotFlowItem[];
+}> {
+  return requestAppJson(session, "/app/chatbot/flows");
+}
+
+export async function createAppChatbotFlow(
+  session: AppSession,
+  payload: {
+    name: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AppChatbotFlowItem;
+}> {
+  return requestAppJson(session, "/app/chatbot/flows", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppChatbotFlow(
+  session: AppSession,
+  flowId: string,
+  payload: {
+    name?: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition?: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AppChatbotFlowItem;
+}> {
+  return requestAppJson(session, `/app/chatbot/flows/${encodeURIComponent(flowId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchAppConversationReport(

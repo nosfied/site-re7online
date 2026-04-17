@@ -1,5 +1,5 @@
 export type ConversationIntent = "pricing" | "support" | "handoff" | "unknown";
-export type ConversationFlow = "quote_site";
+export type ConversationFlow = "quote_site" | `chatbot:${string}`;
 export type ConversationOperationalStatus =
   | "WAITING"
   | "IN_PROGRESS"
@@ -52,6 +52,8 @@ export type ConversationState = {
   lastHandoffDemoScheduledAt?: string;
   flow?: ConversationFlow;
   flowStep?: number;
+  chatbotNodeId?: string;
+  chatbotActive?: boolean;
   answers?: QuoteSiteAnswers;
   mode?: "BOT" | "HUMAN";
   assignedUserId?: string | null;

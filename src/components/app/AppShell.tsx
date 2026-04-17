@@ -82,6 +82,9 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
                   >
                     Departamentos
                   </Link>
+                  <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
+                    Chatbot
+                  </Link>
                   <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
                     Relatorios
                   </Link>
