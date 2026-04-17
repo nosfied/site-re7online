@@ -140,18 +140,6 @@ function AdminConsoleShell({ children }: { children: React.ReactNode }) {
               Templates
             </Link>
             <Link
-              href="/admin/departments"
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Departments
-            </Link>
-            <Link
-              href="/admin/reports"
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Relatorios
-            </Link>
-            <Link
               href="/admin/meta-embedded-signup"
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
             >

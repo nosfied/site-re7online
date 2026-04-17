@@ -194,3 +194,4 @@ ANTES de:
 - NÃO implementar recursos não oficiais de WhatsApp
 - manter foco 100% na API oficial da Meta
 - manter arquitetura simples e evolutiva
+- Sprint 42.1: separar superfícies /admin (plataforma) vs /app (cliente), migrando users, departments e reports para /app com requireClientAuth e auditoria por userId real

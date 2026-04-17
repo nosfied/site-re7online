@@ -1124,19 +1124,45 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
+        return;
+      }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
-        json(res, 404, { error: "client_not_found" });
+        json(res, 404, httpError("client_not_found", "Client not found"));
         return;
       }
       if (client.status !== "ACTIVE") {
-        json(res, 403, { error: "client_inactive" });
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, { ok: true, count: 0, items: [] });
         return;
       }
       const users = await prisma.user.findMany({
-        where: { clientId: client.id },
+        where: {
+          clientId: client.id,
+          ...(departmentAccess.requiresDepartmentScope
+            ? { departmentId: departmentAccess.departmentId }
+            : {}),
+        },
         orderBy: [{ createdAt: "desc" }],
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+          createdAt: true,
+        },
       });
       json(res, 200, { ok: true, count: users.length, items: users });
     } catch (error) {
@@ -1146,6 +1172,757 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/users") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: client.id,
+        body,
+        requireName: true,
+        requireEmail: true,
+        requireRole: false,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      if (
+        departmentAccess.requiresDepartmentScope &&
+        (parsed.data.departmentId ?? null) !== departmentAccess.departmentId
+      ) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Supervisor can only manage users from the same department.")
+        );
+        return;
+      }
+      const password = typeof body.password === "string" ? body.password : "";
+      if (password && password.length < 6) {
+        json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
+        return;
+      }
+      const user = await prisma.user.create({
+        data: {
+          clientId: client.id,
+          name: parsed.data.name as string,
+          email: parsed.data.email as string,
+          ...(parsed.data.role ? { role: parsed.data.role } : {}),
+          ...(Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+            ? { departmentId: parsed.data.departmentId }
+            : {}),
+          ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "user.created",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        targetUserId: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        isActive: user.isActive,
+      });
+      if (user.departmentId) {
+        logger.info({
+          event: "user.department.assigned",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          targetUserId: user.id,
+          departmentId: user.departmentId,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        });
+      }
+      json(res, 200, { ok: true, user });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(res, 409, httpError("user_already_exists", "User email already exists"));
+        return;
+      }
+      logger.error({
+        event: "app.users.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "PUT" &&
+    pathname.startsWith("/app/users/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
+        return;
+      }
+      const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!userId) {
+        json(res, 400, httpError("bad_request", "User id is required"));
+        return;
+      }
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          clientId: client.id,
+          ...(departmentAccess.requiresDepartmentScope
+            ? { departmentId: departmentAccess.departmentId }
+            : {}),
+        },
+        select: { id: true, departmentId: true, role: true, isActive: true },
+      });
+      if (!existingUser) {
+        json(res, 404, httpError("user_not_found", "User not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: client.id,
+        body,
+        requireName: false,
+        requireEmail: false,
+        requireRole: false,
+        currentRole: existingUser.role,
+        currentDepartmentId: existingUser.departmentId,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      if (Object.keys(parsed.data).length === 0) {
+        json(
+          res,
+          400,
+          httpError(
+            "bad_request",
+            "Provide at least one of name, email, role, departmentId or isActive"
+          )
+        );
+        return;
+      }
+      const nextDepartmentId =
+        Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+          ? (parsed.data.departmentId ?? null)
+          : existingUser.departmentId ?? null;
+      if (
+        departmentAccess.requiresDepartmentScope &&
+        nextDepartmentId !== departmentAccess.departmentId
+      ) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Supervisor can only manage users from the same department.")
+        );
+        return;
+      }
+      const user = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: parsed.data,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "user.updated",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        targetUserId: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        isActive: user.isActive,
+      });
+      if (existingUser.departmentId !== user.departmentId && user.departmentId) {
+        logger.info({
+          event: "user.department.assigned",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          targetUserId: user.id,
+          departmentId: user.departmentId,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        });
+      }
+      json(res, 200, { ok: true, user });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(res, 409, httpError("user_already_exists", "User email already exists"));
+        return;
+      }
+      logger.error({
+        event: "app.users.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/departments") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can manage departments.")
+        );
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departments = await prisma.department.findMany({
+        where: {
+          clientId: client.id,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        count: departments.length,
+        items: departments,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.departments.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/departments") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
+        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = parseDepartmentUpsertPayload(body);
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const existingBySlug = await prisma.department.findFirst({
+        where: {
+          clientId: client.id,
+          slug: parsed.data.slug,
+        },
+        select: { id: true },
+      });
+      if (existingBySlug) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      const department = await prisma.department.create({
+        data: {
+          clientId: client.id,
+          name: parsed.data.name as string,
+          slug: parsed.data.slug as string,
+          ...(typeof parsed.data.isActive === "boolean"
+            ? { isActive: parsed.data.isActive }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "department.created",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        departmentId: department.id,
+        isActive: department.isActive,
+      });
+      json(res, 200, { ok: true, department });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      logger.error({
+        event: "app.departments.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "PUT" &&
+    pathname.startsWith("/app/departments/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
+        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!departmentId) {
+        json(res, 400, httpError("bad_request", "Department id is required"));
+        return;
+      }
+      const existing = await prisma.department.findFirst({
+        where: {
+          id: departmentId,
+          clientId: client.id,
+        },
+        select: { id: true, name: true, slug: true, isActive: true },
+      });
+      if (!existing) {
+        json(res, 404, httpError("department_not_found", "Department not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = parseDepartmentUpsertPayload(body, {
+        requireName: false,
+        currentName: existing.name,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      if (Object.keys(parsed.data).length === 0) {
+        json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+        return;
+      }
+      if (parsed.data.slug && parsed.data.slug !== existing.slug) {
+        const conflictingDepartment = await prisma.department.findFirst({
+          where: {
+            clientId: client.id,
+            slug: parsed.data.slug,
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (conflictingDepartment) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
+      }
+      const department = await prisma.department.update({
+        where: { id: existing.id },
+        data: {
+          ...(parsed.data.name ? { name: parsed.data.name } : {}),
+          ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
+          ...(typeof parsed.data.isActive === "boolean"
+            ? { isActive: parsed.data.isActive }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "department.updated",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        departmentId: department.id,
+        isActive: department.isActive,
+      });
+      if (
+        typeof parsed.data.isActive === "boolean" &&
+        existing.isActive !== department.isActive
+      ) {
+        logger.info({
+          event: "department.toggled",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          departmentId: department.id,
+          isActive: department.isActive,
+        });
+      }
+      json(res, 200, { ok: true, department });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      logger.error({
+        event: "app.departments.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/conversations") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view reports.")
+        );
+        return;
+      }
+      const range = parseConversationReportRange(query.range);
+      if (!range) {
+        json(res, 400, httpError("invalid_range", "Invalid range"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId =
+        clientAuth.role === "SUPERVISOR"
+          ? departmentAccess.departmentId ?? ""
+          : typeof query.departmentId === "string"
+            ? query.departmentId.trim()
+            : "";
+      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
+        json(res, 200, {
+          ok: true,
+          range: range.key,
+          userId: requestedUserId || null,
+          departmentId: null,
+          totalConversations: 0,
+          avgFirstResponseTimeSec: null,
+          avgResolutionTimeSec: null,
+          slaBreaches: 0,
+          byAgent: [],
+          byDepartment: [],
+        });
+        return;
+      }
+      const reportData = await loadConversationReportData(prisma, {
+        clientId: client.id,
+        since: range.since,
+        requestedDepartmentId: requestedDepartmentId || null,
+      });
+      if (!reportData.ok) {
+        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        return;
+      }
+      const filteredMetrics = requestedUserId
+        ? reportData.metrics.filter(
+            (item) =>
+              reportData.stateByWaId
+                .get(item.conversation.waId)
+                ?.assignedUserIds.includes(requestedUserId)
+          )
+        : reportData.metrics;
+      json(
+        res,
+        200,
+        buildConversationReportSummary({
+          rangeKey: range.key,
+          requestedUserId: requestedUserId || null,
+          requestedDepartmentId: requestedDepartmentId || null,
+          filteredMetrics,
+          stateByWaId: reportData.stateByWaId,
+          slaConfig: reportData.slaConfig,
+          departmentNameById: reportData.departmentNameById,
+        })
+      );
+      logger.info({
+        event: "app.reports.conversations.viewed",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: requestedDepartmentId || null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.conversations.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/conversations/export") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view reports.")
+        );
+        return;
+      }
+      const range = parseConversationReportRange(query.range);
+      if (!range) {
+        json(res, 400, httpError("invalid_range", "Invalid range"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId =
+        clientAuth.role === "SUPERVISOR"
+          ? departmentAccess.departmentId ?? ""
+          : typeof query.departmentId === "string"
+            ? query.departmentId.trim()
+            : "";
+      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
+        });
+        res.end(
+          [
+            [
+              "conversationId",
+              "waId",
+              "departmentId",
+              "departmentName",
+              "assignedUserId",
+              "status",
+              "firstResponseTimeSec",
+              "resolutionTimeSec",
+              "createdAt",
+              "closedAt",
+            ].join(","),
+          ].join("\n")
+        );
+        return;
+      }
+      const reportData = await loadConversationReportData(prisma, {
+        clientId: client.id,
+        since: range.since,
+        requestedDepartmentId: requestedDepartmentId || null,
+        includeClosedAt: true,
+      });
+      if (!reportData.ok) {
+        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        return;
+      }
+      const filteredMetrics = requestedUserId
+        ? reportData.metrics.filter(
+            (item) =>
+              reportData.stateByWaId
+                .get(item.conversation.waId)
+                ?.assignedUserIds.includes(requestedUserId)
+          )
+        : reportData.metrics;
+      res.writeHead(200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
+      });
+      res.end(
+        buildConversationReportCsv({
+          metrics: filteredMetrics,
+          stateByWaId: reportData.stateByWaId,
+          departmentNameById: reportData.departmentNameById,
+        })
+      );
+      logger.info({
+        event: "app.reports.conversations.exported",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: requestedDepartmentId || null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.conversations_export.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
     }
     return;
   }
@@ -6895,6 +7672,281 @@ function csvCell(value: string | number | null | undefined) {
   return `"${text.replace(/"/g, "\"\"")}"`;
 }
 
+async function loadConversationReportData(
+  prisma: ReturnType<typeof getPrisma>,
+  options: {
+    clientId: string;
+    since: Date;
+    requestedDepartmentId: string | null;
+    includeClosedAt?: boolean;
+  }
+) {
+  if (options.requestedDepartmentId) {
+    const department = await prisma.department.findFirst({
+      where: {
+        id: options.requestedDepartmentId,
+        clientId: options.clientId,
+      },
+      select: { id: true },
+    });
+    if (!department) {
+      return { ok: false as const, status: 404 as const, code: "department_not_found" as const };
+    }
+  }
+  const metrics = await prisma.conversationMetrics.findMany({
+    where: {
+      clientId: options.clientId,
+      startedAt: { gte: options.since },
+      ...(options.requestedDepartmentId
+        ? {
+            conversation: {
+              departmentId: options.requestedDepartmentId,
+            },
+          }
+        : {}),
+    },
+    ...(options.includeClosedAt ? { orderBy: { startedAt: "desc" as const } } : {}),
+    select: {
+      conversationId: true,
+      firstResponseTimeSec: true,
+      totalResponseTimeSec: true,
+      responseCount: true,
+      avgResponseTimeSec: true,
+      resolutionTimeSec: true,
+      startedAt: true,
+      ...(options.includeClosedAt ? { closedAt: true } : {}),
+      conversation: {
+        select: {
+          waId: true,
+          departmentId: true,
+        },
+      },
+    },
+  });
+  const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+  const runtimeStates = waIds.length
+    ? await prisma.conversationRuntimeState.findMany({
+        where: {
+          clientId: options.clientId,
+          waId: { in: waIds },
+        },
+        select: {
+          waId: true,
+          assignedUserId: true,
+          status: true,
+          assignments: {
+            select: {
+              toUserId: true,
+            },
+          },
+        },
+      })
+    : [];
+  const slaConfig = await prisma.sLAConfig.findUnique({
+    where: { clientId: options.clientId },
+    select: {
+      firstResponseLimitSec: true,
+      resolutionTimeLimitSec: true,
+    },
+  });
+  const departmentIds = Array.from(
+    new Set(
+      metrics
+        .map((item) => item.conversation.departmentId ?? null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )
+  );
+  const departments = departmentIds.length
+    ? await prisma.department.findMany({
+        where: {
+          clientId: options.clientId,
+          id: { in: departmentIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+    : [];
+  return {
+    ok: true as const,
+    metrics,
+    stateByWaId: buildReportRuntimeStateMap(runtimeStates),
+    slaConfig,
+    departmentNameById: new Map(departments.map((item) => [item.id, item.name])),
+  };
+}
+
+function buildConversationReportSummary(options: {
+  rangeKey: "1d" | "7d" | "30d";
+  requestedUserId: string | null;
+  requestedDepartmentId: string | null;
+  filteredMetrics: Array<{
+    conversationId: string;
+    firstResponseTimeSec: number | null;
+    totalResponseTimeSec: number | null;
+    responseCount: number | null;
+    avgResponseTimeSec: number | null;
+    resolutionTimeSec: number | null;
+    conversation: {
+      waId: string;
+      departmentId: string | null;
+    };
+  }>;
+  stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  slaConfig: { firstResponseLimitSec: number; resolutionTimeLimitSec: number } | null;
+  departmentNameById: Map<string, string>;
+}) {
+  const totalConversations = options.filteredMetrics.length;
+  const firstResponseValues = options.filteredMetrics
+    .map((item) => item.firstResponseTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const resolutionValues = options.filteredMetrics
+    .map((item) => item.resolutionTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const avgFirstResponseTimeSec =
+    firstResponseValues.length > 0
+      ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+      : null;
+  const avgResolutionTimeSec =
+    resolutionValues.length > 0
+      ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+      : null;
+  const firstResponseLimitSec =
+    options.slaConfig && options.slaConfig.firstResponseLimitSec > 0
+      ? options.slaConfig.firstResponseLimitSec
+      : null;
+  const resolutionTimeLimitSec =
+    options.slaConfig && options.slaConfig.resolutionTimeLimitSec > 0
+      ? options.slaConfig.resolutionTimeLimitSec
+      : null;
+  const slaBreaches = options.filteredMetrics.reduce((count, item) => {
+    const firstResponseBreached =
+      firstResponseLimitSec !== null &&
+      item.firstResponseTimeSec !== null &&
+      item.firstResponseTimeSec > firstResponseLimitSec;
+    const resolutionBreached =
+      resolutionTimeLimitSec !== null &&
+      item.resolutionTimeSec !== null &&
+      item.resolutionTimeSec > resolutionTimeLimitSec;
+    return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+  }, 0);
+  const byAgentMap = new Map<
+    string,
+    { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
+  >();
+  for (const item of options.filteredMetrics) {
+    const assignedUserIds = options.stateByWaId.get(item.conversation.waId)?.assignedUserIds ?? [];
+    for (const assignedUserId of assignedUserIds) {
+      const current = byAgentMap.get(assignedUserId) ?? {
+        userId: assignedUserId,
+        conversations: 0,
+        totalResponseTimeSec: 0,
+        responseCount: 0,
+      };
+      current.conversations += 1;
+      current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+      current.responseCount += item.responseCount ?? 0;
+      byAgentMap.set(assignedUserId, current);
+    }
+  }
+  const byDepartmentMap = new Map<
+    string,
+    {
+      departmentId: string | null;
+      departmentName: string | null;
+      conversations: number;
+      totalResponseTimeSec: number;
+      responseCount: number;
+    }
+  >();
+  for (const item of options.filteredMetrics) {
+    const departmentId = item.conversation.departmentId ?? null;
+    const key = departmentId ?? "__none__";
+    const current = byDepartmentMap.get(key) ?? {
+      departmentId,
+      departmentName: departmentId ? options.departmentNameById.get(departmentId) ?? null : null,
+      conversations: 0,
+      totalResponseTimeSec: 0,
+      responseCount: 0,
+    };
+    current.conversations += 1;
+    current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+    current.responseCount += item.responseCount ?? 0;
+    byDepartmentMap.set(key, current);
+  }
+  return {
+    ok: true,
+    range: options.rangeKey,
+    userId: options.requestedUserId,
+    departmentId: options.requestedDepartmentId,
+    totalConversations,
+    avgFirstResponseTimeSec,
+    avgResolutionTimeSec,
+    slaBreaches,
+    byAgent: Array.from(byAgentMap.values()).map((item) => ({
+      userId: item.userId,
+      conversations: item.conversations,
+      avgResponseTimeSec:
+        item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+    })),
+    byDepartment: Array.from(byDepartmentMap.values()).map((item) => ({
+      departmentId: item.departmentId,
+      departmentName: item.departmentName,
+      conversations: item.conversations,
+      avgResponseTimeSec:
+        item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+    })),
+  };
+}
+
+function buildConversationReportCsv(options: {
+  metrics: Array<{
+    conversationId: string;
+    firstResponseTimeSec: number | null;
+    resolutionTimeSec: number | null;
+    startedAt: Date;
+    closedAt?: Date | null;
+    conversation: {
+      waId: string;
+      departmentId: string | null;
+    };
+  }>;
+  stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  departmentNameById: Map<string, string>;
+}) {
+  return [
+    [
+      "conversationId",
+      "waId",
+      "departmentId",
+      "departmentName",
+      "assignedUserId",
+      "status",
+      "firstResponseTimeSec",
+      "resolutionTimeSec",
+      "createdAt",
+      "closedAt",
+    ].join(","),
+    ...options.metrics.map((item) => {
+      const runtimeState = options.stateByWaId.get(item.conversation.waId);
+      const departmentId = item.conversation.departmentId ?? null;
+      return [
+        csvCell(item.conversationId),
+        csvCell(item.conversation.waId),
+        csvCell(departmentId),
+        csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
+        csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
+        csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
+        csvCell(item.firstResponseTimeSec),
+        csvCell(item.resolutionTimeSec),
+        csvCell(item.startedAt.toISOString()),
+        csvCell(item.closedAt ? item.closedAt.toISOString() : null),
+      ].join(",");
+    }),
+  ].join("\n");
+}
+
 function getRequestedClientKey(req: IncomingMessage, query: Record<string, string>) {
   const headerClientKey = req.headers["x-client-key"];
   if (typeof headerClientKey === "string" && headerClientKey.trim()) {
@@ -7182,6 +8234,61 @@ async function parseAdminUserUpsertPayload(
       };
     }
     data.isActive = body.isActive;
+  }
+
+  return { ok: true, data };
+}
+
+function parseDepartmentUpsertPayload(
+  body: unknown,
+  options?: { requireName?: boolean; currentName?: string | null }
+):
+  | {
+      ok: true;
+      data: {
+        name?: string;
+        slug?: string;
+        isActive?: boolean;
+      };
+    }
+  | { ok: false; status: 400; code: string; message: string } {
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const data: {
+    name?: string;
+    slug?: string;
+    isActive?: boolean;
+  } = {};
+
+  if ("name" in payload || options?.requireName) {
+    const name = String(payload.name ?? "").trim();
+    if (!name) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "Department name is required",
+      };
+    }
+    data.name = name;
+    data.slug = normalizeDepartmentSlug(name);
+  } else if (options?.currentName) {
+    data.name = undefined;
+    data.slug = undefined;
+  }
+
+  if ("isActive" in payload) {
+    if (typeof payload.isActive !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "isActive must be a boolean",
+      };
+    }
+    data.isActive = payload.isActive;
   }
 
   return { ok: true, data };
