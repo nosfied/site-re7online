@@ -83,6 +83,7 @@ model User {
   email     String
   passwordHash String?
   role      String   @default("AGENT")
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -299,6 +300,7 @@ model ConversationRuntimeState {
 model Department {
   id        String   @id @default(cuid())
   name      String
+  slug      String
   clientId  String   @db.Uuid
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -310,6 +312,7 @@ model Department {
   runtimeStates ConversationRuntimeState[]
 
   @@unique([clientId, name])
+  @@unique([clientId, slug])
   @@index([clientId, createdAt])
 }
 

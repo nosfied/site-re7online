@@ -79,12 +79,15 @@ export type AdminUserItem = {
   name: string;
   email: string;
   role: string;
+  departmentId?: string | null;
+  isActive?: boolean;
   createdAt: string;
 };
 
 export type AdminDepartmentItem = {
   id: string;
   name: string;
+  slug?: string;
   isActive: boolean;
   createdAt: string;
 };
@@ -110,15 +113,24 @@ export type ConversationReportByAgentItem = {
   avgResponseTimeSec: number | null;
 };
 
+export type ConversationReportByDepartmentItem = {
+  departmentId: string | null;
+  departmentName: string | null;
+  conversations: number;
+  avgResponseTimeSec: number | null;
+};
+
 export type ConversationReportResponse = {
   ok: true;
   range: ConversationReportRange;
   userId: string | null;
+  departmentId: string | null;
   totalConversations: number;
   avgFirstResponseTimeSec: number | null;
   avgResolutionTimeSec: number | null;
   slaBreaches: number;
   byAgent: ConversationReportByAgentItem[];
+  byDepartment: ConversationReportByDepartmentItem[];
 };
 
 export type LeadStatus =
@@ -521,6 +533,7 @@ export async function fetchConversationReport(
     clientKey: string;
     range: ConversationReportRange;
     userId?: string | null;
+    departmentId?: string | null;
   }
 ): Promise<ConversationReportResponse> {
   const query = new URLSearchParams({
@@ -529,6 +542,9 @@ export async function fetchConversationReport(
   });
   if (params.userId) {
     query.set("userId", params.userId);
+  }
+  if (params.departmentId) {
+    query.set("departmentId", params.departmentId);
   }
   return requestJson(connection, `/admin/reports/conversations?${query.toString()}`);
 }
@@ -539,6 +555,7 @@ export async function exportConversationReportCsv(
     clientKey: string;
     range: ConversationReportRange;
     userId?: string | null;
+    departmentId?: string | null;
   }
 ) {
   const query = new URLSearchParams({
@@ -547,6 +564,9 @@ export async function exportConversationReportCsv(
   });
   if (params.userId) {
     query.set("userId", params.userId);
+  }
+  if (params.departmentId) {
+    query.set("departmentId", params.departmentId);
   }
   return requestText(connection, `/admin/reports/conversations/export?${query.toString()}`);
 }
@@ -557,6 +577,14 @@ export async function createAdminClient(
     name: string;
     clientKey: string;
     phoneNumberId: string;
+    initialUser?: {
+      name: string;
+      email: string;
+      password?: string;
+      role?: string;
+      departmentId?: string | null;
+      isActive?: boolean;
+    };
   }
 ): Promise<AdminClientItem> {
   return requestJson(connection, "/admin/clients", {
@@ -565,6 +593,7 @@ export async function createAdminClient(
       name: payload.name,
       clientKey: payload.clientKey,
       phone_number_id: payload.phoneNumberId,
+      ...(payload.initialUser ? { initialUser: payload.initialUser } : {}),
     }),
   });
 }
@@ -593,6 +622,47 @@ export async function updateTenantById(
   return requestJson(connection, `/admin/tenants/${encodeURIComponent(tenantId)}`, {
     method: "PUT",
     body: JSON.stringify(body),
+  });
+}
+
+export async function bootstrapTenantById(
+  connection: AdminConnection,
+  tenantId: string,
+  payload?: {
+    initialUser?: {
+      name: string;
+      email: string;
+      password?: string;
+      role?: string;
+      departmentId?: string | null;
+      isActive?: boolean;
+    };
+  }
+): Promise<{
+  ok: true;
+  tenantId: string;
+  clientId: string;
+  clientKey: string;
+  seed: {
+    created: number;
+    reactivated: number;
+    unchanged: number;
+    total: number;
+  };
+  initialUser: {
+    action: "created" | "updated";
+    id: string;
+    email: string;
+    role: string;
+    departmentId: string | null;
+    isActive: boolean;
+  } | null;
+  departmentCount: number;
+  firstDepartmentId: string | null;
+}> {
+  return requestJson(connection, `/admin/tenants/${encodeURIComponent(tenantId)}/bootstrap`, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
   });
 }
 
@@ -794,10 +864,47 @@ export async function updateDepartment(
   );
 }
 
+export async function consolidateDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  departmentId: string,
+  targetDepartmentId: string
+): Promise<{
+  ok: true;
+  sourceDepartment: AdminDepartmentItem;
+  targetDepartment: AdminDepartmentItem;
+  counts: {
+    usersMoved: number;
+    conversationsMoved: number;
+    runtimeStatesMoved: number;
+    queuesMoved: number;
+    queuesMerged: number;
+    runtimeStatesRequeued: number;
+  };
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/departments/${encodeURIComponent(departmentId)}/consolidate?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetDepartmentId }),
+    }
+  );
+}
+
 export async function createUser(
   connection: AdminConnection,
   clientKey: string,
-  payload: { name: string; email: string; password?: string; role?: string }
+  payload: {
+    name: string;
+    email: string;
+    password?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
 ): Promise<{
   ok: true;
   user: AdminUserItem;
@@ -835,6 +942,29 @@ export async function resetUserPassword(
   );
 }
 
+export async function updateUser(
+  connection: AdminConnection,
+  userId: string,
+  clientKey: string,
+  payload: {
+    name?: string;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users/${encodeURIComponent(userId)}?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateUserRole(
   connection: AdminConnection,
   userId: string,
@@ -844,12 +974,7 @@ export async function updateUserRole(
   ok: true;
   user: AdminUserItem;
 }> {
-  const params = new URLSearchParams();
-  params.set("clientKey", clientKey);
-  return requestJson(connection, `/admin/users/${encodeURIComponent(userId)}?${params.toString()}`, {
-    method: "PATCH",
-    body: JSON.stringify({ role }),
-  });
+  return updateUser(connection, userId, clientKey, { role });
 }
 
 export async function sendConversationMessage(

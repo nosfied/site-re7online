@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
+import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   AppSession,
   claimAppConversation,
@@ -407,6 +408,7 @@ export default function AppInboxPage() {
   const [transferUserId, setTransferUserId] = useState("");
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
@@ -427,6 +429,16 @@ export default function AppInboxPage() {
     clearAppSession();
     router.replace("/app/login");
   }, [router]);
+
+  useEffect(() => {
+    if (!error && !success && !leadError) return;
+    const timer = window.setTimeout(() => {
+      setError(null);
+      setSuccess(null);
+      setLeadError(null);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [error, leadError, success]);
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -1151,6 +1163,7 @@ export default function AppInboxPage() {
     }
     setConversationAction("transfer-department");
     setError(null);
+    setSuccess(null);
     try {
       const response = await transferConversationDepartment(
         adminConnection,
@@ -1160,6 +1173,11 @@ export default function AppInboxPage() {
       );
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      const targetDepartmentName =
+        departmentOptions.find((item) => item.id === transferDepartmentId)?.name ??
+        response.departmentName ??
+        "setor selecionado";
+      setSuccess(`Conversa transferida para o setor ${targetDepartmentName}.`);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       setError(typed.message || "Falha ao transferir conversa de setor.");
@@ -1201,11 +1219,8 @@ export default function AppInboxPage() {
 
   return (
     <AppShell session={session} title="Inbox" subtitle="Conversas do seu cliente, sem selecao manual de tenant.">
-      {error ? (
-        <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-          {error}
-        </p>
-      ) : null}
+      <FeedbackToast message={success} />
+      <FeedbackToast message={error ?? leadError} variant="error" />
 
       <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">

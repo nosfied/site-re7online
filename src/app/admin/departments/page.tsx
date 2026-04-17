@@ -3,15 +3,22 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   AdminClientItem,
   AdminDepartmentItem,
+  consolidateDepartment,
   createDepartment,
   fetchAdminClients,
   fetchDepartments,
   formatDateTime,
   updateDepartment,
 } from "@/lib/whatsappAdminApi";
+
+function getDepartmentSlugBase(item: AdminDepartmentItem) {
+  const slug = (item.slug ?? item.name).trim().toLowerCase();
+  return slug.replace(/-\d+$/, "");
+}
 
 export default function AdminDepartmentsPage() {
   const { connection } = useAdminConsole();
@@ -22,7 +29,19 @@ export default function AdminDepartmentsPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [consolidatingId, setConsolidatingId] = useState<string | null>(null);
+  const [consolidationTargets, setConsolidationTargets] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!error && !success) return;
+    const timer = window.setTimeout(() => {
+      setError(null);
+      setSuccess(null);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [error, success]);
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -83,6 +102,24 @@ export default function AdminDepartmentsPage() {
     [departments]
   );
 
+  const duplicateGroups = useMemo(() => {
+    const grouped = new Map<string, AdminDepartmentItem[]>();
+    for (const item of sortedDepartments) {
+      const baseSlug = getDepartmentSlugBase(item);
+      const current = grouped.get(baseSlug) ?? [];
+      current.push(item);
+      grouped.set(baseSlug, current);
+    }
+    return Array.from(grouped.entries())
+      .map(([baseSlug, items]) => ({
+        baseSlug,
+        items,
+        activeCount: items.filter((item) => item.isActive).length,
+      }))
+      .filter((group) => group.items.length > 1 && group.activeCount > 1)
+      .sort((a, b) => a.items[0]!.name.localeCompare(b.items[0]!.name, "pt-BR"));
+  }, [sortedDepartments]);
+
   const handleCreate = async () => {
     if (!clientKey) return;
     const trimmedName = name.trim();
@@ -96,6 +133,7 @@ export default function AdminDepartmentsPage() {
       await createDepartment(connection, clientKey, { name: trimmedName });
       setName("");
       await loadItems(clientKey);
+      setSuccess(`Setor "${trimmedName}" criado com sucesso.`);
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Falha ao criar setor.");
@@ -111,6 +149,7 @@ export default function AdminDepartmentsPage() {
     try {
       await updateDepartment(connection, clientKey, item.id, { isActive: !item.isActive });
       await loadItems(clientKey);
+      setSuccess(`Setor ${item.isActive ? "desativado" : "ativado"} com sucesso.`);
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Falha ao atualizar setor.");
@@ -119,8 +158,48 @@ export default function AdminDepartmentsPage() {
     }
   };
 
+  const handleConsolidate = async (item: AdminDepartmentItem) => {
+    if (!clientKey) return;
+    const targetDepartmentId =
+      consolidationTargets[item.id]?.trim() ||
+      duplicateGroups
+        .find((group) => group.items.some((candidate) => candidate.id === item.id))
+        ?.items.find((candidate) => candidate.id !== item.id && candidate.isActive)
+        ?.id ||
+      "";
+    if (!targetDepartmentId) {
+      setError("Selecione o setor de destino para consolidar.");
+      return;
+    }
+    setConsolidatingId(item.id);
+    setError(null);
+    try {
+      const response = await consolidateDepartment(
+        connection,
+        clientKey,
+        item.id,
+        targetDepartmentId
+      );
+      const targetName = response.targetDepartment.name;
+      await loadItems(clientKey);
+      setSuccess(`Setor "${item.name}" consolidado em "${targetName}".`);
+      setConsolidationTargets((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Falha ao consolidar setor.");
+    } finally {
+      setConsolidatingId(null);
+    }
+  };
+
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      <FeedbackToast message={success} />
+      <FeedbackToast message={error} variant="error" />
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -177,12 +256,76 @@ export default function AdminDepartmentsPage() {
         </section>
 
         {loading ? <p className="text-sm text-white/70">Carregando setores...</p> : null}
-        {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-            {error}
-          </p>
+        {duplicateGroups.length ? (
+          <section className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold text-amber-100">
+                Possiveis duplicidades semanticas
+              </h2>
+              <p className="text-sm text-amber-50/80">
+                Consolide setores duplicados com seguranca. O setor de origem sera desativado.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {duplicateGroups.map((group) => (
+                <div
+                  key={group.baseSlug}
+                  className="rounded-lg border border-white/10 bg-re7-navy/40 p-3"
+                >
+                  <p className="mb-2 text-xs uppercase tracking-wide text-white/60">
+                    Grupo {group.baseSlug}
+                  </p>
+                  <div className="grid gap-3">
+                    {group.items.map((item) => {
+                      const targetOptions = group.items.filter(
+                        (candidate) => candidate.id !== item.id && candidate.isActive
+                      );
+                      return (
+                        <div
+                          key={item.id}
+                          className="grid gap-2 rounded-md border border-white/10 px-3 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)_auto]"
+                        >
+                          <div>
+                            <p className="font-medium text-white">{item.name}</p>
+                            <p className="text-xs text-white/60">
+                              {item.slug ?? "-"} · {item.isActive ? "Ativo" : "Inativo"}
+                            </p>
+                          </div>
+                          <select
+                            className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                            value={consolidationTargets[item.id] ?? targetOptions[0]?.id ?? ""}
+                            onChange={(event) =>
+                              setConsolidationTargets((current) => ({
+                                ...current,
+                                [item.id]: event.target.value,
+                              }))
+                            }
+                            disabled={!targetOptions.length || consolidatingId === item.id}
+                          >
+                            <option value="">Escolha destino...</option>
+                            {targetOptions.map((target) => (
+                              <option key={target.id} value={target.id}>
+                                {target.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleConsolidate(item)}
+                            disabled={!targetOptions.length || consolidatingId === item.id}
+                            className="rounded-md border border-amber-300/30 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {consolidatingId === item.id ? "Consolidando..." : "Consolidar"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         ) : null}
-
         <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Setores do tenant</h2>

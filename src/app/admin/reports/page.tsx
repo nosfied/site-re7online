@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   AdminClientItem,
+  AdminDepartmentItem,
   AdminUserItem,
   ConversationReportRange,
   ConversationReportResponse,
   exportConversationReportCsv,
   fetchAdminClients,
   fetchConversationReport,
+  fetchDepartments,
   fetchUsers,
 } from "@/lib/whatsappAdminApi";
 
@@ -30,14 +33,26 @@ function formatSeconds(value: number | null) {
 export default function AdminReportsPage() {
   const { connection } = useAdminConsole();
   const [clients, setClients] = useState<AdminClientItem[]>([]);
+  const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [clientKey, setClientKey] = useState("");
   const [range, setRange] = useState<ConversationReportRange>("7d");
   const [userId, setUserId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
+
+  useEffect(() => {
+    if (!error && !success) return;
+    const timer = window.setTimeout(() => {
+      setError(null);
+      setSuccess(null);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [error, success]);
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -60,17 +75,25 @@ export default function AdminReportsPage() {
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken || !clientKey) return;
     let cancelled = false;
-    fetchUsers(connection, clientKey)
-      .then((response) => {
+    Promise.all([
+      fetchUsers(connection, clientKey),
+      fetchDepartments(connection, clientKey, { includeInactive: true }),
+    ])
+      .then(([usersResponse, departmentsResponse]) => {
         if (cancelled) return;
-        setUsers(response.items);
+        setUsers(usersResponse.items);
+        setDepartments(departmentsResponse.items);
         setUserId((current) =>
-          current && response.items.some((item) => item.id === current) ? current : ""
+          current && usersResponse.items.some((item) => item.id === current) ? current : ""
+        );
+        setDepartmentId((current) =>
+          current && departmentsResponse.items.some((item) => item.id === current) ? current : ""
         );
       })
       .catch((err: { message?: string }) => {
         if (cancelled) return;
         setUsers([]);
+        setDepartments([]);
         setError(err.message || "Falha ao carregar usuarios do tenant.");
       });
     return () => {
@@ -87,6 +110,7 @@ export default function AdminReportsPage() {
       clientKey,
       range,
       userId: userId || null,
+      departmentId: departmentId || null,
     })
       .then((response) => {
         if (cancelled) return;
@@ -103,7 +127,7 @@ export default function AdminReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [clientKey, connection, range, userId]);
+  }, [clientKey, connection, range, userId, departmentId]);
 
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, item.name])),
@@ -114,11 +138,13 @@ export default function AdminReportsPage() {
     if (!clientKey) return;
     setExporting(true);
     setError(null);
+    setSuccess(null);
     try {
       const csv = await exportConversationReportCsv(connection, {
         clientKey,
         range,
         userId: userId || null,
+        departmentId: departmentId || null,
       });
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -129,6 +155,7 @@ export default function AdminReportsPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+      setSuccess("CSV exportado com sucesso.");
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Falha ao exportar CSV.");
@@ -139,6 +166,8 @@ export default function AdminReportsPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      <FeedbackToast message={success} />
+      <FeedbackToast message={error} variant="error" />
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -164,7 +193,7 @@ export default function AdminReportsPage() {
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Tenant</span>
               <select
@@ -211,16 +240,27 @@ export default function AdminReportsPage() {
                 ))}
               </select>
             </label>
+
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Setor</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={departmentId}
+                onChange={(event) => setDepartmentId(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {departments.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {!item.isActive ? " (inativo)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </section>
 
         {loading ? <p className="text-sm text-white/70">Carregando relatorio...</p> : null}
-        {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-            {error}
-          </p>
-        ) : null}
-
         <section className="grid gap-4 md:grid-cols-4">
           <article className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
@@ -238,6 +278,39 @@ export default function AdminReportsPage() {
             <p className="text-xs uppercase tracking-wide text-white/50">Breaches SLA</p>
             <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
           </article>
+        </section>
+
+        <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold">Por setor</h2>
+          </div>
+          {report?.byDepartment.length ? (
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-white/10 text-left">
+                <tr>
+                  <th className="px-3 py-2">Department ID</th>
+                  <th className="px-3 py-2">Nome</th>
+                  <th className="px-3 py-2">Conversas</th>
+                  <th className="px-3 py-2">Tempo medio de resposta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byDepartment.map((item) => (
+                  <tr
+                    key={item.departmentId ?? "__none__"}
+                    className="border-t border-white/10"
+                  >
+                    <td className="px-3 py-2 font-mono text-xs">{item.departmentId ?? "-"}</td>
+                    <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
+                    <td className="px-3 py-2">{item.conversations}</td>
+                    <td className="px-3 py-2">{formatSeconds(item.avgResponseTimeSec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="p-4 text-sm text-white/70">Nenhum dado por setor no periodo selecionado.</p>
+          )}
         </section>
 
         <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">

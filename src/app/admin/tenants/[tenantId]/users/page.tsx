@@ -4,14 +4,17 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
+  AdminDepartmentItem,
   AdminUserItem,
   createUser,
+  fetchDepartments,
   fetchTenantById,
   fetchUsers,
   formatDateTime,
   resetUserPassword,
-  updateUserRole,
+  updateUser,
 } from "@/lib/whatsappAdminApi";
 
 const USER_ROLE_OPTIONS = ["AGENT", "SUPERVISOR", "ADMIN"] as const;
@@ -21,6 +24,8 @@ const EMPTY_USER_FORM = {
   email: "",
   password: "",
   role: "AGENT",
+  departmentId: "",
+  isActive: true,
 };
 
 export default function TenantUsersPage() {
@@ -36,6 +41,7 @@ export default function TenantUsersPage() {
   }, [params]);
   const [clientKey, setClientKey] = useState(searchParams.get("clientKey")?.trim() ?? "");
   const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -47,14 +53,36 @@ export default function TenantUsersPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
-  const [roleDrafts, setRoleDrafts] = useState<Record<string, string>>({});
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [userDrafts, setUserDrafts] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        email: string;
+        role: string;
+        departmentId: string;
+        isActive: boolean;
+      }
+    >
+  >({});
 
   const loadUsers = async (activeClientKey: string) => {
     const response = await fetchUsers(connection, activeClientKey);
     setUsers(response.items);
-    setRoleDrafts(
-      Object.fromEntries(response.items.map((item) => [item.id, String(item.role || "AGENT").toUpperCase()]))
+    setUserDrafts(
+      Object.fromEntries(
+        response.items.map((item) => [
+          item.id,
+          {
+            name: item.name,
+            email: item.email,
+            role: String(item.role || "AGENT").toUpperCase(),
+            departmentId: item.departmentId ?? "",
+            isActive: item.isActive ?? true,
+          },
+        ])
+      )
     );
   };
 
@@ -82,20 +110,32 @@ export default function TenantUsersPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchUsers(connection, clientKey)
-      .then((response) => {
-        if (!cancelled) {
-          setUsers(response.items);
-          setRoleDrafts(
-            Object.fromEntries(
-              response.items.map((item) => [item.id, String(item.role || "AGENT").toUpperCase()])
-            )
-          );
-        }
+    Promise.all([
+      fetchUsers(connection, clientKey),
+      fetchDepartments(connection, clientKey, { includeInactive: true }),
+    ])
+      .then(([usersResponse, departmentsResponse]) => {
+        if (cancelled) return;
+        setUsers(usersResponse.items);
+        setDepartments(departmentsResponse.items);
+        setUserDrafts(
+          Object.fromEntries(
+            usersResponse.items.map((item) => [
+              item.id,
+              {
+                name: item.name,
+                email: item.email,
+                role: String(item.role || "AGENT").toUpperCase(),
+                departmentId: item.departmentId ?? "",
+                isActive: item.isActive ?? true,
+              },
+            ])
+          )
+        );
       })
       .catch((err: { message?: string }) => {
         if (!cancelled) {
-          setError(err.message || "Falha ao carregar usuarios.");
+          setError(err.message || "Falha ao carregar usuarios e setores.");
         }
       })
       .finally(() => {
@@ -105,6 +145,22 @@ export default function TenantUsersPage() {
       cancelled = true;
     };
   }, [clientKey, connection]);
+
+  const departmentNameById = useMemo(
+    () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
+    [departments]
+  );
+
+  const isDepartmentRequired = (role: string) => role === "AGENT" || role === "SUPERVISOR";
+
+  useEffect(() => {
+    if (!userSuccess && !actionSuccess) return;
+    const timer = window.setTimeout(() => {
+      setUserSuccess(null);
+      setActionSuccess(null);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [actionSuccess, userSuccess]);
 
   const handleCreateUser = async () => {
     if (!clientKey) return;
@@ -118,6 +174,10 @@ export default function TenantUsersPage() {
       setUserError("Informe um email valido.");
       return;
     }
+    if (isDepartmentRequired(userForm.role) && !userForm.departmentId) {
+      setUserError("Selecione um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
     setCreatingUser(true);
     setUserError(null);
     setUserSuccess(null);
@@ -129,6 +189,8 @@ export default function TenantUsersPage() {
         email: emailUsed,
         password: userForm.password,
         role: userForm.role,
+        departmentId: userForm.departmentId || null,
+        isActive: userForm.isActive,
       });
       setUserForm(EMPTY_USER_FORM);
       await loadUsers(clientKey);
@@ -142,6 +204,10 @@ export default function TenantUsersPage() {
         setUserError("Senha deve ter pelo menos 6 caracteres.");
       } else if (/invalid_role/i.test(message)) {
         setUserError("Selecione um role valido.");
+      } else if (/department_required/i.test(message)) {
+        setUserError("Selecione um setor para AGENT ou SUPERVISOR.");
+      } else if (/department_not_found/i.test(message)) {
+        setUserError("Setor invalido para este tenant.");
       } else {
         setUserError(message);
       }
@@ -150,29 +216,66 @@ export default function TenantUsersPage() {
     }
   };
 
-  const handleUpdateRole = async (item: AdminUserItem) => {
+  const handleUpdateUser = async (item: AdminUserItem) => {
     if (!clientKey) return;
-    const nextRole = String(roleDrafts[item.id] ?? item.role).trim().toUpperCase();
+    const draft = userDrafts[item.id];
+    if (!draft) return;
+    const nextRole = String(draft.role ?? item.role).trim().toUpperCase();
     if (!USER_ROLE_OPTIONS.includes(nextRole as (typeof USER_ROLE_OPTIONS)[number])) {
       setActionError("Selecione um role valido.");
       return;
     }
-    if (nextRole === item.role) return;
-    setUpdatingRoleUserId(item.id);
+    if (!draft.name.trim() || !draft.email.trim()) {
+      setActionError("Nome e email sao obrigatorios.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(draft.email.trim().toLowerCase())) {
+      setActionError("Informe um email valido.");
+      return;
+    }
+    if (isDepartmentRequired(nextRole) && !draft.departmentId) {
+      setActionError("Selecione um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
+    setSavingUserId(item.id);
     setActionError(null);
     setActionSuccess(null);
     try {
-      await updateUserRole(connection, item.id, clientKey, nextRole);
+      const response = await updateUser(connection, item.id, clientKey, {
+        name: draft.name.trim(),
+        email: draft.email.trim().toLowerCase(),
+        role: nextRole,
+        departmentId: draft.departmentId || null,
+        isActive: draft.isActive,
+      });
       setUsers((current) =>
-        current.map((user) => (user.id === item.id ? { ...user, role: nextRole } : user))
+        current.map((user) => (user.id === item.id ? response.user : user))
       );
-      setRoleDrafts((current) => ({ ...current, [item.id]: nextRole }));
-      setActionSuccess("Role atualizado com sucesso.");
+      setUserDrafts((current) => ({
+        ...current,
+        [item.id]: {
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role,
+          departmentId: response.user.departmentId ?? "",
+          isActive: response.user.isActive ?? true,
+        },
+      }));
+      setActionSuccess("Usuario atualizado com sucesso.");
     } catch (err) {
-      const typed = err as { message?: string };
-      setActionError(typed.message || "Nao foi possivel atualizar o role.");
+      const typed = err as { message?: string; status?: number };
+      const message = typed.message || "Nao foi possivel atualizar o usuario.";
+      if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
+        setActionError("Ja existe um usuario com esse email.");
+      } else if (/department_required/i.test(message)) {
+        setActionError("Selecione um setor para AGENT ou SUPERVISOR.");
+      } else if (/department_not_found/i.test(message)) {
+        setActionError("Setor invalido para este tenant.");
+      } else {
+        setActionError(message);
+      }
     } finally {
-      setUpdatingRoleUserId(null);
+      setSavingUserId(null);
     }
   };
 
@@ -206,6 +309,8 @@ export default function TenantUsersPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      <FeedbackToast message={userSuccess ?? actionSuccess} />
+      <FeedbackToast message={actionError ?? userError ?? error} variant="error" />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -242,7 +347,7 @@ export default function TenantUsersPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
             Novo usuario
           </h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
@@ -282,6 +387,37 @@ export default function TenantUsersPage() {
                 ))}
               </select>
             </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Setor</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.departmentId}
+                onChange={(event) =>
+                  setUserForm((current) => ({ ...current, departmentId: event.target.value }))
+                }
+              >
+                <option value="">-</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                    {!department.isActive ? " (inativo)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Ativo</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.isActive ? "true" : "false"}
+                onChange={(event) =>
+                  setUserForm((current) => ({ ...current, isActive: event.target.value === "true" }))
+                }
+              >
+                <option value="true">Ativo</option>
+                <option value="false">Inativo</option>
+              </select>
+            </label>
           </div>
           {userError ? (
             <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -318,17 +454,14 @@ export default function TenantUsersPage() {
               {actionError}
             </p>
           ) : null}
-          {actionSuccess ? (
-            <p className="m-4 rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
-              {actionSuccess}
-            </p>
-          ) : null}
           <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Nome</th>
                 <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Setor</th>
+                <th className="px-3 py-2">Ativo</th>
                 <th className="px-3 py-2">Criado em</th>
                 <th className="px-3 py-2">Acoes</th>
               </tr>
@@ -338,13 +471,66 @@ export default function TenantUsersPage() {
                 <Fragment key={item.id}>
                   <tr className="border-t border-white/10">
                     <td className="px-3 py-2">{item.name}</td>
-                    <td className="px-3 py-2">{item.email}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="min-w-44 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.name ?? item.name}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              name: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="min-w-52 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.email ?? item.email}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              email: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <select
                         className="min-w-40 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                        value={roleDrafts[item.id] ?? item.role}
+                        value={userDrafts[item.id]?.role ?? item.role}
                         onChange={(event) =>
-                          setRoleDrafts((current) => ({ ...current, [item.id]: event.target.value }))
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              role: event.target.value,
+                            },
+                          }))
                         }
                       >
                         {USER_ROLE_OPTIONS.map((role) => (
@@ -354,19 +540,76 @@ export default function TenantUsersPage() {
                         ))}
                       </select>
                     </td>
+                    <td className="px-3 py-2">
+                      <div className="grid gap-1">
+                        <select
+                          className="min-w-44 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                          value={userDrafts[item.id]?.departmentId ?? item.departmentId ?? ""}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...(current[item.id] ?? {
+                                  name: item.name,
+                                  email: item.email,
+                                  role: item.role,
+                                  departmentId: item.departmentId ?? "",
+                                  isActive: item.isActive ?? true,
+                                }),
+                                departmentId: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          <option value="">-</option>
+                          {departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.name}
+                              {!department.isActive ? " (inativo)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-white/50">
+                          {item.departmentId ? departmentNameById[item.departmentId] ?? item.departmentId : "-"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className="min-w-28 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={(userDrafts[item.id]?.isActive ?? item.isActive ?? true) ? "true" : "false"}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              isActive: event.target.value === "true",
+                            },
+                          }))
+                        }
+                      >
+                        <option value="true">Ativo</option>
+                        <option value="false">Inativo</option>
+                      </select>
+                    </td>
                     <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           disabled={
-                            updatingRoleUserId === item.id ||
-                            (roleDrafts[item.id] ?? item.role) === item.role
+                            savingUserId === item.id
                           }
-                          onClick={() => handleUpdateRole(item)}
+                          onClick={() => handleUpdateUser(item)}
                           className="rounded-md border border-white/20 px-3 py-1 text-xs hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {updatingRoleUserId === item.id ? "Salvando role..." : "Salvar role"}
+                          {savingUserId === item.id ? "Salvando..." : "Salvar"}
                         </button>
                         <button
                           type="button"
@@ -386,7 +629,7 @@ export default function TenantUsersPage() {
                   </tr>
                   {resetUserId === item.id ? (
                     <tr className="border-t border-white/10 bg-white/[0.03]">
-                      <td colSpan={5} className="px-3 py-3">
+                      <td colSpan={7} className="px-3 py-3">
                         <div className="flex flex-col gap-3 md:flex-row md:items-end">
                           <label className="grid flex-1 gap-1 text-sm">
                             <span className="text-white/70">Nova senha</span>
@@ -427,7 +670,7 @@ export default function TenantUsersPage() {
               ))}
               {users.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-white/70">
+                  <td colSpan={7} className="px-3 py-4 text-center text-white/70">
                     Nenhum usuario encontrado.
                   </td>
                 </tr>

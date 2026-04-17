@@ -47,6 +47,8 @@ import {
   compareConversationLookupPriority,
   normalizeWaIdDigits,
 } from "../utils/waid.js";
+import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
+import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
 
@@ -2357,13 +2359,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const users = await prisma.user.findMany({
           where: { clientId: client.id },
           orderBy: [{ createdAt: "desc" }],
-          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
         });
         json(res, 200, { ok: true, count: users.length, items: users });
       } catch (error) {
@@ -2372,7 +2382,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -2383,45 +2393,79 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
-        const name = String(body.name ?? "").trim();
-        const email = String(body.email ?? "").trim().toLowerCase();
+        const parsed = await parseAdminUserUpsertPayload(prisma, {
+          clientId: client.id,
+          body,
+          requireName: true,
+          requireEmail: true,
+          requireRole: false,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const { data } = parsed;
         const password = typeof body.password === "string" ? body.password : "";
-        const role = String(body.role ?? "AGENT").trim().toUpperCase();
-        const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
-        if (!name || !email) {
-          json(res, 400, { error: "bad_request" });
-          return;
-        }
         if (password && password.length < 6) {
-          json(res, 400, { error: "weak_password" });
-          return;
-        }
-        if (!allowedRoles.has(role)) {
-          json(res, 400, { error: "invalid_role" });
+          json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
           return;
         }
         const user = await prisma.user.create({
           data: {
             clientId: client.id,
-            name,
-            email,
+            name: data.name as string,
+            email: data.email as string,
+            ...(data.role ? { role: data.role } : {}),
+            ...(Object.prototype.hasOwnProperty.call(data, "departmentId")
+              ? { departmentId: data.departmentId }
+              : {}),
+            ...(typeof data.isActive === "boolean" ? { isActive: data.isActive } : {}),
             ...(password ? { passwordHash: hashPassword(password) } : {}),
-            role,
           },
-          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
         });
+        logger.info({
+          event: "user.created",
+          requestId,
+          clientId: client.id,
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          isActive: user.isActive,
+        });
+        if (user.departmentId) {
+          logger.info({
+            event: "user.department.assigned",
+            requestId,
+            clientId: client.id,
+            userId: user.id,
+            departmentId: user.departmentId,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+          });
+        }
         json(res, 200, { ok: true, user });
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
         ) {
-          json(res, 409, { error: "user_already_exists" });
+          json(res, 409, httpError("user_already_exists", "User email already exists"));
           return;
         }
         logger.error({
@@ -2429,13 +2473,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
 
     if (
-      req.method === "PATCH" &&
+      (req.method === "PATCH" || req.method === "PUT") &&
       pathname.startsWith("/admin/users/") &&
       pathname.split("/").length === 4
     ) {
@@ -2447,43 +2491,98 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true },
         });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
         if (!userId) {
-          json(res, 400, { error: "bad_request" });
+          json(res, 400, httpError("bad_request", "User id is required"));
           return;
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
-        const role = String(body.role ?? "").trim().toUpperCase();
-        const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
-        if (!allowedRoles.has(role)) {
-          json(res, 400, { error: "invalid_role" });
-          return;
-        }
         const existingUser = await prisma.user.findFirst({
           where: { id: userId, clientId: client.id },
-          select: { id: true },
+          select: { id: true, departmentId: true, role: true, isActive: true },
         });
         if (!existingUser) {
-          json(res, 404, { error: "user_not_found" });
+          json(res, 404, httpError("user_not_found", "User not found"));
+          return;
+        }
+        const parsed = await parseAdminUserUpsertPayload(prisma, {
+          clientId: client.id,
+          body,
+          requireName: false,
+          requireEmail: false,
+          requireRole: false,
+          currentRole: existingUser.role,
+          currentDepartmentId: existingUser.departmentId,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        if (Object.keys(parsed.data).length === 0) {
+          json(
+            res,
+            400,
+            httpError(
+              "bad_request",
+              "Provide at least one of name, email, role, departmentId or isActive"
+            )
+          );
           return;
         }
         const user = await prisma.user.update({
           where: { id: existingUser.id },
-          data: { role },
-          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          data: parsed.data,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
         });
+        logger.info({
+          event: "user.updated",
+          requestId,
+          clientId: client.id,
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          isActive: user.isActive,
+        });
+        if (existingUser.departmentId !== user.departmentId && user.departmentId) {
+          logger.info({
+            event: "user.department.assigned",
+            requestId,
+            clientId: client.id,
+            userId: user.id,
+            departmentId: user.departmentId,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+          });
+        }
         json(res, 200, { ok: true, user });
       } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(res, 409, httpError("user_already_exists", "User email already exists"));
+          return;
+        }
         logger.error({
           event: "admin.users.update.error",
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -2554,7 +2653,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const range = parseConversationReportRange(query.range);
         if (!range) {
-          json(res, 400, { error: "invalid_range" });
+          json(res, 400, httpError("invalid_range", "Invalid range"));
           return;
         }
         const client = await prisma.client.findUnique({
@@ -2562,14 +2661,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true },
         });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const requestedDepartmentId =
+          typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+        if (requestedDepartmentId) {
+          const department = await prisma.department.findFirst({
+            where: {
+              id: requestedDepartmentId,
+              clientId: client.id,
+            },
+            select: { id: true },
+          });
+          if (!department) {
+            json(res, 404, httpError("department_not_found", "Department not found"));
+            return;
+          }
+        }
         const metrics = await prisma.conversationMetrics.findMany({
           where: {
             clientId: client.id,
             startedAt: { gte: range.since },
+            ...(requestedDepartmentId
+              ? {
+                  conversation: {
+                    departmentId: requestedDepartmentId,
+                  },
+                }
+              : {}),
           },
           select: {
             conversationId: true,
@@ -2581,6 +2702,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             conversation: {
               select: {
                 waId: true,
+                departmentId: true,
               },
             },
           },
@@ -2610,6 +2732,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             resolutionTimeLimitSec: true,
           },
         });
+        const departmentIds = Array.from(
+          new Set(
+            metrics
+              .map((item) => item.conversation.departmentId ?? null)
+              .filter((value): value is string => typeof value === "string" && value.length > 0)
+          )
+        );
+        const departments = departmentIds.length
+          ? await prisma.department.findMany({
+              where: {
+                clientId: client.id,
+                id: { in: departmentIds },
+              },
+              select: {
+                id: true,
+                name: true,
+              },
+            })
+          : [];
+        const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
         const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
         const filteredMetrics = requestedUserId
           ? metrics.filter(
@@ -2666,17 +2808,50 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             byAgentMap.set(assignedUserId, current);
           }
         }
+        const byDepartmentMap = new Map<
+          string,
+          {
+            departmentId: string | null;
+            departmentName: string | null;
+            conversations: number;
+            totalResponseTimeSec: number;
+            responseCount: number;
+          }
+        >();
+        for (const item of filteredMetrics) {
+          const departmentId = item.conversation.departmentId ?? null;
+          const key = departmentId ?? "__none__";
+          const current = byDepartmentMap.get(key) ?? {
+            departmentId,
+            departmentName: departmentId ? departmentNameById.get(departmentId) ?? null : null,
+            conversations: 0,
+            totalResponseTimeSec: 0,
+            responseCount: 0,
+          };
+          current.conversations += 1;
+          current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+          current.responseCount += item.responseCount ?? 0;
+          byDepartmentMap.set(key, current);
+        }
 
         json(res, 200, {
           ok: true,
           range: range.key,
           userId: requestedUserId || null,
+          departmentId: requestedDepartmentId || null,
           totalConversations,
           avgFirstResponseTimeSec,
           avgResolutionTimeSec,
           slaBreaches,
           byAgent: Array.from(byAgentMap.values()).map((item) => ({
             userId: item.userId,
+            conversations: item.conversations,
+            avgResponseTimeSec:
+              item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+          })),
+          byDepartment: Array.from(byDepartmentMap.values()).map((item) => ({
+            departmentId: item.departmentId,
+            departmentName: item.departmentName,
             conversations: item.conversations,
             avgResponseTimeSec:
               item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
@@ -2688,7 +2863,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -2699,7 +2874,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const range = parseConversationReportRange(query.range);
         if (!range) {
-          json(res, 400, { error: "invalid_range" });
+          json(res, 400, httpError("invalid_range", "Invalid range"));
           return;
         }
         const client = await prisma.client.findUnique({
@@ -2707,14 +2882,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true },
         });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const requestedDepartmentId =
+          typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+        if (requestedDepartmentId) {
+          const department = await prisma.department.findFirst({
+            where: {
+              id: requestedDepartmentId,
+              clientId: client.id,
+            },
+            select: { id: true },
+          });
+          if (!department) {
+            json(res, 404, httpError("department_not_found", "Department not found"));
+            return;
+          }
+        }
         const metrics = await prisma.conversationMetrics.findMany({
           where: {
             clientId: client.id,
             startedAt: { gte: range.since },
+            ...(requestedDepartmentId
+              ? {
+                  conversation: {
+                    departmentId: requestedDepartmentId,
+                  },
+                }
+              : {}),
           },
           orderBy: { startedAt: "desc" },
           select: {
@@ -2726,6 +2923,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             conversation: {
               select: {
                 waId: true,
+                departmentId: true,
               },
             },
           },
@@ -2749,6 +2947,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               },
             })
           : [];
+        const departmentIds = Array.from(
+          new Set(
+            metrics
+              .map((item) => item.conversation.departmentId ?? null)
+              .filter((value): value is string => typeof value === "string" && value.length > 0)
+          )
+        );
+        const departments = departmentIds.length
+          ? await prisma.department.findMany({
+              where: {
+                clientId: client.id,
+                id: { in: departmentIds },
+              },
+              select: {
+                id: true,
+                name: true,
+              },
+            })
+          : [];
+        const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
         const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
         const filteredMetrics = requestedUserId
           ? metrics.filter(
@@ -2759,6 +2977,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           [
             "conversationId",
             "waId",
+            "departmentId",
+            "departmentName",
             "assignedUserId",
             "status",
             "firstResponseTimeSec",
@@ -2768,9 +2988,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ].join(","),
           ...filteredMetrics.map((item) => {
             const runtimeState = stateByWaId.get(item.conversation.waId);
+            const departmentId = item.conversation.departmentId ?? null;
             return [
               csvCell(item.conversationId),
               csvCell(item.conversation.waId),
+              csvCell(departmentId),
+              csvCell(departmentId ? departmentNameById.get(departmentId) ?? null : null),
               csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
               csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
               csvCell(item.firstResponseTimeSec),
@@ -2791,7 +3014,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -2818,6 +3041,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: {
             id: true,
             name: true,
+            slug: true,
             isActive: true,
             createdAt: true,
           },
@@ -2857,17 +3081,42 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 400, httpError("bad_request", "Department name is required"));
           return;
         }
+        const slug = normalizeDepartmentSlug(name);
+        const existingBySlug = await prisma.department.findFirst({
+          where: {
+            clientId: client.id,
+            slug,
+          },
+          select: { id: true },
+        });
+        if (existingBySlug) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
         const department = await prisma.department.create({
           data: {
             clientId: client.id,
             name,
+            slug,
           },
           select: {
             id: true,
             name: true,
+            slug: true,
             isActive: true,
             createdAt: true,
           },
+        });
+        logger.info({
+          event: "department.created",
+          requestId,
+          clientId: client.id,
+          departmentId: department.id,
+          isActive: department.isActive,
         });
         json(res, 200, { ok: true, department });
       } catch (error) {
@@ -2875,7 +3124,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
         ) {
-          json(res, 409, httpError("department_name_conflict", "Department name already exists"));
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
           return;
         }
         logger.error({
@@ -2927,38 +3180,304 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             id: departmentId,
             clientId: client.id,
           },
-          select: { id: true },
+          select: { id: true, isActive: true, slug: true },
         });
         if (!existing) {
           json(res, 404, httpError("department_not_found", "Department not found"));
           return;
         }
+        const slug = hasName ? normalizeDepartmentSlug(name as string) : existing.slug;
+        if (hasName && slug !== existing.slug) {
+          const conflictingDepartment = await prisma.department.findFirst({
+            where: {
+              clientId: client.id,
+              slug,
+              NOT: { id: existing.id },
+            },
+            select: { id: true },
+          });
+          if (conflictingDepartment) {
+            json(
+              res,
+              409,
+              httpError("department_slug_conflict", "Department slug already exists for this tenant")
+            );
+            return;
+          }
+        }
         const department = await prisma.department.update({
           where: { id: existing.id },
           data: {
             ...(hasName ? { name } : {}),
+            ...(hasName ? { slug } : {}),
             ...(hasActive ? { isActive: Boolean(body.isActive) } : {}),
           },
           select: {
             id: true,
             name: true,
+            slug: true,
             isActive: true,
             createdAt: true,
           },
         });
+        if (hasActive && existing.isActive !== department.isActive) {
+          logger.info({
+            event: "department.toggled",
+            requestId,
+            clientId: client.id,
+            departmentId: department.id,
+            isActive: department.isActive,
+          });
+        }
         json(res, 200, { ok: true, department });
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
         ) {
-          json(res, 409, httpError("department_name_conflict", "Department name already exists"));
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
           return;
         }
         logger.error({
           event: "admin.departments.update.error",
           message: (error as Error).message,
           requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/departments/") &&
+      pathname.split("/").length === 5 &&
+      pathname.split("/")[4] === "consolidate"
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const sourceDepartmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!sourceDepartmentId) {
+          json(res, 400, httpError("bad_request", "Department id is required"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const targetDepartmentId =
+          typeof body.targetDepartmentId === "string" ? body.targetDepartmentId.trim() : "";
+        if (!targetDepartmentId) {
+          json(res, 400, httpError("bad_request", "targetDepartmentId is required"));
+          return;
+        }
+        if (sourceDepartmentId === targetDepartmentId) {
+          json(
+            res,
+            400,
+            httpError("bad_request", "Source and target departments must be different")
+          );
+          return;
+        }
+        const [sourceDepartment, targetDepartment] = await Promise.all([
+          prisma.department.findFirst({
+            where: {
+              id: sourceDepartmentId,
+              clientId: client.id,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+            },
+          }),
+          prisma.department.findFirst({
+            where: {
+              id: targetDepartmentId,
+              clientId: client.id,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+            },
+          }),
+        ]);
+        if (!sourceDepartment) {
+          json(res, 404, httpError("department_not_found", "Department not found"));
+          return;
+        }
+        if (!targetDepartment) {
+          json(
+            res,
+            404,
+            httpError("target_department_not_found", "Target department not found")
+          );
+          return;
+        }
+        if (!targetDepartment.isActive) {
+          json(
+            res,
+            409,
+            httpError("target_department_inactive", "Target department must be active")
+          );
+          return;
+        }
+        logger.info({
+          event: "department.consolidation.started",
+          requestId,
+          clientId: client.id,
+          sourceDepartmentId: sourceDepartment.id,
+          targetDepartmentId: targetDepartment.id,
+        });
+        const consolidation = await prisma.$transaction(async (tx) => {
+          const [sourceQueues, targetQueues] = await Promise.all([
+            tx.queue.findMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              select: { id: true, name: true },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            }),
+            tx.queue.findMany({
+              where: {
+                clientId: client.id,
+                departmentId: targetDepartment.id,
+              },
+              select: { id: true, name: true },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            }),
+          ]);
+
+          const targetQueueByName = new Map(
+            targetQueues.map((queue) => [queue.name.toLocaleLowerCase("pt-BR"), queue])
+          );
+          let queuesMoved = 0;
+          let queuesMerged = 0;
+          let runtimeStatesRequeued = 0;
+
+          for (const sourceQueue of sourceQueues) {
+            const targetQueue = targetQueueByName.get(
+              sourceQueue.name.toLocaleLowerCase("pt-BR")
+            );
+            if (targetQueue) {
+              const reassigned = await tx.conversationRuntimeState.updateMany({
+                where: {
+                  clientId: client.id,
+                  queueId: sourceQueue.id,
+                },
+                data: {
+                  queueId: targetQueue.id,
+                  departmentId: targetDepartment.id,
+                },
+              });
+              runtimeStatesRequeued += reassigned.count;
+              queuesMerged += 1;
+              continue;
+            }
+
+            await tx.queue.update({
+              where: { id: sourceQueue.id },
+              data: { departmentId: targetDepartment.id },
+            });
+            targetQueueByName.set(sourceQueue.name.toLocaleLowerCase("pt-BR"), sourceQueue);
+            queuesMoved += 1;
+          }
+
+          const [users, conversations, runtimeStates] = await Promise.all([
+            tx.user.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+            tx.conversation.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+            tx.conversationRuntimeState.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+          ]);
+
+          const updatedSourceDepartment = await tx.department.update({
+            where: { id: sourceDepartment.id },
+            data: { isActive: false },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              createdAt: true,
+            },
+          });
+
+          const refreshedTargetDepartment = await tx.department.findUniqueOrThrow({
+            where: { id: targetDepartment.id },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              createdAt: true,
+            },
+          });
+
+          return {
+            sourceDepartment: updatedSourceDepartment,
+            targetDepartment: refreshedTargetDepartment,
+            counts: {
+              usersMoved: users.count,
+              conversationsMoved: conversations.count,
+              runtimeStatesMoved: runtimeStates.count,
+              queuesMoved,
+              queuesMerged,
+              runtimeStatesRequeued,
+            },
+          };
+        });
+
+        logger.info({
+          event: "department.consolidation.completed",
+          requestId,
+          clientId: client.id,
+          sourceDepartmentId: sourceDepartment.id,
+          targetDepartmentId: targetDepartment.id,
+          ...consolidation.counts,
+        });
+        json(res, 200, {
+          ok: true,
+          sourceDepartment: consolidation.sourceDepartment,
+          targetDepartment: consolidation.targetDepartment,
+          counts: consolidation.counts,
+        });
+      } catch (error) {
+        logger.error({
+          event: "department.consolidation.failed",
+          requestId,
+          message: (error as Error).message,
         });
         json(res, 500, httpError("server_error", "Server error"));
       }
@@ -4397,6 +4916,70 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (
       req.method === "POST" &&
       pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/bootstrap")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+
+      try {
+        const result = await bootstrapTenantDefaults(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+          initialUser:
+            body && typeof body === "object" && !Array.isArray(body)
+              ? (body as Record<string, unknown>).initialUser ?? null
+              : null,
+        });
+
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          seed: result.seed,
+          initialUser: result.initialUser,
+          departmentCount: result.departments.length,
+          firstDepartmentId: result.departments[0]?.id ?? null,
+        });
+      } catch (error) {
+        const typed = error as Error & { status?: number; code?: string };
+        if (typed.status && typed.code) {
+          json(res, typed.status, httpError(typed.code, typed.message));
+          return;
+        }
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 6 &&
       pathname.endsWith("/onboarding/exchange-code")
     ) {
@@ -4692,6 +5275,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           where: { id: client.id },
           include: { phoneNumbers: true },
         });
+        if (updatedClient) {
+          await bootstrapTenantDefaults(prisma, {
+            clientId: updatedClient.id,
+            clientKey: updatedClient.clientKey,
+            requestId,
+            initialUser:
+              body && typeof body === "object" && !Array.isArray(body)
+                ? (body as Record<string, unknown>).initialUser ?? null
+                : null,
+          });
+        }
         const status = created || createdPhone ? 201 : 200;
         json(res, status, updatedClient);
         return;
@@ -6428,6 +7022,8 @@ function defaultErrorMessage(code: string, status: number) {
     case "bad_request":
     case "invalid_json":
     case "invalid_body":
+    case "invalid_role":
+    case "department_required":
       return "Bad request.";
     case "unauthorized":
     case "invalid_credentials":
@@ -6440,12 +7036,331 @@ function defaultErrorMessage(code: string, status: number) {
     case "conversation_not_found":
     case "lead_not_found":
     case "user_not_found":
+    case "department_not_found":
       return "Not found.";
+    case "weak_password":
+      return "Password is too weak.";
+    case "user_already_exists":
+      return "Conflict.";
     case "server_error":
     case "internal_error":
       return "Internal server error.";
     default:
       return status >= 500 ? "Internal server error." : `Request failed (${status}).`;
+  }
+}
+
+async function parseAdminUserUpsertPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  options: {
+    clientId: string;
+    body: unknown;
+    requireName: boolean;
+    requireEmail: boolean;
+    requireRole: boolean;
+    currentRole?: string | null;
+    currentDepartmentId?: string | null;
+  }
+): Promise<
+  | {
+      ok: true;
+      data: {
+        name?: string;
+        email?: string;
+        role?: string;
+        departmentId?: string | null;
+        isActive?: boolean;
+      };
+    }
+  | { ok: false; status: 400 | 404; code: string; message: string }
+> {
+  const body =
+    options.body && typeof options.body === "object" && !Array.isArray(options.body)
+      ? (options.body as Record<string, unknown>)
+      : {};
+  const data: {
+    name?: string;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  } = {};
+
+  if ("name" in body || options.requireName) {
+    const name = String(body.name ?? "").trim();
+    if (!name) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "User name is required",
+      };
+    }
+    data.name = name;
+  }
+
+  if ("email" in body || options.requireEmail) {
+    const email = String(body.email ?? "").trim().toLowerCase();
+    if (!email) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "User email is required",
+      };
+    }
+    data.email = email;
+  }
+
+  const role =
+    "role" in body || options.requireRole
+      ? String(body.role ?? "AGENT").trim().toUpperCase()
+      : "";
+  const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
+  if (role) {
+    if (!allowedRoles.has(role)) {
+      return {
+        ok: false,
+        status: 400,
+        code: "invalid_role",
+        message: "Role must be AGENT, SUPERVISOR or ADMIN",
+      };
+    }
+    data.role = role;
+  }
+
+  const hasDepartment = "departmentId" in body;
+  const rawDepartmentId =
+    hasDepartment && body.departmentId != null ? String(body.departmentId).trim() : "";
+  if (hasDepartment) {
+    if (!rawDepartmentId) {
+      data.departmentId = null;
+    } else {
+      const department = await prisma.department.findFirst({
+        where: {
+          id: rawDepartmentId,
+          clientId: options.clientId,
+        },
+        select: { id: true },
+      });
+      if (!department) {
+        return {
+          ok: false,
+          status: 404,
+          code: "department_not_found",
+          message: "Department not found for this tenant",
+        };
+      }
+      data.departmentId = department.id;
+    }
+  }
+
+  const effectiveRole =
+    data.role ?? String(options.currentRole ?? "").trim().toUpperCase() ?? "";
+  const effectiveDepartmentId = hasDepartment
+    ? (data.departmentId ?? null)
+    : options.currentDepartmentId ?? undefined;
+  if (
+    (effectiveRole === "AGENT" || effectiveRole === "SUPERVISOR") &&
+    !effectiveDepartmentId
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      code: "department_required",
+      message: "departmentId is required for AGENT and SUPERVISOR",
+    };
+  }
+
+  if ("isActive" in body) {
+    if (typeof body.isActive !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "isActive must be a boolean",
+      };
+    }
+    data.isActive = body.isActive;
+  }
+
+  return { ok: true, data };
+}
+
+async function bootstrapTenantDefaults(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    initialUser?: unknown;
+  }
+) {
+  logger.info({
+    event: "tenant.bootstrap.started",
+    requestId: params.requestId,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    hasInitialUser: Boolean(params.initialUser),
+  });
+
+  try {
+    const seeded = await ensureDefaultDepartments(prisma, {
+      clientId: params.clientId,
+    });
+
+    const activeDepartments = await prisma.department.findMany({
+      where: {
+        clientId: params.clientId,
+        isActive: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    });
+
+    if (activeDepartments.length === 0) {
+      throw new Error("tenant bootstrap failed to ensure at least one active department");
+    }
+
+    let userSummary:
+      | {
+          action: "created" | "updated";
+          id: string;
+          email: string;
+          role: string;
+          departmentId: string | null;
+          isActive: boolean;
+        }
+      | null = null;
+
+    if (params.initialUser && typeof params.initialUser === "object" && !Array.isArray(params.initialUser)) {
+      const body = params.initialUser as Record<string, unknown>;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: params.clientId,
+        body,
+        requireName: true,
+        requireEmail: true,
+        requireRole: false,
+      });
+      if (!parsed.ok) {
+        const error = new Error(parsed.message) as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = parsed.status;
+        error.code = parsed.code;
+        throw error;
+      }
+
+      const password = typeof body.password === "string" ? body.password : "";
+      if (password && password.length < 6) {
+        const error = new Error("Password must be at least 6 characters") as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = 400;
+        error.code = "weak_password";
+        throw error;
+      }
+
+      const email = String(parsed.data.email ?? "").trim().toLowerCase();
+      const existingUser = await prisma.user.findUnique({
+        where: {
+          clientId_email: {
+            clientId: params.clientId,
+            email,
+          },
+        },
+        select: { id: true },
+      });
+
+      const user = await prisma.user.upsert({
+        where: {
+          clientId_email: {
+            clientId: params.clientId,
+            email,
+          },
+        },
+        update: {
+          ...parsed.data,
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        create: {
+          clientId: params.clientId,
+          name: parsed.data.name as string,
+          email,
+          role: parsed.data.role ?? "AGENT",
+          departmentId:
+            Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+              ? (parsed.data.departmentId ?? null)
+              : null,
+          isActive: typeof parsed.data.isActive === "boolean" ? parsed.data.isActive : true,
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+        },
+      });
+
+      userSummary = {
+        action: existingUser ? "updated" : "created",
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId ?? null,
+        isActive: user.isActive,
+      };
+    }
+
+    logger.info({
+      event: "tenant.bootstrap.completed",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      createdDepartments: seeded.created,
+      reactivatedDepartments: seeded.reactivated,
+      unchangedDepartments: seeded.unchanged,
+      activeDepartmentCount: activeDepartments.length,
+      initialUserAction: userSummary?.action ?? null,
+      userId: userSummary?.id ?? null,
+      email: userSummary?.email ?? null,
+      role: userSummary?.role ?? null,
+      departmentId: userSummary?.departmentId ?? null,
+      isActive: userSummary?.isActive ?? null,
+    });
+
+    return {
+      ok: true as const,
+      seed: {
+        created: seeded.created,
+        reactivated: seeded.reactivated,
+        unchanged: seeded.unchanged,
+        total: seeded.total,
+      },
+      departments: activeDepartments,
+      initialUser: userSummary,
+    };
+  } catch (error) {
+    logger.error({
+      event: "tenant.bootstrap.failed",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      message: (error as Error).message,
+      code:
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: unknown }).code ?? "")
+          : null,
+    });
+    throw error;
   }
 }
 
@@ -6888,10 +7803,11 @@ async function ensureDefaultDepartmentAndQueue(
   prisma: ReturnType<typeof getPrisma>,
   clientId: string
 ) {
+  const defaultDepartmentSlug = normalizeDepartmentSlug("Atendimento");
   const department = await prisma.department.upsert({
-    where: { clientId_name: { clientId, name: "Atendimento" } },
+    where: { clientId_slug: { clientId, slug: defaultDepartmentSlug } },
     update: {},
-    create: { clientId, name: "Atendimento" },
+    create: { clientId, name: "Atendimento", slug: defaultDepartmentSlug },
     select: { id: true, name: true },
   });
   const queue = await prisma.queue.upsert({

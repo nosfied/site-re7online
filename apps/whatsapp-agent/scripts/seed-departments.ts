@@ -1,14 +1,8 @@
 #!/usr/bin/env -S node --import tsx
 import "../src/bootstrap-env.js";
 import process from "node:process";
+import { ensureDefaultDepartments } from "../src/bootstrap/seedDepartments.js";
 import { getPrisma } from "../src/db.js";
-
-const DEFAULT_DEPARTMENTS = [
-  "Atendimento Geral",
-  "Saúde",
-  "Educação",
-  "Assistência Social",
-] as const;
 
 type Options = {
   clientId?: string;
@@ -67,82 +61,23 @@ async function main() {
     fail(`tenant não encontrado (${options.clientId ?? options.clientKey})`);
   }
 
-  let created = 0;
-  let reactivated = 0;
-  let unchanged = 0;
+  const seeded = await ensureDefaultDepartments(prisma, { clientId: client.id });
 
-  for (const name of DEFAULT_DEPARTMENTS) {
-    const existing = await prisma.department.findUnique({
-      where: {
-        clientId_name: {
-          clientId: client.id,
-          name,
-        },
-      },
-      select: {
-        id: true,
-        isActive: true,
-      },
-    });
-
-    const department = await prisma.department.upsert({
-      where: {
-        clientId_name: {
-          clientId: client.id,
-          name,
-        },
-      },
-      update: { isActive: true },
-      create: {
-        clientId: client.id,
-        name,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        isActive: true,
-        createdAt: true,
-      },
-    });
-
-    if (!existing) {
-      created += 1;
-      console.log(
-        JSON.stringify({
-          event: "department.seed.created",
-          clientId: client.id,
-          clientKey: client.clientKey,
-          departmentId: department.id,
-          name: department.name,
-        })
-      );
-      continue;
-    }
-
-    if (!existing.isActive) {
-      reactivated += 1;
-      console.log(
-        JSON.stringify({
-          event: "department.seed.reactivated",
-          clientId: client.id,
-          clientKey: client.clientKey,
-          departmentId: department.id,
-          name: department.name,
-        })
-      );
-      continue;
-    }
-
-    unchanged += 1;
+  for (const department of seeded.items) {
     console.log(
       JSON.stringify({
-        event: "department.seed.skipped",
+        event:
+          department.action === "created"
+            ? "department.seed.created"
+            : department.action === "reactivated"
+              ? "department.seed.reactivated"
+              : "department.seed.skipped",
         clientId: client.id,
         clientKey: client.clientKey,
         departmentId: department.id,
         name: department.name,
-        reason: "already_exists",
+        slug: department.slug,
+        ...(department.action === "unchanged" ? { reason: "already_exists" } : {}),
       })
     );
   }
@@ -152,10 +87,10 @@ async function main() {
       ok: true,
       clientId: client.id,
       clientKey: client.clientKey,
-      created,
-      reactivated,
-      unchanged,
-      total: DEFAULT_DEPARTMENTS.length,
+      created: seeded.created,
+      reactivated: seeded.reactivated,
+      unchanged: seeded.unchanged,
+      total: seeded.total,
     })
   );
 
