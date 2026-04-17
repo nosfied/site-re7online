@@ -24,6 +24,7 @@ import {
   logConversationWindow,
   markTemplateNeeded,
   shouldAutoReply,
+  shouldStartQuoteSite,
   updateInbound,
   updateInboundMeta,
   updateOutbound,
@@ -1127,8 +1128,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
     return resolvedEntryPointChatbotFlow;
   };
-  const loadChatbotFlowForConversation = async (state: ConversationState) => {
+  const loadChatbotFlowForConversation = async (
+    state: ConversationState,
+    inboundText: string | null | undefined,
+  ) => {
     if (!tenantClientId) return null;
+    if (appliedTenantConfig?.disableChatbot) return null;
+    if (state.flow === "quote_site" || shouldStartQuoteSite(inboundText)) return null;
     const activeFlowId = extractChatbotFlowId(state.flow);
     if (state.chatbotActive && activeFlowId) {
       return prisma.chatbotFlow.findFirst({
@@ -2628,6 +2634,28 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    if (appliedTenantConfig?.disableChatbot && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
+      updatedConversation = clearChatbotRuntime(updatedConversation);
+      logger.info({
+        event: "chatbot.runtime.cleared",
+        reason: "tenant_disabled",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        requestId: meta?.requestId,
+      });
+    }
+
+    if (updatedConversation.flow === "quote_site" && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
+      updatedConversation = clearChatbotRuntime(updatedConversation);
+      logger.info({
+        event: "chatbot.runtime.cleared",
+        reason: "quote_site_priority",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        requestId: meta?.requestId,
+      });
+    }
+
     let chatbotFlowResult: {
       handled: boolean;
       state: ConversationState;
@@ -2641,7 +2669,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     };
 
     if (!handoffResult.handled) {
-      const chatbotFlow = await loadChatbotFlowForConversation(updatedConversation);
+      const chatbotFlow = await loadChatbotFlowForConversation(updatedConversation, message.text);
       if (chatbotFlow) {
         const validatedDefinition = validateChatbotFlowDefinition(chatbotFlow.definition);
         if (!validatedDefinition.ok) {

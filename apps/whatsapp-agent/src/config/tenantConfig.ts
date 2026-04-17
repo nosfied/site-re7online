@@ -11,6 +11,7 @@ export type TenantConfig = {
   handoffAttendantWaid: string;
   defaultLanguage: string;
   disableAutoReply?: boolean;
+  disableChatbot?: boolean;
   planName?: string;
   messagesLimit?: number;
   quotaMonthlyConversations?: number;
@@ -137,6 +138,9 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.disableAutoReply !== undefined && typeof tenant.disableAutoReply !== "boolean") {
       throw new Error(`invalid_tenant_disable_auto_reply:${key}`);
+    }
+    if (tenant.disableChatbot !== undefined && typeof tenant.disableChatbot !== "boolean") {
+      throw new Error(`invalid_tenant_disable_chatbot:${key}`);
     }
     if (
       tenant.planName !== undefined &&

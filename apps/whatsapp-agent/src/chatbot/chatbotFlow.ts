@@ -45,6 +45,8 @@ export type ChatbotExecutionResult = {
   replyText?: string;
 };
 
+const CHATBOT_MAX_STEPS_PER_EXECUTION = 12;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -279,8 +281,16 @@ function executeNodeChain(params: {
   let currentState = params.state;
   let currentNodeId: string | null = params.nodeId;
   const visited = new Set<string>();
+  let stepCount = 0;
 
   while (currentNodeId) {
+    stepCount += 1;
+    if (stepCount > CHATBOT_MAX_STEPS_PER_EXECUTION) {
+      return {
+        handled: false,
+        state: clearChatbotRuntime(currentState),
+      };
+    }
     if (visited.has(currentNodeId)) {
       return {
         handled: false,

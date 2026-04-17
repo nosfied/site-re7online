@@ -177,3 +177,33 @@ test("clearChatbotRuntime removes chatbot state", () => {
   assert.equal(cleared.chatbotNodeId, undefined);
   assert.equal(cleared.flow, undefined);
 });
+
+test("executeChatbotFlow stops long chains to avoid runaway execution", () => {
+  const nodes: Record<string, { type: "text"; text: string; next?: string }> = {};
+  for (let index = 0; index < 14; index += 1) {
+    nodes[`n${index}`] = {
+      type: "text",
+      text: `Passo ${index}`,
+      ...(index < 13 ? { next: `n${index + 1}` } : {}),
+    };
+  }
+
+  const validated = validateChatbotFlowDefinition({
+    start: "n0",
+    nodes,
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_long",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:04.000Z",
+  });
+
+  assert.equal(result.handled, false);
+  assert.equal(result.state.chatbotActive, false);
+  assert.equal(result.state.chatbotNodeId, undefined);
+});
