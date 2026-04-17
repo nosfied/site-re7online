@@ -10,8 +10,6 @@ import {
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 const WINDOW_HOURS = 24;
-export const DEFAULT_HANDOFF_PROMPT =
-  "Posso transferir voce para um atendente humano? Responda SIM ou NAO.";
 
 function addHoursIso(timestamp: string, hours: number) {
   const base = Number.isNaN(Date.parse(timestamp)) ? Date.now() : Date.parse(timestamp);
@@ -279,31 +277,18 @@ export function handleHandoff(
   }
 
   if (detectIntent(inboundText) === "handoff") {
-    return requestHumanHandoff(state, timestamp);
+    return {
+      handled: true,
+      outcome: "requested",
+      state: withHandoff(state, {
+        status: "pending",
+        requestedAt: timestamp,
+      }),
+      replyText: "Posso transferir você para um atendente humano? Responda SIM ou NÃO.",
+    };
   }
 
   return { state, handled: false };
-}
-
-export function requestHumanHandoff(
-  state: ConversationState,
-  timestamp: string,
-  promptText = DEFAULT_HANDOFF_PROMPT
-): {
-  state: ConversationState;
-  handled: true;
-  replyText: string;
-  outcome: "requested";
-} {
-  return {
-    handled: true,
-    outcome: "requested",
-    state: withHandoff(state, {
-      status: "pending",
-      requestedAt: timestamp,
-    }),
-    replyText: promptText,
-  };
 }
 
 export function applyAdminCommand(

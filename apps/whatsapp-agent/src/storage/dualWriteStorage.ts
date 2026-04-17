@@ -39,8 +39,6 @@ type ShadowCompareFields = {
   lastHandoffDemoScheduledAt?: string | null;
   flow?: string | null;
   flowStep?: number | null;
-  chatbotNodeId?: string | null;
-  chatbotActive?: boolean | null;
   answersJson?: string | null;
   mode?: string | null;
   assignedUserId?: string | null;
@@ -193,8 +191,6 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     lastHandoffDemoScheduledAt: toIso(state.lastHandoffDemoScheduledAt),
     flow: state.flow ?? null,
     flowStep: state.flowStep ?? null,
-    chatbotNodeId: state.chatbotNodeId ?? null,
-    chatbotActive: state.chatbotActive ?? false,
     answersJson: stableJson(state.answers ?? null),
     mode: state.mode ?? null,
     assignedUserId: state.assignedUserId ?? null,
@@ -235,8 +231,6 @@ function mapDbToShadow(db: {
   lastHandoffDemoScheduledAt: Date | null;
   flow: string | null;
   flowStep: number | null;
-  chatbotNodeId: string | null;
-  chatbotActive: boolean;
   answers: unknown;
   mode: string | null;
   assignedUserId: string | null;
@@ -287,8 +281,6 @@ function mapDbToShadow(db: {
       : null,
     flow: db.flow ?? null,
     flowStep: db.flowStep ?? null,
-    chatbotNodeId: db.chatbotNodeId ?? null,
-    chatbotActive: db.chatbotActive,
     answersJson: stableJson(db.answers),
     mode: db.mode ?? null,
     assignedUserId: db.assignedUserId ?? null,
@@ -385,9 +377,6 @@ export function createDualWriteStorage(
 
   function normalizeFlow(value?: string | null): ConversationState["flow"] {
     if (value === "quote_site") return "quote_site";
-    if (typeof value === "string" && value.startsWith("chatbot:")) {
-      return value as ConversationState["flow"];
-    }
     return undefined;
   }
 
@@ -424,8 +413,6 @@ export function createDualWriteStorage(
       lastHandoffDemoScheduledAt: Date | null;
       flow: string | null;
       flowStep: number | null;
-      chatbotNodeId: string | null;
-      chatbotActive: boolean;
       answers: unknown;
       mode: string | null;
       assignedUserId: string | null;
@@ -483,8 +470,6 @@ export function createDualWriteStorage(
         params.db.lastHandoffDemoScheduledAt?.toISOString() ?? undefined,
       flow: normalizeFlow(params.db.flow),
       flowStep: params.db.flowStep ?? undefined,
-      chatbotNodeId: params.db.chatbotNodeId ?? undefined,
-      chatbotActive: params.db.chatbotActive ?? false,
       answers,
       mode: normalizeMode(params.db.mode),
       assignedUserId: params.db.assignedUserId ?? null,
@@ -602,8 +587,6 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: true,
         flow: true,
         flowStep: true,
-        chatbotNodeId: true,
-        chatbotActive: true,
         answers: true,
         mode: true,
         assignedUserId: true,
@@ -768,8 +751,6 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: toDate(state.lastHandoffDemoScheduledAt),
         flow: state.flow ?? null,
         flowStep: state.flowStep ?? null,
-        chatbotNodeId: state.chatbotNodeId ?? null,
-        chatbotActive: state.chatbotActive ?? false,
         answers: state.answers ?? undefined,
         mode: state.mode ?? null,
         assignedUserId: state.assignedUserId ?? null,
@@ -809,8 +790,6 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: toDate(state.lastHandoffDemoScheduledAt),
         flow: state.flow ?? null,
         flowStep: state.flowStep ?? null,
-        chatbotNodeId: state.chatbotNodeId ?? null,
-        chatbotActive: state.chatbotActive ?? false,
         answers: state.answers ?? undefined,
         mode: state.mode ?? null,
         assignedUserId: state.assignedUserId ?? null,

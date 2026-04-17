@@ -52,12 +52,6 @@ import {
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
 import {
-  clearChatbotRuntime,
-  executeChatbotFlow,
-  extractChatbotFlowId,
-  validateChatbotFlowDefinition,
-} from "../chatbot/chatbotFlow.js";
-import {
   getDefaultDepartment,
   persistConversationWindow,
   persistEvent,
@@ -1102,47 +1096,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (resolvedDefaultDepartment !== undefined) return resolvedDefaultDepartment;
     resolvedDefaultDepartment = await getDefaultDepartment(tenantClientId);
     return resolvedDefaultDepartment;
-  };
-  let resolvedEntryPointChatbotFlow:
-    | {
-        id: string;
-        definition: Prisma.JsonValue;
-      }
-    | null
-    | undefined;
-  const loadEntryPointChatbotFlow = async () => {
-    if (!tenantClientId) return null;
-    if (resolvedEntryPointChatbotFlow !== undefined) return resolvedEntryPointChatbotFlow;
-    resolvedEntryPointChatbotFlow = await prisma.chatbotFlow.findFirst({
-      where: {
-        clientId: tenantClientId,
-        isActive: true,
-        entryPoint: true,
-      },
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      select: {
-        id: true,
-        definition: true,
-      },
-    });
-    return resolvedEntryPointChatbotFlow;
-  };
-  const loadChatbotFlowForConversation = async (state: ConversationState) => {
-    if (!tenantClientId) return null;
-    const activeFlowId = extractChatbotFlowId(state.flow);
-    if (state.chatbotActive && activeFlowId) {
-      return prisma.chatbotFlow.findFirst({
-        where: {
-          id: activeFlowId,
-          clientId: tenantClientId,
-        },
-        select: {
-          id: true,
-          definition: true,
-        },
-      });
-    }
-    return loadEntryPointChatbotFlow();
   };
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
@@ -2542,7 +2495,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.timestamp
     );
     if (handoffResult.handled) {
-      updatedConversation = clearChatbotRuntime(handoffResult.state);
+      updatedConversation = handoffResult.state;
       if (handoffResult.outcome === "requested") {
         logger.info({
           event: "handoff.detected",
@@ -2628,81 +2581,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    let chatbotFlowResult: {
-      handled: boolean;
-      state: ConversationState;
-      replyText?: string;
-      flowId: string | null;
-    } = {
-      handled: false,
-      state: updatedConversation,
-      replyText: undefined as string | undefined,
-      flowId: null as string | null,
-    };
-
-    if (!handoffResult.handled) {
-      const chatbotFlow = await loadChatbotFlowForConversation(updatedConversation);
-      if (chatbotFlow) {
-        const validatedDefinition = validateChatbotFlowDefinition(chatbotFlow.definition);
-        if (!validatedDefinition.ok) {
-          updatedConversation = clearChatbotRuntime(updatedConversation);
-          logger.error({
-            event: "chatbot.definition.invalid",
-            clientId: tenantClientId,
-            clientKey: tenantClientKey,
-            flowId: chatbotFlow.id,
-            message: validatedDefinition.message,
-            requestId: meta?.requestId,
-          });
-        } else {
-          const chatbotResult = executeChatbotFlow({
-            flowId: chatbotFlow.id,
-            definition: validatedDefinition.definition,
-            state: updatedConversation,
-            inboundText: message.text,
-            nowIso: message.timestamp,
-          });
-          updatedConversation = chatbotResult.state;
-          chatbotFlowResult = {
-            handled: chatbotResult.handled,
-            state: chatbotResult.state,
-            replyText: chatbotResult.replyText,
-            flowId: chatbotFlow.id,
-          };
-          logger.info({
-            event: "chatbot.executor.checked",
-            clientId: tenantClientId,
-            clientKey: tenantClientKey,
-            flowId: chatbotFlow.id,
-            handled: chatbotResult.handled,
-            active: updatedConversation.chatbotActive ?? false,
-            nodeId: updatedConversation.chatbotNodeId ?? null,
-            requestId: meta?.requestId,
-          });
-        }
-      }
-    }
-
-    const flowResult = chatbotFlowResult.handled
-      ? {
-          state: updatedConversation,
-          handled: true as const,
-          replyText: chatbotFlowResult.replyText,
-          flowKey: "chatbot" as const,
-        }
-      : handoffResult.handled
-        ? { state: updatedConversation, handled: false as const, replyText: undefined }
-        : await runFlowExecutor({
-            tenantId: appliedTenantConfig?.id ?? "default",
-            clientKey: tenantClientKey,
-            requestId: meta?.requestId,
-            meta: {
-              route: meta?.route,
-              method: meta?.method,
-            },
-            message,
-            conversation: updatedConversation,
-          });
+    const flowResult = handoffResult.handled
+      ? { state: updatedConversation, handled: false as const, replyText: undefined }
+      : await runFlowExecutor({
+          tenantId: appliedTenantConfig?.id ?? "default",
+          clientKey: tenantClientKey,
+          requestId: meta?.requestId,
+          meta: {
+            route: meta?.route,
+            method: meta?.method,
+          },
+          message,
+          conversation: updatedConversation,
+        });
     logger.info({
       event: "flow.executor.checked",
       tenantId: appliedTenantConfig?.id ?? "default",
@@ -2716,18 +2607,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         event: "flow.quote_site.handled",
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
-        requestId: meta?.requestId,
-      });
-    }
-    if (flowResult.handled && flowResult.flowKey === "chatbot") {
-      logger.info({
-        event: "chatbot.flow.handled",
-        tenantId: appliedTenantConfig?.id ?? "default",
-        clientId: tenantClientId,
-        clientKey: tenantClientKey,
-        flowId: chatbotFlowResult.flowId,
-        chatbotNodeId: updatedConversation.chatbotNodeId ?? null,
-        chatbotActive: updatedConversation.chatbotActive ?? false,
         requestId: meta?.requestId,
       });
     }

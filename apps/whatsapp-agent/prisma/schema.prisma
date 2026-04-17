@@ -73,7 +73,6 @@ model Client {
   slaConfig      SLAConfig?
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
-  chatbotFlows  ChatbotFlow[]
 }
 
 model User {
@@ -272,8 +271,6 @@ model ConversationRuntimeState {
   lastHandoffDemoScheduledAt  DateTime?
   flow                String?
   flowStep            Int?
-  chatbotNodeId       String?
-  chatbotActive       Boolean       @default(false)
   answers             Json?
   mode                String?
   assignedUserId      String?
@@ -497,20 +494,4 @@ model TenantMetaConfig {
 
   @@index([phoneNumberId])
   @@index([wabaId])
-}
-
-model ChatbotFlow {
-  id         String   @id @default(cuid())
-  clientId   String   @db.Uuid
-  name       String
-  isActive   Boolean  @default(false)
-  entryPoint Boolean  @default(false)
-  definition Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-
-  @@index([clientId, createdAt])
-  @@index([clientId, isActive, entryPoint])
 }

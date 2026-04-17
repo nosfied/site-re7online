@@ -15,7 +15,7 @@ export type FlowContext = {
 };
 
 export type FlowMatch = {
-  flowKey: "quote_site" | "lead_capture" | "chatbot";
+  flowKey: "quote_site" | "lead_capture";
 };
 
 export type FlowResult = {
