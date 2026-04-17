@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
@@ -27,6 +27,38 @@ const EMPTY_USER_FORM = {
   departmentId: "",
   isActive: true,
 };
+
+function InfoBadge({
+  label,
+  tone = "default",
+}: {
+  label: string;
+  tone?: "default" | "success" | "warning";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      : tone === "warning"
+        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+        : "border-white/15 bg-white/5 text-white/80";
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function ActionIcon({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex h-4 w-4 items-center justify-center text-sm leading-none">
+      {children}
+    </span>
+  );
+}
 
 export default function TenantUsersPage() {
   const params = useParams<{ tenantId: string }>();
@@ -374,7 +406,7 @@ export default function TenantUsersPage() {
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Role</span>
+              <span className="text-white/70">Perfil</span>
               <select
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={userForm.role}
@@ -406,7 +438,7 @@ export default function TenantUsersPage() {
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Ativo</span>
+              <span className="text-white/70">Status</span>
               <select
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={userForm.isActive ? "true" : "false"}
@@ -448,32 +480,72 @@ export default function TenantUsersPage() {
           </p>
         ) : null}
 
-        <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <section className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-4 py-3 text-sm text-white/70">
+            Edite os dados na linha do usuario e clique em <span className="font-semibold text-white">Salvar</span>.
+          </div>
           {actionError ? (
             <p className="m-4 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
               {actionError}
             </p>
           ) : null}
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Nome</th>
-                <th className="px-3 py-2">Email</th>
-                <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2">Setor</th>
-                <th className="px-3 py-2">Ativo</th>
-                <th className="px-3 py-2">Criado em</th>
-                <th className="px-3 py-2">Acoes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((item) => (
-                <Fragment key={item.id}>
-                  <tr className="border-t border-white/10">
-                    <td className="px-3 py-2">{item.name}</td>
-                    <td className="px-3 py-2">
+          <div className="grid gap-3 p-4">
+            {users.map((item) => (
+              <Fragment key={item.id}>
+                <article className="rounded-xl border border-white/10 bg-re7-navy/30 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                        <p className="text-sm text-white/60">{item.email}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <InfoBadge label={item.role} />
+                        <InfoBadge
+                          label={item.departmentId ? departmentNameById[item.departmentId] ?? item.departmentId : "Sem setor"}
+                          tone={item.departmentId ? "default" : "warning"}
+                        />
+                        <InfoBadge
+                          label={(item.isActive ?? true) ? "Ativo" : "Inativo"}
+                          tone={(item.isActive ?? true) ? "success" : "warning"}
+                        />
+                      </div>
+                      <p className="text-xs text-white/45">Criado em {formatDateTime(item.createdAt)}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={savingUserId === item.id}
+                        onClick={() => handleUpdateUser(item)}
+                        className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ActionIcon>💾</ActionIcon>
+                        <span>{savingUserId === item.id ? "Salvando..." : "Salvar"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resettingUserId === item.id}
+                        onClick={() => {
+                          setActionError(null);
+                          setActionSuccess(null);
+                          setResetUserId((current) => (current === item.id ? null : item.id));
+                          setResetPassword("");
+                        }}
+                        className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ActionIcon>🔑</ActionIcon>
+                        <span>{resettingUserId === item.id ? "Resetando..." : "Senha"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Nome</span>
                       <input
-                        className="min-w-44 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        aria-label={`Nome do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                         value={userDrafts[item.id]?.name ?? item.name}
                         onChange={(event) =>
                           setUserDrafts((current) => ({
@@ -491,10 +563,12 @@ export default function TenantUsersPage() {
                           }))
                         }
                       />
-                    </td>
-                    <td className="px-3 py-2">
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Email</span>
                       <input
-                        className="min-w-52 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        aria-label={`Email do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                         value={userDrafts[item.id]?.email ?? item.email}
                         onChange={(event) =>
                           setUserDrafts((current) => ({
@@ -512,10 +586,12 @@ export default function TenantUsersPage() {
                           }))
                         }
                       />
-                    </td>
-                    <td className="px-3 py-2">
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Perfil</span>
                       <select
-                        className="min-w-40 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        aria-label={`Perfil do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                         value={userDrafts[item.id]?.role ?? item.role}
                         onChange={(event) =>
                           setUserDrafts((current) => ({
@@ -539,44 +615,43 @@ export default function TenantUsersPage() {
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="grid gap-1">
-                        <select
-                          className="min-w-44 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                          value={userDrafts[item.id]?.departmentId ?? item.departmentId ?? ""}
-                          onChange={(event) =>
-                            setUserDrafts((current) => ({
-                              ...current,
-                              [item.id]: {
-                                ...(current[item.id] ?? {
-                                  name: item.name,
-                                  email: item.email,
-                                  role: item.role,
-                                  departmentId: item.departmentId ?? "",
-                                  isActive: item.isActive ?? true,
-                                }),
-                                departmentId: event.target.value,
-                              },
-                            }))
-                          }
-                        >
-                          <option value="">-</option>
-                          {departments.map((department) => (
-                            <option key={department.id} value={department.id}>
-                              {department.name}
-                              {!department.isActive ? " (inativo)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="text-xs text-white/50">
-                          {item.departmentId ? departmentNameById[item.departmentId] ?? item.departmentId : "-"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Setor</span>
                       <select
-                        className="min-w-28 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        aria-label={`Setor do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.departmentId ?? item.departmentId ?? ""}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              departmentId: event.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="">-</option>
+                        {departments.map((department) => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                            {!department.isActive ? " (inativo)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Status</span>
+                      <select
+                        aria-label={`Status do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                         value={(userDrafts[item.id]?.isActive ?? item.isActive ?? true) ? "true" : "false"}
                         onChange={(event) =>
                           setUserDrafts((current) => ({
@@ -597,86 +672,57 @@ export default function TenantUsersPage() {
                         <option value="true">Ativo</option>
                         <option value="false">Inativo</option>
                       </select>
-                    </td>
-                    <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-2">
+                    </label>
+                  </div>
+                </article>
+
+                {resetUserId === item.id ? (
+                  <div className="mt-[-4px] rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                      <label className="grid flex-1 gap-1 text-sm">
+                        <span className="text-white/70">Nova senha</span>
+                        <input
+                          type="password"
+                          className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                          value={resetPassword}
+                          onChange={(event) => setResetPassword(event.target.value)}
+                        />
+                      </label>
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          disabled={
-                            savingUserId === item.id
-                          }
-                          onClick={() => handleUpdateUser(item)}
-                          className="rounded-md border border-white/20 px-3 py-1 text-xs hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={resettingUserId === item.id}
+                          onClick={() => handleResetPassword(item.id)}
+                          className="inline-flex items-center gap-2 rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {savingUserId === item.id ? "Salvando..." : "Salvar"}
+                          <ActionIcon>✅</ActionIcon>
+                          <span>{resettingUserId === item.id ? "Salvando..." : "Confirmar"}</span>
                         </button>
                         <button
                           type="button"
                           disabled={resettingUserId === item.id}
                           onClick={() => {
-                            setActionError(null);
-                            setActionSuccess(null);
-                            setResetUserId((current) => (current === item.id ? null : item.id));
+                            setResetUserId(null);
                             setResetPassword("");
+                            setActionError(null);
                           }}
-                          className="rounded-md border border-white/20 px-3 py-1 text-xs hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {resettingUserId === item.id ? "Resetando..." : "Resetar senha"}
+                          <ActionIcon>✕</ActionIcon>
+                          <span>Cancelar</span>
                         </button>
                       </div>
-                    </td>
-                  </tr>
-                  {resetUserId === item.id ? (
-                    <tr className="border-t border-white/10 bg-white/[0.03]">
-                      <td colSpan={7} className="px-3 py-3">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                          <label className="grid flex-1 gap-1 text-sm">
-                            <span className="text-white/70">Nova senha</span>
-                            <input
-                              type="password"
-                              className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                              value={resetPassword}
-                              onChange={(event) => setResetPassword(event.target.value)}
-                            />
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              disabled={resettingUserId === item.id}
-                              onClick={() => handleResetPassword(item.id)}
-                              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {resettingUserId === item.id ? "Salvando..." : "Confirmar reset"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={resettingUserId === item.id}
-                              onClick={() => {
-                                setResetUserId(null);
-                                setResetPassword("");
-                                setActionError(null);
-                              }}
-                              className="rounded-md border border-white/20 px-4 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
-              ))}
-              {users.length === 0 && !loading ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-4 text-center text-white/70">
-                    Nenhum usuario encontrado.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                ) : null}
+              </Fragment>
+            ))}
+            {users.length === 0 && !loading ? (
+              <p className="rounded-md border border-white/10 bg-white/[0.03] px-4 py-6 text-center text-white/70">
+                Nenhum usuario encontrado.
+              </p>
+            ) : null}
+          </div>
         </section>
       </div>
     </div>

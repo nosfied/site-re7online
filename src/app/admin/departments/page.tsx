@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
@@ -18,6 +18,30 @@ import {
 function getDepartmentSlugBase(item: AdminDepartmentItem) {
   const slug = (item.slug ?? item.name).trim().toLowerCase();
   return slug.replace(/-\d+$/, "");
+}
+
+function DepartmentBadge({
+  label,
+  tone = "default",
+}: {
+  label: string;
+  tone?: "default" | "success" | "warning";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      : tone === "warning"
+        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+        : "border-white/15 bg-white/5 text-white/80";
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function ActionIcon({ children }: { children: ReactNode }) {
+  return <span className="inline-flex h-4 w-4 items-center justify-center text-sm">{children}</span>;
 }
 
 export default function AdminDepartmentsPage() {
@@ -215,6 +239,14 @@ export default function AdminDepartmentsPage() {
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+              Novo setor
+            </h2>
+            <p className="mt-1 text-sm text-white/65">
+              Escolha o tenant e informe um nome claro. O sistema normaliza o setor automaticamente.
+            </p>
+          </div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)_auto]">
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Tenant</span>
@@ -283,13 +315,17 @@ export default function AdminDepartmentsPage() {
                       return (
                         <div
                           key={item.id}
-                          className="grid gap-2 rounded-md border border-white/10 px-3 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)_auto]"
+                          className="grid gap-3 rounded-md border border-white/10 px-3 py-3 md:grid-cols-[minmax(0,1fr)_minmax(0,240px)_auto]"
                         >
                           <div>
                             <p className="font-medium text-white">{item.name}</p>
-                            <p className="text-xs text-white/60">
-                              {item.slug ?? "-"} · {item.isActive ? "Ativo" : "Inativo"}
-                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <DepartmentBadge
+                                label={item.isActive ? "Ativo" : "Inativo"}
+                                tone={item.isActive ? "success" : "warning"}
+                              />
+                              <DepartmentBadge label={item.slug ?? "-"} />
+                            </div>
                           </div>
                           <select
                             className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
@@ -326,45 +362,40 @@ export default function AdminDepartmentsPage() {
             </div>
           </section>
         ) : null}
-        <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <section className="rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Setores do tenant</h2>
+            <p className="mt-1 text-sm text-white/65">
+              Visual mais simples: nome grande, status claro e acao direta.
+            </p>
           </div>
           {sortedDepartments.length ? (
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-white/10 text-left">
-                <tr>
-                  <th className="px-3 py-2">Nome</th>
-                  <th className="px-3 py-2">ID</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Criado em</th>
-                  <th className="px-3 py-2">Acoes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedDepartments.map((item) => (
-                  <tr key={item.id} className="border-t border-white/10">
-                    <td className="px-3 py-2">{item.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{item.id}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          item.isActive
-                            ? "bg-emerald-500/20 text-emerald-100"
-                            : "bg-white/10 text-white/70"
-                        }`}
-                      >
-                        {item.isActive ? "Ativo" : "Inativo"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
-                    <td className="px-3 py-2">
+            <div className="grid gap-3 p-4">
+              {sortedDepartments.map((item) => (
+                <article key={item.id} className="rounded-xl border border-white/10 bg-re7-navy/30 p-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                        <p className="font-mono text-xs text-white/45">{item.id}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <DepartmentBadge
+                          label={item.isActive ? "Ativo" : "Inativo"}
+                          tone={item.isActive ? "success" : "warning"}
+                        />
+                        <DepartmentBadge label={item.slug ? `slug: ${item.slug}` : "slug: -"} />
+                      </div>
+                      <p className="text-xs text-white/45">Criado em {formatDateTime(item.createdAt)}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
                       <button
                         type="button"
                         onClick={() => handleToggle(item)}
                         disabled={togglingId === item.id}
                         aria-label={item.isActive ? "Desativar setor" : "Ativar setor"}
-                        className={`relative inline-flex h-7 w-14 items-center rounded-full border transition ${
+                        className={`relative inline-flex h-8 w-16 items-center rounded-full border transition ${
                           item.isActive
                             ? "border-emerald-400/50 bg-emerald-500/30"
                             : "border-white/20 bg-white/10"
@@ -378,7 +409,7 @@ export default function AdminDepartmentsPage() {
                               : "Ativar setor"}
                         </span>
                         <span
-                          className={`absolute left-1 text-[10px] font-semibold uppercase tracking-wide ${
+                          className={`absolute left-1.5 text-[10px] font-semibold uppercase tracking-wide ${
                             item.isActive ? "text-emerald-100" : "text-white/60"
                           }`}
                         >
@@ -386,15 +417,18 @@ export default function AdminDepartmentsPage() {
                         </span>
                         <span
                           className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition ${
-                            item.isActive ? "translate-x-8" : "translate-x-1"
+                            item.isActive ? "translate-x-9" : "translate-x-1.5"
                           }`}
                         />
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <span className="text-sm text-white/70">
+                        {item.isActive ? "Setor visivel na operacao" : "Setor fora da operacao"}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           ) : (
             <p className="p-4 text-sm text-white/70">Nenhum setor cadastrado para este tenant.</p>
           )}
