@@ -1,6 +1,9 @@
 import type {
+  AdminDepartmentItem,
   AdminUserItem,
   CampaignItem,
+  ConversationReportRange,
+  ConversationReportResponse,
   ConversationOperationalStatus,
   InboxConversationItem,
   InboxMessageItem,
@@ -75,6 +78,20 @@ export type AppTemplateRequestItem = {
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
+};
+
+export type AppChatbotFlowItem = {
+  id: string;
+  clientId: string;
+  name: string;
+  isActive: boolean;
+  entryPoint: boolean;
+  definition: {
+    start: string;
+    nodes: Record<string, unknown>;
+  };
+  createdAt: string;
+  updatedAt: string;
 };
 
 const SESSION_KEY = "wa_app_session_session_v1";
@@ -260,6 +277,94 @@ async function requestAppJson<T>(
   return (await res.json()) as T;
 }
 
+async function requestAppText(
+  session: AppSession,
+  path: string,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<string> {
+  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = session.token.trim();
+  if (!token) {
+    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    error.status = 401;
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 10000;
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...requestInit,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(requestInit.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AppApiError;
+    error.status = 0;
+    error.errorCode = "network_error";
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+      error.errorCode = "network_timeout";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    let errorCode: string | undefined;
+    let details: string | undefined;
+    let payload: unknown;
+    try {
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string; details?: string };
+        message?: string;
+        details?: string;
+      };
+      payload = body;
+      if (typeof body.error === "string") {
+        errorCode = body.error;
+      } else if (body.error && typeof body.error === "object") {
+        errorCode = typeof body.error.code === "string" ? body.error.code : undefined;
+        if (typeof body.error.details === "string") {
+          details = body.error.details;
+        }
+        if (typeof body.error.message === "string" && body.error.message.trim()) {
+          message = body.error.message;
+        }
+      }
+      details = details || (typeof body.details === "string" ? body.details : undefined);
+      message =
+        (typeof body.message === "string" && body.message.trim() ? body.message : "") ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AppApiError;
+    error.status = res.status;
+    error.errorCode = errorCode;
+    error.details = details;
+    error.payload = payload;
+    if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status >= 500 && !errorCode && !details) {
+      error.message = "Erro no servidor (5xx).";
+    }
+    throw error;
+  }
+
+  return res.text();
+}
+
 export async function loginAppUser(
   email: string,
   password: string
@@ -426,6 +531,174 @@ export async function fetchAppUsers(
   items: AdminUserItem[];
 }> {
   return requestAppJson(session, "/app/users");
+}
+
+export async function createAppUser(
+  session: AppSession,
+  payload: {
+    name: string;
+    email: string;
+    password?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  return requestAppJson(session, "/app/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppUser(
+  session: AppSession,
+  userId: string,
+  payload: {
+    name?: string;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  return requestAppJson(session, `/app/users/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppDepartments(
+  session: AppSession
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminDepartmentItem[];
+}> {
+  return requestAppJson(session, "/app/departments");
+}
+
+export async function fetchAppChatbotFlows(
+  session: AppSession
+): Promise<{
+  ok: true;
+  count: number;
+  items: AppChatbotFlowItem[];
+}> {
+  return requestAppJson(session, "/app/chatbot/flows");
+}
+
+export async function createAppChatbotFlow(
+  session: AppSession,
+  payload: {
+    name: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AppChatbotFlowItem;
+}> {
+  return requestAppJson(session, "/app/chatbot/flows", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppChatbotFlow(
+  session: AppSession,
+  flowId: string,
+  payload: {
+    name?: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition?: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AppChatbotFlowItem;
+}> {
+  return requestAppJson(session, `/app/chatbot/flows/${encodeURIComponent(flowId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppConversationReport(
+  session: AppSession,
+  params: {
+    range: ConversationReportRange;
+    userId?: string | null;
+    departmentId?: string | null;
+  }
+): Promise<ConversationReportResponse> {
+  const query = new URLSearchParams({
+    range: params.range,
+  });
+  if (params.userId) query.set("userId", params.userId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
+}
+
+export async function exportAppConversationReportCsv(
+  session: AppSession,
+  params: {
+    range: ConversationReportRange;
+    userId?: string | null;
+    departmentId?: string | null;
+  }
+) {
+  const query = new URLSearchParams({
+    range: params.range,
+  });
+  if (params.userId) query.set("userId", params.userId);
+  if (params.departmentId) query.set("departmentId", params.departmentId);
+  return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
+}
+
+export async function createAppDepartment(
+  session: AppSession,
+  payload: {
+    name: string;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  return requestAppJson(session, "/app/departments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppDepartment(
+  session: AppSession,
+  departmentId: string,
+  payload: {
+    name?: string;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  return requestAppJson(session, `/app/departments/${encodeURIComponent(departmentId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateAppLeadStatus(
