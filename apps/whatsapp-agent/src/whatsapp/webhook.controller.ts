@@ -933,6 +933,52 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return;
   };
 
+  const notifyAttendantHumanRequested = async (params: {
+    attendantWaId: string;
+    leadWaId: string;
+    snippet: string;
+    requestId?: string;
+  }) => {
+    const attendantConversation = await storage.getConversation(
+      params.attendantWaId,
+      tenantClientKey
+    );
+    if (!attendantConversation || !isWindowOpen(attendantConversation, Date.now())) {
+      logger.info({
+        event: "handoff.notify.skipped",
+        reason: "attendant_window_closed",
+        waId: maskNumber(params.attendantWaId),
+        leadWaId: maskNumber(params.leadWaId),
+        requestId: params.requestId,
+      });
+      return;
+    }
+    const clientDisplay =
+      tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online";
+    const textBody = [
+      "[HANDOFF] Lead pediu atendimento humano",
+      `Cliente: ${clientDisplay}`,
+      `Lead: ${params.leadWaId}`,
+      `Link: https://wa.me/${params.leadWaId}`,
+      `Msg: ${params.snippet || "-"}`,
+    ].join("\n");
+    const result = await sendOutboundText({
+      toE164: params.attendantWaId,
+      waId: params.attendantWaId,
+      intent: "handoff",
+      messageId: `handoff.manual.${params.requestId ?? Date.now()}`,
+      replyText: textBody,
+    });
+    logger.info({
+      event: result.ok ? "handoff.notify.sent" : "handoff.notify.failed",
+      notifyType: "text",
+      waId: maskNumber(params.attendantWaId),
+      leadWaId: maskNumber(params.leadWaId),
+      status: result.status,
+      requestId: params.requestId,
+    });
+  };
+
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
@@ -1134,7 +1180,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   ) => {
     if (!tenantClientId) return null;
     if (appliedTenantConfig?.disableChatbot) return null;
-    if (state.flow === "quote_site" || shouldStartQuoteSite(inboundText)) return null;
+    if (
+      state.flow === "quote_site" ||
+      (!appliedTenantConfig?.disableLegacyFlows && shouldStartQuoteSite(inboundText))
+    ) {
+      return null;
+    }
     const activeFlowId = extractChatbotFlowId(state.flow);
     if (state.chatbotActive && activeFlowId) {
       return prisma.chatbotFlow.findFirst({
@@ -1149,6 +1200,37 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
     return loadEntryPointChatbotFlow();
+  };
+  const ensurePendingHandoffRouting = async (state: ConversationState) => {
+    if (!tenantClientId) return state;
+    const department = state.departmentId ? { id: state.departmentId } : await loadDefaultDepartment();
+    let queueId = state.queueId ?? null;
+    if (department?.id && !queueId) {
+      const queue = await prisma.queue.upsert({
+        where: {
+          clientId_departmentId_name: {
+            clientId: tenantClientId,
+            departmentId: department.id,
+            name: "Fila Geral",
+          },
+        },
+        update: {},
+        create: {
+          clientId: tenantClientId,
+          departmentId: department.id,
+          name: "Fila Geral",
+        },
+        select: { id: true },
+      });
+      queueId = queue.id;
+    }
+    return {
+      ...state,
+      departmentId: state.departmentId ?? department?.id ?? null,
+      queueId,
+      status: state.status ?? "WAITING",
+      closedAt: null,
+    };
   };
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
@@ -2669,6 +2751,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     };
 
     if (!handoffResult.handled) {
+      const previousHandoffStatus = updatedConversation.handoff.status;
       const chatbotFlow = await loadChatbotFlowForConversation(updatedConversation, message.text);
       if (chatbotFlow) {
         const validatedDefinition = validateChatbotFlowDefinition(chatbotFlow.definition);
@@ -2697,6 +2780,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             replyText: chatbotResult.replyText,
             flowId: chatbotFlow.id,
           };
+          if (
+            previousHandoffStatus !== "pending" &&
+            chatbotResult.state.handoff.status === "pending"
+          ) {
+            updatedConversation = await ensurePendingHandoffRouting(chatbotResult.state);
+            chatbotFlowResult.state = updatedConversation;
+            if (tenantHandoffAttendantWaid) {
+              await notifyAttendantHumanRequested({
+                attendantWaId: tenantHandoffAttendantWaid,
+                leadWaId: normalizedFrom,
+                snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
+                requestId: meta?.requestId,
+              });
+            }
+          }
           logger.info({
             event: "chatbot.executor.checked",
             clientId: tenantClientId,
@@ -2720,6 +2818,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       : handoffResult.handled
         ? { state: updatedConversation, handled: false as const, replyText: undefined }
+        : appliedTenantConfig?.disableLegacyFlows
+          ? { state: updatedConversation, handled: false as const, replyText: undefined }
         : await runFlowExecutor({
             tenantId: appliedTenantConfig?.id ?? "default",
             clientKey: tenantClientKey,
@@ -2877,7 +2977,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let skipDemoReplies = false;
     let hasDemoSignal = false;
 
-    if (message.text) {
+    if (message.text && !appliedTenantConfig?.disableLegacyFlows) {
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -3016,22 +3116,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const postDemoFlowResult = await runPostDemoFlowExecutor({
-      tenantId: appliedTenantConfig?.id ?? "default",
-      clientKey: tenantClientKey,
-      requestId: meta?.requestId,
-      meta: {
-        route: meta?.route,
-        method: meta?.method,
-      },
-      message,
-      conversation: updatedConversation,
-      nowMs: now,
-      leadWindowMs,
-      demoHandled,
-      leadReplyText,
-      parsedLead: parsedLeadForCapture,
-    });
+    const postDemoFlowResult = appliedTenantConfig?.disableLegacyFlows
+      ? { handled: false as const }
+      : await runPostDemoFlowExecutor({
+          tenantId: appliedTenantConfig?.id ?? "default",
+          clientKey: tenantClientKey,
+          requestId: meta?.requestId,
+          meta: {
+            route: meta?.route,
+            method: meta?.method,
+          },
+          message,
+          conversation: updatedConversation,
+          nowMs: now,
+          leadWindowMs,
+          demoHandled,
+          leadReplyText,
+          parsedLead: parsedLeadForCapture,
+        });
     if (postDemoFlowResult.handled) {
       updatedConversation = postDemoFlowResult.state ?? updatedConversation;
       leadUpdated = true;
@@ -3184,6 +3286,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !leadHandled &&
       !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
+      !appliedTenantConfig?.disableAiFallback &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
       updatedConversation.intent !== "handoff" &&

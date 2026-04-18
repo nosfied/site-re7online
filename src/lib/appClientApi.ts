@@ -94,6 +94,13 @@ export type AppChatbotFlowItem = {
   updatedAt: string;
 };
 
+export type AppAutomationSettings = {
+  disableAutoReply: boolean;
+  disableChatbot: boolean;
+  disableLegacyFlows: boolean;
+  disableAiFallback: boolean;
+};
+
 const SESSION_KEY = "wa_app_session_session_v1";
 const LOCAL_KEY = "wa_app_session_local_v1";
 
@@ -591,6 +598,31 @@ export async function fetchAppChatbotFlows(
   items: AppChatbotFlowItem[];
 }> {
   return requestAppJson(session, "/app/chatbot/flows");
+}
+
+export async function fetchAppChatbotSettings(
+  session: AppSession
+): Promise<{
+  ok: true;
+  tenantId: string;
+  settings: AppAutomationSettings;
+}> {
+  return requestAppJson(session, "/app/chatbot/settings");
+}
+
+export async function updateAppChatbotSettings(
+  session: AppSession,
+  payload: Partial<AppAutomationSettings>
+): Promise<{
+  ok: true;
+  tenantId: string;
+  fieldsChanged: string[];
+  settings: AppAutomationSettings;
+}> {
+  return requestAppJson(session, "/app/chatbot/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function createAppChatbotFlow(

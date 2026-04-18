@@ -1759,6 +1759,131 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/chatbot/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view chatbot settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: {
+          disableAutoReply: tenant.disableAutoReply ?? false,
+          disableChatbot: tenant.disableChatbot ?? false,
+          disableLegacyFlows: tenant.disableLegacyFlows ?? false,
+          disableAiFallback: tenant.disableAiFallback ?? false,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/chatbot/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
+        json(res, 403, httpError("forbidden", "Only admin can manage chatbot settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const data = body as Record<string, unknown>;
+      const keys = [
+        "disableAutoReply",
+        "disableChatbot",
+        "disableLegacyFlows",
+        "disableAiFallback",
+      ] as const;
+      const payload: Record<string, boolean> = {};
+      for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          if (typeof data[key] !== "boolean") {
+            json(res, 400, httpError("bad_request", `${key} must be boolean`));
+            return;
+          }
+          payload[key] = data[key] as boolean;
+        }
+      }
+      if (Object.keys(payload).length === 0) {
+        json(
+          res,
+          400,
+          httpError(
+            "bad_request",
+            "Provide at least one of disableAutoReply, disableChatbot, disableLegacyFlows or disableAiFallback"
+          )
+        );
+        return;
+      }
+
+      const saved = await saveTenantPatch(client.clientKey, payload);
+      logger.info({
+        event: "app.chatbot.settings.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        fieldsChanged: saved.fieldsChanged,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        fieldsChanged: saved.fieldsChanged,
+        settings: {
+          disableAutoReply: Boolean(saved.tenant.disableAutoReply),
+          disableChatbot: Boolean(saved.tenant.disableChatbot),
+          disableLegacyFlows: Boolean(saved.tenant.disableLegacyFlows),
+          disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.settings.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/app/chatbot/flows") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -8230,6 +8355,10 @@ function diffTenantFields(
   compareField("defaultLanguage");
   compareField("planName");
   compareField("messagesLimit");
+  compareField("disableAutoReply");
+  compareField("disableChatbot");
+  compareField("disableLegacyFlows");
+  compareField("disableAiFallback");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
   compareField("quotaBlockedReplyText");

@@ -12,6 +12,8 @@ export type TenantConfig = {
   defaultLanguage: string;
   disableAutoReply?: boolean;
   disableChatbot?: boolean;
+  disableLegacyFlows?: boolean;
+  disableAiFallback?: boolean;
   planName?: string;
   messagesLimit?: number;
   quotaMonthlyConversations?: number;
@@ -89,9 +91,6 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     const tenant = value as Record<string, unknown>;
     const nextTenant: Record<string, unknown> = { ...tenant };
-    if (tenant.disableAutoReply === undefined && (key === "justa-advocacia" || tenant.id === "justa-advocacia")) {
-      nextTenant.disableAutoReply = true;
-    }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
         typeof waId === "string" ? waId.replace(/\D/g, "") : waId
@@ -141,6 +140,12 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.disableChatbot !== undefined && typeof tenant.disableChatbot !== "boolean") {
       throw new Error(`invalid_tenant_disable_chatbot:${key}`);
+    }
+    if (tenant.disableLegacyFlows !== undefined && typeof tenant.disableLegacyFlows !== "boolean") {
+      throw new Error(`invalid_tenant_disable_legacy_flows:${key}`);
+    }
+    if (tenant.disableAiFallback !== undefined && typeof tenant.disableAiFallback !== "boolean") {
+      throw new Error(`invalid_tenant_disable_ai_fallback:${key}`);
     }
     if (
       tenant.planName !== undefined &&

@@ -266,6 +266,8 @@ export type TenantConfigResponse = {
     defaultLanguage: string;
     disableAutoReply?: boolean;
     disableChatbot?: boolean;
+    disableLegacyFlows?: boolean;
+    disableAiFallback?: boolean;
     templates: {
       manualHandoff: string;
     };

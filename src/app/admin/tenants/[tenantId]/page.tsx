@@ -19,6 +19,8 @@ type TenantFormState = {
   quotaBlockedReplyText: string;
   disableAutoReply: boolean;
   disableChatbot: boolean;
+  disableLegacyFlows: boolean;
+  disableAiFallback: boolean;
 };
 
 export default function TenantEditPage() {
@@ -70,6 +72,8 @@ export default function TenantEditPage() {
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
           disableAutoReply: tenant.disableAutoReply ?? false,
           disableChatbot: tenant.disableChatbot ?? false,
+          disableLegacyFlows: tenant.disableLegacyFlows ?? false,
+          disableAiFallback: tenant.disableAiFallback ?? false,
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -109,6 +113,8 @@ export default function TenantEditPage() {
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
       disableAutoReply: form.disableAutoReply,
       disableChatbot: form.disableChatbot,
+      disableLegacyFlows: form.disableLegacyFlows,
+      disableAiFallback: form.disableAiFallback,
     };
 
     if (form.quotaMonthlyConversations.trim()) {
@@ -283,12 +289,20 @@ export default function TenantEditPage() {
                 <p className="mt-2 text-sm">{tenantSnapshot?.quotaMonthlyConversations ?? "-"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Auto reply</p>
-                <p className="mt-2 text-sm">{tenantSnapshot?.disableAutoReply ? "Desligado" : "Ligado"}</p>
+                <p className="text-xs uppercase tracking-wide text-white/50">Respostas automaticas</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.disableAutoReply ? "Desligadas" : "Ligadas"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Chatbot</p>
+                <p className="text-xs uppercase tracking-wide text-white/50">Chatbot JSON</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableChatbot ? "Desligado" : "Ligado"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Fluxos legados</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.disableLegacyFlows ? "Desligados" : "Ligados"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">IA automatica</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.disableAiFallback ? "Desligada" : "Ligada"}</p>
               </div>
             </div>
           </div>
@@ -380,7 +394,7 @@ export default function TenantEditPage() {
                     )
                   }
                 />
-                <span>Desligar respostas automaticas</span>
+                <span>Desligar todas as respostas automaticas</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-white/80">
                 <input
@@ -392,7 +406,31 @@ export default function TenantEditPage() {
                     )
                   }
                 />
-                <span>Desligar chatbot</span>
+                <span>Desligar chatbot JSON</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={form.disableLegacyFlows}
+                  onChange={(event) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, disableLegacyFlows: event.target.checked } : prev
+                    )
+                  }
+                />
+                <span>Desligar fluxos legados</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={form.disableAiFallback}
+                  onChange={(event) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, disableAiFallback: event.target.checked } : prev
+                    )
+                  }
+                />
+                <span>Desligar IA automatica</span>
               </label>
             </div>
 

@@ -6,14 +6,17 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
+  AppAutomationSettings,
   AppChatbotFlowItem,
   AppSession,
   clearAppSession,
   createAppChatbotFlow,
   fetchAppChatbotFlows,
+  fetchAppChatbotSettings,
   loadAppSession,
   saveAppSession,
   updateAppChatbotFlow,
+  updateAppChatbotSettings,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -87,9 +90,11 @@ export default function AppChatbotPage() {
   const [flows, setFlows] = useState<AppChatbotFlowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
   const [newName, setNewName] = useState("Fluxo principal");
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
   const [newIsActive, setNewIsActive] = useState(false);
@@ -130,8 +135,12 @@ export default function AppChatbotPage() {
 
   const loadFlows = useCallback(
     async (activeSession: AppSession) => {
-      const response = await fetchAppChatbotFlows(activeSession);
-      hydrateFlows(response.items);
+      const [flowResponse, settingsResponse] = await Promise.all([
+        fetchAppChatbotFlows(activeSession),
+        fetchAppChatbotSettings(activeSession),
+      ]);
+      hydrateFlows(flowResponse.items);
+      setSettings(settingsResponse.settings);
     },
     [hydrateFlows]
   );
@@ -295,6 +304,38 @@ export default function AppChatbotPage() {
 
   const readOnly = !canManageChatbot(session.user.role);
 
+  const automationDraft = settings ?? {
+    disableAutoReply: false,
+    disableChatbot: false,
+    disableLegacyFlows: false,
+    disableAiFallback: false,
+  };
+
+  const handleSaveSettings = async () => {
+    if (!session || !settings) return;
+    if (readOnly) {
+      setError("Somente ADMIN pode alterar a automacao do tenant.");
+      return;
+    }
+    setSavingSettings(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await updateAppChatbotSettings(session, automationDraft);
+      setSettings(response.settings);
+      setSuccess("Automacao do tenant atualizada.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao salvar automacao.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
     <AppShell
       session={session}
@@ -303,6 +344,81 @@ export default function AppChatbotPage() {
     >
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
+
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Automacao do tenant</h2>
+            <p className="mt-1 text-sm text-white/65">
+              Use os controles por camada. Desligar o chatbot JSON nao desliga fluxos legados nem IA.
+            </p>
+          </div>
+          {!readOnly ? (
+            <button
+              type="button"
+              onClick={handleSaveSettings}
+              disabled={savingSettings || !settings}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {savingSettings ? "Salvando..." : "Salvar automacao"}
+            </button>
+          ) : null}
+        </div>
+
+        {settings ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              {
+                key: "disableAutoReply" as const,
+                title: "Desligar todas as respostas automaticas",
+                help: "Kill switch total. Para chatbot, fluxos legados e IA.",
+              },
+              {
+                key: "disableChatbot" as const,
+                title: "Desligar chatbot JSON",
+                help: "Bloqueia apenas os flows criados nesta tela.",
+              },
+              {
+                key: "disableLegacyFlows" as const,
+                title: "Desligar fluxos legados",
+                help: "Bloqueia quote_site e automacoes antigas de captura/demo.",
+              },
+              {
+                key: "disableAiFallback" as const,
+                title: "Desligar IA automatica",
+                help: "Bloqueia o fallback global de IA quando nenhum flow tratar.",
+              },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="flex items-start gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-4 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={automationDraft[item.key]}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            [item.key]: event.target.checked,
+                          }
+                        : current
+                    )
+                  }
+                  disabled={readOnly}
+                />
+                <span className="space-y-1">
+                  <span className="block font-medium text-white">{item.title}</span>
+                  <span className="block text-white/60">{item.help}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-white/70">Carregando configuracoes...</p>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="mb-4 space-y-2">
