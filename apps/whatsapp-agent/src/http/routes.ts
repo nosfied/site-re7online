@@ -2422,7 +2422,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const nextState = {
         ...conversation,
-        mode: "HUMAN" as const,
+        mode: "BOT" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "none" as const,
+          releasedAt: new Date().toISOString(),
+        },
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
@@ -5247,7 +5252,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const nextState = {
           ...conversation,
-          mode: "HUMAN" as const,
+          mode: "BOT" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "none" as const,
+            releasedAt: new Date().toISOString(),
+          },
           assignedUserId: null,
           assignedTo: null,
           assignedAt: null,

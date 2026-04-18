@@ -17,6 +17,8 @@ type TenantFormState = {
   quotaWarnAtPct: string;
   quotaExcludeWaIdsInput: string;
   quotaBlockedReplyText: string;
+  disableAutoReply: boolean;
+  disableChatbot: boolean;
 };
 
 export default function TenantEditPage() {
@@ -66,6 +68,8 @@ export default function TenantEditPage() {
             typeof tenant.quotaWarnAtPct === "number" ? String(tenant.quotaWarnAtPct) : "",
           quotaExcludeWaIdsInput: (tenant.quotaExcludeWaIds ?? []).join("\n"),
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
+          disableAutoReply: tenant.disableAutoReply ?? false,
+          disableChatbot: tenant.disableChatbot ?? false,
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -103,6 +107,8 @@ export default function TenantEditPage() {
       ...(tenantSnapshot ?? {}),
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
+      disableAutoReply: form.disableAutoReply,
+      disableChatbot: form.disableChatbot,
     };
 
     if (form.quotaMonthlyConversations.trim()) {
@@ -276,6 +282,14 @@ export default function TenantEditPage() {
                 <p className="text-xs uppercase tracking-wide text-white/50">Quota mensal</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.quotaMonthlyConversations ?? "-"}</p>
               </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Auto reply</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.disableAutoReply ? "Desligado" : "Ligado"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Chatbot</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.disableChatbot ? "Desligado" : "Ligado"}</p>
+              </div>
             </div>
           </div>
         </section>
@@ -354,6 +368,33 @@ export default function TenantEditPage() {
                 placeholder="Use placeholders: {tenantName} {period} {used} {limit} {attendantWaidMasked}"
               />
             </label>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={form.disableAutoReply}
+                  onChange={(event) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, disableAutoReply: event.target.checked } : prev
+                    )
+                  }
+                />
+                <span>Desligar respostas automaticas</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={form.disableChatbot}
+                  onChange={(event) =>
+                    setForm((prev) =>
+                      prev ? { ...prev, disableChatbot: event.target.checked } : prev
+                    )
+                  }
+                />
+                <span>Desligar chatbot</span>
+              </label>
+            </div>
 
             <div className="flex items-center gap-3">
               <button

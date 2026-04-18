@@ -264,6 +264,8 @@ export type TenantConfigResponse = {
     allowlist: string[];
     handoffAttendantWaid: string;
     defaultLanguage: string;
+    disableAutoReply?: boolean;
+    disableChatbot?: boolean;
     templates: {
       manualHandoff: string;
     };
