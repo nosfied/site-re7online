@@ -1179,6 +1179,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     inboundText: string | null | undefined,
   ) => {
     if (!tenantClientId) return null;
+    if (!hasResolvedTenantConfig) return null;
     if (appliedTenantConfig?.disableChatbot) return null;
     if (
       state.flow === "quote_site" ||
@@ -2818,7 +2819,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       : handoffResult.handled
         ? { state: updatedConversation, handled: false as const, replyText: undefined }
-        : appliedTenantConfig?.disableLegacyFlows
+        : appliedTenantConfig?.disableLegacyFlows || !hasResolvedTenantConfig
           ? { state: updatedConversation, handled: false as const, replyText: undefined }
         : await runFlowExecutor({
             tenantId: appliedTenantConfig?.id ?? "default",
@@ -2940,6 +2941,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    if (!hasResolvedTenantConfig) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "tenant_config_missing",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
     if (!shouldAutoReply(updatedConversation)) {
       const skipReason =
         updatedConversation.mode === "HUMAN" ? "human_mode" : "handoff_active";
@@ -2977,7 +2990,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let skipDemoReplies = false;
     let hasDemoSignal = false;
 
-    if (message.text && !appliedTenantConfig?.disableLegacyFlows) {
+    if (message.text && !appliedTenantConfig?.disableLegacyFlows && hasResolvedTenantConfig) {
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -3116,7 +3129,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const postDemoFlowResult = appliedTenantConfig?.disableLegacyFlows
+    const postDemoFlowResult = appliedTenantConfig?.disableLegacyFlows || !hasResolvedTenantConfig
       ? { handled: false as const }
       : await runPostDemoFlowExecutor({
           tenantId: appliedTenantConfig?.id ?? "default",
@@ -3276,6 +3289,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
+    const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
 
     if (
       !leadHandled &&
@@ -3287,6 +3301,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
       !appliedTenantConfig?.disableAiFallback &&
+      aiBusinessContext.length > 0 &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
       updatedConversation.intent !== "handoff" &&
@@ -3300,7 +3315,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           lastMessages: [message.text],
           inboundText: message.text,
           nowIso: new Date().toISOString(),
-          businessContext: "",
+          businessContext: aiBusinessContext,
           stateSummary: {
             segment: updatedConversation.answers?.segment,
             flow: updatedConversation.flow,

@@ -84,6 +84,31 @@ function FlowBadge({
   );
 }
 
+function TogglePill({
+  checked,
+  disabled,
+  onToggle,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+        checked
+          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+          : "border-white/15 bg-white/5 text-white/70"
+      } disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      {checked ? "On" : "Off"}
+    </button>
+  );
+}
+
 export default function AppChatbotPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -369,50 +394,44 @@ export default function AppChatbotPage() {
           <div className="grid gap-3 md:grid-cols-2">
             {[
               {
-                key: "disableAutoReply" as const,
-                title: "Desligar todas as respostas automaticas",
-                help: "Kill switch total. Para chatbot, fluxos legados e IA.",
-              },
-              {
                 key: "disableChatbot" as const,
-                title: "Desligar chatbot JSON",
-                help: "Bloqueia apenas os flows criados nesta tela.",
+                title: "Chatbot JSON",
+                help: "On ativa os flows criados nesta tela. Off corta apenas essa camada.",
               },
               {
                 key: "disableLegacyFlows" as const,
-                title: "Desligar fluxos legados",
-                help: "Bloqueia quote_site e automacoes antigas de captura/demo.",
+                title: "Fluxos legados",
+                help: "On permite quote_site e automacoes antigas de captura/demo.",
               },
               {
                 key: "disableAiFallback" as const,
-                title: "Desligar IA automatica",
-                help: "Bloqueia o fallback global de IA quando nenhum flow tratar.",
+                title: "IA automatica",
+                help: "So ativa se o tenant tiver configuracao previa de contexto; sem isso, fica inativa.",
               },
             ].map((item) => (
-              <label
+              <div
                 key={item.key}
-                className="flex items-start gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-4 text-sm"
+                className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-4 text-sm"
               >
-                <input
-                  type="checkbox"
-                  checked={automationDraft[item.key]}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            [item.key]: event.target.checked,
-                          }
-                        : current
-                    )
-                  }
-                  disabled={readOnly}
-                />
                 <span className="space-y-1">
                   <span className="block font-medium text-white">{item.title}</span>
                   <span className="block text-white/60">{item.help}</span>
                 </span>
-              </label>
+                <TogglePill
+                  checked={!automationDraft[item.key]}
+                  disabled={readOnly}
+                  onToggle={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            [item.key]: !current[item.key],
+                          }
+                        : current
+                    )
+                  }
+                />
+              </div>
             ))}
           </div>
         ) : (

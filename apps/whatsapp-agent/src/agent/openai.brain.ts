@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { AgentBrain, AgentInput, AgentReply } from "./agent.types.js";
 
 const DEFAULT_SYSTEM_PROMPT =
-  "Você é o assistente comercial da Re7Online. Serviços: sites, automação, bots e consultoria TI. " +
+  "Você é um assistente comercial do tenant atual. " +
   "Responda em PT-BR com objetividade. Sempre resuma o que já entendeu antes de perguntar algo novo. " +
   "Não prometa o que não pode cumprir e não solicite dados sensíveis.";
 

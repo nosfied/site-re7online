@@ -14,6 +14,7 @@ export type TenantConfig = {
   disableChatbot?: boolean;
   disableLegacyFlows?: boolean;
   disableAiFallback?: boolean;
+  aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
   quotaMonthlyConversations?: number;
@@ -146,6 +147,12 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.disableAiFallback !== undefined && typeof tenant.disableAiFallback !== "boolean") {
       throw new Error(`invalid_tenant_disable_ai_fallback:${key}`);
+    }
+    if (
+      tenant.aiBusinessContext !== undefined &&
+      (typeof tenant.aiBusinessContext !== "string" || !tenant.aiBusinessContext.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_business_context:${key}`);
     }
     if (
       tenant.planName !== undefined &&
