@@ -3267,6 +3267,29 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
+    const allAutomationLayersDisabled =
+      appliedTenantConfig?.disableChatbot === true &&
+      appliedTenantConfig?.disableLegacyFlows === true &&
+      appliedTenantConfig?.disableAiFallback === true;
+
+    if (
+      allAutomationLayersDisabled &&
+      !demoReplyText &&
+      !leadReplyText &&
+      !flowReplyText &&
+      !handoffResult.replyText
+    ) {
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "automation_layers_disabled",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
     let replyText = demoReplyText ?? leadReplyText ?? flowReplyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
