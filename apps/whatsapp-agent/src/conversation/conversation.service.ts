@@ -306,6 +306,27 @@ export function requestHumanHandoff(
   };
 }
 
+export function activateHumanHandoff(
+  state: ConversationState,
+  timestamp: string,
+  replyText = "Vou te transferir para um atendente humano."
+): {
+  state: ConversationState;
+  handled: true;
+  replyText: string;
+  outcome: "accepted";
+} {
+  return {
+    handled: true,
+    outcome: "accepted",
+    state: withHandoff(state, {
+      status: "active",
+      activatedAt: timestamp,
+    }),
+    replyText,
+  };
+}
+
 export function applyAdminCommand(
   state: ConversationState,
   inboundText: string | null

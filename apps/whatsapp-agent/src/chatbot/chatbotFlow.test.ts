@@ -161,7 +161,7 @@ test("executeChatbotFlow follows text next and reaches handoff", () => {
   assert.equal(result.handled, true);
   assert.equal(result.state.chatbotActive, false);
   assert.equal(result.state.chatbotNodeId, undefined);
-  assert.equal(result.state.handoff.status, "pending");
+  assert.equal(result.state.handoff.status, "active");
   assert.match(result.replyText ?? "", /Vou te encaminhar/);
 });
 

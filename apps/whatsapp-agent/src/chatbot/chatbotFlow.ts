@@ -1,5 +1,5 @@
 import { ConversationState } from "../conversation/conversation.types.js";
-import { requestHumanHandoff } from "../conversation/conversation.service.js";
+import { activateHumanHandoff } from "../conversation/conversation.service.js";
 
 export type ChatbotMenuNode = {
   type: "menu";
@@ -329,7 +329,7 @@ function executeNodeChain(params: {
       };
     }
 
-    const handoff = requestHumanHandoff(clearChatbotRuntime(currentState), params.nowIso, node.text);
+    const handoff = activateHumanHandoff(clearChatbotRuntime(currentState), params.nowIso, node.text);
     messages.push(handoff.replyText);
     return {
       handled: true,

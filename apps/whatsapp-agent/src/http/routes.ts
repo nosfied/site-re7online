@@ -2408,6 +2408,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const nextState = {
         ...conversation,
         mode: "HUMAN" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          activatedAt: assignedAt,
+        },
         assignedUserId: assignedUser?.id ?? clientAuth.userId,
         assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
         assignedAt,
@@ -4871,6 +4876,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
           assignedUserId: assignedUser.id,
           assignedTo: `user:${assignedUser.id}`,
           assignedAt,
@@ -4973,6 +4983,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
           assignedUserId: assignedUser.id,
           assignedTo: `user:${assignedUser.id}`,
           assignedAt,
@@ -5291,6 +5306,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
           assignedUserId: assignedUser?.id ?? null,
           assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
