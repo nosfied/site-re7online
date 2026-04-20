@@ -2287,9 +2287,30 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.timestamp
       );
       await upsertConversationSafe(blockedState);
+      await persistConversationSafe({
+        waId: blockedState.waId,
+        windowIsOpen: blockedState.window.isOpen,
+        windowExpiresAt: blockedState.window.expiresAt,
+        lastInboundAt: blockedState.lastInboundAt ?? null,
+        lastOutboundAt: blockedState.lastOutboundAt ?? null,
+        departmentId: blockedState.departmentId ?? null,
+      });
       await storage.saveIncomingMessage(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
+      await persistInboundSafe({
+        waId: message.from,
+        messageId: message.messageId,
+        type: mapMessageType(message.type),
+        bodyText: message.text,
+        allowlistHit,
+        occurredAt: parseWebhookTimestampToDate(message.timestamp),
+        rawPayload: {
+          ...message.raw,
+          text: message.text,
+          timestamp: message.timestamp,
+        },
+      });
       logger.info({
         event: "handoff.blocked",
         waId: maskNumber(normalizedFrom),
@@ -2696,9 +2717,30 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     if (getHandoffStatus(updatedConversation) === "active") {
       await upsertConversationSafe(updatedConversation);
+      await persistConversationSafe({
+        waId: updatedConversation.waId,
+        windowIsOpen: updatedConversation.window.isOpen,
+        windowExpiresAt: updatedConversation.window.expiresAt,
+        lastInboundAt: updatedConversation.lastInboundAt ?? null,
+        lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+        departmentId: updatedConversation.departmentId ?? null,
+      });
       await storage.saveIncomingMessage(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
+      await persistInboundSafe({
+        waId: message.from,
+        messageId: message.messageId,
+        type: mapMessageType(message.type),
+        bodyText: message.text,
+        allowlistHit,
+        occurredAt: parseWebhookTimestampToDate(message.timestamp),
+        rawPayload: {
+          ...message.raw,
+          text: message.text,
+          timestamp: message.timestamp,
+        },
+      });
       logger.info({
         event: "handoff.blocked",
         waId: maskNumber(normalizedFrom),
@@ -2782,8 +2824,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             flowId: chatbotFlow.id,
           };
           if (
-            previousHandoffStatus !== "pending" &&
-            chatbotResult.state.handoff.status === "pending"
+            previousHandoffStatus !== chatbotResult.state.handoff.status &&
+            (chatbotResult.state.handoff.status === "pending" ||
+              chatbotResult.state.handoff.status === "active")
           ) {
             updatedConversation = await ensurePendingHandoffRouting(chatbotResult.state);
             chatbotFlowResult.state = updatedConversation;
