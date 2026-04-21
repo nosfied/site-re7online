@@ -403,17 +403,17 @@ export default function AppChatbotPage() {
             {[
               {
                 key: "disableChatbot" as const,
-                title: "Chatbot JSON",
-                help: "On ativa os flows criados nesta tela. Off corta apenas essa camada.",
+                title: "Fluxo configuravel",
+                help: "On ativa os flows personalizados criados nesta tela para este tenant.",
               },
               {
                 key: "disableLegacyFlows" as const,
-                title: "Fluxos legados",
-                help: "On permite quote_site e automacoes antigas de captura/demo.",
+                title: "Fluxos prontos",
+                help: "On ativa automacoes especializadas ja disponiveis na plataforma, como roteiros comerciais pre-definidos.",
               },
               {
                 key: "disableAiFallback" as const,
-                title: "IA automatica",
+                title: "IA conversacional",
                 help: automationDraft.aiConfigured
                   ? "On ativa a IA automatica com o contexto configurado para este tenant."
                   : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
