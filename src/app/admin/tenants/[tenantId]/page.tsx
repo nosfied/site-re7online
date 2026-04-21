@@ -72,7 +72,7 @@ export default function TenantEditPage() {
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
           disableAutoReply: tenant.disableAutoReply ?? false,
           disableChatbot: tenant.disableChatbot ?? false,
-          disableLegacyFlows: tenant.disableLegacyFlows ?? false,
+          disableLegacyFlows: tenant.disableLegacyFlows ?? true,
           disableAiFallback: tenant.disableAiFallback ?? false,
         });
       })
@@ -297,7 +297,7 @@ export default function TenantEditPage() {
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableChatbot ? "Desligado" : "Ligado"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Fluxos legados</p>
+                <p className="text-xs uppercase tracking-wide text-white/50">Fluxos prontos</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableLegacyFlows ? "Desligados" : "Ligados"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
@@ -418,7 +418,7 @@ export default function TenantEditPage() {
                     )
                   }
                 />
-                <span>Desligar fluxos legados</span>
+                <span>Desligar fluxos prontos</span>
               </label>
               <label className="flex items-center gap-2 text-sm text-white/80">
                 <input

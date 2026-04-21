@@ -335,7 +335,6 @@ export default function AppChatbotPage() {
   const automationDraft = settings ?? {
     disableAutoReply: false,
     disableChatbot: false,
-    disableLegacyFlows: false,
     disableAiFallback: false,
     aiConfigured: false,
   };
@@ -379,7 +378,7 @@ export default function AppChatbotPage() {
           <div>
             <h2 className="text-lg font-semibold">Automacao do tenant</h2>
             <p className="mt-1 text-sm text-white/65">
-              Use os controles por camada. Desligar o chatbot JSON nao desliga fluxos legados nem IA.
+              Use os controles disponiveis para o tenant. Fluxos prontos ficam restritos ao console interno.
             </p>
             <p className="mt-1 text-xs text-white/50">
               Configuracao previa de IA: {automationDraft.aiConfigured ? "presente" : "ausente"}.
@@ -405,11 +404,6 @@ export default function AppChatbotPage() {
                 key: "disableChatbot" as const,
                 title: "Fluxo configuravel",
                 help: "On ativa os flows personalizados criados nesta tela para este tenant.",
-              },
-              {
-                key: "disableLegacyFlows" as const,
-                title: "Fluxos prontos",
-                help: "On ativa automacoes especializadas ja disponiveis na plataforma, como roteiros comerciais pre-definidos.",
               },
               {
                 key: "disableAiFallback" as const,

@@ -97,7 +97,6 @@ export type AppChatbotFlowItem = {
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
-  disableLegacyFlows: boolean;
   disableAiFallback: boolean;
   aiConfigured: boolean;
 };

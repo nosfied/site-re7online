@@ -51,6 +51,7 @@ function buildDefaultTenant(): TenantConfigMap {
     allowlist: env.WHATSAPP_ALLOWLIST ?? [],
     handoffAttendantWaid: env.HANDOFF_ATTENDANT_WAID ?? "",
     defaultLanguage: env.OUTBOUND_TEMPLATE_DEFAULT_LANG ?? "pt_BR",
+    disableLegacyFlows: true,
     templates: {
       manualHandoff: env.HANDOFF_TEMPLATE_NAME || "re7_atendente_manual_v1",
     },
@@ -92,6 +93,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     const tenant = value as Record<string, unknown>;
     const nextTenant: Record<string, unknown> = { ...tenant };
+    if (nextTenant.disableLegacyFlows === undefined) {
+      nextTenant.disableLegacyFlows = true;
+    }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
         typeof waId === "string" ? waId.replace(/\D/g, "") : waId

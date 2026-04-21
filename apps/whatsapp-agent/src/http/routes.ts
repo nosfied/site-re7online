@@ -1790,7 +1790,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
           disableChatbot: tenant.disableChatbot ?? false,
-          disableLegacyFlows: tenant.disableLegacyFlows ?? false,
           disableAiFallback: tenant.disableAiFallback ?? false,
           aiConfigured,
         },
@@ -1830,7 +1829,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const keys = [
         "disableAutoReply",
         "disableChatbot",
-        "disableLegacyFlows",
         "disableAiFallback",
       ] as const;
       const payload: Record<string, boolean> = {};
@@ -1849,7 +1847,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           400,
           httpError(
             "bad_request",
-            "Provide at least one of disableAutoReply, disableChatbot, disableLegacyFlows or disableAiFallback"
+            "Provide at least one of disableAutoReply, disableChatbot or disableAiFallback"
           )
         );
         return;
@@ -1889,7 +1887,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         settings: {
           disableAutoReply: Boolean(saved.tenant.disableAutoReply),
           disableChatbot: Boolean(saved.tenant.disableChatbot),
-          disableLegacyFlows: Boolean(saved.tenant.disableLegacyFlows),
           disableAiFallback: Boolean(saved.tenant.disableAiFallback),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
         },
