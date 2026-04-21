@@ -1783,6 +1783,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
+      const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
@@ -1791,6 +1792,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableChatbot: tenant.disableChatbot ?? false,
           disableLegacyFlows: tenant.disableLegacyFlows ?? false,
           disableAiFallback: tenant.disableAiFallback ?? false,
+          aiConfigured,
         },
       });
     } catch (error) {
@@ -1852,6 +1854,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
+      if (payload.disableAiFallback === false && !aiConfigured) {
+        json(
+          res,
+          409,
+          httpError(
+            "ai_context_missing",
+            "AI automatica exige configuracao previa do tenant."
+          )
+        );
+        return;
+      }
 
       const saved = await saveTenantPatch(client.clientKey, payload);
       logger.info({
@@ -1871,6 +1891,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableChatbot: Boolean(saved.tenant.disableChatbot),
           disableLegacyFlows: Boolean(saved.tenant.disableLegacyFlows),
           disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+          aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
         },
       });
     } catch (error) {

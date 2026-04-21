@@ -58,6 +58,9 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "invalid_chatbot_definition") {
     return error.message || "JSON invalido para o flow.";
   }
+  if (error.errorCode === "ai_context_missing") {
+    return error.message || "IA automatica exige configuracao previa do tenant.";
+  }
   if (error.status === 403) {
     return "Sem permissao para gerenciar flows do chatbot.";
   }
@@ -334,6 +337,7 @@ export default function AppChatbotPage() {
     disableChatbot: false,
     disableLegacyFlows: false,
     disableAiFallback: false,
+    aiConfigured: false,
   };
 
   const handleSaveSettings = async () => {
@@ -377,6 +381,10 @@ export default function AppChatbotPage() {
             <p className="mt-1 text-sm text-white/65">
               Use os controles por camada. Desligar o chatbot JSON nao desliga fluxos legados nem IA.
             </p>
+            <p className="mt-1 text-xs text-white/50">
+              Configuracao previa de IA: {automationDraft.aiConfigured ? "presente" : "ausente"}.
+              {!automationDraft.aiConfigured ? " Sem isso, a IA automatica permanece indisponivel." : ""}
+            </p>
           </div>
           {!readOnly ? (
             <button
@@ -406,7 +414,9 @@ export default function AppChatbotPage() {
               {
                 key: "disableAiFallback" as const,
                 title: "IA automatica",
-                help: "So ativa se o tenant tiver configuracao previa de contexto; sem isso, fica inativa.",
+                help: automationDraft.aiConfigured
+                  ? "On ativa a IA automatica com o contexto configurado para este tenant."
+                  : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
               },
             ].map((item) => (
               <div
@@ -419,7 +429,12 @@ export default function AppChatbotPage() {
                 </span>
                 <TogglePill
                   checked={!automationDraft[item.key]}
-                  disabled={readOnly}
+                  disabled={
+                    readOnly ||
+                    (item.key === "disableAiFallback" &&
+                      !automationDraft.aiConfigured &&
+                      automationDraft.disableAiFallback)
+                  }
                   onToggle={() =>
                     setSettings((current) =>
                       current

@@ -41,7 +41,7 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
   return (
     <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+        <header className="sticky top-4 z-20 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-[#0d1b36]/95 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur">
           <div>
             <h1 className="text-2xl font-bold">{title}</h1>
             {subtitle ? <p className="mt-1 text-sm text-white/70">{subtitle}</p> : null}

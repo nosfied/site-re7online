@@ -100,6 +100,12 @@ type DepartmentOption = {
   name: string;
 };
 
+type PendingOutgoingMessage = {
+  waId: string;
+  conversationKey: string;
+  text: string;
+};
+
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
   return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
@@ -401,6 +407,7 @@ export default function AppInboxPage() {
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
@@ -416,6 +423,8 @@ export default function AppInboxPage() {
   const shouldScrollToBottomRef = useRef(false);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
+  const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
+  const processingOutgoingRef = useRef(false);
   const unreadStorageKey = useMemo(
     () => (session ? `wa_app_inbox_read_state_v2:${session.user.clientId}` : null),
     [session]
@@ -1024,6 +1033,66 @@ export default function AppInboxPage() {
     }
   };
 
+  const processOutgoingQueue = useCallback(async () => {
+    if (!session || processingOutgoingRef.current) return;
+    processingOutgoingRef.current = true;
+    setSendingMessage(true);
+    try {
+      while (outgoingQueueRef.current.length > 0) {
+        const next = outgoingQueueRef.current.shift();
+        setQueuedMessageCount(outgoingQueueRef.current.length);
+        if (!next) continue;
+        try {
+          const response = await sendAppConversationMessage(session, next.waId, next.text);
+          shouldScrollToBottomRef.current = true;
+          if (selectedConversationWaId === next.waId) {
+            await refreshSelectedTimeline(session, response.waId ?? next.waId);
+          }
+          setConversations((prev) =>
+            sortConversationsByRecent(
+              prev.map((item) =>
+                getConversationIdentity(item) === next.conversationKey
+                  ? {
+                      ...applyConversationOperationalPayload(item, response),
+                      lastMessage: {
+                        direction: "OUTBOUND",
+                        type: "TEXT",
+                        status: response.message.status,
+                        bodyText: next.text,
+                        templateName: null,
+                        createdAt: response.message.createdAt,
+                      },
+                      updatedAt: response.message.createdAt,
+                    }
+                  : item
+              )
+            )
+          );
+          markConversationAsRead(
+            response.waIdCanonical ?? next.conversationKey,
+            response.message.createdAt
+          );
+        } catch (err) {
+          const typed = err as { status?: number; message?: string };
+          if (typed.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          if (selectedConversationWaId === next.waId) {
+            setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
+          }
+          setError(typed.message || "Falha ao enviar mensagem.");
+          break;
+        }
+      }
+    } finally {
+      processingOutgoingRef.current = false;
+      setQueuedMessageCount(outgoingQueueRef.current.length);
+      setSendingMessage(false);
+      focusComposer();
+    }
+  }, [handleUnauthorized, refreshSelectedTimeline, selectedConversationWaId, session]);
+
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
     if (!canReply) {
@@ -1032,58 +1101,23 @@ export default function AppInboxPage() {
     }
     const text = messageDraft.trim();
     if (!text) return;
-    setSendingMessage(true);
+    const queuedMessage: PendingOutgoingMessage = {
+      waId: selectedConversationWaId,
+      conversationKey: getConversationIdentity(selectedConversation),
+      text,
+    };
+    setMessageDraft("");
     setError(null);
-    try {
-      const response = await sendAppConversationMessage(session, selectedConversationWaId, text);
-      setMessageDraft("");
-      shouldScrollToBottomRef.current = true;
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
-      setConversations((prev) =>
-        sortConversationsByRecent(
-          prev.map((item) =>
-            getConversationIdentity(item) === getConversationIdentity(selectedConversation)
-              ? {
-                  ...applyConversationOperationalPayload(item, response),
-                  lastMessage: {
-                    direction: "OUTBOUND",
-                    type: "TEXT",
-                    status: response.message.status,
-                    bodyText: text,
-                    templateName: null,
-                    createdAt: response.message.createdAt,
-                  },
-                  updatedAt: response.message.createdAt,
-                }
-              : item
-          )
-        )
-      );
-      markConversationAsRead(
-        response.waIdCanonical ?? getConversationIdentity(selectedConversation),
-        response.message.createdAt
-      );
-    } catch (err) {
-      const typed = err as { status?: number; message?: string };
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      if (typed.status === 409) {
-        setError(typed.message || "Assuma a conversa para responder manualmente.");
-        return;
-      }
-      setError(typed.message || "Falha ao enviar mensagem.");
-    } finally {
-      setSendingMessage(false);
-      focusComposer();
-    }
+    outgoingQueueRef.current.push(queuedMessage);
+    setQueuedMessageCount(outgoingQueueRef.current.length);
+    void processOutgoingQueue();
+    focusComposer();
   };
 
   const handleComposerKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
-    if (!messageDraft.trim() || sendingMessage || !selectedConversationWaId) return;
+    if (!messageDraft.trim() || !selectedConversationWaId) return;
     await handleSendMessage();
   };
 
@@ -1539,7 +1573,7 @@ export default function AppInboxPage() {
                     setMessageDraft((current) => `${current}${emoji}`);
                     focusComposer();
                   }}
-                  disabled={!selectedConversationWaId || sendingMessage}
+                  disabled={!selectedConversationWaId || !canReply}
                   className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-lg leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {emoji}
@@ -1558,26 +1592,26 @@ export default function AppInboxPage() {
                     ? "Digite a mensagem..."
                     : "Assuma a conversa para responder manualmente..."
                 }
-                disabled={
-                  !selectedConversationWaId ||
-                  sendingMessage ||
-                  !canReply
-                }
+                disabled={!selectedConversationWaId || !canReply}
               />
             </label>
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-600">
+                {sendingMessage || queuedMessageCount > 0
+                  ? `${queuedMessageCount > 0 ? `${queuedMessageCount} ` : ""}mensagem(ns) em envio. O campo continua livre para digitar.`
+                  : "Envio em sequencia. O rascunho atual nao trava enquanto outra mensagem sobe."}
+              </p>
               <button
                 type="button"
                 disabled={
                   !selectedConversationWaId ||
                   !messageDraft.trim() ||
-                  sendingMessage ||
                   !canReply
                 }
                 onClick={handleSendMessage}
                 className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {sendingMessage ? "Enviando..." : "Enviar mensagem"}
+                {sendingMessage ? "Adicionar a fila" : "Enviar mensagem"}
               </button>
             </div>
           </div>
