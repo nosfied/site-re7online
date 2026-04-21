@@ -17,11 +17,33 @@ type TenantFormState = {
   quotaWarnAtPct: string;
   quotaExcludeWaIdsInput: string;
   quotaBlockedReplyText: string;
-  disableAutoReply: boolean;
   disableChatbot: boolean;
   disableLegacyFlows: boolean;
   disableAiFallback: boolean;
+  aiBusinessContext: string;
 };
+
+function TogglePill({
+  checked,
+  onToggle,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
+        checked
+          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+          : "border-white/15 bg-white/5 text-white/70"
+      }`}
+    >
+      {checked ? "On" : "Off"}
+    </button>
+  );
+}
 
 export default function TenantEditPage() {
   const params = useParams<{ tenantId: string }>();
@@ -70,10 +92,10 @@ export default function TenantEditPage() {
             typeof tenant.quotaWarnAtPct === "number" ? String(tenant.quotaWarnAtPct) : "",
           quotaExcludeWaIdsInput: (tenant.quotaExcludeWaIds ?? []).join("\n"),
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
-          disableAutoReply: tenant.disableAutoReply ?? false,
           disableChatbot: tenant.disableChatbot ?? false,
           disableLegacyFlows: tenant.disableLegacyFlows ?? true,
           disableAiFallback: tenant.disableAiFallback ?? false,
+          aiBusinessContext: tenant.aiBusinessContext ?? "",
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -111,10 +133,10 @@ export default function TenantEditPage() {
       ...(tenantSnapshot ?? {}),
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
-      disableAutoReply: form.disableAutoReply,
       disableChatbot: form.disableChatbot,
       disableLegacyFlows: form.disableLegacyFlows,
       disableAiFallback: form.disableAiFallback,
+      aiBusinessContext: form.aiBusinessContext.trim() || undefined,
     };
 
     if (form.quotaMonthlyConversations.trim()) {
@@ -143,6 +165,7 @@ export default function TenantEditPage() {
     setError(null);
     try {
       const result = await updateTenantById(connection, tenantId, payload);
+      setTenantSnapshot(result.tenant);
       setDebugInfo({ fieldsChanged: result.fieldsChanged, backupPath: result.backupPath });
       setToast("Tenant salvo com sucesso.");
       window.setTimeout(() => setToast(null), 3000);
@@ -289,11 +312,7 @@ export default function TenantEditPage() {
                 <p className="mt-2 text-sm">{tenantSnapshot?.quotaMonthlyConversations ?? "-"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Respostas automaticas</p>
-                <p className="mt-2 text-sm">{tenantSnapshot?.disableAutoReply ? "Desligadas" : "Ligadas"}</p>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Chatbot JSON</p>
+                <p className="text-xs uppercase tracking-wide text-white/50">Fluxo configuravel</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableChatbot ? "Desligado" : "Ligado"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
@@ -301,8 +320,12 @@ export default function TenantEditPage() {
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableLegacyFlows ? "Desligados" : "Ligados"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">IA automatica</p>
+                <p className="text-xs uppercase tracking-wide text-white/50">IA conversacional</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableAiFallback ? "Desligada" : "Ligada"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Contexto da IA</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.aiBusinessContext?.trim() ? "Configurado" : "Ausente"}</p>
               </div>
             </div>
           </div>
@@ -384,55 +407,60 @@ export default function TenantEditPage() {
             </label>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm text-white/80">
-                <input
-                  type="checkbox"
-                  checked={form.disableAutoReply}
-                  onChange={(event) =>
-                    setForm((prev) =>
-                      prev ? { ...prev, disableAutoReply: event.target.checked } : prev
-                    )
+              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
+                <span className="space-y-1">
+                  <span className="block font-medium text-white">Fluxo configuravel</span>
+                  <span className="block text-white/60">Controla os flows personalizados disponiveis no /app/chatbot.</span>
+                </span>
+                <TogglePill
+                  checked={!form.disableChatbot}
+                  onToggle={() =>
+                    setForm((prev) => (prev ? { ...prev, disableChatbot: !prev.disableChatbot } : prev))
                   }
                 />
-                <span>Desligar todas as respostas automaticas</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-white/80">
-                <input
-                  type="checkbox"
-                  checked={form.disableChatbot}
-                  onChange={(event) =>
-                    setForm((prev) =>
-                      prev ? { ...prev, disableChatbot: event.target.checked } : prev
-                    )
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
+                <span className="space-y-1">
+                  <span className="block font-medium text-white">Fluxos prontos</span>
+                  <span className="block text-white/60">Camada interna da plataforma. Fica desligada por padrao para tenants.</span>
+                </span>
+                <TogglePill
+                  checked={!form.disableLegacyFlows}
+                  onToggle={() =>
+                    setForm((prev) => (prev ? { ...prev, disableLegacyFlows: !prev.disableLegacyFlows } : prev))
                   }
                 />
-                <span>Desligar chatbot JSON</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-white/80">
-                <input
-                  type="checkbox"
-                  checked={form.disableLegacyFlows}
-                  onChange={(event) =>
-                    setForm((prev) =>
-                      prev ? { ...prev, disableLegacyFlows: event.target.checked } : prev
-                    )
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
+                <span className="space-y-1">
+                  <span className="block font-medium text-white">IA conversacional</span>
+                  <span className="block text-white/60">Use junto com um contexto de negocio abaixo. O tenant admin so consegue ligar no /app quando esse contexto existe.</span>
+                </span>
+                <TogglePill
+                  checked={!form.disableAiFallback}
+                  onToggle={() =>
+                    setForm((prev) => (prev ? { ...prev, disableAiFallback: !prev.disableAiFallback } : prev))
                   }
                 />
-                <span>Desligar fluxos prontos</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-white/80">
-                <input
-                  type="checkbox"
-                  checked={form.disableAiFallback}
-                  onChange={(event) =>
-                    setForm((prev) =>
-                      prev ? { ...prev, disableAiFallback: event.target.checked } : prev
-                    )
-                  }
-                />
-                <span>Desligar IA automatica</span>
-              </label>
+              </div>
             </div>
+
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Contexto de negocio da IA</span>
+              <textarea
+                className="min-h-28 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={form.aiBusinessContext}
+                onChange={(event) =>
+                  setForm((prev) =>
+                    prev ? { ...prev, aiBusinessContext: event.target.value } : prev
+                  )
+                }
+                placeholder="Descreva a empresa, servicos, tom de voz, publico e limites da IA para este tenant."
+              />
+              <span className="text-xs text-white/50">
+                Sem esse contexto, a IA conversacional permanece indisponivel no /app.
+              </span>
+            </label>
 
             <div className="flex items-center gap-3">
               <button

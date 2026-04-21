@@ -8397,6 +8397,7 @@ function diffTenantFields(
   compareField("disableChatbot");
   compareField("disableLegacyFlows");
   compareField("disableAiFallback");
+  compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
   compareField("quotaBlockedReplyText");

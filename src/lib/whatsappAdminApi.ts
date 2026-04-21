@@ -268,6 +268,7 @@ export type TenantConfigResponse = {
     disableChatbot?: boolean;
     disableLegacyFlows?: boolean;
     disableAiFallback?: boolean;
+    aiBusinessContext?: string;
     templates: {
       manualHandoff: string;
     };
