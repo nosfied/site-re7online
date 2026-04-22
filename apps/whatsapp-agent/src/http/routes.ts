@@ -1079,16 +1079,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       if (!result.ok) {
-        if (result.error === "window_closed") {
-          json(res, result.statusCode, {
-            error: {
-              code: "window_closed",
-              message:
-                "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.",
-              details:
-                "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.",
-            },
-          });
+        if (result.error === "window_closed" && result.errorPayload) {
+          json(res, result.statusCode, { error: result.errorPayload });
           return;
         }
         json(res, result.statusCode, { error: result.error });
@@ -5512,16 +5504,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
         if (!result.ok) {
-          if (result.error === "window_closed") {
-            json(res, result.statusCode, {
-              error: {
-                code: "window_closed",
-                message:
-                  "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.",
-                details:
-                  "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.",
-              },
-            });
+          if (result.error === "window_closed" && result.errorPayload) {
+            json(res, result.statusCode, { error: result.errorPayload });
             return;
           }
           json(res, result.statusCode, { error: result.error });
@@ -10663,6 +10647,37 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
   });
 }
 
+function formatElapsedSince(timestampIso?: string, nowMs = Date.now()) {
+  if (!timestampIso) return null;
+  const timestampMs = Date.parse(timestampIso);
+  if (!Number.isFinite(timestampMs) || timestampMs >= nowMs) {
+    return null;
+  }
+  const diffMs = nowMs - timestampMs;
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
+  }
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} dia${diffDays === 1 ? "" : "s"}`;
+}
+
+function buildWindowClosedError(expiresAt?: string) {
+  const elapsed = formatElapsedSince(expiresAt);
+  return {
+    code: "window_closed",
+    message: elapsed
+      ? `Janela fechada ha cerca de ${elapsed}. Envie primeiro um template aprovado pela Meta em Campanhas para reabrir a conversa.`
+      : "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta em Campanhas para reabrir a conversa.",
+    details:
+      "Sem resposta recente do cliente, texto livre fica bloqueado fora da janela de 24 horas. Envie um template aprovado em Campanhas e aguarde o retorno desse numero para a janela reabrir.",
+  };
+}
+
 async function adminSendMessage(params: {
   waId: string;
   text: string;
@@ -10677,7 +10692,7 @@ async function adminSendMessage(params: {
       metaMessageId: string | null;
       createdAt: string;
     }
-  | { ok: false; statusCode: number; error: string }
+  | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
 > {
   if (!env.outboundEnabled) {
     return { ok: false, statusCode: 503, error: "outbound_disabled" };
@@ -10685,7 +10700,12 @@ async function adminSendMessage(params: {
   const nowMs = Date.now();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
-    return { ok: false, statusCode: 409, error: "window_closed" };
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "window_closed",
+      errorPayload: buildWindowClosedError(conversation.window.expiresAt),
+    };
   }
   const usageGate = await checkUsageGate({
     clientId: params.clientId,
