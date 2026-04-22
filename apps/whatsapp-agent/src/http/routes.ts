@@ -1,5 +1,6 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 import { ConversationOperationalStatus, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
@@ -10,7 +11,13 @@ import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
 import { getTenants, saveTenants } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
-import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
+import {
+  fetchMediaContent,
+  sendMediaMessage,
+  sendTextMessage,
+  uploadMedia,
+  type SendMediaKind,
+} from "../whatsapp/whatsapp.client.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
@@ -50,6 +57,7 @@ import {
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
+import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
 
@@ -976,6 +984,173 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 7 &&
+    pathname.split("/")[4] === "messages" &&
+    pathname.split("/")[6] === "media"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const messageId = decodeURIComponent(pathname.split("/")[5] ?? "").trim();
+      if (!waId || !messageId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_media_department_check",
+      });
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/messages/:messageId/media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+
+      const inbound = await prisma.inboundMessage.findFirst({
+        where: {
+          clientId: client.id,
+          messageId,
+          type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] },
+          OR: [
+            { waIdCanonical: resolvedConversation.resolvedWaIdCanonical },
+            { waId: { in: Array.from(new Set([waId, ...resolvedConversation.matchedWaIds])) } },
+          ],
+        },
+        select: {
+          messageId: true,
+          rawPayload: true,
+        },
+      });
+
+      if (!inbound) {
+        json(res, 404, { error: "media_not_found" });
+        return;
+      }
+
+      const mediaId = extractRawMediaId(inbound.rawPayload);
+      if (!mediaId) {
+        json(res, 404, { error: "media_not_found" });
+        return;
+      }
+
+      const credentials = await resolveTenantOutboundCredentials({
+        clientId: client.id,
+        clientKey: client.clientKey,
+      });
+      if (!credentials) {
+        json(res, 503, { error: "tenant_outbound_credentials_missing" });
+        return;
+      }
+
+      const media = await fetchMediaContent(mediaId, {
+        accessToken: credentials.accessToken,
+      });
+      if (!media.ok) {
+        if (media.status === 404) {
+          json(res, 404, { error: "media_not_found" });
+          return;
+        }
+        logger.error({
+          event: "app.conversation.media.fetch_failed",
+          requestId,
+          clientId: client.id,
+          messageId,
+          status: media.status ?? null,
+          errorBody: media.errorBody ?? null,
+        });
+        json(res, 502, { error: "media_fetch_failed" });
+        return;
+      }
+
+      const contentType = media.contentType || "application/octet-stream";
+      const fileName = sanitizeDownloadFileName(media.fileName) || `${messageId}`;
+      const headers: Record<string, string> = {
+        "Content-Type": contentType,
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": `inline; filename="${fileName}"`,
+      };
+      if (media.contentLength) {
+        headers["Content-Length"] = media.contentLength;
+      }
+      res.writeHead(200, headers);
+
+      if (!media.response.body) {
+        res.end();
+        return;
+      }
+
+      Readable.fromWeb(media.response.body as never)
+        .on("error", (error) => {
+          logger.error({
+            event: "app.conversation.media.stream_error",
+            requestId,
+            clientId: client.id,
+            messageId,
+            message: (error as Error).message,
+          });
+          if (!res.writableEnded) {
+            res.destroy(error as Error);
+          }
+        })
+        .pipe(res);
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.media.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
@@ -1116,6 +1291,203 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.conversation.send.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/send-media")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const body = await readMultipartBody(req, res);
+      if (!body) return;
+      if (!body.file || body.file.content.length <= 0) {
+        json(res, 400, {
+          error: {
+            code: "bad_request",
+            message: "Selecione um arquivo valido para enviar.",
+          },
+        });
+        return;
+      }
+      if (body.file.content.length > MAX_MEDIA_UPLOAD_BYTES) {
+        json(res, 400, {
+          error: {
+            code: "file_too_large",
+            message: "Arquivo excede o limite permitido de 10 MB.",
+          },
+        });
+        return;
+      }
+      if (!isAllowedOutboundMediaMimeType(body.file.mimeType)) {
+        json(res, 400, {
+          error: {
+            code: "unsupported_media_type",
+            message: "Tipo de arquivo ainda nao suportado no inbox.",
+          },
+        });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_send_media",
+      });
+      const currentConversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!currentConversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, {
+          error: "conversation_not_assigned",
+          message: "Assuma a conversa antes de responder manualmente.",
+        });
+        return;
+      }
+
+      const result = await adminSendMediaMessage({
+        waId: resolvedConversation.resolvedWaId,
+        clientKey: client.clientKey,
+        clientId: client.id,
+        requestId,
+        mimeType: body.file.mimeType,
+        fileName: body.file.fileName,
+        caption: body.caption,
+        content: body.file.content,
+      });
+      if (!result.ok) {
+        if (result.error === "window_closed" && result.errorPayload) {
+          json(res, result.statusCode, { error: result.errorPayload });
+          return;
+        }
+        if (result.error === "unsupported_media_type") {
+          json(res, result.statusCode, {
+            error: {
+              code: "unsupported_media_type",
+              message: "Tipo de arquivo ainda nao suportado no inbox.",
+            },
+          });
+          return;
+        }
+        if (result.error === "media_upload_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "media_upload_failed",
+              message: "Nao foi possivel enviar o arquivo para a Meta.",
+            },
+          });
+          return;
+        }
+        json(res, result.statusCode, { error: result.error });
+        return;
+      }
+
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const conversation = await ensureConversationOperationalState(prisma, {
+        clientId: client.id,
+        defaults,
+        conversation: {
+          ...currentConversation,
+          mode: "HUMAN" as const,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        },
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        message: {
+          messageId: result.messageId,
+          status: result.status,
+          metaMessageId: result.metaMessageId,
+          createdAt: result.createdAt,
+          type: result.mediaType,
+          bodyText: result.bodyText,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.send_media.error",
         message: (error as Error).message,
         requestId,
       });
@@ -1790,13 +2162,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
       const chatbotLocked = Boolean(tenant.disableChatbot);
       const aiLocked = Boolean(tenant.disableAiFallback);
+      const disableChatbot = isChatbotDisabledForTenant(tenant);
+      const disableAiFallback = isAiFallbackDisabledForTenant(tenant);
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
-          disableChatbot: tenant.appDisableChatbot ?? false,
-          disableAiFallback: tenant.appDisableAiFallback ?? false,
+          disableChatbot,
+          disableAiFallback,
           aiConfigured,
           chatbotLocked,
           aiLocked,
@@ -1919,8 +2293,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fieldsChanged: saved.fieldsChanged,
         settings: {
           disableAutoReply: Boolean(saved.tenant.disableAutoReply),
-          disableChatbot: Boolean(saved.tenant.appDisableChatbot),
-          disableAiFallback: Boolean(saved.tenant.appDisableAiFallback),
+          disableChatbot: isChatbotDisabledForTenant(saved.tenant),
+          disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
           chatbotLocked: Boolean(saved.tenant.disableChatbot),
           aiLocked: Boolean(saved.tenant.disableAiFallback),
@@ -9420,6 +9794,33 @@ function normalizeConversationOperationalStatus(
   }
 }
 
+function sanitizeDownloadFileName(input: string | null | undefined) {
+  const value = String(input ?? "").trim();
+  if (!value) return null;
+  return value.replace(/[^\w.\- ]+/g, "_");
+}
+
+function buildConversationMessageDownloadPath(waId: string, messageId: string) {
+  return `/app/conversation/${encodeURIComponent(waId)}/messages/${encodeURIComponent(messageId)}/media`;
+}
+
+function isChatbotDisabledForTenant(tenant?: {
+  disableChatbot?: boolean;
+  appDisableChatbot?: boolean;
+} | null) {
+  return tenant?.disableChatbot === true || tenant?.appDisableChatbot === true;
+}
+
+function isAiFallbackDisabledForTenant(tenant?: {
+  disableAiFallback?: boolean;
+  appDisableAiFallback?: boolean;
+  aiBusinessContext?: string;
+} | null) {
+  const aiConfigured = Boolean(tenant?.aiBusinessContext?.trim());
+  if (!aiConfigured) return true;
+  return tenant?.disableAiFallback === true || tenant?.appDisableAiFallback === true;
+}
+
 function isConversationInHumanFlow(conversation: {
   mode?: string | null;
   handoff?: { status?: string | null };
@@ -10277,7 +10678,7 @@ async function buildConversationDetailPayload(
         type: true,
         requestId: true,
         bodyText: true,
-        rawPayload: params.includeRaw,
+        rawPayload: true,
       },
     }),
     prisma.outboundMessage.findMany({
@@ -10318,6 +10719,13 @@ async function buildConversationDetailPayload(
       status: "RECEIVED",
       intent: null,
       bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+      media: buildInboxMessageMedia({
+        type: item.type,
+        rawPayload: item.rawPayload,
+        downloadUrl: item.messageId
+          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
+          : undefined,
+      }),
       templateName: null,
       templateLang: null,
       requestId: item.requestId,
@@ -10335,6 +10743,10 @@ async function buildConversationDetailPayload(
         status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
         intent: null,
         bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+        media: buildInboxMessageMedia({
+          type: item.type,
+          rawPayload: item.rawPayload,
+        }),
         templateName: item.templateName,
         templateLang: item.templateLang,
         requestId: item.requestId,
@@ -10680,6 +11092,120 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
   });
 }
 
+type ParsedMultipartBody = {
+  caption: string | null;
+  file:
+    | {
+        fileName: string | null;
+        mimeType: string;
+        content: Buffer;
+      }
+    | null;
+};
+
+const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
+  const contentType = String(req.headers["content-type"] ?? "");
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = (boundaryMatch?.[1] ?? boundaryMatch?.[2] ?? "").trim();
+  if (!boundary) {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
+
+  return new Promise<ParsedMultipartBody | null>((resolve) => {
+    readRawBody(req, (rawBody) => {
+      try {
+        const bodyText = rawBody.toString("latin1");
+        const parts = bodyText.split(`--${boundary}`);
+        let caption: string | null = null;
+        let file: ParsedMultipartBody["file"] = null;
+
+        for (const rawPart of parts) {
+          if (!rawPart || rawPart === "--" || rawPart === "--\r\n") continue;
+          const normalizedPart = rawPart.startsWith("\r\n") ? rawPart.slice(2) : rawPart;
+          const separatorIndex = normalizedPart.indexOf("\r\n\r\n");
+          if (separatorIndex < 0) continue;
+
+          const headerText = normalizedPart.slice(0, separatorIndex);
+          let bodyPart = normalizedPart.slice(separatorIndex + 4);
+          if (bodyPart.endsWith("\r\n")) {
+            bodyPart = bodyPart.slice(0, -2);
+          }
+          if (bodyPart.endsWith("--")) {
+            bodyPart = bodyPart.slice(0, -2);
+          }
+
+          const disposition = headerText.match(/content-disposition:[^\r\n]*name="([^"]+)"/i);
+          const fieldName = disposition?.[1] ?? "";
+          if (!fieldName) continue;
+
+          const bodyBuffer = Buffer.from(bodyPart, "latin1");
+          if (fieldName === "caption") {
+            const decoded = bodyBuffer.toString("utf8").trim();
+            caption = decoded || null;
+            continue;
+          }
+
+          if (fieldName === "file") {
+            const fileNameMatch = headerText.match(/filename="([^"]*)"/i);
+            const mimeTypeMatch = headerText.match(/content-type:\s*([^\r\n;]+)/i);
+            file = {
+              fileName: (fileNameMatch?.[1] ?? "").trim() || null,
+              mimeType: (mimeTypeMatch?.[1] ?? "").trim() || "application/octet-stream",
+              content: bodyBuffer,
+            };
+          }
+        }
+
+        resolve({ caption, file });
+      } catch {
+        json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+        resolve(null);
+      }
+    }).catch(() => {
+      json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+      resolve(null);
+    });
+  });
+}
+
+function detectOutboundMediaKind(mimeType: string, fileName?: string | null): SendMediaKind | null {
+  const normalizedMime = mimeType.trim().toLowerCase();
+  if (normalizedMime.startsWith("image/")) return "image";
+  if (normalizedMime.startsWith("audio/")) return "audio";
+  if (normalizedMime.startsWith("video/")) return "video";
+  if (normalizedMime) return "document";
+
+  const extension = String(fileName ?? "")
+    .trim()
+    .toLowerCase()
+    .split(".")
+    .pop();
+  if (extension && ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) return "image";
+  if (extension && ["mp3", "ogg", "wav", "m4a", "aac"].includes(extension)) return "audio";
+  if (extension && ["mp4", "mov", "avi", "webm"].includes(extension)) return "video";
+  if (extension) return "document";
+  return null;
+}
+
+function isAllowedOutboundMediaMimeType(mimeType: unknown) {
+  if (typeof mimeType !== "string") return false;
+  const normalizedMime = mimeType.trim().toLowerCase();
+  if (!normalizedMime) return false;
+  return (
+    normalizedMime.startsWith("image/") ||
+    normalizedMime.startsWith("audio/") ||
+    normalizedMime.startsWith("video/") ||
+    normalizedMime === "application/pdf" ||
+    normalizedMime === "text/plain" ||
+    normalizedMime === "application/msword" ||
+    normalizedMime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
 function formatElapsedSince(timestampIso?: string, nowMs = Date.now()) {
   if (!timestampIso) return null;
   const timestampMs = Date.parse(timestampIso);
@@ -10743,7 +11269,7 @@ async function adminSendMessage(params: {
   const usageGate = await checkUsageGate({
     clientId: params.clientId,
     clientKey: params.clientKey,
-    messageType: "text",
+    messageType: "media",
     requestId: params.requestId,
     waId: params.waId,
   });
@@ -10827,5 +11353,166 @@ async function adminSendMessage(params: {
     messageId,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
+  };
+}
+
+async function adminSendMediaMessage(params: {
+  waId: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  mimeType: string;
+  fileName?: string | null;
+  caption?: string | null;
+  content: Buffer;
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+      mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
+      bodyText: string | null;
+    }
+  | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
+> {
+  if (!env.outboundEnabled) {
+    return { ok: false, statusCode: 503, error: "outbound_disabled" };
+  }
+  const nowMs = Date.now();
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  if (conversation && !isWindowOpen(conversation, nowMs)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "window_closed",
+      errorPayload: buildWindowClosedError(conversation.window.expiresAt),
+    };
+  }
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
+  }
+
+  const credentials = await resolveTenantOutboundCredentials({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+  });
+  if (!credentials) {
+    logger.error({
+      event: "admin.conversation.send_media.credentials_missing",
+      waId: maskWaId(params.waId),
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+    });
+    return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
+  }
+
+  const mediaKind = detectOutboundMediaKind(params.mimeType, params.fileName);
+  if (!mediaKind) {
+    return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+  }
+
+  const uploaded = await uploadMedia(
+    new Blob([new Uint8Array(params.content)], { type: params.mimeType }),
+    params.mimeType,
+    {
+      accessToken: credentials.accessToken,
+      phoneNumberId: credentials.phoneNumberId,
+    }
+  );
+  if (!uploaded.ok) {
+    logger.error({
+      event: "admin.conversation.send_media.upload_failed",
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      waId: maskWaId(params.waId),
+      status: uploaded.status ?? null,
+      errorBody: uploaded.errorBody ?? null,
+    });
+    return { ok: false, statusCode: uploaded.status ?? 502, error: "media_upload_failed" };
+  }
+
+  const sendResult = await sendMediaMessage({
+    to: params.waId,
+    kind: mediaKind,
+    mediaId: uploaded.mediaId,
+    caption: params.caption,
+    fileName: params.fileName,
+    credentials,
+  });
+  const status = sendResult.ok ? "SENT" : "FAILED";
+  const messageId = `admin.send_media.${params.requestId}`;
+  const createdAt = new Date().toISOString();
+  const tenants = await getTenants();
+  const phoneNumberId =
+    credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
+
+  const prismaType =
+    mediaKind === "image"
+      ? "IMAGE"
+      : mediaKind === "audio"
+        ? "AUDIO"
+        : mediaKind === "video"
+          ? "VIDEO"
+          : "DOCUMENT";
+
+  const outboundInserted = await persistOutboundMessage({
+    clientId: params.clientId,
+    phoneNumberId,
+    waId: params.waId,
+    messageId,
+    type: prismaType,
+    status,
+    bodyText: params.caption ?? null,
+    requestId: params.requestId,
+    metaMessageId: sendResult.messageId ?? null,
+    errorBody: sendResult.errorBody ?? null,
+    rawPayload: {
+      type: mediaKind,
+      media: {
+        mediaId: uploaded.mediaId,
+        mimeType: params.mimeType,
+        fileName: params.fileName ?? null,
+        caption: params.caption ?? null,
+      },
+      source: "admin_inbox_media",
+      status: sendResult.status ?? null,
+      errorBody: sendResult.errorBody ?? null,
+    },
+  });
+
+  if (conversation) {
+    await runtimeStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt,
+    });
+    await recordConversationAgentOutboundMetrics({
+      prisma: getPrisma(),
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: new Date(createdAt),
+      wasInserted: outboundInserted && sendResult.ok,
+      assignedAt: conversation.assignedAt ?? null,
+      assignedUserId: conversation.assignedUserId ?? null,
+      requestId: params.requestId,
+    });
+  }
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId: sendResult.messageId ?? null,
+    createdAt,
+    mediaType: prismaType,
+    bodyText: params.caption ?? null,
   };
 }

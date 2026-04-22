@@ -25,6 +25,14 @@ export type InboxMessageItem = {
   status: string;
   intent: string | null;
   bodyText: string | null;
+  media?: {
+    kind: "image" | "audio" | "video" | "document";
+    mimeType?: string;
+    fileName?: string;
+    caption?: string;
+    hasDownload: boolean;
+    downloadUrl?: string;
+  } | null;
   templateName: string | null;
   templateLang: string | null;
   requestId: string | null;

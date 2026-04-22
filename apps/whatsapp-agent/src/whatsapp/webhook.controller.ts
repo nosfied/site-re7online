@@ -1174,13 +1174,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
     return resolvedEntryPointChatbotFlow;
   };
+  const isChatbotDisabledForTenant = () =>
+    appliedTenantConfig?.disableChatbot === true || appliedTenantConfig?.appDisableChatbot === true;
+  const isAiFallbackDisabledForTenant = () =>
+    !appliedTenantConfig?.aiBusinessContext?.trim() ||
+    appliedTenantConfig?.disableAiFallback === true ||
+    appliedTenantConfig?.appDisableAiFallback === true;
   const loadChatbotFlowForConversation = async (
     state: ConversationState,
     inboundText: string | null | undefined,
   ) => {
     if (!tenantClientId) return null;
     if (!hasResolvedTenantConfig) return null;
-    if (appliedTenantConfig?.disableChatbot || appliedTenantConfig?.appDisableChatbot) return null;
+    if (isChatbotDisabledForTenant()) return null;
     if (
       state.flow === "quote_site" ||
       (!appliedTenantConfig?.disableLegacyFlows && shouldStartQuoteSite(inboundText))
@@ -2759,7 +2765,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    if ((appliedTenantConfig?.disableChatbot || appliedTenantConfig?.appDisableChatbot) && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
+    if (isChatbotDisabledForTenant() && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
       updatedConversation = clearChatbotRuntime(updatedConversation);
       logger.info({
         event: "chatbot.runtime.cleared",
@@ -2969,18 +2975,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
 
     if (!allowlistHit) {
-      continue;
-    }
-
-    if (appliedTenantConfig?.disableAutoReply) {
-      logger.info({
-        event: "reply.skipped",
-        waId: maskNumber(normalizedFrom),
-        reason: "tenant_auto_reply_disabled",
-        route: meta?.route,
-        method: meta?.method,
-        requestId: meta?.requestId,
-      });
       continue;
     }
 
@@ -3311,9 +3305,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const allAutomationLayersDisabled =
-      (appliedTenantConfig?.disableChatbot === true || appliedTenantConfig?.appDisableChatbot === true) &&
+      isChatbotDisabledForTenant() &&
       appliedTenantConfig?.disableLegacyFlows === true &&
-      (appliedTenantConfig?.disableAiFallback === true || appliedTenantConfig?.appDisableAiFallback === true);
+      isAiFallbackDisabledForTenant();
 
     if (
       allAutomationLayersDisabled &&
@@ -3366,9 +3360,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !leadHandled &&
       !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
-      !appliedTenantConfig?.disableAiFallback &&
-      !appliedTenantConfig?.appDisableAiFallback &&
-      aiBusinessContext.length > 0 &&
+      !isAiFallbackDisabledForTenant() &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
       updatedConversation.intent !== "handoff" &&

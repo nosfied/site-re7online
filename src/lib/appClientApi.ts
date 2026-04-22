@@ -214,12 +214,14 @@ async function requestAppJson<T>(
   const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 10000;
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  const isFormDataBody =
+    typeof FormData !== "undefined" && requestInit.body instanceof FormData;
   let res: Response;
   try {
     res = await fetch(`${baseUrl}${path}`, {
       ...requestInit,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
         Authorization: `Bearer ${token}`,
         ...(requestInit.headers ?? {}),
       },
@@ -381,6 +383,80 @@ async function requestAppText(
   return res.text();
 }
 
+async function requestAppBlob(
+  session: AppSession,
+  path: string,
+  init?: RequestInit & { timeoutMs?: number }
+): Promise<{
+  blob: Blob;
+  contentType: string | null;
+  fileName: string | null;
+}> {
+  const baseUrl = normalizeBaseUrl(session.baseUrl || getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const token = session.token.trim();
+  if (!token) {
+    const error = new Error("Sessao invalida. Faca login novamente.") as AppApiError;
+    error.status = 401;
+    throw error;
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = typeof init?.timeoutMs === "number" ? init.timeoutMs : 20000;
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...requestInit,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(requestInit.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AppApiError;
+    error.status = 0;
+    error.errorCode = "network_error";
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+      error.errorCode = "network_timeout";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string | { message?: string }; message?: string };
+      message =
+        (typeof body.message === "string" && body.message.trim()) ||
+        (body.error && typeof body.error === "object" && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AppApiError;
+    error.status = res.status;
+    throw error;
+  }
+
+  const contentDisposition = res.headers.get("content-disposition");
+  const fileNameMatch = contentDisposition?.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^\";]+)\"?/i);
+  const encodedFileName = fileNameMatch?.[1] ?? fileNameMatch?.[2] ?? null;
+  return {
+    blob: await res.blob(),
+    contentType: res.headers.get("content-type"),
+    fileName: encodedFileName ? decodeURIComponent(encodedFileName) : null,
+  };
+}
+
 export async function loginAppUser(
   email: string,
   password: string
@@ -495,6 +571,47 @@ export async function sendAppConversationMessage(
     method: "POST",
     body: JSON.stringify({ text }),
   });
+}
+
+export async function sendAppConversationMedia(
+  session: AppSession,
+  waId: string,
+  file: File,
+  caption?: string
+): Promise<AppConversationOperationalPayload & {
+  message: {
+    messageId: string;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+    type: string;
+    bodyText: string | null;
+  };
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (caption?.trim()) {
+    formData.append("caption", caption.trim());
+  }
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-media`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function fetchAppConversationMedia(
+  session: AppSession,
+  waId: string,
+  messageId: string
+): Promise<{
+  blob: Blob;
+  contentType: string | null;
+  fileName: string | null;
+}> {
+  return requestAppBlob(
+    session,
+    `/app/conversation/${encodeURIComponent(waId)}/messages/${encodeURIComponent(messageId)}/media`
+  );
 }
 
 export async function claimAppConversation(

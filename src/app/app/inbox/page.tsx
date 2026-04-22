@@ -12,11 +12,13 @@ import {
   fetchAppConversation,
   fetchAppConversations,
   fetchAppLeadNotes,
+  sendAppConversationMedia,
   fetchAppUsers,
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
   saveAppSession,
+  fetchAppConversationMedia,
   sendAppConversationMessage,
   transferAppConversation,
   updateAppConversationStatus,
@@ -65,6 +67,183 @@ function getMessageContentLabel(item: InboxMessageItem) {
     default:
       return "Mensagem";
   }
+}
+
+function MediaBubble({
+  session,
+  waId,
+  item,
+}: {
+  session: AppSession | null;
+  waId: string | null;
+  item: InboxMessageItem;
+}) {
+  const media = item.media;
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [mediaBlob, setMediaBlob] = useState<Blob | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  const clearLoadedMedia = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+    setObjectUrl(null);
+    setMediaBlob(null);
+  }, []);
+
+  const loadMedia = useCallback(async () => {
+    if (!session || !waId || !media?.hasDownload || !item.messageId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchAppConversationMedia(session, waId, item.messageId);
+      const nextObjectUrl = URL.createObjectURL(response.blob);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+      objectUrlRef.current = nextObjectUrl;
+      setMediaBlob(response.blob);
+      setObjectUrl(nextObjectUrl);
+    } catch {
+      setError("Falha ao carregar midia.");
+    } finally {
+      setLoading(false);
+    }
+  }, [item.messageId, media?.hasDownload, session, waId]);
+
+  useEffect(() => {
+    if (!session || !media?.hasDownload || !item.messageId || !waId) {
+      clearLoadedMedia();
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    clearLoadedMedia();
+    setLoading(false);
+    setError(null);
+
+    if (media.kind === "document" || media.kind === "audio" || media.kind === "video") {
+      return;
+    }
+
+    void loadMedia();
+
+    return () => {
+      clearLoadedMedia();
+    };
+  }, [clearLoadedMedia, item.messageId, loadMedia, media?.hasDownload, media?.kind, session, waId]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    if (!session || !waId || !media?.hasDownload || !item.messageId) return;
+    setError(null);
+    try {
+      const blob = mediaBlob ?? (await fetchAppConversationMedia(session, waId, item.messageId)).blob;
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = media.fileName || `${item.messageId}`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch {
+      setError("Falha ao baixar midia.");
+    }
+  }, [item.messageId, media?.fileName, media?.hasDownload, mediaBlob, session, waId]);
+
+  if (!media) return null;
+
+  return (
+    <div className="mt-2 space-y-2">
+      {!media.hasDownload && !objectUrl ? (
+        <p className="text-sm italic text-slate-700">
+          {media.kind === "image"
+            ? "Imagem enviada"
+            : media.kind === "audio"
+              ? "Audio enviado"
+              : media.kind === "video"
+                ? "Video enviado"
+                : media.fileName
+                  ? `Documento enviado (${media.fileName})`
+                  : "Documento enviado"}
+        </p>
+      ) : null}
+      {media.kind === "image" ? (
+        objectUrl ? (
+          <a href={objectUrl} target="_blank" rel="noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={objectUrl}
+              alt={media.caption || "Imagem recebida"}
+              className="max-h-72 rounded-xl border border-black/10 object-contain"
+            />
+          </a>
+        ) : loading ? (
+          <p className="text-xs text-slate-600">Carregando imagem...</p>
+        ) : null
+      ) : null}
+
+      {media.kind === "audio" ? (
+        objectUrl ? (
+          <audio controls preload="metadata" className="w-full max-w-xs">
+            <source src={objectUrl} type={media.mimeType || undefined} />
+          </audio>
+        ) : loading ? (
+          <p className="text-xs text-slate-600">Carregando audio...</p>
+        ) : media.hasDownload ? (
+          <button
+            type="button"
+            onClick={() => void loadMedia()}
+            className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
+          >
+            Carregar midia
+          </button>
+        ) : null
+      ) : null}
+
+      {media.kind === "video" ? (
+        objectUrl ? (
+          <video controls preload="metadata" className="max-h-72 w-full rounded-xl border border-black/10">
+            <source src={objectUrl} type={media.mimeType || undefined} />
+          </video>
+        ) : loading ? (
+          <p className="text-xs text-slate-600">Carregando video...</p>
+        ) : media.hasDownload ? (
+          <button
+            type="button"
+            onClick={() => void loadMedia()}
+            className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
+          >
+            Carregar midia
+          </button>
+        ) : null
+      ) : null}
+
+      {media.kind === "document" ? (
+        <button
+          type="button"
+          onClick={() => void handleDownload()}
+          disabled={!media.hasDownload}
+          className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Baixar documento{media.fileName ? ` (${media.fileName})` : ""}
+        </button>
+      ) : null}
+
+      {media.caption ? <p className="text-sm leading-relaxed">{media.caption}</p> : null}
+      {error ? <p className="text-xs text-red-700">{error}</p> : null}
+    </div>
+  );
 }
 
 function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waIdCanonical">) {
@@ -413,6 +592,7 @@ export default function AppInboxPage() {
   const [savingLeadName, setSavingLeadName] = useState(false);
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
+  const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
@@ -428,6 +608,7 @@ export default function AppInboxPage() {
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
@@ -1129,6 +1310,69 @@ export default function AppInboxPage() {
     focusComposer();
   };
 
+  const handleSendMedia = async () => {
+    if (!session || !selectedConversationWaId || !selectedConversation || !selectedMediaFile) return;
+    if (!canReply) {
+      setError("Assuma a conversa para responder manualmente.");
+      setErrorDetails(null);
+      return;
+    }
+
+    setSendingMessage(true);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      const response = await sendAppConversationMedia(
+        session,
+        selectedConversationWaId,
+        selectedMediaFile,
+        messageDraft.trim() || undefined
+      );
+      setSelectedMediaFile(null);
+      setMessageDraft("");
+      if (mediaInputRef.current) {
+        mediaInputRef.current.value = "";
+      }
+      shouldScrollToBottomRef.current = true;
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      setConversations((prev) =>
+        sortConversationsByRecent(
+          prev.map((item) =>
+            getConversationIdentity(item) === getConversationIdentity(selectedConversation)
+              ? {
+                  ...applyConversationOperationalPayload(item, response),
+                  lastMessage: {
+                    direction: "OUTBOUND",
+                    type: response.message.type,
+                    status: response.message.status,
+                    bodyText: response.message.bodyText,
+                    templateName: null,
+                    createdAt: response.message.createdAt,
+                  },
+                  updatedAt: response.message.createdAt,
+                }
+              : item
+          )
+        )
+      );
+      markConversationAsRead(
+        response.waIdCanonical ?? getConversationIdentity(selectedConversation),
+        response.message.createdAt
+      );
+    } catch (err) {
+      const typed = err as { status?: number; message?: string; details?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao enviar arquivo.");
+      setErrorDetails(typed.details || null);
+    } finally {
+      setSendingMessage(false);
+      focusComposer();
+    }
+  };
+
   const handleComposerKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
@@ -1438,18 +1682,25 @@ export default function AppInboxPage() {
                         item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
                       }`}
                     >
-                    {item.bodyText ? (
-                      <p className="text-sm leading-relaxed">{item.bodyText}</p>
-                    ) : (
-                      <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
-                    )}
-                    {item.templateName ? (
-                      <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
-                    ) : null}
-                    <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
-                      <span>{formatDateTime(item.createdAt)}</span>
-                      {statusTicks}
-                    </div>
+                      {item.bodyText ? (
+                        <p className="text-sm leading-relaxed">{item.bodyText}</p>
+                      ) : item.media ? null : (
+                        <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
+                      )}
+                      {item.media ? (
+                        <MediaBubble
+                          session={session}
+                          waId={selectedConversationWaId}
+                          item={item}
+                        />
+                      ) : null}
+                      {item.templateName ? (
+                        <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
+                      ) : null}
+                      <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
+                        <span>{formatDateTime(item.createdAt)}</span>
+                        {statusTicks}
+                      </div>
                     </article>
                   </div>
                 );
@@ -1617,24 +1868,69 @@ export default function AppInboxPage() {
                 disabled={!selectedConversationWaId || !canReply}
               />
             </label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                ref={mediaInputRef}
+                type="file"
+                className="hidden"
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] ?? null;
+                  setSelectedMediaFile(nextFile);
+                }}
+                disabled={!selectedConversationWaId || !canReply}
+              />
+              <button
+                type="button"
+                disabled={!selectedConversationWaId || !canReply}
+                onClick={() => mediaInputRef.current?.click()}
+                className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Anexar arquivo
+              </button>
+              {selectedMediaFile ? (
+                <>
+                  <span className="text-xs text-slate-700">
+                    Arquivo: {selectedMediaFile.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMediaFile(null);
+                      if (mediaInputRef.current) {
+                        mediaInputRef.current.value = "";
+                      }
+                    }}
+                    className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-xs text-slate-900 hover:bg-white"
+                  >
+                    Remover
+                  </button>
+                </>
+              ) : null}
+            </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-slate-600">
                 {sendingMessage || queuedMessageCount > 0
                   ? `${queuedMessageCount > 0 ? `${queuedMessageCount} ` : ""}mensagem(ns) em envio. O campo continua livre para digitar.`
                   : "Envio em sequencia. O rascunho atual nao trava enquanto outra mensagem sobe."}
               </p>
-              <button
-                type="button"
-                disabled={
-                  !selectedConversationWaId ||
-                  !messageDraft.trim() ||
-                  !canReply
-                }
-                onClick={handleSendMessage}
-                className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sendingMessage ? "Adicionar a fila" : "Enviar mensagem"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!selectedConversationWaId || !messageDraft.trim() || !canReply}
+                  onClick={handleSendMessage}
+                  className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingMessage ? "Adicionar a fila" : "Enviar mensagem"}
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedConversationWaId || !selectedMediaFile || !canReply || sendingMessage}
+                  onClick={handleSendMedia}
+                  className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Enviar anexo
+                </button>
+              </div>
             </div>
           </div>
         </div>
