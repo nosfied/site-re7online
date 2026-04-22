@@ -18,7 +18,7 @@ export function FeedbackToast({
 
   return (
     <div
-      className={`fixed right-4 top-4 z-50 max-w-md rounded-md border px-4 py-3 text-sm shadow-lg ${style}`}
+      className={`fixed right-4 top-4 z-50 max-w-md whitespace-pre-line rounded-md border px-4 py-3 text-sm shadow-lg ${style}`}
       role="status"
       aria-live="polite"
     >

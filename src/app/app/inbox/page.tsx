@@ -384,6 +384,13 @@ function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
 
+function buildInboxErrorToast(error: string | null, errorDetails: string | null, leadError: string | null) {
+  if (error && errorDetails && !error.includes(errorDetails)) {
+    return `${error}\n${errorDetails}`;
+  }
+  return error ?? leadError;
+}
+
 export default function AppInboxPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -415,6 +422,7 @@ export default function AppInboxPage() {
   const [transferUserId, setTransferUserId] = useState("");
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
@@ -440,14 +448,15 @@ export default function AppInboxPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!error && !success && !leadError) return;
+    if (!error && !errorDetails && !success && !leadError) return;
     const timer = window.setTimeout(() => {
       setError(null);
+      setErrorDetails(null);
       setSuccess(null);
       setLeadError(null);
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [error, leadError, success]);
+  }, [error, errorDetails, leadError, success]);
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -1073,7 +1082,7 @@ export default function AppInboxPage() {
             response.message.createdAt
           );
         } catch (err) {
-          const typed = err as { status?: number; message?: string };
+          const typed = err as { status?: number; message?: string; details?: string };
           if (typed.status === 401) {
             handleUnauthorized();
             return;
@@ -1082,6 +1091,7 @@ export default function AppInboxPage() {
             setMessageDraft((current) => (current.trim() ? `${current}\n${next.text}` : next.text));
           }
           setError(typed.message || "Falha ao enviar mensagem.");
+          setErrorDetails(typed.details || null);
           break;
         }
       }
@@ -1097,6 +1107,7 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
     if (!canReply) {
       setError("Assuma a conversa para responder manualmente.");
+      setErrorDetails(null);
       return;
     }
     const text = messageDraft.trim();
@@ -1108,6 +1119,7 @@ export default function AppInboxPage() {
     };
     setMessageDraft("");
     setError(null);
+    setErrorDetails(null);
     outgoingQueueRef.current.push(queuedMessage);
     setQueuedMessageCount(outgoingQueueRef.current.length);
     void processOutgoingQueue();
@@ -1254,7 +1266,7 @@ export default function AppInboxPage() {
   return (
     <AppShell session={session} title="Inbox" subtitle="Conversas do seu cliente, sem selecao manual de tenant.">
       <FeedbackToast message={success} />
-      <FeedbackToast message={error ?? leadError} variant="error" />
+      <FeedbackToast message={buildInboxErrorToast(error, errorDetails, leadError)} variant="error" />
 
       <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
