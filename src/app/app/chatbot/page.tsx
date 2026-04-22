@@ -61,6 +61,12 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "ai_context_missing") {
     return error.message || "IA automatica exige configuracao previa do tenant.";
   }
+  if (error.errorCode === "chatbot_locked_by_admin") {
+    return error.message || "Fluxo configuravel esta desativado no console interno.";
+  }
+  if (error.errorCode === "ai_locked_by_admin") {
+    return error.message || "IA conversacional esta desativada no console interno.";
+  }
   if (error.status === 403) {
     return "Sem permissao para gerenciar flows do chatbot.";
   }
@@ -337,6 +343,8 @@ export default function AppChatbotPage() {
     disableChatbot: false,
     disableAiFallback: false,
     aiConfigured: false,
+    chatbotLocked: false,
+    aiLocked: false,
   };
 
   const handleSaveSettings = async () => {
@@ -403,12 +411,16 @@ export default function AppChatbotPage() {
               {
                 key: "disableChatbot" as const,
                 title: "Fluxo configuravel",
-                help: "On ativa os flows personalizados criados nesta tela para este tenant.",
+                help: automationDraft.chatbotLocked
+                  ? "Bloqueado pelo console interno. O tenant nao pode reativar esta camada no /app."
+                  : "On ativa os flows personalizados criados nesta tela para este tenant.",
               },
               {
                 key: "disableAiFallback" as const,
                 title: "IA conversacional",
-                help: automationDraft.aiConfigured
+                help: automationDraft.aiLocked
+                  ? "Bloqueado pelo console interno. O tenant nao pode reativar esta camada no /app."
+                  : automationDraft.aiConfigured
                   ? "On ativa a IA automatica com o contexto configurado para este tenant."
                   : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
               },
@@ -425,9 +437,10 @@ export default function AppChatbotPage() {
                   checked={!automationDraft[item.key]}
                   disabled={
                     readOnly ||
+                    (item.key === "disableChatbot" && automationDraft.chatbotLocked) ||
                     (item.key === "disableAiFallback" &&
-                      !automationDraft.aiConfigured &&
-                      automationDraft.disableAiFallback)
+                      (automationDraft.aiLocked ||
+                        (!automationDraft.aiConfigured && automationDraft.disableAiFallback)))
                   }
                   onToggle={() =>
                     setSettings((current) =>

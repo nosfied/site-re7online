@@ -1788,14 +1788,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
+      const chatbotLocked = Boolean(tenant.disableChatbot);
+      const aiLocked = Boolean(tenant.disableAiFallback);
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
-          disableChatbot: tenant.disableChatbot ?? false,
-          disableAiFallback: tenant.disableAiFallback ?? false,
+          disableChatbot: tenant.appDisableChatbot ?? false,
+          disableAiFallback: tenant.appDisableAiFallback ?? false,
           aiConfigured,
+          chatbotLocked,
+          aiLocked,
         },
       });
     } catch (error) {
@@ -1830,11 +1834,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const data = body as Record<string, unknown>;
-      const keys = [
-        "disableAutoReply",
-        "disableChatbot",
-        "disableAiFallback",
-      ] as const;
+      const keys = ["disableChatbot", "disableAiFallback"] as const;
       const payload: Record<string, boolean> = {};
       for (const key of keys) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -1851,7 +1851,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           400,
           httpError(
             "bad_request",
-            "Provide at least one of disableAutoReply, disableChatbot or disableAiFallback"
+            "Provide at least one of disableChatbot or disableAiFallback"
           )
         );
         return;
@@ -1863,6 +1863,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
+      if (payload.disableChatbot === false && tenant.disableChatbot) {
+        json(
+          res,
+          409,
+          httpError(
+            "chatbot_locked_by_admin",
+            "Fluxo configuravel esta desativado no console interno."
+          )
+        );
+        return;
+      }
       if (payload.disableAiFallback === false && !aiConfigured) {
         json(
           res,
@@ -1874,8 +1885,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
+      if (payload.disableAiFallback === false && tenant.disableAiFallback) {
+        json(
+          res,
+          409,
+          httpError(
+            "ai_locked_by_admin",
+            "IA conversacional esta desativada no console interno."
+          )
+        );
+        return;
+      }
 
-      const saved = await saveTenantPatch(client.clientKey, payload);
+      const saved = await saveTenantPatch(client.clientKey, {
+        ...(payload.disableChatbot !== undefined
+          ? { appDisableChatbot: payload.disableChatbot }
+          : {}),
+        ...(payload.disableAiFallback !== undefined
+          ? { appDisableAiFallback: payload.disableAiFallback }
+          : {}),
+      });
       logger.info({
         event: "app.chatbot.settings.updated",
         requestId,
@@ -1890,9 +1919,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fieldsChanged: saved.fieldsChanged,
         settings: {
           disableAutoReply: Boolean(saved.tenant.disableAutoReply),
-          disableChatbot: Boolean(saved.tenant.disableChatbot),
-          disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+          disableChatbot: Boolean(saved.tenant.appDisableChatbot),
+          disableAiFallback: Boolean(saved.tenant.appDisableAiFallback),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
+          chatbotLocked: Boolean(saved.tenant.disableChatbot),
+          aiLocked: Boolean(saved.tenant.disableAiFallback),
         },
       });
     } catch (error) {
@@ -8403,8 +8434,10 @@ function diffTenantFields(
   compareField("messagesLimit");
   compareField("disableAutoReply");
   compareField("disableChatbot");
+  compareField("appDisableChatbot");
   compareField("disableLegacyFlows");
   compareField("disableAiFallback");
+  compareField("appDisableAiFallback");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

@@ -1180,7 +1180,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   ) => {
     if (!tenantClientId) return null;
     if (!hasResolvedTenantConfig) return null;
-    if (appliedTenantConfig?.disableChatbot) return null;
+    if (appliedTenantConfig?.disableChatbot || appliedTenantConfig?.appDisableChatbot) return null;
     if (
       state.flow === "quote_site" ||
       (!appliedTenantConfig?.disableLegacyFlows && shouldStartQuoteSite(inboundText))
@@ -2759,7 +2759,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    if (appliedTenantConfig?.disableChatbot && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
+    if ((appliedTenantConfig?.disableChatbot || appliedTenantConfig?.appDisableChatbot) && (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId)) {
       updatedConversation = clearChatbotRuntime(updatedConversation);
       logger.info({
         event: "chatbot.runtime.cleared",
@@ -3311,9 +3311,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const allAutomationLayersDisabled =
-      appliedTenantConfig?.disableChatbot === true &&
+      (appliedTenantConfig?.disableChatbot === true || appliedTenantConfig?.appDisableChatbot === true) &&
       appliedTenantConfig?.disableLegacyFlows === true &&
-      appliedTenantConfig?.disableAiFallback === true;
+      (appliedTenantConfig?.disableAiFallback === true || appliedTenantConfig?.appDisableAiFallback === true);
 
     if (
       allAutomationLayersDisabled &&
@@ -3367,6 +3367,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoAwaitingSchedule &&
       env.WHATSAPP_AI_ENABLED &&
       !appliedTenantConfig?.disableAiFallback &&
+      !appliedTenantConfig?.appDisableAiFallback &&
       aiBusinessContext.length > 0 &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&

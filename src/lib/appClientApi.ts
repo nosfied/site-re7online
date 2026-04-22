@@ -99,6 +99,8 @@ export type AppAutomationSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
   aiConfigured: boolean;
+  chatbotLocked?: boolean;
+  aiLocked?: boolean;
 };
 
 const SESSION_KEY = "wa_app_session_session_v1";

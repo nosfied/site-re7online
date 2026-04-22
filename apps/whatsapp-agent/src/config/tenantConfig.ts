@@ -12,8 +12,10 @@ export type TenantConfig = {
   defaultLanguage: string;
   disableAutoReply?: boolean;
   disableChatbot?: boolean;
+  appDisableChatbot?: boolean;
   disableLegacyFlows?: boolean;
   disableAiFallback?: boolean;
+  appDisableAiFallback?: boolean;
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -96,6 +98,12 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     if (nextTenant.disableLegacyFlows === undefined) {
       nextTenant.disableLegacyFlows = true;
     }
+    if (nextTenant.appDisableChatbot === undefined) {
+      nextTenant.appDisableChatbot = false;
+    }
+    if (nextTenant.appDisableAiFallback === undefined) {
+      nextTenant.appDisableAiFallback = false;
+    }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
         typeof waId === "string" ? waId.replace(/\D/g, "") : waId
@@ -146,11 +154,17 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     if (tenant.disableChatbot !== undefined && typeof tenant.disableChatbot !== "boolean") {
       throw new Error(`invalid_tenant_disable_chatbot:${key}`);
     }
+    if (tenant.appDisableChatbot !== undefined && typeof tenant.appDisableChatbot !== "boolean") {
+      throw new Error(`invalid_tenant_app_disable_chatbot:${key}`);
+    }
     if (tenant.disableLegacyFlows !== undefined && typeof tenant.disableLegacyFlows !== "boolean") {
       throw new Error(`invalid_tenant_disable_legacy_flows:${key}`);
     }
     if (tenant.disableAiFallback !== undefined && typeof tenant.disableAiFallback !== "boolean") {
       throw new Error(`invalid_tenant_disable_ai_fallback:${key}`);
+    }
+    if (tenant.appDisableAiFallback !== undefined && typeof tenant.appDisableAiFallback !== "boolean") {
+      throw new Error(`invalid_tenant_app_disable_ai_fallback:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&
