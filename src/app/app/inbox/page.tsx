@@ -423,6 +423,7 @@ export default function AppInboxPage() {
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [pauseErrorToast, setPauseErrorToast] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
@@ -449,14 +450,16 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (!error && !errorDetails && !success && !leadError) return;
+    if (pauseErrorToast && (error || errorDetails || leadError)) return;
     const timer = window.setTimeout(() => {
       setError(null);
       setErrorDetails(null);
+      setPauseErrorToast(false);
       setSuccess(null);
       setLeadError(null);
     }, 3000);
     return () => window.clearTimeout(timer);
-  }, [error, errorDetails, leadError, success]);
+  }, [error, errorDetails, leadError, pauseErrorToast, success]);
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -1266,7 +1269,14 @@ export default function AppInboxPage() {
   return (
     <AppShell session={session} title="Inbox" subtitle="Conversas do seu cliente, sem selecao manual de tenant.">
       <FeedbackToast message={success} />
-      <FeedbackToast message={buildInboxErrorToast(error, errorDetails, leadError)} variant="error" />
+      <FeedbackToast
+        message={buildInboxErrorToast(error, errorDetails, leadError)}
+        variant="error"
+        onMouseEnter={() => setPauseErrorToast(true)}
+        onMouseLeave={() => setPauseErrorToast(false)}
+        onFocus={() => setPauseErrorToast(true)}
+        onBlur={() => setPauseErrorToast(false)}
+      />
 
       <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
