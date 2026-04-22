@@ -1079,6 +1079,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       if (!result.ok) {
+        if (result.error === "window_closed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "window_closed",
+              message:
+                "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.",
+              details:
+                "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.",
+            },
+          });
+          return;
+        }
         json(res, result.statusCode, { error: result.error });
         return;
       }
@@ -5500,6 +5512,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
         if (!result.ok) {
+          if (result.error === "window_closed") {
+            json(res, result.statusCode, {
+              error: {
+                code: "window_closed",
+                message:
+                  "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.",
+                details:
+                  "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.",
+              },
+            });
+            return;
+          }
           json(res, result.statusCode, { error: result.error });
           return;
         }

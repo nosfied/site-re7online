@@ -275,6 +275,13 @@ async function requestAppJson<T>(
     error.payload = payload;
     if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
     if (res.status === 403) error.message = "Sem permissao (403).";
+    if (errorCode === "window_closed") {
+      error.message =
+        "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.";
+      error.details =
+        details ||
+        "A conversa esta fora da janela de 24 horas para texto livre. Use um template aprovado e, apos a resposta do cliente, retome o atendimento manual.";
+    }
     if (res.status >= 500 && !errorCode && !details) {
       error.message = "Erro no servidor (5xx).";
     }
