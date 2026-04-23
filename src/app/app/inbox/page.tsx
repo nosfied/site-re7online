@@ -125,7 +125,7 @@ function MediaBubble({
     setLoading(false);
     setError(null);
 
-    if (media.kind === "document" || media.kind === "audio" || media.kind === "video") {
+    if (media.kind === "document" || media.kind === "video") {
       return;
     }
 
@@ -201,13 +201,7 @@ function MediaBubble({
         ) : loading ? (
           <p className="text-xs text-slate-600">Carregando audio...</p>
         ) : media.hasDownload ? (
-          <button
-            type="button"
-            onClick={() => void loadMedia()}
-            className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
-          >
-            Carregar midia
-          </button>
+          <p className="text-xs text-slate-600">Preparando audio...</p>
         ) : null
       ) : null}
 
