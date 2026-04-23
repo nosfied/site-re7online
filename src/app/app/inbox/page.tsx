@@ -305,6 +305,13 @@ function getSupportedRecordingMimeType() {
   return null;
 }
 
+function normalizeRecordedAudioMimeType(mimeType: string) {
+  const normalized = mimeType.trim().toLowerCase();
+  if (!normalized) return "audio/ogg";
+  const [baseMimeType] = normalized.split(";", 1);
+  return baseMimeType || "audio/ogg";
+}
+
 function getRecordingFileExtension(mimeType: string) {
   const normalized = mimeType.trim().toLowerCase();
   if (normalized.includes("ogg")) return "ogg";
@@ -1476,7 +1483,7 @@ export default function AppInboxPage() {
       });
 
       recorder.addEventListener("stop", () => {
-        const nextMimeType = recorder.mimeType || mimeType;
+        const nextMimeType = normalizeRecordedAudioMimeType(recorder.mimeType || mimeType);
         const extension = getRecordingFileExtension(nextMimeType);
         const blob = new Blob(audioChunksRef.current, { type: nextMimeType });
         audioChunksRef.current = [];

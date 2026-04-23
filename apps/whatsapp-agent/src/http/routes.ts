@@ -1459,6 +1459,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             error: {
               code: "media_upload_failed",
               message: "Nao foi possivel enviar o arquivo para a Meta.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
+            },
+          });
+          return;
+        }
+        if (result.error === "media_send_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "media_send_failed",
+              message: "A Meta recusou o envio desta midia.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
             },
           });
           return;
@@ -11256,7 +11267,7 @@ async function adminSendMessage(params: {
   const usageGate = await checkUsageGate({
     clientId: params.clientId,
     clientKey: params.clientKey,
-    messageType: "media",
+    messageType: "text",
     requestId: params.requestId,
     waId: params.waId,
   });
@@ -11362,7 +11373,13 @@ async function adminSendMediaMessage(params: {
       mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
       bodyText: string | null;
     }
-  | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
+  | {
+      ok: false;
+      statusCode: number;
+      error: string;
+      errorPayload?: { code: string; message: string; details: string };
+      errorDetails?: string | null;
+    }
 > {
   if (!env.outboundEnabled) {
     return { ok: false, statusCode: 503, error: "outbound_disabled" };
@@ -11424,7 +11441,12 @@ async function adminSendMediaMessage(params: {
       status: uploaded.status ?? null,
       errorBody: uploaded.errorBody ?? null,
     });
-    return { ok: false, statusCode: uploaded.status ?? 502, error: "media_upload_failed" };
+    return {
+      ok: false,
+      statusCode: uploaded.status ?? 502,
+      error: "media_upload_failed",
+      errorDetails: uploaded.errorBody ?? null,
+    };
   }
 
   const sendResult = await sendMediaMessage({
@@ -11491,6 +11513,15 @@ async function adminSendMediaMessage(params: {
       assignedUserId: conversation.assignedUserId ?? null,
       requestId: params.requestId,
     });
+  }
+
+  if (!sendResult.ok) {
+    return {
+      ok: false,
+      statusCode: sendResult.status ?? 502,
+      error: "media_send_failed",
+      errorDetails: sendResult.errorBody ?? null,
+    };
   }
 
   return {
