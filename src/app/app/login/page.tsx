@@ -56,11 +56,11 @@ export default function AppLoginPage() {
           <p className="text-xs uppercase tracking-[0.2em] text-re7-sky">Re7Online</p>
           <h1 className="mt-2 text-3xl font-bold">Area do cliente</h1>
           <p className="mt-2 text-sm text-white/70">
-            Entre com o usuario do seu atendimento para acessar inbox e campanhas.
+            Entre com seu acesso para acompanhar conversas, campanhas e configuracoes.
           </p>
         </div>
 
-        {checkingSession ? <p className="text-sm text-white/70">Verificando sessao...</p> : null}
+        {checkingSession ? <p className="text-sm text-white/70">Verificando acesso...</p> : null}
 
         {!checkingSession ? (
           <form className="grid gap-4" onSubmit={handleSubmit}>

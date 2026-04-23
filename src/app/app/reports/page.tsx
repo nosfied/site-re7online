@@ -202,7 +202,7 @@ export default function AppReportsPage() {
     <AppShell
       session={session}
       title="Relatorios"
-      subtitle="SLA e tempos medios baseados em ConversationMetrics no portal do cliente."
+      subtitle="Acompanhe tempos de resposta e volume de atendimento do seu time."
     >
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
@@ -271,7 +271,7 @@ export default function AppReportsPage() {
         </div>
       </section>
 
-      {loading ? <p className="text-sm text-white/70">Carregando relatorio...</p> : null}
+      {loading ? <p className="text-sm text-white/70">Carregando relatorios...</p> : null}
 
       <section className="grid gap-4 md:grid-cols-4">
         <article className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -279,7 +279,7 @@ export default function AppReportsPage() {
           <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
         </article>
         <article className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">1a resposta media</p>
+          <p className="text-xs uppercase tracking-wide text-white/50">Primeira resposta media</p>
           <p className="mt-2 text-2xl font-semibold">
             {formatSeconds(report?.avgFirstResponseTimeSec ?? null)}
           </p>
@@ -291,7 +291,7 @@ export default function AppReportsPage() {
           </p>
         </article>
         <article className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Breaches SLA</p>
+          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
           <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>
       </section>

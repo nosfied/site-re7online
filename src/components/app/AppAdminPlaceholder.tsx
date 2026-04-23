@@ -56,7 +56,7 @@ export default function AppAdminPlaceholder({
           </p>
           <p className="text-base text-white/85">{description}</p>
           <p className="text-sm text-white/60">
-            Esta tela foi criada para separar operacao e administracao no portal do cliente.
+            Esta area ajuda a organizar o atendimento e a administracao no portal do cliente.
           </p>
         </div>
       </section>

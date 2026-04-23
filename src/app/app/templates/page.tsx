@@ -475,7 +475,7 @@ export default function AppTemplatesPage() {
     <AppShell
       session={session}
       title="Templates"
-      subtitle="Catalogo unificado de templates e status de aprovacao do cliente."
+      subtitle="Consulte os modelos aprovados e envie novos templates para analise."
     >
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
       {error ? (
@@ -496,9 +496,9 @@ export default function AppTemplatesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-white/10 text-left">
                   <tr>
-                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Nome</th>
                     <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Category</th>
+                    <th className="px-3 py-2">Categoria</th>
                     <th className="px-3 py-2">Atualizado</th>
                     <th className="px-3 py-2">Motivo</th>
                     <th className="px-3 py-2">Acao</th>
@@ -570,7 +570,7 @@ export default function AppTemplatesPage() {
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Name</span>
+              <span>Nome</span>
               <input
                 value={form.name}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
@@ -578,7 +578,7 @@ export default function AppTemplatesPage() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Category</span>
+              <span>Categoria</span>
               <select
                 value={form.category}
                 onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
@@ -592,7 +592,7 @@ export default function AppTemplatesPage() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Content</span>
+              <span>Conteudo</span>
               <textarea
                 value={form.content}
                 onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
@@ -601,7 +601,7 @@ export default function AppTemplatesPage() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Variables (JSON opcional)</span>
+              <span>Variaveis (JSON opcional)</span>
               <textarea
                 value={form.variables}
                 onChange={(event) => setForm((current) => ({ ...current, variables: event.target.value }))}
@@ -619,7 +619,7 @@ export default function AppTemplatesPage() {
                 }
                 className="mt-1 h-4 w-4 rounded border-white/20 bg-re7-navy text-re7-orange"
               />
-              <span>Enviar automaticamente para aprovacao (Meta)</span>
+              <span>Enviar automaticamente para aprovacao na Meta</span>
             </label>
 
             {formError ? (

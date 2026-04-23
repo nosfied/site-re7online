@@ -13,7 +13,7 @@ type AppShellProps = {
 };
 
 function getLinkClasses(active: boolean) {
-  return `rounded-md border px-3 py-2 text-sm transition ${
+  return `rounded-lg border px-3 py-1.5 text-sm transition ${
     active
       ? "border-re7-sky/50 bg-re7-sky/20 text-white"
       : "border-white/20 text-white/80 hover:bg-white/10"
@@ -39,28 +39,28 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
   };
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="sticky top-4 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.18)] backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <main className="min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
+        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Portal do cliente
               </p>
-              <p className="mt-1 text-sm text-white/70">{session.user.name || session.user.email}</p>
+              <p className="mt-0.5 text-sm text-white/70">{session.user.name || session.user.email}</p>
             </div>
             <div className="flex items-center">
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-md border border-red-400/30 bg-red-900/20 px-3 py-2 text-sm text-red-100 hover:bg-red-900/30"
+                className="rounded-lg border border-red-400/30 bg-red-900/20 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/30"
               >
                 Sair
               </button>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap items-start gap-3">
-            <div className="flex min-w-[220px] flex-col gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+          <div className="mt-3 flex flex-wrap items-start gap-2">
+            <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Operacao
               </p>
@@ -77,7 +77,7 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
               </div>
             </div>
             {canViewAdministration ? (
-              <div className="flex min-w-[220px] flex-col gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+              <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   Administracao
                 </p>
@@ -92,7 +92,7 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
                     href="/app/settings/departments"
                     className={getLinkClasses(pathname === "/app/settings/departments")}
                   >
-                    Departamentos
+                    Setores
                   </Link>
                   <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
                     Chatbot
@@ -106,9 +106,9 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
           </div>
         </header>
 
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          {subtitle ? <p className="mt-1 text-sm text-white/70">{subtitle}</p> : null}
+        <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <h1 className="text-xl font-bold">{title}</h1>
+          {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
         </section>
 
         {children}

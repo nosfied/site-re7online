@@ -249,8 +249,8 @@ export default function AppSettingsDepartmentsPage() {
   return (
     <AppShell
       session={session}
-      title="Departamentos"
-      subtitle="Gestao de setores do tenant no portal do cliente."
+      title="Setores"
+      subtitle="Organize as conversas por setor dentro do portal do cliente."
     >
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />

@@ -52,6 +52,23 @@ function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
 }
 
+function getLeadStatusLabel(status?: string | null) {
+  switch ((status || "").trim().toUpperCase()) {
+    case "NEW":
+      return "Novo";
+    case "QUALIFIED":
+      return "Qualificado";
+    case "WAITING_ATTENDANT":
+      return "Aguardando atendimento";
+    case "IN_ATTENDANCE":
+      return "Em atendimento";
+    case "CLOSED":
+      return "Encerrado";
+    default:
+      return "Sem andamento";
+  }
+}
+
 function getMessageContentLabel(item: InboxMessageItem) {
   switch (item.type) {
     case "AUDIO":
@@ -540,7 +557,7 @@ function getConversationStatusLabel(status: ConversationOperationalStatus | null
     case "CLOSED":
       return "Finalizada";
     default:
-      return "Sem status";
+      return "Sem andamento";
   }
 }
 
@@ -1658,7 +1675,7 @@ export default function AppInboxPage() {
   }
 
   return (
-    <AppShell session={session} title="Inbox" subtitle="Conversas do seu cliente, sem selecao manual de tenant.">
+    <AppShell session={session} title="Inbox" subtitle="Atendimentos do seu WhatsApp em um so lugar.">
       <FeedbackToast message={success} />
       <FeedbackToast
         message={buildInboxErrorToast(error, errorDetails, leadError)}
@@ -1669,19 +1686,19 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+      <section className="grid gap-3 xl:h-[calc(100vh-9.5rem)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
             <h2 className="text-sm font-semibold">Conversas</h2>
             <button
               type="button"
               onClick={() => session && refreshConversationList(session)}
-              className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10"
+              className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10"
             >
               Atualizar
             </button>
           </div>
-          <div className="border-b border-white/10 px-4 py-3">
+          <div className="border-b border-white/10 px-3 py-2.5">
             <div className="flex flex-wrap gap-2">
               {CONVERSATION_FILTERS.map((filter) => (
                 <button
@@ -1720,16 +1737,18 @@ export default function AppInboxPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
-              <p className="px-4 py-3 text-sm text-white/70">Carregando conversas...</p>
+              <p className="px-3 py-3 text-sm text-white/70">Carregando conversas...</p>
             ) : null}
             {!loadingConversations && filteredConversations.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-white/70">Nenhuma conversa encontrada.</p>
+              <p className="px-3 py-3 text-sm text-white/70">Nenhuma conversa encontrada.</p>
             ) : null}
             {filteredConversations.map((item) => {
               const conversationIdentity = getConversationIdentity(item);
               const isActive = conversationIdentity === selectedConversationKey;
               const unread = !isActive && isConversationUnread(item, readState);
               const status = getConversationOperationalStatus(item);
+              const label = getConversationLabel(item);
+              const phoneLine = item.waId && item.waId !== label ? item.waId : null;
               return (
                 <button
                   key={conversationIdentity}
@@ -1740,13 +1759,13 @@ export default function AppInboxPage() {
                     setSelectedConversationWaId(item.waId);
                     markConversationAsRead(conversationIdentity, getConversationActivityAt(item));
                   }}
-                  className={`w-full border-b border-white/10 px-4 py-3 text-left transition ${
+                  className={`w-full border-b border-white/10 px-3 py-3 text-left transition ${
                     isActive ? "bg-re7-sky/20" : "hover:bg-white/10"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <p className={`text-sm font-medium ${unread ? "text-white" : ""}`}>
-                      {getConversationLabel(item)}
+                      {label}
                     </p>
                     {unread ? (
                       <span
@@ -1755,26 +1774,21 @@ export default function AppInboxPage() {
                       />
                     ) : null}
                   </div>
-                  <p className="mt-1 font-mono text-xs text-white/80">{item.waId}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/70">
+                  {phoneLine ? <p className="mt-1 font-mono text-xs text-white/70">{phoneLine}</p> : null}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/75">
                     <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
                     <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/80">
-                      setor: {item.departmentName || "Sem setor"}
+                      Setor: {item.departmentName || "Sem setor"}
                     </span>
-                    <span>{item.assignedUserName || (item.assignedUserId ? item.assignedTo : "nao atribuida")}</span>
-                    <span>{formatRelativeTime(getConversationActivityAt(item))}</span>
                   </div>
-                  <p className="mt-1 text-xs text-white/60">
-                    {item.queueName || "Fila Geral"} • {item.leadStatus || "sem status"} •{" "}
-                    {formatDateTime(item.updatedAt)}
+                  <p className="mt-2 line-clamp-2 text-sm text-white/70">
+                    {item.lastMessage?.bodyText || "Sem mensagem recente."}
                   </p>
-                  {item.lastMessage?.bodyText ? (
-                    <p className={`mt-2 line-clamp-2 text-xs ${unread ? "text-white/85" : "text-white/60"}`}>
-                      {item.lastMessage.bodyText}
-                    </p>
-                  ) : null}
+                  <p className="mt-2 text-xs text-white/55">
+                    {getLeadStatusLabel(item.leadStatus)} • {formatDateTime(item.updatedAt)}
+                  </p>
                 </button>
               );
             })}
@@ -1783,30 +1797,29 @@ export default function AppInboxPage() {
 
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
           <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Timeline{" "}
+            <h2 className="text-base font-semibold text-slate-900">
+              Conversa{" "}
               {selectedConversation
                 ? `• ${selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId}`
                 : ""}
             </h2>
             {selectedConversation ? (
-              <p className="mt-1 text-xs text-slate-700">
-                modo: {selectedConversation.mode} • status:{" "}
+              <p className="mt-1 text-sm text-slate-700">
                 {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
                 {selectedConversation.assignedUserName
-                  ? ` • atendente: ${selectedConversation.assignedUserName}`
+                  ? ` • Atendente: ${selectedConversation.assignedUserName}`
                   : selectedConversation.assignedTo
-                    ? ` • atendente: ${selectedConversation.assignedTo}`
+                    ? ` • Atendente: ${selectedConversation.assignedTo}`
                     : ""}
+                {selectedConversation.departmentName ? ` • Setor: ${selectedConversation.departmentName}` : ""}
+                {selectedConversation.queueName ? ` • ${selectedConversation.queueName}` : ""}
                 {selectedConversation.assignedAt
-                  ? ` • desde ${formatDateTime(selectedConversation.assignedAt)}`
+                  ? ` • Desde ${formatDateTime(selectedConversation.assignedAt)}`
                   : ""}
-                {` • setor: ${selectedConversation.departmentName || "Sem setor"}`}
-                {selectedConversation.queueName ? ` • fila: ${selectedConversation.queueName}` : ""}
               </p>
             ) : null}
           </div>
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto p-4">
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-3">
             {!selectedConversationWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
@@ -1816,7 +1829,7 @@ export default function AppInboxPage() {
             {selectedConversationWaId && !loadingMessages && messages.length === 0 ? (
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
             ) : null}
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {messages.map((item, index) => {
                 const statusTicks = renderMessageStatusTicks(item);
                 return (
@@ -1854,8 +1867,8 @@ export default function AppInboxPage() {
               })}
             </div>
           </div>
-          <div className="wa-composer-shell border-t border-black/5 p-4 text-slate-900">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="wa-composer-shell border-t border-black/5 px-4 py-3 text-slate-900">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={statusActionDraft}
@@ -1866,7 +1879,7 @@ export default function AppInboxPage() {
                     await handleUpdateConversationStatus(nextStatus);
                   }}
                   disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="" disabled>
                     Alterar status
@@ -1880,50 +1893,52 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              {selectedConversation ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    markConversationAsUnread(getConversationIdentity(selectedConversation));
-                    setSelectedConversationKey(null);
-                    setSelectedConversationWaId(null);
-                    setMessages([]);
-                  }}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white"
-                >
-                  Marcar como nao lida
-                </button>
-              ) : null}
-              {selectedConversation?.assignedUserId === session.user.id ? (
-                <button
-                  type="button"
-                  disabled={!selectedConversationWaId || Boolean(conversationAction)}
-                  onClick={handleReleaseConversation}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {conversationAction === "release" ? "Atualizando..." : "Liberar para fila"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={
-                    !selectedConversationWaId ||
-                    Boolean(conversationAction) ||
-                    isSelectedConversationLocked
-                  }
-                  onClick={handleClaimConversation}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {conversationAction === "claim" ? "Atualizando..." : "Assumir conversa"}
-                </button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedConversation ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      markConversationAsUnread(getConversationIdentity(selectedConversation));
+                      setSelectedConversationKey(null);
+                      setSelectedConversationWaId(null);
+                      setMessages([]);
+                    }}
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white"
+                  >
+                    Marcar como nao lida
+                  </button>
+                ) : null}
+                {selectedConversation?.assignedUserId === session.user.id ? (
+                  <button
+                    type="button"
+                    disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                    onClick={handleReleaseConversation}
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "release" ? "Atualizando..." : "Liberar para fila"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={
+                      !selectedConversationWaId ||
+                      Boolean(conversationAction) ||
+                      isSelectedConversationLocked
+                    }
+                    onClick={handleClaimConversation}
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "claim" ? "Atualizando..." : "Assumir conversa"}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
               <select
                 value={transferUserId}
                 onChange={(event) => setTransferUserId(event.target.value)}
                 disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Selecionar atendente</option>
                 {users.map((user) => (
@@ -1936,7 +1951,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
                 onClick={handleTransferConversation}
-                className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-[#d4c7b5] bg-white/75 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
               </button>
@@ -1952,7 +1967,7 @@ export default function AppInboxPage() {
                       departmentOptions.length === 0 ||
                       Boolean(conversationAction)
                     }
-                    className="rounded-xl border border-[#d4c7b5] bg-white/90 px-3 py-2 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
                   >
                     <option value="">Selecionar setor</option>
                     {departmentOptions.map((department) => (
@@ -1970,21 +1985,21 @@ export default function AppInboxPage() {
                       Boolean(conversationAction)
                     }
                     onClick={handleTransferDepartment}
-                    className="rounded-xl border border-[#d4c7b5] bg-white/75 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/75 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {conversationAction === "transfer-department"
                       ? "Transferindo setor..."
                       : "Transferir para outro setor"}
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-slate-700">
+                <p className="mt-2 text-sm text-slate-700">
                   {canTransferDepartment
-                    ? "A transferencia de setor limpa atribuicao e devolve a conversa para waiting."
-                    : "Conecte o console admin neste navegador para transferir a conversa entre setores."}
+                    ? "Transfira a conversa para o setor certo quando o atendimento precisar mudar."
+                    : "Abra o painel administrativo neste navegador para mover a conversa entre setores."}
                 </p>
               </div>
             ) : null}
-            <div className="mb-3 flex flex-wrap gap-2">
+            <div className="mb-2 flex flex-wrap gap-2">
               {QUICK_EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
@@ -1994,7 +2009,7 @@ export default function AppInboxPage() {
                     focusComposer();
                   }}
                   disabled={!selectedConversationWaId || !canReply}
-                  className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-lg leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-base leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {emoji}
                 </button>
@@ -2003,7 +2018,7 @@ export default function AppInboxPage() {
             <label className="grid gap-2 text-sm">
               <textarea
                 ref={composerRef}
-                className="min-h-24 rounded-[1.1rem] border border-[#d4c7b5] bg-white/92 px-4 py-3 text-slate-900 outline-none focus:border-[#7cbf69]"
+                className="min-h-24 rounded-[1.2rem] border border-[#d4c7b5] bg-white/92 px-4 py-3.5 text-base text-slate-900 outline-none focus:border-[#7cbf69]"
                 value={messageDraft}
                 onChange={(event) => setMessageDraft(event.target.value)}
                 onKeyDown={handleComposerKeyDown}
@@ -2015,7 +2030,7 @@ export default function AppInboxPage() {
                 disabled={!selectedConversationWaId || !canReply}
               />
             </label>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <input
                 ref={mediaInputRef}
                 type="file"
@@ -2030,7 +2045,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={!selectedConversationWaId || !canReply}
                 onClick={() => mediaInputRef.current?.click()}
-                className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-[#d4c7b5] bg-white/85 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Anexar arquivo
               </button>
@@ -2044,14 +2059,14 @@ export default function AppInboxPage() {
                   audioRecordingState === "stopping"
                 }
                 onClick={() => void handleToggleAudioRecording()}
-                className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-2xl border border-[#d4c7b5] bg-white/85 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {audioRecordingState === "recording" ? "Parar e enviar audio" : "Gravar audio"}
               </button>
               {selectedMediaFile ? (
                 <>
-                  <span className="text-xs text-slate-700">
-                    Arquivo: {selectedMediaFile.name}
+                  <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
+                    {selectedMediaFile.name}
                   </span>
                   <button
                     type="button"
@@ -2061,28 +2076,30 @@ export default function AppInboxPage() {
                         mediaInputRef.current.value = "";
                       }
                     }}
-                    className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-xs text-slate-900 hover:bg-white"
+                    className="rounded-2xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white"
                   >
                     Remover
                   </button>
                 </>
               ) : null}
               {audioRecordingState === "recording" ? (
-                <span className="text-xs font-medium text-[#b45309]">Gravando audio...</span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-[#b45309]">
+                  Gravando audio...
+                </span>
               ) : null}
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-slate-600">
+              <p className="text-sm text-slate-600">
                 {sendingMessage || queuedMessageCount > 0
-                  ? `${queuedMessageCount > 0 ? `${queuedMessageCount} ` : ""}mensagem(ns) em envio. O campo continua livre para digitar.`
-                  : "Envio em sequencia. O rascunho atual nao trava enquanto outra mensagem sobe."}
+                  ? `${queuedMessageCount > 0 ? `${queuedMessageCount} ` : ""}envio(s) em andamento.`
+                  : "Voce pode continuar digitando enquanto outra mensagem e enviada."}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   disabled={!selectedConversationWaId || !messageDraft.trim() || !canReply}
                   onClick={handleSendMessage}
-                  className="rounded-xl bg-[#20b15a] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-2xl bg-[#20b15a] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sendingMessage ? "Adicionar a fila" : "Enviar mensagem"}
                 </button>
@@ -2090,7 +2107,7 @@ export default function AppInboxPage() {
                   type="button"
                   disabled={!selectedConversationWaId || !selectedMediaFile || !canReply || sendingMessage}
                   onClick={handleSendMedia}
-                  className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-2xl bg-[#1d4ed8] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Enviar anexo
                 </button>
@@ -2101,24 +2118,26 @@ export default function AppInboxPage() {
 
         <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold">Lead</h2>
+            <h2 className="text-sm font-semibold">Contato</h2>
           </div>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
             {!selectedLead ? (
               <p className="text-sm text-white/70">
-                Ha conversa persistida, mas esta conversa ainda nao entrou no fluxo de captura de lead.
+                Esta conversa ainda nao entrou no fluxo de cadastro do contato.
               </p>
             ) : (
               <>
-                <div className="space-y-1 text-sm">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-sm font-semibold">Dados do contato</p>
+                  <div className="mt-3 space-y-2 text-sm">
                   <label className="grid gap-1 text-sm">
-                    <span className="text-white/70">Nome / apelido</span>
+                    <span className="text-white/70">Nome</span>
                     <div className="flex gap-2">
                       <input
                         className="min-w-0 flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                         value={leadNameDraft}
                         onChange={(event) => setLeadNameDraft(event.target.value)}
-                        placeholder="Como este contato deve aparecer no inbox"
+                        placeholder="Como este contato deve aparecer"
                         disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
                       />
                       <button
@@ -2132,7 +2151,7 @@ export default function AppInboxPage() {
                     </div>
                   </label>
                   <p>
-                    <span className="text-white/70">Phone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
+                    <span className="text-white/70">Telefone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
                   </p>
                   <p>
                     <span className="text-white/70">Cidade:</span> {selectedLead.city || "-"}
@@ -2141,8 +2160,10 @@ export default function AppInboxPage() {
                     <span className="text-white/70">Servico:</span> {selectedLead.service || "-"}
                   </p>
                 </div>
+                </div>
 
-                <div className="space-y-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                  <p className="text-sm font-semibold">Andamento do contato</p>
                   <label className="grid gap-1 text-sm">
                     <span className="text-white/70">Status</span>
                     <select
@@ -2156,7 +2177,7 @@ export default function AppInboxPage() {
                       </option>
                       {LEAD_STATUS_OPTIONS.map((status) => (
                         <option key={status} value={status}>
-                          {status}
+                          {getLeadStatusLabel(status)}
                         </option>
                       ))}
                     </select>
@@ -2171,14 +2192,15 @@ export default function AppInboxPage() {
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                  <p className="text-sm font-semibold">Nota interna</p>
                   <label className="grid gap-1 text-sm">
-                    <span className="text-white/70">Nota interna</span>
+                    <span className="text-white/70">Escreva uma observacao</span>
                     <textarea
                       className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
-                      placeholder="Registrar observacao de atendimento..."
+                      placeholder="Registre um detalhe importante do atendimento..."
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadNote}
                     />
                   </label>
@@ -2192,18 +2214,18 @@ export default function AppInboxPage() {
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold">Notas</p>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                  <p className="text-sm font-semibold">Historico de notas</p>
                   {loadingLeadNotes ? (
-                    <p className="text-xs text-white/70">Carregando notas...</p>
+                    <p className="text-sm text-white/70">Carregando notas...</p>
                   ) : null}
                   {!loadingLeadNotes && leadNotes.length === 0 ? (
-                    <p className="text-xs text-white/70">Sem notas para este lead.</p>
+                    <p className="text-sm text-white/70">Nenhuma nota registrada.</p>
                   ) : null}
                   <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                     {leadNotes.map((note) => (
                       <article key={note.id} className="rounded-md border border-white/15 bg-white/5 p-2">
-                        <p className="text-xs text-white">{note.body}</p>
+                        <p className="text-sm text-white">{note.body}</p>
                         <p className="mt-1 text-[11px] text-white/60">{formatDateTime(note.createdAt)}</p>
                       </article>
                     ))}
@@ -2213,7 +2235,7 @@ export default function AppInboxPage() {
             )}
 
             {leadError ? (
-              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-2 text-xs text-red-100">
+              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
                 {leadError}
               </p>
             ) : null}

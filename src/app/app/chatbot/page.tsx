@@ -350,7 +350,7 @@ export default function AppChatbotPage() {
   const handleSaveSettings = async () => {
     if (!session || !settings) return;
     if (readOnly) {
-      setError("Somente ADMIN pode alterar a automacao do tenant.");
+      setError("Somente administradores podem alterar essas configuracoes.");
       return;
     }
     setSavingSettings(true);
@@ -359,7 +359,7 @@ export default function AppChatbotPage() {
     try {
       const response = await updateAppChatbotSettings(session, automationDraft);
       setSettings(response.settings);
-      setSuccess("Automacao do tenant atualizada.");
+      setSuccess("Automacao atualizada com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
@@ -376,7 +376,7 @@ export default function AppChatbotPage() {
     <AppShell
       session={session}
       title="Chatbot"
-      subtitle="Flows JSON por tenant, sem builder visual e sem alterar o pipeline atual."
+      subtitle="Ajuste os fluxos de atendimento automatico sem sair do portal."
     >
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
@@ -384,13 +384,13 @@ export default function AppChatbotPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Automacao do tenant</h2>
+            <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
             <p className="mt-1 text-sm text-white/65">
-              Use os controles disponiveis para o tenant. Fluxos prontos ficam restritos ao console interno.
+              Ligue ou desligue os recursos disponiveis para este cliente.
             </p>
             <p className="mt-1 text-xs text-white/50">
-              Configuracao previa de IA: {automationDraft.aiConfigured ? "presente" : "ausente"}.
-              {!automationDraft.aiConfigured ? " Sem isso, a IA automatica permanece indisponivel." : ""}
+              Configuracao de IA: {automationDraft.aiConfigured ? "pronta" : "pendente"}.
+              {!automationDraft.aiConfigured ? " Sem isso, a IA conversacional fica indisponivel." : ""}
             </p>
           </div>
           {!readOnly ? (
@@ -400,7 +400,7 @@ export default function AppChatbotPage() {
               disabled={savingSettings || !settings}
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {savingSettings ? "Salvando..." : "Salvar automacao"}
+              {savingSettings ? "Salvando..." : "Salvar ajustes"}
             </button>
           ) : null}
         </div>
@@ -457,7 +457,7 @@ export default function AppChatbotPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-white/70">Carregando configuracoes...</p>
+            <p className="text-sm text-white/70">Carregando configuracoes...</p>
         )}
       </section>
 
@@ -467,9 +467,8 @@ export default function AppChatbotPage() {
             Novo flow
           </span>
           <p className="text-sm text-white/65">
-            Defina um JSON com <code className="rounded bg-white/10 px-1 py-0.5">start</code> e{" "}
-            <code className="rounded bg-white/10 px-1 py-0.5">nodes</code>. Supervisores acessam esta
-            tela em leitura.
+            Defina o fluxo em JSON com <code className="rounded bg-white/10 px-1 py-0.5">start</code> e{" "}
+            <code className="rounded bg-white/10 px-1 py-0.5">nodes</code>. Supervisores podem acompanhar, mas nao editar.
           </p>
         </div>
         <div className="grid gap-3">
@@ -503,7 +502,7 @@ export default function AppChatbotPage() {
                 onChange={(event) => setNewEntryPoint(event.target.checked)}
                 disabled={readOnly || creating}
               />
-              Entry point
+              Entrada principal
             </label>
           </div>
           <div>
@@ -513,7 +512,7 @@ export default function AppChatbotPage() {
               disabled={readOnly || creating}
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creating ? "Criando..." : "Criar flow"}
+              {creating ? "Criando..." : "Criar fluxo"}
             </button>
           </div>
         </div>
@@ -522,20 +521,20 @@ export default function AppChatbotPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">Flows do tenant</h2>
+            <h2 className="text-lg font-semibold">Fluxos cadastrados</h2>
             <p className="mt-1 text-sm text-white/65">
               {readOnly
-                ? "Visualizacao em leitura para supervisores."
-                : "Edite nome, JSON e flags do flow sem sair do portal."}
+                ? "Visualizacao somente para leitura."
+                : "Edite nome, JSON e ativacao sem sair do portal."}
             </p>
           </div>
-          <FlowBadge label={`${flows.length} flows`} />
+          <FlowBadge label={`${flows.length} fluxo(s)`} />
         </div>
 
         {loading ? (
-          <p className="text-sm text-white/70">Carregando flows...</p>
+          <p className="text-sm text-white/70">Carregando fluxos...</p>
         ) : sortedFlows.length === 0 ? (
-          <p className="text-sm text-white/70">Nenhum flow encontrado.</p>
+          <p className="text-sm text-white/70">Nenhum fluxo cadastrado.</p>
         ) : (
           <div className="space-y-4">
             {sortedFlows.map((flow) => {
@@ -548,7 +547,7 @@ export default function AppChatbotPage() {
                       <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
                       <div className="flex flex-wrap items-center gap-2">
                         <FlowBadge label={flow.isActive ? "Ativo" : "Inativo"} tone={flow.isActive ? "success" : "warning"} />
-                        {flow.entryPoint ? <FlowBadge label="Entry point" /> : null}
+                        {flow.entryPoint ? <FlowBadge label="Entrada principal" /> : null}
                         <FlowBadge label={`Atualizado em ${formatDateTime(flow.updatedAt)}`} />
                       </div>
                     </div>

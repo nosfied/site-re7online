@@ -322,7 +322,7 @@ export default function AppSettingsUsersPage() {
     <AppShell
       session={session}
       title="Usuarios"
-      subtitle="Gestao de usuarios do tenant com autenticacao por usuario real."
+      subtitle="Cadastre e organize quem atende no portal do cliente."
     >
       <FeedbackToast message={userSuccess || actionSuccess} variant="success" />
       <FeedbackToast message={userError || actionError} variant="error" />

@@ -519,7 +519,7 @@ export default function AppCampaignsPage() {
   }
 
   return (
-    <AppShell session={session} title="Campanhas" subtitle="Criacao, acompanhamento e status real da Meta no ambiente do cliente.">
+    <AppShell session={session} title="Campanhas" subtitle="Crie campanhas e acompanhe o envio das mensagens em tempo real.">
       {error ? (
         <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
           {error}
