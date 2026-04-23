@@ -18,6 +18,7 @@ import {
   uploadMedia,
   type SendMediaKind,
 } from "../whatsapp/whatsapp.client.js";
+import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
@@ -1469,6 +1470,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             error: {
               code: "media_send_failed",
               message: "A Meta recusou o envio desta midia.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
+            },
+          });
+          return;
+        }
+        if (result.error === "audio_transcode_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "audio_transcode_failed",
+              message: "Nao foi possivel normalizar o audio gravado para envio.",
               details: summarizeMetaErrorMessage(result.errorDetails || ""),
             },
           });
@@ -11424,9 +11435,35 @@ async function adminSendMediaMessage(params: {
     return { ok: false, statusCode: 400, error: "unsupported_media_type" };
   }
 
+  let uploadContent = params.content;
+  let uploadMimeType = params.mimeType;
+  let uploadFileName = params.fileName ?? null;
+
+  if (mediaKind === "audio") {
+    const transcoded = await transcodeAudioToOggOpus({
+      inputBuffer: params.content,
+      inputMimeType: params.mimeType,
+      fileName: params.fileName,
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+    });
+    if (!transcoded.ok) {
+      return {
+        ok: false,
+        statusCode: 502,
+        error: "audio_transcode_failed",
+        errorDetails: transcoded.details ?? transcoded.error,
+      };
+    }
+    uploadContent = transcoded.buffer;
+    uploadMimeType = transcoded.mimeType;
+    uploadFileName = transcoded.fileName;
+  }
+
   const uploaded = await uploadMedia(
-    new Blob([new Uint8Array(params.content)], { type: params.mimeType }),
-    params.mimeType,
+    new Blob([new Uint8Array(uploadContent)], { type: uploadMimeType }),
+    uploadMimeType,
     {
       accessToken: credentials.accessToken,
       phoneNumberId: credentials.phoneNumberId,
@@ -11454,7 +11491,7 @@ async function adminSendMediaMessage(params: {
     kind: mediaKind,
     mediaId: uploaded.mediaId,
     caption: params.caption,
-    fileName: params.fileName,
+    fileName: uploadFileName,
     credentials,
   });
   const status = sendResult.ok ? "SENT" : "FAILED";
@@ -11488,8 +11525,8 @@ async function adminSendMediaMessage(params: {
       type: mediaKind,
       media: {
         mediaId: uploaded.mediaId,
-        mimeType: params.mimeType,
-        fileName: params.fileName ?? null,
+        mimeType: uploadMimeType,
+        fileName: uploadFileName,
         caption: params.caption ?? null,
       },
       source: "admin_inbox_media",
