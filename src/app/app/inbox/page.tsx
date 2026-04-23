@@ -195,9 +195,7 @@ function MediaBubble({
 
       {media.kind === "audio" ? (
         objectUrl ? (
-          <audio controls preload="metadata" className="w-full max-w-xs">
-            <source src={objectUrl} type={media.mimeType || undefined} />
-          </audio>
+          <audio src={objectUrl} controls preload="metadata" className="w-full max-w-xs" />
         ) : loading ? (
           <p className="text-xs text-slate-600">Carregando audio...</p>
         ) : media.hasDownload ? (
@@ -207,9 +205,12 @@ function MediaBubble({
 
       {media.kind === "video" ? (
         objectUrl ? (
-          <video controls preload="metadata" className="max-h-72 w-full rounded-xl border border-black/10">
-            <source src={objectUrl} type={media.mimeType || undefined} />
-          </video>
+          <video
+            src={objectUrl}
+            controls
+            preload="metadata"
+            className="max-h-72 w-full rounded-xl border border-black/10"
+          />
         ) : loading ? (
           <p className="text-xs text-slate-600">Carregando video...</p>
         ) : media.hasDownload ? (
