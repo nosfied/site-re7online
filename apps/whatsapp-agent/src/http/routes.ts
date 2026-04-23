@@ -11199,6 +11199,17 @@ function detectOutboundMediaKind(mimeType: string, fileName?: string | null): Se
   return null;
 }
 
+function resolveFinalUploadMimeType(mediaKind: SendMediaKind, mimeType: string | null | undefined) {
+  const normalizedMimeType = String(mimeType ?? "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMimeType) return normalizedMimeType;
+  if (mediaKind === "audio") return "audio/ogg";
+  if (mediaKind === "image") return "image/jpeg";
+  if (mediaKind === "video") return "video/mp4";
+  return "application/octet-stream";
+}
+
 function isAllowedOutboundMediaMimeType(mimeType: unknown) {
   if (typeof mimeType !== "string") return false;
   const normalizedMime = mimeType.trim().toLowerCase();
@@ -11436,7 +11447,7 @@ async function adminSendMediaMessage(params: {
   }
 
   let uploadContent = params.content;
-  let uploadMimeType = params.mimeType;
+  let uploadMimeType = resolveFinalUploadMimeType(mediaKind, params.mimeType);
   let uploadFileName = params.fileName ?? null;
 
   if (mediaKind === "audio") {
@@ -11457,7 +11468,7 @@ async function adminSendMediaMessage(params: {
       };
     }
     uploadContent = transcoded.buffer;
-    uploadMimeType = transcoded.mimeType;
+    uploadMimeType = resolveFinalUploadMimeType(mediaKind, transcoded.mimeType);
     uploadFileName = transcoded.fileName;
   }
 
