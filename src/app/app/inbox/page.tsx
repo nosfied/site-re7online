@@ -292,6 +292,7 @@ function getSupportedRecordingMimeType() {
     return null;
   }
   const candidates = [
+    "audio/ogg; codecs=opus",
     "audio/ogg;codecs=opus",
     "audio/ogg",
     "audio/mp4;codecs=mp4a.40.2",
@@ -307,9 +308,20 @@ function getSupportedRecordingMimeType() {
 
 function normalizeRecordedAudioMimeType(mimeType: string) {
   const normalized = mimeType.trim().toLowerCase();
-  if (!normalized) return "audio/ogg";
-  const [baseMimeType] = normalized.split(";", 1);
-  return baseMimeType || "audio/ogg";
+  if (!normalized) return "audio/ogg; codecs=opus";
+  if (normalized.includes("audio/ogg") && normalized.includes("opus")) {
+    return "audio/ogg; codecs=opus";
+  }
+  if (normalized.includes("audio/mp4")) {
+    return "audio/mp4";
+  }
+  if (normalized.includes("audio/aac")) {
+    return "audio/aac";
+  }
+  if (normalized.includes("audio/mpeg")) {
+    return "audio/mpeg";
+  }
+  return normalized;
 }
 
 function getRecordingFileExtension(mimeType: string) {
