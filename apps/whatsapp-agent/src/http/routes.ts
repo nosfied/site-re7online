@@ -11114,81 +11114,34 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
     return null;
   }
 
-  return new Promise<ParsedMultipartBody | null>((resolve) => {
-    readRawBody(req, (rawBody) => {
-      try {
-        let caption: string | null = null;
-        let file: ParsedMultipartBody["file"] = null;
+  try {
+    const request = new Request("http://localhost/upload", {
+      method: req.method ?? "POST",
+      headers: req.headers as HeadersInit,
+      body: Readable.toWeb(req) as BodyInit,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    const formData = await request.formData();
+    const captionValue = formData.get("caption");
+    const fileValue = formData.get("file");
 
-        const boundaryBuffer = Buffer.from(`--${boundary}`, "utf8");
-        const headerSeparator = Buffer.from("\r\n\r\n", "utf8");
-        let cursor = 0;
+    let file: ParsedMultipartBody["file"] = null;
+    if (fileValue instanceof File) {
+      file = {
+        fileName: fileValue.name.trim() || null,
+        mimeType: fileValue.type.trim() || "application/octet-stream",
+        content: Buffer.from(await fileValue.arrayBuffer()),
+      };
+    }
 
-        while (cursor < rawBody.length) {
-          const boundaryIndex = rawBody.indexOf(boundaryBuffer, cursor);
-          if (boundaryIndex < 0) break;
-
-          let partStart = boundaryIndex + boundaryBuffer.length;
-          if (rawBody.subarray(partStart, partStart + 2).equals(Buffer.from("--"))) {
-            break;
-          }
-          if (rawBody.subarray(partStart, partStart + 2).equals(Buffer.from("\r\n"))) {
-            partStart += 2;
-          }
-
-          const nextBoundaryIndex = rawBody.indexOf(boundaryBuffer, partStart);
-          if (nextBoundaryIndex < 0) break;
-
-          let partBuffer = rawBody.subarray(partStart, nextBoundaryIndex);
-          if (partBuffer.subarray(partBuffer.length - 2).equals(Buffer.from("\r\n"))) {
-            partBuffer = partBuffer.subarray(0, partBuffer.length - 2);
-          }
-
-          const separatorIndex = partBuffer.indexOf(headerSeparator);
-          if (separatorIndex < 0) {
-            cursor = nextBoundaryIndex + boundaryBuffer.length;
-            continue;
-          }
-
-          const headerText = partBuffer.subarray(0, separatorIndex).toString("utf8");
-          const disposition = headerText.match(/content-disposition:[^\r\n]*name="([^"]+)"/i);
-          const fieldName = disposition?.[1] ?? "";
-          if (!fieldName) {
-            cursor = nextBoundaryIndex + boundaryBuffer.length;
-            continue;
-          }
-
-          const bodyBuffer = partBuffer.subarray(separatorIndex + headerSeparator.length);
-          if (fieldName === "caption") {
-            const decoded = bodyBuffer.toString("utf8").trim();
-            caption = decoded || null;
-            cursor = nextBoundaryIndex + boundaryBuffer.length;
-            continue;
-          }
-
-          if (fieldName === "file") {
-            const fileNameMatch = headerText.match(/filename="([^"]*)"/i);
-            const mimeTypeMatch = headerText.match(/content-type:\s*([^\r\n;]+)/i);
-            file = {
-              fileName: (fileNameMatch?.[1] ?? "").trim() || null,
-              mimeType: (mimeTypeMatch?.[1] ?? "").trim() || "application/octet-stream",
-              content: bodyBuffer,
-            };
-          }
-
-          cursor = nextBoundaryIndex + boundaryBuffer.length;
-        }
-
-        resolve({ caption, file });
-      } catch {
-        json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
-        resolve(null);
-      }
-    }).catch(() => {
-      json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
-      resolve(null);
-    });
-  });
+    return {
+      caption: typeof captionValue === "string" && captionValue.trim() ? captionValue.trim() : null,
+      file,
+    };
+  } catch {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
 }
 
 function detectOutboundMediaKind(mimeType: string, fileName?: string | null): SendMediaKind | null {
