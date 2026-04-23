@@ -43,6 +43,26 @@ function runFfmpeg(args: string[], timeoutMs: number) {
   });
 }
 
+function runFfprobe(targetFile: string, timeoutMs: number) {
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      "ffprobe",
+      ["-v", "error", "-show_format", "-show_streams", "-of", "json", targetFile],
+      { timeout: timeoutMs, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject({
+            error,
+            stderr: summarizeStderr(stderr),
+          });
+          return;
+        }
+        resolve(stdout);
+      }
+    );
+  });
+}
+
 export async function transcodeAudioToOggOpus(params: {
   inputBuffer: Buffer;
   inputMimeType?: string | null;
@@ -97,6 +117,27 @@ export async function transcodeAudioToOggOpus(params: {
       20_000
     );
     const buffer = await readFile(outputFile);
+    try {
+      const ffprobeOutput = await runFfprobe(outputFile, 10_000);
+      logger.info({
+        event: "audio.transcode.probe",
+        requestId: params.requestId ?? null,
+        clientId: params.clientId ?? null,
+        clientKey: params.clientKey ?? null,
+        fileName: path.basename(outputFile),
+        ffprobe: ffprobeOutput.length > 4000 ? `${ffprobeOutput.slice(0, 3997)}...` : ffprobeOutput,
+      });
+    } catch (probeError) {
+      const typedProbeError = probeError as { error?: NodeJS.ErrnoException; stderr?: string | null };
+      logger.warn({
+        event: "audio.transcode.probe_failed",
+        requestId: params.requestId ?? null,
+        clientId: params.clientId ?? null,
+        clientKey: params.clientKey ?? null,
+        fileName: path.basename(outputFile),
+        stderr: typedProbeError.stderr ?? typedProbeError.error?.message ?? null,
+      });
+    }
     logger.info({
       event: "audio.transcode.succeeded",
       requestId: params.requestId ?? null,
