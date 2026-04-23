@@ -285,6 +285,8 @@ type PendingOutgoingMessage = {
   text: string;
 };
 
+type AudioRecordingState = "idle" | "recording" | "stopping";
+
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
   return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
@@ -593,6 +595,9 @@ export default function AppInboxPage() {
   const [savingLeadNote, setSavingLeadNote] = useState(false);
   const [messageDraft, setMessageDraft] = useState("");
   const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  const [audioRecordingState, setAudioRecordingState] = useState<"idle" | "recording" | "stopping">(
+    "idle"
+  );
   const [sendingMessage, setSendingMessage] = useState(false);
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
@@ -609,6 +614,9 @@ export default function AppInboxPage() {
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
@@ -641,6 +649,17 @@ export default function AppInboxPage() {
     }, 3000);
     return () => window.clearTimeout(timer);
   }, [error, errorDetails, leadError, pauseErrorToast, success]);
+
+  useEffect(
+    () => () => {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      audioChunksRef.current = [];
+    },
+    []
+  );
 
   useEffect(() => {
     const stored = loadAppSession();
@@ -1310,66 +1329,154 @@ export default function AppInboxPage() {
     focusComposer();
   };
 
+  const sendMediaFile = useCallback(
+    async (file: File, caption?: string) => {
+      if (!session || !selectedConversationWaId || !selectedConversation) return;
+      if (!canReply) {
+        setError("Assuma a conversa para responder manualmente.");
+        setErrorDetails(null);
+        return;
+      }
+
+      setSendingMessage(true);
+      setError(null);
+      setErrorDetails(null);
+      try {
+        const response = await sendAppConversationMedia(
+          session,
+          selectedConversationWaId,
+          file,
+          caption?.trim() || undefined
+        );
+        setSelectedMediaFile(null);
+        setMessageDraft("");
+        if (mediaInputRef.current) {
+          mediaInputRef.current.value = "";
+        }
+        shouldScrollToBottomRef.current = true;
+        await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+        setConversations((prev) =>
+          sortConversationsByRecent(
+            prev.map((item) =>
+              getConversationIdentity(item) === getConversationIdentity(selectedConversation)
+                ? {
+                    ...applyConversationOperationalPayload(item, response),
+                    lastMessage: {
+                      direction: "OUTBOUND",
+                      type: response.message.type,
+                      status: response.message.status,
+                      bodyText: response.message.bodyText,
+                      templateName: null,
+                      createdAt: response.message.createdAt,
+                    },
+                    updatedAt: response.message.createdAt,
+                  }
+                : item
+            )
+          )
+        );
+        markConversationAsRead(
+          response.waIdCanonical ?? getConversationIdentity(selectedConversation),
+          response.message.createdAt
+        );
+      } catch (err) {
+        const typed = err as { status?: number; message?: string; details?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(typed.message || "Falha ao enviar arquivo.");
+        setErrorDetails(typed.details || null);
+      } finally {
+        setSendingMessage(false);
+        focusComposer();
+      }
+    },
+    [
+      canReply,
+      focusComposer,
+      handleUnauthorized,
+      refreshSelectedTimeline,
+      selectedConversation,
+      selectedConversationWaId,
+      session,
+    ]
+  );
+
   const handleSendMedia = async () => {
-    if (!session || !selectedConversationWaId || !selectedConversation || !selectedMediaFile) return;
+    if (!selectedMediaFile) return;
+    await sendMediaFile(selectedMediaFile, messageDraft);
+  };
+
+  const handleToggleAudioRecording = async () => {
+    if (!selectedConversationWaId) return;
     if (!canReply) {
       setError("Assuma a conversa para responder manualmente.");
       setErrorDetails(null);
       return;
     }
 
-    setSendingMessage(true);
-    setError(null);
-    setErrorDetails(null);
+    if (audioRecordingState === "recording") {
+      setAudioRecordingState("stopping");
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    if (audioRecordingState !== "idle" || sendingMessage || selectedMediaFile) return;
+    if (typeof window === "undefined" || !window.navigator.mediaDevices?.getUserMedia) {
+      setError("Gravacao de audio nao suportada neste navegador.");
+      setErrorDetails(null);
+      return;
+    }
+
     try {
-      const response = await sendAppConversationMedia(
-        session,
-        selectedConversationWaId,
-        selectedMediaFile,
-        messageDraft.trim() || undefined
-      );
-      setSelectedMediaFile(null);
-      setMessageDraft("");
-      if (mediaInputRef.current) {
-        mediaInputRef.current.value = "";
-      }
-      shouldScrollToBottomRef.current = true;
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
-      setConversations((prev) =>
-        sortConversationsByRecent(
-          prev.map((item) =>
-            getConversationIdentity(item) === getConversationIdentity(selectedConversation)
-              ? {
-                  ...applyConversationOperationalPayload(item, response),
-                  lastMessage: {
-                    direction: "OUTBOUND",
-                    type: response.message.type,
-                    status: response.message.status,
-                    bodyText: response.message.bodyText,
-                    templateName: null,
-                    createdAt: response.message.createdAt,
-                  },
-                  updatedAt: response.message.createdAt,
-                }
-              : item
-          )
-        )
-      );
-      markConversationAsRead(
-        response.waIdCanonical ?? getConversationIdentity(selectedConversation),
-        response.message.createdAt
-      );
+      setError(null);
+      setErrorDetails(null);
+      const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      });
+
+      recorder.addEventListener("stop", () => {
+        const nextMimeType = recorder.mimeType || "audio/webm";
+        const extension = nextMimeType.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(audioChunksRef.current, { type: nextMimeType });
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        setAudioRecordingState("idle");
+        if (!blob.size) {
+          setError("Nao foi possivel capturar o audio.");
+          setErrorDetails(null);
+          return;
+        }
+        const file = new File([blob], `audio-${Date.now()}.${extension}`, { type: nextMimeType });
+        void sendMediaFile(file);
+      });
+
+      recorder.start();
+      setAudioRecordingState("recording");
     } catch (err) {
-      const typed = err as { status?: number; message?: string; details?: string };
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      setError(typed.message || "Falha ao enviar arquivo.");
-      setErrorDetails(typed.details || null);
-    } finally {
-      setSendingMessage(false);
-      focusComposer();
+      const typed = err as { message?: string };
+      setAudioRecordingState("idle");
+      mediaRecorderRef.current = null;
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      setError("Nao foi possivel iniciar a gravacao de audio.");
+      setErrorDetails(typed.message ?? null);
     }
   };
 
@@ -1887,6 +1994,20 @@ export default function AppInboxPage() {
               >
                 Anexar arquivo
               </button>
+              <button
+                type="button"
+                disabled={
+                  !selectedConversationWaId ||
+                  !canReply ||
+                  sendingMessage ||
+                  Boolean(selectedMediaFile) ||
+                  audioRecordingState === "stopping"
+                }
+                onClick={() => void handleToggleAudioRecording()}
+                className="rounded-xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {audioRecordingState === "recording" ? "Parar e enviar audio" : "Gravar audio"}
+              </button>
               {selectedMediaFile ? (
                 <>
                   <span className="text-xs text-slate-700">
@@ -1905,6 +2026,9 @@ export default function AppInboxPage() {
                     Remover
                   </button>
                 </>
+              ) : null}
+              {audioRecordingState === "recording" ? (
+                <span className="text-xs font-medium text-[#b45309]">Gravando audio...</span>
               ) : null}
             </div>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">

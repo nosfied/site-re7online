@@ -11117,34 +11117,52 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
   return new Promise<ParsedMultipartBody | null>((resolve) => {
     readRawBody(req, (rawBody) => {
       try {
-        const bodyText = rawBody.toString("latin1");
-        const parts = bodyText.split(`--${boundary}`);
         let caption: string | null = null;
         let file: ParsedMultipartBody["file"] = null;
 
-        for (const rawPart of parts) {
-          if (!rawPart || rawPart === "--" || rawPart === "--\r\n") continue;
-          const normalizedPart = rawPart.startsWith("\r\n") ? rawPart.slice(2) : rawPart;
-          const separatorIndex = normalizedPart.indexOf("\r\n\r\n");
-          if (separatorIndex < 0) continue;
+        const boundaryBuffer = Buffer.from(`--${boundary}`, "utf8");
+        const headerSeparator = Buffer.from("\r\n\r\n", "utf8");
+        let cursor = 0;
 
-          const headerText = normalizedPart.slice(0, separatorIndex);
-          let bodyPart = normalizedPart.slice(separatorIndex + 4);
-          if (bodyPart.endsWith("\r\n")) {
-            bodyPart = bodyPart.slice(0, -2);
+        while (cursor < rawBody.length) {
+          const boundaryIndex = rawBody.indexOf(boundaryBuffer, cursor);
+          if (boundaryIndex < 0) break;
+
+          let partStart = boundaryIndex + boundaryBuffer.length;
+          if (rawBody.subarray(partStart, partStart + 2).equals(Buffer.from("--"))) {
+            break;
           }
-          if (bodyPart.endsWith("--")) {
-            bodyPart = bodyPart.slice(0, -2);
+          if (rawBody.subarray(partStart, partStart + 2).equals(Buffer.from("\r\n"))) {
+            partStart += 2;
           }
 
+          const nextBoundaryIndex = rawBody.indexOf(boundaryBuffer, partStart);
+          if (nextBoundaryIndex < 0) break;
+
+          let partBuffer = rawBody.subarray(partStart, nextBoundaryIndex);
+          if (partBuffer.subarray(partBuffer.length - 2).equals(Buffer.from("\r\n"))) {
+            partBuffer = partBuffer.subarray(0, partBuffer.length - 2);
+          }
+
+          const separatorIndex = partBuffer.indexOf(headerSeparator);
+          if (separatorIndex < 0) {
+            cursor = nextBoundaryIndex + boundaryBuffer.length;
+            continue;
+          }
+
+          const headerText = partBuffer.subarray(0, separatorIndex).toString("utf8");
           const disposition = headerText.match(/content-disposition:[^\r\n]*name="([^"]+)"/i);
           const fieldName = disposition?.[1] ?? "";
-          if (!fieldName) continue;
+          if (!fieldName) {
+            cursor = nextBoundaryIndex + boundaryBuffer.length;
+            continue;
+          }
 
-          const bodyBuffer = Buffer.from(bodyPart, "latin1");
+          const bodyBuffer = partBuffer.subarray(separatorIndex + headerSeparator.length);
           if (fieldName === "caption") {
             const decoded = bodyBuffer.toString("utf8").trim();
             caption = decoded || null;
+            cursor = nextBoundaryIndex + boundaryBuffer.length;
             continue;
           }
 
@@ -11157,6 +11175,8 @@ async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
               content: bodyBuffer,
             };
           }
+
+          cursor = nextBoundaryIndex + boundaryBuffer.length;
         }
 
         resolve({ caption, file });
