@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
-import { ConversationOperationalStatus, Prisma } from "@prisma/client";
+import { ConversationOperationalStatus, MessageType, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
@@ -1052,28 +1052,39 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const inbound = await prisma.inboundMessage.findFirst({
-        where: {
-          clientId: client.id,
-          messageId,
-          type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] },
-          OR: [
-            { waIdCanonical: resolvedConversation.resolvedWaIdCanonical },
-            { waId: { in: Array.from(new Set([waId, ...resolvedConversation.matchedWaIds])) } },
-          ],
-        },
-        select: {
-          messageId: true,
-          rawPayload: true,
-        },
-      });
+      const conversationWhere = {
+        clientId: client.id,
+        messageId,
+        type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] as MessageType[] },
+        OR: [
+          { waIdCanonical: resolvedConversation.resolvedWaIdCanonical },
+          { waId: { in: Array.from(new Set([waId, ...resolvedConversation.matchedWaIds])) } },
+        ],
+      };
+      const [inbound, outbound] = await Promise.all([
+        prisma.inboundMessage.findFirst({
+          where: conversationWhere,
+          select: {
+            messageId: true,
+            rawPayload: true,
+          },
+        }),
+        prisma.outboundMessage.findFirst({
+          where: conversationWhere,
+          select: {
+            messageId: true,
+            rawPayload: true,
+          },
+        }),
+      ]);
 
-      if (!inbound) {
+      const mediaMessage = inbound ?? outbound;
+      if (!mediaMessage) {
         json(res, 404, { error: "media_not_found" });
         return;
       }
 
-      const mediaId = extractRawMediaId(inbound.rawPayload);
+      const mediaId = extractRawMediaId(mediaMessage.rawPayload);
       if (!mediaId) {
         json(res, 404, { error: "media_not_found" });
         return;
@@ -10746,6 +10757,9 @@ async function buildConversationDetailPayload(
         media: buildInboxMessageMedia({
           type: item.type,
           rawPayload: item.rawPayload,
+          downloadUrl: item.messageId
+            ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
+            : undefined,
         }),
         templateName: item.templateName,
         templateLang: item.templateLang,

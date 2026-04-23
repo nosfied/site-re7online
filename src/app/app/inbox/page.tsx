@@ -287,6 +287,31 @@ type PendingOutgoingMessage = {
 
 type AudioRecordingState = "idle" | "recording" | "stopping";
 
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+    return null;
+  }
+  const candidates = [
+    "audio/ogg;codecs=opus",
+    "audio/ogg",
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4",
+  ];
+  for (const candidate of candidates) {
+    if (MediaRecorder.isTypeSupported(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function getRecordingFileExtension(mimeType: string) {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("mp4")) return "m4a";
+  return "audio";
+}
+
 function getConversationActivityAt(item: InboxConversationItem) {
   // Activity priority stays explicit: last visible message, then conversation update timestamp.
   return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
@@ -1432,13 +1457,14 @@ export default function AppInboxPage() {
     try {
       setError(null);
       setErrorDetails(null);
+      const mimeType = getSupportedRecordingMimeType();
+      if (!mimeType) {
+        setError("Este navegador nao grava audio em formato compativel com o WhatsApp.");
+        setErrorDetails("Use upload de arquivo de audio ou tente outro navegador.");
+        return;
+      }
       const stream = await window.navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "";
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
@@ -1450,8 +1476,8 @@ export default function AppInboxPage() {
       });
 
       recorder.addEventListener("stop", () => {
-        const nextMimeType = recorder.mimeType || "audio/webm";
-        const extension = nextMimeType.includes("ogg") ? "ogg" : "webm";
+        const nextMimeType = recorder.mimeType || mimeType;
+        const extension = getRecordingFileExtension(nextMimeType);
         const blob = new Blob(audioChunksRef.current, { type: nextMimeType });
         audioChunksRef.current = [];
         mediaRecorderRef.current = null;
