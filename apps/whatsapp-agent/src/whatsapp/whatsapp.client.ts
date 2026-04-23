@@ -144,7 +144,8 @@ export async function sendTemplateMessage(
 export async function uploadMedia(
   file: Blob,
   mimeType: string,
-  credentials?: TenantMediaCredentials
+  credentials?: TenantMediaCredentials,
+  fileName?: string | null
 ): Promise<UploadMediaResult> {
   const phoneNumberId = credentials?.phoneNumberId?.trim() || env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = credentials?.accessToken?.trim() || env.WHATSAPP_ACCESS_TOKEN;
@@ -152,7 +153,8 @@ export async function uploadMedia(
   const formData = new FormData();
   formData.append("messaging_product", "whatsapp");
   formData.append("type", mimeType);
-  formData.append("file", file);
+  const normalizedFileName = String(fileName ?? "").trim() || `upload.${mimeType.includes("ogg") ? "ogg" : "bin"}`;
+  formData.append("file", new File([file], normalizedFileName, { type: mimeType }));
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);

@@ -11478,7 +11478,8 @@ async function adminSendMediaMessage(params: {
     {
       accessToken: credentials.accessToken,
       phoneNumberId: credentials.phoneNumberId,
-    }
+    },
+    uploadFileName
   );
   if (!uploaded.ok) {
     logger.error({
