@@ -658,10 +658,13 @@ export default function AppInboxPage() {
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
+  const [conversationSearch, setConversationSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
   const [statusActionDraft, setStatusActionDraft] = useState<ConversationOperationalStatus | "">("");
   const [transferUserId, setTransferUserId] = useState("");
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pauseErrorToast, setPauseErrorToast] = useState(false);
@@ -1071,6 +1074,21 @@ export default function AppInboxPage() {
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
+      const searchTerm = conversationSearch.trim().toLowerCase();
+      if (searchTerm) {
+        const haystack = [
+          item.leadName,
+          item.leadPhone,
+          item.waId,
+          item.lastMessage?.bodyText,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(searchTerm)) {
+          return false;
+        }
+      }
       if (isAdminUser && departmentFilter !== "ALL") {
         if ((item.departmentId ?? null) !== departmentFilter) {
           return false;
@@ -1091,7 +1109,7 @@ export default function AppInboxPage() {
           return true;
       }
     });
-  }, [conversationFilter, conversations, departmentFilter, isAdminUser, session?.user.id]);
+  }, [conversationFilter, conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
@@ -1472,6 +1490,14 @@ export default function AppInboxPage() {
     await sendMediaFile(selectedMediaFile, messageDraft);
   };
 
+  const handlePrimarySend = async () => {
+    if (selectedMediaFile) {
+      await handleSendMedia();
+      return;
+    }
+    await handleSendMessage();
+  };
+
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
     if (!canReply) {
@@ -1548,8 +1574,8 @@ export default function AppInboxPage() {
   const handleComposerKeyDown = async (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey) return;
     event.preventDefault();
-    if (!messageDraft.trim() || !selectedConversationWaId) return;
-    await handleSendMessage();
+    if ((!messageDraft.trim() && !selectedMediaFile) || !selectedConversationWaId) return;
+    await handlePrimarySend();
   };
 
   const handleClaimConversation = async () => {
@@ -1699,61 +1725,65 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid min-h-0 flex-1 gap-2 overflow-hidden xl:grid-cols-[300px_minmax(0,1fr)_280px]">
-        <aside className="flex min-h-0 flex-col bg-white/3">
-          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-            <h2 className="text-sm font-semibold">Conversas</h2>
-            <button
-              type="button"
-              onClick={() => session && refreshConversationList(session)}
-              className="rounded-lg border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:bg-white/10"
-            >
-              Atualizar
-            </button>
-          </div>
-          <div className="border-b border-white/10 px-3 py-2">
-            <div className="flex flex-wrap gap-2">
-              {CONVERSATION_FILTERS.map((filter) => (
-                <button
-                  key={filter.value}
-                  type="button"
-                  onClick={() => setConversationFilter(filter.value)}
-                  className={`rounded-full px-3 py-1 text-xs transition ${
-                    conversationFilter === filter.value
-                      ? "bg-re7-sky/30 text-white"
-                      : "bg-white/5 text-white/70 hover:bg-white/10"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+      <section className="grid h-full min-h-0 grid-cols-1 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)_320px]">
+        <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
+          <div className="border-b border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-white">Conversas</h2>
+              <button
+                type="button"
+                onClick={() => session && refreshConversationList(session)}
+                className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/75 transition hover:bg-white/10"
+              >
+                Atualizar
+              </button>
             </div>
-            {isAdminUser ? (
-              <div className="mt-3">
-                <label className="grid gap-1 text-xs text-white/70">
-                  <span>Filtrar por setor</span>
-                  <select
-                    value={departmentFilter}
-                    onChange={(event) => setDepartmentFilter(event.target.value)}
-                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
+            <div className="mt-3 space-y-2">
+              <input
+                type="search"
+                value={conversationSearch}
+                onChange={(event) => setConversationSearch(event.target.value)}
+                placeholder="Buscar conversa"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {CONVERSATION_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setConversationFilter(filter.value)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                      conversationFilter === filter.value
+                        ? "bg-re7-sky/30 text-white"
+                        : "bg-white/5 text-white/65 hover:bg-white/10"
+                    }`}
                   >
-                    <option value="ALL">Todos os setores</option>
-                    {departmentOptions.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    {filter.label}
+                  </button>
+                ))}
               </div>
-            ) : null}
+              {isAdminUser ? (
+                <select
+                  value={departmentFilter}
+                  onChange={(event) => setDepartmentFilter(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
+                >
+                  <option value="ALL">Todos os setores</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingConversations ? (
-              <p className="px-3 py-3 text-sm text-white/70">Carregando conversas...</p>
+              <p className="px-4 py-4 text-sm text-white/70">Carregando conversas...</p>
             ) : null}
             {!loadingConversations && filteredConversations.length === 0 ? (
-              <p className="px-3 py-3 text-sm text-white/70">Nenhuma conversa encontrada.</p>
+              <p className="px-4 py-4 text-sm text-white/70">Nenhuma conversa encontrada.</p>
             ) : null}
             {filteredConversations.map((item) => {
               const conversationIdentity = getConversationIdentity(item);
@@ -1770,37 +1800,31 @@ export default function AppInboxPage() {
                     shouldScrollToBottomRef.current = true;
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
+                    setShowMoreActions(false);
                     markConversationAsRead(conversationIdentity, getConversationActivityAt(item));
                   }}
-                  className={`w-full border-b border-white/10 px-3 py-3 text-left transition ${
-                    isActive ? "bg-re7-sky/20" : "hover:bg-white/10"
+                  className={`min-h-[76px] w-full border-b border-white/10 px-4 py-3.5 text-left transition ${
+                    isActive ? "bg-re7-sky/16" : "hover:bg-white/5"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className={`text-sm font-medium ${unread ? "text-white" : ""}`}>
-                      {label}
-                    </p>
-                    {unread ? (
-                      <span
-                        aria-label="mensagem nao lida"
-                        className="mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#20b15a]"
-                      />
-                    ) : null}
+                    <div className="min-w-0">
+                      <p className={`truncate text-sm font-semibold ${unread ? "text-white" : "text-white/90"}`}>
+                        {label}
+                      </p>
+                      {phoneLine ? <p className="mt-0.5 text-xs text-white/55">{phoneLine}</p> : null}
+                    </div>
+                    <span className="shrink-0 text-[11px] text-white/45">{formatDateTime(item.updatedAt)}</span>
                   </div>
-                  {phoneLine ? <p className="mt-1 font-mono text-xs text-white/70">{phoneLine}</p> : null}
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-white/75">
+                  <div className="mt-2 flex items-center gap-2 text-[11px] text-white/58">
                     <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-white/80">
-                      Setor: {item.departmentName || "Sem setor"}
-                    </span>
+                    <span className="truncate">{item.departmentName || "Sem setor"}</span>
+                    {unread ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#20b15a]" /> : null}
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm text-white/70">
+                  <p className="mt-2 line-clamp-2 text-sm leading-5 text-white/68">
                     {item.lastMessage?.bodyText || "Sem mensagem recente."}
-                  </p>
-                  <p className="mt-2 text-xs text-white/55">
-                    {getLeadStatusLabel(item.leadStatus)} • {formatDateTime(item.updatedAt)}
                   </p>
                 </button>
               );
@@ -1808,31 +1832,168 @@ export default function AppInboxPage() {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
-          <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-base font-semibold text-slate-900">
-              Conversa{" "}
-              {selectedConversation
-                ? `• ${selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId}`
-                : ""}
-            </h2>
-            {selectedConversation ? (
-              <p className="mt-1 text-sm text-slate-700">
-                {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
-                {selectedConversation.assignedUserName
-                  ? ` • Atendente: ${selectedConversation.assignedUserName}`
-                  : selectedConversation.assignedTo
-                    ? ` • Atendente: ${selectedConversation.assignedTo}`
-                    : ""}
-                {selectedConversation.departmentName ? ` • Setor: ${selectedConversation.departmentName}` : ""}
-                {selectedConversation.queueName ? ` • ${selectedConversation.queueName}` : ""}
-                {selectedConversation.assignedAt
-                  ? ` • Desde ${formatDateTime(selectedConversation.assignedAt)}`
-                  : ""}
+        <div className="flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
+          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold text-slate-900">
+                {selectedConversation
+                  ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
+                  : "Conversa"}
+              </h2>
+              {selectedConversation ? (
+                <p className="mt-0.5 truncate text-sm text-slate-600">
+                  {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
+                  {selectedConversation.assignedUserName
+                    ? ` • ${selectedConversation.assignedUserName}`
+                    : selectedConversation.assignedTo
+                      ? ` • ${selectedConversation.assignedTo}`
+                      : ""}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedConversation?.assignedUserId === session.user.id ? (
+                <button
+                  type="button"
+                  disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                  onClick={handleReleaseConversation}
+                  className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {conversationAction === "release" ? "Atualizando..." : "Liberar"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={
+                    !selectedConversationWaId ||
+                    Boolean(conversationAction) ||
+                    isSelectedConversationLocked
+                  }
+                  onClick={handleClaimConversation}
+                  className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {conversationAction === "claim" ? "Atualizando..." : "Assumir"}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!selectedConversation}
+                onClick={() => {
+                  if (!selectedConversation) return;
+                  markConversationAsUnread(getConversationIdentity(selectedConversation));
+                  setSelectedConversationKey(null);
+                  setSelectedConversationWaId(null);
+                  setMessages([]);
+                }}
+                className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Não lida
+              </button>
+              <button
+                type="button"
+                disabled={!selectedConversation}
+                onClick={() => setShowMoreActions((current) => !current)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ⋯
+              </button>
+            </div>
+          </header>
+
+          <div className="border-b border-black/8 bg-[#efe6d7] px-4 py-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <select
+                value={statusActionDraft}
+                onChange={async (event) => {
+                  const nextStatus = event.target.value as ConversationOperationalStatus | "";
+                  setStatusActionDraft(nextStatus);
+                  if (!nextStatus) return;
+                  await handleUpdateConversationStatus(nextStatus);
+                }}
+                disabled={!canManageSelectedConversation || Boolean(conversationAction)}
+                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="" disabled>
+                  Status
+                </option>
+                {CONVERSATION_FILTERS.filter((item) =>
+                  ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
+                ).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={transferUserId}
+                onChange={(event) => setTransferUserId(event.target.value)}
+                disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
+                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Atendente</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
+                onClick={handleTransferConversation}
+                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
+              </button>
+              {isAdminUser ? (
+                <>
+                  <select
+                    value={transferDepartmentId}
+                    onChange={(event) => setTransferDepartmentId(event.target.value)}
+                    disabled={
+                      !canTransferDepartment ||
+                      departmentOptions.length === 0 ||
+                      Boolean(conversationAction)
+                    }
+                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                  >
+                    <option value="">Setor</option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={
+                      !canTransferDepartment ||
+                      !transferDepartmentId ||
+                      transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
+                      Boolean(conversationAction)
+                    }
+                    onClick={handleTransferDepartment}
+                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
+                  </button>
+                </>
+              ) : (
+                <div className="rounded-xl border border-[#e1d4c2] bg-white/70 px-3 py-1.5 text-sm text-slate-700">
+                  {selectedConversation?.departmentName || "Sem setor"}
+                </div>
+              )}
+            </div>
+            {showMoreActions ? (
+              <p className="mt-2 text-xs text-slate-600">
+                {selectedConversation?.assignedAt
+                  ? `Conversa em andamento desde ${formatDateTime(selectedConversation.assignedAt)}.`
+                  : "Ajuste status, atendente e setor conforme o andamento do atendimento."}
               </p>
             ) : null}
           </div>
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-3">
+
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4">
             {!selectedConversationWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
@@ -1842,7 +2003,7 @@ export default function AppInboxPage() {
             {selectedConversationWaId && !loadingMessages && messages.length === 0 ? (
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
             ) : null}
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {messages.map((item, index) => {
                 const statusTicks = renderMessageStatusTicks(item);
                 return (
@@ -1861,11 +2022,7 @@ export default function AppInboxPage() {
                         <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                       )}
                       {item.media ? (
-                        <MediaBubble
-                          session={session}
-                          waId={selectedConversationWaId}
-                          item={item}
-                        />
+                        <MediaBubble session={session} waId={selectedConversationWaId} item={item} />
                       ) : null}
                       {item.templateName ? (
                         <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
@@ -1880,170 +2037,49 @@ export default function AppInboxPage() {
               })}
             </div>
           </div>
-          <div className="wa-composer-shell sticky bottom-0 border-t border-black/5 bg-[#eadfcd] px-4 py-3 text-slate-900">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={statusActionDraft}
-                  onChange={async (event) => {
-                    const nextStatus = event.target.value as ConversationOperationalStatus | "";
-                    setStatusActionDraft(nextStatus);
-                    if (!nextStatus) return;
-                    await handleUpdateConversationStatus(nextStatus);
-                  }}
-                  disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                  className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="" disabled>
-                    Alterar status
-                  </option>
-                  {CONVERSATION_FILTERS.filter((item) =>
-                    ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
-                  ).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {selectedConversation ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      markConversationAsUnread(getConversationIdentity(selectedConversation));
-                      setSelectedConversationKey(null);
-                      setSelectedConversationWaId(null);
-                      setMessages([]);
-                    }}
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white"
-                  >
-                    Marcar como nao lida
-                  </button>
-                ) : null}
-                {selectedConversation?.assignedUserId === session.user.id ? (
-                  <button
-                    type="button"
-                    disabled={!selectedConversationWaId || Boolean(conversationAction)}
-                    onClick={handleReleaseConversation}
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {conversationAction === "release" ? "Atualizando..." : "Liberar para fila"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={
-                      !selectedConversationWaId ||
-                      Boolean(conversationAction) ||
-                      isSelectedConversationLocked
-                    }
-                    onClick={handleClaimConversation}
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/60 px-3 py-2 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {conversationAction === "claim" ? "Atualizando..." : "Assumir conversa"}
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="mb-3 flex flex-wrap items-center gap-2 border-t border-black/5 pt-3">
-              <select
-                value={transferUserId}
-                onChange={(event) => setTransferUserId(event.target.value)}
-                disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Selecionar atendente</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
-                onClick={handleTransferConversation}
-                className="rounded-2xl border border-[#d4c7b5] bg-white/75 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
-              </button>
-            </div>
-            {isAdminUser ? (
-              <div className="mb-3 rounded-2xl border border-[#d4c7b5] bg-white/50 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={transferDepartmentId}
-                    onChange={(event) => setTransferDepartmentId(event.target.value)}
-                    disabled={
-                      !canTransferDepartment ||
-                      departmentOptions.length === 0 ||
-                      Boolean(conversationAction)
-                    }
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/90 px-3 py-2.5 text-sm text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
-                  >
-                    <option value="">Selecionar setor</option>
-                    {departmentOptions.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={
-                      !canTransferDepartment ||
-                      !transferDepartmentId ||
-                      transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
-                      Boolean(conversationAction)
-                    }
-                    onClick={handleTransferDepartment}
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/75 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {conversationAction === "transfer-department"
-                      ? "Transferindo setor..."
-                      : "Transferir para outro setor"}
-                  </button>
-                </div>
-                <p className="mt-2 text-sm text-slate-700">
-                  {canTransferDepartment
-                    ? "Transfira a conversa para o setor certo quando o atendimento precisar mudar."
-                    : "Abra o painel administrativo neste navegador para mover a conversa entre setores."}
-                </p>
-              </div>
-            ) : null}
-            <div className="mb-2 flex flex-wrap gap-2">
-              {QUICK_EMOJIS.map((emoji) => (
+
+          <div className="sticky bottom-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3">
+            {selectedMediaFile ? (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
+                  Arquivo: {selectedMediaFile.name}
+                </span>
                 <button
-                  key={emoji}
                   type="button"
                   onClick={() => {
-                    setMessageDraft((current) => `${current}${emoji}`);
-                    focusComposer();
+                    setSelectedMediaFile(null);
+                    if (mediaInputRef.current) {
+                      mediaInputRef.current.value = "";
+                    }
                   }}
-                  disabled={!selectedConversationWaId || !canReply}
-                  className="rounded-full border border-[#d4c7b5] bg-white/80 px-3 py-1 text-base leading-none hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="text-sm text-slate-600 hover:text-slate-900"
                 >
-                  {emoji}
+                  ×
                 </button>
-              ))}
-            </div>
-            <label className="grid gap-2 text-sm">
-              <textarea
-                ref={composerRef}
-                className="min-h-24 rounded-[1.2rem] border border-[#d4c7b5] bg-white/92 px-4 py-3.5 text-base text-slate-900 outline-none focus:border-[#7cbf69]"
-                value={messageDraft}
-                onChange={(event) => setMessageDraft(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-                placeholder={
-                  canReply
-                    ? "Digite a mensagem..."
-                    : "Assuma a conversa para responder manualmente..."
-                }
-                disabled={!selectedConversationWaId || !canReply}
-              />
-            </label>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+              </div>
+            ) : null}
+            {audioRecordingState === "recording" ? (
+              <div className="mb-2 text-sm font-medium text-[#b45309]">Gravando áudio...</div>
+            ) : null}
+            <div className="relative flex items-center gap-2">
+              {showEmojiPicker ? (
+                <div className="absolute bottom-full left-12 z-20 mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-[#d4c7b5] bg-white/95 p-2 shadow-[0_12px_28px_rgba(15,23,42,0.18)]">
+                  {QUICK_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => {
+                        setMessageDraft((current) => `${current}${emoji}`);
+                        setShowEmojiPicker(false);
+                        focusComposer();
+                      }}
+                      className="rounded-full px-2 py-1 text-base leading-none transition hover:bg-[#efe6d7]"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <input
                 ref={mediaInputRef}
                 type="file"
@@ -2058,9 +2094,17 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={!selectedConversationWaId || !canReply}
                 onClick={() => mediaInputRef.current?.click()}
-                className="rounded-2xl border border-[#d4c7b5] bg-white/85 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Anexar arquivo
+                +
+              </button>
+              <button
+                type="button"
+                disabled={!selectedConversationWaId || !canReply}
+                onClick={() => setShowEmojiPicker((current) => !current)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                😊
               </button>
               <button
                 type="button"
@@ -2072,115 +2116,87 @@ export default function AppInboxPage() {
                   audioRecordingState === "stopping"
                 }
                 onClick={() => void handleToggleAudioRecording()}
-                className="rounded-2xl border border-[#d4c7b5] bg-white/85 px-4 py-2.5 text-sm font-medium text-slate-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {audioRecordingState === "recording" ? "Parar e enviar audio" : "Gravar audio"}
+                🎤
               </button>
-              {selectedMediaFile ? (
-                <>
-                  <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
-                    {selectedMediaFile.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedMediaFile(null);
-                      if (mediaInputRef.current) {
-                        mediaInputRef.current.value = "";
-                      }
-                    }}
-                    className="rounded-2xl border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900 hover:bg-white"
-                  >
-                    Remover
-                  </button>
-                </>
-              ) : null}
-              {audioRecordingState === "recording" ? (
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-[#b45309]">
-                  Gravando audio...
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-slate-600">
-                {sendingMessage || queuedMessageCount > 0
-                  ? `${queuedMessageCount > 0 ? `${queuedMessageCount} ` : ""}envio(s) em andamento.`
-                  : "Voce pode continuar digitando enquanto outra mensagem e enviada."}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={!selectedConversationWaId || !messageDraft.trim() || !canReply}
-                  onClick={handleSendMessage}
-                  className="rounded-2xl bg-[#20b15a] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {sendingMessage ? "Adicionar a fila" : "Enviar mensagem"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedConversationWaId || !selectedMediaFile || !canReply || sendingMessage}
-                  onClick={handleSendMedia}
-                  className="rounded-2xl bg-[#1d4ed8] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Enviar anexo
-                </button>
-              </div>
+              <label className="min-w-0 flex-1">
+                <textarea
+                  ref={composerRef}
+                  className="h-10 min-h-10 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-[#7cbf69]"
+                  value={messageDraft}
+                  onChange={(event) => setMessageDraft(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                  placeholder={
+                    canReply
+                      ? "Digite uma mensagem"
+                      : "Assuma a conversa para responder"
+                  }
+                  disabled={!selectedConversationWaId || !canReply}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={
+                  !selectedConversationWaId ||
+                  (!messageDraft.trim() && !selectedMediaFile) ||
+                  !canReply ||
+                  sendingMessage
+                }
+                onClick={handlePrimarySend}
+                className="h-10 shrink-0 rounded-2xl bg-[#20b15a] px-3.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Enviar
+              </button>
             </div>
           </div>
         </div>
 
-        <aside className="flex min-h-0 flex-col bg-white/3">
-          <div className="border-b border-white/10 px-3 py-2">
-            <h2 className="text-sm font-semibold">Contato</h2>
+        <aside className="flex min-h-0 flex-col border-l border-white/10 bg-[#0c1930]">
+          <div className="border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold text-white">Cliente</h2>
           </div>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {!selectedLead ? (
-              <p className="text-sm text-white/70">
+              <p className="px-4 py-4 text-sm text-white/70">
                 Esta conversa ainda nao entrou no fluxo de cadastro do contato.
               </p>
             ) : (
               <>
-                <div className="rounded-xl bg-white/4 p-2.5">
-                  <p className="text-sm font-semibold">Dados do contato</p>
-                  <div className="mt-3 space-y-2 text-sm">
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-white/70">Nome</span>
-                    <div className="flex gap-2">
-                      <input
-                        className="min-w-0 flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                        value={leadNameDraft}
-                        onChange={(event) => setLeadNameDraft(event.target.value)}
-                        placeholder="Como este contato deve aparecer"
-                        disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
-                      />
-                      <button
-                        type="button"
-                        disabled={savingLeadName || !isSelectedConversationOwnedByCurrentUser}
-                        onClick={handleSaveLeadName}
-                        className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {savingLeadName ? "Salvando..." : "Salvar"}
-                      </button>
-                    </div>
-                  </label>
-                  <p>
-                    <span className="text-white/70">Telefone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}
-                  </p>
-                  <p>
-                    <span className="text-white/70">Cidade:</span> {selectedLead.city || "-"}
-                  </p>
-                  <p>
-                    <span className="text-white/70">Servico:</span> {selectedLead.service || "-"}
-                  </p>
-                </div>
-                </div>
+                <section className="border-b border-white/10 px-4 py-4">
+                  <h3 className="text-sm font-semibold text-white">Contato</h3>
+                  <div className="mt-3 space-y-2 text-sm text-white/85">
+                    <label className="grid gap-1">
+                      <span className="text-white/55">Nome</span>
+                      <div className="flex gap-2">
+                        <input
+                          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                          value={leadNameDraft}
+                          onChange={(event) => setLeadNameDraft(event.target.value)}
+                          placeholder="Como este contato deve aparecer"
+                          disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
+                        />
+                        <button
+                          type="button"
+                          disabled={savingLeadName || !isSelectedConversationOwnedByCurrentUser}
+                          onClick={handleSaveLeadName}
+                          className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {savingLeadName ? "Salvando..." : "Salvar"}
+                        </button>
+                      </div>
+                    </label>
+                    <p><span className="text-white/55">Telefone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}</p>
+                    <p><span className="text-white/55">Cidade:</span> {selectedLead.city || "-"}</p>
+                    <p><span className="text-white/55">Serviço:</span> {selectedLead.service || "-"}</p>
+                  </div>
+                </section>
 
-                <div className="rounded-xl bg-white/4 p-2.5 space-y-3">
-                  <p className="text-sm font-semibold">Andamento do contato</p>
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-white/70">Status</span>
+                <section className="border-b border-white/10 px-4 py-4">
+                  <h3 className="text-sm font-semibold text-white">Andamento</h3>
+                  <div className="mt-3 space-y-3">
                     <select
-                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2"
+                      className="w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                       value={statusDraft}
                       onChange={(event) => setStatusDraft(event.target.value as LeadStatus)}
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadStatus}
@@ -2194,61 +2210,60 @@ export default function AppInboxPage() {
                         </option>
                       ))}
                     </select>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!statusDraft || savingLeadStatus || !isSelectedConversationOwnedByCurrentUser}
-                    onClick={handleSaveLeadStatus}
-                    className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {savingLeadStatus ? "Salvando..." : "Salvar status"}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      disabled={!statusDraft || savingLeadStatus || !isSelectedConversationOwnedByCurrentUser}
+                      onClick={handleSaveLeadStatus}
+                      className="rounded-xl bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingLeadStatus ? "Salvando..." : "Salvar"}
+                    </button>
+                  </div>
+                </section>
 
-                <div className="rounded-xl bg-white/4 p-2.5 space-y-3">
-                  <p className="text-sm font-semibold">Nota interna</p>
-                  <label className="grid gap-1 text-sm">
-                    <span className="text-white/70">Escreva uma observacao</span>
+                <section className="border-b border-white/10 px-4 py-4">
+                  <h3 className="text-sm font-semibold text-white">Nota interna</h3>
+                  <div className="mt-3 space-y-3">
                     <textarea
-                      className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      className="min-h-24 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
                       placeholder="Registre um detalhe importante do atendimento..."
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadNote}
                     />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
-                    onClick={handleAddLeadNote}
-                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {savingLeadNote ? "Salvando..." : "Salvar nota"}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
+                      onClick={handleAddLeadNote}
+                      className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingLeadNote ? "Salvando..." : "Salvar nota"}
+                    </button>
+                  </div>
+                </section>
 
-                <div className="rounded-xl bg-white/4 p-2.5 space-y-2">
-                  <p className="text-sm font-semibold">Historico de notas</p>
+                <section className="px-4 py-4">
+                  <h3 className="text-sm font-semibold text-white">Histórico de notas</h3>
                   {loadingLeadNotes ? (
-                    <p className="text-sm text-white/70">Carregando notas...</p>
+                    <p className="mt-3 text-sm text-white/70">Carregando notas...</p>
                   ) : null}
                   {!loadingLeadNotes && leadNotes.length === 0 ? (
-                    <p className="text-sm text-white/70">Nenhuma nota registrada.</p>
+                    <p className="mt-3 text-sm text-white/70">Nenhuma nota registrada.</p>
                   ) : null}
-                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                  <div className="mt-3 space-y-2">
                     {leadNotes.map((note) => (
-                      <article key={note.id} className="rounded-md border border-white/15 bg-white/5 p-2">
+                      <article key={note.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
                         <p className="text-sm text-white">{note.body}</p>
-                        <p className="mt-1 text-[11px] text-white/60">{formatDateTime(note.createdAt)}</p>
+                        <p className="mt-1 text-[11px] text-white/55">{formatDateTime(note.createdAt)}</p>
                       </article>
                     ))}
                   </div>
-                </div>
+                </section>
               </>
             )}
 
             {leadError ? (
-              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+              <p className="mx-4 mb-4 rounded-xl border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
                 {leadError}
               </p>
             ) : null}

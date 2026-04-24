@@ -13,6 +13,13 @@ type AppShellProps = {
   fullScreen?: boolean;
 };
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  adminOnly?: boolean;
+};
+
 function getLinkClasses(active: boolean) {
   return `rounded-lg border px-3 py-1.5 text-sm transition ${
     active
@@ -29,6 +36,16 @@ function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
+const FULLSCREEN_NAV_ITEMS: NavItem[] = [
+  { href: "/app/inbox", label: "Inbox", icon: "📥" },
+  { href: "/app/campaigns", label: "Campanhas", icon: "📢" },
+  { href: "/app/templates", label: "Templates", icon: "🧾" },
+  { href: "/app/chatbot", label: "Chatbot", icon: "🤖", adminOnly: true },
+  { href: "/app/reports", label: "Relatórios", icon: "📊", adminOnly: true },
+  { href: "/app/settings/users", label: "Usuários", icon: "👤", adminOnly: true },
+  { href: "/app/settings/departments", label: "Setores", icon: "⚙️", adminOnly: true },
+];
+
 export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -39,33 +56,63 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     router.replace("/app/login");
   };
 
+  if (fullScreen) {
+    return (
+      <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white">
+        <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
+          <aside className="flex h-full flex-col items-center border-r border-white/10 bg-[#081327] py-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-re7-sky/15 text-sm font-semibold text-white">
+              R7
+            </div>
+            <nav className="mt-4 flex w-full flex-1 flex-col items-center gap-2 px-2">
+              {FULLSCREEN_NAV_ITEMS.filter((item) => !item.adminOnly || canViewAdministration).map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={item.label}
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xs font-semibold transition ${
+                      active
+                        ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-xl leading-none">{item.icon}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sair"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/25 bg-red-900/20 text-xs font-semibold text-red-100 transition hover:bg-red-900/30"
+            >
+              <span className="text-xl leading-none">🚪</span>
+            </button>
+          </aside>
+
+          <section className="min-h-0 min-w-0 overflow-hidden">{children}</section>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className={
-        fullScreen
-          ? "h-screen w-screen overflow-hidden bg-re7-navy px-2 py-2 text-white"
-          : "min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6"
+        "min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6"
       }
     >
-      <div className={fullScreen ? "flex h-full w-full flex-col gap-2" : "mx-auto flex w-full max-w-7xl flex-col gap-3"}>
-        <header
-          className={
-            fullScreen
-              ? "z-20 px-2 py-2 backdrop-blur"
-              : "sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur"
-          }
-        >
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
+        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Portal do cliente
               </p>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <p className="text-sm text-white/70">{session.user.name || session.user.email}</p>
-                {fullScreen ? <span className="text-sm text-white/40">•</span> : null}
-                {fullScreen ? <p className="text-sm font-medium text-white">{title}</p> : null}
-                {fullScreen && subtitle ? <p className="text-sm text-white/60">{subtitle}</p> : null}
-              </div>
+              <p className="mt-0.5 text-sm text-white/70">{session.user.name || session.user.email}</p>
             </div>
             <div className="flex items-center">
               <button
@@ -124,12 +171,10 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           </div>
         </header>
 
-        {!fullScreen ? (
-          <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-            <h1 className="text-xl font-bold">{title}</h1>
-            {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
-          </section>
-        ) : null}
+        <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <h1 className="text-xl font-bold">{title}</h1>
+          {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
+        </section>
 
         {children}
       </div>
