@@ -33,7 +33,7 @@ function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
 function AccessButton() {
   return (
     <Link
-      href="/app/login"
+      href="https://admin.re7online.com/app/login"
       className="inline-flex items-center justify-center rounded-2xl bg-[#20b15a] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
     >
       Acessar sistema
