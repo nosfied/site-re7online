@@ -496,6 +496,20 @@ function getLatestMessageSignature(items: InboxMessageItem[]) {
   return `${latest.createdAt}:${latest.messageId ?? latest.metaMessageId ?? latest.requestId ?? latest.direction}`;
 }
 
+function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
+  let latestItem: InboxConversationItem | null = null;
+  let latestTs = Number.NEGATIVE_INFINITY;
+  for (const item of items) {
+    if (!item.lastInboundAt) continue;
+    const ts = Date.parse(item.lastInboundAt);
+    if (!Number.isFinite(ts) || ts <= latestTs) continue;
+    latestTs = ts;
+    latestItem = item;
+  }
+  if (!latestItem?.lastInboundAt) return null;
+  return `${getConversationIdentity(latestItem)}:${latestItem.lastInboundAt}`;
+}
+
 function applyConversationOperationalPayload(
   item: InboxConversationItem,
   payload: {
@@ -680,6 +694,10 @@ export default function AppInboxPage() {
   const shouldScrollToBottomRef = useRef(false);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
+  const lastInboundConversationSignatureRef = useRef<string | null>(null);
+  const hasPrimedNotificationRef = useRef(false);
+  const hasInitializedConversationSoundRef = useRef(false);
+  const notificationAudioContextRef = useRef<AudioContext | null>(null);
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const unreadStorageKey = useMemo(
@@ -821,6 +839,65 @@ export default function AppInboxPage() {
     composerRef.current.setSelectionRange(caretPosition, caretPosition);
   }, []);
 
+  const playInboundNotification = useCallback(() => {
+    if (!hasPrimedNotificationRef.current || typeof window === "undefined") return;
+    const AudioContextCtor =
+      window.AudioContext ||
+      // @ts-expect-error webkit fallback for older browsers.
+      window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+    try {
+      const ctx = notificationAudioContextRef.current ?? new AudioContextCtor();
+      notificationAudioContextRef.current = ctx;
+      if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+      const now = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.12);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.18);
+    } catch {
+      // Browser autoplay policy can block audio; fail silently.
+    }
+  }, []);
+
+  useEffect(() => {
+    const primeNotificationAudio = () => {
+      hasPrimedNotificationRef.current = true;
+      const AudioContextCtor =
+        window.AudioContext ||
+        // @ts-expect-error webkit fallback for older browsers.
+        window.webkitAudioContext;
+      if (!AudioContextCtor) return;
+      try {
+        const ctx = notificationAudioContextRef.current ?? new AudioContextCtor();
+        notificationAudioContextRef.current = ctx;
+        if (ctx.state === "suspended") {
+          void ctx.resume();
+        }
+      } catch {
+        // noop
+      }
+    };
+
+    window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
+    window.addEventListener("keydown", primeNotificationAudio);
+
+    return () => {
+      window.removeEventListener("pointerdown", primeNotificationAudio);
+      window.removeEventListener("keydown", primeNotificationAudio);
+    };
+  }, []);
+
   const markConversationAsRead = useCallback((conversationKey: string, activityAt?: string | null) => {
     if (!activityAt) return;
     setReadState((prev) => {
@@ -852,6 +929,18 @@ export default function AppInboxPage() {
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });
     const sortedItems = sortConversationsByRecent(response.items);
+    const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
+    if (hasInitializedConversationSoundRef.current) {
+      if (
+        latestInboundSignature &&
+        latestInboundSignature !== lastInboundConversationSignatureRef.current
+      ) {
+        playInboundNotification();
+      }
+    } else {
+      hasInitializedConversationSoundRef.current = true;
+    }
+    lastInboundConversationSignatureRef.current = latestInboundSignature;
     setConversations(sortedItems);
     if (response.items.length === 0) {
       setSelectedConversationKey(null);
@@ -884,7 +973,7 @@ export default function AppInboxPage() {
         getConversationActivityAt(activeConversation)
       );
     }
-  }, [markConversationAsRead, selectedConversationKey]);
+  }, [markConversationAsRead, playInboundNotification, selectedConversationKey]);
 
   const refreshSelectedTimeline = useCallback(async (activeSession: AppSession, waId: string) => {
     const response = await fetchAppConversation(activeSession, waId, { order: "asc", limit: 300 });
@@ -1728,6 +1817,7 @@ export default function AppInboxPage() {
       <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
+            <p className="mb-1 text-[11px] text-white/45">{session.user.name || session.user.email}</p>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">Conversas</h2>
               <button
@@ -1803,27 +1893,35 @@ export default function AppInboxPage() {
                     setShowMoreActions(false);
                     markConversationAsRead(conversationIdentity, getConversationActivityAt(item));
                   }}
-                  className={`min-h-[76px] w-full border-b border-white/10 px-4 py-3.5 text-left transition ${
-                    isActive ? "bg-re7-sky/16" : "hover:bg-white/5"
+                  className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition ${
+                    isActive
+                      ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
+                      : "border-l-4 border-l-transparent border-b-white/10 hover:bg-white/5"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className={`truncate text-sm font-semibold ${unread ? "text-white" : "text-white/90"}`}>
+                      <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
                         {label}
                       </p>
-                      {phoneLine ? <p className="mt-0.5 text-xs text-white/55">{phoneLine}</p> : null}
+                      {phoneLine ? (
+                        <p className={`mt-0.5 text-xs ${isActive ? "text-white/75" : "text-white/55"}`}>
+                          {phoneLine}
+                        </p>
+                      ) : null}
                     </div>
-                    <span className="shrink-0 text-[11px] text-white/45">{formatDateTime(item.updatedAt)}</span>
+                    <span className={`shrink-0 text-[11px] ${isActive ? "text-white/70" : "text-white/45"}`}>
+                      {formatDateTime(item.updatedAt)}
+                    </span>
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-[11px] text-white/58">
+                  <div className={`mt-2 flex items-center gap-2 text-[11px] ${isActive ? "text-white/78" : "text-white/58"}`}>
                     <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
                     {unread ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#20b15a]" /> : null}
                   </div>
-                  <p className="mt-2 line-clamp-2 text-sm leading-5 text-white/68">
+                  <p className={`mt-2 line-clamp-2 text-sm leading-5 ${isActive ? "text-white/88" : "text-white/68"}`}>
                     {item.lastMessage?.bodyText || "Sem mensagem recente."}
                   </p>
                 </button>

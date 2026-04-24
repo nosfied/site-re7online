@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { AppSession, clearAppSession } from "@/lib/appClientApi";
 
 type AppShellProps = {
@@ -40,15 +41,16 @@ const FULLSCREEN_NAV_ITEMS: NavItem[] = [
   { href: "/app/inbox", label: "Inbox", icon: "📥" },
   { href: "/app/campaigns", label: "Campanhas", icon: "📢" },
   { href: "/app/templates", label: "Templates", icon: "🧾" },
-  { href: "/app/chatbot", label: "Chatbot", icon: "🤖", adminOnly: true },
+  { href: "/app/chatbot", label: "Configurações Chatbot", icon: "🤖", adminOnly: true },
   { href: "/app/reports", label: "Relatórios", icon: "📊", adminOnly: true },
   { href: "/app/settings/users", label: "Usuários", icon: "👤", adminOnly: true },
-  { href: "/app/settings/departments", label: "Setores", icon: "⚙️", adminOnly: true },
+  { href: "/app/settings/departments", label: "Setores", icon: "🏢", adminOnly: true },
 ];
 
 export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [showBrandModal, setShowBrandModal] = useState(false);
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
 
   const handleLogout = () => {
@@ -56,14 +58,57 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     router.replace("/app/login");
   };
 
+  const brandModal = showBrandModal ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm"
+      onClick={() => setShowBrandModal(false)}
+    >
+      <div
+        className="relative w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0d1b36] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setShowBrandModal(false)}
+          className="absolute right-4 top-4 rounded-full border border-white/15 px-3 py-1 text-sm text-white/75 hover:bg-white/10 hover:text-white"
+        >
+          Fechar
+        </button>
+        <div className="flex min-h-[280px] items-center justify-center">
+          <Image
+            src="/images/converta-logo-light.png"
+            alt="Converta ampliada"
+            width={900}
+            height={340}
+            priority
+            className="h-auto w-full max-w-[760px] object-contain"
+          />
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (fullScreen) {
     return (
       <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white">
         <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
           <aside className="flex h-full flex-col items-center border-r border-white/10 bg-[#081327] py-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-re7-sky/15 text-sm font-semibold text-white">
-              R7
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowBrandModal(true)}
+              title="Ampliar logo da Converta"
+              className="flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa]">
+                <Image
+                  src="/images/converta-check-mark.png"
+                  alt="Converta"
+                  width={64}
+                  height={64}
+                  className="h-9 w-9 translate-x-[2px] object-contain"
+                />
+              </span>
+            </button>
             <nav className="mt-4 flex w-full flex-1 flex-col items-center gap-2 px-2">
               {FULLSCREEN_NAV_ITEMS.filter((item) => !item.adminOnly || canViewAdministration).map((item) => {
                 const active = pathname === item.href;
@@ -95,6 +140,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
           <section className="min-h-0 min-w-0 overflow-hidden">{children}</section>
         </div>
+        {brandModal}
       </main>
     );
   }
@@ -106,15 +152,15 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       }
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
-        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
+        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur relative">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Portal do cliente
               </p>
-              <p className="mt-0.5 text-sm text-white/70">{session.user.name || session.user.email}</p>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-white/65">{session.user.name || session.user.email}</span>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -160,7 +206,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                     Setores
                   </Link>
                   <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-                    Chatbot
+                    Configurações Chatbot
                   </Link>
                   <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
                     Relatorios
@@ -169,6 +215,20 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               </div>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() => setShowBrandModal(true)}
+            title="Ampliar logo da Converta"
+            className="absolute right-4 top-[4.95rem] hidden h-9 w-28 items-center justify-center xl:flex"
+          >
+            <Image
+              src="/images/converta-logo-light.png"
+              alt="Converta"
+              width={160}
+              height={60}
+              className="h-auto w-full object-contain"
+            />
+          </button>
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
@@ -178,6 +238,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
         {children}
       </div>
+
+      {brandModal}
     </main>
   );
 }
