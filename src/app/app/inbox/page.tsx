@@ -706,6 +706,14 @@ export default function AppInboxPage() {
     return () => window.clearTimeout(timer);
   }, [error, errorDetails, leadError, pauseErrorToast, success]);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   useEffect(
     () => () => {
       mediaRecorderRef.current?.stop();
@@ -1675,7 +1683,12 @@ export default function AppInboxPage() {
   }
 
   return (
-    <AppShell session={session} title="Inbox" subtitle="Atendimentos do seu WhatsApp em um so lugar.">
+    <AppShell
+      session={session}
+      title="Inbox"
+      subtitle="Atendimentos do seu WhatsApp em um so lugar."
+      fullScreen
+    >
       <FeedbackToast message={success} />
       <FeedbackToast
         message={buildInboxErrorToast(error, errorDetails, leadError)}
@@ -1686,9 +1699,9 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid gap-3 xl:h-[calc(100vh-9.5rem)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
-          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+      <section className="grid min-h-0 flex-1 gap-2 overflow-hidden xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+        <aside className="flex min-h-0 flex-col bg-white/3">
+          <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
             <h2 className="text-sm font-semibold">Conversas</h2>
             <button
               type="button"
@@ -1698,7 +1711,7 @@ export default function AppInboxPage() {
               Atualizar
             </button>
           </div>
-          <div className="border-b border-white/10 px-3 py-2.5">
+          <div className="border-b border-white/10 px-3 py-2">
             <div className="flex flex-wrap gap-2">
               {CONVERSATION_FILTERS.map((filter) => (
                 <button
@@ -1795,7 +1808,7 @@ export default function AppInboxPage() {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl bg-[#eadfcd] shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-base font-semibold text-slate-900">
               Conversa{" "}
@@ -1867,7 +1880,7 @@ export default function AppInboxPage() {
               })}
             </div>
           </div>
-          <div className="wa-composer-shell border-t border-black/5 px-4 py-3 text-slate-900">
+          <div className="wa-composer-shell sticky bottom-0 border-t border-black/5 bg-[#eadfcd] px-4 py-3 text-slate-900">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -2116,18 +2129,18 @@ export default function AppInboxPage() {
           </div>
         </div>
 
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-4 py-3">
+        <aside className="flex min-h-0 flex-col bg-white/3">
+          <div className="border-b border-white/10 px-3 py-2">
             <h2 className="text-sm font-semibold">Contato</h2>
           </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-2">
             {!selectedLead ? (
               <p className="text-sm text-white/70">
                 Esta conversa ainda nao entrou no fluxo de cadastro do contato.
               </p>
             ) : (
               <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="rounded-xl bg-white/4 p-2.5">
                   <p className="text-sm font-semibold">Dados do contato</p>
                   <div className="mt-3 space-y-2 text-sm">
                   <label className="grid gap-1 text-sm">
@@ -2162,7 +2175,7 @@ export default function AppInboxPage() {
                 </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="rounded-xl bg-white/4 p-2.5 space-y-3">
                   <p className="text-sm font-semibold">Andamento do contato</p>
                   <label className="grid gap-1 text-sm">
                     <span className="text-white/70">Status</span>
@@ -2192,7 +2205,7 @@ export default function AppInboxPage() {
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="rounded-xl bg-white/4 p-2.5 space-y-3">
                   <p className="text-sm font-semibold">Nota interna</p>
                   <label className="grid gap-1 text-sm">
                     <span className="text-white/70">Escreva uma observacao</span>
@@ -2214,7 +2227,7 @@ export default function AppInboxPage() {
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                <div className="rounded-xl bg-white/4 p-2.5 space-y-2">
                   <p className="text-sm font-semibold">Historico de notas</p>
                   {loadingLeadNotes ? (
                     <p className="text-sm text-white/70">Carregando notas...</p>

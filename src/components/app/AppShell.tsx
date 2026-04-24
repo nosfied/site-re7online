@@ -10,6 +10,7 @@ type AppShellProps = {
   title: string;
   subtitle?: string | null;
   children: ReactNode;
+  fullScreen?: boolean;
 };
 
 function getLinkClasses(active: boolean) {
@@ -28,7 +29,7 @@ function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
-export default function AppShell({ session, title, subtitle, children }: AppShellProps) {
+export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
@@ -39,15 +40,32 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
   };
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
-        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
+    <main
+      className={
+        fullScreen
+          ? "h-screen w-screen overflow-hidden bg-re7-navy px-2 py-2 text-white"
+          : "min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6"
+      }
+    >
+      <div className={fullScreen ? "flex h-full w-full flex-col gap-2" : "mx-auto flex w-full max-w-7xl flex-col gap-3"}>
+        <header
+          className={
+            fullScreen
+              ? "z-20 px-2 py-2 backdrop-blur"
+              : "sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur"
+          }
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                 Portal do cliente
               </p>
-              <p className="mt-0.5 text-sm text-white/70">{session.user.name || session.user.email}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-sm text-white/70">{session.user.name || session.user.email}</p>
+                {fullScreen ? <span className="text-sm text-white/40">•</span> : null}
+                {fullScreen ? <p className="text-sm font-medium text-white">{title}</p> : null}
+                {fullScreen && subtitle ? <p className="text-sm text-white/60">{subtitle}</p> : null}
+              </div>
             </div>
             <div className="flex items-center">
               <button
@@ -106,10 +124,12 @@ export default function AppShell({ session, title, subtitle, children }: AppShel
           </div>
         </header>
 
-        <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-          <h1 className="text-xl font-bold">{title}</h1>
-          {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
-        </section>
+        {!fullScreen ? (
+          <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <h1 className="text-xl font-bold">{title}</h1>
+            {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
+          </section>
+        ) : null}
 
         {children}
       </div>
