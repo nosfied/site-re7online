@@ -1725,7 +1725,7 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid h-full min-h-0 min-w-[1380px] grid-cols-[340px_minmax(648px,1fr)_320px] overflow-hidden">
+      <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
             <div className="flex items-center justify-between gap-2">
@@ -1900,9 +1900,9 @@ export default function AppInboxPage() {
             </div>
           </header>
 
-          <div className="border-b border-black/8 bg-[#efe6d7] px-4 py-2">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
+          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2">
+            <div className="flex items-end gap-2 overflow-hidden">
+              <div className="w-[132px] shrink-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
                 <select
                   value={statusActionDraft}
                   onChange={async (event) => {
@@ -1912,7 +1912,7 @@ export default function AppInboxPage() {
                     await handleUpdateConversationStatus(nextStatus);
                   }}
                   disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                  className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="" disabled>
                     Status
@@ -1926,15 +1926,15 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
-                <div className="flex items-center gap-1.5">
+              <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferUserId}
                     onChange={(event) => setTransferUserId(event.target.value)}
                     disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="">Escolher atendente</option>
+                    <option value="">Atendente</option>
                     {users.map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.name}
@@ -1945,15 +1945,15 @@ export default function AppInboxPage() {
                     type="button"
                     disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
                     onClick={handleTransferConversation}
-                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {conversationAction === "transfer" ? "Transferindo..." : "Transferir para atendente"}
+                    {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
                   </button>
                 </div>
               </div>
               {isAdminUser ? (
-                <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
-                  <div className="flex items-center gap-1.5">
+                <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
                     <select
                       value={transferDepartmentId}
                       onChange={(event) => setTransferDepartmentId(event.target.value)}
@@ -1962,9 +1962,9 @@ export default function AppInboxPage() {
                         departmentOptions.length === 0 ||
                         Boolean(conversationAction)
                       }
-                      className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                      className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
                     >
-                      <option value="">Escolher setor</option>
+                      <option value="">Setor</option>
                       {departmentOptions.map((department) => (
                         <option key={department.id} value={department.id}>
                           {department.name}
@@ -1980,14 +1980,14 @@ export default function AppInboxPage() {
                         Boolean(conversationAction)
                       }
                       onClick={handleTransferDepartment}
-                      className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {conversationAction === "transfer-department" ? "Movendo..." : "Mover para setor"}
+                      {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-[#e1d4c2] bg-white/70 px-3 py-1.5 text-sm text-slate-700">
+                <div className="w-[180px] shrink-0 rounded-xl border border-[#e1d4c2] bg-white/70 px-2.5 py-1.5 text-[13px] text-slate-700">
                   {selectedConversation?.departmentName || "Sem setor"}
                 </div>
               )}

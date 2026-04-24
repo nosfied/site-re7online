@@ -58,8 +58,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="h-screen w-screen overflow-x-auto overflow-y-hidden bg-re7-navy text-white">
-        <div className="grid h-full min-w-[1452px] grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
+      <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white">
+        <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
           <aside className="flex h-full flex-col items-center border-r border-white/10 bg-[#081327] py-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-re7-sky/15 text-sm font-semibold text-white">
               R7
@@ -102,10 +102,10 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   return (
     <main
       className={
-        "min-h-screen overflow-x-auto bg-re7-navy px-4 py-4 text-white md:px-6"
+        "min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6"
       }
     >
-      <div className="mx-auto flex min-w-[1100px] w-full max-w-7xl flex-col gap-3">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
         <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
