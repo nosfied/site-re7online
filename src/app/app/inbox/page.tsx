@@ -1901,83 +1901,91 @@ export default function AppInboxPage() {
           </header>
 
           <div className="border-b border-black/8 bg-[#efe6d7] px-4 py-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <select
-                value={statusActionDraft}
-                onChange={async (event) => {
-                  const nextStatus = event.target.value as ConversationOperationalStatus | "";
-                  setStatusActionDraft(nextStatus);
-                  if (!nextStatus) return;
-                  await handleUpdateConversationStatus(nextStatus);
-                }}
-                disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="" disabled>
-                  Status
-                </option>
-                {CONVERSATION_FILTERS.filter((item) =>
-                  ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
-                ).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
+                <select
+                  value={statusActionDraft}
+                  onChange={async (event) => {
+                    const nextStatus = event.target.value as ConversationOperationalStatus | "";
+                    setStatusActionDraft(nextStatus);
+                    if (!nextStatus) return;
+                    await handleUpdateConversationStatus(nextStatus);
+                  }}
+                  disabled={!canManageSelectedConversation || Boolean(conversationAction)}
+                  className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>
+                    Status
                   </option>
-                ))}
-              </select>
-              <select
-                value={transferUserId}
-                onChange={(event) => setTransferUserId(event.target.value)}
-                disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Atendente</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
-                onClick={handleTransferConversation}
-                className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
-              </button>
-              {isAdminUser ? (
-                <>
+                  {CONVERSATION_FILTERS.filter((item) =>
+                    ["IN_PROGRESS", "WAITING_USER", "CLOSED"].includes(item.value)
+                  ).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
+                <div className="flex items-center gap-1.5">
                   <select
-                    value={transferDepartmentId}
-                    onChange={(event) => setTransferDepartmentId(event.target.value)}
-                    disabled={
-                      !canTransferDepartment ||
-                      departmentOptions.length === 0 ||
-                      Boolean(conversationAction)
-                    }
-                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                    value={transferUserId}
+                    onChange={(event) => setTransferUserId(event.target.value)}
+                    disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
+                    className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <option value="">Setor</option>
-                    {departmentOptions.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
+                    <option value="">Escolher atendente</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
                       </option>
                     ))}
                   </select>
                   <button
                     type="button"
-                    disabled={
-                      !canTransferDepartment ||
-                      !transferDepartmentId ||
-                      transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
-                      Boolean(conversationAction)
-                    }
-                    onClick={handleTransferDepartment}
+                    disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
+                    onClick={handleTransferConversation}
                     className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
+                    {conversationAction === "transfer" ? "Transferindo..." : "Transferir para atendente"}
                   </button>
-                </>
+                </div>
+              </div>
+              {isAdminUser ? (
+                <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2.5 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={transferDepartmentId}
+                      onChange={(event) => setTransferDepartmentId(event.target.value)}
+                      disabled={
+                        !canTransferDepartment ||
+                        departmentOptions.length === 0 ||
+                        Boolean(conversationAction)
+                      }
+                      className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                    >
+                      <option value="">Escolher setor</option>
+                      {departmentOptions.map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={
+                        !canTransferDepartment ||
+                        !transferDepartmentId ||
+                        transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
+                        Boolean(conversationAction)
+                      }
+                      onClick={handleTransferDepartment}
+                      className="rounded-xl border border-[#e1d4c2] bg-white px-3 py-1.5 text-sm text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {conversationAction === "transfer-department" ? "Movendo..." : "Mover para setor"}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-xl border border-[#e1d4c2] bg-white/70 px-3 py-1.5 text-sm text-slate-700">
                   {selectedConversation?.departmentName || "Sem setor"}
@@ -2059,7 +2067,10 @@ export default function AppInboxPage() {
               </div>
             ) : null}
             {audioRecordingState === "recording" ? (
-              <div className="mb-2 text-sm font-medium text-[#b45309]">Gravando áudio...</div>
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[#b45309]">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#dc2626]" />
+                <span>Gravando áudio... clique no botão vermelho para enviar.</span>
+              </div>
             ) : null}
             <div className="relative flex items-center gap-2">
               {showEmojiPicker ? (
@@ -2116,9 +2127,18 @@ export default function AppInboxPage() {
                   audioRecordingState === "stopping"
                 }
                 onClick={() => void handleToggleAudioRecording()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                title={
+                  audioRecordingState === "recording"
+                    ? "Clique novamente para parar e enviar o áudio"
+                    : "Gravar áudio"
+                }
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  audioRecordingState === "recording"
+                    ? "border-red-300 bg-red-600 text-white shadow-[0_0_0_3px_rgba(220,38,38,0.18)] hover:bg-red-500"
+                    : "border-[#d4c7b5] bg-white text-slate-700 hover:bg-slate-50"
+                }`}
               >
-                🎤
+                {audioRecordingState === "recording" ? "⏺" : "🎤"}
               </button>
               <label className="min-w-0 flex-1">
                 <textarea
