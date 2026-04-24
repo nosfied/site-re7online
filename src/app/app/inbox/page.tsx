@@ -1725,7 +1725,7 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid h-full min-h-0 grid-cols-1 overflow-hidden lg:grid-cols-[340px_minmax(0,1fr)_320px]">
+      <section className="grid h-full min-h-0 min-w-[1380px] grid-cols-[340px_minmax(648px,1fr)_320px] overflow-hidden">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
             <div className="flex items-center justify-between gap-2">
