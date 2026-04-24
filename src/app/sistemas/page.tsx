@@ -54,40 +54,42 @@ function WhatsAppBadge() {
 
 export default function SistemasPage() {
   return (
-    <main className="min-h-screen bg-re7-navy text-white">
-      <section className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-12 md:px-8 lg:px-10">
-        <div className="max-w-2xl">
+    <main className="flex min-h-screen overflow-hidden bg-re7-navy text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-re7-sky/80">Re7</p>
-          <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">Sistemas Re7</h1>
-          <p className="mt-3 text-base text-white/72 md:text-lg">Acesse as solucoes digitais da Re7.</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-[2.75rem]">
+            Sistemas Re7
+          </h1>
+          <p className="mt-2 text-sm text-white/72 sm:text-base">Acesse as solucoes digitais da Re7.</p>
         </div>
 
-        <div className="mt-10 grid gap-6 sm:max-w-xl lg:max-w-md">
-          <article className="group rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-6 shadow-[0_24px_64px_rgba(0,0,0,0.24)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_28px_72px_rgba(0,0,0,0.3)]">
+        <div className="mt-6 grid max-w-[26rem] gap-4 sm:mt-8">
+          <article className="group rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_52px_rgba(0,0,0,0.22)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Converta</span>
               <WhatsAppBadge />
             </div>
 
-            <div className="mt-4 flex min-h-[164px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-6 py-8">
+            <div className="mt-4 flex min-h-[128px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-4 py-6 sm:min-h-[144px]">
               <Image
                 src="/images/converta-logo-dark.png"
                 alt="Converta"
                 width={320}
                 height={120}
                 priority
-                className="h-auto w-full max-w-[240px] object-contain"
+                className="h-auto w-full max-w-[210px] object-contain sm:max-w-[220px]"
               />
             </div>
 
-            <div className="mt-6">
-              <h2 className="text-2xl font-semibold text-white">Converta</h2>
-              <p className="mt-3 text-sm leading-6 text-white/72">
+            <div className="mt-5">
+              <h2 className="text-xl font-semibold text-white sm:text-2xl">Converta</h2>
+              <p className="mt-2 text-sm leading-6 text-white/72">
                 Atendimento inteligente via WhatsApp com automacao, campanhas, chatbot, midia e gestao de leads.
               </p>
             </div>
 
-            <div className="mt-6">
+            <div className="mt-5">
               <AccessButton />
             </div>
           </article>

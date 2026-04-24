@@ -519,7 +519,11 @@ export default function AppCampaignsPage() {
   }
 
   return (
-    <AppShell session={session} title="Campanhas" subtitle="Crie campanhas e acompanhe o envio das mensagens em tempo real.">
+    <AppShell
+      session={session}
+      title="Campanhas"
+      subtitle="Crie campanhas e acompanhe os envios sem perder o historico."
+    >
       {error ? (
         <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
           {error}
@@ -531,17 +535,17 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="grid gap-4 xl:h-[calc(100vh-12rem)] xl:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
+      <section className="grid gap-3 xl:h-[calc(100vh-10.5rem)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5 xl:overflow-hidden">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4">
+            <div className="grid min-h-0 flex-1 gap-2.5 overflow-y-auto p-3">
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.name}
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="campanha-marco-01"
@@ -550,7 +554,7 @@ export default function AppCampaignsPage() {
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Template</span>
               <select
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.templateId}
                 disabled={templates.length === 0}
                 onChange={(event) => {
@@ -585,13 +589,13 @@ export default function AppCampaignsPage() {
               ) : null}
             </label>
             {templateVariableLabels.length > 0 ? (
-              <div className="grid gap-3">
+              <div className="grid gap-2.5">
                 <span className="text-sm text-white/70">Variaveis do template</span>
                 {templateVariableLabels.map((label, index) => (
                   <label key={`${label}-${index}`} className="grid gap-1 text-sm">
                     <span className="text-white/70">{label}</span>
                     <input
-                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                       value={form.templateVariables[index] ?? ""}
                       onChange={(event) =>
                         setForm((prev) => ({
@@ -622,7 +626,7 @@ export default function AppCampaignsPage() {
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Template params (um por linha)</span>
                 <textarea
-                  className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                   value={form.templateParamsInput}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
@@ -634,7 +638,7 @@ export default function AppCampaignsPage() {
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Recipients (um waId por linha)</span>
               <textarea
-                className="min-h-32 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.recipientsInput}
                 onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
                 placeholder={"558499049614\n558494786787"}
@@ -646,7 +650,7 @@ export default function AppCampaignsPage() {
               </p>
             ) : null}
             </div>
-            <div className="border-t border-white/10 bg-re7-navy/30 p-4">
+            <div className="border-t border-white/10 bg-re7-navy/30 p-3">
             <button
               type="submit"
               disabled={creating}
@@ -658,7 +662,7 @@ export default function AppCampaignsPage() {
           </form>
         </aside>
 
-        <div className="grid min-h-0 gap-4 xl:grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="grid min-h-0 gap-3 xl:grid-rows-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
           <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -671,11 +675,11 @@ export default function AppCampaignsPage() {
                   Atualizar
                 </button>
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-[220px_1fr]">
+              <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr]">
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Status</span>
                   <select
-                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white"
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                     value={statusFilter}
                     onChange={(event) => setStatusFilter(event.target.value as CampaignStatusFilter)}
                   >
@@ -689,7 +693,7 @@ export default function AppCampaignsPage() {
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Buscar por nome</span>
                   <input
-                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="campanha-ui-vps"
@@ -698,16 +702,16 @@ export default function AppCampaignsPage() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
-                  <th className="px-3 py-2">Replay</th>
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Sent</th>
-                  <th className="px-3 py-2">Total</th>
-                  <th className="px-3 py-2">Template</th>
-                  <th className="px-3 py-2">Criada em</th>
+                  <th className="px-2 py-2">Replay</th>
+                  <th className="px-2 py-2">Campanha</th>
+                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2 text-center">Enviadas</th>
+                  <th className="px-2 py-2 text-center">Total</th>
+                  <th className="hidden px-2 py-2 lg:table-cell">Template</th>
+                  <th className="hidden px-2 py-2 xl:table-cell">Criada em</th>
                 </tr>
               </thead>
               <tbody>
@@ -742,7 +746,7 @@ export default function AppCampaignsPage() {
                       }`}
                       onClick={() => setSelectedCampaignId(campaign.id)}
                     >
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2 align-top">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -757,19 +761,24 @@ export default function AppCampaignsPage() {
                           ↺
                         </button>
                       </td>
-                      <td className="px-3 py-2">{campaign.name || "(sem nome)"}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(campaign.status)}`}>
-                            {campaign.status}
-                          </span>
-                          <span className="text-xs text-white/60">{getStatusLabel(campaign.status)}</span>
+                      <td className="px-2 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-white">{campaign.name || "(sem nome)"}</p>
+                          <p className="mt-1 text-xs text-white/55">{formatRelativeTime(campaign.updatedAt)}</p>
                         </div>
                       </td>
-                      <td className="px-3 py-2">{campaign.sentCount}</td>
-                      <td className="px-3 py-2">{campaign.totalRecipients}</td>
-                      <td className="px-3 py-2">{campaign.templateName || "(sem template)"}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-2 py-2 align-top">
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(campaign.status)}`}>
+                            {getStatusLabel(campaign.status)}
+                          </span>
+                          <span className="text-xs text-white/60">{campaign.status}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-center">{campaign.sentCount}</td>
+                      <td className="px-2 py-2 text-center">{campaign.totalRecipients}</td>
+                      <td className="hidden px-2 py-2 lg:table-cell">{campaign.templateName || "(sem template)"}</td>
+                      <td className="hidden px-2 py-2 xl:table-cell">
                         <div className="flex flex-col gap-1">
                           <span>{formatDateTime(campaign.createdAt)}</span>
                           <span className="text-xs text-white/60">{formatRelativeTime(campaign.createdAt)}</span>
@@ -781,7 +790,7 @@ export default function AppCampaignsPage() {
               </tbody>
             </table>
             </div>
-            <div className="flex items-center justify-between border-t border-white/10 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between border-t border-white/10 px-4 py-2.5 text-sm">
               <p className="text-white/70">Pagina {currentPage} de {totalPages}</p>
               <div className="flex items-center gap-2">
                 <button
@@ -808,7 +817,7 @@ export default function AppCampaignsPage() {
             <div className="border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
             </div>
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 text-sm">
+            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 text-sm">
               {!selectedCampaignId ? (
                 <p className="text-white/70">Selecione uma campanha para ver o detalhe.</p>
               ) : null}
@@ -822,11 +831,11 @@ export default function AppCampaignsPage() {
               ) : null}
               {selectedCampaign ? (
                 <>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Status</p>
                       <p className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedCampaign.status)}`}>
-                        {selectedCampaign.status}
+                        {getStatusLabel(selectedCampaign.status)}
                       </p>
                       <p className="mt-2 text-xs text-white/60">{getStatusLabel(selectedCampaign.status)}</p>
                     </div>
@@ -844,7 +853,7 @@ export default function AppCampaignsPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Enviadas</p>
                       <p className="mt-1 font-semibold text-slate-100">{selectedCampaign.metaSummary?.totalSent ?? 0}</p>
@@ -884,7 +893,7 @@ export default function AppCampaignsPage() {
                   <div className="grid gap-2 md:grid-cols-2">
                     <p><span className="text-white/70">Nome:</span> {selectedCampaign.name || "(sem nome)"}</p>
                     <p><span className="text-white/70">Template:</span> {selectedCampaign.templateName || "(sem template)"}</p>
-                    <p><span className="text-white/70">Total recipients:</span> {selectedCampaign.totalRecipients}</p>
+                    <p><span className="text-white/70">Total de destinatarios:</span> {selectedCampaign.totalRecipients}</p>
                     <p>
                       <span className="text-white/70">Atualizada em:</span> {formatDateTime(selectedCampaign.updatedAt)}
                       <span className="ml-2 text-xs text-white/60">({formatRelativeTime(selectedCampaign.updatedAt)})</span>

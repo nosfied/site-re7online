@@ -48,6 +48,8 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
   "CLOSED",
 ];
 
+const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+
 function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
 }
@@ -684,6 +686,7 @@ export default function AppInboxPage() {
   const [pauseErrorToast, setPauseErrorToast] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -734,6 +737,19 @@ export default function AppInboxPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY);
+    if (stored === "0") {
+      setSoundEnabled(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
+  }, [soundEnabled]);
 
   useEffect(
     () => () => {
@@ -840,7 +856,7 @@ export default function AppInboxPage() {
   }, []);
 
   const playInboundNotification = useCallback(() => {
-    if (!hasPrimedNotificationRef.current || typeof window === "undefined") return;
+    if (!soundEnabled || !hasPrimedNotificationRef.current || typeof window === "undefined") return;
     const AudioContextCtor =
       window.AudioContext ||
       // @ts-expect-error webkit fallback for older browsers.
@@ -853,22 +869,31 @@ export default function AppInboxPage() {
         void ctx.resume();
       }
       const now = ctx.currentTime;
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, now);
-      oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.12);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start(now);
-      oscillator.stop(now + 0.18);
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.0001, now);
+      masterGain.gain.exponentialRampToValueAtTime(0.11, now + 0.03);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      masterGain.connect(ctx.destination);
+
+      const toneA = ctx.createOscillator();
+      toneA.type = "triangle";
+      toneA.frequency.setValueAtTime(880, now);
+      toneA.frequency.exponentialRampToValueAtTime(1046, now + 0.16);
+      toneA.connect(masterGain);
+      toneA.start(now);
+      toneA.stop(now + 0.18);
+
+      const toneB = ctx.createOscillator();
+      toneB.type = "triangle";
+      toneB.frequency.setValueAtTime(1318, now + 0.2);
+      toneB.frequency.exponentialRampToValueAtTime(988, now + 0.38);
+      toneB.connect(masterGain);
+      toneB.start(now + 0.19);
+      toneB.stop(now + 0.4);
     } catch {
       // Browser autoplay policy can block audio; fail silently.
     }
-  }, []);
+  }, [soundEnabled]);
 
   useEffect(() => {
     const primeNotificationAudio = () => {
@@ -1820,13 +1845,27 @@ export default function AppInboxPage() {
             <p className="mb-1 text-[11px] text-white/45">{session.user.name || session.user.email}</p>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">Conversas</h2>
-              <button
-                type="button"
-                onClick={() => session && refreshConversationList(session)}
-                className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/75 transition hover:bg-white/10"
-              >
-                Atualizar
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSoundEnabled((current) => !current)}
+                  title={soundEnabled ? "Silenciar notificações" : "Ativar notificações"}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
+                    soundEnabled
+                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
+                      : "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
+                  }`}
+                >
+                  {soundEnabled ? "🔔" : "🔕"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => session && refreshConversationList(session)}
+                  className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/75 transition hover:bg-white/10"
+                >
+                  Atualizar
+                </button>
+              </div>
             </div>
             <div className="mt-3 space-y-2">
               <input
