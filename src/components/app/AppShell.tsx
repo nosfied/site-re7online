@@ -152,14 +152,70 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       }
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
-        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur relative">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Portal do cliente
-              </p>
+        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
+          <div className="grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)_220px] xl:items-start">
+            <div className="flex flex-col items-start gap-1.5 pt-5">
+              <button
+                type="button"
+                onClick={() => setShowBrandModal(true)}
+                title="Ampliar logo da Converta"
+                className="hidden h-9 w-28 items-center justify-center xl:flex"
+              >
+                <Image
+                  src="/images/converta-logo-light.png"
+                  alt="Converta"
+                  width={160}
+                  height={60}
+                  className="h-auto w-full object-contain"
+                />
+              </button>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-start justify-center gap-2 xl:pt-1">
+              <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Operacao
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
+                    Inbox
+                  </Link>
+                  <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
+                    Campanhas
+                  </Link>
+                  <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
+                    Templates
+                  </Link>
+                </div>
+              </div>
+              {canViewAdministration ? (
+                <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                    Administracao
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href="/app/settings/users"
+                      className={getLinkClasses(pathname === "/app/settings/users")}
+                    >
+                      Usuarios
+                    </Link>
+                    <Link
+                      href="/app/settings/departments"
+                      className={getLinkClasses(pathname === "/app/settings/departments")}
+                    >
+                      Setores
+                    </Link>
+                    <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
+                      Configurações Chatbot
+                    </Link>
+                    <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
+                      Relatorios
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-start justify-end gap-3 xl:pt-1">
               <span className="text-sm text-white/65">{session.user.name || session.user.email}</span>
               <button
                 type="button"
@@ -170,65 +226,6 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               </button>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-start gap-2">
-            <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                Operacao
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
-                  Inbox
-                </Link>
-                <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
-                  Campanhas
-                </Link>
-                <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
-                  Templates
-                </Link>
-              </div>
-            </div>
-            {canViewAdministration ? (
-              <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                  Administracao
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href="/app/settings/users"
-                    className={getLinkClasses(pathname === "/app/settings/users")}
-                  >
-                    Usuarios
-                  </Link>
-                  <Link
-                    href="/app/settings/departments"
-                    className={getLinkClasses(pathname === "/app/settings/departments")}
-                  >
-                    Setores
-                  </Link>
-                  <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-                    Configurações Chatbot
-                  </Link>
-                  <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
-                    Relatorios
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowBrandModal(true)}
-            title="Ampliar logo da Converta"
-            className="absolute right-4 top-[4.95rem] hidden h-9 w-28 items-center justify-center xl:flex"
-          >
-            <Image
-              src="/images/converta-logo-light.png"
-              alt="Converta"
-              width={160}
-              height={60}
-              className="h-auto w-full object-contain"
-            />
-          </button>
         </header>
 
         <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">

@@ -535,13 +535,13 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="grid gap-3 xl:h-[calc(100vh-10.5rem)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5 xl:overflow-hidden">
+      <section className="grid items-start gap-3 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="flex flex-col rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-8rem)]">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
-          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-h-0 flex-1 gap-2.5 overflow-y-auto p-3">
+          <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
+            <div className="grid flex-1 gap-2.5 overflow-y-auto p-3">
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
@@ -662,8 +662,8 @@ export default function AppCampaignsPage() {
           </form>
         </aside>
 
-        <div className="grid min-h-0 gap-3 xl:grid-rows-[minmax(0,0.78fr)_minmax(0,1.22fr)]">
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
+        <div className="grid gap-3">
+          <section className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold">Campanhas</h2>
@@ -701,7 +701,7 @@ export default function AppCampaignsPage() {
                 </label>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="max-h-[28rem] overflow-auto xl:max-h-[26rem]">
             <table className="w-full text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
@@ -813,11 +813,11 @@ export default function AppCampaignsPage() {
             </div>
           </section>
 
-          <section className="flex min-h-0 flex-col rounded-xl border border-white/10 bg-white/5">
+          <section className="flex flex-col rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
             </div>
-            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 text-sm">
+            <div className="grid gap-3 p-3 text-sm">
               {!selectedCampaignId ? (
                 <p className="text-white/70">Selecione uma campanha para ver o detalhe.</p>
               ) : null}

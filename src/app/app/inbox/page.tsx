@@ -871,25 +871,25 @@ export default function AppInboxPage() {
       const now = ctx.currentTime;
       const masterGain = ctx.createGain();
       masterGain.gain.setValueAtTime(0.0001, now);
-      masterGain.gain.exponentialRampToValueAtTime(0.11, now + 0.03);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      masterGain.gain.exponentialRampToValueAtTime(0.09, now + 0.015);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
       masterGain.connect(ctx.destination);
 
-      const toneA = ctx.createOscillator();
-      toneA.type = "triangle";
-      toneA.frequency.setValueAtTime(880, now);
-      toneA.frequency.exponentialRampToValueAtTime(1046, now + 0.16);
-      toneA.connect(masterGain);
-      toneA.start(now);
-      toneA.stop(now + 0.18);
+      const bellFundamental = ctx.createOscillator();
+      bellFundamental.type = "sine";
+      bellFundamental.frequency.setValueAtTime(1318.5, now);
+      bellFundamental.frequency.exponentialRampToValueAtTime(1174.7, now + 0.42);
+      bellFundamental.connect(masterGain);
+      bellFundamental.start(now);
+      bellFundamental.stop(now + 0.62);
 
-      const toneB = ctx.createOscillator();
-      toneB.type = "triangle";
-      toneB.frequency.setValueAtTime(1318, now + 0.2);
-      toneB.frequency.exponentialRampToValueAtTime(988, now + 0.38);
-      toneB.connect(masterGain);
-      toneB.start(now + 0.19);
-      toneB.stop(now + 0.4);
+      const bellHarmonic = ctx.createOscillator();
+      bellHarmonic.type = "sine";
+      bellHarmonic.frequency.setValueAtTime(2637, now);
+      bellHarmonic.frequency.exponentialRampToValueAtTime(2349, now + 0.32);
+      bellHarmonic.connect(masterGain);
+      bellHarmonic.start(now);
+      bellHarmonic.stop(now + 0.45);
     } catch {
       // Browser autoplay policy can block audio; fail silently.
     }
