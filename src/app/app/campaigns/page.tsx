@@ -536,25 +536,25 @@ export default function AppCampaignsPage() {
       ) : null}
 
       <section className="grid items-start gap-3 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex flex-col rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-8rem)]">
+        <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-8rem)]">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
           <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid flex-1 gap-2.5 overflow-y-auto p-3">
-            <label className="grid gap-1 text-sm">
+            <div className="grid min-w-0 flex-1 gap-2.5 overflow-x-hidden overflow-y-auto p-3">
+            <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.name}
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="campanha-marco-01"
               />
             </label>
-            <label className="grid gap-1 text-sm">
+            <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Template</span>
               <select
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.templateId}
                 disabled={templates.length === 0}
                 onChange={(event) => {
@@ -589,13 +589,13 @@ export default function AppCampaignsPage() {
               ) : null}
             </label>
             {templateVariableLabels.length > 0 ? (
-              <div className="grid gap-2.5">
+              <div className="grid min-w-0 gap-2.5">
                 <span className="text-sm text-white/70">Variaveis do template</span>
                 {templateVariableLabels.map((label, index) => (
-                  <label key={`${label}-${index}`} className="grid gap-1 text-sm">
+                  <label key={`${label}-${index}`} className="grid min-w-0 gap-1 text-sm">
                     <span className="text-white/70">{label}</span>
                     <input
-                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                       value={form.templateVariables[index] ?? ""}
                       onChange={(event) =>
                         setForm((prev) => ({
@@ -623,10 +623,10 @@ export default function AppCampaignsPage() {
                 ) : null}
               </div>
             ) : (
-              <label className="grid gap-1 text-sm">
+              <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Template params (um por linha)</span>
                 <textarea
-                  className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                  className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                   value={form.templateParamsInput}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
@@ -635,10 +635,10 @@ export default function AppCampaignsPage() {
                 />
               </label>
             )}
-            <label className="grid gap-1 text-sm">
+            <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Recipients (um waId por linha)</span>
               <textarea
-                className="min-h-24 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                className="block min-h-24 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.recipientsInput}
                 onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
                 placeholder={"558499049614\n558494786787"}
