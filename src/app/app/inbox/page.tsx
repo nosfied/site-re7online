@@ -700,7 +700,7 @@ export default function AppInboxPage() {
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
   const hasPrimedNotificationRef = useRef(false);
   const hasInitializedConversationSoundRef = useRef(false);
-  const notificationAudioContextRef = useRef<AudioContext | null>(null);
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const unreadStorageKey = useMemo(
@@ -750,6 +750,16 @@ export default function AppInboxPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const audio = new window.Audio("/sounds/inbox-notification.wav");
+    audio.preload = "auto";
+    notificationAudioRef.current = audio;
+    return () => {
+      notificationAudioRef.current = null;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -857,46 +867,13 @@ export default function AppInboxPage() {
 
   const playInboundNotification = useCallback(() => {
     if (!soundEnabled || !hasPrimedNotificationRef.current || typeof window === "undefined") return;
-    const AudioContextCtor =
-      window.AudioContext ||
-      // @ts-expect-error webkit fallback for older browsers.
-      window.webkitAudioContext;
-    if (!AudioContextCtor) return;
     try {
-      const ctx = notificationAudioContextRef.current ?? new AudioContextCtor();
-      notificationAudioContextRef.current = ctx;
-      if (ctx.state === "suspended") {
-        void ctx.resume();
-      }
-      const now = ctx.currentTime;
-      const masterGain = ctx.createGain();
-      masterGain.gain.setValueAtTime(0.0001, now);
-      masterGain.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
-      masterGain.connect(ctx.destination);
-
-      const plimGain = ctx.createGain();
-      plimGain.gain.setValueAtTime(0.0001, now);
-      plimGain.gain.exponentialRampToValueAtTime(0.18, now + 0.012);
-      plimGain.gain.exponentialRampToValueAtTime(0.05, now + 0.11);
-      plimGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
-      plimGain.connect(masterGain);
-
-      const plimMain = ctx.createOscillator();
-      plimMain.type = "triangle";
-      plimMain.frequency.setValueAtTime(1760, now);
-      plimMain.frequency.exponentialRampToValueAtTime(1567.98, now + 0.22);
-      plimMain.connect(plimGain);
-      plimMain.start(now);
-      plimMain.stop(now + 0.26);
-
-      const plimShine = ctx.createOscillator();
-      plimShine.type = "sine";
-      plimShine.frequency.setValueAtTime(2637.02, now);
-      plimShine.frequency.exponentialRampToValueAtTime(2349.32, now + 0.18);
-      plimShine.connect(plimGain);
-      plimShine.start(now + 0.008);
-      plimShine.stop(now + 0.18);
+      const baseAudio = notificationAudioRef.current;
+      if (!baseAudio) return;
+      const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
+      nextAudio.volume = 0.95;
+      nextAudio.currentTime = 0;
+      void nextAudio.play();
     } catch {
       // Browser autoplay policy can block audio; fail silently.
     }
@@ -905,17 +882,15 @@ export default function AppInboxPage() {
   useEffect(() => {
     const primeNotificationAudio = () => {
       hasPrimedNotificationRef.current = true;
-      const AudioContextCtor =
-        window.AudioContext ||
-        // @ts-expect-error webkit fallback for older browsers.
-        window.webkitAudioContext;
-      if (!AudioContextCtor) return;
       try {
-        const ctx = notificationAudioContextRef.current ?? new AudioContextCtor();
-        notificationAudioContextRef.current = ctx;
-        if (ctx.state === "suspended") {
-          void ctx.resume();
-        }
+        void notificationAudioRef.current?.play().then(() => {
+          notificationAudioRef.current?.pause();
+          if (notificationAudioRef.current) {
+            notificationAudioRef.current.currentTime = 0;
+          }
+        }).catch(() => {
+          // noop
+        });
       } catch {
         // noop
       }
@@ -1157,7 +1132,7 @@ export default function AppInboxPage() {
       } finally {
         polling = false;
       }
-    }, 10000);
+    }, 2000);
 
     return () => window.clearInterval(interval);
   }, [

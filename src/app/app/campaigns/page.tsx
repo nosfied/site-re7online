@@ -45,7 +45,7 @@ const EMPTY_FORM: CampaignFormState = {
   recipientsInput: "",
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
   "all",
   "draft",
