@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
+  AppInboxReadState,
   AppSession,
   claimAppConversation,
   clearAppSession,
@@ -23,6 +24,7 @@ import {
   transferAppConversation,
   updateAppConversationStatus,
   updateAppLeadStatus,
+  updateAppConversationReadState,
 } from "@/lib/appClientApi";
 import {
   ConversationOperationalStatus,
@@ -49,6 +51,9 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
+const mediaBlobCache = new Map<string, Blob>();
+const mediaNotFoundCache = new Map<string, number>();
 
 function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
@@ -103,6 +108,7 @@ function MediaBubble({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const mediaCacheKey = waId && item.messageId ? `${waId}:${item.messageId}` : null;
 
   const clearLoadedMedia = useCallback(() => {
     if (objectUrlRef.current) {
@@ -114,7 +120,24 @@ function MediaBubble({
   }, []);
 
   const loadMedia = useCallback(async () => {
-    if (!session || !waId || !media?.hasDownload || !item.messageId) return;
+    if (!session || !waId || !media?.hasDownload || !item.messageId || !mediaCacheKey) return;
+    const cachedBlob = mediaBlobCache.get(mediaCacheKey);
+    if (cachedBlob) {
+      const nextObjectUrl = URL.createObjectURL(cachedBlob);
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+      }
+      objectUrlRef.current = nextObjectUrl;
+      setMediaBlob(cachedBlob);
+      setObjectUrl(nextObjectUrl);
+      setError(null);
+      return;
+    }
+    const lastNotFoundAt = mediaNotFoundCache.get(mediaCacheKey);
+    if (lastNotFoundAt && Date.now() - lastNotFoundAt < MEDIA_NOT_FOUND_TTL_MS) {
+      setError("Midia indisponivel.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -124,14 +147,21 @@ function MediaBubble({
         URL.revokeObjectURL(objectUrlRef.current);
       }
       objectUrlRef.current = nextObjectUrl;
+      mediaBlobCache.set(mediaCacheKey, response.blob);
+      mediaNotFoundCache.delete(mediaCacheKey);
       setMediaBlob(response.blob);
       setObjectUrl(nextObjectUrl);
-    } catch {
-      setError("Falha ao carregar midia.");
+    } catch (err) {
+      if ((err as { status?: number }).status === 404) {
+        mediaNotFoundCache.set(mediaCacheKey, Date.now());
+        setError("Midia indisponivel.");
+      } else {
+        setError("Falha ao carregar midia.");
+      }
     } finally {
       setLoading(false);
     }
-  }, [item.messageId, media?.hasDownload, session, waId]);
+  }, [item.messageId, media?.hasDownload, mediaCacheKey, session, waId]);
 
   useEffect(() => {
     if (!session || !media?.hasDownload || !item.messageId || !waId) {
@@ -264,10 +294,7 @@ function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waI
   return item.waIdCanonical ?? item.waId;
 }
 
-type InboxReadState = {
-  lastReadAtByConversationKey: Record<string, string>;
-  manuallyUnreadByConversationKey: Record<string, boolean>;
-};
+type InboxReadState = AppInboxReadState;
 
 const EMPTY_READ_STATE: InboxReadState = {
   lastReadAtByConversationKey: {},
@@ -703,14 +730,7 @@ export default function AppInboxPage() {
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
-  const unreadStorageKey = useMemo(
-    () => (session ? `wa_app_inbox_read_state_v2:${session.user.clientId}` : null),
-    [session]
-  );
-  const legacyUnreadStorageKey = useMemo(
-    () => (session ? `wa_app_inbox_read_state_v1:${session.user.clientId}` : null),
-    [session]
-  );
+  const detailRequestSeqRef = useRef(0);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -833,26 +853,6 @@ export default function AppInboxPage() {
     };
   }, [adminClientKey, adminConnection, session?.user.role]);
 
-  useEffect(() => {
-    if (!unreadStorageKey) return;
-    setReadState(loadReadStateWithFallback(unreadStorageKey, legacyUnreadStorageKey));
-  }, [legacyUnreadStorageKey, unreadStorageKey]);
-
-  useEffect(() => {
-    if (!unreadStorageKey) return;
-    saveReadState(unreadStorageKey, readState);
-  }, [readState, unreadStorageKey]);
-
-  useEffect(() => {
-    if (!unreadStorageKey) return;
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== unreadStorageKey && event.key !== legacyUnreadStorageKey) return;
-      setReadState(loadReadStateWithFallback(unreadStorageKey, legacyUnreadStorageKey));
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, [legacyUnreadStorageKey, unreadStorageKey]);
-
   const scrollTimelineToBottom = useCallback(() => {
     if (!timelineRef.current) return;
     timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
@@ -905,7 +905,11 @@ export default function AppInboxPage() {
     };
   }, []);
 
-  const markConversationAsRead = useCallback((conversationKey: string, activityAt?: string | null) => {
+  const markConversationAsRead = useCallback((
+    conversationKey: string,
+    activityAt?: string | null,
+    waId?: string | null
+  ) => {
     if (!activityAt) return;
     setReadState((prev) => {
       const alreadyRead = prev.lastReadAtByConversationKey[conversationKey] === activityAt;
@@ -921,9 +925,15 @@ export default function AppInboxPage() {
         manuallyUnreadByConversationKey: nextUnread,
       };
     });
-  }, []);
+    if (session && waId) {
+      void updateAppConversationReadState(session, waId, {
+        unread: false,
+        activityAt,
+      }).catch(() => undefined);
+    }
+  }, [session]);
 
-  const markConversationAsUnread = useCallback((conversationKey: string) => {
+  const markConversationAsUnread = useCallback((conversationKey: string, waId?: string | null) => {
     setReadState((prev) => ({
       lastReadAtByConversationKey: prev.lastReadAtByConversationKey,
       manuallyUnreadByConversationKey: {
@@ -931,10 +941,18 @@ export default function AppInboxPage() {
         [conversationKey]: true,
       },
     }));
-  }, []);
+    if (session && waId) {
+      void updateAppConversationReadState(session, waId, {
+        unread: true,
+      }).catch(() => undefined);
+    }
+  }, [session]);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });
+    if (response.readState) {
+      setReadState(response.readState);
+    }
     const sortedItems = sortConversationsByRecent(response.items);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     if (hasInitializedConversationSoundRef.current) {
@@ -977,13 +995,16 @@ export default function AppInboxPage() {
     if (activeConversation) {
       markConversationAsRead(
         getConversationIdentity(activeConversation),
-        getConversationActivityAt(activeConversation)
+        getConversationActivityAt(activeConversation),
+        activeConversation.waId
       );
     }
   }, [markConversationAsRead, playInboundNotification, selectedConversationKey]);
 
   const refreshSelectedTimeline = useCallback(async (activeSession: AppSession, waId: string) => {
+    const requestSeq = ++detailRequestSeqRef.current;
     const response = await fetchAppConversation(activeSession, waId, { order: "asc", limit: 300 });
+    if (requestSeq !== detailRequestSeqRef.current) return;
     setMessages(response.items);
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     setSelectedConversationWaId(response.waId ?? waId);
@@ -1000,7 +1021,7 @@ export default function AppInboxPage() {
     const latestActivityAt =
       response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
     if (document.visibilityState === "visible") {
-      markConversationAsRead(responseConversationKey, latestActivityAt);
+      markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
     }
   }, [markConversationAsRead]);
 
@@ -1050,12 +1071,13 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (!session || !selectedConversationWaId) return;
     let cancelled = false;
+    const requestSeq = ++detailRequestSeqRef.current;
     setLoadingMessages(true);
     setError(null);
 
     fetchAppConversation(session, selectedConversationWaId, { order: "asc", limit: 300 })
       .then((response) => {
-        if (cancelled) return;
+        if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         setMessages(response.items);
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
         setSelectedConversationWaId(response.waId ?? selectedConversationWaId);
@@ -1072,11 +1094,15 @@ export default function AppInboxPage() {
         const latestActivityAt =
           response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
         if (latestActivityAt) {
-          markConversationAsRead(responseConversationKey, latestActivityAt);
+          markConversationAsRead(
+            responseConversationKey,
+            latestActivityAt,
+            response.waId ?? selectedConversationWaId
+          );
         }
       })
       .catch((err: { status?: number; message?: string }) => {
-        if (cancelled) return;
+        if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         if (err.status === 401) {
           handleUnauthorized();
           return;
@@ -1286,7 +1312,8 @@ export default function AppInboxPage() {
       if (document.visibilityState !== "visible" || !selectedConversation) return;
       markConversationAsRead(
         getConversationIdentity(selectedConversation),
-        getConversationActivityAt(selectedConversation)
+        getConversationActivityAt(selectedConversation),
+        selectedConversation.waId
       );
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -1460,7 +1487,8 @@ export default function AppInboxPage() {
           );
           markConversationAsRead(
             response.waIdCanonical ?? next.conversationKey,
-            response.message.createdAt
+            response.message.createdAt,
+            next.waId
           );
         } catch (err) {
           const typed = err as { status?: number; message?: string; details?: string };
@@ -1555,7 +1583,8 @@ export default function AppInboxPage() {
         );
         markConversationAsRead(
           response.waIdCanonical ?? getConversationIdentity(selectedConversation),
-          response.message.createdAt
+          response.message.createdAt,
+          selectedConversation.waId
         );
       } catch (err) {
         const typed = err as { status?: number; message?: string; details?: string };
@@ -1912,7 +1941,8 @@ export default function AppInboxPage() {
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
                     setShowMoreActions(false);
-                    markConversationAsRead(conversationIdentity, getConversationActivityAt(item));
+                    detailRequestSeqRef.current += 1;
+                    markConversationAsRead(conversationIdentity, getConversationActivityAt(item), item.waId);
                   }}
                   className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition ${
                     isActive
@@ -1999,7 +2029,10 @@ export default function AppInboxPage() {
                 disabled={!selectedConversation}
                 onClick={() => {
                   if (!selectedConversation) return;
-                  markConversationAsUnread(getConversationIdentity(selectedConversation));
+                  markConversationAsUnread(
+                    getConversationIdentity(selectedConversation),
+                    selectedConversation.waId
+                  );
                   setSelectedConversationKey(null);
                   setSelectedConversationWaId(null);
                   setMessages([]);

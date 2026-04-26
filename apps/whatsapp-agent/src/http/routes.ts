@@ -59,6 +59,11 @@ import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
 import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
+import {
+  getInboxReadState,
+  markInboxConversationRead,
+  markInboxConversationUnread,
+} from "../inbox/readStateStore.js";
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
 
@@ -185,6 +190,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
+        userId: clientAuth.userId,
         limit,
         includeAssignedUserName: true,
       });
@@ -976,6 +982,62 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.conversation.messages.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.split("/")[4] === "read-state"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const unread = body.unread === true;
+      const activityAt = String(body.activityAt ?? "").trim();
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_read_state",
+      });
+      const conversationKey = resolvedConversation.resolvedWaIdCanonical;
+      const nextState = unread
+        ? await markInboxConversationUnread({
+            clientId: client.id,
+            userId: clientAuth.userId,
+            conversationKey,
+          })
+        : await markInboxConversationRead({
+            clientId: client.id,
+            userId: clientAuth.userId,
+            conversationKey,
+            activityAt: activityAt || new Date().toISOString(),
+          });
+      json(res, 200, { ok: true, readState: nextState });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.read_state.error",
         message: (error as Error).message,
         requestId,
       });
@@ -10412,6 +10474,7 @@ async function buildConversationListPayload(
   params: {
     clientId: string;
     clientKey: string;
+    userId?: string;
     limit: number;
     includeAssignedUserName: boolean;
   }
@@ -10554,6 +10617,12 @@ async function buildConversationListPayload(
     states: runtimeConversations.map((item) => item.conversation),
     defaults,
   });
+  const readState = params.userId
+    ? await getInboxReadState(params.clientId, params.userId)
+    : {
+        lastReadAtByConversationKey: {},
+        manuallyUnreadByConversationKey: {},
+      };
 
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
@@ -10657,6 +10726,7 @@ async function buildConversationListPayload(
     ok: true,
     count: items.length,
     items,
+    readState,
   };
 }
 

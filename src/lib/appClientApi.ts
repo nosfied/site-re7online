@@ -25,6 +25,11 @@ export type AppSession = {
   user: AppSessionUser;
 };
 
+export type AppInboxReadState = {
+  lastReadAtByConversationKey: Record<string, string>;
+  manuallyUnreadByConversationKey: Record<string, boolean>;
+};
+
 export type AppApiError = Error & {
   status?: number;
   errorCode?: string;
@@ -527,13 +532,24 @@ export async function loginAppUser(
 export async function fetchAppConversations(
   session: AppSession,
   options?: { limit?: number }
-): Promise<{ ok: true; count: number; items: InboxConversationItem[] }> {
+): Promise<{ ok: true; count: number; items: InboxConversationItem[]; readState?: AppInboxReadState }> {
   const params = new URLSearchParams();
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
     params.set("limit", String(options.limit));
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversations${suffix}`);
+}
+
+export async function updateAppConversationReadState(
+  session: AppSession,
+  waId: string,
+  payload: { unread: boolean; activityAt?: string | null }
+): Promise<{ ok: true; readState: AppInboxReadState }> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/read-state`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchAppConversation(
