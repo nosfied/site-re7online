@@ -538,6 +538,17 @@ function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
   return `${getConversationIdentity(latestItem)}:${latestItem.lastInboundAt}`;
 }
 
+function getLatestInboundConversationTimestamp(items: InboxConversationItem[]) {
+  let latestTs = Number.NEGATIVE_INFINITY;
+  for (const item of items) {
+    if (!item.lastInboundAt) continue;
+    const ts = Date.parse(item.lastInboundAt);
+    if (!Number.isFinite(ts) || ts <= latestTs) continue;
+    latestTs = ts;
+  }
+  return Number.isFinite(latestTs) ? latestTs : null;
+}
+
 function applyConversationOperationalPayload(
   item: InboxConversationItem,
   payload: {
@@ -724,6 +735,7 @@ export default function AppInboxPage() {
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
+  const lastInboundConversationTimestampRef = useRef<number | null>(null);
   const hasPrimedNotificationRef = useRef(false);
   const hasInitializedConversationSoundRef = useRef(false);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -955,10 +967,14 @@ export default function AppInboxPage() {
     }
     const sortedItems = dedupeConversationsByIdentity(response.items);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
+    const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
     if (hasInitializedConversationSoundRef.current) {
       if (
         latestInboundSignature &&
-        latestInboundSignature !== lastInboundConversationSignatureRef.current
+        latestInboundSignature !== lastInboundConversationSignatureRef.current &&
+        latestInboundTimestamp !== null &&
+        (lastInboundConversationTimestampRef.current === null ||
+          latestInboundTimestamp > lastInboundConversationTimestampRef.current)
       ) {
         playInboundNotification();
       }
@@ -966,6 +982,7 @@ export default function AppInboxPage() {
       hasInitializedConversationSoundRef.current = true;
     }
     lastInboundConversationSignatureRef.current = latestInboundSignature;
+    lastInboundConversationTimestampRef.current = latestInboundTimestamp;
     setConversations(sortedItems);
     if (response.items.length === 0) {
       setSelectedConversationKey(null);
@@ -985,8 +1002,6 @@ export default function AppInboxPage() {
       setMessages([]);
       return;
     }
-    setSelectedConversationKey(getConversationIdentity(selectedItem));
-    setSelectedConversationWaId(selectedItem.waId);
 
     if (document.visibilityState !== "visible") return;
     const activeConversation = sortedItems.find(
