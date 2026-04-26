@@ -654,15 +654,6 @@ export async function releaseAppConversation(
   });
 }
 
-export async function resumeAppConversationAutomation(
-  session: AppSession,
-  waId: string
-): Promise<AppConversationOperationalPayload> {
-  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/resume-automation`, {
-    method: "POST",
-  });
-}
-
 export async function transferAppConversation(
   session: AppSession,
   waId: string,

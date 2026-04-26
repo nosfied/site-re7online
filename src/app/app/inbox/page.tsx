@@ -15,7 +15,6 @@ import {
   fetchAppLeadNotes,
   sendAppConversationMedia,
   fetchAppUsers,
-  resumeAppConversationAutomation,
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
@@ -1346,18 +1345,6 @@ export default function AppInboxPage() {
     [adminClientKey, adminConnection, isAdminUser, selectedConversationWaId]
   );
 
-  const canResumeSelectedConversationAutomation = useMemo(
-    () =>
-      Boolean(
-        selectedConversationWaId &&
-          selectedConversation &&
-          (selectedConversation.mode === "HUMAN" ||
-            selectedConversation.handoffStatus === "active" ||
-            selectedConversation.handoffStatus === "pending")
-      ),
-    [selectedConversation, selectedConversationWaId]
-  );
-
   useEffect(() => {
     if (!selectedConversation) {
       setStatusActionDraft("");
@@ -1832,27 +1819,6 @@ export default function AppInboxPage() {
     }
   };
 
-  const handleResumeConversationAutomation = async () => {
-    if (!session || !selectedConversationWaId) return;
-    setConversationAction("resume-automation");
-    setError(null);
-    try {
-      const response = await resumeAppConversationAutomation(session, selectedConversationWaId);
-      await refreshConversationList(session);
-      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
-      setSuccess("Automacao retomada.");
-    } catch (err) {
-      const typed = err as { status?: number; message?: string };
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      setError(typed.message || "Falha ao retomar automacao.");
-    } finally {
-      setConversationAction(null);
-    }
-  };
-
   const handleTransferConversation = async () => {
     if (!session || !selectedConversationWaId || !transferUserId) return;
     setConversationAction("transfer");
@@ -2186,14 +2152,6 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              <button
-                type="button"
-                disabled={!canResumeSelectedConversationAutomation || Boolean(conversationAction)}
-                onClick={handleResumeConversationAutomation}
-                className="shrink-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-3 py-2 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {conversationAction === "resume-automation" ? "Retomando..." : "Retomar automacao"}
-              </button>
               <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
