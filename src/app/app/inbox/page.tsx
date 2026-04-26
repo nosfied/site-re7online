@@ -251,7 +251,12 @@ function MediaBubble({
 
       {media.kind === "audio" ? (
         objectUrl ? (
-          <audio src={objectUrl} controls preload="metadata" className="w-full max-w-xs" />
+          <audio
+            src={objectUrl}
+            controls
+            preload="metadata"
+            className="block w-[18rem] max-w-full min-w-[18rem]"
+          />
         ) : loading ? (
           <p className="text-xs text-slate-600">Carregando audio...</p>
         ) : media.hasDownload ? (
@@ -2205,7 +2210,7 @@ export default function AppInboxPage() {
                     <article
                       className={`wa-bubble ${
                         item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
-                      }`}
+                      } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                     >
                       {item.bodyText ? (
                         <p className="text-sm leading-relaxed">{item.bodyText}</p>
