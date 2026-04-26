@@ -894,18 +894,6 @@ export default function AppInboxPage() {
   useEffect(() => {
     const primeNotificationAudio = () => {
       hasPrimedNotificationRef.current = true;
-      try {
-        void notificationAudioRef.current?.play().then(() => {
-          notificationAudioRef.current?.pause();
-          if (notificationAudioRef.current) {
-            notificationAudioRef.current.currentTime = 0;
-          }
-        }).catch(() => {
-          // noop
-        });
-      } catch {
-        // noop
-      }
     };
 
     window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
