@@ -871,25 +871,32 @@ export default function AppInboxPage() {
       const now = ctx.currentTime;
       const masterGain = ctx.createGain();
       masterGain.gain.setValueAtTime(0.0001, now);
-      masterGain.gain.exponentialRampToValueAtTime(0.09, now + 0.015);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+      masterGain.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
       masterGain.connect(ctx.destination);
 
-      const bellFundamental = ctx.createOscillator();
-      bellFundamental.type = "sine";
-      bellFundamental.frequency.setValueAtTime(1318.5, now);
-      bellFundamental.frequency.exponentialRampToValueAtTime(1174.7, now + 0.42);
-      bellFundamental.connect(masterGain);
-      bellFundamental.start(now);
-      bellFundamental.stop(now + 0.62);
+      const plimGain = ctx.createGain();
+      plimGain.gain.setValueAtTime(0.0001, now);
+      plimGain.gain.exponentialRampToValueAtTime(0.18, now + 0.012);
+      plimGain.gain.exponentialRampToValueAtTime(0.05, now + 0.11);
+      plimGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      plimGain.connect(masterGain);
 
-      const bellHarmonic = ctx.createOscillator();
-      bellHarmonic.type = "sine";
-      bellHarmonic.frequency.setValueAtTime(2637, now);
-      bellHarmonic.frequency.exponentialRampToValueAtTime(2349, now + 0.32);
-      bellHarmonic.connect(masterGain);
-      bellHarmonic.start(now);
-      bellHarmonic.stop(now + 0.45);
+      const plimMain = ctx.createOscillator();
+      plimMain.type = "triangle";
+      plimMain.frequency.setValueAtTime(1760, now);
+      plimMain.frequency.exponentialRampToValueAtTime(1567.98, now + 0.22);
+      plimMain.connect(plimGain);
+      plimMain.start(now);
+      plimMain.stop(now + 0.26);
+
+      const plimShine = ctx.createOscillator();
+      plimShine.type = "sine";
+      plimShine.frequency.setValueAtTime(2637.02, now);
+      plimShine.frequency.exponentialRampToValueAtTime(2349.32, now + 0.18);
+      plimShine.connect(plimGain);
+      plimShine.start(now + 0.008);
+      plimShine.stop(now + 0.18);
     } catch {
       // Browser autoplay policy can block audio; fail silently.
     }
