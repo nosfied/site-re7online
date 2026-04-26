@@ -3124,6 +3124,136 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/resume-automation")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_resume_automation",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/resume-automation",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/resume-automation",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode retomar a automacao de conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const nextState = {
+        ...conversation,
+        mode: "BOT" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "none" as const,
+          releasedAt: new Date().toISOString(),
+        },
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      logger.info({
+        event: "conversation.automation_resumed",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: null,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.resume_automation.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/transfer")
   ) {
     const prisma = getPrisma();
@@ -10289,6 +10419,7 @@ function logAppRbacDenied(params: {
 function serializeConversationOperationalFields(params: {
   conversation: {
     mode?: string | null;
+    handoff?: { status?: string | null } | null;
     assignedUserId?: string | null;
     assignedTo?: string | null;
     assignedAt?: string | null;
@@ -10306,6 +10437,7 @@ function serializeConversationOperationalFields(params: {
   const conversation = params.conversation;
   return {
     mode: conversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
+    handoffStatus: conversation?.handoff?.status ?? "none",
     assignedUserId: conversation?.assignedUserId ?? null,
     assignedTo: conversation?.assignedTo ?? null,
     assignedUserName: params.assignedUserName,

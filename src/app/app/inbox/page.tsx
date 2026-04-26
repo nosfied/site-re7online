@@ -15,6 +15,7 @@ import {
   fetchAppLeadNotes,
   sendAppConversationMedia,
   fetchAppUsers,
+  resumeAppConversationAutomation,
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
@@ -566,6 +567,7 @@ function applyConversationOperationalPayload(
     waId?: string | null;
     waIdCanonical?: string | null;
     mode: "BOT" | "HUMAN";
+    handoffStatus?: "none" | "pending" | "active" | null;
     assignedUserId: string | null;
     assignedTo: string | null;
     assignedUserName: string | null;
@@ -586,6 +588,7 @@ function applyConversationOperationalPayload(
     waId: payload.waId ?? item.waId,
     waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
     mode: payload.mode,
+    handoffStatus: payload.handoffStatus ?? item.handoffStatus ?? "none",
     assignedUserId: payload.assignedUserId,
     assignedTo: payload.assignedTo,
     assignedUserName: payload.assignedUserName,
@@ -623,6 +626,15 @@ function getConversationStatusLabel(status: ConversationOperationalStatus | null
     default:
       return "Sem andamento";
   }
+}
+
+function getConversationModeLabel(
+  item: Pick<InboxConversationItem, "mode" | "handoffStatus"> | null
+) {
+  if (!item) return "Sem modo";
+  if (item.handoffStatus === "active") return "Aguardando atendente";
+  if (item.handoffStatus === "pending") return "Confirmacao de handoff";
+  return item.mode === "HUMAN" ? "Modo humano" : "Automacao ativa";
 }
 
 function getConversationStatusClass(status: ConversationOperationalStatus | null) {
@@ -1059,6 +1071,10 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (!session) return;
+    if (session.user.role === "AGENT") {
+      setUsers([]);
+      return;
+    }
     let cancelled = false;
     fetchAppUsers(session)
       .then((response) => {
@@ -1328,6 +1344,18 @@ export default function AppInboxPage() {
           adminConnection.adminToken.trim()
       ),
     [adminClientKey, adminConnection, isAdminUser, selectedConversationWaId]
+  );
+
+  const canResumeSelectedConversationAutomation = useMemo(
+    () =>
+      Boolean(
+        selectedConversationWaId &&
+          selectedConversation &&
+          (selectedConversation.mode === "HUMAN" ||
+            selectedConversation.handoffStatus === "active" ||
+            selectedConversation.handoffStatus === "pending")
+      ),
+    [selectedConversation, selectedConversationWaId]
   );
 
   useEffect(() => {
@@ -1804,6 +1832,27 @@ export default function AppInboxPage() {
     }
   };
 
+  const handleResumeConversationAutomation = async () => {
+    if (!session || !selectedConversationWaId) return;
+    setConversationAction("resume-automation");
+    setError(null);
+    try {
+      const response = await resumeAppConversationAutomation(session, selectedConversationWaId);
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+      setSuccess("Automacao retomada.");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao retomar automacao.");
+    } finally {
+      setConversationAction(null);
+    }
+  };
+
   const handleTransferConversation = async () => {
     if (!session || !selectedConversationWaId || !transferUserId) return;
     setConversationAction("transfer");
@@ -2048,6 +2097,8 @@ export default function AppInboxPage() {
               </h2>
               {selectedConversation ? (
                 <p className="mt-0.5 truncate text-sm text-slate-600">
+                  {getConversationModeLabel(selectedConversation)}
+                  {" • "}
                   {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
                   {selectedConversation.assignedUserName
                     ? ` • ${selectedConversation.assignedUserName}`
@@ -2135,6 +2186,14 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
+              <button
+                type="button"
+                disabled={!canResumeSelectedConversationAutomation || Boolean(conversationAction)}
+                onClick={handleResumeConversationAutomation}
+                className="shrink-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-3 py-2 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {conversationAction === "resume-automation" ? "Retomando..." : "Retomar automacao"}
+              </button>
               <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select

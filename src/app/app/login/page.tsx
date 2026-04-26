@@ -77,7 +77,6 @@ export default function AppLoginPage() {
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="operador@cliente.com"
                 autoComplete="email"
               />
             </label>
@@ -88,7 +87,6 @@ export default function AppLoginPage() {
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
                 autoComplete="current-password"
               />
             </label>

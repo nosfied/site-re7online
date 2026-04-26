@@ -548,7 +548,6 @@ export default function AppCampaignsPage() {
                 className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.name}
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="campanha-marco-01"
               />
             </label>
             <label className="grid min-w-0 gap-1 text-sm">
@@ -611,7 +610,6 @@ export default function AppCampaignsPage() {
                           ).join("\n"),
                         }))
                       }
-                      placeholder={`Informe ${label.toLowerCase()}`}
                     />
                   </label>
                 ))}
@@ -631,7 +629,6 @@ export default function AppCampaignsPage() {
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
                   }
-                  placeholder={"Cliente teste\nCampanha marco\nHoje 15h"}
                 />
               </label>
             )}
@@ -641,7 +638,6 @@ export default function AppCampaignsPage() {
                 className="block min-h-24 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.recipientsInput}
                 onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
-                placeholder={"558499049614\n558494786787"}
               />
             </label>
             {formError ? (
@@ -696,7 +692,6 @@ export default function AppCampaignsPage() {
                     className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="campanha-ui-vps"
                   />
                 </label>
               </div>

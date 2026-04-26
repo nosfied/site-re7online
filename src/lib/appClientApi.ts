@@ -42,6 +42,7 @@ type AppConversationOperationalPayload = {
   waId: string;
   waIdCanonical?: string | null;
   mode: "BOT" | "HUMAN";
+  handoffStatus?: "none" | "pending" | "active" | null;
   assignedUserId: string | null;
   assignedTo: string | null;
   assignedUserName: string | null;
@@ -649,6 +650,15 @@ export async function releaseAppConversation(
   waId: string
 ): Promise<AppConversationOperationalPayload> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/release`, {
+    method: "POST",
+  });
+}
+
+export async function resumeAppConversationAutomation(
+  session: AppSession,
+  waId: string
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/resume-automation`, {
     method: "POST",
   });
 }
