@@ -394,59 +394,6 @@ function sortConversationsByRecent(items: InboxConversationItem[]) {
   });
 }
 
-function loadReadState(storageKey: string): InboxReadState {
-  if (typeof window === "undefined") return EMPTY_READ_STATE;
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return EMPTY_READ_STATE;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const lastReadAtByConversationKey =
-      parsed && typeof parsed === "object"
-        ? parsed.lastReadAtByConversationKey ?? parsed.lastReadAtByWaId ?? parsed.lastOpenedAtByWaId ?? {}
-        : {};
-    const manuallyUnreadByConversationKey =
-      parsed && typeof parsed === "object" ? parsed.manuallyUnreadByConversationKey ?? {} : {};
-    const normalizedReadState =
-      lastReadAtByConversationKey && typeof lastReadAtByConversationKey === "object"
-        ? Object.fromEntries(
-            Object.entries(lastReadAtByConversationKey).filter(
-              (entry): entry is [string, string] => typeof entry[1] === "string"
-            )
-          )
-        : {};
-    const normalizedUnreadOverrides =
-      manuallyUnreadByConversationKey && typeof manuallyUnreadByConversationKey === "object"
-        ? Object.fromEntries(
-            Object.entries(manuallyUnreadByConversationKey).filter(
-              (entry): entry is [string, boolean] => typeof entry[1] === "boolean"
-            )
-          )
-        : {};
-    return {
-      lastReadAtByConversationKey: normalizedReadState,
-      manuallyUnreadByConversationKey: normalizedUnreadOverrides,
-    };
-  } catch {
-    return EMPTY_READ_STATE;
-  }
-}
-
-function loadReadStateWithFallback(storageKey: string, legacyStorageKey?: string | null) {
-  const current = loadReadState(storageKey);
-  if (Object.keys(current.lastReadAtByConversationKey).length > 0) {
-    return current;
-  }
-  if (!legacyStorageKey || typeof window === "undefined") {
-    return current;
-  }
-  return loadReadState(legacyStorageKey);
-}
-
-function saveReadState(storageKey: string, state: InboxReadState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey, JSON.stringify(state));
-}
-
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
   if (state.manuallyUnreadByConversationKey[getConversationIdentity(item)]) return true;
   if (item.lastMessage?.direction !== "INBOUND") return false;
@@ -523,6 +470,24 @@ function getLatestMessageSignature(items: InboxMessageItem[]) {
   if (items.length === 0) return null;
   const latest = items[items.length - 1];
   return `${latest.createdAt}:${latest.messageId ?? latest.metaMessageId ?? latest.requestId ?? latest.direction}`;
+}
+
+function getMessageIdentity(item: InboxMessageItem) {
+  return `${item.direction}:${item.messageId ?? item.metaMessageId ?? item.requestId ?? item.createdAt}:${item.type}`;
+}
+
+function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMessageItem[]) {
+  if (incoming.length === 0) return current;
+  const next = [...current];
+  const seen = new Set(current.map(getMessageIdentity));
+  for (const item of incoming) {
+    const identity = getMessageIdentity(item);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    next.push(item);
+  }
+  next.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  return next;
 }
 
 function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
@@ -1001,11 +966,23 @@ export default function AppInboxPage() {
     }
   }, [markConversationAsRead, playInboundNotification, selectedConversationKey]);
 
-  const refreshSelectedTimeline = useCallback(async (activeSession: AppSession, waId: string) => {
+  const refreshSelectedTimeline = useCallback(async (
+    activeSession: AppSession,
+    waId: string,
+    mode: "replace" | "append" = "replace"
+  ) => {
     const requestSeq = ++detailRequestSeqRef.current;
-    const response = await fetchAppConversation(activeSession, waId, { order: "asc", limit: 300 });
+    const latestKnownAt =
+      mode === "append" && selectedConversationWaId === waId && messages.length > 0
+        ? messages[messages.length - 1]?.createdAt ?? null
+        : null;
+    const response = await fetchAppConversation(activeSession, waId, {
+      order: "asc",
+      limit: mode === "append" ? 80 : 300,
+      after: latestKnownAt,
+    });
     if (requestSeq !== detailRequestSeqRef.current) return;
-    setMessages(response.items);
+    setMessages((prev) => (mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items));
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     setSelectedConversationWaId(response.waId ?? waId);
     setSelectedConversationKey((prev) => prev ?? responseConversationKey);
@@ -1019,11 +996,13 @@ export default function AppInboxPage() {
       )
     );
     const latestActivityAt =
-      response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
+      (response.items.length > 0
+        ? response.items[response.items.length - 1]?.createdAt
+        : latestKnownAt) ?? null;
     if (document.visibilityState === "visible") {
       markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
     }
-  }, [markConversationAsRead]);
+  }, [markConversationAsRead, messages, selectedConversationWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -1149,7 +1128,7 @@ export default function AppInboxPage() {
       try {
         await refreshConversationList(session);
         if (selectedConversationWaId) {
-          await refreshSelectedTimeline(session, selectedConversationWaId);
+          await refreshSelectedTimeline(session, selectedConversationWaId, "append");
         }
       } catch (err) {
         if ((err as { status?: number }).status === 401) {

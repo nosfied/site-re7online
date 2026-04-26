@@ -914,6 +914,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const orderRaw = String(query.order ?? "asc").trim().toLowerCase();
       const order = orderRaw === "desc" ? "desc" : "asc";
+      const afterRaw = String(query.after ?? "").trim();
+      const after =
+        afterRaw && Number.isFinite(Date.parse(afterRaw)) ? new Date(afterRaw) : null;
       const limitRaw = Number(query.limit ?? 200);
       const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
       const includeRaw = String(query.includeRaw ?? "false") === "true";
@@ -972,6 +975,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         waId,
         order,
+        after,
         limit,
         includeRaw,
         includeAssignedUserName: true,
@@ -6077,6 +6081,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientKey,
           waId,
           order,
+          after: null,
           limit,
           includeRaw,
           includeAssignedUserName: true,
@@ -10737,6 +10742,7 @@ async function buildConversationDetailPayload(
     clientKey: string;
     waId: string;
     order: "asc" | "desc";
+    after: Date | null;
     limit: number;
     includeRaw: boolean;
     includeAssignedUserName: boolean;
@@ -10768,6 +10774,7 @@ async function buildConversationDetailPayload(
     prisma.inboundMessage.findMany({
       where: {
         clientId: params.clientId,
+        ...(params.after ? { createdAt: { gt: params.after } } : {}),
         OR: [
           { waIdCanonical: resolved.resolvedWaIdCanonical },
           { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
@@ -10787,6 +10794,7 @@ async function buildConversationDetailPayload(
     prisma.outboundMessage.findMany({
       where: {
         clientId: params.clientId,
+        ...(params.after ? { createdAt: { gt: params.after } } : {}),
         OR: [
           { waIdCanonical: resolved.resolvedWaIdCanonical },
           { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },

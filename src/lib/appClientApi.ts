@@ -555,7 +555,7 @@ export async function updateAppConversationReadState(
 export async function fetchAppConversation(
   session: AppSession,
   waId: string,
-  options?: { limit?: number; order?: "asc" | "desc" }
+  options?: { limit?: number; order?: "asc" | "desc"; after?: string | null }
 ): Promise<AppConversationOperationalPayload & {
   count: number;
   items: InboxMessageItem[];
@@ -566,6 +566,9 @@ export async function fetchAppConversation(
   }
   if (options?.order) {
     params.set("order", options.order);
+  }
+  if (options?.after?.trim()) {
+    params.set("after", options.after.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}${suffix}`);
