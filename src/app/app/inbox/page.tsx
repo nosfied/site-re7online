@@ -97,10 +97,12 @@ function MediaBubble({
   session,
   waId,
   item,
+  autoLoad = false,
 }: {
   session: AppSession | null;
   waId: string | null;
   item: InboxMessageItem;
+  autoLoad?: boolean;
 }) {
   const media = item.media;
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -174,7 +176,7 @@ function MediaBubble({
     setLoading(false);
     setError(null);
 
-    if (media.kind === "document" || media.kind === "video") {
+    if (!autoLoad || media.kind === "document" || media.kind === "video") {
       return;
     }
 
@@ -696,6 +698,7 @@ export default function AppInboxPage() {
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
+  const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -982,7 +985,11 @@ export default function AppInboxPage() {
       after: latestKnownAt,
     });
     if (requestSeq !== detailRequestSeqRef.current) return;
-    setMessages((prev) => (mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items));
+    setMessages((prev) => {
+      const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items;
+      timelineCacheRef.current.set(response.waId ?? waId, nextMessages);
+      return nextMessages;
+    });
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     setSelectedConversationWaId(response.waId ?? waId);
     setSelectedConversationKey((prev) => prev ?? responseConversationKey);
@@ -1051,13 +1058,24 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId) return;
     let cancelled = false;
     const requestSeq = ++detailRequestSeqRef.current;
+    const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
     setLoadingMessages(true);
     setError(null);
+    setMessages(cachedMessages ?? []);
 
-    fetchAppConversation(session, selectedConversationWaId, { order: "asc", limit: 300 })
+    fetchAppConversation(session, selectedConversationWaId, {
+      order: "asc",
+      limit: cachedMessages?.length ? 80 : 300,
+      after: cachedMessages?.length ? cachedMessages[cachedMessages.length - 1]?.createdAt ?? null : null,
+    })
       .then((response) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
-        setMessages(response.items);
+        setMessages((prev) => {
+          const nextMessages =
+            cachedMessages?.length ? mergeMessagesByIdentity(prev, response.items) : response.items;
+          timelineCacheRef.current.set(response.waId ?? selectedConversationWaId, nextMessages);
+          return nextMessages;
+        });
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
         setSelectedConversationWaId(response.waId ?? selectedConversationWaId);
         setSelectedConversationKey(responseConversationKey);
@@ -1071,7 +1089,9 @@ export default function AppInboxPage() {
           )
         );
         const latestActivityAt =
-          response.items.length > 0 ? response.items[response.items.length - 1]?.createdAt : null;
+          response.items.length > 0
+            ? response.items[response.items.length - 1]?.createdAt
+            : cachedMessages?.[cachedMessages.length - 1]?.createdAt ?? null;
         if (latestActivityAt) {
           markConversationAsRead(
             responseConversationKey,
@@ -2145,6 +2165,7 @@ export default function AppInboxPage() {
             <div className="space-y-3">
               {messages.map((item, index) => {
                 const statusTicks = renderMessageStatusTicks(item);
+                const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 return (
                   <div
                     key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
@@ -2161,7 +2182,12 @@ export default function AppInboxPage() {
                         <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                       )}
                       {item.media ? (
-                        <MediaBubble session={session} waId={selectedConversationWaId} item={item} />
+                        <MediaBubble
+                          session={session}
+                          waId={selectedConversationWaId}
+                          item={item}
+                          autoLoad={shouldAutoLoadMedia}
+                        />
                       ) : null}
                       {item.templateName ? (
                         <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
