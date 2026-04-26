@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -12,6 +13,7 @@ export default function AppLoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const existing = loadAppSession();
@@ -32,6 +34,7 @@ export default function AppLoginPage() {
 
     setLoading(true);
     setError(null);
+    setInfoMessage(null);
     try {
       const response = await loginAppUser(normalizedEmail, password);
       const session: AppSession = {
@@ -52,12 +55,15 @@ export default function AppLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-re7-navy px-4 py-8 text-white">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20">
-        <div className="mb-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-re7-sky">Re7Online</p>
-          <h1 className="mt-2 text-3xl font-bold">Area do cliente</h1>
-          <p className="mt-2 text-sm text-white/70">
-            Entre com seu acesso para acompanhar conversas, campanhas e configuracoes.
-          </p>
+        <div className="mb-6 flex justify-center">
+          <Image
+            src="/images/converta-logo-light.png"
+            alt="Converta"
+            width={240}
+            height={88}
+            priority
+            className="h-auto w-full max-w-[220px] object-contain"
+          />
         </div>
 
         {checkingSession ? <p className="text-sm text-white/70">Verificando acesso...</p> : null}
@@ -91,6 +97,11 @@ export default function AppLoginPage() {
                 {error}
               </p>
             ) : null}
+            {infoMessage ? (
+              <p className="rounded-md border border-amber-400/30 bg-amber-900/30 p-3 text-sm text-amber-100">
+                {infoMessage}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={loading}
@@ -101,10 +112,16 @@ export default function AppLoginPage() {
           </form>
         ) : null}
 
-        <div className="mt-6 text-xs text-white/50">
-          <Link href="/" className="hover:text-white">
-            Voltar para o site
-          </Link>
+        <div className="mt-6 text-center text-xs text-white/50">
+          <button
+            type="button"
+            onClick={() =>
+              setInfoMessage("Recuperacao de senha ainda nao esta disponivel no portal. Solicite o reset ao administrador.")
+            }
+            className="hover:text-white"
+          >
+            Recuperar senha
+          </button>
         </div>
       </div>
     </main>

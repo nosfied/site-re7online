@@ -22,7 +22,7 @@ type NavItem = {
 };
 
 function getLinkClasses(active: boolean) {
-  return `rounded-lg border px-3 py-1.5 text-sm transition ${
+  return `rounded-lg border px-3 py-1.5 text-sm leading-none transition ${
     active
       ? "border-re7-sky/50 bg-re7-sky/20 text-white"
       : "border-white/20 text-white/80 hover:bg-white/10"
@@ -146,20 +146,16 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   }
 
   return (
-    <main
-      className={
-        "min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6"
-      }
-    >
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
+    <main className="min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6 lg:px-7 xl:px-8">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-3">
         <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
-          <div className="grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)_220px] xl:items-start">
+          <div className="grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)_160px] xl:items-start">
             <div className="flex flex-col items-start gap-1.5 pt-5">
               <button
                 type="button"
-                onClick={() => setShowBrandModal(true)}
-                title="Ampliar logo da Converta"
-                className="hidden h-9 w-28 items-center justify-center xl:flex"
+                onClick={() => router.push("/app/inbox")}
+                title="Abrir inbox"
+                className="hidden h-10 w-32 items-center justify-center xl:flex"
               >
                 <Image
                   src="/images/converta-logo-light.png"
@@ -170,12 +166,12 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 />
               </button>
             </div>
-            <div className="flex flex-wrap items-start justify-center gap-2 xl:pt-1">
-              <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+            <div className="flex min-w-0 items-start justify-center gap-2 xl:pt-1">
+              <div className="inline-flex min-w-0 shrink-0 flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   Operacao
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex min-w-0 flex-nowrap items-center gap-1.5 whitespace-nowrap">
                   <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
                     Inbox
                   </Link>
@@ -188,11 +184,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 </div>
               </div>
               {canViewAdministration ? (
-                <div className="flex min-w-[190px] flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                <div className="inline-flex min-w-0 shrink-0 flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                     Administracao
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 whitespace-nowrap">
                     <Link
                       href="/app/settings/users"
                       className={getLinkClasses(pathname === "/app/settings/users")}
@@ -215,8 +211,10 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 </div>
               ) : null}
             </div>
-            <div className="flex items-start justify-end gap-3 xl:pt-1">
-              <span className="text-sm text-white/65">{session.user.name || session.user.email}</span>
+            <div className="flex flex-col items-end justify-start gap-1 xl:pt-1">
+              <span className="text-right text-sm leading-none text-white/65">
+                {session.user.name || session.user.email}
+              </span>
               <button
                 type="button"
                 onClick={handleLogout}

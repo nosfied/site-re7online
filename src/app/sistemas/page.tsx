@@ -31,9 +31,12 @@ function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
 }
 
 function AccessButton() {
+  const href =
+    process.env.NODE_ENV === "development" ? "/app/login" : "https://admin.re7online.com/app/login";
+
   return (
     <Link
-      href="https://admin.re7online.com/app/login"
+      href={href}
       className="inline-flex items-center justify-center rounded-2xl bg-[#20b15a] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
     >
       Acessar sistema
@@ -55,41 +58,41 @@ function WhatsAppBadge() {
 export default function SistemasPage() {
   return (
     <main className="flex min-h-screen overflow-hidden bg-re7-navy text-white">
-      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <div className="max-w-xl">
+      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
+        <div className="mx-auto max-w-lg text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-re7-sky/80">Re7</p>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-[2.75rem]">
-            Sistemas Re7
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-[2.35rem]">
+            Sistemas Re7online
           </h1>
-          <p className="mt-2 text-sm text-white/72 sm:text-base">Acesse as solucoes digitais da Re7.</p>
+          <p className="mt-1.5 text-sm text-white/72">Acesse as solucoes digitais da Re7.</p>
         </div>
 
-        <div className="mt-6 grid max-w-[26rem] gap-4 sm:mt-8">
-          <article className="group rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_52px_rgba(0,0,0,0.22)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_24px_60px_rgba(0,0,0,0.28)] sm:p-6">
+        <div className="mt-12 grid max-w-[15rem] gap-4 sm:mt-14">
+          <article className="group rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.26)]">
             <div className="flex items-start justify-between gap-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Converta</span>
               <WhatsAppBadge />
             </div>
 
-            <div className="mt-4 flex min-h-[128px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-4 py-6 sm:min-h-[144px]">
+            <div className="mt-3 flex min-h-[78px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-3 py-4">
               <Image
-                src="/images/converta-logo-dark.png"
+                src="/images/converta-logo-light.png"
                 alt="Converta"
                 width={320}
                 height={120}
                 priority
-                className="h-auto w-full max-w-[210px] object-contain sm:max-w-[220px]"
+                className="h-auto w-full max-w-[182px] object-contain"
               />
             </div>
 
-            <div className="mt-5">
-              <h2 className="text-xl font-semibold text-white sm:text-2xl">Converta</h2>
-              <p className="mt-2 text-sm leading-6 text-white/72">
+            <div className="mt-4">
+              <h2 className="text-lg font-semibold text-white">Converta</h2>
+              <p className="mt-1.5 text-xs leading-5 text-white/72">
                 Atendimento inteligente via WhatsApp com automacao, campanhas, chatbot, midia e gestao de leads.
               </p>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-4">
               <AccessButton />
             </div>
           </article>

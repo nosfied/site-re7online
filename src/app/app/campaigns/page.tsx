@@ -536,12 +536,12 @@ export default function AppCampaignsPage() {
       ) : null}
 
       <section className="grid items-start gap-3 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-8rem)]">
+        <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-8rem)]">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
           <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-w-0 flex-1 gap-2.5 overflow-x-hidden overflow-y-auto p-3">
+            <div className="grid min-w-0 flex-1 gap-2.5 overflow-x-hidden p-3 2xl:overflow-y-auto">
             <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
@@ -701,7 +701,7 @@ export default function AppCampaignsPage() {
                 </label>
               </div>
             </div>
-            <div className="max-h-[28rem] overflow-auto xl:max-h-[26rem]">
+            <div className="overflow-auto 2xl:max-h-[26rem]">
             <table className="w-full text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
