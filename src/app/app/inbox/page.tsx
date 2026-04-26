@@ -181,7 +181,7 @@ function MediaBubble({
     setLoading(false);
     setError(null);
 
-    if (!autoLoad || media.kind === "document" || media.kind === "video") {
+    if (!autoLoad || media.kind === "document" || media.kind === "video" || media.kind === "audio") {
       return;
     }
 
@@ -260,7 +260,13 @@ function MediaBubble({
         ) : loading ? (
           <p className="text-xs text-slate-600">Carregando audio...</p>
         ) : media.hasDownload ? (
-          <p className="text-xs text-slate-600">Preparando audio...</p>
+          <button
+            type="button"
+            onClick={() => void loadMedia()}
+            className="rounded-lg border border-[#d4c7b5] bg-white/80 px-3 py-2 text-sm text-slate-900"
+          >
+            Carregar audio
+          </button>
         ) : null
       ) : null}
 
@@ -729,6 +735,7 @@ export default function AppInboxPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -873,6 +880,7 @@ export default function AppInboxPage() {
   const scrollTimelineToBottom = useCallback(() => {
     if (!timelineRef.current) return;
     timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+    setShowJumpToLatest(false);
   }, []);
 
   const focusComposer = useCallback(() => {
@@ -1174,6 +1182,20 @@ export default function AppInboxPage() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [messages, scrollTimelineToBottom, selectedConversationKey]);
+
+  useEffect(() => {
+    const node = timelineRef.current;
+    if (!node) return;
+
+    const updateJumpState = () => {
+      const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+      setShowJumpToLatest(distanceFromBottom > 160);
+    };
+
+    updateJumpState();
+    node.addEventListener("scroll", updateJumpState, { passive: true });
+    return () => node.removeEventListener("scroll", updateJumpState);
+  }, [messages, selectedConversationKey]);
 
   useEffect(() => {
     if (!session) return;
@@ -2016,7 +2038,7 @@ export default function AppInboxPage() {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
+        <div className="relative flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
           <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3">
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold text-slate-900">
@@ -2213,7 +2235,7 @@ export default function AppInboxPage() {
                       } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                     >
                       {item.bodyText ? (
-                        <p className="text-sm leading-relaxed">{item.bodyText}</p>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.bodyText}</p>
                       ) : item.media ? null : (
                         <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                       )}
@@ -2238,6 +2260,17 @@ export default function AppInboxPage() {
               })}
             </div>
           </div>
+          {selectedConversationKey && showJumpToLatest ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
+              <button
+                type="button"
+                onClick={scrollTimelineToBottom}
+                className="pointer-events-auto rounded-full border border-[#d4c7b5] bg-white/92 px-4 py-2 text-sm font-medium text-slate-800 shadow-md transition hover:bg-white"
+              >
+                Ir para a mais recente
+              </button>
+            </div>
+          ) : null}
 
           <div className="sticky bottom-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3">
             {selectedMediaFile ? (
