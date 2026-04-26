@@ -55,6 +55,11 @@ const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
 
+function getMediaCacheKey(messageId: string | null, mediaKind?: string | null) {
+  if (!messageId) return null;
+  return `${messageId}:${mediaKind ?? "unknown"}`;
+}
+
 function getConversationLabel(item: InboxConversationItem) {
   return item.leadName || item.leadPhone || "Sem nome";
 }
@@ -110,7 +115,7 @@ function MediaBubble({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
-  const mediaCacheKey = waId && item.messageId ? `${waId}:${item.messageId}` : null;
+  const mediaCacheKey = getMediaCacheKey(item.messageId, media?.kind);
 
   const clearLoadedMedia = useCallback(() => {
     if (objectUrlRef.current) {
@@ -394,6 +399,33 @@ function sortConversationsByRecent(items: InboxConversationItem[]) {
     if (bTs === null) return -1;
     return bTs - aTs;
   });
+}
+
+function dedupeConversationsByIdentity(items: InboxConversationItem[]) {
+  const byIdentity = new Map<string, InboxConversationItem>();
+  for (const item of sortConversationsByRecent(items)) {
+    const identity = getConversationIdentity(item);
+    if (!byIdentity.has(identity)) {
+      byIdentity.set(identity, item);
+      continue;
+    }
+
+    const existing = byIdentity.get(identity)!;
+    const existingTs = getConversationActivityTimestamp(existing) ?? Number.NEGATIVE_INFINITY;
+    const nextTs = getConversationActivityTimestamp(item) ?? Number.NEGATIVE_INFINITY;
+    if (nextTs > existingTs) {
+      byIdentity.set(identity, item);
+      continue;
+    }
+
+    if (!existing.waIdCanonical && item.waIdCanonical) {
+      byIdentity.set(identity, {
+        ...existing,
+        waIdCanonical: item.waIdCanonical,
+      });
+    }
+  }
+  return sortConversationsByRecent(Array.from(byIdentity.values()));
 }
 
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
@@ -921,7 +953,7 @@ export default function AppInboxPage() {
     if (response.readState) {
       setReadState(response.readState);
     }
-    const sortedItems = sortConversationsByRecent(response.items);
+    const sortedItems = dedupeConversationsByIdentity(response.items);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     if (hasInitializedConversationSoundRef.current) {
       if (
@@ -987,14 +1019,12 @@ export default function AppInboxPage() {
     if (requestSeq !== detailRequestSeqRef.current) return;
     setMessages((prev) => {
       const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items;
-      timelineCacheRef.current.set(response.waId ?? waId, nextMessages);
+      timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
-    setSelectedConversationWaId(response.waId ?? waId);
-    setSelectedConversationKey((prev) => prev ?? responseConversationKey);
     setConversations((prev) =>
-      sortConversationsByRecent(
+      dedupeConversationsByIdentity(
         prev.map((item) =>
           getConversationIdentity(item) === responseConversationKey
             ? applyConversationOperationalPayload(item, response)
@@ -1073,14 +1103,12 @@ export default function AppInboxPage() {
         setMessages((prev) => {
           const nextMessages =
             cachedMessages?.length ? mergeMessagesByIdentity(prev, response.items) : response.items;
-          timelineCacheRef.current.set(response.waId ?? selectedConversationWaId, nextMessages);
+          timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-        setSelectedConversationWaId(response.waId ?? selectedConversationWaId);
-        setSelectedConversationKey(responseConversationKey);
         setConversations((prev) =>
-          sortConversationsByRecent(
+          dedupeConversationsByIdentity(
             prev.map((item) =>
               getConversationIdentity(item) === responseConversationKey
                 ? applyConversationOperationalPayload(item, response)
@@ -1465,7 +1493,7 @@ export default function AppInboxPage() {
             await refreshSelectedTimeline(session, response.waId ?? next.waId);
           }
           setConversations((prev) =>
-            sortConversationsByRecent(
+            dedupeConversationsByIdentity(
               prev.map((item) =>
                 getConversationIdentity(item) === next.conversationKey
                   ? {
@@ -1561,7 +1589,7 @@ export default function AppInboxPage() {
         shouldScrollToBottomRef.current = true;
         await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
         setConversations((prev) =>
-          sortConversationsByRecent(
+          dedupeConversationsByIdentity(
             prev.map((item) =>
               getConversationIdentity(item) === getConversationIdentity(selectedConversation)
                 ? {
@@ -2168,7 +2196,7 @@ export default function AppInboxPage() {
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 return (
                   <div
-                    key={`${item.createdAt}-${item.direction}-${item.messageId ?? "noid"}-${index}`}
+                    key={getMessageIdentity(item)}
                     className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                   >
                     <article
