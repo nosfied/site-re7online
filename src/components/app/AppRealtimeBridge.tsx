@@ -134,7 +134,8 @@ export default function AppRealtimeBridge() {
   );
 
   useEffect(() => {
-    if (!pathname.startsWith("/app") || pathname === "/app/login") {
+    const currentPathname = pathname ?? "";
+    if (!currentPathname.startsWith("/app") || currentPathname === "/app/login") {
       clientRef.current?.close();
       clientRef.current = null;
       sessionKeyRef.current = null;

@@ -4,7 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { AppSession, loadAppSession, loginAppUser, saveAppSession } from "@/lib/appClientApi";
+import {
+  AppSession,
+  clearAppSession,
+  loadAppSession,
+  loginAppUser,
+  saveAppSession,
+} from "@/lib/appClientApi";
 
 export default function AppLoginPage() {
   const router = useRouter();
@@ -16,10 +22,14 @@ export default function AppLoginPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const existing = loadAppSession();
-    if (existing?.token) {
-      router.replace("/app/inbox");
-      return;
+    try {
+      const existing = loadAppSession();
+      if (existing?.token) {
+        router.replace("/app/inbox");
+        return;
+      }
+    } catch {
+      clearAppSession();
     }
     setCheckingSession(false);
   }, [router]);
