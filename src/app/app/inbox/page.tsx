@@ -51,6 +51,8 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+const INBOX_NOTIFICATION_SOUND_INTERVAL_MS = 320;
+const INBOX_NOTIFICATION_MAX_QUEUE = 10;
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
@@ -521,6 +523,37 @@ function getMessageIdentity(item: InboxMessageItem) {
   return `${item.direction}:${item.messageId ?? item.metaMessageId ?? item.requestId ?? item.createdAt}:${item.type}`;
 }
 
+function getInboundNotificationIdentity(waId: string | null, item: InboxMessageItem) {
+  if (item.direction !== "INBOUND") return null;
+  return `${waId ?? "unknown"}:${item.messageId ?? item.metaMessageId ?? item.createdAt}:${item.type}`;
+}
+
+function countUnseenInboundMessages(
+  waId: string | null,
+  items: InboxMessageItem[],
+  seenKeys: Set<string>
+) {
+  let count = 0;
+  for (const item of items) {
+    const identity = getInboundNotificationIdentity(waId, item);
+    if (!identity || seenKeys.has(identity)) continue;
+    seenKeys.add(identity);
+    count += 1;
+  }
+  return count;
+}
+
+function rememberInboundMessages(
+  waId: string | null,
+  items: InboxMessageItem[],
+  seenKeys: Set<string>
+) {
+  for (const item of items) {
+    const identity = getInboundNotificationIdentity(waId, item);
+    if (identity) seenKeys.add(identity);
+  }
+}
+
 function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMessageItem[]) {
   if (incoming.length === 0) return current;
   const next = [...current];
@@ -769,6 +802,9 @@ export default function AppInboxPage() {
   const hasPrimedNotificationRef = useRef(false);
   const hasInitializedConversationSoundRef = useRef(false);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const notificationQueueRef = useRef(0);
+  const notificationTimerRef = useRef<number | null>(null);
+  const notifiedInboundMessageKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
@@ -922,6 +958,41 @@ export default function AppInboxPage() {
     }
   }, [soundEnabled]);
 
+  const processNotificationQueue = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (notificationQueueRef.current <= 0) {
+      notificationTimerRef.current = null;
+      return;
+    }
+    notificationQueueRef.current -= 1;
+    playInboundNotification();
+    notificationTimerRef.current = window.setTimeout(
+      processNotificationQueue,
+      INBOX_NOTIFICATION_SOUND_INTERVAL_MS
+    );
+  }, [playInboundNotification]);
+
+  const enqueueInboundNotifications = useCallback((count: number) => {
+    if (count <= 0 || typeof window === "undefined") return;
+    notificationQueueRef.current = Math.min(
+      INBOX_NOTIFICATION_MAX_QUEUE,
+      notificationQueueRef.current + count
+    );
+    if (notificationTimerRef.current !== null) return;
+    processNotificationQueue();
+  }, [processNotificationQueue]);
+
+  useEffect(
+    () => () => {
+      if (notificationTimerRef.current !== null) {
+        window.clearTimeout(notificationTimerRef.current);
+        notificationTimerRef.current = null;
+      }
+      notificationQueueRef.current = 0;
+    },
+    []
+  );
+
   useEffect(() => {
     const primeNotificationAudio = () => {
       hasPrimedNotificationRef.current = true;
@@ -995,7 +1066,18 @@ export default function AppInboxPage() {
         (lastInboundConversationTimestampRef.current === null ||
           latestInboundTimestamp > lastInboundConversationTimestampRef.current)
       ) {
-        playInboundNotification();
+        const latestInboundItem = sortedItems.find(
+          (item) =>
+            shouldPlayInboundNotificationForConversation(item) &&
+            item.lastInboundAt &&
+            Date.parse(item.lastInboundAt) === latestInboundTimestamp
+        );
+        const latestInboundConversationKey = latestInboundItem
+          ? getConversationIdentity(latestInboundItem)
+          : null;
+        if (latestInboundConversationKey !== selectedConversationKey) {
+          enqueueInboundNotifications(1);
+        }
       }
     } else {
       hasInitializedConversationSoundRef.current = true;
@@ -1033,7 +1115,7 @@ export default function AppInboxPage() {
         activeConversation.waId
       );
     }
-  }, [markConversationAsRead, playInboundNotification, selectedConversationKey]);
+  }, [enqueueInboundNotifications, markConversationAsRead, selectedConversationKey]);
 
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,
@@ -1051,12 +1133,26 @@ export default function AppInboxPage() {
       after: latestKnownAt,
     });
     if (requestSeq !== detailRequestSeqRef.current) return;
+    const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
+    if (mode === "append") {
+      const newInboundCount = countUnseenInboundMessages(
+        responseConversationKey,
+        response.items,
+        notifiedInboundMessageKeysRef.current
+      );
+      enqueueInboundNotifications(newInboundCount);
+    } else {
+      rememberInboundMessages(
+        responseConversationKey,
+        response.items,
+        notifiedInboundMessageKeysRef.current
+      );
+    }
     setMessages((prev) => {
       const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items;
       timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
-    const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     setConversations((prev) =>
       dedupeConversationsByIdentity(
         prev.map((item) =>
@@ -1073,7 +1169,7 @@ export default function AppInboxPage() {
     if (document.visibilityState === "visible") {
       markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
     }
-  }, [markConversationAsRead, messages, selectedConversationWaId]);
+  }, [enqueueInboundNotifications, markConversationAsRead, messages, selectedConversationWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -1134,13 +1230,18 @@ export default function AppInboxPage() {
     })
       .then((response) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
+        const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+        rememberInboundMessages(
+          responseConversationKey,
+          response.items,
+          notifiedInboundMessageKeysRef.current
+        );
         setMessages((prev) => {
           const nextMessages =
             cachedMessages?.length ? mergeMessagesByIdentity(prev, response.items) : response.items;
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
-        const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
