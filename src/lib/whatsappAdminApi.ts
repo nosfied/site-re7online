@@ -49,6 +49,7 @@ export type InboxConversationItem = {
     direction: "INBOUND" | "OUTBOUND";
     type: string;
     status: string;
+    messageId?: string | null;
     bodyText: string | null;
     templateName: string | null;
     createdAt: string;

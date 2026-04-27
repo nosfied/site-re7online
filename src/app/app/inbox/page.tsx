@@ -1023,6 +1023,7 @@ export default function AppInboxPage() {
               direction: message.direction,
               type: message.type,
               status: message.status,
+              messageId: message.messageId,
               bodyText: message.bodyText,
               templateName: message.templateName,
               createdAt: message.createdAt,
@@ -1064,6 +1065,7 @@ export default function AppInboxPage() {
       source: "polling",
       kind: isHandoffTransition ? "handoff" : "message",
       conversationIdentity: getConversationIdentity(item),
+      messageId: item.lastMessage?.messageId ?? null,
       createdAt: item.lastInboundAt ?? item.lastMessage?.createdAt ?? null,
       bodyText: item.lastMessage?.bodyText ?? null,
       direction: "INBOUND",
@@ -1701,7 +1703,26 @@ export default function AppInboxPage() {
           const response = await sendAppConversationMessage(session, next.waId, next.text);
           shouldScrollToBottomRef.current = true;
           if (selectedConversationWaId === next.waId) {
-            await refreshSelectedTimeline(session, response.waId ?? next.waId);
+            const outboundMessage: InboxMessageItem = {
+              direction: "OUTBOUND",
+              type: "TEXT",
+              status: response.message.status,
+              intent: null,
+              bodyText: next.text,
+              media: null,
+              templateName: null,
+              templateLang: null,
+              requestId: null,
+              messageId: response.message.messageId,
+              metaMessageId: response.message.metaMessageId,
+              errorBody: null,
+              createdAt: response.message.createdAt,
+            };
+            setMessages((prev) => {
+              const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+              timelineCacheRef.current.set(next.waId, nextMessages);
+              return nextMessages;
+            });
           }
           setConversations((prev) =>
             dedupeConversationsByIdentity(
@@ -1713,6 +1734,7 @@ export default function AppInboxPage() {
                         direction: "OUTBOUND",
                         type: "TEXT",
                         status: response.message.status,
+                        messageId: response.message.messageId,
                         bodyText: next.text,
                         templateName: null,
                         createdAt: response.message.createdAt,
@@ -1748,7 +1770,7 @@ export default function AppInboxPage() {
       setSendingMessage(false);
       focusComposer();
     }
-  }, [handleUnauthorized, refreshSelectedTimeline, selectedConversationWaId, session]);
+  }, [handleUnauthorized, selectedConversationWaId, session]);
 
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
@@ -1798,7 +1820,26 @@ export default function AppInboxPage() {
           mediaInputRef.current.value = "";
         }
         shouldScrollToBottomRef.current = true;
-        await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+        const outboundMessage: InboxMessageItem = {
+          direction: "OUTBOUND",
+          type: response.message.type,
+          status: response.message.status,
+          intent: null,
+          bodyText: response.message.bodyText,
+          media: null,
+          templateName: null,
+          templateLang: null,
+          requestId: null,
+          messageId: response.message.messageId,
+          metaMessageId: response.message.metaMessageId,
+          errorBody: null,
+          createdAt: response.message.createdAt,
+        };
+        setMessages((prev) => {
+          const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+          timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+          return nextMessages;
+        });
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
@@ -1809,6 +1850,7 @@ export default function AppInboxPage() {
                       direction: "OUTBOUND",
                       type: response.message.type,
                       status: response.message.status,
+                      messageId: response.message.messageId,
                       bodyText: response.message.bodyText,
                       templateName: null,
                       createdAt: response.message.createdAt,
@@ -1841,7 +1883,6 @@ export default function AppInboxPage() {
       canReply,
       focusComposer,
       handleUnauthorized,
-      refreshSelectedTimeline,
       selectedConversation,
       selectedConversationWaId,
       session,

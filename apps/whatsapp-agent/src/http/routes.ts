@@ -10574,6 +10574,7 @@ async function buildConversationListPayload(
       select: {
         waId: true,
         waIdCanonical: true,
+        messageId: true,
         type: true,
         bodyText: true,
         createdAt: true,
@@ -10589,6 +10590,7 @@ async function buildConversationListPayload(
       select: {
         waId: true,
         waIdCanonical: true,
+        messageId: true,
         type: true,
         status: true,
         bodyText: true,
@@ -10694,6 +10696,7 @@ async function buildConversationListPayload(
               direction: "INBOUND",
               type: latestInbound.type,
               status: "RECEIVED",
+              messageId: latestInbound.messageId,
               bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
               templateName: null,
               createdAt: latestInbound.createdAt,
@@ -10707,6 +10710,7 @@ async function buildConversationListPayload(
                 extractMetaStatus(latestOutbound.rawPayload).lastStatus,
                 latestOutbound.status
               ),
+              messageId: latestOutbound.messageId,
               bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
               templateName: latestOutbound.templateName ?? null,
               createdAt: latestOutbound.createdAt,
