@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
-import { AppRealtimeEvent, createAppRealtimeClient } from "@/lib/appRealtime";
+import {
+  addAppRealtimeListener,
+  isActiveInboxConversation,
+  setActiveInboxConversation,
+  shouldNotifyMessage,
+  type AppRealtimeEvent,
+} from "@/lib/appRealtime";
 import {
   AppInboxReadState,
   AppSession,
@@ -1069,12 +1075,11 @@ export default function AppInboxPage() {
     const message = event.message;
 
     if (message.direction === "INBOUND") {
-      const newInboundCount = countUnseenInboundMessages(
+      countUnseenInboundMessages(
         conversationKey,
         [message],
         notifiedInboundMessageKeysRef.current
       );
-      enqueueInboundNotifications(newInboundCount);
     }
 
     setConversations((prev) =>
@@ -1116,7 +1121,6 @@ export default function AppInboxPage() {
 
     markConversationAsUnread(conversationKey, event.waId);
   }, [
-    enqueueInboundNotifications,
     markConversationAsUnread,
     selectedConversationKey,
     selectedConversationWaId,
@@ -1124,15 +1128,21 @@ export default function AppInboxPage() {
   ]);
 
   useEffect(() => {
-    if (!session?.token) return;
-    const realtime = createAppRealtimeClient({
-      baseUrl: session.baseUrl,
-      token: session.token,
-      onMessage: applyRealtimeMessageCreated,
+    return addAppRealtimeListener(applyRealtimeMessageCreated);
+  }, [applyRealtimeMessageCreated]);
+
+  const shouldNotifyInboundConversation = useCallback((item: InboxConversationItem) => {
+    if (!shouldPlayInboundNotificationForConversation(item)) return false;
+    if (isActiveInboxConversation({ waId: item.waId, waIdCanonical: item.waIdCanonical })) return false;
+    return shouldNotifyMessage({
+      waId: item.waId,
+      waIdCanonical: item.waIdCanonical,
+      createdAt: item.lastInboundAt ?? item.lastMessage?.createdAt ?? null,
+      bodyText: item.lastMessage?.bodyText ?? null,
+      direction: "INBOUND",
+      type: item.lastMessage?.type ?? null,
     });
-    realtime.connect();
-    return () => realtime.close();
-  }, [applyRealtimeMessageCreated, session]);
+  }, []);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });
@@ -1150,7 +1160,8 @@ export default function AppInboxPage() {
         if (
           humanFlowConversationKeys.has(conversationKey) &&
           !humanFlowConversationKeysRef.current.has(conversationKey) &&
-          item.lastInboundAt
+          item.lastInboundAt &&
+          shouldNotifyInboundConversation(item)
         ) {
           handoffTransitionCount += 1;
         }
@@ -1174,7 +1185,11 @@ export default function AppInboxPage() {
         const latestInboundConversationKey = latestInboundItem
           ? getConversationIdentity(latestInboundItem)
           : null;
-        if (latestInboundConversationKey !== selectedConversationKey) {
+        if (
+          latestInboundItem &&
+          latestInboundConversationKey !== selectedConversationKey &&
+          shouldNotifyInboundConversation(latestInboundItem)
+        ) {
           enqueueInboundNotifications(1);
         }
       }
@@ -1215,7 +1230,7 @@ export default function AppInboxPage() {
         activeConversation.waId
       );
     }
-  }, [enqueueInboundNotifications, markConversationAsRead, selectedConversationKey]);
+  }, [enqueueInboundNotifications, markConversationAsRead, selectedConversationKey, shouldNotifyInboundConversation]);
 
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,
@@ -1239,12 +1254,11 @@ export default function AppInboxPage() {
         latestKnownAt &&
         primedTimelineNotificationKeysRef.current.has(responseConversationKey)
       ) {
-        const newInboundCount = countUnseenInboundMessages(
+        countUnseenInboundMessages(
           responseConversationKey,
           response.items,
           notifiedInboundMessageKeysRef.current
         );
-        enqueueInboundNotifications(newInboundCount);
       } else {
         rememberInboundMessages(
           responseConversationKey,
@@ -1282,7 +1296,7 @@ export default function AppInboxPage() {
     if (document.visibilityState === "visible") {
       markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
     }
-  }, [enqueueInboundNotifications, markConversationAsRead, messages, selectedConversationWaId]);
+  }, [markConversationAsRead, messages, selectedConversationWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -1464,6 +1478,11 @@ export default function AppInboxPage() {
       conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null,
     [conversations, selectedConversationKey]
   );
+
+  useEffect(() => {
+    setActiveInboxConversation(selectedConversationWaId, selectedConversation?.waIdCanonical ?? null);
+    return () => setActiveInboxConversation(null);
+  }, [selectedConversation?.waIdCanonical, selectedConversationWaId]);
 
   const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
 

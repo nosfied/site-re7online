@@ -18,10 +18,93 @@ type AppRealtimeClientOptions = {
   onStatus?: (status: AppRealtimeStatus) => void;
 };
 
+export const APP_REALTIME_EVENT_NAME = "re7:inbox-realtime";
+
+const MAX_NOTIFIED_MESSAGE_KEYS = 500;
+const notifiedMessageIds = new Set<string>();
+const notifiedMessageOrder: string[] = [];
+
+type ActiveInboxConversation = {
+  waId: string | null;
+  waIdCanonical: string | null;
+};
+
+let activeInboxConversation: ActiveInboxConversation = {
+  waId: null,
+  waIdCanonical: null,
+};
+
+type NotificationCandidate = {
+  waId?: string | null;
+  waIdCanonical?: string | null;
+  messageId?: string | null;
+  metaMessageId?: string | null;
+  requestId?: string | null;
+  createdAt?: string | null;
+  bodyText?: string | null;
+  direction?: string | null;
+  type?: string | null;
+};
+
 export type AppRealtimeClient = {
   connect: () => void;
   close: () => void;
 };
+
+export function dispatchAppRealtimeEvent(event: AppRealtimeEvent) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppRealtimeEvent>(APP_REALTIME_EVENT_NAME, { detail: event }));
+}
+
+export function addAppRealtimeListener(handler: (event: AppRealtimeEvent) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    handler((event as CustomEvent<AppRealtimeEvent>).detail);
+  };
+  window.addEventListener(APP_REALTIME_EVENT_NAME, listener);
+  return () => window.removeEventListener(APP_REALTIME_EVENT_NAME, listener);
+}
+
+export function setActiveInboxConversation(waId: string | null, waIdCanonical?: string | null) {
+  activeInboxConversation = {
+    waId,
+    waIdCanonical: waIdCanonical ?? null,
+  };
+}
+
+export function isActiveInboxConversation(event: Pick<AppRealtimeEvent, "waId" | "waIdCanonical">) {
+  const activeWaId = activeInboxConversation.waId;
+  const activeCanonical = activeInboxConversation.waIdCanonical;
+  if (!activeWaId && !activeCanonical) return false;
+  return (
+    event.waId === activeWaId ||
+    event.waId === activeCanonical ||
+    event.waIdCanonical === activeWaId ||
+    event.waIdCanonical === activeCanonical
+  );
+}
+
+export function shouldNotifyMessage(candidate: NotificationCandidate) {
+  if (candidate.direction && candidate.direction !== "INBOUND") return false;
+
+  const primaryId = candidate.messageId ?? candidate.metaMessageId ?? candidate.requestId ?? null;
+  const conversationKey = candidate.waIdCanonical ?? candidate.waId ?? "unknown";
+  const notificationKey = primaryId
+    ? `${conversationKey}:${primaryId}`
+    : `${conversationKey}:${candidate.createdAt ?? "unknown"}:${candidate.bodyText ?? ""}:${candidate.type ?? ""}`;
+
+  if (notifiedMessageIds.has(notificationKey)) return false;
+
+  notifiedMessageIds.add(notificationKey);
+  notifiedMessageOrder.push(notificationKey);
+
+  while (notifiedMessageOrder.length > MAX_NOTIFIED_MESSAGE_KEYS) {
+    const oldestKey = notifiedMessageOrder.shift();
+    if (oldestKey) notifiedMessageIds.delete(oldestKey);
+  }
+
+  return true;
+}
 
 function getRealtimeUrl(baseUrl: string, token: string) {
   const cleanBaseUrl = baseUrl.trim().replace(/\/+$/, "") || "/agent-api";

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AppRealtimeBridge from "@/components/app/AppRealtimeBridge";
 
 export const metadata: Metadata = {
   title: {
@@ -19,5 +20,10 @@ export default function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return (
+    <>
+      <AppRealtimeBridge />
+      {children}
+    </>
+  );
 }
