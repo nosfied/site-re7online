@@ -6,12 +6,11 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   addAppRealtimeListener,
-  buildNotificationKey,
+  handleRealtimeNotificationCandidate,
   isActiveInboxConversation,
   requestBrowserNotificationPermission,
   setActiveConversationIdentity,
   setActiveInboxConversation,
-  shouldProcessNotification,
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
@@ -61,8 +60,6 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
-const INBOX_NOTIFICATION_SOUND_INTERVAL_MS = 320;
-const INBOX_NOTIFICATION_MAX_QUEUE = 10;
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
@@ -820,11 +817,7 @@ export default function AppInboxPage() {
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
   const lastInboundConversationTimestampRef = useRef<number | null>(null);
   const humanFlowConversationKeysRef = useRef(new Set<string>());
-  const hasPrimedNotificationRef = useRef(false);
   const hasInitializedConversationSoundRef = useRef(false);
-  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
-  const notificationQueueRef = useRef(0);
-  const notificationTimerRef = useRef<number | null>(null);
   const notifiedInboundMessageKeysRef = useRef(new Set<string>());
   const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
@@ -870,16 +863,6 @@ export default function AppInboxPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const audio = new window.Audio("/sounds/inbox-notification.wav");
-    audio.preload = "auto";
-    notificationAudioRef.current = audio;
-    return () => {
-      notificationAudioRef.current = null;
-    };
-  }, []);
 
   useEffect(
     () => () => {
@@ -964,69 +947,6 @@ export default function AppInboxPage() {
     composerRef.current.focus();
     const caretPosition = composerRef.current.value.length;
     composerRef.current.setSelectionRange(caretPosition, caretPosition);
-  }, []);
-
-  const playInboundNotification = useCallback(() => {
-    if (!soundEnabled || !hasPrimedNotificationRef.current || typeof window === "undefined") return;
-    try {
-      const baseAudio = notificationAudioRef.current;
-      if (!baseAudio) return;
-      const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
-      nextAudio.volume = 0.95;
-      nextAudio.currentTime = 0;
-      void nextAudio.play();
-    } catch {
-      // Browser autoplay policy can block audio; fail silently.
-    }
-  }, [soundEnabled]);
-
-  const processNotificationQueue = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (notificationQueueRef.current <= 0) {
-      notificationTimerRef.current = null;
-      return;
-    }
-    notificationQueueRef.current -= 1;
-    playInboundNotification();
-    notificationTimerRef.current = window.setTimeout(
-      processNotificationQueue,
-      INBOX_NOTIFICATION_SOUND_INTERVAL_MS
-    );
-  }, [playInboundNotification]);
-
-  const enqueueInboundNotifications = useCallback((count: number) => {
-    if (count <= 0 || typeof window === "undefined") return;
-    notificationQueueRef.current = Math.min(
-      INBOX_NOTIFICATION_MAX_QUEUE,
-      notificationQueueRef.current + count
-    );
-    if (notificationTimerRef.current !== null) return;
-    processNotificationQueue();
-  }, [processNotificationQueue]);
-
-  useEffect(
-    () => () => {
-      if (notificationTimerRef.current !== null) {
-        window.clearTimeout(notificationTimerRef.current);
-        notificationTimerRef.current = null;
-      }
-      notificationQueueRef.current = 0;
-    },
-    []
-  );
-
-  useEffect(() => {
-    const primeNotificationAudio = () => {
-      hasPrimedNotificationRef.current = true;
-    };
-
-    window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
-    window.addEventListener("keydown", primeNotificationAudio);
-
-    return () => {
-      window.removeEventListener("pointerdown", primeNotificationAudio);
-      window.removeEventListener("keydown", primeNotificationAudio);
-    };
   }, []);
 
   const markConversationAsRead = useCallback((
@@ -1134,18 +1054,23 @@ export default function AppInboxPage() {
     return addAppRealtimeListener(applyRealtimeMessageCreated);
   }, [applyRealtimeMessageCreated]);
 
-  const shouldNotifyInboundConversation = useCallback((item: InboxConversationItem) => {
-    if (!shouldPlayInboundNotificationForConversation(item)) return false;
-    if (isActiveInboxConversation({ waId: item.waId, waIdCanonical: item.waIdCanonical })) return false;
-    const notificationKey = buildNotificationKey({
-      waId: item.waId,
-      waIdCanonical: item.waIdCanonical,
+  const buildConversationNotificationRequest = useCallback((
+    item: InboxConversationItem,
+    isHandoffTransition = false
+  ) => {
+    if (!shouldPlayInboundNotificationForConversation(item)) return null;
+    if (isActiveInboxConversation({ waId: item.waId, waIdCanonical: item.waIdCanonical })) return null;
+    const wasAccepted = handleRealtimeNotificationCandidate({
+      source: "polling",
+      kind: isHandoffTransition ? "handoff" : "message",
+      conversationIdentity: getConversationIdentity(item),
       createdAt: item.lastInboundAt ?? item.lastMessage?.createdAt ?? null,
       bodyText: item.lastMessage?.bodyText ?? null,
       direction: "INBOUND",
-      type: item.lastMessage?.type ?? null,
+      mode: item.mode,
+      handoffStatus: item.handoffStatus ?? "none",
     });
-    return shouldProcessNotification(notificationKey);
+    return wasAccepted;
   }, []);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
@@ -1158,22 +1083,21 @@ export default function AppInboxPage() {
     const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
     const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
     if (hasInitializedConversationSoundRef.current) {
-      let handoffTransitionCount = 0;
+      let notifiedHandoffTransition = false;
       for (const item of sortedItems) {
         const conversationKey = getConversationIdentity(item);
         if (
           humanFlowConversationKeys.has(conversationKey) &&
-          !humanFlowConversationKeysRef.current.has(conversationKey) &&
-          item.lastInboundAt &&
-          shouldNotifyInboundConversation(item)
+          !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
-          handoffTransitionCount += 1;
+          if (buildConversationNotificationRequest(item, true)) {
+            notifiedHandoffTransition = true;
+          }
         }
       }
-      enqueueInboundNotifications(handoffTransitionCount);
 
       if (
-        handoffTransitionCount === 0 &&
+        !notifiedHandoffTransition &&
         latestInboundSignature &&
         latestInboundSignature !== lastInboundConversationSignatureRef.current &&
         latestInboundTimestamp !== null &&
@@ -1191,10 +1115,9 @@ export default function AppInboxPage() {
           : null;
         if (
           latestInboundItem &&
-          latestInboundConversationKey !== selectedConversationKey &&
-          shouldNotifyInboundConversation(latestInboundItem)
+          latestInboundConversationKey !== selectedConversationKey
         ) {
-          enqueueInboundNotifications(1);
+          buildConversationNotificationRequest(latestInboundItem);
         }
       }
     } else {
@@ -1234,7 +1157,7 @@ export default function AppInboxPage() {
         activeConversation.waId
       );
     }
-  }, [enqueueInboundNotifications, markConversationAsRead, selectedConversationKey, shouldNotifyInboundConversation]);
+  }, [buildConversationNotificationRequest, markConversationAsRead, selectedConversationKey]);
 
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,

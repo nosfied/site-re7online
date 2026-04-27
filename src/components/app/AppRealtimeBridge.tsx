@@ -3,14 +3,14 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import {
-  buildNotificationKey,
+  addAppNotificationListener,
   createAppRealtimeClient,
   dispatchAppRealtimeEvent,
-  getActiveConversationIdentity,
   getConversationIdentityFromRealtimeEvent,
-  shouldProcessNotification,
+  handleRealtimeNotificationCandidate,
   type AppRealtimeClient,
   type AppRealtimeEvent,
+  type AppNotificationRequest,
 } from "@/lib/appRealtime";
 import { loadAppSession, type AppSession } from "@/lib/appClientApi";
 
@@ -72,14 +72,13 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
-  const showBrowserNotification = useCallback((event: AppRealtimeEvent, notificationKey: string) => {
+  const showBrowserNotification = useCallback((request: AppNotificationRequest) => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
-    const messageBody = event.message.bodyText || "Voce recebeu uma nova mensagem.";
     try {
-      new Notification("Nova mensagem no Converta", {
-        body: messageBody,
-        tag: notificationKey,
+      new Notification(request.title, {
+        body: request.body,
+        tag: request.key,
         silent: true,
       });
     } catch {
@@ -87,34 +86,31 @@ export default function AppRealtimeBridge() {
     }
   }, []);
 
+  const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
+    const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
+    if (!appIsFocused) {
+      showBrowserNotification(request);
+    }
+    enqueueNotification();
+  }, [enqueueNotification, showBrowserNotification]);
+
   const handleInboundNotification = useCallback((event: AppRealtimeEvent) => {
     if (event.message.direction !== "INBOUND") return;
 
-    const conversationIdentity = getConversationIdentityFromRealtimeEvent(event);
-    const notificationKey = buildNotificationKey({
-      waId: event.waId,
-      waIdCanonical: event.waIdCanonical,
+    handleRealtimeNotificationCandidate({
+      source: "websocket",
+      kind: "message",
+      conversationIdentity: getConversationIdentityFromRealtimeEvent(event),
       messageId: event.message.messageId,
       metaMessageId: event.message.metaMessageId,
       requestId: event.message.requestId,
       createdAt: event.message.createdAt,
       bodyText: event.message.bodyText,
       direction: event.message.direction,
-      type: event.message.type,
+      mode: event.mode,
+      handoffStatus: event.handoffStatus,
     });
-
-    if (!shouldProcessNotification(notificationKey)) return;
-    if (conversationIdentity === getActiveConversationIdentity()) return;
-
-    const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
-    if (appIsFocused) {
-      enqueueNotification();
-      return;
-    }
-
-    showBrowserNotification(event, notificationKey);
-    enqueueNotification();
-  }, [enqueueNotification, showBrowserNotification]);
+  }, []);
 
   const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
     dispatchAppRealtimeEvent(event);
@@ -132,6 +128,10 @@ export default function AppRealtimeBridge() {
       audioRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    return addAppNotificationListener(handleNotificationRequest);
+  }, [handleNotificationRequest]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

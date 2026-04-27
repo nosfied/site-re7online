@@ -1,6 +1,8 @@
 import type { InboxMessageItem } from "@/lib/whatsappAdminApi";
 
 export type AppRealtimeStatus = "connected" | "reconnecting" | "offline";
+export type AppConversationMode = "BOT" | "HUMAN";
+export type AppHandoffStatus = "none" | "pending" | "active";
 
 export type AppRealtimeEvent =
   | {
@@ -9,6 +11,8 @@ export type AppRealtimeEvent =
       waId: string;
       waIdCanonical?: string | null;
       message: InboxMessageItem;
+      mode?: AppConversationMode | null;
+      handoffStatus?: AppHandoffStatus | null;
     };
 
 type AppRealtimeClientOptions = {
@@ -19,6 +23,7 @@ type AppRealtimeClientOptions = {
 };
 
 export const APP_REALTIME_EVENT_NAME = "re7:inbox-realtime";
+export const APP_NOTIFICATION_EVENT_NAME = "re7:app-notification";
 
 const MAX_NOTIFIED_MESSAGE_KEYS = 500;
 const notifiedMessageIds = new Set<string>();
@@ -35,6 +40,37 @@ type NotificationCandidate = {
   bodyText?: string | null;
   direction?: string | null;
   type?: string | null;
+};
+
+export type AppNotificationRequest = {
+  key: string;
+  title: string;
+  body: string;
+};
+
+export type AppNotificationCandidate = {
+  source: "websocket" | "polling";
+  kind?: "message" | "handoff";
+  conversationIdentity: string | null;
+  messageId?: string | null;
+  metaMessageId?: string | null;
+  requestId?: string | null;
+  createdAt?: string | null;
+  direction?: string | null;
+  bodyText?: string | null;
+  mode?: AppConversationMode | null;
+  handoffStatus?: AppHandoffStatus | null;
+  title?: string;
+  body?: string;
+};
+
+type InboundOrHandoffNotificationInput = {
+  conversationIdentity: string | null;
+  notificationKey: string;
+  direction?: string | null;
+  mode?: AppConversationMode | null;
+  handoffStatus?: AppHandoffStatus | null;
+  isHandoffTransition?: boolean;
 };
 
 export type AppRealtimeClient = {
@@ -54,6 +90,20 @@ export function addAppRealtimeListener(handler: (event: AppRealtimeEvent) => voi
   };
   window.addEventListener(APP_REALTIME_EVENT_NAME, listener);
   return () => window.removeEventListener(APP_REALTIME_EVENT_NAME, listener);
+}
+
+export function dispatchAppNotificationRequest(request: AppNotificationRequest) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppNotificationRequest>(APP_NOTIFICATION_EVENT_NAME, { detail: request }));
+}
+
+export function addAppNotificationListener(handler: (request: AppNotificationRequest) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    handler((event as CustomEvent<AppNotificationRequest>).detail);
+  };
+  window.addEventListener(APP_NOTIFICATION_EVENT_NAME, listener);
+  return () => window.removeEventListener(APP_NOTIFICATION_EVENT_NAME, listener);
 }
 
 export function setActiveInboxConversation(waId: string | null, waIdCanonical?: string | null) {
@@ -84,8 +134,16 @@ export function buildNotificationKey(candidate: NotificationCandidate) {
   const primaryId = candidate.messageId ?? candidate.metaMessageId ?? candidate.requestId ?? null;
   const conversationIdentity = candidate.waIdCanonical ?? candidate.waId ?? "unknown";
   return primaryId
-    ? `${conversationIdentity}:${primaryId}`
-    : `${conversationIdentity}:${candidate.createdAt ?? "unknown"}:${candidate.bodyText ?? ""}:${candidate.direction ?? ""}`;
+    ? `message:${primaryId}`
+    : `message:${conversationIdentity}:${candidate.createdAt ?? "unknown"}:${candidate.bodyText ?? ""}:${candidate.direction ?? ""}`;
+}
+
+export function buildHandoffNotificationKey(
+  conversationIdentity: string | null,
+  handoffStatus?: string | null,
+  updatedAt?: string | null
+) {
+  return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}:${updatedAt ?? "unknown"}`;
 }
 
 export function shouldProcessNotification(key: string) {
@@ -105,6 +163,66 @@ export function shouldProcessNotification(key: string) {
 export function shouldNotifyMessage(candidate: NotificationCandidate) {
   if (candidate.direction && candidate.direction.toUpperCase() !== "INBOUND") return false;
   return shouldProcessNotification(buildNotificationKey(candidate));
+}
+
+function isHumanNotificationContext(
+  mode?: AppConversationMode | null,
+  handoffStatus?: AppHandoffStatus | null
+) {
+  return mode === "HUMAN" || handoffStatus === "pending" || handoffStatus === "active";
+}
+
+export function shouldNotifyInboundOrHandoff(input: InboundOrHandoffNotificationInput) {
+  if (input.direction && input.direction.toUpperCase() !== "INBOUND") return false;
+  if (!input.conversationIdentity) return false;
+  if (input.conversationIdentity === getActiveConversationIdentity()) return false;
+  if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
+  if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
+  return shouldProcessNotification(input.notificationKey);
+}
+
+export function handleRealtimeNotificationCandidate(candidate: AppNotificationCandidate) {
+  const notificationKey =
+    candidate.kind === "handoff"
+      ? buildHandoffNotificationKey(
+          candidate.conversationIdentity,
+          candidate.handoffStatus ?? candidate.mode,
+          candidate.createdAt ?? null
+        )
+      : buildNotificationKey({
+          waId: candidate.conversationIdentity,
+          messageId: candidate.messageId,
+          metaMessageId: candidate.metaMessageId,
+          requestId: candidate.requestId,
+          createdAt: candidate.createdAt,
+          bodyText: candidate.bodyText,
+          direction: candidate.direction,
+        });
+
+  const shouldNotify = shouldNotifyInboundOrHandoff({
+    conversationIdentity: candidate.conversationIdentity,
+    notificationKey,
+    direction: candidate.direction,
+    mode: candidate.mode,
+    handoffStatus: candidate.handoffStatus,
+    isHandoffTransition: candidate.kind === "handoff",
+  });
+
+  if (!shouldNotify) return false;
+
+  dispatchAppNotificationRequest({
+    key: notificationKey,
+    title:
+      candidate.title ??
+      (candidate.kind === "handoff" ? "Novo atendimento humano no Converta" : "Nova mensagem no Converta"),
+    body:
+      candidate.body ??
+      (candidate.kind === "handoff"
+        ? "Uma conversa foi transferida para atendimento."
+        : candidate.bodyText || "Voce recebeu uma nova mensagem."),
+  });
+
+  return true;
 }
 
 export function requestBrowserNotificationPermission() {
