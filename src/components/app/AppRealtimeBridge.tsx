@@ -8,6 +8,7 @@ import {
   dispatchAppRealtimeEvent,
   getConversationIdentityFromRealtimeEvent,
   handleRealtimeNotificationCandidate,
+  setActiveConversationIdentity,
   type AppRealtimeClient,
   type AppRealtimeEvent,
   type AppNotificationRequest,
@@ -164,6 +165,10 @@ export default function AppRealtimeBridge() {
 
   useEffect(() => {
     const currentPathname = pathname ?? "";
+    if (!currentPathname.startsWith("/app/inbox")) {
+      setActiveConversationIdentity(null);
+    }
+
     if (!currentPathname.startsWith("/app") || currentPathname === "/app/login") {
       clientRef.current?.close();
       clientRef.current = null;
