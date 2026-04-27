@@ -358,14 +358,12 @@ function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxR
 
   for (const conversationKey of Object.keys(manuallyUnreadByConversationKey)) {
     const currentReadAt = current.lastReadAtByConversationKey[conversationKey];
-    const incomingReadAt = incoming.lastReadAtByConversationKey[conversationKey];
     const latestReadAt = lastReadAtByConversationKey[conversationKey];
     if (
       !current.manuallyUnreadByConversationKey[conversationKey] &&
       currentReadAt &&
       latestReadAt &&
-      latestReadAt === currentReadAt &&
-      currentReadAt !== incomingReadAt
+      latestReadAt === currentReadAt
     ) {
       delete manuallyUnreadByConversationKey[conversationKey];
     }
@@ -836,6 +834,7 @@ export default function AppInboxPage() {
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
+  const [messagesConversationKey, setMessagesConversationKey] = useState<string | null>(null);
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
   const [leadNameDraft, setLeadNameDraft] = useState("");
@@ -1116,6 +1115,7 @@ export default function AppInboxPage() {
         timelineCacheRef.current.set(selectedConversationWaId ?? event.waId, nextMessages);
         return nextMessages;
       });
+      setMessagesConversationKey(conversationKey);
       return;
     }
 
@@ -1208,6 +1208,7 @@ export default function AppInboxPage() {
       setSelectedConversationKey(null);
       setSelectedConversationWaId(null);
       setMessages([]);
+      setMessagesConversationKey(null);
       return;
     }
     if (!selectedConversationKey) {
@@ -1220,6 +1221,7 @@ export default function AppInboxPage() {
       setSelectedConversationKey(null);
       setSelectedConversationWaId(null);
       setMessages([]);
+      setMessagesConversationKey(null);
       return;
     }
 
@@ -1284,6 +1286,7 @@ export default function AppInboxPage() {
       timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
+    setMessagesConversationKey(responseConversationKey);
     setConversations((prev) =>
       dedupeConversationsByIdentity(
         prev.map((item) =>
@@ -1349,10 +1352,15 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId) return;
     let cancelled = false;
     const requestSeq = ++detailRequestSeqRef.current;
-    const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
+    const shouldLoadUnreadWindow =
+      pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
+    const cachedMessages = shouldLoadUnreadWindow
+      ? undefined
+      : timelineCacheRef.current.get(selectedConversationWaId);
     setLoadingMessages(true);
     setError(null);
     setMessages(cachedMessages ?? []);
+    setMessagesConversationKey(cachedMessages ? selectedConversationKey : null);
 
     fetchAppConversation(session, selectedConversationWaId, {
       order: "asc",
@@ -1374,6 +1382,7 @@ export default function AppInboxPage() {
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
+        setMessagesConversationKey(responseConversationKey);
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
@@ -1410,7 +1419,7 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, markConversationAsRead, selectedConversationWaId, session]);
+  }, [handleUnauthorized, markConversationAsRead, selectedConversationKey, selectedConversationWaId, session]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
@@ -1426,6 +1435,7 @@ export default function AppInboxPage() {
     lastMessageSignatureRef.current = latestSignature;
 
     if (!selectedConversationKey) return;
+    if (messagesConversationKey !== selectedConversationKey) return;
     const frame = window.requestAnimationFrame(() => {
       const unreadTarget = pendingUnreadScrollTargetRef.current;
       if (unreadTarget?.conversationKey === selectedConversationKey) {
@@ -1435,6 +1445,7 @@ export default function AppInboxPage() {
           shouldScrollToBottomRef.current = false;
           return;
         }
+        if (loadingMessages) return;
         pendingUnreadScrollTargetRef.current = null;
       }
 
@@ -1444,7 +1455,14 @@ export default function AppInboxPage() {
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, scrollTimelineToBottom, scrollTimelineToMessageIndex, selectedConversationKey]);
+  }, [
+    loadingMessages,
+    messages,
+    messagesConversationKey,
+    scrollTimelineToBottom,
+    scrollTimelineToMessageIndex,
+    selectedConversationKey,
+  ]);
 
   useEffect(() => {
     const node = timelineRef.current;
@@ -1810,6 +1828,7 @@ export default function AppInboxPage() {
               timelineCacheRef.current.set(next.waId, nextMessages);
               return nextMessages;
             });
+            setMessagesConversationKey(next.conversationKey);
           }
           setConversations((prev) =>
             dedupeConversationsByIdentity(
@@ -1927,6 +1946,7 @@ export default function AppInboxPage() {
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
+        setMessagesConversationKey(getConversationIdentity(selectedConversation));
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
@@ -2416,6 +2436,7 @@ export default function AppInboxPage() {
                   setSelectedConversationWaId(null);
                   setActiveConversationIdentity(null);
                   setMessages([]);
+                  setMessagesConversationKey(null);
                 }}
                 className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >

@@ -73,14 +73,14 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
-  const showBrowserNotification = useCallback((request: AppNotificationRequest) => {
+  const showBrowserNotification = useCallback((request: AppNotificationRequest, silent = true) => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
     try {
       new Notification(request.title, {
         body: request.body,
         tag: request.key,
-        silent: true,
+        silent,
       });
     } catch {
       // Notification support varies by browser/profile; internal updates continue.
@@ -89,10 +89,13 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
-    if (!appIsFocused) {
-      showBrowserNotification(request);
+    const canPlayInternalSound = isSoundEnabled() && hasPrimedAudioRef.current;
+    if (!appIsFocused || !canPlayInternalSound) {
+      showBrowserNotification(request, canPlayInternalSound);
     }
-    enqueueNotification();
+    if (canPlayInternalSound) {
+      enqueueNotification();
+    }
   }, [enqueueNotification, showBrowserNotification]);
 
   const handleInboundNotification = useCallback((event: AppRealtimeEvent) => {
@@ -138,6 +141,24 @@ export default function AppRealtimeBridge() {
     if (typeof window === "undefined") return;
     const primeNotificationAudio = () => {
       hasPrimedAudioRef.current = true;
+      const audio = audioRef.current;
+      if (!audio) return;
+      try {
+        const previousVolume = audio.volume;
+        audio.volume = 0;
+        const playAttempt = audio.play();
+        void playAttempt
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = previousVolume || 0.95;
+          })
+          .catch(() => {
+            audio.volume = previousVolume || 0.95;
+          });
+      } catch {
+        audio.volume = 0.95;
+      }
     };
 
     window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
