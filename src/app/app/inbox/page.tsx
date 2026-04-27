@@ -631,9 +631,8 @@ function getConversationModeLabel(
   item: Pick<InboxConversationItem, "mode" | "handoffStatus"> | null
 ) {
   if (!item) return "Sem modo";
-  if (item.handoffStatus === "active") return "Aguardando atendente";
-  if (item.handoffStatus === "pending") return "Confirmacao de handoff";
-  return item.mode === "HUMAN" ? "Modo humano" : "Automacao ativa";
+  if (item.handoffStatus === "active" || item.handoffStatus === "pending") return "Modo humano";
+  return item.mode === "HUMAN" ? "Modo humano" : "Modo automacao";
 }
 
 function getConversationStatusClass(status: ConversationOperationalStatus | null) {
@@ -1070,10 +1069,6 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (!session) return;
-    if (session.user.role === "AGENT") {
-      setUsers([]);
-      return;
-    }
     let cancelled = false;
     fetchAppUsers(session)
       .then((response) => {
@@ -1329,8 +1324,10 @@ export default function AppInboxPage() {
   );
 
   const canTransferSelectedConversation = useMemo(
-    () => Boolean(selectedConversationWaId) && isSelectedConversationOwnedByCurrentUser,
-    [isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
+    () =>
+      Boolean(selectedConversationWaId) &&
+      (isAdminUser || isSelectedConversationOwnedByCurrentUser),
+    [isAdminUser, isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
   );
 
   const canTransferDepartment = useMemo(
@@ -1360,7 +1357,7 @@ export default function AppInboxPage() {
     );
     setTransferUserId(selectedConversation.assignedUserId ?? "");
     setTransferDepartmentId(selectedConversation.departmentId ?? "");
-  }, [selectedConversation]);
+  }, [selectedConversationKey]);
 
   useEffect(() => {
     if (!selectedConversationWaId || !canReply || sendingMessage || conversationAction) {
@@ -2127,8 +2124,8 @@ export default function AppInboxPage() {
           </header>
 
           <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2">
-            <div className="flex items-end gap-2 overflow-hidden">
-              <div className="w-[132px] shrink-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+            <div className="grid grid-cols-[168px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2">
+              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
                 <select
                   value={statusActionDraft}
                   onChange={async (event) => {
@@ -2152,7 +2149,7 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferUserId}
@@ -2177,46 +2174,42 @@ export default function AppInboxPage() {
                   </button>
                 </div>
               </div>
-              {isAdminUser ? (
-                <div className="min-w-0 flex flex-1 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                    <select
-                      value={transferDepartmentId}
-                      onChange={(event) => setTransferDepartmentId(event.target.value)}
-                      disabled={
-                        !canTransferDepartment ||
-                        departmentOptions.length === 0 ||
-                        Boolean(conversationAction)
-                      }
-                      className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
-                    >
-                      <option value="">Setor</option>
-                      {departmentOptions.map((department) => (
-                        <option key={department.id} value={department.id}>
-                          {department.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={
-                        !canTransferDepartment ||
-                        !transferDepartmentId ||
-                        transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
-                        Boolean(conversationAction)
-                      }
-                      onClick={handleTransferDepartment}
-                      className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
-                    </button>
-                  </div>
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <select
+                    value={transferDepartmentId}
+                    onChange={(event) => setTransferDepartmentId(event.target.value)}
+                    disabled={
+                      !canTransferDepartment ||
+                      departmentOptions.length === 0 ||
+                      Boolean(conversationAction)
+                    }
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                  >
+                    <option value="">
+                      {selectedConversation?.departmentName || "Setor"}
+                    </option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={
+                      !canTransferDepartment ||
+                      !transferDepartmentId ||
+                      transferDepartmentId === (selectedConversation?.departmentId ?? "") ||
+                      Boolean(conversationAction)
+                    }
+                    onClick={handleTransferDepartment}
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
+                  </button>
                 </div>
-              ) : (
-                <div className="w-[180px] shrink-0 rounded-xl border border-[#e1d4c2] bg-white/70 px-2.5 py-1.5 text-[13px] text-slate-700">
-                  {selectedConversation?.departmentName || "Sem setor"}
-                </div>
-              )}
+              </div>
             </div>
             {showMoreActions ? (
               <p className="mt-2 text-xs text-slate-600">

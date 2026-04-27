@@ -1600,10 +1600,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      if (isAgentRole(clientAuth.role)) {
-        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
-        return;
-      }
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -3204,6 +3200,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       if (
+        !isAdminRole(clientAuth.role) &&
         !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
       ) {
         logAppRbacDenied({
