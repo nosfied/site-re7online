@@ -7,7 +7,6 @@ import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   addAppRealtimeListener,
   handleRealtimeNotificationCandidate,
-  isActiveInboxConversation,
   requestBrowserNotificationPermission,
   setActiveConversationIdentity,
   setActiveInboxConversation,
@@ -1060,7 +1059,6 @@ export default function AppInboxPage() {
     isHandoffTransition = false
   ) => {
     if (!shouldPlayInboundNotificationForConversation(item)) return null;
-    if (isActiveInboxConversation({ waId: item.waId, waIdCanonical: item.waIdCanonical })) return null;
     const wasAccepted = handleRealtimeNotificationCandidate({
       source: "polling",
       kind: isHandoffTransition ? "handoff" : "message",

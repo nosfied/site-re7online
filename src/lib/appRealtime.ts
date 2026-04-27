@@ -172,10 +172,17 @@ function isHumanNotificationContext(
   return mode === "HUMAN" || handoffStatus === "pending" || handoffStatus === "active";
 }
 
+function isAppVisibleAndFocused() {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
 export function shouldNotifyInboundOrHandoff(input: InboundOrHandoffNotificationInput) {
   if (input.direction && input.direction.toUpperCase() !== "INBOUND") return false;
   if (!input.conversationIdentity) return false;
-  if (input.conversationIdentity === getActiveConversationIdentity()) return false;
+  if (input.conversationIdentity === getActiveConversationIdentity() && isAppVisibleAndFocused()) {
+    return false;
+  }
   if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
   if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
   return shouldProcessNotification(input.notificationKey);
