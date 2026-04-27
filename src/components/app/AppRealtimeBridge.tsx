@@ -3,10 +3,12 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import {
+  buildNotificationKey,
   createAppRealtimeClient,
   dispatchAppRealtimeEvent,
-  isActiveInboxConversation,
-  shouldNotifyMessage,
+  getActiveConversationIdentity,
+  getConversationIdentityFromRealtimeEvent,
+  shouldProcessNotification,
   type AppRealtimeClient,
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
@@ -70,14 +72,26 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
-  const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
-    dispatchAppRealtimeEvent(event);
+  const showBrowserNotification = useCallback((event: AppRealtimeEvent, notificationKey: string) => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    const messageBody = event.message.bodyText || "Voce recebeu uma nova mensagem.";
+    try {
+      new Notification("Nova mensagem no Converta", {
+        body: messageBody,
+        tag: notificationKey,
+        silent: true,
+      });
+    } catch {
+      // Notification support varies by browser/profile; internal updates continue.
+    }
+  }, []);
 
-    if (event.type !== "message.created" || event.clientId !== session.user.clientId) return;
+  const handleInboundNotification = useCallback((event: AppRealtimeEvent) => {
     if (event.message.direction !== "INBOUND") return;
-    if (isActiveInboxConversation(event)) return;
 
-    const shouldNotify = shouldNotifyMessage({
+    const conversationIdentity = getConversationIdentityFromRealtimeEvent(event);
+    const notificationKey = buildNotificationKey({
       waId: event.waId,
       waIdCanonical: event.waIdCanonical,
       messageId: event.message.messageId,
@@ -89,10 +103,25 @@ export default function AppRealtimeBridge() {
       type: event.message.type,
     });
 
-    if (shouldNotify) {
+    if (!shouldProcessNotification(notificationKey)) return;
+    if (conversationIdentity === getActiveConversationIdentity()) return;
+
+    const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
+    if (appIsFocused) {
       enqueueNotification();
+      return;
     }
-  }, [enqueueNotification]);
+
+    showBrowserNotification(event, notificationKey);
+    enqueueNotification();
+  }, [enqueueNotification, showBrowserNotification]);
+
+  const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
+    dispatchAppRealtimeEvent(event);
+
+    if (event.type !== "message.created" || event.clientId !== session.user.clientId) return;
+    handleInboundNotification(event);
+  }, [handleInboundNotification]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

@@ -23,16 +23,7 @@ export const APP_REALTIME_EVENT_NAME = "re7:inbox-realtime";
 const MAX_NOTIFIED_MESSAGE_KEYS = 500;
 const notifiedMessageIds = new Set<string>();
 const notifiedMessageOrder: string[] = [];
-
-type ActiveInboxConversation = {
-  waId: string | null;
-  waIdCanonical: string | null;
-};
-
-let activeInboxConversation: ActiveInboxConversation = {
-  waId: null,
-  waIdCanonical: null,
-};
+let activeConversationIdentity: string | null = null;
 
 type NotificationCandidate = {
   waId?: string | null;
@@ -66,37 +57,42 @@ export function addAppRealtimeListener(handler: (event: AppRealtimeEvent) => voi
 }
 
 export function setActiveInboxConversation(waId: string | null, waIdCanonical?: string | null) {
-  activeInboxConversation = {
-    waId,
-    waIdCanonical: waIdCanonical ?? null,
-  };
+  setActiveConversationIdentity(waIdCanonical ?? waId ?? null);
+}
+
+export function setActiveConversationIdentity(identity: string | null) {
+  activeConversationIdentity = identity;
+}
+
+export function getActiveConversationIdentity() {
+  return activeConversationIdentity;
 }
 
 export function isActiveInboxConversation(event: Pick<AppRealtimeEvent, "waId" | "waIdCanonical">) {
-  const activeWaId = activeInboxConversation.waId;
-  const activeCanonical = activeInboxConversation.waIdCanonical;
-  if (!activeWaId && !activeCanonical) return false;
-  return (
-    event.waId === activeWaId ||
-    event.waId === activeCanonical ||
-    event.waIdCanonical === activeWaId ||
-    event.waIdCanonical === activeCanonical
-  );
+  const activeIdentity = getActiveConversationIdentity();
+  if (!activeIdentity) return false;
+  return getConversationIdentityFromRealtimeEvent(event) === activeIdentity;
 }
 
-export function shouldNotifyMessage(candidate: NotificationCandidate) {
-  if (candidate.direction && candidate.direction !== "INBOUND") return false;
+export function getConversationIdentityFromRealtimeEvent(
+  event: Pick<AppRealtimeEvent, "waId" | "waIdCanonical">
+) {
+  return event.waIdCanonical ?? event.waId;
+}
 
+export function buildNotificationKey(candidate: NotificationCandidate) {
   const primaryId = candidate.messageId ?? candidate.metaMessageId ?? candidate.requestId ?? null;
-  const conversationKey = candidate.waIdCanonical ?? candidate.waId ?? "unknown";
-  const notificationKey = primaryId
-    ? `${conversationKey}:${primaryId}`
-    : `${conversationKey}:${candidate.createdAt ?? "unknown"}:${candidate.bodyText ?? ""}:${candidate.type ?? ""}`;
+  const conversationIdentity = candidate.waIdCanonical ?? candidate.waId ?? "unknown";
+  return primaryId
+    ? `${conversationIdentity}:${primaryId}`
+    : `${conversationIdentity}:${candidate.createdAt ?? "unknown"}:${candidate.bodyText ?? ""}:${candidate.direction ?? ""}`;
+}
 
-  if (notifiedMessageIds.has(notificationKey)) return false;
+export function shouldProcessNotification(key: string) {
+  if (!key || notifiedMessageIds.has(key)) return false;
 
-  notifiedMessageIds.add(notificationKey);
-  notifiedMessageOrder.push(notificationKey);
+  notifiedMessageIds.add(key);
+  notifiedMessageOrder.push(key);
 
   while (notifiedMessageOrder.length > MAX_NOTIFIED_MESSAGE_KEYS) {
     const oldestKey = notifiedMessageOrder.shift();
@@ -104,6 +100,17 @@ export function shouldNotifyMessage(candidate: NotificationCandidate) {
   }
 
   return true;
+}
+
+export function shouldNotifyMessage(candidate: NotificationCandidate) {
+  if (candidate.direction && candidate.direction.toUpperCase() !== "INBOUND") return false;
+  return shouldProcessNotification(buildNotificationKey(candidate));
+}
+
+export function requestBrowserNotificationPermission() {
+  if (typeof window === "undefined" || !("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+  void Notification.requestPermission().catch(() => undefined);
 }
 
 function getRealtimeUrl(baseUrl: string, token: string) {

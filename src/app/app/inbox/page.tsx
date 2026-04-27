@@ -6,9 +6,12 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
   addAppRealtimeListener,
+  buildNotificationKey,
   isActiveInboxConversation,
+  requestBrowserNotificationPermission,
+  setActiveConversationIdentity,
   setActiveInboxConversation,
-  shouldNotifyMessage,
+  shouldProcessNotification,
   type AppRealtimeEvent,
 } from "@/lib/appRealtime";
 import {
@@ -1134,7 +1137,7 @@ export default function AppInboxPage() {
   const shouldNotifyInboundConversation = useCallback((item: InboxConversationItem) => {
     if (!shouldPlayInboundNotificationForConversation(item)) return false;
     if (isActiveInboxConversation({ waId: item.waId, waIdCanonical: item.waIdCanonical })) return false;
-    return shouldNotifyMessage({
+    const notificationKey = buildNotificationKey({
       waId: item.waId,
       waIdCanonical: item.waIdCanonical,
       createdAt: item.lastInboundAt ?? item.lastMessage?.createdAt ?? null,
@@ -1142,6 +1145,7 @@ export default function AppInboxPage() {
       direction: "INBOUND",
       type: item.lastMessage?.type ?? null,
     });
+    return shouldProcessNotification(notificationKey);
   }, []);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
@@ -2170,7 +2174,10 @@ export default function AppInboxPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setSoundEnabled((current) => !current)}
+                  onClick={() => {
+                    requestBrowserNotificationPermission();
+                    setSoundEnabled((current) => !current);
+                  }}
                   title={soundEnabled ? "Silenciar notificações" : "Ativar notificações"}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
                     soundEnabled
@@ -2249,6 +2256,7 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={() => {
                     shouldScrollToBottomRef.current = true;
+                    setActiveConversationIdentity(conversationIdentity);
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
                     setShowMoreActions(false);
@@ -2348,6 +2356,7 @@ export default function AppInboxPage() {
                   );
                   setSelectedConversationKey(null);
                   setSelectedConversationWaId(null);
+                  setActiveConversationIdentity(null);
                   setMessages([]);
                 }}
                 className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
