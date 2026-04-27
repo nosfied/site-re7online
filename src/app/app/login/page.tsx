@@ -22,11 +22,17 @@ export default function AppLoginPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    let fallbackTimer: number | null = null;
     try {
       const existing = loadAppSession();
       if (existing?.token) {
         router.replace("/app/inbox");
-        return;
+        fallbackTimer = window.setTimeout(() => {
+          setCheckingSession(false);
+        }, 800);
+        return () => {
+          if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+        };
       }
     } catch {
       clearAppSession();
