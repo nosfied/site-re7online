@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
@@ -403,6 +403,12 @@ type PendingOutgoingMessage = {
 type PendingUnreadScrollTarget = {
   conversationKey: string;
   lastReadAt: string | null;
+};
+
+type PendingReadAfterHydration = {
+  conversationKey: string;
+  activityAt: string | null;
+  waId: string | null;
 };
 
 type AudioRecordingState = "idle" | "recording" | "stopping";
@@ -868,6 +874,7 @@ export default function AppInboxPage() {
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -877,6 +884,7 @@ export default function AppInboxPage() {
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
+  const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -1007,6 +1015,12 @@ export default function AppInboxPage() {
     setShowJumpToLatest(false);
   }, []);
 
+  const isTimelineNearBottom = useCallback(() => {
+    const node = timelineRef.current;
+    if (!node) return true;
+    return node.scrollHeight - node.scrollTop - node.clientHeight <= 160;
+  }, []);
+
   const scrollTimelineToMessageIndex = useCallback((index: number) => {
     const node = timelineRef.current;
     if (!node) return false;
@@ -1051,6 +1065,13 @@ export default function AppInboxPage() {
       }).catch(() => undefined);
     }
   }, [session]);
+
+  const completeHydrationRead = useCallback((conversationKey: string) => {
+    const pendingRead = pendingReadAfterHydrationRef.current;
+    if (!pendingRead || pendingRead.conversationKey !== conversationKey) return;
+    pendingReadAfterHydrationRef.current = null;
+    markConversationAsRead(conversationKey, pendingRead.activityAt, pendingRead.waId);
+  }, [markConversationAsRead]);
 
   const markConversationAsUnread = useCallback((conversationKey: string, waId?: string | null) => {
     setReadState((prev) => ({
@@ -1110,18 +1131,21 @@ export default function AppInboxPage() {
     );
 
     if (selectedConversationKey === conversationKey || selectedConversationWaId === event.waId) {
+      const shouldStickToBottom = isTimelineNearBottom();
       setMessages((prev) => {
         const nextMessages = mergeMessagesByIdentity(prev, [message]);
         timelineCacheRef.current.set(selectedConversationWaId ?? event.waId, nextMessages);
         return nextMessages;
       });
       setMessagesConversationKey(conversationKey);
+      shouldScrollToBottomRef.current = shouldStickToBottom;
       return;
     }
 
     markConversationAsUnread(conversationKey, event.waId);
   }, [
     markConversationAsUnread,
+    isTimelineNearBottom,
     selectedConversationKey,
     selectedConversationWaId,
     session,
@@ -1209,6 +1233,9 @@ export default function AppInboxPage() {
       setSelectedConversationWaId(null);
       setMessages([]);
       setMessagesConversationKey(null);
+      pendingUnreadScrollTargetRef.current = null;
+      pendingReadAfterHydrationRef.current = null;
+      setUnreadSeparatorIndex(null);
       return;
     }
     if (!selectedConversationKey) {
@@ -1222,21 +1249,26 @@ export default function AppInboxPage() {
       setSelectedConversationWaId(null);
       setMessages([]);
       setMessagesConversationKey(null);
+      pendingUnreadScrollTargetRef.current = null;
+      pendingReadAfterHydrationRef.current = null;
+      setUnreadSeparatorIndex(null);
       return;
     }
 
     if (document.visibilityState !== "visible") return;
+    const waitingForUnreadAnchor =
+      pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const activeConversation = sortedItems.find(
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
-    if (activeConversation) {
+    if (activeConversation && !loadingMessages && !waitingForUnreadAnchor) {
       markConversationAsRead(
         getConversationIdentity(activeConversation),
         getConversationActivityAt(activeConversation),
         activeConversation.waId
       );
     }
-  }, [buildConversationNotificationRequest, markConversationAsRead, selectedConversationKey]);
+  }, [buildConversationNotificationRequest, loadingMessages, markConversationAsRead, selectedConversationKey]);
 
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,
@@ -1248,6 +1280,7 @@ export default function AppInboxPage() {
       mode === "append" && selectedConversationWaId === waId && messages.length > 0
         ? messages[messages.length - 1]?.createdAt ?? null
         : null;
+    const shouldStickToBottom = mode === "append" && isTimelineNearBottom();
     const response = await fetchAppConversation(activeSession, waId, {
       order: "asc",
       limit: mode === "append" ? 80 : 300,
@@ -1255,6 +1288,13 @@ export default function AppInboxPage() {
     });
     if (requestSeq !== detailRequestSeqRef.current) return;
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
+    if (
+      selectedConversationKey &&
+      responseConversationKey !== selectedConversationKey &&
+      response.waId !== selectedConversationWaId
+    ) {
+      return;
+    }
     if (mode === "append") {
       if (
         latestKnownAt &&
@@ -1286,6 +1326,9 @@ export default function AppInboxPage() {
       timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
+    if (shouldStickToBottom) {
+      shouldScrollToBottomRef.current = true;
+    }
     setMessagesConversationKey(responseConversationKey);
     setConversations((prev) =>
       dedupeConversationsByIdentity(
@@ -1303,7 +1346,7 @@ export default function AppInboxPage() {
     if (document.visibilityState === "visible") {
       markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
     }
-  }, [markConversationAsRead, messages, selectedConversationWaId]);
+  }, [isTimelineNearBottom, markConversationAsRead, messages, selectedConversationKey, selectedConversationWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -1349,14 +1392,15 @@ export default function AppInboxPage() {
   }, [handleUnauthorized, refreshConversationList, session]);
 
   useEffect(() => {
-    if (!session || !selectedConversationWaId) return;
+    if (!session || !selectedConversationWaId) {
+      setLoadingMessages(false);
+      return;
+    }
     let cancelled = false;
     const requestSeq = ++detailRequestSeqRef.current;
-    const shouldLoadUnreadWindow =
+    const shouldRefreshUnreadWindow =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
-    const cachedMessages = shouldLoadUnreadWindow
-      ? undefined
-      : timelineCacheRef.current.get(selectedConversationWaId);
+    const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
     setLoadingMessages(true);
     setError(null);
     setMessages(cachedMessages ?? []);
@@ -1364,12 +1408,19 @@ export default function AppInboxPage() {
 
     fetchAppConversation(session, selectedConversationWaId, {
       order: "asc",
-      limit: cachedMessages?.length ? 80 : 300,
-      after: cachedMessages?.length ? cachedMessages[cachedMessages.length - 1]?.createdAt ?? null : null,
+      limit: shouldRefreshUnreadWindow || !cachedMessages?.length ? 300 : 80,
+      after:
+        shouldRefreshUnreadWindow || !cachedMessages?.length
+          ? null
+          : cachedMessages[cachedMessages.length - 1]?.createdAt ?? null,
     })
       .then((response) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+        if (responseConversationKey !== selectedConversationKey && response.waId !== selectedConversationWaId) {
+          return;
+        }
+        const visibleConversationKey = selectedConversationKey ?? responseConversationKey;
         rememberInboundMessages(
           responseConversationKey,
           response.items,
@@ -1382,7 +1433,7 @@ export default function AppInboxPage() {
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
-        setMessagesConversationKey(responseConversationKey);
+        setMessagesConversationKey(visibleConversationKey);
         setConversations((prev) =>
           dedupeConversationsByIdentity(
             prev.map((item) =>
@@ -1392,17 +1443,6 @@ export default function AppInboxPage() {
             )
           )
         );
-        const latestActivityAt =
-          response.items.length > 0
-            ? response.items[response.items.length - 1]?.createdAt
-            : cachedMessages?.[cachedMessages.length - 1]?.createdAt ?? null;
-        if (latestActivityAt) {
-          markConversationAsRead(
-            responseConversationKey,
-            latestActivityAt,
-            response.waId ?? selectedConversationWaId
-          );
-        }
       })
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
@@ -1419,20 +1459,17 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, markConversationAsRead, selectedConversationKey, selectedConversationWaId, session]);
+  }, [handleUnauthorized, selectedConversationKey, selectedConversationWaId, session]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
     if (selectedChanged) {
       lastSelectedConversationKeyRef.current = selectedConversationKey;
       lastMessageSignatureRef.current = null;
+      setUnreadSeparatorIndex(null);
     }
 
-    const latestSignature = getLatestMessageSignature(messages);
-    if (!selectedChanged && latestSignature && latestSignature !== lastMessageSignatureRef.current) {
-      shouldScrollToBottomRef.current = true;
-    }
-    lastMessageSignatureRef.current = latestSignature;
+    lastMessageSignatureRef.current = getLatestMessageSignature(messages);
 
     if (!selectedConversationKey) return;
     if (messagesConversationKey !== selectedConversationKey) return;
@@ -1441,17 +1478,22 @@ export default function AppInboxPage() {
       if (unreadTarget?.conversationKey === selectedConversationKey) {
         const unreadIndex = findFirstUnreadMessageIndex(messages, unreadTarget.lastReadAt);
         if (unreadIndex >= 0 && scrollTimelineToMessageIndex(unreadIndex)) {
+          setUnreadSeparatorIndex(unreadIndex);
           pendingUnreadScrollTargetRef.current = null;
           shouldScrollToBottomRef.current = false;
+          completeHydrationRead(selectedConversationKey);
           return;
         }
         if (loadingMessages) return;
         pendingUnreadScrollTargetRef.current = null;
+        setUnreadSeparatorIndex(null);
+        shouldScrollToBottomRef.current = true;
       }
 
       if (shouldScrollToBottomRef.current) {
         scrollTimelineToBottom();
         shouldScrollToBottomRef.current = false;
+        completeHydrationRead(selectedConversationKey);
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -1459,6 +1501,7 @@ export default function AppInboxPage() {
     loadingMessages,
     messages,
     messagesConversationKey,
+    completeHydrationRead,
     scrollTimelineToBottom,
     scrollTimelineToMessageIndex,
     selectedConversationKey,
@@ -1486,7 +1529,11 @@ export default function AppInboxPage() {
       polling = true;
       try {
         await refreshConversationList(session);
-        if (selectedConversationWaId) {
+        if (
+          selectedConversationWaId &&
+          !loadingMessages &&
+          messagesConversationKey === selectedConversationKey
+        ) {
           await refreshSelectedTimeline(session, selectedConversationWaId, "append");
         }
       } catch (err) {
@@ -1501,8 +1548,11 @@ export default function AppInboxPage() {
     return () => window.clearInterval(interval);
   }, [
     handleUnauthorized,
+    loadingMessages,
+    messagesConversationKey,
     refreshConversationList,
     refreshSelectedTimeline,
+    selectedConversationKey,
     selectedConversationWaId,
     session,
   ]);
@@ -1580,6 +1630,15 @@ export default function AppInboxPage() {
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
     [selectedConversation, session]
   );
+  const isHydratingSelectedTimeline =
+    Boolean(selectedConversationWaId) &&
+    loadingMessages &&
+    messagesConversationKey !== selectedConversationKey;
+  const isRefreshingSelectedTimeline =
+    Boolean(selectedConversationWaId) &&
+    loadingMessages &&
+    messages.length > 0 &&
+    messagesConversationKey === selectedConversationKey;
 
   const isSelectedConversationLocked = useMemo(
     () => (session ? isConversationAssignedToAnotherUser(selectedConversation, session.user.id) : false),
@@ -2327,19 +2386,25 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={() => {
                     const shouldOpenAtUnread = isConversationUnread(item, readState);
+                    const activityAt = getConversationActivityAt(item);
                     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
                       ? {
                           conversationKey: conversationIdentity,
                           lastReadAt: readState.lastReadAtByConversationKey[conversationIdentity] ?? null,
                         }
                       : null;
+                    pendingReadAfterHydrationRef.current = {
+                      conversationKey: conversationIdentity,
+                      activityAt,
+                      waId: item.waId,
+                    };
                     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
+                    setUnreadSeparatorIndex(null);
                     setActiveConversationIdentity(conversationIdentity);
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
                     setShowMoreActions(false);
                     detailRequestSeqRef.current += 1;
-                    markConversationAsRead(conversationIdentity, getConversationActivityAt(item), item.waId);
                   }}
                   className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition ${
                     isActive
@@ -2437,6 +2502,9 @@ export default function AppInboxPage() {
                   setActiveConversationIdentity(null);
                   setMessages([]);
                   setMessagesConversationKey(null);
+                  pendingUnreadScrollTargetRef.current = null;
+                  pendingReadAfterHydrationRef.current = null;
+                  setUnreadSeparatorIndex(null);
                 }}
                 className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2554,8 +2622,11 @@ export default function AppInboxPage() {
             {!selectedConversationWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
-            {selectedConversationWaId && loadingMessages ? (
+            {selectedConversationWaId && isHydratingSelectedTimeline ? (
               <p className="text-sm text-slate-700/80">Carregando mensagens...</p>
+            ) : null}
+            {selectedConversationWaId && isRefreshingSelectedTimeline ? (
+              <p className="text-sm text-slate-700/80">Atualizando mensagens...</p>
             ) : null}
             {selectedConversationWaId && !loadingMessages && messages.length === 0 ? (
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
@@ -2565,38 +2636,48 @@ export default function AppInboxPage() {
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
                 return (
-                  <div
-                    key={getMessageIdentity(item)}
-                    data-message-index={index}
-                    className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
-                  >
-                    <article
-                      className={`wa-bubble ${
-                        item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
-                      } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
-                    >
-                      {item.bodyText ? (
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.bodyText}</p>
-                      ) : item.media ? null : (
-                        <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
-                      )}
-                      {item.media ? (
-                        <MediaBubble
-                          session={session}
-                          waId={selectedConversationWaId}
-                          item={item}
-                          autoLoad={shouldAutoLoadMedia}
-                        />
-                      ) : null}
-                      {item.templateName ? (
-                        <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
-                      ) : null}
-                      <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
-                        <span>{formatDateTime(item.createdAt)}</span>
-                        {statusTicks}
+                  <Fragment key={getMessageIdentity(item)}>
+                    {unreadSeparatorIndex === index ? (
+                      <div className="flex items-center gap-3 py-1" aria-label="Mensagens nao lidas">
+                        <span className="h-px flex-1 bg-emerald-500/35" />
+                        <span className="rounded-full border border-emerald-500/35 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+                          Mensagens nao lidas
+                        </span>
+                        <span className="h-px flex-1 bg-emerald-500/35" />
                       </div>
-                    </article>
-                  </div>
+                    ) : null}
+                    <div
+                      data-message-index={index}
+                      className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
+                    >
+                      <article
+                        className={`wa-bubble ${
+                          item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
+                        } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
+                      >
+                        {item.bodyText ? (
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.bodyText}</p>
+                        ) : item.media ? null : (
+                          <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
+                        )}
+                        {item.media ? (
+                          <MediaBubble
+                            session={session}
+                            waId={selectedConversationWaId}
+                            item={item}
+                            autoLoad={shouldAutoLoadMedia}
+                          />
+                        ) : null}
+                        {item.templateName ? (
+                          <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
+                        ) : null}
+                        <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
+                          <span>{formatDateTime(item.createdAt)}</span>
+                          {statusTicks}
+                        </div>
+                      </article>
+                    </div>
+                  </Fragment>
                 );
               })}
             </div>
@@ -2666,11 +2747,11 @@ export default function AppInboxPage() {
                   const nextFile = event.target.files?.[0] ?? null;
                   setSelectedMediaFile(nextFile);
                 }}
-                disabled={!selectedConversationWaId || !canReply}
+                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
               />
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !canReply}
+                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
                 onClick={() => mediaInputRef.current?.click()}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2678,7 +2759,7 @@ export default function AppInboxPage() {
               </button>
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !canReply}
+                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
                 onClick={() => setShowEmojiPicker((current) => !current)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2689,6 +2770,7 @@ export default function AppInboxPage() {
                 disabled={
                   !selectedConversationWaId ||
                   !canReply ||
+                  isHydratingSelectedTimeline ||
                   sendingMessage ||
                   Boolean(selectedMediaFile) ||
                   audioRecordingState === "stopping"
@@ -2716,10 +2798,12 @@ export default function AppInboxPage() {
                   onKeyDown={handleComposerKeyDown}
                   placeholder={
                     canReply
-                      ? "Digite uma mensagem"
+                      ? isHydratingSelectedTimeline
+                        ? "Carregando mensagens..."
+                        : "Digite uma mensagem"
                       : "Assuma a conversa para responder"
                   }
-                  disabled={!selectedConversationWaId || !canReply}
+                  disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
                 />
               </label>
               <button
@@ -2728,6 +2812,7 @@ export default function AppInboxPage() {
                   !selectedConversationWaId ||
                   (!messageDraft.trim() && !selectedMediaFile) ||
                   !canReply ||
+                  isHydratingSelectedTimeline ||
                   sendingMessage
                 }
                 onClick={handlePrimarySend}
