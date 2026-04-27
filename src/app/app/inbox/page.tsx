@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { AppRealtimeEvent, createAppRealtimeClient } from "@/lib/appRealtime";
 import {
   AppInboxReadState,
   AppSession,
@@ -1061,6 +1062,77 @@ export default function AppInboxPage() {
       }).catch(() => undefined);
     }
   }, [session]);
+
+  const applyRealtimeMessageCreated = useCallback((event: AppRealtimeEvent) => {
+    if (!session || event.type !== "message.created" || event.clientId !== session.user.clientId) return;
+    const conversationKey = event.waIdCanonical ?? event.waId;
+    const message = event.message;
+
+    if (message.direction === "INBOUND") {
+      const newInboundCount = countUnseenInboundMessages(
+        conversationKey,
+        [message],
+        notifiedInboundMessageKeysRef.current
+      );
+      enqueueInboundNotifications(newInboundCount);
+    }
+
+    setConversations((prev) =>
+      dedupeConversationsByIdentity(
+        prev.map((item) => {
+          const itemKey = getConversationIdentity(item);
+          if (
+            itemKey !== conversationKey &&
+            item.waId !== event.waId &&
+            item.waIdCanonical !== event.waIdCanonical
+          ) {
+            return item;
+          }
+          return {
+            ...item,
+            waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+            lastMessage: {
+              direction: message.direction,
+              type: message.type,
+              status: message.status,
+              bodyText: message.bodyText,
+              templateName: message.templateName,
+              createdAt: message.createdAt,
+            },
+            lastInboundAt: message.direction === "INBOUND" ? message.createdAt : item.lastInboundAt,
+          };
+        })
+      )
+    );
+
+    if (selectedConversationKey === conversationKey || selectedConversationWaId === event.waId) {
+      setMessages((prev) => {
+        const nextMessages = mergeMessagesByIdentity(prev, [message]);
+        timelineCacheRef.current.set(selectedConversationWaId ?? event.waId, nextMessages);
+        return nextMessages;
+      });
+      return;
+    }
+
+    markConversationAsUnread(conversationKey, event.waId);
+  }, [
+    enqueueInboundNotifications,
+    markConversationAsUnread,
+    selectedConversationKey,
+    selectedConversationWaId,
+    session,
+  ]);
+
+  useEffect(() => {
+    if (!session?.token) return;
+    const realtime = createAppRealtimeClient({
+      baseUrl: session.baseUrl,
+      token: session.token,
+      onMessage: applyRealtimeMessageCreated,
+    });
+    realtime.connect();
+    return () => realtime.close();
+  }, [applyRealtimeMessageCreated, session]);
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });

@@ -1,6 +1,7 @@
 import "./bootstrap-env.js";
 import "./processHandlers.js";
 import { createServer } from "./http/server.js";
+import { attachRealtimeWebSocket } from "./realtime/websocket.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
 import { getTenants } from "./config/tenantConfig.js";
@@ -150,6 +151,7 @@ async function bootstrap() {
   }
 
   const server = createServer();
+  attachRealtimeWebSocket(server);
   server.listen(env.PORT, () => {
     logger.info({ event: "server.started", port: env.PORT });
   });

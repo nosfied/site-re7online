@@ -68,6 +68,8 @@ import {
 import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
+import { buildInboxMessageMedia } from "../http/inboxMedia.js";
+import { publishRealtimeEvent } from "../realtime/hub.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -1335,6 +1337,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         occurredAt: params.occurredAt ?? new Date(),
         wasInserted: inserted,
       });
+      if (inserted) {
+        const createdAt = (params.occurredAt ?? new Date()).toISOString();
+        publishRealtimeEvent({
+          type: "message.created",
+          clientId: tenantClientId,
+          waId: params.waId,
+          waIdCanonical: canonicalizeBrazilWaId(params.waId),
+          message: {
+            direction: "INBOUND",
+            type: params.type,
+            status: "RECEIVED",
+            intent: null,
+            bodyText: params.bodyText ? params.bodyText.slice(0, 300) : null,
+            media: buildInboxMessageMedia({
+              type: params.type,
+              rawPayload: params.rawPayload,
+              downloadUrl: buildRealtimeMessageDownloadPath(params.waId, params.messageId),
+            }),
+            templateName: null,
+            templateLang: null,
+            requestId: meta?.requestId ?? null,
+            messageId: params.messageId,
+            metaMessageId: null,
+            errorBody: null,
+            createdAt,
+          },
+        });
+      }
     } catch (error) {
       logger.error({
         event: "db.persist.error",
@@ -3530,6 +3560,10 @@ function mapMessageType(type: string): MessageType {
   if (type === "document") return MessageType.DOCUMENT;
   if (type === "template") return MessageType.TEMPLATE;
   return MessageType.UNKNOWN;
+}
+
+function buildRealtimeMessageDownloadPath(waId: string, messageId: string) {
+  return `/app/conversation/${encodeURIComponent(waId)}/messages/${encodeURIComponent(messageId)}/media`;
 }
 
 function parseDebugCloseWindowCommand(text: string | null): { waId: string } | null {
