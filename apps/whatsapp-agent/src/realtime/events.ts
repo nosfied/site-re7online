@@ -20,5 +20,7 @@ export type InboxRealtimeEvent =
       clientId: string;
       waId: string;
       waIdCanonical?: string | null;
+      mode?: "BOT" | "HUMAN" | null;
+      handoffStatus?: "none" | "pending" | "active" | null;
       message: InboxRealtimeMessage;
     };

@@ -1339,11 +1339,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       if (inserted) {
         const createdAt = (params.occurredAt ?? new Date()).toISOString();
+        const realtimeConversation = await storage.getConversation(params.waId, tenantClientKey);
+        const realtimeHandoffStatus =
+          realtimeConversation?.handoff?.status === "pending" ||
+          realtimeConversation?.handoff?.status === "active"
+            ? realtimeConversation.handoff.status
+            : "none";
         publishRealtimeEvent({
           type: "message.created",
           clientId: tenantClientId,
           waId: params.waId,
           waIdCanonical: canonicalizeBrazilWaId(params.waId),
+          mode: realtimeConversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
+          handoffStatus: realtimeHandoffStatus,
           message: {
             direction: "INBOUND",
             type: params.type,
