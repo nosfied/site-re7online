@@ -35,12 +35,14 @@ function AccessButton() {
     process.env.NODE_ENV === "development" ? "/app/login" : "https://admin.re7online.com/app/login";
 
   return (
-    <Link
+    <a
       href={href}
+      target="_blank"
+      rel="noreferrer"
       className="inline-flex items-center justify-center rounded-2xl bg-[#20b15a] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
     >
       Acessar sistema
-    </Link>
+    </a>
   );
 }
 

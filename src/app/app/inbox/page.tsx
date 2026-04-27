@@ -535,10 +535,17 @@ function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMes
   return next;
 }
 
+function shouldPlayInboundNotificationForConversation(
+  item: Pick<InboxConversationItem, "mode" | "handoffStatus">
+) {
+  return item.mode === "HUMAN" || item.handoffStatus === "active" || item.handoffStatus === "pending";
+}
+
 function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
   let latestItem: InboxConversationItem | null = null;
   let latestTs = Number.NEGATIVE_INFINITY;
   for (const item of items) {
+    if (!shouldPlayInboundNotificationForConversation(item)) continue;
     if (!item.lastInboundAt) continue;
     const ts = Date.parse(item.lastInboundAt);
     if (!Number.isFinite(ts) || ts <= latestTs) continue;
@@ -552,6 +559,7 @@ function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
 function getLatestInboundConversationTimestamp(items: InboxConversationItem[]) {
   let latestTs = Number.NEGATIVE_INFINITY;
   for (const item of items) {
+    if (!shouldPlayInboundNotificationForConversation(item)) continue;
     if (!item.lastInboundAt) continue;
     const ts = Date.parse(item.lastInboundAt);
     if (!Number.isFinite(ts) || ts <= latestTs) continue;
