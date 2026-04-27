@@ -574,6 +574,16 @@ function shouldPlayInboundNotificationForConversation(
   return item.mode === "HUMAN" || item.handoffStatus === "active" || item.handoffStatus === "pending";
 }
 
+function getHumanFlowConversationKeys(items: InboxConversationItem[]) {
+  const keys = new Set<string>();
+  for (const item of items) {
+    if (shouldPlayInboundNotificationForConversation(item)) {
+      keys.add(getConversationIdentity(item));
+    }
+  }
+  return keys;
+}
+
 function getLatestInboundConversationSignature(items: InboxConversationItem[]) {
   let latestItem: InboxConversationItem | null = null;
   let latestTs = Number.NEGATIVE_INFINITY;
@@ -799,12 +809,14 @@ export default function AppInboxPage() {
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
   const lastInboundConversationTimestampRef = useRef<number | null>(null);
+  const humanFlowConversationKeysRef = useRef(new Set<string>());
   const hasPrimedNotificationRef = useRef(false);
   const hasInitializedConversationSoundRef = useRef(false);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const notificationQueueRef = useRef(0);
   const notificationTimerRef = useRef<number | null>(null);
   const notifiedInboundMessageKeysRef = useRef(new Set<string>());
+  const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
@@ -1058,8 +1070,23 @@ export default function AppInboxPage() {
     const sortedItems = dedupeConversationsByIdentity(response.items);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
+    const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
     if (hasInitializedConversationSoundRef.current) {
+      let handoffTransitionCount = 0;
+      for (const item of sortedItems) {
+        const conversationKey = getConversationIdentity(item);
+        if (
+          humanFlowConversationKeys.has(conversationKey) &&
+          !humanFlowConversationKeysRef.current.has(conversationKey) &&
+          item.lastInboundAt
+        ) {
+          handoffTransitionCount += 1;
+        }
+      }
+      enqueueInboundNotifications(handoffTransitionCount);
+
       if (
+        handoffTransitionCount === 0 &&
         latestInboundSignature &&
         latestInboundSignature !== lastInboundConversationSignatureRef.current &&
         latestInboundTimestamp !== null &&
@@ -1084,6 +1111,7 @@ export default function AppInboxPage() {
     }
     lastInboundConversationSignatureRef.current = latestInboundSignature;
     lastInboundConversationTimestampRef.current = latestInboundTimestamp;
+    humanFlowConversationKeysRef.current = humanFlowConversationKeys;
     setConversations(sortedItems);
     if (response.items.length === 0) {
       setSelectedConversationKey(null);
@@ -1135,18 +1163,31 @@ export default function AppInboxPage() {
     if (requestSeq !== detailRequestSeqRef.current) return;
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
     if (mode === "append") {
-      const newInboundCount = countUnseenInboundMessages(
-        responseConversationKey,
-        response.items,
-        notifiedInboundMessageKeysRef.current
-      );
-      enqueueInboundNotifications(newInboundCount);
+      if (
+        latestKnownAt &&
+        primedTimelineNotificationKeysRef.current.has(responseConversationKey)
+      ) {
+        const newInboundCount = countUnseenInboundMessages(
+          responseConversationKey,
+          response.items,
+          notifiedInboundMessageKeysRef.current
+        );
+        enqueueInboundNotifications(newInboundCount);
+      } else {
+        rememberInboundMessages(
+          responseConversationKey,
+          response.items,
+          notifiedInboundMessageKeysRef.current
+        );
+      }
+      primedTimelineNotificationKeysRef.current.add(responseConversationKey);
     } else {
       rememberInboundMessages(
         responseConversationKey,
         response.items,
         notifiedInboundMessageKeysRef.current
       );
+      primedTimelineNotificationKeysRef.current.add(responseConversationKey);
     }
     setMessages((prev) => {
       const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items;
@@ -1236,6 +1277,7 @@ export default function AppInboxPage() {
           response.items,
           notifiedInboundMessageKeysRef.current
         );
+        primedTimelineNotificationKeysRef.current.add(responseConversationKey);
         setMessages((prev) => {
           const nextMessages =
             cachedMessages?.length ? mergeMessagesByIdentity(prev, response.items) : response.items;
