@@ -1,8 +1,56 @@
-# WhatsApp Agent (scaffold)
+# WhatsApp Agent / Converta
 
 ## Objetivo
-Serviço base para receber webhooks, rotear mensagens, acoplar IA/KB e armazenar logs.
-Nesta fase, não há integração real com WhatsApp.
+Backend operacional do Converta, o SaaS de atendimento digital via WhatsApp oficial
+da Re7Online/Reset Online.
+
+O serviço recebe webhooks da Meta, resolve o tenant pelo `phone_number_id`, persiste
+conversas no Postgres, executa fluxos de chatbot/IA, controla handoff humano, envia
+mensagens e templates pela WhatsApp Cloud API, executa campanhas e expõe APIs para:
+
+- `/admin`: console interno da Re7/Reset, superadmin e operação de plataforma.
+- `/app`: portal do cliente, com autenticação por usuário real e escopo por tenant.
+
+Não é mais um scaffold. A integração real com WhatsApp Cloud API, Postgres/Prisma,
+multi-tenant, campanhas, templates, inbox, usuários, departamentos, relatórios, SLA,
+mídia e chatbot configurável já existe no código atual.
+
+## Estado atual da arquitetura
+
+- Runtime principal: Node.js + TypeScript.
+- Banco: PostgreSQL via Prisma.
+- Produção: VPS em `/opt/re7online/site-re7online/apps/whatsapp-agent`, processo PM2
+  `re7-whatsapp-agent`, porta `3001`.
+- Desenvolvimento local de referência: backend em `http://127.0.0.1:3002`.
+- Frontend Next.js na raiz do monorepo, com `/admin` e `/app`.
+- Integração WhatsApp: Meta Cloud API oficial, sem WhatsApp Web, scraping ou BSP
+  intermediário.
+- Tenant resolution: `WaPhoneNumber.phoneNumberId` -> `Client`.
+- Autenticação do cliente: `/auth/login` emite token HMAC/JWT-like para uso no `/app`.
+- Autenticação interna/admin: `X-Admin-Token`.
+
+## Superfícies
+
+`/admin` permanece para operação interna da Re7:
+
+- tenants/clientes
+- onboarding Meta e Embedded Signup
+- bootstrap e suporte interno
+- observabilidade cross-tenant
+- compatibilidade temporária com ferramentas antigas
+
+`/app` é a superfície do cliente:
+
+- inbox e atendimento humano
+- campanhas
+- templates
+- usuários
+- departamentos/setores
+- relatórios
+- chatbot
+
+Novas funcionalidades entregues ao cliente devem ser implementadas no `/app`, usando
+`requireClientAuth`, escopo por `clientId` e auditoria por `userId` real.
 
 ## Como rodar local
 ```bash
@@ -60,6 +108,8 @@ npm run db:deploy
 
 ## Endpoints admin
 Autenticação via `ADMIN_TOKEN` (header `X-Admin-Token: <token>`).
+Rotas `/admin` são para console interno e compatibilidade operacional. Não use
+`/admin` como destino de novas funcionalidades de cliente.
 Para atualizar o utilitário de produção:
 ```bash
 sudo install -m 0755 apps/whatsapp-agent/scripts/outbound-policyB-prod-check-wrapper.sh /usr/local/bin/outbound-policyB-prod-check
@@ -123,6 +173,14 @@ curl -s -X POST "http://localhost:3001/admin/conversations/558494786787/reset?cl
 ## Endpoints atuais
 - `GET /` → "whatsapp-agent running"
 - `GET /health` → `{ ok: true }`
+- `POST /auth/login` → login do usuário do cliente
+- `GET /app/conversations` → inbox tenant-scoped
+- `GET/POST/PATCH /app/users` → usuários do tenant
+- `GET/POST/PATCH /app/departments` → departamentos do tenant
+- `GET /app/reports/conversations` → relatórios tenant/departamento
+- `GET/POST /app/campaigns` → campanhas tenant-scoped
+- `GET/POST /app/templates*` → catálogo e solicitações de templates
+- `GET/PUT/POST/PATCH /app/chatbot/*` → chatbot configurável do tenant
 
 ## Teste local do webhook (assinatura)
 O endpoint `/webhook` exige assinatura `X-Hub-Signature-256` mesmo em dev. Para testar:

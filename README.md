@@ -1,6 +1,22 @@
-## Re7Online — Site institucional
+## Re7Online / Reset Online — Monorepo
 
-Landing page institucional da Re7Online, construída com Next.js (App Router), TypeScript e Tailwind.
+Monorepo da Re7Online/Reset Online.
+
+O repositório contém:
+
+- site institucional da Re7Online, construído com Next.js (App Router), TypeScript e Tailwind;
+- frontend do Converta em `/app`;
+- console interno em `/admin`;
+- backend do WhatsApp Agent/Converta em `apps/whatsapp-agent`.
+
+O **Converta** é o SaaS de atendimento digital via WhatsApp oficial da Meta, com
+inbox, campanhas, templates, chatbot, atendimento humano, usuários, departamentos,
+relatórios, SLA, multi-tenant e integração direta com WhatsApp Cloud API.
+
+Superfícies:
+
+- `/admin`: console interno da Re7/Reset, onboarding, tenants, Embedded Signup e observabilidade.
+- `/app`: produto do cliente, com autenticação por usuário real e escopo por tenant.
 
 ## Pré-requisitos
 
@@ -24,6 +40,13 @@ Abra http://localhost:3000
 ## Build
 
 ```bash
+npm run build
+```
+
+Backend do Converta:
+
+```bash
+cd apps/whatsapp-agent
 npm run build
 ```
 
@@ -77,3 +100,10 @@ npm run lint
 npm run build
 npm run start
 ```
+
+## Documentação
+
+- Visão do produto: `docs/whatsapp-agent/00-visao-produto.md`
+- Arquitetura atual: `docs/whatsapp-agent/02-arquitetura-mvp-meta-cloud.md`
+- Separação `/admin` vs `/app`: `docs/ADR-004-separacao-admin-app.md`
+- Runbook operacional: `docs/RUNBOOK_WHATSAPP_AGENT.md`
