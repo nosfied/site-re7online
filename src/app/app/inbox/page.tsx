@@ -327,6 +327,56 @@ const EMPTY_READ_STATE: InboxReadState = {
   manuallyUnreadByConversationKey: {},
 };
 
+function getLatestReadAt(current?: string | null, incoming?: string | null) {
+  if (!current) return incoming ?? null;
+  if (!incoming) return current;
+  const currentTimestamp = Date.parse(current);
+  const incomingTimestamp = Date.parse(incoming);
+  if (!Number.isFinite(currentTimestamp)) return incoming;
+  if (!Number.isFinite(incomingTimestamp)) return current;
+  return incomingTimestamp > currentTimestamp ? incoming : current;
+}
+
+function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxReadState): InboxReadState {
+  const lastReadAtByConversationKey = { ...incoming.lastReadAtByConversationKey };
+  for (const [conversationKey, currentReadAt] of Object.entries(current.lastReadAtByConversationKey)) {
+    const latestReadAt = getLatestReadAt(
+      currentReadAt,
+      incoming.lastReadAtByConversationKey[conversationKey]
+    );
+    if (latestReadAt) {
+      lastReadAtByConversationKey[conversationKey] = latestReadAt;
+    }
+  }
+
+  const manuallyUnreadByConversationKey = { ...incoming.manuallyUnreadByConversationKey };
+  for (const [conversationKey, isUnread] of Object.entries(current.manuallyUnreadByConversationKey)) {
+    if (isUnread) {
+      manuallyUnreadByConversationKey[conversationKey] = true;
+    }
+  }
+
+  for (const conversationKey of Object.keys(manuallyUnreadByConversationKey)) {
+    const currentReadAt = current.lastReadAtByConversationKey[conversationKey];
+    const incomingReadAt = incoming.lastReadAtByConversationKey[conversationKey];
+    const latestReadAt = lastReadAtByConversationKey[conversationKey];
+    if (
+      !current.manuallyUnreadByConversationKey[conversationKey] &&
+      currentReadAt &&
+      latestReadAt &&
+      latestReadAt === currentReadAt &&
+      currentReadAt !== incomingReadAt
+    ) {
+      delete manuallyUnreadByConversationKey[conversationKey];
+    }
+  }
+
+  return {
+    lastReadAtByConversationKey,
+    manuallyUnreadByConversationKey,
+  };
+}
+
 const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
@@ -350,6 +400,11 @@ type PendingOutgoingMessage = {
   waId: string;
   conversationKey: string;
   text: string;
+};
+
+type PendingUnreadScrollTarget = {
+  conversationKey: string;
+  lastReadAt: string | null;
 };
 
 type AudioRecordingState = "idle" | "recording" | "stopping";
@@ -532,6 +587,17 @@ function getMessageIdentity(item: InboxMessageItem) {
 function getInboundNotificationIdentity(waId: string | null, item: InboxMessageItem) {
   if (item.direction !== "INBOUND") return null;
   return `${waId ?? "unknown"}:${item.messageId ?? item.metaMessageId ?? item.createdAt}:${item.type}`;
+}
+
+function findFirstUnreadMessageIndex(items: InboxMessageItem[], lastReadAt: string | null) {
+  const lastReadTimestamp = Date.parse(lastReadAt ?? "");
+  const hasReadTimestamp = Number.isFinite(lastReadTimestamp);
+  return items.findIndex((item) => {
+    if (item.direction !== "INBOUND") return false;
+    if (!hasReadTimestamp) return true;
+    const createdAt = Date.parse(item.createdAt);
+    return Number.isFinite(createdAt) && createdAt > lastReadTimestamp;
+  });
 }
 
 function countUnseenInboundMessages(
@@ -811,6 +877,7 @@ export default function AppInboxPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const shouldScrollToBottomRef = useRef(false);
+  const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -939,6 +1006,16 @@ export default function AppInboxPage() {
     if (!timelineRef.current) return;
     timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
     setShowJumpToLatest(false);
+  }, []);
+
+  const scrollTimelineToMessageIndex = useCallback((index: number) => {
+    const node = timelineRef.current;
+    if (!node) return false;
+    const target = node.querySelector<HTMLElement>(`[data-message-index="${index}"]`);
+    if (!target) return false;
+    node.scrollTop = Math.max(0, target.offsetTop - node.offsetTop - 18);
+    setShowJumpToLatest(true);
+    return true;
   }, []);
 
   const focusComposer = useCallback(() => {
@@ -1076,7 +1153,7 @@ export default function AppInboxPage() {
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
     const response = await fetchAppConversations(activeSession, { limit: 100 });
     if (response.readState) {
-      setReadState(response.readState);
+      setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
     }
     const sortedItems = dedupeConversationsByIdentity(response.items);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
@@ -1340,7 +1417,6 @@ export default function AppInboxPage() {
     if (selectedChanged) {
       lastSelectedConversationKeyRef.current = selectedConversationKey;
       lastMessageSignatureRef.current = null;
-      shouldScrollToBottomRef.current = Boolean(selectedConversationKey);
     }
 
     const latestSignature = getLatestMessageSignature(messages);
@@ -1349,13 +1425,26 @@ export default function AppInboxPage() {
     }
     lastMessageSignatureRef.current = latestSignature;
 
-    if (!selectedConversationKey || !shouldScrollToBottomRef.current) return;
+    if (!selectedConversationKey) return;
     const frame = window.requestAnimationFrame(() => {
-      scrollTimelineToBottom();
-      shouldScrollToBottomRef.current = false;
+      const unreadTarget = pendingUnreadScrollTargetRef.current;
+      if (unreadTarget?.conversationKey === selectedConversationKey) {
+        const unreadIndex = findFirstUnreadMessageIndex(messages, unreadTarget.lastReadAt);
+        if (unreadIndex >= 0 && scrollTimelineToMessageIndex(unreadIndex)) {
+          pendingUnreadScrollTargetRef.current = null;
+          shouldScrollToBottomRef.current = false;
+          return;
+        }
+        pendingUnreadScrollTargetRef.current = null;
+      }
+
+      if (shouldScrollToBottomRef.current) {
+        scrollTimelineToBottom();
+        shouldScrollToBottomRef.current = false;
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, scrollTimelineToBottom, selectedConversationKey]);
+  }, [messages, scrollTimelineToBottom, scrollTimelineToMessageIndex, selectedConversationKey]);
 
   useEffect(() => {
     const node = timelineRef.current;
@@ -2217,7 +2306,14 @@ export default function AppInboxPage() {
                   key={conversationIdentity}
                   type="button"
                   onClick={() => {
-                    shouldScrollToBottomRef.current = true;
+                    const shouldOpenAtUnread = isConversationUnread(item, readState);
+                    pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
+                      ? {
+                          conversationKey: conversationIdentity,
+                          lastReadAt: readState.lastReadAtByConversationKey[conversationIdentity] ?? null,
+                        }
+                      : null;
+                    shouldScrollToBottomRef.current = !shouldOpenAtUnread;
                     setActiveConversationIdentity(conversationIdentity);
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
@@ -2450,6 +2546,7 @@ export default function AppInboxPage() {
                 return (
                   <div
                     key={getMessageIdentity(item)}
+                    data-message-index={index}
                     className={`flex ${item.direction === "INBOUND" ? "justify-start" : "justify-end"}`}
                   >
                     <article
