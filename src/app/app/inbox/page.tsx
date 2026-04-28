@@ -886,6 +886,9 @@ export default function AppInboxPage() {
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
+  const pendingUnreadAnchorConversationIdentityRef = useRef<string | null>(null);
+  const pendingUnreadLastReadAtRef = useRef<string | null>(null);
+  const pendingUnreadAnchorMessageIdRef = useRef<string | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -897,6 +900,7 @@ export default function AppInboxPage() {
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
+  const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
 
   const handleUnauthorized = useCallback(() => {
@@ -1074,6 +1078,9 @@ export default function AppInboxPage() {
     const pendingRead = pendingReadAfterHydrationRef.current;
     if (!pendingRead || pendingRead.conversationKey !== conversationKey) return;
     pendingReadAfterHydrationRef.current = null;
+    pendingUnreadAnchorConversationIdentityRef.current = null;
+    pendingUnreadLastReadAtRef.current = null;
+    pendingUnreadAnchorMessageIdRef.current = null;
     markConversationAsRead(conversationKey, pendingRead.activityAt, pendingRead.waId);
   }, [markConversationAsRead]);
 
@@ -1105,9 +1112,9 @@ export default function AppInboxPage() {
       );
     }
 
-    setConversations((prev) =>
-      dedupeConversationsByIdentity(
-        prev.map((item) => {
+    let matchedConversation = false;
+    setConversations((prev) => {
+      const nextItems = prev.map((item) => {
           const itemKey = getConversationIdentity(item);
           if (
             itemKey !== conversationKey &&
@@ -1116,6 +1123,7 @@ export default function AppInboxPage() {
           ) {
             return item;
           }
+          matchedConversation = true;
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
@@ -1130,9 +1138,12 @@ export default function AppInboxPage() {
             },
             lastInboundAt: message.direction === "INBOUND" ? message.createdAt : item.lastInboundAt,
           };
-        })
-      )
-    );
+        });
+      if (!matchedConversation) {
+        void refreshConversationListRef.current?.(session);
+      }
+      return dedupeConversationsByIdentity(nextItems);
+    });
 
     if (selectedConversationKey === conversationKey || selectedConversationWaId === event.waId) {
       const shouldStickToBottom = isTimelineNearBottom();
@@ -1239,6 +1250,9 @@ export default function AppInboxPage() {
       setMessagesConversationKey(null);
       pendingUnreadScrollTargetRef.current = null;
       pendingReadAfterHydrationRef.current = null;
+      pendingUnreadAnchorConversationIdentityRef.current = null;
+      pendingUnreadLastReadAtRef.current = null;
+      pendingUnreadAnchorMessageIdRef.current = null;
       setUnreadSeparatorIndex(null);
       setUnreadAnchorMessageIdentity(null);
       return;
@@ -1256,6 +1270,9 @@ export default function AppInboxPage() {
       setMessagesConversationKey(null);
       pendingUnreadScrollTargetRef.current = null;
       pendingReadAfterHydrationRef.current = null;
+      pendingUnreadAnchorConversationIdentityRef.current = null;
+      pendingUnreadLastReadAtRef.current = null;
+      pendingUnreadAnchorMessageIdRef.current = null;
       setUnreadSeparatorIndex(null);
       setUnreadAnchorMessageIdentity(null);
       return;
@@ -1275,6 +1292,15 @@ export default function AppInboxPage() {
       );
     }
   }, [buildConversationNotificationRequest, loadingMessages, markConversationAsRead, selectedConversationKey]);
+
+  useEffect(() => {
+    refreshConversationListRef.current = refreshConversationList;
+    return () => {
+      if (refreshConversationListRef.current === refreshConversationList) {
+        refreshConversationListRef.current = null;
+      }
+    };
+  }, [refreshConversationList]);
 
   const refreshSelectedTimeline = useCallback(async (
     activeSession: AppSession,
@@ -1407,6 +1433,7 @@ export default function AppInboxPage() {
     const shouldRefreshUnreadWindow =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
+    const shouldStickToBottomAfterHydration = !shouldRefreshUnreadWindow && isTimelineNearBottom();
     setLoadingMessages(true);
     setError(null);
     setMessages(cachedMessages ?? []);
@@ -1439,6 +1466,9 @@ export default function AppInboxPage() {
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
+        if (shouldStickToBottomAfterHydration) {
+          shouldScrollToBottomRef.current = true;
+        }
         setMessagesConversationKey(visibleConversationKey);
         setConversations((prev) =>
           dedupeConversationsByIdentity(
@@ -1465,15 +1495,17 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, selectedConversationKey, selectedConversationWaId, session]);
+  }, [handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
     if (selectedChanged) {
       lastSelectedConversationKeyRef.current = selectedConversationKey;
       lastMessageSignatureRef.current = null;
-      setUnreadSeparatorIndex(null);
-      setUnreadAnchorMessageIdentity(null);
+      if (pendingUnreadAnchorConversationIdentityRef.current !== selectedConversationKey) {
+        setUnreadSeparatorIndex(null);
+        setUnreadAnchorMessageIdentity(null);
+      }
     }
 
     lastMessageSignatureRef.current = getLatestMessageSignature(messages);
@@ -1483,11 +1515,15 @@ export default function AppInboxPage() {
     const frame = window.requestAnimationFrame(() => {
       const unreadTarget = pendingUnreadScrollTargetRef.current;
       if (unreadTarget?.conversationKey === selectedConversationKey) {
-        const unreadIndex = findFirstUnreadMessageIndex(messages, unreadTarget.lastReadAt);
+        const lastReadAtBeforeOpen =
+          pendingUnreadLastReadAtRef.current ?? unreadTarget.lastReadAt;
+        const unreadIndex = findFirstUnreadMessageIndex(messages, lastReadAtBeforeOpen);
         const unreadMessage = unreadIndex >= 0 ? messages[unreadIndex] : null;
         if (unreadMessage) {
+          const unreadMessageIdentity = getMessageIdentity(unreadMessage);
+          pendingUnreadAnchorMessageIdRef.current = unreadMessageIdentity;
           setUnreadSeparatorIndex(unreadIndex);
-          setUnreadAnchorMessageIdentity(getMessageIdentity(unreadMessage));
+          setUnreadAnchorMessageIdentity(unreadMessageIdentity);
           pendingUnreadScrollTargetRef.current = null;
           shouldScrollToBottomRef.current = false;
           scrollTimelineToUnreadAnchor(() => completeHydrationRead(selectedConversationKey));
@@ -1495,12 +1531,19 @@ export default function AppInboxPage() {
         }
         if (loadingMessages) return;
         pendingUnreadScrollTargetRef.current = null;
+        pendingUnreadAnchorConversationIdentityRef.current = null;
+        pendingUnreadLastReadAtRef.current = null;
+        pendingUnreadAnchorMessageIdRef.current = null;
         setUnreadSeparatorIndex(null);
         setUnreadAnchorMessageIdentity(null);
         shouldScrollToBottomRef.current = true;
       }
 
-      if (shouldScrollToBottomRef.current) {
+      if (
+        shouldScrollToBottomRef.current &&
+        !pendingUnreadAnchorMessageIdRef.current &&
+        !pendingUnreadAnchorConversationIdentityRef.current
+      ) {
         scrollTimelineToBottom();
         shouldScrollToBottomRef.current = false;
         completeHydrationRead(selectedConversationKey);
@@ -2403,6 +2446,13 @@ export default function AppInboxPage() {
                           lastReadAt: readState.lastReadAtByConversationKey[conversationIdentity] ?? null,
                         }
                       : null;
+                    pendingUnreadAnchorConversationIdentityRef.current = shouldOpenAtUnread
+                      ? conversationIdentity
+                      : null;
+                    pendingUnreadLastReadAtRef.current = shouldOpenAtUnread
+                      ? readState.lastReadAtByConversationKey[conversationIdentity] ?? null
+                      : null;
+                    pendingUnreadAnchorMessageIdRef.current = null;
                     pendingReadAfterHydrationRef.current = {
                       conversationKey: conversationIdentity,
                       activityAt,
@@ -2515,6 +2565,9 @@ export default function AppInboxPage() {
                   setMessagesConversationKey(null);
                   pendingUnreadScrollTargetRef.current = null;
                   pendingReadAfterHydrationRef.current = null;
+                  pendingUnreadAnchorConversationIdentityRef.current = null;
+                  pendingUnreadLastReadAtRef.current = null;
+                  pendingUnreadAnchorMessageIdRef.current = null;
                   setUnreadSeparatorIndex(null);
                   setUnreadAnchorMessageIdentity(null);
                 }}
