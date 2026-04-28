@@ -246,12 +246,12 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
-        <div aria-hidden="true" className="h-[164px] sm:h-[176px] lg:h-[130px]" />
-
-        <section className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 sm:px-4">
+        <section className="fixed left-3 right-3 top-[170px] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.12)] backdrop-blur sm:left-4 sm:right-4 sm:top-[184px] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[138px] lg:w-[calc(100%-2.5rem)]">
           <h1 className="text-lg font-bold">{title}</h1>
           {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
         </section>
+
+        <div aria-hidden="true" className="h-[230px] sm:h-[244px] lg:h-[196px]" />
 
         {children}
       </div>
