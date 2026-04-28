@@ -644,6 +644,10 @@ function mergeMessagesByIdentity(current: InboxMessageItem[], incoming: InboxMes
   return next;
 }
 
+function sortMessagesAscending(items: InboxMessageItem[]) {
+  return [...items].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+}
+
 function shouldPlayInboundNotificationForConversation(
   item: Pick<InboxConversationItem, "mode" | "handoffStatus">
 ) {
@@ -1314,7 +1318,7 @@ export default function AppInboxPage() {
         : null;
     const shouldStickToBottom = mode === "append" && isTimelineNearBottom();
     const response = await fetchAppConversation(activeSession, waId, {
-      order: "asc",
+      order: mode === "append" ? "asc" : "desc",
       limit: mode === "append" ? 80 : 300,
       after: latestKnownAt,
     });
@@ -1353,8 +1357,9 @@ export default function AppInboxPage() {
       );
       primedTimelineNotificationKeysRef.current.add(responseConversationKey);
     }
+    const responseItems = mode === "append" ? response.items : sortMessagesAscending(response.items);
     setMessages((prev) => {
-      const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, response.items) : response.items;
+      const nextMessages = mode === "append" ? mergeMessagesByIdentity(prev, responseItems) : responseItems;
       timelineCacheRef.current.set(waId, nextMessages);
       return nextMessages;
     });
@@ -1372,8 +1377,8 @@ export default function AppInboxPage() {
       )
     );
     const latestActivityAt =
-      (response.items.length > 0
-        ? response.items[response.items.length - 1]?.createdAt
+      (responseItems.length > 0
+        ? responseItems[responseItems.length - 1]?.createdAt
         : latestKnownAt) ?? null;
     if (document.visibilityState === "visible") {
       markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
@@ -1440,12 +1445,9 @@ export default function AppInboxPage() {
     setMessagesConversationKey(cachedMessages ? selectedConversationKey : null);
 
     fetchAppConversation(session, selectedConversationWaId, {
-      order: "asc",
-      limit: shouldRefreshUnreadWindow || !cachedMessages?.length ? 300 : 80,
-      after:
-        shouldRefreshUnreadWindow || !cachedMessages?.length
-          ? null
-          : cachedMessages[cachedMessages.length - 1]?.createdAt ?? null,
+      order: "desc",
+      limit: 500,
+      after: null,
     })
       .then((response) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
@@ -1460,9 +1462,12 @@ export default function AppInboxPage() {
           notifiedInboundMessageKeysRef.current
         );
         primedTimelineNotificationKeysRef.current.add(responseConversationKey);
+        const responseItems = sortMessagesAscending(response.items);
         setMessages((prev) => {
           const nextMessages =
-            cachedMessages?.length ? mergeMessagesByIdentity(prev, response.items) : response.items;
+            cachedMessages?.length && shouldRefreshUnreadWindow
+              ? mergeMessagesByIdentity(prev, responseItems)
+              : responseItems;
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
