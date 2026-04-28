@@ -264,7 +264,7 @@ export default function AppSettingsDepartmentsPage() {
             O nome informado gera o slug automaticamente. Supervisores acessam esta tela apenas em leitura.
           </p>
         </div>
-        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <input
             className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
             value={name}
@@ -324,7 +324,7 @@ export default function AppSettingsDepartmentsPage() {
                     <div className="text-sm text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
                   </div>
 
-                  <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+                  <div className="mt-4 grid min-w-0 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
                     <label className="flex flex-col gap-2 text-sm text-white/75">
                       <span>Nome</span>
                       <input

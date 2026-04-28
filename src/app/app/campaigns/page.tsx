@@ -535,13 +535,13 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-8rem)]">
+      <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
+        <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-hidden">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
           <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-w-0 flex-1 gap-2.5 overflow-x-hidden p-3 2xl:overflow-y-auto">
+            <div className="grid min-w-0 flex-1 gap-2.5 p-3 lg:overflow-y-auto">
             <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
@@ -671,7 +671,7 @@ export default function AppCampaignsPage() {
                   Atualizar
                 </button>
               </div>
-              <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr]">
+              <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)]">
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Status</span>
                   <select

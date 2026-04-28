@@ -58,6 +58,75 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     router.replace("/app/login");
   };
 
+  const operationLinks = (
+    <>
+      <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
+        Inbox
+      </Link>
+      <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
+        Campanhas
+      </Link>
+      <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
+        Templates
+      </Link>
+    </>
+  );
+
+  const administrationLinks = canViewAdministration ? (
+    <>
+      <Link href="/app/settings/users" className={getLinkClasses(pathname === "/app/settings/users")}>
+        Usuarios
+      </Link>
+      <Link
+        href="/app/settings/departments"
+        className={getLinkClasses(pathname === "/app/settings/departments")}
+      >
+        Setores
+      </Link>
+      <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
+        Configurações Chatbot
+      </Link>
+      <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
+        Relatorios
+      </Link>
+    </>
+  ) : null;
+
+  const navGroupClasses =
+    "flex min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 sm:px-3 sm:py-2.5";
+  const navLinksClasses = "flex min-w-0 flex-wrap items-center gap-1.5";
+  const userActions = (
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 xl:flex-col xl:items-end xl:gap-1">
+      <span className="min-w-0 truncate text-right text-sm leading-none text-white/65">
+        {session.user.name || session.user.email}
+      </span>
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="rounded-lg border border-red-400/30 bg-red-900/20 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/30"
+      >
+        Sair
+      </button>
+    </div>
+  );
+  const logoButton = (
+    <button
+      type="button"
+      onClick={() => router.push("/app/inbox")}
+      title="Abrir inbox"
+      className="flex h-10 w-[120px] max-w-full shrink-0 items-center justify-center"
+    >
+      <Image
+        src="/images/converta-logo-light.png"
+        alt="Converta"
+        width={160}
+        height={60}
+        priority
+        className="h-auto w-full max-w-[120px] object-contain"
+      />
+    </button>
+  );
+
   const brandModal = showBrandModal ? (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm"
@@ -149,80 +218,48 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     <main className="min-h-screen overflow-x-hidden bg-re7-navy px-3 py-3 text-white sm:px-4 md:px-6 lg:px-7 xl:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
         <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur sm:px-4">
-          <div className="grid min-w-0 gap-3 xl:grid-cols-[150px_minmax(0,1fr)_150px] xl:items-start">
-            <div className="flex min-w-0 items-center justify-center gap-1.5 xl:justify-start xl:pt-5">
-              <button
-                type="button"
-                onClick={() => router.push("/app/inbox")}
-                title="Abrir inbox"
-                className="flex h-10 w-36 max-w-full items-center justify-center sm:w-40 xl:w-32"
-              >
-                <Image
-                  src="/images/converta-logo-light.png"
-                  alt="Converta"
-                  width={160}
-                  height={60}
-                  priority
-                  className="h-auto w-full object-contain"
-                />
-              </button>
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 items-center justify-between gap-3 xl:hidden">
+              {logoButton}
+              {userActions}
             </div>
-            <div className="flex min-w-0 flex-wrap items-start justify-center gap-2 xl:pt-1">
-              <div className="flex min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 sm:px-3 sm:py-2.5">
+
+            <div className="hidden min-w-0 items-start gap-3 xl:flex">
+              {logoButton}
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+                <div className={navGroupClasses}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                    Operacao
+                  </p>
+                  <div className={navLinksClasses}>{operationLinks}</div>
+                </div>
+                {administrationLinks ? (
+                  <div className={navGroupClasses}>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                      Administracao
+                    </p>
+                    <div className={navLinksClasses}>{administrationLinks}</div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="w-[150px] shrink-0">{userActions}</div>
+            </div>
+
+            <div className="grid min-w-0 gap-2 xl:hidden">
+              <div className={navGroupClasses}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   Operacao
                 </p>
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
-                    Inbox
-                  </Link>
-                  <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
-                    Campanhas
-                  </Link>
-                  <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
-                    Templates
-                  </Link>
-                </div>
+                <div className={navLinksClasses}>{operationLinks}</div>
               </div>
-              {canViewAdministration ? (
-                <div className="flex min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 sm:px-3 sm:py-2.5">
+              {administrationLinks ? (
+                <div className={navGroupClasses}>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                     Administracao
                   </p>
-                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <Link
-                      href="/app/settings/users"
-                      className={getLinkClasses(pathname === "/app/settings/users")}
-                    >
-                      Usuarios
-                    </Link>
-                    <Link
-                      href="/app/settings/departments"
-                      className={getLinkClasses(pathname === "/app/settings/departments")}
-                    >
-                      Setores
-                    </Link>
-                    <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-                      Configurações Chatbot
-                    </Link>
-                    <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
-                      Relatorios
-                    </Link>
-                  </div>
+                  <div className={navLinksClasses}>{administrationLinks}</div>
                 </div>
               ) : null}
-            </div>
-            <div className="flex min-w-0 flex-row flex-wrap items-center justify-center gap-2 xl:flex-col xl:items-end xl:justify-start xl:gap-1 xl:pt-1">
-              <span className="min-w-0 truncate text-center text-sm leading-none text-white/65 xl:text-right">
-                {session.user.name || session.user.email}
-              </span>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-lg border border-red-400/30 bg-red-900/20 px-3 py-1.5 text-sm text-red-100 hover:bg-red-900/30"
-              >
-                Sair
-              </button>
             </div>
           </div>
         </header>

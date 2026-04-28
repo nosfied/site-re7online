@@ -484,7 +484,7 @@ export default function AppTemplatesPage() {
         </p>
       ) : null}
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.9fr)]">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Catalogo de templates</h2>
