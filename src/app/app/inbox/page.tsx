@@ -310,7 +310,7 @@ function MediaBubble({
         </button>
       ) : null}
 
-      {media.caption ? <p className="text-sm leading-relaxed">{media.caption}</p> : null}
+      {media.caption ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{media.caption}</p> : null}
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
     </div>
   );
@@ -2902,7 +2902,9 @@ export default function AppInboxPage() {
                         } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                       >
                         {item.bodyText ? (
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.bodyText}</p>
+                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                            {item.bodyText}
+                          </p>
                         ) : item.media ? null : (
                           <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                         )}
