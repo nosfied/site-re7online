@@ -310,7 +310,7 @@ function MediaBubble({
         </button>
       ) : null}
 
-      {media.caption ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{media.caption}</p> : null}
+      {media.caption ? <p className="wa-bubble-text text-sm leading-relaxed">{media.caption}</p> : null}
       {error ? <p className="text-xs text-red-700">{error}</p> : null}
     </div>
   );
@@ -2902,7 +2902,7 @@ export default function AppInboxPage() {
                         } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                       >
                         {item.bodyText ? (
-                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          <p className="wa-bubble-text text-sm leading-relaxed">
                             {item.bodyText}
                           </p>
                         ) : item.media ? null : (
@@ -3040,7 +3040,7 @@ export default function AppInboxPage() {
               <label className="min-w-0 flex-1">
                 <textarea
                   ref={composerRef}
-                  className="h-10 min-h-10 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-[#7cbf69]"
+                  className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69]"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
