@@ -506,6 +506,45 @@ function dedupeConversationsByIdentity(items: InboxConversationItem[]) {
   return sortConversationsByRecent(Array.from(byIdentity.values()));
 }
 
+function mergeConversationsPreservingStableOrder(
+  current: InboxConversationItem[],
+  incoming: InboxConversationItem[]
+) {
+  if (current.length === 0) return incoming;
+  const currentIndexByIdentity = new Map<string, number>();
+  current.forEach((item, index) => {
+    currentIndexByIdentity.set(getConversationIdentity(item), index);
+  });
+
+  const incomingByIdentity = new Map<string, InboxConversationItem>();
+  for (const item of incoming) {
+    incomingByIdentity.set(getConversationIdentity(item), item);
+  }
+
+  const merged = [
+    ...current.map((item) => incomingByIdentity.get(getConversationIdentity(item)) ?? item),
+    ...incoming.filter((item) => !currentIndexByIdentity.has(getConversationIdentity(item))),
+  ];
+
+  return merged.sort((a, b) => {
+    const aTs = getConversationActivityTimestamp(a);
+    const bTs = getConversationActivityTimestamp(b);
+    if (aTs === null && bTs === null) {
+      return (
+        (currentIndexByIdentity.get(getConversationIdentity(a)) ?? Number.MAX_SAFE_INTEGER) -
+        (currentIndexByIdentity.get(getConversationIdentity(b)) ?? Number.MAX_SAFE_INTEGER)
+      );
+    }
+    if (aTs === null) return 1;
+    if (bTs === null) return -1;
+    if (bTs !== aTs) return bTs - aTs;
+    return (
+      (currentIndexByIdentity.get(getConversationIdentity(a)) ?? Number.MAX_SAFE_INTEGER) -
+      (currentIndexByIdentity.get(getConversationIdentity(b)) ?? Number.MAX_SAFE_INTEGER)
+    );
+  });
+}
+
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
   if (state.manuallyUnreadByConversationKey[getConversationIdentity(item)]) return true;
   if (item.lastMessage?.direction !== "INBOUND") return false;
@@ -1246,7 +1285,7 @@ export default function AppInboxPage() {
     lastInboundConversationSignatureRef.current = latestInboundSignature;
     lastInboundConversationTimestampRef.current = latestInboundTimestamp;
     humanFlowConversationKeysRef.current = humanFlowConversationKeys;
-    setConversations(sortedItems);
+    setConversations((current) => mergeConversationsPreservingStableOrder(current, sortedItems));
     if (response.items.length === 0) {
       setSelectedConversationKey(null);
       setSelectedConversationWaId(null);
