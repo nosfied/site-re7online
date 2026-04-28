@@ -535,13 +535,13 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)]">
-        <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-hidden">
-          <div className="border-b border-white/10 px-4 py-3">
+      <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden">
+          <div className="border-b border-white/10 px-3 py-2.5">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
           </div>
           <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-w-0 flex-1 gap-2.5 p-3 lg:overflow-y-auto">
+            <div className="grid min-w-0 flex-1 gap-2 p-3 lg:overflow-y-auto">
             <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Nome</span>
               <input
@@ -624,7 +624,7 @@ export default function AppCampaignsPage() {
               <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Template params (um por linha)</span>
                 <textarea
-                  className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                  className="block min-h-16 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                   value={form.templateParamsInput}
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
@@ -635,7 +635,7 @@ export default function AppCampaignsPage() {
             <label className="grid min-w-0 gap-1 text-sm">
               <span className="text-white/70">Recipients (um waId por linha)</span>
               <textarea
-                className="block min-h-24 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.recipientsInput}
                 onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
               />
@@ -646,7 +646,7 @@ export default function AppCampaignsPage() {
               </p>
             ) : null}
             </div>
-            <div className="border-t border-white/10 bg-re7-navy/30 p-3">
+            <div className="border-t border-white/10 bg-re7-navy/30 p-2.5">
             <button
               type="submit"
               disabled={creating}
@@ -660,7 +660,7 @@ export default function AppCampaignsPage() {
 
         <div className="grid min-w-0 gap-3">
           <section className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
-            <div className="border-b border-white/10 px-4 py-3">
+            <div className="border-b border-white/10 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold">Campanhas</h2>
                 <button
@@ -785,7 +785,7 @@ export default function AppCampaignsPage() {
               </tbody>
             </table>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-3 py-2.5 text-sm sm:px-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-3 py-2 text-sm sm:px-4">
               <p className="text-white/70">Pagina {currentPage} de {totalPages}</p>
               <div className="flex items-center gap-2">
                 <button
