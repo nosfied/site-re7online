@@ -161,8 +161,47 @@ test("executeChatbotFlow follows text next and reaches handoff", () => {
   assert.equal(result.handled, true);
   assert.equal(result.state.chatbotActive, false);
   assert.equal(result.state.chatbotNodeId, undefined);
-  assert.equal(result.state.handoff.status, "active");
+  assert.equal(result.state.handoff.status, "none");
+  assert.equal(result.pendingHandoff?.feedbackText, "Vou te transferir para um atendente humano.");
+  assert.equal(result.events?.some((event) => event.event === "flow.node.auto_advanced"), true);
   assert.match(result.replyText ?? "", /Vou te encaminhar/);
+});
+
+test("executeChatbotFlow returns handoff feedback before human activation", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "Humano", next: "handoff_1" }],
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar para um especialista agora.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_1",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "1",
+    nowIso: "2026-04-17T10:00:03.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.handoff.status, "none");
+  assert.equal(result.state.mode, "BOT");
+  assert.equal(result.pendingHandoff?.feedbackText, "Vou encaminhar para um especialista agora.");
+  assert.equal(result.replyText, "Vou encaminhar para um especialista agora.");
 });
 
 test("clearChatbotRuntime removes chatbot state", () => {

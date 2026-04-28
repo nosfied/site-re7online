@@ -15,6 +15,7 @@ import { sendTemplateMessage, sendTextMessage } from "./whatsapp.client.js";
 import { getPrisma } from "../db.js";
 import {
   applyAdminCommand,
+  activateHumanHandoff,
   clearTemplateNeeded,
   decideOutboundPolicy,
   getHandoffStatus,
@@ -2884,11 +2885,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       state: ConversationState;
       replyText?: string;
       flowId: string | null;
+      pendingHandoff?: { feedbackText: string };
     } = {
       handled: false,
       state: updatedConversation,
       replyText: undefined as string | undefined,
       flowId: null as string | null,
+      pendingHandoff: undefined as { feedbackText: string } | undefined,
     };
 
     if (!handoffResult.handled) {
@@ -2920,8 +2923,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             state: chatbotResult.state,
             replyText: chatbotResult.replyText,
             flowId: chatbotFlow.id,
+            pendingHandoff: chatbotResult.pendingHandoff,
           };
+          for (const event of chatbotResult.events ?? []) {
+            logger.info({
+              ...event,
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              requestId: meta?.requestId,
+            });
+          }
           if (
+            !chatbotResult.pendingHandoff &&
             previousHandoffStatus !== chatbotResult.state.handoff.status &&
             (chatbotResult.state.handoff.status === "pending" ||
               chatbotResult.state.handoff.status === "active")
@@ -3079,6 +3092,120 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         method: meta?.method,
         requestId: meta?.requestId,
       });
+      continue;
+    }
+
+    if (chatbotFlowResult.pendingHandoff) {
+      logger.info({
+        event: "flow.handoff.triggered",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        flowId: chatbotFlowResult.flowId,
+        waId: maskNumber(normalizedFrom),
+        hasFeedbackText: Boolean(chatbotFlowResult.replyText?.trim()),
+        requestId: meta?.requestId,
+      });
+      if (chatbotFlowResult.replyText?.trim() && env.outboundEnabled) {
+        logger.info({
+          event: "flow.handoff.feedback.sending",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          flowId: chatbotFlowResult.flowId,
+          waId: maskNumber(normalizedFrom),
+          messageId: message.messageId,
+          requestId: meta?.requestId,
+        });
+        try {
+          const feedbackResult = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `flow.handoff.feedback.${message.messageId}`,
+            replyText: chatbotFlowResult.replyText,
+            guard: inboundGuard,
+          });
+          if (feedbackResult.ok) {
+            await storage.updateMessage(message.messageId, {
+              status: "replied",
+              repliedAt: new Date().toISOString(),
+              replyType: "text",
+            });
+            logger.info({
+              event: "flow.handoff.feedback.sent",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              messageId: message.messageId,
+              metaMessageId: feedbackResult.messageId,
+              requestId: meta?.requestId,
+            });
+          } else {
+            logger.error({
+              event: "flow.handoff.feedback.failed",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              messageId: message.messageId,
+              status: feedbackResult.status,
+              errorBody: feedbackResult.errorBody,
+              requestId: meta?.requestId,
+            });
+          }
+        } catch (error) {
+          logger.error({
+            event: "flow.handoff.feedback.failed",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            flowId: chatbotFlowResult.flowId,
+            waId: maskNumber(normalizedFrom),
+            messageId: message.messageId,
+            error: (error as Error).message,
+            requestId: meta?.requestId,
+          });
+        }
+      } else if (chatbotFlowResult.replyText?.trim()) {
+        logger.error({
+          event: "flow.handoff.feedback.failed",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          flowId: chatbotFlowResult.flowId,
+          waId: maskNumber(normalizedFrom),
+          messageId: message.messageId,
+          errorBody: "outbound_disabled",
+          requestId: meta?.requestId,
+        });
+      }
+
+      const activatedHandoff = activateHumanHandoff(
+        clearChatbotRuntime(chatbotFlowResult.state),
+        message.timestamp,
+        chatbotFlowResult.pendingHandoff.feedbackText
+      );
+      updatedConversation = await ensurePendingHandoffRouting({
+        ...activatedHandoff.state,
+        mode: "HUMAN" as const,
+      });
+      await upsertConversationSafe(updatedConversation);
+      logger.info({
+        event: "flow.handoff.mode_human.enabled",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        flowId: chatbotFlowResult.flowId,
+        waId: maskNumber(normalizedFrom),
+        handoffStatus: updatedConversation.handoff.status,
+        mode: updatedConversation.mode,
+        requestId: meta?.requestId,
+      });
+      if (tenantHandoffAttendantWaid) {
+        await notifyAttendantHumanRequested({
+          attendantWaId: tenantHandoffAttendantWaid,
+          leadWaId: normalizedFrom,
+          snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
+          requestId: meta?.requestId,
+        });
+      }
       continue;
     }
 

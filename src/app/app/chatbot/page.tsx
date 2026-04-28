@@ -73,6 +73,65 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   return error.message || fallback;
 }
 
+function formatDefinitionText(definition: unknown) {
+  return JSON.stringify(definition, null, 2);
+}
+
+function parseDefinitionText(definitionText: string) {
+  const definition = JSON.parse(definitionText) as {
+    start: string;
+    nodes: Record<string, unknown>;
+  };
+  return {
+    definition,
+    formatted: formatDefinitionText(definition),
+  };
+}
+
+function getJsonSyntaxError(definitionText: string) {
+  try {
+    JSON.parse(definitionText);
+    return null;
+  } catch (error) {
+    return (error as Error).message || "JSON invalido.";
+  }
+}
+
+function countOccurrences(text: string, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return 0;
+  let total = 0;
+  let cursor = 0;
+  const normalizedText = text.toLowerCase();
+  while (cursor < normalizedText.length) {
+    const index = normalizedText.indexOf(normalizedQuery, cursor);
+    if (index < 0) break;
+    total += 1;
+    cursor = index + normalizedQuery.length;
+  }
+  return total;
+}
+
+function selectJsonOccurrence(textareaId: string, text: string, query: string, backwards = false) {
+  const textarea = document.getElementById(textareaId);
+  if (!(textarea instanceof HTMLTextAreaElement)) return;
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return;
+  const normalizedText = text.toLowerCase();
+  const currentCursor = backwards ? textarea.selectionStart - 1 : textarea.selectionEnd;
+  let index = backwards
+    ? normalizedText.lastIndexOf(normalizedQuery, Math.max(currentCursor, 0))
+    : normalizedText.indexOf(normalizedQuery, currentCursor);
+  if (index < 0) {
+    index = backwards
+      ? normalizedText.lastIndexOf(normalizedQuery)
+      : normalizedText.indexOf(normalizedQuery);
+  }
+  if (index < 0) return;
+  textarea.focus();
+  textarea.setSelectionRange(index, index + normalizedQuery.length);
+}
+
 function FlowBadge({
   label,
   tone = "default",
@@ -131,6 +190,7 @@ export default function AppChatbotPage() {
   const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
   const [newName, setNewName] = useState("Fluxo principal");
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
+  const [newSearch, setNewSearch] = useState("");
   const [newIsActive, setNewIsActive] = useState(false);
   const [newEntryPoint, setNewEntryPoint] = useState(true);
   const [drafts, setDrafts] = useState<
@@ -144,6 +204,7 @@ export default function AppChatbotPage() {
       }
     >
   >({});
+  const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -158,7 +219,7 @@ export default function AppChatbotPage() {
           item.id,
           {
             name: item.name,
-            definitionText: JSON.stringify(item.definition, null, 2),
+            definitionText: formatDefinitionText(item.definition),
             isActive: item.isActive,
             entryPoint: item.entryPoint,
           },
@@ -239,10 +300,14 @@ export default function AppChatbotPage() {
     [flows]
   );
 
-  const parseDefinition = (definitionText: string) => JSON.parse(definitionText) as {
-    start: string;
-    nodes: Record<string, unknown>;
-  };
+  const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
+  const draftJsonErrors = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(drafts).map(([flowId, draft]) => [flowId, getJsonSyntaxError(draft.definitionText)])
+      ),
+    [drafts]
+  );
 
   const handleCreate = async () => {
     if (!session) return;
@@ -255,13 +320,14 @@ export default function AppChatbotPage() {
       setError("Informe o nome do flow.");
       return;
     }
-    let definition;
+    let parsedDefinition;
     try {
-      definition = parseDefinition(newDefinition);
+      parsedDefinition = parseDefinitionText(newDefinition);
     } catch {
       setError("JSON invalido no novo flow.");
       return;
     }
+    setNewDefinition(parsedDefinition.formatted);
     setCreating(true);
     setError(null);
     setSuccess(null);
@@ -270,7 +336,7 @@ export default function AppChatbotPage() {
         name: trimmedName,
         isActive: newIsActive,
         entryPoint: newEntryPoint,
-        definition,
+        definition: parsedDefinition.definition,
       });
       await loadFlows(session);
       setSuccess("Flow criado com sucesso.");
@@ -295,13 +361,20 @@ export default function AppChatbotPage() {
       setError("Informe o nome do flow.");
       return;
     }
-    let definition;
+    let parsedDefinition;
     try {
-      definition = parseDefinition(draft.definitionText);
+      parsedDefinition = parseDefinitionText(draft.definitionText);
     } catch {
       setError("JSON invalido no flow selecionado.");
       return;
     }
+    setDrafts((current) => ({
+      ...current,
+      [flow.id]: {
+        ...draft,
+        definitionText: parsedDefinition.formatted,
+      },
+    }));
     setSavingId(flow.id);
     setError(null);
     setSuccess(null);
@@ -310,7 +383,7 @@ export default function AppChatbotPage() {
         name: trimmedName,
         isActive: draft.isActive,
         entryPoint: draft.entryPoint,
-        definition,
+        definition: parsedDefinition.definition,
       });
       await loadFlows(session);
       setSuccess("Flow atualizado com sucesso.");
@@ -480,11 +553,45 @@ export default function AppChatbotPage() {
             disabled={readOnly || creating}
           />
           <textarea
+            id="new-flow-definition"
             className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
             value={newDefinition}
             onChange={(event) => setNewDefinition(event.target.value)}
             disabled={readOnly || creating}
           />
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
+            <input
+              className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+              value={newSearch}
+              onChange={(event) => setNewSearch(event.target.value)}
+              placeholder="Localizar no JSON"
+              disabled={readOnly || creating}
+            />
+            <button
+              type="button"
+              onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch, true)}
+              disabled={!newSearch.trim()}
+              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              onClick={() => selectJsonOccurrence("new-flow-definition", newDefinition, newSearch)}
+              disabled={!newSearch.trim()}
+              className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Proximo
+            </button>
+            <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
+          </div>
+          {newJsonError ? (
+            <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+              JSON invalido: {newJsonError}
+            </p>
+          ) : (
+            <p className="text-xs text-emerald-200/80">JSON valido. Ao salvar, o conteudo sera reindentado automaticamente.</p>
+          )}
           <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
             <label className="flex items-center gap-2">
               <input
@@ -579,6 +686,7 @@ export default function AppChatbotPage() {
                       disabled={readOnly}
                     />
                     <textarea
+                      id={`flow-definition-${flow.id}`}
                       className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
                       value={draft.definitionText}
                       onChange={(event) =>
@@ -592,6 +700,61 @@ export default function AppChatbotPage() {
                       }
                       disabled={readOnly}
                     />
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
+                      <input
+                        className="min-w-[220px] flex-1 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                        value={draftSearches[flow.id] ?? ""}
+                        onChange={(event) =>
+                          setDraftSearches((current) => ({
+                            ...current,
+                            [flow.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Localizar no JSON"
+                        disabled={readOnly}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          selectJsonOccurrence(
+                            `flow-definition-${flow.id}`,
+                            draft.definitionText,
+                            draftSearches[flow.id] ?? "",
+                            true
+                          )
+                        }
+                        disabled={!(draftSearches[flow.id] ?? "").trim()}
+                        className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Anterior
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          selectJsonOccurrence(
+                            `flow-definition-${flow.id}`,
+                            draft.definitionText,
+                            draftSearches[flow.id] ?? ""
+                          )
+                        }
+                        disabled={!(draftSearches[flow.id] ?? "").trim()}
+                        className="rounded-md border border-white/20 px-3 py-2 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Proximo
+                      </button>
+                      <span className="text-xs text-white/50">
+                        {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrencia(s)
+                      </span>
+                    </div>
+                    {draftJsonErrors[flow.id] ? (
+                      <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                        JSON invalido: {draftJsonErrors[flow.id]}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-emerald-200/80">
+                        JSON valido. Ao salvar, o conteudo sera reindentado automaticamente.
+                      </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
                       <label className="flex items-center gap-2">
                         <input

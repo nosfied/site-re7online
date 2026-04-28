@@ -1,5 +1,4 @@
 import { ConversationState } from "../conversation/conversation.types.js";
-import { activateHumanHandoff } from "../conversation/conversation.service.js";
 
 export type ChatbotMenuNode = {
   type: "menu";
@@ -43,9 +42,22 @@ export type ChatbotExecutionResult = {
   handled: boolean;
   state: ConversationState;
   replyText?: string;
+  pendingHandoff?: {
+    feedbackText: string;
+  };
+  events?: ChatbotExecutionEvent[];
 };
 
 const CHATBOT_MAX_STEPS_PER_EXECUTION = 12;
+const CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION = 5;
+const DEFAULT_HANDOFF_FEEDBACK_TEXT = "Vou te transferir para um atendente humano.";
+
+export type ChatbotExecutionEvent = {
+  event: "flow.node.auto_advanced";
+  flowId: string;
+  fromNodeId: string;
+  toNodeId: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -278,10 +290,12 @@ function executeNodeChain(params: {
   nowIso: string;
 }): ChatbotExecutionResult {
   const messages: string[] = [];
+  const events: ChatbotExecutionEvent[] = [];
   let currentState = params.state;
   let currentNodeId: string | null = params.nodeId;
   const visited = new Set<string>();
   let stepCount = 0;
+  let autoAdvanceCount = 0;
 
   while (currentNodeId) {
     stepCount += 1;
@@ -313,12 +327,27 @@ function executeNodeChain(params: {
         handled: true,
         state: currentState,
         replyText: messages.join("\n\n"),
+        events,
       };
     }
 
     if (node.type === "text") {
       messages.push(node.text);
       if (node.next) {
+        autoAdvanceCount += 1;
+        if (autoAdvanceCount > CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION) {
+          return {
+            handled: false,
+            state: clearChatbotRuntime(currentState),
+            events,
+          };
+        }
+        events.push({
+          event: "flow.node.auto_advanced",
+          flowId: params.flowId,
+          fromNodeId: currentNodeId,
+          toNodeId: node.next,
+        });
         currentNodeId = node.next;
         continue;
       }
@@ -326,21 +355,25 @@ function executeNodeChain(params: {
         handled: true,
         state: clearChatbotRuntime(currentState),
         replyText: messages.join("\n\n"),
+        events,
       };
     }
 
-    const handoff = activateHumanHandoff(clearChatbotRuntime(currentState), params.nowIso, node.text);
-    messages.push(handoff.replyText);
+    const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
+    messages.push(feedbackText);
     return {
       handled: true,
-      state: handoff.state,
+      state: clearChatbotRuntime(currentState),
       replyText: messages.join("\n\n"),
+      pendingHandoff: { feedbackText },
+      events,
     };
   }
 
   return {
     handled: false,
     state: clearChatbotRuntime(currentState),
+    events,
   };
 }
 
