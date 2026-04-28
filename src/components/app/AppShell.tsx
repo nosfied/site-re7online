@@ -22,7 +22,7 @@ type NavItem = {
 };
 
 function getLinkClasses(active: boolean) {
-  return `inline-flex min-w-0 items-center justify-center rounded-md border px-2 py-1 text-xs leading-none transition lg:px-2.5 ${
+  return `inline-flex h-8 min-w-0 items-center justify-center rounded-md border px-2.5 text-xs leading-none transition lg:h-9 lg:px-3 lg:text-sm ${
     active
       ? "border-re7-sky/50 bg-re7-sky/20 text-white"
       : "border-white/20 text-white/80 hover:bg-white/10"
@@ -84,8 +84,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         Setores
       </Link>
       <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-        <span className="hidden 2xl:inline">Configurações Chatbot</span>
-        <span className="2xl:hidden">Chatbot</span>
+        Chatbot
       </Link>
       <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
         Relatorios
@@ -94,17 +93,17 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   ) : null;
 
   const navGroupClasses =
-    "flex min-w-0 max-w-full flex-col gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5";
+    "grid min-w-0 max-w-full gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5";
   const navLinksClasses = "flex min-w-0 flex-wrap items-center gap-1";
   const userActions = (
-    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 xl:flex-col xl:items-end xl:gap-1">
+    <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
       <span className="min-w-0 truncate text-right text-xs leading-none text-white/65 lg:text-sm">
         {session.user.name || session.user.email}
       </span>
       <button
         type="button"
         onClick={handleLogout}
-        className="rounded-md border border-red-400/30 bg-red-900/20 px-2.5 py-1 text-xs text-red-100 hover:bg-red-900/30 lg:text-sm"
+        className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
       >
         Sair
       </button>
@@ -115,15 +114,15 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       type="button"
       onClick={() => router.push("/app/inbox")}
       title="Abrir inbox"
-      className="flex h-8 w-[78px] max-w-full shrink-0 items-center justify-center sm:w-[88px] xl:w-[96px]"
+      className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/95 lg:h-20 lg:w-20"
     >
       <Image
         src="/images/converta-logo-light.png"
         alt="Converta"
-        width={160}
-        height={60}
+        width={96}
+        height={120}
         priority
-        className="h-auto w-full max-w-[96px] object-contain"
+        className="h-[58px] w-[46px] object-contain lg:h-[72px] lg:w-[58px]"
       />
     </button>
   );
@@ -219,49 +218,32 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     <main className="min-h-screen overflow-x-hidden bg-re7-navy px-3 py-3 text-white sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
         <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-2.5 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
-          <div className="flex min-w-0 flex-col gap-2">
-            <div className="flex min-w-0 items-center justify-between gap-2 xl:hidden">
+          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[88px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[96px_minmax(0,1fr)_160px]">
+            <div className="flex min-w-0 items-center justify-between gap-2 lg:block">
               {logoButton}
-              {userActions}
-            </div>
-
-            <div className="hidden min-w-0 items-center gap-2 xl:flex">
-              {logoButton}
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                <div className={navGroupClasses}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                    Operacao
-                  </p>
-                  <div className={navLinksClasses}>{operationLinks}</div>
-                </div>
-                {administrationLinks ? (
-                  <div className={navGroupClasses}>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                      Administracao
-                    </p>
-                    <div className={navLinksClasses}>{administrationLinks}</div>
-                  </div>
-                ) : null}
+              <div className="min-w-0 lg:hidden">
+                {userActions}
               </div>
-              <div className="w-[140px] shrink-0">{userActions}</div>
             </div>
 
-            <div className="grid min-w-0 gap-2 xl:hidden">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto] lg:items-center lg:justify-start lg:gap-2 xl:gap-3">
               <div className={navGroupClasses}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                   Operacao
                 </p>
                 <div className={navLinksClasses}>{operationLinks}</div>
               </div>
               {administrationLinks ? (
                 <div className={navGroupClasses}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                  <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                     Administracao
                   </p>
                   <div className={navLinksClasses}>{administrationLinks}</div>
                 </div>
               ) : null}
             </div>
+
+            <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
 
