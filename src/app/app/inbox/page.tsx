@@ -468,6 +468,28 @@ function getConversationActivityTimestamp(item: InboxConversationItem) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function getConversationOrderActivityAt(item: InboxConversationItem) {
+  return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? null;
+}
+
+function getConversationOrderActivityTimestamp(item: InboxConversationItem) {
+  const activityAt = getConversationOrderActivityAt(item);
+  const timestamp = Date.parse(activityAt ?? "");
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function getConversationOrderSignature(item: InboxConversationItem) {
+  if (item.lastMessage) {
+    return [
+      item.lastMessage.direction,
+      item.lastMessage.messageId ?? "",
+      item.lastMessage.createdAt,
+      item.lastMessage.bodyText ?? "",
+    ].join(":");
+  }
+  return [item.lastInboundAt ?? "", item.lastOutboundAt ?? ""].join(":");
+}
+
 function sortConversationsByRecent(items: InboxConversationItem[]) {
   return [...items].sort((a, b) => {
     const aTs = getConversationActivityTimestamp(a);
@@ -512,8 +534,11 @@ function mergeConversationsPreservingStableOrder(
 ) {
   if (current.length === 0) return incoming;
   const currentIndexByIdentity = new Map<string, number>();
+  const currentByIdentity = new Map<string, InboxConversationItem>();
   current.forEach((item, index) => {
-    currentIndexByIdentity.set(getConversationIdentity(item), index);
+    const identity = getConversationIdentity(item);
+    currentIndexByIdentity.set(identity, index);
+    currentByIdentity.set(identity, item);
   });
 
   const incomingByIdentity = new Map<string, InboxConversationItem>();
@@ -527,20 +552,36 @@ function mergeConversationsPreservingStableOrder(
   ];
 
   return merged.sort((a, b) => {
-    const aTs = getConversationActivityTimestamp(a);
-    const bTs = getConversationActivityTimestamp(b);
+    const aIdentity = getConversationIdentity(a);
+    const bIdentity = getConversationIdentity(b);
+    const aCurrent = currentByIdentity.get(aIdentity);
+    const bCurrent = currentByIdentity.get(bIdentity);
+    const aChanged =
+      !aCurrent || getConversationOrderSignature(aCurrent) !== getConversationOrderSignature(a);
+    const bChanged =
+      !bCurrent || getConversationOrderSignature(bCurrent) !== getConversationOrderSignature(b);
+
+    if (!aChanged && !bChanged) {
+      return (
+        (currentIndexByIdentity.get(aIdentity) ?? Number.MAX_SAFE_INTEGER) -
+        (currentIndexByIdentity.get(bIdentity) ?? Number.MAX_SAFE_INTEGER)
+      );
+    }
+
+    const aTs = getConversationOrderActivityTimestamp(a);
+    const bTs = getConversationOrderActivityTimestamp(b);
     if (aTs === null && bTs === null) {
       return (
-        (currentIndexByIdentity.get(getConversationIdentity(a)) ?? Number.MAX_SAFE_INTEGER) -
-        (currentIndexByIdentity.get(getConversationIdentity(b)) ?? Number.MAX_SAFE_INTEGER)
+        (currentIndexByIdentity.get(aIdentity) ?? Number.MAX_SAFE_INTEGER) -
+        (currentIndexByIdentity.get(bIdentity) ?? Number.MAX_SAFE_INTEGER)
       );
     }
     if (aTs === null) return 1;
     if (bTs === null) return -1;
     if (bTs !== aTs) return bTs - aTs;
     return (
-      (currentIndexByIdentity.get(getConversationIdentity(a)) ?? Number.MAX_SAFE_INTEGER) -
-      (currentIndexByIdentity.get(getConversationIdentity(b)) ?? Number.MAX_SAFE_INTEGER)
+      (currentIndexByIdentity.get(aIdentity) ?? Number.MAX_SAFE_INTEGER) -
+      (currentIndexByIdentity.get(bIdentity) ?? Number.MAX_SAFE_INTEGER)
     );
   });
 }
