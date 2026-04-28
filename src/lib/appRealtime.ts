@@ -13,6 +13,17 @@ export type AppRealtimeEvent =
       message: InboxMessageItem;
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
+    }
+  | {
+      type: "message.status.updated";
+      clientId: string;
+      waId?: string | null;
+      waIdCanonical?: string | null;
+      messageId?: string | null;
+      metaMessageId?: string | null;
+      status: "SENT" | "DELIVERED" | "READ" | "FAILED";
+      errorBody?: string | null;
+      updatedAt: string;
     };
 
 type AppRealtimeClientOptions = {
@@ -312,7 +323,7 @@ export function createAppRealtimeClient(options: AppRealtimeClientOptions): AppR
     socket.addEventListener("message", (message) => {
       try {
         const event = JSON.parse(String(message.data)) as AppRealtimeEvent;
-        if (event?.type === "message.created") {
+        if (event?.type === "message.created" || event?.type === "message.status.updated") {
           options.onMessage(event);
         }
       } catch {

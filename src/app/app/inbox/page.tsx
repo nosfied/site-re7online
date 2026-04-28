@@ -558,6 +558,7 @@ function getMessageStatusTicks(item: InboxMessageItem) {
       label: "✓✓",
       className: "text-sky-600",
       ariaLabel: "lida",
+      title: "Lida",
     };
   }
   if (normalized === "DELIVERED") {
@@ -565,6 +566,7 @@ function getMessageStatusTicks(item: InboxMessageItem) {
       label: "✓✓",
       className: "text-slate-500",
       ariaLabel: "entregue",
+      title: "Entregue",
     };
   }
   if (normalized === "SENT") {
@@ -572,13 +574,23 @@ function getMessageStatusTicks(item: InboxMessageItem) {
       label: "✓",
       className: "text-slate-500",
       ariaLabel: "enviada",
+      title: "Enviada",
     };
   }
-  if (normalized === "FAILED") {
+  if (normalized === "FAILED" || normalized === "ERROR") {
     return {
       label: "!",
       className: "text-red-600",
       ariaLabel: "falhou",
+      title: "Falha no envio",
+    };
+  }
+  if (normalized === "PENDING" || normalized === "QUEUED" || normalized === "SENDING") {
+    return {
+      label: "...",
+      className: "text-slate-500",
+      ariaLabel: "enviando",
+      title: "Enviando",
     };
   }
   return null;
@@ -589,7 +601,7 @@ function renderMessageStatusTicks(item: InboxMessageItem) {
   if (!ticks) return null;
   if (ticks.label === "!") {
     return (
-      <span aria-label={ticks.ariaLabel} className={`font-semibold ${ticks.className}`}>
+      <span aria-label={ticks.ariaLabel} title={ticks.title} className={`font-semibold ${ticks.className}`}>
         !
       </span>
     );
@@ -597,7 +609,7 @@ function renderMessageStatusTicks(item: InboxMessageItem) {
 
   const glyphs = ticks.label.split("");
   return (
-    <span aria-label={ticks.ariaLabel} className={`inline-flex items-center ${ticks.className}`}>
+    <span aria-label={ticks.ariaLabel} title={ticks.title} className={`inline-flex items-center ${ticks.className}`}>
       {glyphs.map((glyph, index) => (
         <span
           key={`${ticks.ariaLabel}-${index}`}
@@ -618,6 +630,64 @@ function getLatestMessageSignature(items: InboxMessageItem[]) {
 
 function getMessageIdentity(item: InboxMessageItem) {
   return `${item.direction}:${item.messageId ?? item.metaMessageId ?? item.requestId ?? item.createdAt}:${item.type}`;
+}
+
+function getMessageStatusPriority(status?: string | null) {
+  switch ((status || "").trim().toUpperCase()) {
+    case "FAILED":
+    case "ERROR":
+      return 99;
+    case "READ":
+      return 3;
+    case "DELIVERED":
+      return 2;
+    case "SENT":
+      return 1;
+    case "PENDING":
+    case "QUEUED":
+    case "SENDING":
+      return 0;
+    default:
+      return -1;
+  }
+}
+
+function shouldApplyStatusUpdate(currentStatus: string | null | undefined, nextStatus: string | null | undefined) {
+  const currentPriority = getMessageStatusPriority(currentStatus);
+  const nextPriority = getMessageStatusPriority(nextStatus);
+  if (nextPriority < 0) return false;
+  if (currentPriority === 99 && nextPriority !== 99) return false;
+  return nextPriority >= currentPriority;
+}
+
+function isStatusUpdateTarget(
+  item: InboxMessageItem,
+  event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
+) {
+  if (item.direction !== "OUTBOUND") return false;
+  if (event.metaMessageId && item.metaMessageId === event.metaMessageId) return true;
+  if (event.messageId && item.messageId === event.messageId) return true;
+  return false;
+}
+
+function applyStatusUpdateToMessages(
+  items: InboxMessageItem[],
+  event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
+) {
+  let didUpdate = false;
+  const nextItems = items.map((item) => {
+    if (!isStatusUpdateTarget(item, event)) return item;
+    if (!shouldApplyStatusUpdate(item.status, event.status)) return item;
+    didUpdate = true;
+    return {
+      ...item,
+      status: event.status,
+      errorBody: event.errorBody ?? item.errorBody,
+      metaMessageId: item.metaMessageId ?? event.metaMessageId ?? null,
+      messageId: item.messageId ?? event.messageId ?? null,
+    };
+  });
+  return didUpdate ? nextItems : items;
 }
 
 function getInboundNotificationIdentity(waId: string | null, item: InboxMessageItem) {
@@ -1136,7 +1206,65 @@ export default function AppInboxPage() {
     }
   }, [session]);
 
-  const applyRealtimeMessageCreated = useCallback((event: AppRealtimeEvent) => {
+  const applyRealtimeStatusUpdated = useCallback((
+    event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
+  ) => {
+    if (!session || event.clientId !== session.user.clientId) return;
+    const conversationKey = event.waIdCanonical ?? event.waId ?? null;
+
+    setMessages((prev) => {
+      const nextMessages = applyStatusUpdateToMessages(prev, event);
+      if (nextMessages !== prev && selectedConversationWaId) {
+        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+      }
+      return nextMessages;
+    });
+
+    for (const [cacheKey, cacheMessages] of timelineCacheRef.current.entries()) {
+      if (conversationKey && cacheKey !== conversationKey && cacheKey !== event.waId) {
+        continue;
+      }
+      const nextMessages = applyStatusUpdateToMessages(cacheMessages, event);
+      if (nextMessages !== cacheMessages) {
+        timelineCacheRef.current.set(cacheKey, nextMessages);
+      }
+    }
+
+    setConversations((prev) =>
+      prev.map((item) => {
+        const itemKey = getConversationIdentity(item);
+        if (
+          conversationKey &&
+          itemKey !== conversationKey &&
+          item.waId !== event.waId &&
+          item.waIdCanonical !== event.waIdCanonical
+        ) {
+          return item;
+        }
+        if (!item.lastMessage) return item;
+        const lastMessage = item.lastMessage;
+        const matchesLastMessage =
+          (event.metaMessageId && lastMessage.messageId === event.metaMessageId) ||
+          (event.messageId && lastMessage.messageId === event.messageId);
+        if (!matchesLastMessage || !shouldApplyStatusUpdate(lastMessage.status, event.status)) {
+          return item;
+        }
+        return {
+          ...item,
+          lastMessage: {
+            ...lastMessage,
+            status: event.status,
+          },
+        };
+      })
+    );
+  }, [selectedConversationWaId, session]);
+
+  const applyRealtimeEvent = useCallback((event: AppRealtimeEvent) => {
+    if (event.type === "message.status.updated") {
+      applyRealtimeStatusUpdated(event);
+      return;
+    }
     if (!session || event.type !== "message.created" || event.clientId !== session.user.clientId) return;
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
@@ -1196,6 +1324,7 @@ export default function AppInboxPage() {
 
     markConversationAsUnread(conversationKey, event.waId);
   }, [
+    applyRealtimeStatusUpdated,
     markConversationAsUnread,
     isTimelineNearBottom,
     selectedConversationKey,
@@ -1204,8 +1333,8 @@ export default function AppInboxPage() {
   ]);
 
   useEffect(() => {
-    return addAppRealtimeListener(applyRealtimeMessageCreated);
-  }, [applyRealtimeMessageCreated]);
+    return addAppRealtimeListener(applyRealtimeEvent);
+  }, [applyRealtimeEvent]);
 
   const buildConversationNotificationRequest = useCallback((
     item: InboxConversationItem,

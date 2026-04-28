@@ -1650,6 +1650,35 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   ) => {
     if (!tenantClientId || statuses.length === 0) return;
     const prisma = getPrisma();
+    const normalizeRealtimeStatus = (status: string | null) => {
+      switch ((status || "").trim().toLowerCase()) {
+        case "sent":
+          return "SENT" as const;
+        case "delivered":
+          return "DELIVERED" as const;
+        case "read":
+          return "READ" as const;
+        case "failed":
+          return "FAILED" as const;
+        default:
+          return null;
+      }
+    };
+    const stringifyStatusError = (value: unknown) => {
+      if (!value) return null;
+      if (typeof value === "string") return value;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return null;
+      }
+    };
+    const normalizeStatusTimestamp = (timestamp: string | null) => {
+      if (!timestamp) return new Date().toISOString();
+      const parsed = Number(timestamp);
+      if (!Number.isFinite(parsed)) return new Date().toISOString();
+      return new Date(parsed * 1000).toISOString();
+    };
     const getMetaStatusPriority = (status: string | null) => {
       switch ((status || "").trim().toLowerCase()) {
         case "read":
@@ -1667,6 +1696,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     for (const item of statuses) {
       if (!item.id) continue;
+      const normalizedStatus = normalizeRealtimeStatus(item.status);
+      if (!normalizedStatus) continue;
       try {
         const outbound = await prisma.outboundMessage.findFirst({
           where: {
@@ -1675,6 +1706,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           },
           select: {
             id: true,
+            clientId: true,
+            waId: true,
+            waIdCanonical: true,
+            messageId: true,
+            metaMessageId: true,
+            errorBody: true,
             rawPayload: true,
           },
         });
@@ -1711,6 +1748,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           typeof item.pricing?.billable === "boolean" ? item.pricing.billable : null;
         const pricingModel =
           typeof item.pricing?.pricing_model === "string" ? item.pricing.pricing_model : null;
+        const statusErrorBody =
+          item.status_detail ||
+          stringifyStatusError(item.error_data) ||
+          stringifyStatusError(item.errors) ||
+          outbound.errorBody ||
+          null;
 
         await prisma.outboundMessage.update({
           where: { id: outbound.id },
@@ -1733,6 +1776,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               },
             } as Prisma.InputJsonValue,
           },
+        });
+        publishRealtimeEvent({
+          type: "message.status.updated",
+          clientId: outbound.clientId,
+          waId: outbound.waId,
+          waIdCanonical: outbound.waIdCanonical ?? canonicalizeBrazilWaId(outbound.waId),
+          messageId: outbound.messageId,
+          metaMessageId: outbound.metaMessageId ?? item.id,
+          status: normalizedStatus,
+          errorBody: normalizedStatus === "FAILED" ? statusErrorBody : null,
+          updatedAt: normalizeStatusTimestamp(item.timestamp),
         });
       } catch (error) {
         logger.error({

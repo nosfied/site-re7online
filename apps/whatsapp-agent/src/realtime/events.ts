@@ -23,4 +23,15 @@ export type InboxRealtimeEvent =
       mode?: "BOT" | "HUMAN" | null;
       handoffStatus?: "none" | "pending" | "active" | null;
       message: InboxRealtimeMessage;
+    }
+  | {
+      type: "message.status.updated";
+      clientId: string;
+      waId?: string | null;
+      waIdCanonical?: string | null;
+      messageId?: string | null;
+      metaMessageId?: string | null;
+      status: "SENT" | "DELIVERED" | "READ" | "FAILED";
+      errorBody?: string | null;
+      updatedAt: string;
     };

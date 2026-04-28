@@ -103,13 +103,15 @@ export default function AppRealtimeBridge() {
     }
   }, [enqueueNotification, playNotificationSound, showBrowserNotification]);
 
-  const handleInboundNotification = useCallback((event: AppRealtimeEvent) => {
+  const handleInboundNotification = useCallback((
+    event: Extract<AppRealtimeEvent, { type: "message.created" }>
+  ) => {
     if (event.message.direction !== "INBOUND") return;
 
     handleRealtimeNotificationCandidate({
       source: "websocket",
       kind: "message",
-      conversationIdentity: getConversationIdentityFromRealtimeEvent(event),
+      conversationIdentity: getConversationIdentityFromRealtimeEvent(event) ?? null,
       messageId: event.message.messageId,
       metaMessageId: event.message.metaMessageId,
       requestId: event.message.requestId,
