@@ -241,6 +241,27 @@ Quando o patch afetar realtime/inbox, validar tambem no navegador:
 - inbound na conversa aberta atualiza timeline e toca som suave;
 - polling continua atualizando estado se o socket cair.
 
+## Retencao de midia local
+
+Midias outbound enviadas pelo `/app/inbox` sao cacheadas localmente em
+`apps/whatsapp-agent/.data/media/outbound/` para permitir reabertura,
+download e reproducao futura sem depender apenas da URL temporaria da Meta.
+
+Limpeza manual:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup
+```
+
+Cron recomendado:
+
+```cron
+0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /var/log/re7-media-cleanup.log 2>&1
+```
+
+Detalhes: `docs/whatsapp-agent/ops/MEDIA_RETENTION.md`.
+
 ## Registro minimo do deploy
 Registrar preferencialmente em:
 - `docs/DEPLOY_LOG.md`

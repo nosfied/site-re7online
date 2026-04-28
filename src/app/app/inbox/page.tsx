@@ -2212,7 +2212,13 @@ export default function AppInboxPage() {
           status: response.message.status,
           intent: null,
           bodyText: response.message.bodyText,
-          media: null,
+          media: response.message.media
+            ? {
+                ...response.message.media,
+                fileName: response.message.media.fileName ?? undefined,
+                caption: response.message.media.caption ?? undefined,
+              }
+            : null,
           templateName: null,
           templateLang: null,
           requestId: null,

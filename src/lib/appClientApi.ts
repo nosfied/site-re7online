@@ -606,6 +606,14 @@ export async function sendAppConversationMedia(
     createdAt: string;
     type: string;
     bodyText: string | null;
+    media?: {
+      kind: "image" | "audio" | "video" | "document";
+      mimeType?: string;
+      fileName?: string | null;
+      caption?: string | null;
+      hasDownload: boolean;
+      downloadUrl?: string;
+    } | null;
   };
 }> {
   const formData = new FormData();

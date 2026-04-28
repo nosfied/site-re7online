@@ -1,5 +1,8 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
+import { createReadStream } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { Readable } from "node:stream";
 import { ConversationOperationalStatus, MessageType, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
@@ -1152,6 +1155,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
 
       const mediaId = extractRawMediaId(mediaMessage.rawPayload);
+      const localMedia = await resolveStoredOutboundMedia(mediaMessage.rawPayload);
+      if (localMedia) {
+        const fileName = sanitizeDownloadFileName(localMedia.fileName) || `${messageId}`;
+        const headers: Record<string, string> = {
+          "Content-Type": localMedia.mimeType || "application/octet-stream",
+          "Cache-Control": "private, max-age=31536000, immutable",
+          "Content-Disposition": `inline; filename="${fileName}"`,
+          "Content-Length": String(localMedia.size),
+        };
+        res.writeHead(200, headers);
+        createReadStream(localMedia.absolutePath)
+          .on("error", (error) => {
+            logger.error({
+              event: "app.conversation.media.local_stream_error",
+              requestId,
+              clientId: client.id,
+              messageId,
+              message: (error as Error).message,
+            });
+            if (!res.writableEnded) {
+              res.destroy(error as Error);
+            }
+          })
+          .pipe(res);
+        return;
+      }
+
       if (!mediaId) {
         json(res, 404, { error: "media_not_found" });
         return;
@@ -1582,6 +1612,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           createdAt: result.createdAt,
           type: result.mediaType,
           bodyText: result.bodyText,
+          media: result.media,
         },
       });
     } catch (error) {
@@ -9911,6 +9942,70 @@ function sanitizeDownloadFileName(input: string | null | undefined) {
   return value.replace(/[^\w.\- ]+/g, "_");
 }
 
+const outboundMediaRoot = path.resolve(process.cwd(), ".data", "media", "outbound");
+
+function sanitizeStorageSegment(input: string) {
+  return input.replace(/[^\w.-]+/g, "_").slice(0, 160) || crypto.randomUUID();
+}
+
+function getRawMediaPayload(rawPayload: unknown) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const root = rawPayload as Record<string, unknown>;
+  const media = root.media;
+  if (media && typeof media === "object" && !Array.isArray(media)) {
+    return media as Record<string, unknown>;
+  }
+  return root;
+}
+
+async function storeOutboundMediaFile(params: {
+  clientId: string;
+  messageId: string;
+  content: Buffer;
+  mimeType: string;
+  fileName?: string | null;
+}) {
+  const safeClientId = sanitizeStorageSegment(params.clientId);
+  const safeMessageId = sanitizeStorageSegment(params.messageId);
+  const safeFileName =
+    sanitizeDownloadFileName(params.fileName) ||
+    `${safeMessageId}.${params.mimeType.includes("ogg") ? "ogg" : "bin"}`;
+  const directory = path.join(outboundMediaRoot, safeClientId);
+  await fs.mkdir(directory, { recursive: true });
+  const absolutePath = path.join(directory, `${safeMessageId}-${safeFileName}`);
+  await fs.writeFile(absolutePath, params.content);
+  return {
+    localPath: path.relative(process.cwd(), absolutePath),
+    size: params.content.length,
+  };
+}
+
+async function resolveStoredOutboundMedia(rawPayload: unknown) {
+  const media = getRawMediaPayload(rawPayload);
+  const localPath = typeof media?.localPath === "string" ? media.localPath : null;
+  if (!localPath) return null;
+
+  const absolutePath = path.resolve(process.cwd(), localPath);
+  const relativeToRoot = path.relative(outboundMediaRoot, absolutePath);
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) return null;
+
+  try {
+    const stats = await fs.stat(absolutePath);
+    if (!stats.isFile()) return null;
+    return {
+      absolutePath,
+      size: stats.size,
+      mimeType:
+        typeof media?.mimeType === "string" && media.mimeType.trim()
+          ? media.mimeType.trim()
+          : "application/octet-stream",
+      fileName: typeof media?.fileName === "string" ? media.fileName : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function buildConversationMessageDownloadPath(waId: string, messageId: string) {
   return `/app/conversation/${encodeURIComponent(waId)}/messages/${encodeURIComponent(messageId)}/media`;
 }
@@ -11489,6 +11584,14 @@ async function adminSendMediaMessage(params: {
       createdAt: string;
       mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
       bodyText: string | null;
+      media: {
+        kind: "image" | "document" | "audio" | "video";
+        mimeType: string;
+        fileName: string | null;
+        caption: string | null;
+        hasDownload: boolean;
+        downloadUrl: string;
+      };
     }
   | {
       ok: false;
@@ -11617,6 +11720,23 @@ async function adminSendMediaMessage(params: {
           ? "VIDEO"
           : "DOCUMENT";
 
+  const storedMedia = await storeOutboundMediaFile({
+    clientId: params.clientId,
+    messageId,
+    content: uploadContent,
+    mimeType: uploadMimeType,
+    fileName: uploadFileName,
+  }).catch((error) => {
+    logger.error({
+      event: "admin.conversation.send_media.local_store_failed",
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      waId: maskWaId(params.waId),
+      message: (error as Error).message,
+    });
+    return null;
+  });
+
   const outboundInserted = await persistOutboundMessage({
     clientId: params.clientId,
     phoneNumberId,
@@ -11635,6 +11755,8 @@ async function adminSendMediaMessage(params: {
         mimeType: uploadMimeType,
         fileName: uploadFileName,
         caption: params.caption ?? null,
+        localPath: storedMedia?.localPath ?? null,
+        localSize: storedMedia?.size ?? null,
       },
       source: "admin_inbox_media",
       status: sendResult.status ?? null,
@@ -11676,5 +11798,13 @@ async function adminSendMediaMessage(params: {
     createdAt,
     mediaType: prismaType,
     bodyText: params.caption ?? null,
+    media: {
+      kind: mediaKind,
+      mimeType: uploadMimeType,
+      fileName: uploadFileName,
+      caption: params.caption ?? null,
+      hasDownload: true,
+      downloadUrl: buildConversationMessageDownloadPath(params.waId, messageId),
+    },
   };
 }

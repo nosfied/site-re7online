@@ -19,6 +19,7 @@
     "dev:webhook:block": "FROM=5511999999999 node scripts/send-signed-webhook.mjs",
     "dev:webhook:re7": "FROM=558499049614 PHONE_NUMBER_ID=1018032104719713 node scripts/send-signed-webhook.mjs",
     "dev:webhook:help": "node scripts/send-signed-webhook.mjs --help",
+    "media:cleanup": "node scripts/cleanup-local-media.mjs",
     "test:last-outbound": "tsx scripts/test-last-outbound-at.ts",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production"
