@@ -28,6 +28,8 @@ mídia e chatbot configurável já existe no código atual.
 - Tenant resolution: `WaPhoneNumber.phoneNumberId` -> `Client`.
 - Autenticação do cliente: `/auth/login` emite token HMAC/JWT-like para uso no `/app`.
 - Autenticação interna/admin: `X-Admin-Token`.
+- Realtime do inbox: WebSocket em `/app/realtime`, com REST/polling como fonte de
+  verdade e fallback.
 
 ## Superfícies
 
@@ -175,12 +177,31 @@ curl -s -X POST "http://localhost:3001/admin/conversations/558494786787/reset?cl
 - `GET /health` → `{ ok: true }`
 - `POST /auth/login` → login do usuário do cliente
 - `GET /app/conversations` → inbox tenant-scoped
+- `GET /app/conversation/:waId` → timeline do inbox tenant-scoped
+- `POST /app/conversation/:waId/read-state` → estado lida/nao lida por usuario
+- `WS /app/realtime` → eventos realtime do `/app`, atualmente `message.created`
 - `GET/POST/PATCH /app/users` → usuários do tenant
 - `GET/POST/PATCH /app/departments` → departamentos do tenant
 - `GET /app/reports/conversations` → relatórios tenant/departamento
 - `GET/POST /app/campaigns` → campanhas tenant-scoped
 - `GET/POST /app/templates*` → catálogo e solicitações de templates
 - `GET/PUT/POST/PATCH /app/chatbot/*` → chatbot configurável do tenant
+
+## Realtime do inbox
+
+O WebSocket do `/app` entrega eventos rápidos para o inbox, mas não é fonte de
+verdade. A consistência continua vindo de REST:
+
+- `GET /app/conversations` para lista/read-state;
+- `GET /app/conversation/:waId` para timeline;
+- polling frontend como fallback;
+- WebSocket para reduzir latência de `message.created`.
+
+O evento inclui `mode` e `handoffStatus` para que o frontend notifique apenas
+conversas humanas ou em handoff humano. Mensagens tratadas pela automação/bot nao
+devem disparar som.
+
+Documento detalhado: `../../docs/whatsapp-agent/06-realtime-inbox-websocket.md`.
 
 ## Teste local do webhook (assinatura)
 O endpoint `/webhook` exige assinatura `X-Hub-Signature-256` mesmo em dev. Para testar:

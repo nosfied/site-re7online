@@ -22,6 +22,8 @@ Webhook Meta -> Assinatura -> Tenant Resolver -> Normalizer -> Router/Flow Execu
 - **Responder**: envia texto, template e mídia pela WhatsApp Cloud API.
 - **Campaign Runner**: executa campanhas assíncronas tenant-scoped.
 - **Meta Template Service**: submete/sincroniza templates com a Meta.
+- **Realtime Hub**: entrega eventos rápidos do inbox via WebSocket no `/app`,
+  mantendo REST como fonte de verdade.
 - **Logs/Eventos/Métricas**: auditoria por tenant, status Meta, SLA e relatórios.
 
 ## Meta Cloud API — pontos essenciais
@@ -59,6 +61,21 @@ Novas funcionalidades de cliente devem ir para `/app`, não para `/admin`.
 
 PostgreSQL/Prisma é a fonte de verdade operacional. O storage JSON permanece no
 código apenas para compatibilidade/transição e não deve orientar novas features.
+
+### Realtime do `/app/inbox`
+
+O inbox usa WebSocket como camada rápida de entrega de eventos, sem substituir REST.
+
+Decisão atual:
+
+- REST continua sendo a fonte de verdade para conversas, timeline, read-state e
+  resync.
+- WebSocket entrega `message.created` após inbound persistido.
+- Polling permanece ativo como fallback e reconciliação.
+- O socket fica no nível global do `/app`, não dentro da página do inbox.
+- Notificações, som principal/suave e deduplicação são centralizados no frontend.
+
+Detalhamento: `docs/whatsapp-agent/06-realtime-inbox-websocket.md`.
 
 ### Produção
 

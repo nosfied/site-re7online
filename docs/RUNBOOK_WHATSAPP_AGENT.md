@@ -73,6 +73,11 @@ Checklist local minimo:
 - inbox carregando
 - fluxo do patch sendo validado localmente
 - quando aplicavel, confirmar no banco o estado persistido
+- quando o patch afetar realtime/inbox:
+  - confirmar WebSocket `101 Switching Protocols` em `/agent-api/app/realtime`
+    ou `/app/realtime`
+  - validar ponto verde, som principal, som suave e fallback por polling
+  - validar que trocar conversa nao recarrega nem desloca a lista lateral
 
 Exemplo ja validado no estado atual:
 - Sprint 37 validada localmente
@@ -228,6 +233,13 @@ pm2 status
 curl -sS http://127.0.0.1:3001/admin/health -H "X-Admin-Token: $ADMIN_TOKEN"
 lsof -i :3001
 ```
+
+Quando o patch afetar realtime/inbox, validar tambem no navegador:
+- `/app/inbox` abre sem erro;
+- socket aparece como `101 Switching Protocols`;
+- inbound em conversa nao ativa atualiza lista, ponto verde e som principal;
+- inbound na conversa aberta atualiza timeline e toca som suave;
+- polling continua atualizando estado se o socket cair.
 
 ## Registro minimo do deploy
 Registrar preferencialmente em:
