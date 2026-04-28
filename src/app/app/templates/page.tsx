@@ -484,16 +484,16 @@ export default function AppTemplatesPage() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(20rem,0.9fr)]">
-        <section className="rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-4 py-3">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.9fr)]">
+        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Catalogo de templates</h2>
           </div>
           {catalogItems.length === 0 ? (
             <p className="p-4 text-sm text-white/70">Nenhum template encontrado.</p>
           ) : (
-            <div className="max-h-[34rem] overflow-auto">
-              <table className="w-full text-sm">
+            <div className="max-h-[34rem] overflow-x-auto xl:overflow-y-auto">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead className="bg-white/10 text-left">
                   <tr>
                     <th className="px-3 py-2">Nome</th>
@@ -564,17 +564,17 @@ export default function AppTemplatesPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-4 py-3">
+        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Solicitar template</h2>
           </div>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
+          <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
             <label className="flex flex-col gap-2 text-sm text-white/80">
               <span>Nome</span>
               <input
                 value={form.name}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
@@ -582,7 +582,7 @@ export default function AppTemplatesPage() {
               <select
                 value={form.category}
                 onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               >
                 {CATEGORY_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -597,7 +597,7 @@ export default function AppTemplatesPage() {
                 value={form.content}
                 onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
                 rows={6}
-                className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
@@ -607,7 +607,7 @@ export default function AppTemplatesPage() {
                 onChange={(event) => setForm((current) => ({ ...current, variables: event.target.value }))}
                 rows={4}
                 placeholder='{"items":["nome","cidade"]}'
-                className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
             </label>
             <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-white/80">

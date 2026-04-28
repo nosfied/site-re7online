@@ -22,7 +22,7 @@ type NavItem = {
 };
 
 function getLinkClasses(active: boolean) {
-  return `rounded-lg border px-3 py-1.5 text-sm leading-none transition ${
+  return `inline-flex min-w-0 items-center justify-center rounded-lg border px-2.5 py-1.5 text-xs leading-none transition sm:px-3 sm:text-sm ${
     active
       ? "border-re7-sky/50 bg-re7-sky/20 text-white"
       : "border-white/20 text-white/80 hover:bg-white/10"
@@ -64,7 +64,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       onClick={() => setShowBrandModal(false)}
     >
       <div
-        className="relative w-full max-w-3xl rounded-3xl border border-white/10 bg-[#0d1b36] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.42)]"
+        className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#0d1b36] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -146,32 +146,33 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   }
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-4 text-white md:px-6 lg:px-7 xl:px-8">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-3">
-        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-4 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
-          <div className="grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)_160px] xl:items-start">
-            <div className="flex flex-col items-start gap-1.5 pt-5">
+    <main className="min-h-screen overflow-x-hidden bg-re7-navy px-3 py-3 text-white sm:px-4 md:px-6 lg:px-7 xl:px-8">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3">
+        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-3 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur sm:px-4">
+          <div className="grid min-w-0 gap-3 xl:grid-cols-[150px_minmax(0,1fr)_150px] xl:items-start">
+            <div className="flex min-w-0 items-center justify-center gap-1.5 xl:justify-start xl:pt-5">
               <button
                 type="button"
                 onClick={() => router.push("/app/inbox")}
                 title="Abrir inbox"
-                className="hidden h-10 w-32 items-center justify-center xl:flex"
+                className="flex h-10 w-36 max-w-full items-center justify-center sm:w-40 xl:w-32"
               >
                 <Image
                   src="/images/converta-logo-light.png"
                   alt="Converta"
                   width={160}
                   height={60}
+                  priority
                   className="h-auto w-full object-contain"
                 />
               </button>
             </div>
-            <div className="flex min-w-0 items-start justify-center gap-2 xl:pt-1">
-              <div className="inline-flex min-w-0 shrink-0 flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-start justify-center gap-2 xl:pt-1">
+              <div className="flex min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 sm:px-3 sm:py-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                   Operacao
                 </p>
-                <div className="flex min-w-0 flex-nowrap items-center gap-1.5 whitespace-nowrap">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
                     Inbox
                   </Link>
@@ -184,11 +185,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 </div>
               </div>
               {canViewAdministration ? (
-                <div className="inline-flex min-w-0 shrink-0 flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+                <div className="flex min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 sm:px-3 sm:py-2.5">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
                     Administracao
                   </p>
-                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 whitespace-nowrap">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <Link
                       href="/app/settings/users"
                       className={getLinkClasses(pathname === "/app/settings/users")}
@@ -211,8 +212,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 </div>
               ) : null}
             </div>
-            <div className="flex flex-col items-end justify-start gap-1 xl:pt-1">
-              <span className="text-right text-sm leading-none text-white/65">
+            <div className="flex min-w-0 flex-row flex-wrap items-center justify-center gap-2 xl:flex-col xl:items-end xl:justify-start xl:gap-1 xl:pt-1">
+              <span className="min-w-0 truncate text-center text-sm leading-none text-white/65 xl:text-right">
                 {session.user.name || session.user.email}
               </span>
               <button
@@ -226,8 +227,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           </div>
         </header>
 
-        <section className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-          <h1 className="text-xl font-bold">{title}</h1>
+        <section className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 sm:px-4">
+          <h1 className="text-lg font-bold sm:text-xl">{title}</h1>
           {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
         </section>
 

@@ -255,7 +255,7 @@ export default function AppSettingsDepartmentsPage() {
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
             Novo setor
@@ -264,9 +264,9 @@ export default function AppSettingsDepartmentsPage() {
             O nome informado gera o slug automaticamente. Supervisores acessam esta tela apenas em leitura.
           </p>
         </div>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <input
-            className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Atendimento Geral"
@@ -283,9 +283,9 @@ export default function AppSettingsDepartmentsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">Setores do tenant</h2>
             <p className="mt-1 text-sm text-white/65">
               {readOnly
@@ -324,7 +324,7 @@ export default function AppSettingsDepartmentsPage() {
                     <div className="text-sm text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
                   </div>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+                  <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
                     <label className="flex flex-col gap-2 text-sm text-white/75">
                       <span>Nome</span>
                       <input
@@ -339,7 +339,7 @@ export default function AppSettingsDepartmentsPage() {
                           }))
                         }
                         disabled={readOnly}
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </label>
 

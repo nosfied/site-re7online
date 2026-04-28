@@ -535,7 +535,7 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="grid items-start gap-3 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
+      <section className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-8rem)]">
           <div className="border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold">Criar campanha</h2>
@@ -658,10 +658,10 @@ export default function AppCampaignsPage() {
           </form>
         </aside>
 
-        <div className="grid gap-3">
+        <div className="grid min-w-0 gap-3">
           <section className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold">Campanhas</h2>
                 <button
                   type="button"
@@ -675,7 +675,7 @@ export default function AppCampaignsPage() {
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Status</span>
                   <select
-                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                     value={statusFilter}
                     onChange={(event) => setStatusFilter(event.target.value as CampaignStatusFilter)}
                   >
@@ -689,15 +689,15 @@ export default function AppCampaignsPage() {
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Buscar por nome</span>
                   <input
-                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
                 </label>
               </div>
             </div>
-            <div className="overflow-auto 2xl:max-h-[26rem]">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto 2xl:max-h-[26rem] 2xl:overflow-y-auto">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
                   <th className="px-2 py-2">Replay</th>
@@ -785,7 +785,7 @@ export default function AppCampaignsPage() {
               </tbody>
             </table>
             </div>
-            <div className="flex items-center justify-between border-t border-white/10 px-4 py-2.5 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-3 py-2.5 text-sm sm:px-4">
               <p className="text-white/70">Pagina {currentPage} de {totalPages}</p>
               <div className="flex items-center gap-2">
                 <button
@@ -876,7 +876,7 @@ export default function AppCampaignsPage() {
                   </div>
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-wide text-white/60">Progresso</p>
                       <p className="text-sm font-semibold">{getProgressPct(selectedCampaign)}%</p>
                     </div>

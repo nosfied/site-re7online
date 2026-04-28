@@ -39,7 +39,7 @@ function AccessButton() {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center justify-center rounded-2xl bg-[#20b15a] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
+      className="inline-flex w-full items-center justify-center rounded-2xl bg-[#20b15a] px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 sm:w-auto sm:px-5"
     >
       Acessar sistema
     </a>
@@ -59,8 +59,8 @@ function WhatsAppBadge() {
 
 export default function SistemasPage() {
   return (
-    <main className="flex min-h-screen overflow-hidden bg-re7-navy text-white">
-      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-4 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
+    <main className="flex min-h-screen overflow-x-hidden bg-re7-navy text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
         <div className="mx-auto max-w-lg text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-re7-sky/80">Re7</p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-[2.35rem]">
@@ -69,9 +69,9 @@ export default function SistemasPage() {
           <p className="mt-1.5 text-sm text-white/72">Acesse as solucoes digitais da Re7.</p>
         </div>
 
-        <div className="mt-12 grid max-w-[15rem] gap-4 sm:mt-14">
-          <article className="group rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.26)]">
-            <div className="flex items-start justify-between gap-4">
+        <div className="mx-auto mt-8 grid w-full max-w-sm gap-4 sm:mt-10">
+          <article className="group rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.26)]">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Converta</span>
               <WhatsAppBadge />
             </div>

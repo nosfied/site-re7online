@@ -207,12 +207,12 @@ export default function AppReportsPage() {
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
 
-      <section className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <div className="grid gap-3 md:grid-cols-4">
+      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Periodo</span>
             <select
-              className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
               value={range}
               onChange={(event) => setRange(event.target.value as ConversationReportRange)}
             >
@@ -227,7 +227,7 @@ export default function AppReportsPage() {
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Atendente</span>
             <select
-              className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
             >
@@ -243,7 +243,7 @@ export default function AppReportsPage() {
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Setor</span>
             <select
-              className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
               value={departmentId}
               onChange={(event) => setDepartmentId(event.target.value)}
               disabled={!canFilterDepartment}
@@ -273,24 +273,24 @@ export default function AppReportsPage() {
 
       {loading ? <p className="text-sm text-white/70">Carregando relatorios...</p> : null}
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <article className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
           <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Primeira resposta media</p>
           <p className="mt-2 text-2xl font-semibold">
             {formatSeconds(report?.avgFirstResponseTimeSec ?? null)}
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
           <p className="mt-2 text-2xl font-semibold">
             {formatSeconds(report?.avgResolutionTimeSec ?? null)}
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
           <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>

@@ -257,8 +257,21 @@ MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup
 Cron recomendado:
 
 ```cron
-0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /var/log/re7-media-cleanup.log 2>&1
+0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log 2>&1
 ```
+
+Na VPS `admin.re7online.com`, essa entrada ja foi instalada no crontab do usuario
+`deploy` em 2026-04-28, no commit `dbfcbd5`.
+
+Verificacao:
+
+```bash
+crontab -l | grep media:cleanup
+tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log
+```
+
+Reativar somente se a VPS/usuario `deploy` forem recriados, se o crontab for
+removido, ou se a pasta de producao mudar.
 
 Detalhes: `docs/whatsapp-agent/ops/MEDIA_RETENTION.md`.
 

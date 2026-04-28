@@ -327,7 +327,7 @@ export default function AppSettingsUsersPage() {
       <FeedbackToast message={userSuccess || actionSuccess} variant="success" />
       <FeedbackToast message={userError || actionError} variant="error" />
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
             Novo usuario
@@ -337,13 +337,13 @@ export default function AppSettingsUsersPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <label className="flex flex-col gap-2 text-sm text-white/75">
             <span>Nome</span>
             <input
               value={userForm.name}
               onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             />
           </label>
           <label className="flex flex-col gap-2 text-sm text-white/75">
@@ -351,7 +351,7 @@ export default function AppSettingsUsersPage() {
             <input
               value={userForm.email}
               onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             />
           </label>
           <label className="flex flex-col gap-2 text-sm text-white/75">
@@ -360,7 +360,7 @@ export default function AppSettingsUsersPage() {
               type="password"
               value={userForm.password}
               onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             />
           </label>
           <label className="flex flex-col gap-2 text-sm text-white/75">
@@ -374,7 +374,7 @@ export default function AppSettingsUsersPage() {
                   departmentId: isDepartmentRequired(event.target.value) ? current.departmentId : "",
                 }))
               }
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             >
               {USER_ROLE_OPTIONS.map((role) => (
                 <option key={role} value={role}>
@@ -390,7 +390,7 @@ export default function AppSettingsUsersPage() {
               onChange={(event) =>
                 setUserForm((current) => ({ ...current, departmentId: event.target.value }))
               }
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             >
               <option value="">-</option>
               {departments.map((department) => (
@@ -411,7 +411,7 @@ export default function AppSettingsUsersPage() {
                   isActive: event.target.value === "active",
                 }))
               }
-              className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
             >
               <option value="active">Ativo</option>
               <option value="inactive">Inativo</option>
@@ -434,9 +434,9 @@ export default function AppSettingsUsersPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">Usuarios do tenant</h2>
             <p className="mt-1 text-sm text-white/65">
               Edite os dados na linha do usuario e clique em Salvar.
@@ -482,7 +482,7 @@ export default function AppSettingsUsersPage() {
                     <div className="text-sm text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
                   </div>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                     <label className="flex flex-col gap-2 text-sm text-white/75">
                       <span>Nome</span>
                       <input
@@ -496,7 +496,7 @@ export default function AppSettingsUsersPage() {
                             },
                           }))
                         }
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm text-white/75">
@@ -512,7 +512,7 @@ export default function AppSettingsUsersPage() {
                             },
                           }))
                         }
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm text-white/75">
@@ -531,7 +531,7 @@ export default function AppSettingsUsersPage() {
                             },
                           }))
                         }
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
                       >
                         {USER_ROLE_OPTIONS.map((role) => (
                           <option key={role} value={role}>
@@ -553,7 +553,7 @@ export default function AppSettingsUsersPage() {
                             },
                           }))
                         }
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
                       >
                         <option value="">-</option>
                         {departments.map((department) => (
@@ -577,7 +577,7 @@ export default function AppSettingsUsersPage() {
                             },
                           }))
                         }
-                        className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
+                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
                       >
                         <option value="active">Ativo</option>
                         <option value="inactive">Inativo</option>

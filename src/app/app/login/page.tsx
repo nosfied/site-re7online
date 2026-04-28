@@ -69,8 +69,8 @@ export default function AppLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-re7-navy px-4 py-8 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20">
+    <main className="flex min-h-screen overflow-x-hidden bg-re7-navy px-3 py-6 text-white sm:items-center sm:justify-center sm:px-4 sm:py-8">
+      <div className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/20 sm:p-6">
         <div className="mb-6 flex justify-center">
           <Image
             src="/images/converta-logo-light.png"
@@ -90,7 +90,7 @@ export default function AppLoginPage() {
               <span className="text-white/70">Email</span>
               <input
                 type="email"
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="email"
@@ -100,7 +100,7 @@ export default function AppLoginPage() {
               <span className="text-white/70">Senha</span>
               <input
                 type="password"
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"

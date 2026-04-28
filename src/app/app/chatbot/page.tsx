@@ -381,9 +381,9 @@ export default function AppChatbotPage() {
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
             <p className="mt-1 text-sm text-white/65">
               Ligue ou desligue os recursos disponiveis para este cliente.
@@ -406,7 +406,7 @@ export default function AppChatbotPage() {
         </div>
 
         {settings ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
             {[
               {
                 key: "disableChatbot" as const,
@@ -427,7 +427,7 @@ export default function AppChatbotPage() {
             ].map((item) => (
               <div
                 key={item.key}
-                className="flex items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-4 text-sm"
+                className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4"
               >
                 <span className="space-y-1">
                   <span className="block font-medium text-white">{item.title}</span>
@@ -461,7 +461,7 @@ export default function AppChatbotPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-4 space-y-2">
           <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
             Novo flow
@@ -473,14 +473,14 @@ export default function AppChatbotPage() {
         </div>
         <div className="grid gap-3">
           <input
-            className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             placeholder="Fluxo principal"
             disabled={readOnly || creating}
           />
           <textarea
-            className="min-h-[18rem] rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
             value={newDefinition}
             onChange={(event) => setNewDefinition(event.target.value)}
             disabled={readOnly || creating}
@@ -518,9 +518,9 @@ export default function AppChatbotPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
+      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold">Fluxos cadastrados</h2>
             <p className="mt-1 text-sm text-white/65">
               {readOnly
@@ -541,7 +541,7 @@ export default function AppChatbotPage() {
               const draft = drafts[flow.id];
               if (!draft) return null;
               return (
-                <article key={flow.id} className="rounded-xl border border-white/10 bg-re7-navy/40 p-4">
+                <article key={flow.id} className="min-w-0 rounded-xl border border-white/10 bg-re7-navy/40 p-3 sm:p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
@@ -565,7 +565,7 @@ export default function AppChatbotPage() {
 
                   <div className="mt-4 grid gap-3">
                     <input
-                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
                       value={draft.name}
                       onChange={(event) =>
                         setDrafts((current) => ({
@@ -579,7 +579,7 @@ export default function AppChatbotPage() {
                       disabled={readOnly}
                     />
                     <textarea
-                      className="min-h-[18rem] rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
+                      className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
                       value={draft.definitionText}
                       onChange={(event) =>
                         setDrafts((current) => ({
