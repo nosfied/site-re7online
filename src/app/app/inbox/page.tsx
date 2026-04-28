@@ -530,6 +530,14 @@ function mergeConversationsPreservingStableOrder(
   return merged;
 }
 
+function updateConversationInPlace(
+  current: InboxConversationItem[],
+  conversationKey: string,
+  updater: (item: InboxConversationItem) => InboxConversationItem
+) {
+  return current.map((item) => (getConversationIdentity(item) === conversationKey ? updater(item) : item));
+}
+
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
   if (state.manuallyUnreadByConversationKey[getConversationIdentity(item)]) return true;
   if (item.lastMessage?.direction !== "INBOUND") return false;
@@ -1401,12 +1409,8 @@ export default function AppInboxPage() {
     }
     setMessagesConversationKey(responseConversationKey);
     setConversations((prev) =>
-      dedupeConversationsByIdentity(
-        prev.map((item) =>
-          getConversationIdentity(item) === responseConversationKey
-            ? applyConversationOperationalPayload(item, response)
-            : item
-        )
+      updateConversationInPlace(prev, responseConversationKey, (item) =>
+        applyConversationOperationalPayload(item, response)
       )
     );
     const latestActivityAt =
@@ -1443,7 +1447,8 @@ export default function AppInboxPage() {
     setLoadingConversations(true);
     setError(null);
 
-    refreshConversationList(session)
+    const loadConversations = refreshConversationListRef.current ?? refreshConversationList;
+    loadConversations(session)
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (err.status === 401) {
@@ -1459,7 +1464,7 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, refreshConversationList, session]);
+  }, [handleUnauthorized, session]);
 
   useEffect(() => {
     if (!session || !selectedConversationWaId) {
@@ -1509,12 +1514,8 @@ export default function AppInboxPage() {
         }
         setMessagesConversationKey(visibleConversationKey);
         setConversations((prev) =>
-          dedupeConversationsByIdentity(
-            prev.map((item) =>
-              getConversationIdentity(item) === responseConversationKey
-                ? applyConversationOperationalPayload(item, response)
-                : item
-            )
+          updateConversationInPlace(prev, responseConversationKey, (item) =>
+            applyConversationOperationalPayload(item, response)
           )
         );
       })
@@ -2457,7 +2458,7 @@ export default function AppInboxPage() {
               ) : null}
             </div>
           </div>
-          <div ref={conversationListRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={conversationListRef} className="min-h-0 flex-1 overflow-y-auto overflow-anchor-none">
             {loadingConversations ? (
               <p className="px-4 py-4 text-sm text-white/70">Carregando conversas...</p>
             ) : null}
