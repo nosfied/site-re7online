@@ -1358,7 +1358,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             type: params.type,
             status: "RECEIVED",
             intent: null,
-            bodyText: params.bodyText ? params.bodyText.slice(0, 300) : null,
+            bodyText: params.bodyText ?? null,
             media: buildInboxMessageMedia({
               type: params.type,
               rawPayload: params.rawPayload,

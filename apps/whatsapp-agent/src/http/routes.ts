@@ -10941,7 +10941,7 @@ async function buildConversationDetailPayload(
       type: item.type,
       status: "RECEIVED",
       intent: null,
-      bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+      bodyText: item.bodyText ?? null,
       media: buildInboxMessageMedia({
         type: item.type,
         rawPayload: item.rawPayload,
@@ -10965,7 +10965,7 @@ async function buildConversationDetailPayload(
         type: item.type,
         status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
         intent: null,
-        bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+        bodyText: item.bodyText ?? null,
         media: buildInboxMessageMedia({
           type: item.type,
           rawPayload: item.rawPayload,
