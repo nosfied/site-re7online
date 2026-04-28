@@ -875,6 +875,7 @@ export default function AppInboxPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
+  const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
   const [readState, setReadState] = useState<InboxReadState>(EMPTY_READ_STATE);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
@@ -1021,14 +1022,17 @@ export default function AppInboxPage() {
     return node.scrollHeight - node.scrollTop - node.clientHeight <= 160;
   }, []);
 
-  const scrollTimelineToMessageIndex = useCallback((index: number) => {
-    const node = timelineRef.current;
-    if (!node) return false;
-    const target = node.querySelector<HTMLElement>(`[data-message-index="${index}"]`);
-    if (!target) return false;
-    node.scrollTop = Math.max(0, target.offsetTop - node.offsetTop - 18);
-    setShowJumpToLatest(true);
-    return true;
+  const scrollTimelineToUnreadAnchor = useCallback((onComplete?: () => void) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const node = timelineRef.current;
+        const target = node?.querySelector<HTMLElement>("[data-unread-anchor='true']");
+        if (!node || !target) return;
+        node.scrollTop = Math.max(0, target.offsetTop - node.offsetTop - 24);
+        setShowJumpToLatest(true);
+        onComplete?.();
+      });
+    });
   }, []);
 
   const focusComposer = useCallback(() => {
@@ -1236,6 +1240,7 @@ export default function AppInboxPage() {
       pendingUnreadScrollTargetRef.current = null;
       pendingReadAfterHydrationRef.current = null;
       setUnreadSeparatorIndex(null);
+      setUnreadAnchorMessageIdentity(null);
       return;
     }
     if (!selectedConversationKey) {
@@ -1252,6 +1257,7 @@ export default function AppInboxPage() {
       pendingUnreadScrollTargetRef.current = null;
       pendingReadAfterHydrationRef.current = null;
       setUnreadSeparatorIndex(null);
+      setUnreadAnchorMessageIdentity(null);
       return;
     }
 
@@ -1467,6 +1473,7 @@ export default function AppInboxPage() {
       lastSelectedConversationKeyRef.current = selectedConversationKey;
       lastMessageSignatureRef.current = null;
       setUnreadSeparatorIndex(null);
+      setUnreadAnchorMessageIdentity(null);
     }
 
     lastMessageSignatureRef.current = getLatestMessageSignature(messages);
@@ -1477,16 +1484,19 @@ export default function AppInboxPage() {
       const unreadTarget = pendingUnreadScrollTargetRef.current;
       if (unreadTarget?.conversationKey === selectedConversationKey) {
         const unreadIndex = findFirstUnreadMessageIndex(messages, unreadTarget.lastReadAt);
-        if (unreadIndex >= 0 && scrollTimelineToMessageIndex(unreadIndex)) {
+        const unreadMessage = unreadIndex >= 0 ? messages[unreadIndex] : null;
+        if (unreadMessage) {
           setUnreadSeparatorIndex(unreadIndex);
+          setUnreadAnchorMessageIdentity(getMessageIdentity(unreadMessage));
           pendingUnreadScrollTargetRef.current = null;
           shouldScrollToBottomRef.current = false;
-          completeHydrationRead(selectedConversationKey);
+          scrollTimelineToUnreadAnchor(() => completeHydrationRead(selectedConversationKey));
           return;
         }
         if (loadingMessages) return;
         pendingUnreadScrollTargetRef.current = null;
         setUnreadSeparatorIndex(null);
+        setUnreadAnchorMessageIdentity(null);
         shouldScrollToBottomRef.current = true;
       }
 
@@ -1503,7 +1513,7 @@ export default function AppInboxPage() {
     messagesConversationKey,
     completeHydrationRead,
     scrollTimelineToBottom,
-    scrollTimelineToMessageIndex,
+    scrollTimelineToUnreadAnchor,
     selectedConversationKey,
   ]);
 
@@ -2400,6 +2410,7 @@ export default function AppInboxPage() {
                     };
                     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
                     setUnreadSeparatorIndex(null);
+                    setUnreadAnchorMessageIdentity(null);
                     setActiveConversationIdentity(conversationIdentity);
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
@@ -2505,6 +2516,7 @@ export default function AppInboxPage() {
                   pendingUnreadScrollTargetRef.current = null;
                   pendingReadAfterHydrationRef.current = null;
                   setUnreadSeparatorIndex(null);
+                  setUnreadAnchorMessageIdentity(null);
                 }}
                 className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -2633,12 +2645,19 @@ export default function AppInboxPage() {
             ) : null}
             <div className="space-y-3">
               {messages.map((item, index) => {
+                const messageIdentity = getMessageIdentity(item);
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
+                const isUnreadAnchor =
+                  unreadAnchorMessageIdentity === messageIdentity || unreadSeparatorIndex === index;
                 return (
-                  <Fragment key={getMessageIdentity(item)}>
-                    {unreadSeparatorIndex === index ? (
-                      <div className="flex items-center gap-3 py-1" aria-label="Mensagens nao lidas">
+                  <Fragment key={messageIdentity}>
+                    {isUnreadAnchor ? (
+                      <div
+                        data-unread-anchor="true"
+                        className="flex items-center gap-3 py-1"
+                        aria-label="Mensagens nao lidas"
+                      >
                         <span className="h-px flex-1 bg-emerald-500/35" />
                         <span className="rounded-full border border-emerald-500/35 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
                           Mensagens nao lidas

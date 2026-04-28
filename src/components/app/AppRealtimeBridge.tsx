@@ -33,18 +33,19 @@ export default function AppRealtimeBridge() {
   const pathname = usePathname();
   const clientRef = useRef<AppRealtimeClient | null>(null);
   const sessionKeyRef = useRef<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationQueueRef = useRef(0);
   const notificationTimerRef = useRef<number | null>(null);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
     if (!isSoundEnabled() || !hasPrimedAudioRef.current || typeof window === "undefined") return;
     try {
-      const baseAudio = audioRef.current;
+      const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
       const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
-      nextAudio.volume = 0.95;
+      nextAudio.volume = sound === "active" ? 0.42 : 0.95;
       nextAudio.currentTime = 0;
       void nextAudio.play();
     } catch {
@@ -59,7 +60,7 @@ export default function AppRealtimeBridge() {
       return;
     }
     notificationQueueRef.current -= 1;
-    playNotificationSound();
+    playNotificationSound("primary");
     notificationTimerRef.current = window.setTimeout(
       processNotificationQueue,
       NOTIFICATION_SOUND_INTERVAL_MS
@@ -90,13 +91,17 @@ export default function AppRealtimeBridge() {
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
     const canPlayInternalSound = isSoundEnabled() && hasPrimedAudioRef.current;
-    if (!appIsFocused || !canPlayInternalSound) {
+    if (request.notifyBrowser && (!appIsFocused || !canPlayInternalSound)) {
       showBrowserNotification(request, canPlayInternalSound);
     }
     if (canPlayInternalSound) {
-      enqueueNotification();
+      if (request.sound === "active") {
+        playNotificationSound("active");
+      } else {
+        enqueueNotification();
+      }
     }
-  }, [enqueueNotification, showBrowserNotification]);
+  }, [enqueueNotification, playNotificationSound, showBrowserNotification]);
 
   const handleInboundNotification = useCallback((event: AppRealtimeEvent) => {
     if (event.message.direction !== "INBOUND") return;
@@ -125,11 +130,15 @@ export default function AppRealtimeBridge() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const audio = new window.Audio("/sounds/inbox-notification.wav");
-    audio.preload = "auto";
-    audioRef.current = audio;
+    const primaryAudio = new window.Audio("/sounds/inbox-notification.wav");
+    primaryAudio.preload = "auto";
+    const activeAudio = new window.Audio("/sounds/inbox-active-message.wav");
+    activeAudio.preload = "auto";
+    primaryAudioRef.current = primaryAudio;
+    activeAudioRef.current = activeAudio;
     return () => {
-      audioRef.current = null;
+      primaryAudioRef.current = null;
+      activeAudioRef.current = null;
     };
   }, []);
 
@@ -141,23 +150,24 @@ export default function AppRealtimeBridge() {
     if (typeof window === "undefined") return;
     const primeNotificationAudio = () => {
       hasPrimedAudioRef.current = true;
-      const audio = audioRef.current;
-      if (!audio) return;
-      try {
-        const previousVolume = audio.volume;
-        audio.volume = 0;
-        const playAttempt = audio.play();
-        void playAttempt
-          .then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-            audio.volume = previousVolume || 0.95;
-          })
-          .catch(() => {
-            audio.volume = previousVolume || 0.95;
-          });
-      } catch {
-        audio.volume = 0.95;
+      for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
+        if (!audio) continue;
+        try {
+          const previousVolume = audio.volume;
+          audio.volume = 0;
+          const playAttempt = audio.play();
+          void playAttempt
+            .then(() => {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.volume = previousVolume || 0.95;
+            })
+            .catch(() => {
+              audio.volume = previousVolume || 0.95;
+            });
+        } catch {
+          audio.volume = 0.95;
+        }
       }
     };
 

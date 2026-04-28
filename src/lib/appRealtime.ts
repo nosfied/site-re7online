@@ -46,6 +46,8 @@ export type AppNotificationRequest = {
   key: string;
   title: string;
   body: string;
+  sound: "primary" | "active";
+  notifyBrowser: boolean;
 };
 
 export type AppNotificationCandidate = {
@@ -72,6 +74,19 @@ type InboundOrHandoffNotificationInput = {
   handoffStatus?: AppHandoffStatus | null;
   isHandoffTransition?: boolean;
 };
+
+function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
+  if (input.direction && input.direction.toUpperCase() !== "INBOUND") return null;
+  if (!input.conversationIdentity) return null;
+  if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
+  if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
+
+  const isActiveConversation = input.conversationIdentity === getActiveConversationIdentity();
+  if (isActiveConversation && isAppVisibleAndFocused()) {
+    return "active" as const;
+  }
+  return "primary" as const;
+}
 
 export type AppRealtimeClient = {
   connect: () => void;
@@ -178,13 +193,7 @@ function isAppVisibleAndFocused() {
 }
 
 export function shouldNotifyInboundOrHandoff(input: InboundOrHandoffNotificationInput) {
-  if (input.direction && input.direction.toUpperCase() !== "INBOUND") return false;
-  if (!input.conversationIdentity) return false;
-  if (input.conversationIdentity === getActiveConversationIdentity() && isAppVisibleAndFocused()) {
-    return false;
-  }
-  if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
-  if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return false;
+  if (!resolveNotificationSound(input)) return false;
   return shouldProcessNotification(input.notificationKey);
 }
 
@@ -206,14 +215,17 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
           direction: candidate.direction,
         });
 
-  const shouldNotify = shouldNotifyInboundOrHandoff({
+  const notificationInput = {
     conversationIdentity: candidate.conversationIdentity,
     notificationKey,
     direction: candidate.direction,
     mode: candidate.mode,
     handoffStatus: candidate.handoffStatus,
     isHandoffTransition: candidate.kind === "handoff",
-  });
+  };
+  const sound = resolveNotificationSound(notificationInput);
+  if (!sound) return false;
+  const shouldNotify = shouldProcessNotification(notificationKey);
 
   if (!shouldNotify) return false;
 
@@ -227,6 +239,8 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
       (candidate.kind === "handoff"
         ? "Uma conversa foi transferida para atendimento."
         : candidate.bodyText || "Voce recebeu uma nova mensagem."),
+    sound,
+    notifyBrowser: sound === "primary",
   });
 
   return true;
