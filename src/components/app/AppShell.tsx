@@ -94,7 +94,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   const navGroupClasses =
     "grid min-w-0 max-w-full gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5";
-  const navLinksClasses = "flex min-w-0 flex-wrap items-center gap-1";
+  const navLinksClasses = "flex min-w-0 flex-wrap items-center justify-center gap-1";
   const userActions = (
     <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
       <span className="min-w-0 truncate text-right text-xs leading-none text-white/65 lg:text-sm">
@@ -114,15 +114,15 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       type="button"
       onClick={() => router.push("/app/inbox")}
       title="Abrir inbox"
-      className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/95 lg:h-20 lg:w-20"
+      className="relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[109px] lg:w-[247px]"
     >
       <Image
         src="/images/converta-logo-light.png"
         alt="Converta"
-        width={96}
-        height={120}
+        width={160}
+        height={200}
         priority
-        className="h-[58px] w-[46px] object-contain lg:h-[72px] lg:w-[58px]"
+        className="absolute left-1/2 top-1/2 m-0 block h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[177px]"
       />
     </button>
   );
@@ -217,25 +217,25 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   return (
     <main className="min-h-screen overflow-x-hidden bg-re7-navy px-3 py-3 text-white sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
-        <header className="sticky top-2 z-20 rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-2.5 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur">
-          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[88px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[96px_minmax(0,1fr)_160px]">
-            <div className="flex min-w-0 items-center justify-between gap-2 lg:block">
+        <header className="fixed left-3 right-3 top-2 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-1.5 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:w-[calc(100%-2.5rem)]">
+          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[120px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[128px_minmax(0,1fr)_160px]">
+            <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
               <div className="min-w-0 lg:hidden">
                 {userActions}
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto] lg:items-center lg:justify-start lg:gap-2 xl:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto] lg:items-center lg:justify-center lg:gap-2 xl:gap-3">
               <div className={navGroupClasses}>
-                <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
+                <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                   Operacao
                 </p>
                 <div className={navLinksClasses}>{operationLinks}</div>
               </div>
               {administrationLinks ? (
                 <div className={navGroupClasses}>
-                  <p className="text-[10px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
+                  <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                     Administracao
                   </p>
                   <div className={navLinksClasses}>{administrationLinks}</div>
@@ -246,6 +246,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
+        <div aria-hidden="true" className="h-[164px] sm:h-[176px] lg:h-[130px]" />
 
         <section className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 sm:px-4">
           <h1 className="text-lg font-bold">{title}</h1>
