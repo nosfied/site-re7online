@@ -89,6 +89,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
         Relatorios
       </Link>
+      {isAdminRole(session.user.role) ? (
+        <Link href="/app/settings/privacy" className={getLinkClasses(pathname === "/app/settings/privacy")}>
+          Privacidade
+        </Link>
+      ) : null}
     </>
   ) : null;
 

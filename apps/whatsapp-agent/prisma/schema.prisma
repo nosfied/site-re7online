@@ -71,6 +71,7 @@ model Client {
   templates     Template[]
   templateRequests TemplateRequest[]
   slaConfig      SLAConfig?
+  retentionConfig RetentionConfig?
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
   chatbotFlows  ChatbotFlow[]
@@ -133,6 +134,8 @@ model Conversation {
   closedAt         DateTime?
   lastInboundAt    DateTime?
   lastOutboundAt   DateTime?
+  deletedAt        DateTime?
+  anonymizedAt     DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -145,6 +148,7 @@ model Conversation {
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
   @@index([clientId, closedAt])
+  @@index([clientId, deletedAt])
   @@index([clientId, departmentId])
   @@index([clientId, firstAssignedAt])
 }
@@ -238,6 +242,15 @@ model Event {
   @@index([clientId, eventName, createdAt])
   @@index([clientId, waIdCanonical, createdAt])
   @@unique([clientId, eventName, requestId])
+}
+
+model RetentionConfig {
+  id            String   @id @default(cuid())
+  clientId      String   @unique @db.Uuid
+  retentionDays Int      @default(90)
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model ConversationRuntimeState {

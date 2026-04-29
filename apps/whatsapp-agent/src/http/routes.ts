@@ -165,6 +165,151 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (
+    req.method === "GET" &&
+    (pathname === "/app/privacy/retention" || pathname === "/app/privacy")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode gerenciar privacidade." });
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const retention = await getOrCreateRetentionConfig(prisma, client.id);
+      json(res, 200, { ok: true, retentionDays: retention.retentionDays, createdAt: retention.createdAt });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.get.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/privacy/retention") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode gerenciar privacidade." });
+      return;
+    }
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const retentionDays = normalizeRetentionDays((body as { retentionDays?: unknown }).retentionDays);
+      if (!retentionDays) {
+        json(res, 400, { error: "bad_request", message: "Informe dias de retencao entre 1 e 3650." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const retention = await prisma.retentionConfig.upsert({
+        where: { clientId: client.id },
+        update: { retentionDays },
+        create: { clientId: client.id, retentionDays },
+      });
+      json(res, 200, { ok: true, retentionDays: retention.retentionDays, createdAt: retention.createdAt });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.update.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/privacy/retention/execute") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar retencao." });
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const result = await executeRetentionForClient(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        requestId,
+      });
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.execute.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    (req.method === "DELETE" || req.method === "POST") &&
+    /^\/app\/conversations\/[^/]+(?:\/anonymize)?$/.test(pathname)
+  ) {
+    const isAnonymize = req.method === "POST" && pathname.endsWith("/anonymize");
+    const isDelete = req.method === "DELETE" && !pathname.endsWith("/anonymize");
+    if (!isAnonymize && !isDelete) {
+      json(res, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar acoes LGPD." });
+      return;
+    }
+    try {
+      const parts = pathname.split("/");
+      const rawConversationId = decodeURIComponent(parts[3] ?? "").trim();
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const target = await findPrivacyConversationTarget(prisma, client.id, rawConversationId);
+      if (!target) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (isDelete) {
+        const result = await deleteConversationPrivacyData(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          conversation: target,
+          userId: clientAuth.userId,
+          requestId,
+          audit: true,
+        });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      const result = await anonymizeConversationPrivacyData(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: target,
+        userId: clientAuth.userId,
+        requestId,
+      });
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error({ event: "privacy.conversation_action.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/conversations") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -10503,6 +10648,394 @@ function buildScopedWaIdWhere(rawWaId: string) {
   };
 }
 
+type PrivacyConversationTarget = {
+  id: string;
+  waId: string;
+  waIdCanonical: string | null;
+  deletedAt?: Date | null;
+  anonymizedAt?: Date | null;
+};
+
+function normalizeRetentionDays(value: unknown) {
+  const days = Number(value);
+  if (!Number.isInteger(days) || days < 1 || days > 3650) return null;
+  return days;
+}
+
+function maskPersonalWaId(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 8) {
+    return `${digits.slice(0, 4)}******${digits.slice(-4)}`;
+  }
+  if (raw.length <= 4) return "******";
+  return `${raw.slice(0, 2)}******${raw.slice(-2)}`;
+}
+
+function buildAnonymizedWaId(target: PrivacyConversationTarget) {
+  const masked = maskPersonalWaId(target.waId);
+  return masked.includes("*") ? `${masked}:${target.id.slice(0, 8)}` : `anon:${target.id.slice(0, 12)}`;
+}
+
+function buildPrivacyAuditPayload(params: {
+  userId: string;
+  clientId: string;
+  conversationId?: string | null;
+  action: string;
+  details?: Record<string, unknown>;
+}) {
+  return {
+    userId: params.userId,
+    clientId: params.clientId,
+    conversationId: params.conversationId ?? null,
+    timestamp: new Date().toISOString(),
+    action: params.action,
+    ...(params.details ? { details: params.details } : {}),
+  };
+}
+
+async function persistPrivacyAuditEvent(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    conversationId?: string | null;
+    waId?: string | null;
+    waIdCanonical?: string | null;
+    requestId: string;
+    eventName: "conversation.deleted" | "conversation.anonymized" | "retention.executed";
+    payload: Prisma.InputJsonValue;
+  }
+) {
+  await prisma.event.create({
+    data: {
+      clientId: params.clientId,
+      conversationId: params.conversationId ?? null,
+      waId: params.waId ?? null,
+      waIdCanonical: params.waIdCanonical ?? null,
+      requestId: `${params.requestId}:${params.eventName}`,
+      eventName: params.eventName,
+      payloadJson: params.payload,
+    },
+  });
+}
+
+async function getOrCreateRetentionConfig(prisma: ReturnType<typeof getPrisma>, clientId: string) {
+  return prisma.retentionConfig.upsert({
+    where: { clientId },
+    update: {},
+    create: { clientId, retentionDays: 90 },
+  });
+}
+
+async function findPrivacyConversationTarget(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string,
+  rawConversationId: string
+): Promise<PrivacyConversationTarget | null> {
+  if (!rawConversationId) return null;
+  const normalizedWaId = normalizeWaId(rawConversationId);
+  return prisma.conversation.findFirst({
+    where: {
+      clientId,
+      OR: [
+        { id: rawConversationId },
+        ...(normalizedWaId
+          ? [
+              { waId: normalizedWaId },
+              { waIdCanonical: canonicalizeBrazilWaId(normalizedWaId) },
+            ]
+          : []),
+      ],
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+    select: { id: true, waId: true, waIdCanonical: true, deletedAt: true, anonymizedAt: true },
+  });
+}
+
+function buildConversationPrivacyWhere(target: PrivacyConversationTarget) {
+  const values = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
+  return {
+    OR: [
+      { waId: { in: values } },
+      { waIdCanonical: { in: values } },
+    ],
+  };
+}
+
+async function deleteConversationPrivacyData(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    conversation: PrivacyConversationTarget;
+    userId: string;
+    requestId: string;
+    audit: boolean;
+  }
+) {
+  const target = params.conversation;
+  const scopedWaWhere = buildConversationPrivacyWhere(target);
+  const now = new Date();
+  const matchingConversations = await prisma.conversation.findMany({
+    where: {
+      clientId: params.clientId,
+      OR: [{ id: target.id }, ...scopedWaWhere.OR],
+    },
+    select: { id: true, waId: true, waIdCanonical: true, deletedAt: true },
+  });
+  const conversationIds = matchingConversations.map((item) => item.id);
+  const waIds = Array.from(
+    new Set(matchingConversations.flatMap((item) => [item.waId, item.waIdCanonical].filter(Boolean) as string[]))
+  );
+
+  const [conversations, runtimeStates] = await prisma.$transaction([
+    prisma.conversation.updateMany({
+      where: { clientId: params.clientId, id: { in: conversationIds }, deletedAt: null },
+      data: { deletedAt: now, closedAt: now },
+    }),
+    prisma.conversationRuntimeState.updateMany({
+      where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+      data: {
+        status: ConversationOperationalStatus.CLOSED,
+        closedAt: now,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        handoffStatus: "NONE",
+        handoffReleasedAt: now,
+        mode: "BOT",
+      },
+    }),
+  ]);
+
+  for (const waId of waIds) {
+    const currentRuntime = await runtimeStorage.getConversation(waId, params.clientKey);
+    if (!currentRuntime) continue;
+    await runtimeStorage.upsertConversation({
+      ...currentRuntime,
+      status: "CLOSED",
+      closedAt: now.toISOString(),
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      handoff: {
+        ...currentRuntime.handoff,
+        status: "none",
+        releasedAt: now.toISOString(),
+      },
+      mode: "BOT",
+    });
+  }
+
+  if (params.audit) {
+    const payload = buildPrivacyAuditPayload({
+      userId: params.userId,
+      clientId: params.clientId,
+      conversationId: target.id,
+      action: "conversation.deleted",
+      details: { action: "soft_delete", softDeletedConversations: conversations.count },
+    });
+    await persistPrivacyAuditEvent(prisma, {
+      clientId: params.clientId,
+      conversationId: null,
+      waId: null,
+      waIdCanonical: null,
+      requestId: params.requestId,
+      eventName: "conversation.deleted",
+      payload: payload as Prisma.InputJsonValue,
+    });
+    logger.info({ event: "conversation.deleted", ...payload });
+  }
+
+  return {
+    deleted: {
+      action: "soft_delete",
+      conversations: conversations.count,
+      softDeletedConversations: conversations.count,
+      metrics: 0,
+      messages: 0,
+      inboundMessages: 0,
+      outboundMessages: 0,
+      runtimeStates: runtimeStates.count,
+      events: 0,
+      contacts: 0,
+      leads: 0,
+    },
+  };
+}
+
+async function anonymizeConversationPrivacyData(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    conversation: PrivacyConversationTarget;
+    userId: string;
+    requestId: string;
+  }
+) {
+  const target = params.conversation;
+  const anonymizedWaId = buildAnonymizedWaId(target);
+  const anonymizedName = "Usuario Anonimizado";
+  const scopedWaWhere = buildConversationPrivacyWhere(target);
+  const waIds = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
+
+  const currentRuntime = await runtimeStorage.getConversation(target.waId, params.clientKey);
+  if (currentRuntime) {
+    await runtimeStorage.upsertConversation({
+      ...currentRuntime,
+      answers: {},
+    });
+  }
+
+  const [conversation, runtimeStates, inbound, outbound, contacts, leads, events] = await prisma.$transaction([
+    prisma.conversation.updateMany({
+      where: { clientId: params.clientId, id: target.id },
+      data: { waId: anonymizedWaId, waIdCanonical: anonymizedWaId, anonymizedAt: new Date() },
+    }),
+    prisma.conversationRuntimeState.updateMany({
+      where: { clientId: params.clientId, ...scopedWaWhere },
+      data: {
+        waId: anonymizedWaId,
+        waIdCanonical: anonymizedWaId,
+        conversationKey: `${params.clientKey}:${anonymizedWaId}`,
+        answers: {},
+      },
+    }),
+    prisma.inboundMessage.updateMany({
+      where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+      data: { waId: anonymizedWaId, waIdCanonical: anonymizedWaId, bodyText: "[mensagem anonimizada]", rawPayload: Prisma.JsonNull },
+    }),
+    prisma.outboundMessage.updateMany({
+      where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+      data: { waId: anonymizedWaId, waIdCanonical: anonymizedWaId, bodyText: "[mensagem anonimizada]", errorBody: null, rawPayload: Prisma.JsonNull },
+    }),
+    prisma.contact.updateMany({
+      where: { clientId: params.clientId, waId: { in: waIds } },
+      data: { waId: anonymizedWaId, name: anonymizedName },
+    }),
+    prisma.lead.updateMany({
+      where: { tenantId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+      data: {
+        waId: anonymizedWaId,
+        waIdCanonical: anonymizedWaId,
+        name: anonymizedName,
+        phone: anonymizedWaId,
+        city: null,
+        service: null,
+      },
+    }),
+    prisma.event.updateMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ conversationId: target.id }, { waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
+      },
+      data: {
+        waId: anonymizedWaId,
+        waIdCanonical: anonymizedWaId,
+        payloadJson: { anonymized: true, action: "conversation.anonymized" },
+      },
+    }),
+  ]);
+
+  const payload = buildPrivacyAuditPayload({
+    userId: params.userId,
+    clientId: params.clientId,
+    conversationId: target.id,
+    action: "conversation.anonymized",
+    details: { anonymizedWaId: maskPersonalWaId(target.waId) },
+  });
+  await persistPrivacyAuditEvent(prisma, {
+    clientId: params.clientId,
+    conversationId: target.id,
+    waId: anonymizedWaId,
+    waIdCanonical: anonymizedWaId,
+    requestId: params.requestId,
+    eventName: "conversation.anonymized",
+    payload: payload as Prisma.InputJsonValue,
+  });
+  logger.info({ event: "conversation.anonymized", ...payload });
+
+  return {
+    anonymized: {
+      conversation: conversation.count,
+      runtimeStates: runtimeStates.count,
+      inboundMessages: inbound.count,
+      outboundMessages: outbound.count,
+      contacts: contacts.count,
+      leads: leads.count,
+      events: events.count,
+    },
+    waId: anonymizedWaId,
+  };
+}
+
+async function executeRetentionForClient(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    userId: string;
+    requestId: string;
+  }
+) {
+  const retention = await getOrCreateRetentionConfig(prisma, params.clientId);
+  const cutoff = new Date(Date.now() - retention.retentionDays * 24 * 60 * 60 * 1000);
+  const conversations = await prisma.conversation.findMany({
+    where: { clientId: params.clientId, createdAt: { lt: cutoff }, deletedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, waId: true, waIdCanonical: true, deletedAt: true, anonymizedAt: true },
+  });
+  let softDeletedConversations = 0;
+  let anonymizedConversations = 0;
+  for (const conversation of conversations) {
+    const anonymized = await anonymizeConversationPrivacyData(prisma, {
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      conversation,
+      userId: params.userId,
+      requestId: `${params.requestId}:retention:anonymize:${conversation.id}`,
+    });
+    anonymizedConversations += anonymized.anonymized.conversation;
+    const softDeleted = await deleteConversationPrivacyData(prisma, {
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      conversation,
+      userId: params.userId,
+      requestId: `${params.requestId}:retention:${conversation.id}`,
+      audit: false,
+    });
+    softDeletedConversations += softDeleted.deleted.softDeletedConversations;
+  }
+  const payload = buildPrivacyAuditPayload({
+    userId: params.userId,
+    clientId: params.clientId,
+    conversationId: null,
+    action: "retention.executed",
+    details: {
+      retentionDays: retention.retentionDays,
+      cutoff: cutoff.toISOString(),
+      action: "soft_delete_anonymize",
+      anonymizedConversations,
+      softDeletedConversations,
+    },
+  });
+  await persistPrivacyAuditEvent(prisma, {
+    clientId: params.clientId,
+    requestId: params.requestId,
+    eventName: "retention.executed",
+    payload: payload as Prisma.InputJsonValue,
+  });
+  logger.info({ event: "retention.executed", ...payload });
+  return {
+    retentionDays: retention.retentionDays,
+    cutoff: cutoff.toISOString(),
+    deletedConversations: softDeletedConversations,
+    softDeletedConversations,
+    anonymizedConversations,
+  };
+}
+
 function getWaIdGroupKey(waId: string, waIdCanonical?: string | null) {
   return waIdCanonical ?? canonicalizeBrazilWaId(waId);
 }
@@ -10521,6 +11054,7 @@ async function resolveConversationTarget(
   const matches = await prisma.conversation.findMany({
     where: {
       clientId: params.clientId,
+      deletedAt: null,
       ...buildScopedWaIdWhere(lookup.raw),
     },
     select: {
@@ -10710,6 +11244,7 @@ async function buildConversationListPayload(
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
   const conversationWhere: Prisma.ConversationWhereInput = {
     clientId: params.clientId,
+    deletedAt: null,
     ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
     ...(params.cursor
       ? {

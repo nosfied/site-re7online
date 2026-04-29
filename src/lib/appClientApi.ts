@@ -920,6 +920,55 @@ export async function updateAppDepartment(
   });
 }
 
+export async function fetchAppRetentionConfig(
+  session: AppSession
+): Promise<{ ok: true; retentionDays: number; createdAt: string }> {
+  return requestAppJson(session, "/app/privacy/retention");
+}
+
+export async function updateAppRetentionConfig(
+  session: AppSession,
+  retentionDays: number
+): Promise<{ ok: true; retentionDays: number; createdAt: string }> {
+  return requestAppJson(session, "/app/privacy/retention", {
+    method: "PUT",
+    body: JSON.stringify({ retentionDays }),
+  });
+}
+
+export async function executeAppRetention(
+  session: AppSession
+): Promise<{
+  ok: true;
+  retentionDays: number;
+  cutoff: string;
+  deletedConversations: number;
+  softDeletedConversations?: number;
+  anonymizedConversations?: number;
+}> {
+  return requestAppJson(session, "/app/privacy/retention/execute", {
+    method: "POST",
+  });
+}
+
+export async function deleteAppConversationData(
+  session: AppSession,
+  conversationIdOrWaId: string
+): Promise<{ ok: true; deleted: Record<string, number | string> }> {
+  return requestAppJson(session, `/app/conversations/${encodeURIComponent(conversationIdOrWaId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function anonymizeAppConversationData(
+  session: AppSession,
+  conversationIdOrWaId: string
+): Promise<{ ok: true; anonymized: Record<string, number>; waId: string }> {
+  return requestAppJson(session, `/app/conversations/${encodeURIComponent(conversationIdOrWaId)}/anonymize`, {
+    method: "POST",
+  });
+}
+
 export async function updateAppLeadStatus(
   session: AppSession,
   leadId: string,
