@@ -169,7 +169,14 @@ try {
     });
     const cutoff = new Date(Date.now() - retention.retentionDays * 24 * 60 * 60 * 1000);
     const conversations = await prisma.conversation.findMany({
-      where: { clientId: client.id, createdAt: { lt: cutoff }, deletedAt: null },
+      where: {
+        clientId: client.id,
+        deletedAt: null,
+        createdAt: { lt: cutoff },
+        updatedAt: { lt: cutoff },
+        OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: cutoff } }],
+        AND: [{ OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: cutoff } }] }],
+      },
       orderBy: { createdAt: "asc" },
       select: { id: true, waId: true, waIdCanonical: true },
     });

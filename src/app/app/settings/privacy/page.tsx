@@ -42,6 +42,9 @@ export default function AppPrivacySettingsPage() {
   const [conversationId, setConversationId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
+  const [anonymizeConfirmation, setAnonymizeConfirmation] = useState("");
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -66,6 +69,14 @@ export default function AppPrivacySettingsPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryConversationId = params.get("conversationId")?.trim();
+    if (queryConversationId) {
+      setConversationId(queryConversationId);
+    }
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -150,6 +161,15 @@ export default function AppPrivacySettingsPage() {
     }
   };
 
+  const openDeleteModal = () => {
+    const target = conversationId.trim();
+    if (!target) {
+      setError("Informe o waId ou ID da conversa.");
+      return;
+    }
+    setDeleteModalOpen(true);
+  };
+
   const handleDelete = async () => {
     if (!session) return;
     const target = conversationId.trim();
@@ -157,16 +177,13 @@ export default function AppPrivacySettingsPage() {
       setError("Informe o waId ou ID da conversa.");
       return;
     }
-    const confirmed = window.confirm(
-      "Essa ação remove a conversa da operação. Os dados pessoais poderão ser anonimizados para fins de LGPD."
-    );
-    if (!confirmed) return;
     setDeleting(true);
     setError(null);
     setSuccess(null);
     try {
       await deleteAppConversationData(session, target);
       setConversationId("");
+      setDeleteModalOpen(false);
       setSuccess("Conversa removida da operacao com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -178,6 +195,16 @@ export default function AppPrivacySettingsPage() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const openAnonymizeModal = () => {
+    const target = conversationId.trim();
+    if (!target) {
+      setError("Informe o waId ou ID da conversa.");
+      return;
+    }
+    setAnonymizeConfirmation("");
+    setAnonymizeModalOpen(true);
   };
 
   const handleAnonymize = async () => {
@@ -193,6 +220,8 @@ export default function AppPrivacySettingsPage() {
     try {
       await anonymizeAppConversationData(session, target);
       setConversationId("");
+      setAnonymizeModalOpen(false);
+      setAnonymizeConfirmation("");
       setSuccess("Dados da conversa anonimizados com sucesso.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -238,27 +267,46 @@ export default function AppPrivacySettingsPage() {
               placeholder="Ex: 5584999999999"
               className="w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
             />
-            <div className="flex flex-wrap gap-2">
+            <div className="rounded-xl border border-white/10 bg-[#071225]/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Acoes reversiveis
+              </p>
+              <p className="mt-1 text-sm text-white/65">
+                Exclusao remove a conversa apenas da operacao.
+              </p>
               <button
                 type="button"
-                onClick={handleAnonymize}
+                onClick={openDeleteModal}
+                disabled={loading || deleting || anonymizing}
+                className="mt-3 rounded-lg border border-white/15 bg-white/8 px-4 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Excluindo..." : "Excluir da operacao"}
+              </button>
+            </div>
+            <div className="rounded-xl border border-red-400/30 bg-red-950/25 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-red-100/75">
+                  Acoes irreversiveis
+                </p>
+                <span className="rounded-full border border-red-300/30 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-100">
+                  Irreversivel
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-red-50/70">
+                Anonimizacao remove permanentemente os dados pessoais.
+              </p>
+              <button
+                type="button"
+                onClick={openAnonymizeModal}
                 disabled={loading || anonymizing || deleting}
-                className="rounded-lg border border-amber-300/30 bg-amber-500/15 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 rounded-lg border border-red-300/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {anonymizing ? "Anonimizando..." : "Anonimizar dados"}
               </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={loading || deleting || anonymizing}
-                className="rounded-lg border border-red-400/35 bg-red-900/25 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-900/35 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deleting ? "Excluindo..." : "Excluir dados"}
-              </button>
             </div>
             <p className="text-xs leading-relaxed text-white/50">
-              Excluir dados remove a conversa da operacao e preserva auditoria tecnica minima.
-              Use anonimizar dados quando precisar mascarar identificadores e conteudos pessoais.
+              Anonimizacao remove permanentemente os dados pessoais. Exclusao remove a conversa
+              apenas da operacao.
             </p>
           </div>
         </section>
@@ -301,6 +349,84 @@ export default function AppPrivacySettingsPage() {
           </form>
         </section>
       </div>
+      {deleteModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+            <h2 className="text-lg font-semibold text-white">Excluir conversa da operacao</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              Essa acao remove a conversa da operacao, mas mantem dados tecnicos para auditoria.
+            </p>
+            <p className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75">
+              {conversationId.trim()}
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleting}
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Excluindo..." : "Excluir conversa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {anonymizeModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-red-300/20 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-white">Anonimizar dados</h2>
+              <span className="rounded-full border border-red-300/30 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-100">
+                Irreversivel
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              Essa acao remove permanentemente os dados pessoais desta conversa. Apos confirmar,
+              nao sera possivel recuperar nome, telefone ou informacoes sensiveis.
+            </p>
+            <p className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75">
+              {conversationId.trim()}
+            </p>
+            <label className="mt-4 block text-sm font-medium text-white/75" htmlFor="anonymize-confirmation">
+              Digite ANONIMIZAR para confirmar
+            </label>
+            <input
+              id="anonymize-confirmation"
+              value={anonymizeConfirmation}
+              onChange={(event) => setAnonymizeConfirmation(event.target.value)}
+              autoFocus
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-red-300/50"
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAnonymizeModalOpen(false)}
+                disabled={anonymizing}
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAnonymize}
+                disabled={anonymizing || anonymizeConfirmation !== "ANONIMIZAR"}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {anonymizing ? "Anonimizando..." : "Confirmar anonimizacao"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   );
 }

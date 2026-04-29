@@ -1,6 +1,13 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
 import { getPrisma } from "../db.js";
+import { logger } from "../logger/logger.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+
+function maskWaIdForLog(value: string) {
+  const raw = String(value ?? "").trim();
+  if (raw.length <= 4) return "***";
+  return `***${raw.slice(-4)}`;
+}
 
 export async function getDefaultDepartment(
   clientId: string,
@@ -89,7 +96,9 @@ export async function persistConversationWindow(params: {
       },
     },
     select: {
+      id: true,
       departmentId: true,
+      deletedAt: true,
     },
   });
   const resolvedDepartmentId =
@@ -111,6 +120,12 @@ export async function persistConversationWindow(params: {
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
       lastOutboundAt: params.lastOutboundAt ?? undefined,
+      ...(existing?.deletedAt && params.lastInboundAt
+        ? {
+            deletedAt: null,
+            closedAt: null,
+          }
+        : {}),
       departmentId: existing?.departmentId ? undefined : resolvedDepartmentId ?? undefined,
     },
     create: {
@@ -125,6 +140,15 @@ export async function persistConversationWindow(params: {
       departmentId: resolvedDepartmentId ?? undefined,
     },
   });
+  if (existing?.deletedAt && params.lastInboundAt) {
+    logger.info({
+      event: "conversation.reactivated_after_retention",
+      clientId: params.clientId,
+      waId: maskWaIdForLog(params.waId),
+      conversationId: existing.id,
+      reason: "inbound_after_soft_delete",
+    });
+  }
 }
 
 export async function persistOutboundMessage(params: {

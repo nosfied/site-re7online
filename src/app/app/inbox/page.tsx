@@ -2770,6 +2770,23 @@ export default function AppInboxPage() {
               ) : null}
             </div>
             <div className="flex items-center gap-2">
+              {isAdminUser ? (
+                <button
+                  type="button"
+                  disabled={!selectedConversation}
+                  onClick={() => {
+                    if (!selectedConversation) return;
+                    router.push(
+                      `/app/settings/privacy?conversationId=${encodeURIComponent(
+                        selectedConversation.waIdCanonical ?? selectedConversation.waId
+                      )}`
+                    );
+                  }}
+                  className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Privacidade
+                </button>
+              ) : null}
               {selectedConversation?.assignedUserId === session.user.id ? (
                 <button
                   type="button"
