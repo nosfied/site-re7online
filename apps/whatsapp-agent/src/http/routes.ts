@@ -10662,6 +10662,12 @@ function normalizeRetentionDays(value: unknown) {
   return days;
 }
 
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
 function maskPersonalWaId(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   const digits = raw.replace(/\D/g, "");
@@ -10734,18 +10740,18 @@ async function findPrivacyConversationTarget(
 ): Promise<PrivacyConversationTarget | null> {
   if (!rawConversationId) return null;
   const normalizedWaId = normalizeWaId(rawConversationId);
+  const idLookup = isUuidLike(rawConversationId) ? [{ id: rawConversationId }] : [];
+  const waIdLookup = normalizedWaId
+    ? [
+        { waId: normalizedWaId },
+        { waIdCanonical: canonicalizeBrazilWaId(normalizedWaId) },
+      ]
+    : [];
+  if (idLookup.length === 0 && waIdLookup.length === 0) return null;
   return prisma.conversation.findFirst({
     where: {
       clientId,
-      OR: [
-        { id: rawConversationId },
-        ...(normalizedWaId
-          ? [
-              { waId: normalizedWaId },
-              { waIdCanonical: canonicalizeBrazilWaId(normalizedWaId) },
-            ]
-          : []),
-      ],
+      OR: [...idLookup, ...waIdLookup],
     },
     orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
     select: { id: true, waId: true, waIdCanonical: true, deletedAt: true, anonymizedAt: true },
