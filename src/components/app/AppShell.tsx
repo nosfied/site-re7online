@@ -45,6 +45,7 @@ const FULLSCREEN_NAV_ITEMS: NavItem[] = [
   { href: "/app/reports", label: "Relatórios", icon: "📊", adminOnly: true },
   { href: "/app/settings/users", label: "Usuários", icon: "👤", adminOnly: true },
   { href: "/app/settings/departments", label: "Setores", icon: "🏢", adminOnly: true },
+  { href: "/app/settings/privacy", label: "Privacidade", icon: "🔒", adminOnly: true },
 ];
 
 export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
