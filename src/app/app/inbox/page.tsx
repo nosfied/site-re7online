@@ -60,6 +60,7 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
+const CONVERSATION_PAGE_SIZE = 30;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
 
@@ -952,6 +953,8 @@ export default function AppInboxPage() {
   const [leadNameDraft, setLeadNameDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
+  const [conversationNextCursor, setConversationNextCursor] = useState<string | null>(null);
+  const [loadingConversationsPage, setLoadingConversationsPage] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingLeadNotes, setLoadingLeadNotes] = useState(false);
   const [savingLeadStatus, setSavingLeadStatus] = useState(false);
@@ -1002,6 +1005,8 @@ export default function AppInboxPage() {
   const lastInboundConversationTimestampRef = useRef<number | null>(null);
   const humanFlowConversationKeysRef = useRef(new Set<string>());
   const hasInitializedConversationSoundRef = useRef(false);
+  const suppressNextConversationRefreshNotificationRef = useRef(false);
+  const loadedConversationPageCountRef = useRef(0);
   const notifiedInboundMessageKeysRef = useRef(new Set<string>());
   const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
@@ -1355,16 +1360,51 @@ export default function AppInboxPage() {
     return wasAccepted;
   }, []);
 
+  const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
+
+  const buildConversationFetchOptions = useCallback((cursor?: string | null) => {
+    const search = conversationSearch.trim();
+    const status =
+      conversationFilter === "WAITING" ||
+      conversationFilter === "IN_PROGRESS" ||
+      conversationFilter === "WAITING_USER" ||
+      conversationFilter === "CLOSED"
+        ? conversationFilter
+        : null;
+    return {
+      limit: CONVERSATION_PAGE_SIZE,
+      cursor,
+      status,
+      departmentId: isAdminUser && departmentFilter !== "ALL" ? departmentFilter : null,
+      assignedUserId: conversationFilter === "MINE" ? session?.user.id ?? null : null,
+      unassigned: conversationFilter === "UNASSIGNED",
+      search: search || null,
+    };
+  }, [conversationFilter, conversationSearch, departmentFilter, isAdminUser, session?.user.id]);
+
+  const conversationQueryKey = useMemo(
+    () => JSON.stringify(buildConversationFetchOptions(null)),
+    [buildConversationFetchOptions]
+  );
+
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
-    const response = await fetchAppConversations(activeSession, { limit: 100 });
+    const response = await fetchAppConversations(activeSession, buildConversationFetchOptions(null));
     if (response.readState) {
       setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
     }
-    const sortedItems = dedupeConversationsByIdentity(response.items);
+    const pageItems = response.conversations ?? response.items;
+    if (loadedConversationPageCountRef.current <= 1) {
+      setConversationNextCursor(response.nextCursor ?? null);
+      loadedConversationPageCountRef.current = 1;
+    }
+    const sortedItems = dedupeConversationsByIdentity(pageItems);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
     const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
-    if (hasInitializedConversationSoundRef.current) {
+    const suppressRefreshNotifications = suppressNextConversationRefreshNotificationRef.current;
+    if (suppressRefreshNotifications) {
+      hasInitializedConversationSoundRef.current = true;
+    } else if (hasInitializedConversationSoundRef.current) {
       let notifiedHandoffTransition = false;
       for (const item of sortedItems) {
         const conversationKey = getConversationIdentity(item);
@@ -1408,6 +1448,7 @@ export default function AppInboxPage() {
     lastInboundConversationSignatureRef.current = latestInboundSignature;
     lastInboundConversationTimestampRef.current = latestInboundTimestamp;
     humanFlowConversationKeysRef.current = humanFlowConversationKeys;
+    suppressNextConversationRefreshNotificationRef.current = false;
     const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
     setConversations((current) => mergeConversationsPreservingStableOrder(current, sortedItems));
     if (previousListScrollTop !== null) {
@@ -1417,20 +1458,6 @@ export default function AppInboxPage() {
         }
       });
     }
-    if (response.items.length === 0) {
-      setSelectedConversationKey(null);
-      setSelectedConversationWaId(null);
-      setMessages([]);
-      setMessagesConversationKey(null);
-      pendingUnreadScrollTargetRef.current = null;
-      pendingReadAfterHydrationRef.current = null;
-      pendingUnreadAnchorConversationIdentityRef.current = null;
-      pendingUnreadLastReadAtRef.current = null;
-      pendingUnreadAnchorMessageIdRef.current = null;
-      setUnreadSeparatorIndex(null);
-      setUnreadAnchorMessageIdentity(null);
-      return;
-    }
     if (!selectedConversationKey) {
       return;
     }
@@ -1438,17 +1465,6 @@ export default function AppInboxPage() {
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
     if (!selectedItem) {
-      setSelectedConversationKey(null);
-      setSelectedConversationWaId(null);
-      setMessages([]);
-      setMessagesConversationKey(null);
-      pendingUnreadScrollTargetRef.current = null;
-      pendingReadAfterHydrationRef.current = null;
-      pendingUnreadAnchorConversationIdentityRef.current = null;
-      pendingUnreadLastReadAtRef.current = null;
-      pendingUnreadAnchorMessageIdRef.current = null;
-      setUnreadSeparatorIndex(null);
-      setUnreadAnchorMessageIdentity(null);
       return;
     }
 
@@ -1465,7 +1481,46 @@ export default function AppInboxPage() {
         activeConversation.waId
       );
     }
-  }, [buildConversationNotificationRequest, loadingMessages, markConversationAsRead, selectedConversationKey]);
+  }, [
+    buildConversationFetchOptions,
+    buildConversationNotificationRequest,
+    loadingMessages,
+    markConversationAsRead,
+    selectedConversationKey,
+  ]);
+
+  const loadMoreConversations = useCallback(async () => {
+    if (!session || !conversationNextCursor || loadingConversationsPage) return;
+    setLoadingConversationsPage(true);
+    setError(null);
+    try {
+      const response = await fetchAppConversations(
+        session,
+        buildConversationFetchOptions(conversationNextCursor)
+      );
+      if (response.readState) {
+        setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
+      }
+      setConversationNextCursor(response.nextCursor ?? null);
+      loadedConversationPageCountRef.current += 1;
+      const pageItems = dedupeConversationsByIdentity(response.conversations ?? response.items);
+      setConversations((current) => dedupeConversationsByIdentity([...current, ...pageItems]));
+    } catch (err) {
+      if ((err as { status?: number }).status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError((err as { message?: string }).message || "Falha ao carregar mais conversas.");
+    } finally {
+      setLoadingConversationsPage(false);
+    }
+  }, [
+    buildConversationFetchOptions,
+    conversationNextCursor,
+    handleUnauthorized,
+    loadingConversationsPage,
+    session,
+  ]);
 
   useEffect(() => {
     refreshConversationListRef.current = refreshConversationList;
@@ -1574,6 +1629,10 @@ export default function AppInboxPage() {
     if (!session) return;
     let cancelled = false;
     setLoadingConversations(true);
+    setConversationNextCursor(null);
+    loadedConversationPageCountRef.current = 0;
+    suppressNextConversationRefreshNotificationRef.current = true;
+    setConversations([]);
     setError(null);
 
     const loadConversations = refreshConversationListRef.current ?? refreshConversationList;
@@ -1584,6 +1643,7 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
+        suppressNextConversationRefreshNotificationRef.current = false;
         setError(err.message || "Falha ao carregar conversas.");
       })
       .finally(() => {
@@ -1593,7 +1653,7 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, session]);
+  }, [conversationQueryKey, handleUnauthorized, session]);
 
   useEffect(() => {
     if (!session || !selectedConversationWaId) {
@@ -1788,8 +1848,6 @@ export default function AppInboxPage() {
     setActiveInboxConversation(selectedConversationWaId, selectedConversation?.waIdCanonical ?? null);
     return () => setActiveInboxConversation(null);
   }, [selectedConversation?.waIdCanonical, selectedConversationWaId]);
-
-  const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
 
   const departmentOptions = useMemo<DepartmentOption[]>(() => {
     if (departments.length > 0) {
@@ -2675,6 +2733,18 @@ export default function AppInboxPage() {
                 </button>
               );
             })}
+            {conversationNextCursor ? (
+              <div className="px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => void loadMoreConversations()}
+                  disabled={loadingConversationsPage}
+                  className="w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loadingConversationsPage ? "Carregando..." : "Carregar mais conversas"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </aside>
 

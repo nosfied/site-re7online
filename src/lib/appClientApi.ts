@@ -532,11 +532,44 @@ export async function loginAppUser(
 
 export async function fetchAppConversations(
   session: AppSession,
-  options?: { limit?: number }
-): Promise<{ ok: true; count: number; items: InboxConversationItem[]; readState?: AppInboxReadState }> {
+  options?: {
+    limit?: number;
+    cursor?: string | null;
+    status?: string | null;
+    departmentId?: string | null;
+    assignedUserId?: string | null;
+    unassigned?: boolean;
+    search?: string | null;
+  }
+): Promise<{
+  ok: true;
+  count: number;
+  items: InboxConversationItem[];
+  conversations?: InboxConversationItem[];
+  nextCursor?: string | null;
+  readState?: AppInboxReadState;
+}> {
   const params = new URLSearchParams();
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
     params.set("limit", String(options.limit));
+  }
+  if (options?.cursor?.trim()) {
+    params.set("cursor", options.cursor.trim());
+  }
+  if (options?.status?.trim()) {
+    params.set("status", options.status.trim());
+  }
+  if (options?.departmentId?.trim()) {
+    params.set("departmentId", options.departmentId.trim());
+  }
+  if (options?.assignedUserId?.trim()) {
+    params.set("assignedUserId", options.assignedUserId.trim());
+  }
+  if (options?.unassigned) {
+    params.set("unassigned", "true");
+  }
+  if (options?.search?.trim()) {
+    params.set("search", options.search.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversations${suffix}`);

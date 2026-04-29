@@ -170,8 +170,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const limitRaw = Number(query.limit ?? 100);
-      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+      const limitRaw = Number(query.limit ?? 30);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 30;
+      const cursor = decodeConversationListCursor(String(query.cursor ?? "").trim());
+      const statusFilter = normalizeConversationStatusFilter(query.status);
+      const departmentIdFilter = String(query.departmentId ?? "").trim() || null;
+      const assignedUserIdFilter = String(query.assignedUserId ?? "").trim() || null;
+      const unassignedFilter = String(query.unassigned ?? "").trim() === "true";
+      const searchFilter = String(query.search ?? "").trim();
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, { error: "client_not_found" });
@@ -187,7 +193,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
       });
       if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 200, { ok: true, count: 0, items: [] });
+        json(res, 200, { ok: true, count: 0, items: [], conversations: [], nextCursor: null });
         return;
       }
       const result = await buildConversationListPayload(prisma, {
@@ -195,14 +201,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientKey: client.clientKey,
         userId: clientAuth.userId,
         limit,
+        cursor,
+        filters: {
+          status: statusFilter,
+          departmentId: departmentAccess.requiresDepartmentScope
+            ? departmentAccess.departmentId
+            : departmentIdFilter,
+          assignedUserId: assignedUserIdFilter,
+          unassigned: unassignedFilter,
+          search: searchFilter,
+        },
         includeAssignedUserName: true,
       });
-      if (departmentAccess.requiresDepartmentScope) {
-        result.items = result.items.filter(
-          (item) => (item.departmentId ?? null) === departmentAccess.departmentId
-        );
-        result.count = result.items.length;
-      }
       json(res, 200, result);
     } catch (error) {
       logger.error({
@@ -5370,6 +5380,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           clientKey,
           limit,
+          cursor: null,
+          filters: {
+            status: null,
+            departmentId: null,
+            assignedUserId: null,
+            unassigned: false,
+            search: "",
+          },
           includeAssignedUserName: true,
         });
         json(res, 200, result);
@@ -10508,6 +10526,7 @@ async function resolveConversationTarget(
     select: {
       waId: true,
       waIdCanonical: true,
+      departmentId: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
@@ -10582,6 +10601,98 @@ function dedupeCampaignRecipients(
   return Array.from(canonicalToRaw.values());
 }
 
+type ConversationListCursor = {
+  updatedAt: string;
+  conversationIdentity: string;
+};
+
+type ConversationListFilters = {
+  status: ConversationOperationalStatus | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+  unassigned: boolean;
+  search: string;
+};
+
+function decodeConversationListCursor(raw: string): ConversationListCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<ConversationListCursor>;
+    if (!parsed.updatedAt || !parsed.conversationIdentity || !Number.isFinite(Date.parse(parsed.updatedAt))) {
+      return null;
+    }
+    return {
+      updatedAt: parsed.updatedAt,
+      conversationIdentity: parsed.conversationIdentity,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function encodeConversationListCursor(cursor: ConversationListCursor) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function normalizeConversationStatusFilter(value: unknown): ConversationOperationalStatus | null {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === ConversationOperationalStatus.WAITING ||
+    normalized === ConversationOperationalStatus.IN_PROGRESS ||
+    normalized === ConversationOperationalStatus.WAITING_USER ||
+    normalized === ConversationOperationalStatus.CLOSED
+    ? normalized
+    : null;
+}
+
+function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
+  return item.waIdCanonical || item.waId;
+}
+
+function isAfterConversationListCursor(
+  item: { updatedAt: Date; waId: string; waIdCanonical: string },
+  cursor: ConversationListCursor | null
+) {
+  if (!cursor) return true;
+  const itemTimestamp = item.updatedAt.getTime();
+  const cursorTimestamp = Date.parse(cursor.updatedAt);
+  if (!Number.isFinite(cursorTimestamp)) return true;
+  if (itemTimestamp < cursorTimestamp) return true;
+  if (itemTimestamp > cursorTimestamp) return false;
+  return getConversationListCursorIdentity(item) > cursor.conversationIdentity;
+}
+
+function compareConversationListOrder(
+  left: { updatedAt: Date; waId: string; waIdCanonical: string },
+  right: { updatedAt: Date; waId: string; waIdCanonical: string }
+) {
+  const updatedDiff = right.updatedAt.getTime() - left.updatedAt.getTime();
+  if (updatedDiff !== 0) return updatedDiff;
+  return getConversationListCursorIdentity(left).localeCompare(getConversationListCursorIdentity(right));
+}
+
+function conversationMatchesListFilters(item: {
+  lastMessage: { bodyText: string | null } | null;
+  leadName: string | null;
+  leadPhone: string | null;
+  waId: string;
+  status: ConversationOperationalStatus | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+}, filters: ConversationListFilters) {
+  if (filters.status && item.status !== filters.status) return false;
+  if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
+  if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
+  if (filters.unassigned && item.assignedUserId) return false;
+  if (filters.search) {
+    const haystack = [item.leadName, item.leadPhone, item.waId, item.lastMessage?.bodyText]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(filters.search.toLowerCase())) return false;
+  }
+  return true;
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -10589,19 +10700,42 @@ async function buildConversationListPayload(
     clientKey: string;
     userId?: string;
     limit: number;
+    cursor: ConversationListCursor | null;
+    filters: ConversationListFilters;
     includeAssignedUserName: boolean;
   }
 ) {
   const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
-  const conversationFetchLimit = Math.min(params.limit * 3, 600);
-  const messageFetchLimit = Math.min(params.limit * 6, 1200);
+  const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
+  const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
+  const conversationWhere: Prisma.ConversationWhereInput = {
+    clientId: params.clientId,
+    ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
+    ...(params.cursor
+      ? {
+          OR: [
+            { updatedAt: { lt: new Date(params.cursor.updatedAt) } },
+            {
+              updatedAt: new Date(params.cursor.updatedAt),
+              waIdCanonical: { gt: params.cursor.conversationIdentity },
+            },
+            {
+              updatedAt: new Date(params.cursor.updatedAt),
+              waIdCanonical: null,
+              waId: { gt: params.cursor.conversationIdentity },
+            },
+          ],
+        }
+      : {}),
+  };
   const conversations = await prisma.conversation.findMany({
-    where: { clientId: params.clientId },
-    orderBy: { updatedAt: "desc" },
+    where: conversationWhere,
+    orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
     take: conversationFetchLimit,
     select: {
       waId: true,
       waIdCanonical: true,
+      departmentId: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
@@ -10616,6 +10750,7 @@ async function buildConversationListPayload(
     {
       waId: string;
       waIdCanonical: string;
+      departmentId: string | null;
       updatedAt: Date;
       lastInboundAt: Date | null;
       lastOutboundAt: Date | null;
@@ -10628,15 +10763,17 @@ async function buildConversationListPayload(
       groupedConversations.set(key, {
         waId: conversation.waId,
         waIdCanonical: key,
+        departmentId: conversation.departmentId,
         updatedAt: conversation.updatedAt,
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
       });
     }
   }
-  const winners = Array.from(groupedConversations.values())
-    .sort((left, right) => compareConversationLookupPriority(left, right))
-    .slice(0, params.limit);
+  const cursorFilteredConversations = Array.from(groupedConversations.values())
+    .sort(compareConversationListOrder)
+    .filter((item) => isAfterConversationListCursor(item, params.cursor));
+  const winners = cursorFilteredConversations;
   const waIds = Array.from(new Set(winners.map((item) => item.waId)));
   const canonicalWaIds = Array.from(new Set(winners.map((item) => item.waIdCanonical)));
 
@@ -10776,12 +10913,25 @@ async function buildConversationListPayload(
     }
   }
 
-  const items = winners.map((conversation) => {
+  const allItems = winners.map((conversation) => {
     const key = conversation.waIdCanonical;
     const lead = leadByWaId.get(key);
     const latestInbound = latestInboundByWaId.get(key);
     const latestOutbound = latestOutboundByWaId.get(key);
     const runtimeState = runtimeByWaId.get(key);
+    const operationalFields = serializeConversationOperationalFields({
+      conversation: runtimeState ?? null,
+      assignedUserName:
+        params.includeAssignedUserName && runtimeState?.assignedUserId
+          ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+          : null,
+      departmentName: runtimeState?.departmentId
+        ? operationalLookups.departmentById.get(runtimeState.departmentId) ?? null
+        : null,
+      queueName: runtimeState?.queueId
+        ? operationalLookups.queueById.get(runtimeState.queueId) ?? null
+        : null,
+    });
     const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
     const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
     const lastMessage =
@@ -10822,27 +10972,35 @@ async function buildConversationListPayload(
       leadPhone: lead?.phone ?? null,
       leadCity: lead?.city ?? null,
       leadService: lead?.service ?? null,
-      ...serializeConversationOperationalFields({
-        conversation: runtimeState ?? null,
-        assignedUserName:
-          params.includeAssignedUserName && runtimeState?.assignedUserId
-            ? assignedUserById.get(runtimeState.assignedUserId) ?? null
-            : null,
-        departmentName: runtimeState?.departmentId
-          ? operationalLookups.departmentById.get(runtimeState.departmentId) ?? null
-          : null,
-        queueName: runtimeState?.queueId
-          ? operationalLookups.queueById.get(runtimeState.queueId) ?? null
-          : null,
-      }),
+      ...operationalFields,
+      departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
       updatedAt: conversation.updatedAt,
     };
   });
+  const filteredItems = allItems.filter((item) => conversationMatchesListFilters(item, params.filters));
+  const items = filteredItems.slice(0, params.limit);
+  const nextCursorSource =
+    filteredItems.length > params.limit
+      ? items[items.length - 1]
+      : cursorFilteredConversations.length >= conversationFetchLimit
+        ? cursorFilteredConversations[cursorFilteredConversations.length - 1]
+        : null;
+  const nextCursor = nextCursorSource
+    ? encodeConversationListCursor({
+        updatedAt:
+          nextCursorSource.updatedAt instanceof Date
+            ? nextCursorSource.updatedAt.toISOString()
+            : String(nextCursorSource.updatedAt),
+        conversationIdentity: getConversationListCursorIdentity(nextCursorSource),
+      })
+    : null;
 
   return {
     ok: true,
     count: items.length,
     items,
+    conversations: items,
+    nextCursor,
     readState,
   };
 }
