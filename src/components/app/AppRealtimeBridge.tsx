@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
@@ -26,11 +26,9 @@ function isSoundEnabled() {
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) !== "0";
 }
 
-function dispatchCurrentAudioState(unlocked: boolean) {
-  dispatchAppAudioState({
-    unlocked,
-    soundEnabled: isSoundEnabled(),
-  });
+function getNotificationPermissionState() {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  return Notification.permission;
 }
 
 function getSessionKey(session: AppSession | null) {
@@ -47,6 +45,17 @@ export default function AppRealtimeBridge() {
   const hasPrimedAudioRef = useRef(false);
   const notificationQueueRef = useRef(0);
   const notificationTimerRef = useRef<number | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermissionState);
+
+  const syncAudioState = useCallback((unlocked: boolean) => {
+    setAudioUnlocked(unlocked);
+    setNotificationPermission(getNotificationPermissionState());
+    dispatchAppAudioState({
+      unlocked,
+      soundEnabled: isSoundEnabled(),
+    });
+  }, []);
 
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
     if (!isSoundEnabled() || typeof window === "undefined") return;
@@ -60,16 +69,64 @@ export default function AppRealtimeBridge() {
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
-          dispatchCurrentAudioState(true);
+          syncAudioState(true);
         })
         .catch(() => {
-          dispatchCurrentAudioState(false);
+          syncAudioState(false);
           // Browser autoplay policy can block audio after reload until the next user gesture.
         });
     } catch {
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
-  }, []);
+  }, [syncAudioState]);
+
+  const primeNotificationAudio = useCallback(() => {
+    if (typeof window === "undefined") return;
+    let attemptedAudio = false;
+    for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
+      if (!audio) continue;
+      attemptedAudio = true;
+      try {
+        const previousVolume = audio.volume;
+        audio.volume = 0;
+        const playAttempt = audio.play();
+        void playAttempt
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = previousVolume || 0.95;
+            hasPrimedAudioRef.current = true;
+            syncAudioState(true);
+          })
+          .catch(() => {
+            audio.volume = previousVolume || 0.95;
+            syncAudioState(false);
+          });
+      } catch {
+        audio.volume = 0.95;
+        syncAudioState(false);
+      }
+    }
+    if (!attemptedAudio) {
+      syncAudioState(false);
+    }
+  }, [syncAudioState]);
+
+  const activateAlerts = useCallback(() => {
+    if (typeof window === "undefined") return;
+    primeNotificationAudio();
+    if ("Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission()
+        .then(() => {
+          setNotificationPermission(getNotificationPermissionState());
+        })
+        .catch(() => {
+          setNotificationPermission(getNotificationPermissionState());
+        });
+    } else {
+      setNotificationPermission(getNotificationPermissionState());
+    }
+  }, [primeNotificationAudio]);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -177,12 +234,12 @@ export default function AppRealtimeBridge() {
     activeAudio.preload = "auto";
     primaryAudioRef.current = primaryAudio;
     activeAudioRef.current = activeAudio;
-    dispatchCurrentAudioState(hasPrimedAudioRef.current);
+    syncAudioState(hasPrimedAudioRef.current);
     return () => {
       primaryAudioRef.current = null;
       activeAudioRef.current = null;
     };
-  }, []);
+  }, [syncAudioState]);
 
   useEffect(() => {
     return addAppNotificationListener(handleNotificationRequest);
@@ -190,30 +247,6 @@ export default function AppRealtimeBridge() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const primeNotificationAudio = () => {
-      hasPrimedAudioRef.current = true;
-      dispatchCurrentAudioState(true);
-      for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
-        if (!audio) continue;
-        try {
-          const previousVolume = audio.volume;
-          audio.volume = 0;
-          const playAttempt = audio.play();
-          void playAttempt
-            .then(() => {
-              audio.pause();
-              audio.currentTime = 0;
-              audio.volume = previousVolume || 0.95;
-            })
-            .catch(() => {
-              audio.volume = previousVolume || 0.95;
-            });
-        } catch {
-          audio.volume = 0.95;
-        }
-      }
-    };
-
     window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
     window.addEventListener("keydown", primeNotificationAudio);
     window.addEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
@@ -223,7 +256,7 @@ export default function AppRealtimeBridge() {
       window.removeEventListener("keydown", primeNotificationAudio);
       window.removeEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
     };
-  }, []);
+  }, [primeNotificationAudio]);
 
   useEffect(
     () => () => {
@@ -274,5 +307,28 @@ export default function AppRealtimeBridge() {
     realtime.connect();
   }, [handleRealtimeEvent, pathname]);
 
-  return null;
+  const currentPathname = pathname ?? "";
+  const shouldShowAlertActivation =
+    currentPathname.startsWith("/app") &&
+    currentPathname !== "/app/login" &&
+    isSoundEnabled() &&
+    (!audioUnlocked || notificationPermission === "default");
+
+  if (!shouldShowAlertActivation) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={activateAlerts}
+      className="fixed right-4 top-4 z-[70] flex max-w-[280px] items-center gap-3 rounded-xl border border-amber-300/35 bg-[#1b1830]/95 px-3 py-2 text-left text-xs text-amber-50 shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition hover:bg-[#2a2340]"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-300/20 text-base">
+        🔔
+      </span>
+      <span className="min-w-0">
+        <span className="block font-semibold">Ativar alertas</span>
+        <span className="block text-amber-50/75">Necessario apos atualizar a pagina.</span>
+      </span>
+    </button>
+  );
 }
