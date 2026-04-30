@@ -11,6 +11,7 @@ import {
   exportAppConversationReportCsv,
   fetchAppConversationReport,
   fetchAppDepartments,
+  fetchAppRetentionConfig,
   fetchAppUsers,
   loadAppSession,
   saveAppSession,
@@ -57,6 +58,7 @@ export default function AppReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
+  const [retentionDays, setRetentionDays] = useState<number | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -108,6 +110,21 @@ export default function AppReportsPage() {
       cancelled = true;
     };
   }, [handleUnauthorized, session]);
+
+  useEffect(() => {
+    if (!session || !isAdminRole(session.user.role)) return;
+    let cancelled = false;
+    fetchAppRetentionConfig(session)
+      .then((response) => {
+        if (!cancelled) setRetentionDays(response.retentionDays);
+      })
+      .catch(() => {
+        if (!cancelled) setRetentionDays(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -206,6 +223,14 @@ export default function AppReportsPage() {
     >
       <FeedbackToast message={success} />
       <FeedbackToast message={error} variant="error" />
+
+      {retentionDays !== null && retentionDays < 30 ? (
+        <section className="rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50 sm:p-4">
+          A retencao LGPD esta configurada para {retentionDays} dia
+          {retentionDays === 1 ? "" : "s"}. Relatorios e historico operacional podem ficar reduzidos
+          quando a retencao for executada.
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">

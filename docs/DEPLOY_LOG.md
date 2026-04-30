@@ -55,3 +55,12 @@ Preencher a cada deploy:
 - executado por: Codex/deploy
 - resultado: ok
 - observacoes: deploy da retencao de midia outbound local do inbox; backend passou a salvar copia em `.data/media/outbound`, servir local primeiro com fallback Meta, executar `npm run media:cleanup` e manter cron diario as 03:00 no usuario `deploy`; log do cron em `.data/logs/media-cleanup.log`; validado com `/health`, `/app/inbox` HTTP 200 e PM2 online
+
+## 2026-04-30 08:06 BRT
+
+- branch: flow-executor-quote-hardening
+- commit: este commit (`git rev-parse --short HEAD` apos checkout/deploy)
+- migration: nao
+- executado por: Codex/deploy
+- resultado: pendente no momento do registro
+- observacoes: documentacao da auditoria das superficies do `/app`, dependencias de dados e efeitos da retencao LGPD; `/app/reports` passou a avisar ADMIN quando a retencao esta menor que 30 dias; tenant `justa-advocacia` teve `RetentionConfig.retentionDays` ajustado para `90` dias diretamente na VPS para evitar nova limpeza agressiva durante validacao
