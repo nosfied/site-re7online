@@ -1072,6 +1072,7 @@ export default function AppInboxPage() {
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
+  const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
 
@@ -1823,15 +1824,15 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (!session || !selectedConversationWaId) {
       setLoadingMessages(false);
+      selectedConversationIdentityCandidatesRef.current = [];
       return;
     }
     let cancelled = false;
     const requestSeq = ++detailRequestSeqRef.current;
-    const selectedConversationItem =
-      conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null;
-    const selectedIdentityCandidates = selectedConversationItem
-      ? getConversationIdentityCandidates(selectedConversationItem)
-      : [selectedConversationKey, selectedConversationWaId];
+    const selectedIdentityCandidates =
+      selectedConversationIdentityCandidatesRef.current.length > 0
+        ? selectedConversationIdentityCandidatesRef.current
+        : [selectedConversationKey, selectedConversationWaId].filter(Boolean);
     const shouldRefreshUnreadWindow =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
@@ -1900,7 +1901,7 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [conversations, handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
+  }, [handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
@@ -2875,6 +2876,7 @@ export default function AppInboxPage() {
                       waId: item.waId,
                     };
                     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
+                    selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
                     setUnreadSeparatorIndex(null);
                     setUnreadAnchorMessageIdentity(null);
                     setActiveConversationIdentity(conversationIdentity);
