@@ -139,6 +139,34 @@ function buildHighlightedJsonParts(text: string, query: string) {
   return parts.length > 0 ? parts : [{ text, highlighted: false }];
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getOccurrenceRanges(text: string, query: string) {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) return [];
+  const matcher = new RegExp(escapeRegExp(normalizedQuery), "gi");
+  return Array.from(text.matchAll(matcher)).map((match) => ({
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+  }));
+}
+
+function getLineHeightPx(element: HTMLElement) {
+  const computed = window.getComputedStyle(element);
+  const lineHeight = Number.parseFloat(computed.lineHeight);
+  const fontSize = Number.parseFloat(computed.fontSize);
+  return Number.isFinite(lineHeight) ? lineHeight : Number.isFinite(fontSize) ? fontSize * 1.4 : 20;
+}
+
+function scrollTextareaToSelection(textarea: HTMLTextAreaElement, index: number) {
+  const lineHeight = getLineHeightPx(textarea);
+  const linesBeforeMatch = textarea.value.slice(0, index).split("\n").length - 1;
+  const targetTop = Math.max(0, linesBeforeMatch * lineHeight - textarea.clientHeight * 0.35);
+  textarea.scrollTop = targetTop;
+}
+
 function selectJsonOccurrence(textareaId: string, text: string, query: string, backwards = false) {
   const textarea = document.getElementById(textareaId);
   if (!(textarea instanceof HTMLTextAreaElement)) return;
@@ -157,13 +185,60 @@ function selectJsonOccurrence(textareaId: string, text: string, query: string, b
   if (index < 0) return;
   textarea.focus();
   textarea.setSelectionRange(index, index + normalizedQuery.length);
+  scrollTextareaToSelection(textarea, index);
+}
+
+function JsonEditorWithSearch({
+  id,
+  value,
+  onChange,
+  disabled,
+  search,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  search: string;
+}) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const highlightedParts = useMemo(() => buildHighlightedJsonParts(value, search), [search, value]);
+
+  return (
+    <div className="relative min-h-[14rem] sm:min-h-[18rem]">
+      <pre
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 min-h-[14rem] overflow-hidden whitespace-pre-wrap break-words rounded-md border border-transparent px-3 py-2 font-mono text-sm leading-normal text-transparent sm:min-h-[18rem]"
+        style={{ transform: `translateY(-${scrollTop}px)` }}
+      >
+        {highlightedParts.map((part, index) =>
+          part.highlighted ? (
+            <mark key={index} className="rounded bg-re7-orange/90 px-0.5 text-transparent">
+              {part.text}
+            </mark>
+          ) : (
+            <span key={index}>{part.text}</span>
+          )
+        )}
+      </pre>
+      <textarea
+        id={id}
+        className="relative min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm leading-normal text-white/95 caret-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        spellCheck={false}
+        disabled={disabled}
+      />
+    </div>
+  );
 }
 
 function JsonSearchPreview({ text, query }: { text: string; query: string }) {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) return null;
 
-  const occurrences = countOccurrences(text, trimmedQuery);
+  const occurrences = getOccurrenceRanges(text, trimmedQuery).length;
   if (occurrences === 0) {
     return (
       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
@@ -612,11 +687,11 @@ export default function AppChatbotPage() {
             placeholder="Fluxo principal"
             disabled={readOnly || creating}
           />
-          <textarea
+          <JsonEditorWithSearch
             id="new-flow-definition"
-            className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
             value={newDefinition}
-            onChange={(event) => setNewDefinition(event.target.value)}
+            onChange={setNewDefinition}
+            search={newSearch}
             disabled={readOnly || creating}
           />
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
@@ -746,19 +821,19 @@ export default function AppChatbotPage() {
                       }
                       disabled={readOnly}
                     />
-                    <textarea
+                    <JsonEditorWithSearch
                       id={`flow-definition-${flow.id}`}
-                      className="min-h-[14rem] w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 font-mono text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[18rem]"
                       value={draft.definitionText}
-                      onChange={(event) =>
+                      onChange={(value) =>
                         setDrafts((current) => ({
                           ...current,
                           [flow.id]: {
                             ...draft,
-                            definitionText: event.target.value,
+                            definitionText: value,
                           },
                         }))
                       }
+                      search={draftSearches[flow.id] ?? ""}
                       disabled={readOnly}
                     />
                     <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">

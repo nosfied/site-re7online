@@ -10675,7 +10675,7 @@ async function buildConversationActionPayload(
 function buildScopedWaIdWhere(rawWaId: string) {
   const lookup = buildWaIdLookup(rawWaId);
   return {
-    OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
+    OR: [{ waIdCanonical: { in: lookup.variants } }, { waId: { in: lookup.variants } }],
   };
 }
 
@@ -10844,7 +10844,7 @@ async function deleteConversationPrivacyData(
   const result = await prisma.$transaction(async (tx) => {
     const conversations = await tx.conversation.updateMany({
       where: { clientId: params.clientId, id: { in: conversationIds }, deletedAt: null },
-      data: { deletedAt: now, closedAt: now },
+      data: { deletedAt: now, closedAt: now, historyVisibleAfter: now },
     });
     const runtimeStates = await tx.conversationRuntimeState.updateMany({
       where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
@@ -11165,6 +11165,7 @@ async function resolveConversationTarget(
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      historyVisibleAfter: true,
     },
   });
   const sortedMatches = matches.sort((left, right) => compareConversationLookupPriority(left, right));
@@ -11391,6 +11392,7 @@ async function buildConversationListPayload(
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      historyVisibleAfter: true,
     },
   });
   if (conversations.length === 0) {
@@ -11406,6 +11408,7 @@ async function buildConversationListPayload(
       updatedAt: Date;
       lastInboundAt: Date | null;
       lastOutboundAt: Date | null;
+      historyVisibleAfter: Date | null;
     }
   >();
   for (const conversation of conversations) {
@@ -11419,6 +11422,7 @@ async function buildConversationListPayload(
         updatedAt: conversation.updatedAt,
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
+        historyVisibleAfter: conversation.historyVisibleAfter,
       });
     }
   }
@@ -11428,6 +11432,18 @@ async function buildConversationListPayload(
   const winners = cursorFilteredConversations;
   const waIds = Array.from(new Set(winners.map((item) => item.waId)));
   const canonicalWaIds = Array.from(new Set(winners.map((item) => item.waIdCanonical)));
+  const historyVisibleAfterByWaId = new Map(
+    winners.map((item) => [item.waIdCanonical, item.historyVisibleAfter])
+  );
+  const isVisibleInCurrentOperation = (
+    key: string,
+    createdAt: Date | string | null | undefined
+  ) => {
+    const cutoff = historyVisibleAfterByWaId.get(key);
+    if (!cutoff || !createdAt) return true;
+    const createdAtMs = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+    return Number.isFinite(createdAtMs) && createdAtMs > cutoff.getTime();
+  };
 
   const [leads, inbound, outbound] = await Promise.all([
     prisma.lead.findMany({
@@ -11553,6 +11569,7 @@ async function buildConversationListPayload(
   const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
   for (const item of inbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestInboundByWaId.has(key)) {
       latestInboundByWaId.set(key, item);
     }
@@ -11560,6 +11577,7 @@ async function buildConversationListPayload(
   const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
   for (const item of outbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestOutboundByWaId.has(key)) {
       latestOutboundByWaId.set(key, item);
     }
@@ -11688,6 +11706,23 @@ async function buildConversationDetailPayload(
     await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
     defaults
   );
+  const detailWaIds = Array.from(
+    new Set(
+      [
+        ...buildWaIdLookup(params.waId).variants,
+        resolved.resolvedWaId,
+        resolved.resolvedWaIdCanonical,
+        ...resolved.matchedWaIds,
+      ].filter(Boolean)
+    )
+  );
+  const historyVisibleAfter = resolved.winner?.historyVisibleAfter ?? null;
+  const messageCreatedAfter =
+    params.after && historyVisibleAfter
+      ? params.after > historyVisibleAfter
+        ? params.after
+        : historyVisibleAfter
+      : params.after ?? historyVisibleAfter;
   const assignedUser =
     params.includeAssignedUserName && conversation?.assignedUserId
       ? await prisma.user.findFirst({
@@ -11700,11 +11735,8 @@ async function buildConversationDetailPayload(
     prisma.inboundMessage.findMany({
       where: {
         clientId: params.clientId,
-        ...(params.after ? { createdAt: { gt: params.after } } : {}),
-        OR: [
-          { waIdCanonical: resolved.resolvedWaIdCanonical },
-          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
-        ],
+        ...(messageCreatedAfter ? { createdAt: { gt: messageCreatedAfter } } : {}),
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
       },
       orderBy: { createdAt: params.order },
       take: params.limit,
@@ -11720,11 +11752,8 @@ async function buildConversationDetailPayload(
     prisma.outboundMessage.findMany({
       where: {
         clientId: params.clientId,
-        ...(params.after ? { createdAt: { gt: params.after } } : {}),
-        OR: [
-          { waIdCanonical: resolved.resolvedWaIdCanonical },
-          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
-        ],
+        ...(messageCreatedAfter ? { createdAt: { gt: messageCreatedAfter } } : {}),
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
       },
       orderBy: { createdAt: params.order },
       take: params.limit,
