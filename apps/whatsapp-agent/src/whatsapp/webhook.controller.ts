@@ -3198,6 +3198,45 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         mode: updatedConversation.mode,
         requestId: meta?.requestId,
       });
+      if (tenantClientId) {
+        const createdAt = parseWebhookTimestampToDate(message.timestamp).toISOString();
+        const inboundType = mapMessageType(message.type);
+        publishRealtimeEvent({
+          type: "message.created",
+          clientId: tenantClientId,
+          waId: message.from,
+          waIdCanonical: canonicalizeBrazilWaId(message.from),
+          mode: "HUMAN",
+          handoffStatus:
+            updatedConversation.handoff.status === "pending" ||
+            updatedConversation.handoff.status === "active"
+              ? updatedConversation.handoff.status
+              : "active",
+          message: {
+            direction: "INBOUND",
+            type: inboundType,
+            status: "RECEIVED",
+            intent: null,
+            bodyText: message.text ?? null,
+            media: buildInboxMessageMedia({
+              type: inboundType,
+              rawPayload: {
+                ...message.raw,
+                text: message.text,
+                timestamp: message.timestamp,
+              } as Prisma.InputJsonValue,
+              downloadUrl: buildRealtimeMessageDownloadPath(message.from, message.messageId),
+            }),
+            templateName: null,
+            templateLang: null,
+            requestId: meta?.requestId ?? null,
+            messageId: message.messageId,
+            metaMessageId: null,
+            errorBody: null,
+            createdAt,
+          },
+        });
+      }
       if (tenantHandoffAttendantWaid) {
         await notifyAttendantHumanRequested({
           attendantWaId: tenantHandoffAttendantWaid,
