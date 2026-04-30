@@ -48,8 +48,6 @@ export const APP_NOTIFICATION_EVENT_NAME = "re7:app-notification";
 const MAX_NOTIFIED_MESSAGE_KEYS = 500;
 const notifiedMessageIds = new Set<string>();
 const notifiedMessageOrder: string[] = [];
-const recentHandoffNotificationKeys = new Map<string, number>();
-const HANDOFF_RECENT_DEDUPE_MS = 15_000;
 let activeConversationIdentity: string | null = null;
 
 type NotificationCandidate = {
@@ -183,13 +181,6 @@ export function buildHandoffNotificationKey(
   return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}:${updatedAt ?? "unknown"}`;
 }
 
-function buildRecentHandoffNotificationKey(
-  conversationIdentity: string | null,
-  handoffStatus?: string | null
-) {
-  return `handoff-recent:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}`;
-}
-
 export function shouldProcessNotification(key: string) {
   if (!key || notifiedMessageIds.has(key)) return false;
 
@@ -201,23 +192,6 @@ export function shouldProcessNotification(key: string) {
     if (oldestKey) notifiedMessageIds.delete(oldestKey);
   }
 
-  return true;
-}
-
-function shouldProcessHandoffNotification(
-  key: string,
-  conversationIdentity: string | null,
-  handoffStatus?: string | null
-) {
-  const now = Date.now();
-  const recentKey = buildRecentHandoffNotificationKey(conversationIdentity, handoffStatus);
-  for (const [storedKey, expiresAt] of recentHandoffNotificationKeys.entries()) {
-    if (expiresAt <= now) recentHandoffNotificationKeys.delete(storedKey);
-  }
-  const recentExpiresAt = recentHandoffNotificationKeys.get(recentKey);
-  if (recentExpiresAt && recentExpiresAt > now) return false;
-  if (!shouldProcessNotification(key)) return false;
-  recentHandoffNotificationKeys.set(recentKey, now + HANDOFF_RECENT_DEDUPE_MS);
   return true;
 }
 
@@ -271,14 +245,7 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
   };
   const sound = resolveNotificationSound(notificationInput);
   if (!sound) return false;
-  const shouldNotify =
-    candidate.kind === "handoff"
-      ? shouldProcessHandoffNotification(
-          notificationKey,
-          candidate.conversationIdentity,
-          candidate.handoffStatus ?? candidate.mode
-        )
-      : shouldProcessNotification(notificationKey);
+  const shouldNotify = shouldProcessNotification(notificationKey);
 
   if (!shouldNotify) return false;
 
