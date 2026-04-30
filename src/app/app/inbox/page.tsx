@@ -3357,7 +3357,7 @@ export default function AppInboxPage() {
 
         <aside className="flex min-h-0 flex-col border-l border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
-            <h2 className="text-sm font-semibold text-white">Cliente</h2>
+            <h2 className="text-sm font-semibold text-white">CRM</h2>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!selectedLead ? (
