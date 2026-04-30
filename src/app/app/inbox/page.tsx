@@ -322,6 +322,12 @@ function getConversationIdentity(item: Pick<InboxConversationItem, "waId" | "waI
   return item.waIdCanonical ?? item.waId;
 }
 
+function getConversationIdentityCandidates(item: Pick<InboxConversationItem, "waId" | "waIdCanonical">) {
+  return Array.from(
+    new Set([getConversationIdentity(item), item.waId, item.waIdCanonical ?? ""].filter(Boolean))
+  );
+}
+
 type InboxReadState = AppInboxReadState;
 
 const EMPTY_READ_STATE: InboxReadState = {
@@ -409,6 +415,7 @@ type PendingUnreadScrollTarget = {
 
 type PendingReadAfterHydration = {
   conversationKey: string;
+  conversationKeys: string[];
   activityAt: string | null;
   waId: string | null;
 };
@@ -541,15 +548,27 @@ function updateConversationInPlace(
 }
 
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
-  if (state.manuallyUnreadByConversationKey[getConversationIdentity(item)]) return true;
+  const identityCandidates = getConversationIdentityCandidates(item);
+  if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
   if (item.lastMessage?.direction !== "INBOUND") return false;
   const activityAt = getConversationActivityTimestamp(item);
-  const lastReadAt = Date.parse(
-    state.lastReadAtByConversationKey[getConversationIdentity(item)] ?? ""
-  );
+  const lastReadAt = getLatestReadAtForConversation(item, state);
   if (activityAt === null) return false;
-  if (!Number.isFinite(lastReadAt)) return true;
-  return activityAt > lastReadAt;
+  if (!lastReadAt) return true;
+  const lastReadAtTimestamp = Date.parse(lastReadAt);
+  if (!Number.isFinite(lastReadAtTimestamp)) return true;
+  return activityAt > lastReadAtTimestamp;
+}
+
+function getLatestReadAtForConversation(
+  item: Pick<InboxConversationItem, "waId" | "waIdCanonical">,
+  state: InboxReadState
+) {
+  let latestReadAt: string | null = null;
+  for (const key of getConversationIdentityCandidates(item)) {
+    latestReadAt = getLatestReadAt(latestReadAt, state.lastReadAtByConversationKey[key]);
+  }
+  return latestReadAt;
 }
 
 function getMessageStatusTicks(item: InboxMessageItem) {
@@ -1187,6 +1206,41 @@ export default function AppInboxPage() {
     }
   }, [session]);
 
+  const markConversationIdentitiesAsRead = useCallback((
+    conversationKeys: Array<string | null | undefined>,
+    activityAt?: string | null,
+    waId?: string | null
+  ) => {
+    if (!activityAt) return;
+    const uniqueKeys = Array.from(
+      new Set(
+        conversationKeys
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+    if (uniqueKeys.length === 0) return;
+    setReadState((prev) => {
+      const nextUnread = { ...prev.manuallyUnreadByConversationKey };
+      for (const key of uniqueKeys) {
+        delete nextUnread[key];
+      }
+      return {
+        lastReadAtByConversationKey: {
+          ...prev.lastReadAtByConversationKey,
+          ...Object.fromEntries(uniqueKeys.map((key) => [key, activityAt])),
+        },
+        manuallyUnreadByConversationKey: nextUnread,
+      };
+    });
+    if (session && waId) {
+      void updateAppConversationReadState(session, waId, {
+        unread: false,
+        activityAt,
+      }).catch(() => undefined);
+    }
+  }, [session]);
+
   const completeHydrationRead = useCallback((conversationKey: string) => {
     const pendingRead = pendingReadAfterHydrationRef.current;
     if (!pendingRead || pendingRead.conversationKey !== conversationKey) return;
@@ -1194,8 +1248,8 @@ export default function AppInboxPage() {
     pendingUnreadAnchorConversationIdentityRef.current = null;
     pendingUnreadLastReadAtRef.current = null;
     pendingUnreadAnchorMessageIdRef.current = null;
-    markConversationAsRead(conversationKey, pendingRead.activityAt, pendingRead.waId);
-  }, [markConversationAsRead]);
+    markConversationIdentitiesAsRead(pendingRead.conversationKeys, pendingRead.activityAt, pendingRead.waId);
+  }, [markConversationIdentitiesAsRead]);
 
   const markConversationAsUnread = useCallback((conversationKey: string, waId?: string | null) => {
     setReadState((prev) => ({
@@ -1475,6 +1529,9 @@ export default function AppInboxPage() {
           humanFlowConversationKeys.has(conversationKey) &&
           !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
+          if (conversationKey !== selectedConversationKey) {
+            markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
+          }
           if (buildConversationNotificationRequest(item, true)) {
             notifiedHandoffTransition = true;
           }
@@ -1538,8 +1595,8 @@ export default function AppInboxPage() {
       (item) => getConversationIdentity(item) === selectedConversationKey
     );
     if (activeConversation && !loadingMessages && !waitingForUnreadAnchor) {
-      markConversationAsRead(
-        getConversationIdentity(activeConversation),
+      markConversationIdentitiesAsRead(
+        getConversationIdentityCandidates(activeConversation),
         getConversationActivityAt(activeConversation),
         activeConversation.waId
       );
@@ -1548,7 +1605,8 @@ export default function AppInboxPage() {
     buildConversationFetchOptions,
     buildConversationNotificationRequest,
     loadingMessages,
-    markConversationAsRead,
+    markConversationIdentitiesAsRead,
+    markConversationIdentitiesAsUnread,
     selectedConversationKey,
   ]);
 
@@ -1665,9 +1723,13 @@ export default function AppInboxPage() {
         ? responseItems[responseItems.length - 1]?.createdAt
         : latestKnownAt) ?? null;
     if (document.visibilityState === "visible") {
-      markConversationAsRead(responseConversationKey, latestActivityAt, response.waId ?? waId);
+      markConversationIdentitiesAsRead(
+        [responseConversationKey, response.waId, response.waIdCanonical, waId],
+        latestActivityAt,
+        response.waId ?? waId
+      );
     }
-  }, [isTimelineNearBottom, markConversationAsRead, messages, selectedConversationKey, selectedConversationWaId]);
+  }, [isTimelineNearBottom, markConversationIdentitiesAsRead, messages, selectedConversationKey, selectedConversationWaId]);
 
   useEffect(() => {
     if (!session) return;
@@ -2056,15 +2118,15 @@ export default function AppInboxPage() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== "visible" || !selectedConversation) return;
-      markConversationAsRead(
-        getConversationIdentity(selectedConversation),
+      markConversationIdentitiesAsRead(
+        getConversationIdentityCandidates(selectedConversation),
         getConversationActivityAt(selectedConversation),
         selectedConversation.waId
       );
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [markConversationAsRead, selectedConversation]);
+  }, [markConversationIdentitiesAsRead, selectedConversation]);
 
   const selectedLead = useMemo(() => {
     if (!selectedConversation?.leadId) return null;
@@ -2252,8 +2314,8 @@ export default function AppInboxPage() {
               )
             )
           );
-          markConversationAsRead(
-            response.waIdCanonical ?? next.conversationKey,
+          markConversationIdentitiesAsRead(
+            [response.waIdCanonical, response.waId, next.conversationKey, next.waId],
             response.message.createdAt,
             next.waId
           );
@@ -2375,8 +2437,12 @@ export default function AppInboxPage() {
             )
           )
         );
-        markConversationAsRead(
-          response.waIdCanonical ?? getConversationIdentity(selectedConversation),
+        markConversationIdentitiesAsRead(
+          [
+            response.waIdCanonical,
+            response.waId,
+            ...getConversationIdentityCandidates(selectedConversation),
+          ],
           response.message.createdAt,
           selectedConversation.waId
         );
@@ -2724,6 +2790,7 @@ export default function AppInboxPage() {
             ) : null}
             {filteredConversations.map((item) => {
               const conversationIdentity = getConversationIdentity(item);
+              const conversationIdentityCandidates = getConversationIdentityCandidates(item);
               const isActive = conversationIdentity === selectedConversationKey;
               const unread = !isActive && isConversationUnread(item, readState);
               const status = getConversationOperationalStatus(item);
@@ -2739,18 +2806,19 @@ export default function AppInboxPage() {
                     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
                       ? {
                           conversationKey: conversationIdentity,
-                          lastReadAt: readState.lastReadAtByConversationKey[conversationIdentity] ?? null,
+                          lastReadAt: getLatestReadAtForConversation(item, readState),
                         }
                       : null;
                     pendingUnreadAnchorConversationIdentityRef.current = shouldOpenAtUnread
                       ? conversationIdentity
                       : null;
                     pendingUnreadLastReadAtRef.current = shouldOpenAtUnread
-                      ? readState.lastReadAtByConversationKey[conversationIdentity] ?? null
+                      ? getLatestReadAtForConversation(item, readState)
                       : null;
                     pendingUnreadAnchorMessageIdRef.current = null;
                     pendingReadAfterHydrationRef.current = {
                       conversationKey: conversationIdentity,
+                      conversationKeys: conversationIdentityCandidates,
                       activityAt,
                       waId: item.waId,
                     };
