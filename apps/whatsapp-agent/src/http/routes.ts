@@ -10714,6 +10714,10 @@ function buildAnonymizedWaId(target: PrivacyConversationTarget) {
   return masked.includes("*") ? `${masked}:${target.id.slice(0, 8)}` : `anon:${target.id.slice(0, 12)}`;
 }
 
+function buildDetachedCrmWaId(target: PrivacyConversationTarget, kind: "lead" | "contact", recordId: string) {
+  return `deleted:${target.id.slice(0, 8)}:${kind}:${recordId.slice(0, 8)}`;
+}
+
 function buildPrivacyAuditPayload(params: {
   userId: string;
   clientId: string;
@@ -10825,12 +10829,24 @@ async function deleteConversationPrivacyData(
     new Set(matchingConversations.flatMap((item) => [item.waId, item.waIdCanonical].filter(Boolean) as string[]))
   );
 
-  const [conversations, runtimeStates] = await prisma.$transaction([
-    prisma.conversation.updateMany({
+  const [crmContacts, crmLeads] = await Promise.all([
+    prisma.contact.findMany({
+      where: { clientId: params.clientId, waId: { in: waIds } },
+      select: { id: true },
+    }),
+    prisma.lead.findMany({
+      where: { tenantId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+      select: { id: true },
+    }),
+  ]);
+  const crmLeadIds = crmLeads.map((lead) => lead.id);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const conversations = await tx.conversation.updateMany({
       where: { clientId: params.clientId, id: { in: conversationIds }, deletedAt: null },
       data: { deletedAt: now, closedAt: now },
-    }),
-    prisma.conversationRuntimeState.updateMany({
+    });
+    const runtimeStates = await tx.conversationRuntimeState.updateMany({
       where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
       data: {
         status: ConversationOperationalStatus.CLOSED,
@@ -10842,8 +10858,42 @@ async function deleteConversationPrivacyData(
         handoffReleasedAt: now,
         mode: "BOT",
       },
-    }),
-  ]);
+    });
+    let contacts = 0;
+    for (const contact of crmContacts) {
+      const detachedWaId = buildDetachedCrmWaId(target, "contact", contact.id);
+      await tx.contact.update({
+        where: { id: contact.id },
+        data: { waId: detachedWaId, name: null },
+      });
+      contacts += 1;
+    }
+    let leads = 0;
+    for (const lead of crmLeads) {
+      const detachedWaId = buildDetachedCrmWaId(target, "lead", lead.id);
+      await tx.lead.update({
+        where: { id: lead.id },
+        data: {
+          waId: detachedWaId,
+          waIdCanonical: detachedWaId,
+          name: null,
+          phone: null,
+          city: null,
+          service: null,
+          status: "REMOVED",
+        },
+      });
+      leads += 1;
+    }
+    const leadNotes =
+      crmLeadIds.length > 0
+        ? await tx.leadNote.updateMany({
+            where: { tenantId: params.clientId, leadId: { in: crmLeadIds } },
+            data: { body: "[nota removida por exclusao operacional]" },
+          })
+        : { count: 0 };
+    return { conversations, runtimeStates, contacts, leads, leadNotes };
+  });
 
   for (const waId of waIds) {
     const currentRuntime = await runtimeStorage.getConversation(waId, params.clientKey);
@@ -10870,7 +10920,13 @@ async function deleteConversationPrivacyData(
       clientId: params.clientId,
       conversationId: target.id,
       action: "conversation.deleted",
-      details: { action: "soft_delete", softDeletedConversations: conversations.count },
+      details: {
+        action: "soft_delete",
+        softDeletedConversations: result.conversations.count,
+        detachedContacts: result.contacts,
+        detachedLeads: result.leads,
+        sanitizedLeadNotes: result.leadNotes.count,
+      },
     });
     await persistPrivacyAuditEvent(prisma, {
       clientId: params.clientId,
@@ -10887,16 +10943,17 @@ async function deleteConversationPrivacyData(
   return {
     deleted: {
       action: "soft_delete",
-      conversations: conversations.count,
-      softDeletedConversations: conversations.count,
+      conversations: result.conversations.count,
+      softDeletedConversations: result.conversations.count,
       metrics: 0,
       messages: 0,
       inboundMessages: 0,
       outboundMessages: 0,
-      runtimeStates: runtimeStates.count,
+      runtimeStates: result.runtimeStates.count,
       events: 0,
-      contacts: 0,
-      leads: 0,
+      contacts: result.contacts,
+      leads: result.leads,
+      leadNotes: result.leadNotes.count,
     },
   };
 }

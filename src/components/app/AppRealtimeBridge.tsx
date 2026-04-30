@@ -320,7 +320,7 @@ export default function AppRealtimeBridge() {
     <button
       type="button"
       onClick={activateAlerts}
-      className="fixed right-4 top-4 z-[70] flex max-w-[280px] items-center gap-3 rounded-xl border border-amber-300/35 bg-[#1b1830]/95 px-3 py-2 text-left text-xs text-amber-50 shadow-[0_14px_40px_rgba(0,0,0,0.28)] backdrop-blur transition hover:bg-[#2a2340]"
+      className="fixed left-1/2 top-1/2 z-[70] flex w-[min(92vw,320px)] -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-xl border border-amber-300/35 bg-[#1b1830]/95 px-4 py-3 text-left text-xs text-amber-50 shadow-[0_18px_52px_rgba(0,0,0,0.34)] backdrop-blur transition hover:bg-[#2a2340]"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-300/20 text-base">
         🔔

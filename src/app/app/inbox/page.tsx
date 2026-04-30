@@ -113,21 +113,23 @@ function getMessageContentLabel(item: InboxMessageItem) {
 function getConversationPreviewText(item: InboxConversationItem) {
   if (!item.lastMessage) return "Sem mensagem recente.";
   if (item.lastMessage.bodyText?.trim()) return item.lastMessage.bodyText;
+  const directionLabel = item.lastMessage.direction === "OUTBOUND" ? "enviado" : "recebido";
+  const directionLabelFemale = item.lastMessage.direction === "OUTBOUND" ? "enviada" : "recebida";
   switch (item.lastMessage.type?.toUpperCase()) {
     case "AUDIO":
-      return "Audio recebido";
+      return `Audio ${directionLabel}`;
     case "IMAGE":
-      return "Imagem recebida";
+      return `Imagem ${directionLabelFemale}`;
     case "VIDEO":
-      return "Video recebido";
+      return `Video ${directionLabel}`;
     case "DOCUMENT":
-      return "Documento recebido";
+      return `Documento ${directionLabel}`;
     case "TEMPLATE":
       return "Template enviado";
     case "UNKNOWN":
       return "Mensagem nao suportada.";
     default:
-      return "Mensagem recebida";
+      return `Mensagem ${directionLabelFemale}`;
   }
 }
 
