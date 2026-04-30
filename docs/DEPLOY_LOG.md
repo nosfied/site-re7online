@@ -62,5 +62,5 @@ Preencher a cada deploy:
 - commit: este commit (`git rev-parse --short HEAD` apos checkout/deploy)
 - migration: nao
 - executado por: Codex/deploy
-- resultado: pendente no momento do registro
+- resultado: ok
 - observacoes: documentacao da auditoria das superficies do `/app`, dependencias de dados e efeitos da retencao LGPD; `/app/reports` passou a avisar ADMIN quando a retencao esta menor que 30 dias; tenant `justa-advocacia` teve `RetentionConfig.retentionDays` ajustado para `90` dias diretamente na VPS para evitar nova limpeza agressiva durante validacao
