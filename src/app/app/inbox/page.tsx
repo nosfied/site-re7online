@@ -5,8 +5,10 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type Keybo
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import {
+  addAppAudioStateListener,
   addAppRealtimeListener,
   handleRealtimeNotificationCandidate,
+  requestAppNotificationAudioUnlock,
   requestBrowserNotificationPermission,
   setActiveConversationIdentity,
   setActiveInboxConversation,
@@ -982,6 +984,7 @@ export default function AppInboxPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
@@ -1047,6 +1050,10 @@ export default function AppInboxPage() {
     if (stored === "0") {
       setSoundEnabled(false);
     }
+    return addAppAudioStateListener((state) => {
+      setAudioUnlocked(state.unlocked);
+      setSoundEnabled(state.soundEnabled);
+    });
   }, []);
 
   useEffect(() => {
@@ -2625,6 +2632,7 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={() => {
                     requestBrowserNotificationPermission();
+                    requestAppNotificationAudioUnlock();
                     setSoundEnabled((current) => !current);
                   }}
                   title={soundEnabled ? "Silenciar notificações" : "Ativar notificações"}
@@ -2645,6 +2653,23 @@ export default function AppInboxPage() {
                 </button>
               </div>
             </div>
+            {soundEnabled && !audioUnlocked ? (
+              <button
+                type="button"
+                onClick={() => {
+                  requestBrowserNotificationPermission();
+                  requestAppNotificationAudioUnlock();
+                }}
+                className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-left text-xs text-amber-50 transition hover:bg-amber-400/15"
+              >
+                <span className="min-w-0">
+                  Som bloqueado apos atualizar. Clique para ativar os alertas sonoros.
+                </span>
+                <span className="shrink-0 rounded-lg bg-amber-300/20 px-2 py-1 font-semibold">
+                  Ativar
+                </span>
+              </button>
+            ) : null}
             <div className="mt-3 space-y-2">
               <input
                 type="search"

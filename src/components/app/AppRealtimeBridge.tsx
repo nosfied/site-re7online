@@ -4,7 +4,9 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import {
   addAppNotificationListener,
+  APP_AUDIO_UNLOCK_EVENT_NAME,
   createAppRealtimeClient,
+  dispatchAppAudioState,
   dispatchAppRealtimeEvent,
   getConversationIdentityFromRealtimeEvent,
   handleRealtimeNotificationCandidate,
@@ -22,6 +24,13 @@ const NOTIFICATION_MAX_QUEUE = 10;
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) !== "0";
+}
+
+function dispatchCurrentAudioState(unlocked: boolean) {
+  dispatchAppAudioState({
+    unlocked,
+    soundEnabled: isSoundEnabled(),
+  });
 }
 
 function getSessionKey(session: AppSession | null) {
@@ -51,8 +60,10 @@ export default function AppRealtimeBridge() {
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
+          dispatchCurrentAudioState(true);
         })
         .catch(() => {
+          dispatchCurrentAudioState(false);
           // Browser autoplay policy can block audio after reload until the next user gesture.
         });
     } catch {
@@ -166,6 +177,7 @@ export default function AppRealtimeBridge() {
     activeAudio.preload = "auto";
     primaryAudioRef.current = primaryAudio;
     activeAudioRef.current = activeAudio;
+    dispatchCurrentAudioState(hasPrimedAudioRef.current);
     return () => {
       primaryAudioRef.current = null;
       activeAudioRef.current = null;
@@ -180,6 +192,7 @@ export default function AppRealtimeBridge() {
     if (typeof window === "undefined") return;
     const primeNotificationAudio = () => {
       hasPrimedAudioRef.current = true;
+      dispatchCurrentAudioState(true);
       for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
         if (!audio) continue;
         try {
@@ -203,10 +216,12 @@ export default function AppRealtimeBridge() {
 
     window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
     window.addEventListener("keydown", primeNotificationAudio);
+    window.addEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
 
     return () => {
       window.removeEventListener("pointerdown", primeNotificationAudio);
       window.removeEventListener("keydown", primeNotificationAudio);
+      window.removeEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
     };
   }, []);
 

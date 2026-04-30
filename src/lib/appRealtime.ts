@@ -44,6 +44,8 @@ type AppRealtimeClientOptions = {
 
 export const APP_REALTIME_EVENT_NAME = "re7:inbox-realtime";
 export const APP_NOTIFICATION_EVENT_NAME = "re7:app-notification";
+export const APP_AUDIO_STATE_EVENT_NAME = "re7:app-audio-state";
+export const APP_AUDIO_UNLOCK_EVENT_NAME = "re7:app-audio-unlock";
 
 const MAX_NOTIFIED_MESSAGE_KEYS = 500;
 const notifiedMessageIds = new Set<string>();
@@ -68,6 +70,11 @@ export type AppNotificationRequest = {
   body: string;
   sound: "primary" | "active";
   notifyBrowser: boolean;
+};
+
+export type AppAudioState = {
+  unlocked: boolean;
+  soundEnabled: boolean;
 };
 
 export type AppNotificationCandidate = {
@@ -139,6 +146,25 @@ export function addAppNotificationListener(handler: (request: AppNotificationReq
   };
   window.addEventListener(APP_NOTIFICATION_EVENT_NAME, listener);
   return () => window.removeEventListener(APP_NOTIFICATION_EVENT_NAME, listener);
+}
+
+export function dispatchAppAudioState(state: AppAudioState) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppAudioState>(APP_AUDIO_STATE_EVENT_NAME, { detail: state }));
+}
+
+export function addAppAudioStateListener(handler: (state: AppAudioState) => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = (event: Event) => {
+    handler((event as CustomEvent<AppAudioState>).detail);
+  };
+  window.addEventListener(APP_AUDIO_STATE_EVENT_NAME, listener);
+  return () => window.removeEventListener(APP_AUDIO_STATE_EVENT_NAME, listener);
+}
+
+export function requestAppNotificationAudioUnlock() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(APP_AUDIO_UNLOCK_EVENT_NAME));
 }
 
 export function setActiveInboxConversation(waId: string | null, waIdCanonical?: string | null) {
