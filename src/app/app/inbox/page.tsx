@@ -1212,6 +1212,29 @@ export default function AppInboxPage() {
     }
   }, [session]);
 
+  const markConversationIdentitiesAsUnread = useCallback((conversationKeys: Array<string | null | undefined>, waId?: string | null) => {
+    const uniqueKeys = Array.from(
+      new Set(
+        conversationKeys
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+    if (uniqueKeys.length === 0) return;
+    setReadState((prev) => ({
+      lastReadAtByConversationKey: prev.lastReadAtByConversationKey,
+      manuallyUnreadByConversationKey: {
+        ...prev.manuallyUnreadByConversationKey,
+        ...Object.fromEntries(uniqueKeys.map((key) => [key, true])),
+      },
+    }));
+    if (session && waId) {
+      void updateAppConversationReadState(session, waId, {
+        unread: true,
+      }).catch(() => undefined);
+    }
+  }, [session]);
+
   const applyRealtimeStatusUpdated = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.status.updated" }>
   ) => {
@@ -1275,6 +1298,7 @@ export default function AppInboxPage() {
     if (event.type === "conversation.handoff.updated") {
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
+      const matchedConversationKeys = new Set<string>([conversationKey, event.waId, event.waIdCanonical ?? ""]);
       setConversations((prev) => {
         const nextItems = prev.map((item) => {
           const itemKey = getConversationIdentity(item);
@@ -1286,6 +1310,9 @@ export default function AppInboxPage() {
             return item;
           }
           matchedConversation = true;
+          matchedConversationKeys.add(itemKey);
+          matchedConversationKeys.add(item.waId);
+          if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
@@ -1301,7 +1328,7 @@ export default function AppInboxPage() {
         return dedupeConversationsByIdentity(nextItems);
       });
       if (selectedConversationKey !== conversationKey && selectedConversationWaId !== event.waId) {
-        markConversationAsUnread(conversationKey, event.waId);
+        markConversationIdentitiesAsUnread(Array.from(matchedConversationKeys), event.waId);
       }
       return;
     }
@@ -1365,6 +1392,7 @@ export default function AppInboxPage() {
     markConversationAsUnread(conversationKey, event.waId);
   }, [
     applyRealtimeStatusUpdated,
+    markConversationIdentitiesAsUnread,
     markConversationAsUnread,
     isTimelineNearBottom,
     selectedConversationKey,

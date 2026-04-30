@@ -112,6 +112,33 @@ function countOccurrences(text: string, query: string) {
   return total;
 }
 
+function buildHighlightedJsonParts(text: string, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [{ text, highlighted: false }];
+
+  const normalizedText = text.toLowerCase();
+  const parts: Array<{ text: string; highlighted: boolean }> = [];
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const index = normalizedText.indexOf(normalizedQuery, cursor);
+    if (index < 0) {
+      parts.push({ text: text.slice(cursor), highlighted: false });
+      break;
+    }
+    if (index > cursor) {
+      parts.push({ text: text.slice(cursor, index), highlighted: false });
+    }
+    parts.push({
+      text: text.slice(index, index + normalizedQuery.length),
+      highlighted: true,
+    });
+    cursor = index + normalizedQuery.length;
+  }
+
+  return parts.length > 0 ? parts : [{ text, highlighted: false }];
+}
+
 function selectJsonOccurrence(textareaId: string, text: string, query: string, backwards = false) {
   const textarea = document.getElementById(textareaId);
   if (!(textarea instanceof HTMLTextAreaElement)) return;
@@ -130,6 +157,39 @@ function selectJsonOccurrence(textareaId: string, text: string, query: string, b
   if (index < 0) return;
   textarea.focus();
   textarea.setSelectionRange(index, index + normalizedQuery.length);
+}
+
+function JsonSearchPreview({ text, query }: { text: string; query: string }) {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return null;
+
+  const occurrences = countOccurrences(text, trimmedQuery);
+  if (occurrences === 0) {
+    return (
+      <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+        Nenhuma ocorrencia encontrada para "{trimmedQuery}".
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-re7-sky/30 bg-re7-navy/70">
+      <div className="border-b border-white/10 px-3 py-2 text-xs text-white/65">
+        Termos localizados no JSON
+      </div>
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-xs leading-relaxed text-white/75">
+        {buildHighlightedJsonParts(text, trimmedQuery).map((part, index) =>
+          part.highlighted ? (
+            <mark key={index} className="rounded bg-re7-orange px-0.5 text-white">
+              {part.text}
+            </mark>
+          ) : (
+            <span key={index}>{part.text}</span>
+          )
+        )}
+      </pre>
+    </div>
+  );
 }
 
 function FlowBadge({
@@ -585,6 +645,7 @@ export default function AppChatbotPage() {
             </button>
             <span className="text-xs text-white/50">{countOccurrences(newDefinition, newSearch)} ocorrencia(s)</span>
           </div>
+          <JsonSearchPreview text={newDefinition} query={newSearch} />
           {newJsonError ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
               JSON invalido: {newJsonError}
@@ -746,6 +807,7 @@ export default function AppChatbotPage() {
                         {countOccurrences(draft.definitionText, draftSearches[flow.id] ?? "")} ocorrencia(s)
                       </span>
                     </div>
+                    <JsonSearchPreview text={draft.definitionText} query={draftSearches[flow.id] ?? ""} />
                     {draftJsonErrors[flow.id] ? (
                       <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                         JSON invalido: {draftJsonErrors[flow.id]}

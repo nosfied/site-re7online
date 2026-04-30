@@ -11289,6 +11289,7 @@ async function buildConversationListPayload(
   const conversationWhere: Prisma.ConversationWhereInput = {
     clientId: params.clientId,
     deletedAt: null,
+    lastInboundAt: { not: null },
     ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
     ...(params.cursor
       ? {
