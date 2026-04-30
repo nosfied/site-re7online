@@ -563,7 +563,9 @@ function mergeConversationsPreservingStableOrder(
     ...incoming.filter((item) => !currentIndexByIdentity.has(getConversationIdentity(item))),
   ];
 
-  return merged;
+  // Keep unchanged conversations stable, but promote conversations with newer activity.
+  // A support inbox must reflect the operational queue without requiring a page refresh.
+  return sortConversationsByRecent(merged);
 }
 
 function updateConversationInPlace(
