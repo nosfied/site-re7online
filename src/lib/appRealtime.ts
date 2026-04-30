@@ -175,9 +175,10 @@ export function buildNotificationKey(candidate: NotificationCandidate) {
 
 export function buildHandoffNotificationKey(
   conversationIdentity: string | null,
-  handoffStatus?: string | null
+  handoffStatus?: string | null,
+  updatedAt?: string | null
 ) {
-  return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}`;
+  return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}:${updatedAt ?? "unknown"}`;
 }
 
 export function shouldProcessNotification(key: string) {
@@ -221,7 +222,8 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     candidate.kind === "handoff"
       ? buildHandoffNotificationKey(
           candidate.conversationIdentity,
-          candidate.handoffStatus ?? candidate.mode
+          candidate.handoffStatus ?? candidate.mode,
+          candidate.createdAt ?? null
         )
       : buildNotificationKey({
           waId: candidate.conversationIdentity,

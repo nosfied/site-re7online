@@ -1238,12 +1238,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ...state,
       departmentId: state.departmentId ?? department?.id ?? null,
       queueId,
-      status: state.status ?? "WAITING",
+      status: state.status === "CLOSED" ? "WAITING" : state.status ?? "WAITING",
       closedAt: null,
     };
   };
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
+    const stateLastInboundAt = Date.parse(state.lastInboundAt ?? "");
+    const currentClosedAt = Date.parse(currentState?.closedAt ?? "");
+    const shouldReopenClosedConversation =
+      currentState?.status === "CLOSED" &&
+      Number.isFinite(stateLastInboundAt) &&
+      (!Number.isFinite(currentClosedAt) || stateLastInboundAt > currentClosedAt);
     const appliedDefaultDepartment =
       !state.departmentId && !currentState?.departmentId ? await loadDefaultDepartment() : null;
     const baseState = {
@@ -1251,8 +1257,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       departmentId:
         state.departmentId ?? currentState?.departmentId ?? appliedDefaultDepartment?.id ?? null,
       queueId: state.queueId ?? currentState?.queueId ?? null,
-      status: state.status ?? currentState?.status ?? null,
-      closedAt: state.closedAt ?? currentState?.closedAt ?? null,
+      status: shouldReopenClosedConversation
+        ? "WAITING"
+        : state.status ?? currentState?.status ?? null,
+      closedAt: shouldReopenClosedConversation
+        ? null
+        : state.closedAt ?? currentState?.closedAt ?? null,
     };
     const nextState =
       currentState?.mode === "HUMAN" && state.mode !== "HUMAN"
@@ -3210,7 +3220,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             updatedConversation.handoff.status === "active"
               ? updatedConversation.handoff.status
               : "active",
-          updatedAt: new Date().toISOString(),
+          updatedAt: parseWebhookTimestampToDate(message.timestamp).toISOString(),
         });
       }
       if (tenantHandoffAttendantWaid) {

@@ -1290,10 +1290,8 @@ export default function AppInboxPage() {
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             mode: event.mode,
             handoffStatus: event.handoffStatus,
-            status:
-              item.status === "CLOSED"
-                ? item.status
-                : item.status ?? "WAITING",
+            status: "WAITING" as const,
+            closedAt: null,
           };
         });
         if (!matchedConversation) {
