@@ -40,14 +40,21 @@ export default function AppRealtimeBridge() {
   const notificationTimerRef = useRef<number | null>(null);
 
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
-    if (!isSoundEnabled() || !hasPrimedAudioRef.current || typeof window === "undefined") return;
+    if (!isSoundEnabled() || typeof window === "undefined") return;
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
       const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
       nextAudio.volume = sound === "active" ? 0.42 : 0.95;
       nextAudio.currentTime = 0;
-      void nextAudio.play();
+      void nextAudio
+        .play()
+        .then(() => {
+          hasPrimedAudioRef.current = true;
+        })
+        .catch(() => {
+          // Browser autoplay policy can block audio after reload until the next user gesture.
+        });
     } catch {
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
@@ -90,11 +97,12 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
-    const canPlayInternalSound = isSoundEnabled() && hasPrimedAudioRef.current;
-    if (request.notifyBrowser && (!appIsFocused || !canPlayInternalSound)) {
-      showBrowserNotification(request, canPlayInternalSound);
+    const soundEnabled = isSoundEnabled();
+    const audioAlreadyPrimed = hasPrimedAudioRef.current;
+    if (request.notifyBrowser && (!appIsFocused || !audioAlreadyPrimed)) {
+      showBrowserNotification(request, audioAlreadyPrimed);
     }
-    if (canPlayInternalSound) {
+    if (soundEnabled) {
       if (request.sound === "active") {
         playNotificationSound("active");
       } else {
