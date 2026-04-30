@@ -1270,7 +1270,43 @@ export default function AppInboxPage() {
       applyRealtimeStatusUpdated(event);
       return;
     }
-    if (!session || event.type !== "message.created" || event.clientId !== session.user.clientId) return;
+    if (!session || event.clientId !== session.user.clientId) return;
+    if (event.type === "conversation.handoff.updated") {
+      const conversationKey = event.waIdCanonical ?? event.waId;
+      let matchedConversation = false;
+      setConversations((prev) => {
+        const nextItems = prev.map((item) => {
+          const itemKey = getConversationIdentity(item);
+          if (
+            itemKey !== conversationKey &&
+            item.waId !== event.waId &&
+            item.waIdCanonical !== event.waIdCanonical
+          ) {
+            return item;
+          }
+          matchedConversation = true;
+          return {
+            ...item,
+            waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+            mode: event.mode,
+            handoffStatus: event.handoffStatus,
+            status:
+              item.status === "CLOSED"
+                ? item.status
+                : item.status ?? "WAITING",
+          };
+        });
+        if (!matchedConversation) {
+          void refreshConversationListRef.current?.(session);
+        }
+        return dedupeConversationsByIdentity(nextItems);
+      });
+      if (selectedConversationKey !== conversationKey && selectedConversationWaId !== event.waId) {
+        markConversationAsUnread(conversationKey, event.waId);
+      }
+      return;
+    }
+    if (event.type !== "message.created") return;
     const conversationKey = event.waIdCanonical ?? event.waId;
     const message = event.message;
 

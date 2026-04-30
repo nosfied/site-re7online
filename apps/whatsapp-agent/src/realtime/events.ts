@@ -34,4 +34,13 @@ export type InboxRealtimeEvent =
       status: "SENT" | "DELIVERED" | "READ" | "FAILED";
       errorBody?: string | null;
       updatedAt: string;
+    }
+  | {
+      type: "conversation.handoff.updated";
+      clientId: string;
+      waId: string;
+      waIdCanonical?: string | null;
+      mode: "HUMAN";
+      handoffStatus: "pending" | "active";
+      updatedAt: string;
     };

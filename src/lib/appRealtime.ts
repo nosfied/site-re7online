@@ -24,6 +24,15 @@ export type AppRealtimeEvent =
       status: "SENT" | "DELIVERED" | "READ" | "FAILED";
       errorBody?: string | null;
       updatedAt: string;
+    }
+  | {
+      type: "conversation.handoff.updated";
+      clientId: string;
+      waId: string;
+      waIdCanonical?: string | null;
+      mode: "HUMAN";
+      handoffStatus: "pending" | "active";
+      updatedAt: string;
     };
 
 type AppRealtimeClientOptions = {
@@ -166,10 +175,9 @@ export function buildNotificationKey(candidate: NotificationCandidate) {
 
 export function buildHandoffNotificationKey(
   conversationIdentity: string | null,
-  handoffStatus?: string | null,
-  updatedAt?: string | null
+  handoffStatus?: string | null
 ) {
-  return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}:${updatedAt ?? "unknown"}`;
+  return `handoff:${conversationIdentity ?? "unknown"}:${handoffStatus ?? "unknown"}`;
 }
 
 export function shouldProcessNotification(key: string) {
@@ -213,8 +221,7 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     candidate.kind === "handoff"
       ? buildHandoffNotificationKey(
           candidate.conversationIdentity,
-          candidate.handoffStatus ?? candidate.mode,
-          candidate.createdAt ?? null
+          candidate.handoffStatus ?? candidate.mode
         )
       : buildNotificationKey({
           waId: candidate.conversationIdentity,
@@ -323,7 +330,11 @@ export function createAppRealtimeClient(options: AppRealtimeClientOptions): AppR
     socket.addEventListener("message", (message) => {
       try {
         const event = JSON.parse(String(message.data)) as AppRealtimeEvent;
-        if (event?.type === "message.created" || event?.type === "message.status.updated") {
+        if (
+          event?.type === "message.created" ||
+          event?.type === "message.status.updated" ||
+          event?.type === "conversation.handoff.updated"
+        ) {
           options.onMessage(event);
         }
       } catch {

@@ -123,12 +123,32 @@ export default function AppRealtimeBridge() {
     });
   }, []);
 
+  const handleHandoffNotification = useCallback((
+    event: Extract<AppRealtimeEvent, { type: "conversation.handoff.updated" }>
+  ) => {
+    handleRealtimeNotificationCandidate({
+      source: "websocket",
+      kind: "handoff",
+      conversationIdentity: getConversationIdentityFromRealtimeEvent(event) ?? null,
+      createdAt: event.updatedAt,
+      direction: "INBOUND",
+      mode: event.mode,
+      handoffStatus: event.handoffStatus,
+    });
+  }, []);
+
   const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
     dispatchAppRealtimeEvent(event);
 
-    if (event.type !== "message.created" || event.clientId !== session.user.clientId) return;
-    handleInboundNotification(event);
-  }, [handleInboundNotification]);
+    if (event.clientId !== session.user.clientId) return;
+    if (event.type === "message.created") {
+      handleInboundNotification(event);
+      return;
+    }
+    if (event.type === "conversation.handoff.updated") {
+      handleHandoffNotification(event);
+    }
+  }, [handleHandoffNotification, handleInboundNotification]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
