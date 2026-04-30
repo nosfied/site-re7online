@@ -92,7 +92,7 @@ function getLeadStatusLabel(status?: string | null) {
 }
 
 function getMessageContentLabel(item: InboxMessageItem) {
-  switch (item.type) {
+  switch (item.type?.toUpperCase()) {
     case "AUDIO":
       return "Audio";
     case "IMAGE":
@@ -103,9 +103,36 @@ function getMessageContentLabel(item: InboxMessageItem) {
       return "Documento";
     case "TEMPLATE":
       return "Template";
+    case "UNKNOWN":
+      return "Mensagem nao suportada pela API oficial do WhatsApp.";
     default:
       return "Mensagem";
   }
+}
+
+function getConversationPreviewText(item: InboxConversationItem) {
+  if (!item.lastMessage) return "Sem mensagem recente.";
+  if (item.lastMessage.bodyText?.trim()) return item.lastMessage.bodyText;
+  switch (item.lastMessage.type?.toUpperCase()) {
+    case "AUDIO":
+      return "Audio recebido";
+    case "IMAGE":
+      return "Imagem recebida";
+    case "VIDEO":
+      return "Video recebido";
+    case "DOCUMENT":
+      return "Documento recebido";
+    case "TEMPLATE":
+      return "Template enviado";
+    case "UNKNOWN":
+      return "Mensagem nao suportada.";
+    default:
+      return "Mensagem recebida";
+  }
+}
+
+function isUnsupportedMessage(item: InboxMessageItem) {
+  return item.type === "UNKNOWN" && !item.bodyText && !item.media;
 }
 
 function MediaBubble({
@@ -550,14 +577,15 @@ function updateConversationInPlace(
 function isConversationUnread(item: InboxConversationItem, state: InboxReadState) {
   const identityCandidates = getConversationIdentityCandidates(item);
   if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
-  if (item.lastMessage?.direction !== "INBOUND") return false;
-  const activityAt = getConversationActivityTimestamp(item);
+  const activityAt = item.lastInboundAt;
   const lastReadAt = getLatestReadAtForConversation(item, state);
   if (activityAt === null) return false;
   if (!lastReadAt) return true;
+  const activityAtTimestamp = Date.parse(activityAt);
+  if (!Number.isFinite(activityAtTimestamp)) return false;
   const lastReadAtTimestamp = Date.parse(lastReadAt);
   if (!Number.isFinite(lastReadAtTimestamp)) return true;
-  return activityAt > lastReadAtTimestamp;
+  return activityAtTimestamp > lastReadAtTimestamp;
 }
 
 function getLatestReadAtForConversation(
@@ -2860,7 +2888,7 @@ export default function AppInboxPage() {
                     {unread ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#20b15a]" /> : null}
                   </div>
                   <p className={`mt-2 line-clamp-2 text-sm leading-5 ${isActive ? "text-white/88" : "text-white/68"}`}>
-                    {item.lastMessage?.bodyText || "Sem mensagem recente."}
+                    {getConversationPreviewText(item)}
                   </p>
                 </button>
               );
@@ -3124,7 +3152,14 @@ export default function AppInboxPage() {
                           <p className="wa-bubble-text text-sm leading-relaxed">
                             {item.bodyText}
                           </p>
-                        ) : item.media ? null : (
+                        ) : item.media ? null : isUnsupportedMessage(item) ? (
+                          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                            <p className="font-semibold">Mensagem nao suportada</p>
+                            <p className="mt-1 text-xs leading-relaxed">
+                              A API oficial do WhatsApp informou este item como tipo nao suportado e nao enviou dados para download.
+                            </p>
+                          </div>
+                        ) : (
                           <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                         )}
                         {item.media ? (

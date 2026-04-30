@@ -11271,6 +11271,21 @@ function conversationMatchesListFilters(item: {
   return true;
 }
 
+function conversationListItemIsInHumanFlow(item: {
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId: string | null;
+  assignedAt: string | null;
+}) {
+  return (
+    item.mode === "HUMAN" ||
+    item.handoffStatus === "active" ||
+    item.handoffStatus === "pending" ||
+    Boolean(item.assignedUserId) ||
+    Boolean(item.assignedAt)
+  );
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -11557,7 +11572,11 @@ async function buildConversationListPayload(
       updatedAt: conversation.updatedAt,
     };
   });
-  const filteredItems = allItems.filter((item) => conversationMatchesListFilters(item, params.filters));
+  const filteredItems = allItems.filter(
+    (item) =>
+      conversationListItemIsInHumanFlow(item) &&
+      conversationMatchesListFilters(item, params.filters)
+  );
   const items = filteredItems.slice(0, params.limit);
   const nextCursorSource =
     filteredItems.length > params.limit
