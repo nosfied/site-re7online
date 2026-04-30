@@ -357,6 +357,14 @@ function getConversationIdentityCandidates(item: Pick<InboxConversationItem, "wa
   );
 }
 
+function conversationIdentityMatches(
+  left: Array<string | null | undefined>,
+  right: Array<string | null | undefined>
+) {
+  const leftValues = new Set(left.filter(Boolean));
+  return right.some((value) => Boolean(value) && leftValues.has(value));
+}
+
 type InboxReadState = AppInboxReadState;
 
 const EMPTY_READ_STATE: InboxReadState = {
@@ -1819,6 +1827,11 @@ export default function AppInboxPage() {
     }
     let cancelled = false;
     const requestSeq = ++detailRequestSeqRef.current;
+    const selectedConversationItem =
+      conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null;
+    const selectedIdentityCandidates = selectedConversationItem
+      ? getConversationIdentityCandidates(selectedConversationItem)
+      : [selectedConversationKey, selectedConversationWaId];
     const shouldRefreshUnreadWindow =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
@@ -1836,7 +1849,14 @@ export default function AppInboxPage() {
       .then((response) => {
         if (cancelled || requestSeq !== detailRequestSeqRef.current) return;
         const responseConversationKey = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
-        if (responseConversationKey !== selectedConversationKey && response.waId !== selectedConversationWaId) {
+        if (
+          !conversationIdentityMatches(selectedIdentityCandidates, [
+            responseConversationKey,
+            response.waId,
+            response.waIdCanonical,
+            selectedConversationWaId,
+          ])
+        ) {
           return;
         }
         const visibleConversationKey = selectedConversationKey ?? responseConversationKey;
@@ -1880,7 +1900,7 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
+  }, [conversations, handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
@@ -3118,7 +3138,10 @@ export default function AppInboxPage() {
             {selectedConversationWaId && isRefreshingSelectedTimeline ? (
               <p className="text-sm text-slate-700/80">Atualizando mensagens...</p>
             ) : null}
-            {selectedConversationWaId && !loadingMessages && messages.length === 0 ? (
+            {selectedConversationWaId &&
+            !loadingMessages &&
+            messages.length === 0 &&
+            messagesConversationKey === selectedConversationKey ? (
               <p className="text-sm text-slate-700/80">Sem mensagens para esta conversa.</p>
             ) : null}
             <div className="space-y-3">
