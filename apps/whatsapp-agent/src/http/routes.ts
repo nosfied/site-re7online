@@ -9971,6 +9971,37 @@ function buildCampaignMetaStatusItem(item: {
   };
 }
 
+function buildCampaignSeedFallbackStatusItems(
+  campaign: {
+    sentCount: number;
+    blockedCount: number;
+    status: string;
+    templateName: string;
+  },
+  seed: CampaignDraftSeed
+): CampaignMetaStatus[] {
+  const sentLimit = Math.max(campaign.sentCount || 0, 0);
+  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
+  return seed.recipients.map((waId, index) => {
+    const wasSent = index < sentLimit;
+    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
+    return {
+      waId,
+      templateName: seed.templateName || campaign.templateName,
+      status: wasSent ? "sent" : "failed",
+      pricingCategory: null,
+      pricingBillable: null,
+      pricingModel: null,
+      conversationId: null,
+      error: wasSent
+        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
+        : wasBlockedOrFailed
+          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
+          : "Envio individual nao encontrado no historico preservado.",
+    };
+  });
+}
+
 function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
   return items.reduce<CampaignMetaSummary>(
     (acc, item) => {
@@ -11826,12 +11857,16 @@ async function buildCampaignDetailPayload(
     templateName: campaign.templateName,
     outboundMessages,
   });
+  const visibleMessagesMetaStatus =
+    messagesMetaStatus.length > 0
+      ? messagesMetaStatus
+      : buildCampaignSeedFallbackStatusItems(campaign, draftSeed);
   return {
     ok: true,
     campaign: {
       ...serializeCampaign(campaign),
-      metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
-      messagesMetaStatus,
+      metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus),
+      messagesMetaStatus: visibleMessagesMetaStatus,
       draftSeed,
     },
   };
