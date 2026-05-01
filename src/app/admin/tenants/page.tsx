@@ -165,11 +165,12 @@ export default function TenantsSummaryPage() {
           id: clientKey,
           name,
           metaPhoneNumberId: phoneNumberId,
+          maxActiveAppUsers: 5,
           allowlist: [],
           handoffAttendantWaid: "",
           defaultLanguage: "pt_BR",
           templates: {
-            manualHandoff: "",
+            manualHandoff: "re7_atendente_manual_v1",
           },
         });
       } catch {
