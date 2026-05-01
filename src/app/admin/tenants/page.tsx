@@ -399,7 +399,7 @@ export default function TenantsSummaryPage() {
         ) : null}
 
         <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-          <table className="w-full min-w-[1320px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Tenant</th>
@@ -415,12 +415,12 @@ export default function TenantsSummaryPage() {
                 <th className="px-3 py-2">Outbound text</th>
                 <th className="px-3 py-2">Outbound tpl</th>
                 <th className="px-3 py-2">Outbound failed</th>
-                <th className="px-3 py-2">Acoes</th>
+                <th className="px-3 py-2 text-right">Acoes</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => (
-                <tr key={item.tenantId} className="border-t border-white/10">
+                <tr key={item.tenantId} className="border-t border-white/10 hover:bg-white/[0.03]">
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">{item.name}</span>
@@ -477,51 +477,13 @@ export default function TenantsSummaryPage() {
                   <td className="px-3 py-2">{item.counts.outbound.sent_text}</td>
                   <td className="px-3 py-2">{item.counts.outbound.sent_template}</td>
                   <td className="px-3 py-2">{item.counts.outbound.failed}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Abrir
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/onboarding`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Onboarding
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/campaigns`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Campanhas
-                      </Link>
-                      <Link
-                        href={`/admin/templates/manage?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Templates
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/users?clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Usuarios
-                      </Link>
-                      <Link
-                        href={`/admin/departments?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Setores
-                      </Link>
-                      <Link
-                        href={`/admin/reports?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Relatorios
-                      </Link>
-                    </div>
+                  <td className="px-3 py-2 text-right">
+                    <Link
+                      href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
+                      className="inline-flex rounded-md border border-white/20 px-3 py-1.5 text-xs font-medium hover:bg-white/10"
+                    >
+                      Abrir
+                    </Link>
                   </td>
                 </tr>
               ))}
