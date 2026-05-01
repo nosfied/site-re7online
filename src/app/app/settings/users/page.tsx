@@ -70,6 +70,9 @@ function ActionIcon({ children }: { children: ReactNode }) {
 }
 
 function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
+  if (error.errorCode === "user_limit_exceeded") {
+    return "Limite de usuarios ativos contratado para este tenant foi atingido.";
+  }
   if (error.errorCode === "user_already_exists" || error.status === 409) {
     return "Ja existe um usuario com esse email.";
   }

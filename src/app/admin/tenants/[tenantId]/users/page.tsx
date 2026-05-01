@@ -235,7 +235,9 @@ export default function TenantUsersPage() {
     } catch (err) {
       const typed = err as { message?: string; status?: number };
       const message = typed.message || "Nao foi possivel criar o usuario.";
-      if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
+      if (/user_limit_exceeded/i.test(message)) {
+        setUserError("Limite de usuarios ativos contratado para este tenant foi atingido.");
+      } else if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
         setUserError("Ja existe um usuario com esse email.");
       } else if (/weak_password/i.test(message)) {
         setUserError("Senha deve ter pelo menos 6 caracteres.");
@@ -302,7 +304,9 @@ export default function TenantUsersPage() {
     } catch (err) {
       const typed = err as { message?: string; status?: number };
       const message = typed.message || "Nao foi possivel atualizar o usuario.";
-      if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
+      if (/user_limit_exceeded/i.test(message)) {
+        setActionError("Limite de usuarios ativos contratado para este tenant foi atingido.");
+      } else if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
         setActionError("Ja existe um usuario com esse email.");
       } else if (/department_required/i.test(message)) {
         setActionError("Selecione um setor para AGENT ou SUPERVISOR.");

@@ -13,6 +13,42 @@ import {
 
 type TenantFormState = {
   displayPhoneNumber: string;
+  companyLegalName: string;
+  companyTradeName: string;
+  companyTaxId: string;
+  companyStateRegistration: string;
+  companyMunicipalRegistration: string;
+  companyWebsite: string;
+  companyIndustry: string;
+  companyAddressStreet: string;
+  companyAddressNumber: string;
+  companyAddressComplement: string;
+  companyAddressDistrict: string;
+  companyAddressCity: string;
+  companyAddressState: string;
+  companyAddressZip: string;
+  companyAddressCountry: string;
+  legalRepresentativeName: string;
+  legalRepresentativeCpf: string;
+  legalRepresentativeEmail: string;
+  legalRepresentativePhone: string;
+  billingContactName: string;
+  billingContactEmail: string;
+  billingContactPhone: string;
+  billingEmail: string;
+  financialContactName: string;
+  financialContactEmail: string;
+  financialContactPhone: string;
+  technicalContactName: string;
+  technicalContactEmail: string;
+  technicalContactPhone: string;
+  contractPlanName: string;
+  contractStartDate: string;
+  contractEndDate: string;
+  contractBillingDay: string;
+  contractPaymentMethod: string;
+  contractNotes: string;
+  maxActiveAppUsers: string;
   allowlistInput: string;
   quotaMonthlyConversations: string;
   quotaWarnAtPct: string;
@@ -47,6 +83,11 @@ function TogglePill({
   );
 }
 
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
 export default function TenantEditPage() {
   const params = useParams<{ tenantId: string }>();
   const tenantId = useMemo(() => {
@@ -75,6 +116,9 @@ export default function TenantEditPage() {
   const reportsHref = clientSnapshot?.clientKey
     ? `/admin/reports?tenantId=${encodeURIComponent(tenantId)}&clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
     : "/admin/reports";
+  const chatbotHref = clientSnapshot?.clientKey
+    ? `/admin/tenants/${encodeURIComponent(tenantId)}/chatbot?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
+    : `/admin/tenants/${encodeURIComponent(tenantId)}/chatbot`;
 
   useEffect(() => {
     if (!tenantId) return;
@@ -92,6 +136,48 @@ export default function TenantEditPage() {
         setTenantSnapshot(tenant);
         setForm({
           displayPhoneNumber: tenant.displayPhoneNumber ?? "",
+          companyLegalName: tenant.companyLegalName ?? "",
+          companyTradeName: tenant.companyTradeName ?? "",
+          companyTaxId: tenant.companyTaxId ?? "",
+          companyStateRegistration: tenant.companyStateRegistration ?? "",
+          companyMunicipalRegistration: tenant.companyMunicipalRegistration ?? "",
+          companyWebsite: tenant.companyWebsite ?? "",
+          companyIndustry: tenant.companyIndustry ?? "",
+          companyAddressStreet: tenant.companyAddressStreet ?? "",
+          companyAddressNumber: tenant.companyAddressNumber ?? "",
+          companyAddressComplement: tenant.companyAddressComplement ?? "",
+          companyAddressDistrict: tenant.companyAddressDistrict ?? "",
+          companyAddressCity: tenant.companyAddressCity ?? "",
+          companyAddressState: tenant.companyAddressState ?? "",
+          companyAddressZip: tenant.companyAddressZip ?? "",
+          companyAddressCountry: tenant.companyAddressCountry ?? "Brasil",
+          legalRepresentativeName: tenant.legalRepresentativeName ?? "",
+          legalRepresentativeCpf: tenant.legalRepresentativeCpf ?? "",
+          legalRepresentativeEmail: tenant.legalRepresentativeEmail ?? "",
+          legalRepresentativePhone: tenant.legalRepresentativePhone ?? "",
+          billingContactName: tenant.billingContactName ?? "",
+          billingContactEmail: tenant.billingContactEmail ?? "",
+          billingContactPhone: tenant.billingContactPhone ?? "",
+          billingEmail: tenant.billingEmail ?? "",
+          financialContactName: tenant.financialContactName ?? "",
+          financialContactEmail: tenant.financialContactEmail ?? "",
+          financialContactPhone: tenant.financialContactPhone ?? "",
+          technicalContactName: tenant.technicalContactName ?? "",
+          technicalContactEmail: tenant.technicalContactEmail ?? "",
+          technicalContactPhone: tenant.technicalContactPhone ?? "",
+          contractPlanName: tenant.contractPlanName ?? "",
+          contractStartDate: tenant.contractStartDate ?? "",
+          contractEndDate: tenant.contractEndDate ?? "",
+          contractBillingDay:
+            typeof tenant.contractBillingDay === "number"
+              ? String(tenant.contractBillingDay)
+              : "",
+          contractPaymentMethod: tenant.contractPaymentMethod ?? "",
+          contractNotes: tenant.contractNotes ?? "",
+          maxActiveAppUsers:
+            typeof tenant.maxActiveAppUsers === "number"
+              ? String(tenant.maxActiveAppUsers)
+              : "5",
           allowlistInput: (tenant.allowlist ?? []).join("\n"),
           quotaMonthlyConversations:
             typeof tenant.quotaMonthlyConversations === "number"
@@ -135,6 +221,10 @@ export default function TenantEditPage() {
     return Number.isFinite(value) && value >= 0 && value <= 1;
   }, [form]);
 
+  const updateFormField = (field: keyof TenantFormState, value: string) => {
+    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form) return;
@@ -142,6 +232,40 @@ export default function TenantEditPage() {
     const payload: Record<string, unknown> = {
       ...(tenantSnapshot ?? {}),
       displayPhoneNumber: form.displayPhoneNumber.trim() || undefined,
+      companyLegalName: optionalText(form.companyLegalName),
+      companyTradeName: optionalText(form.companyTradeName),
+      companyTaxId: optionalText(form.companyTaxId),
+      companyStateRegistration: optionalText(form.companyStateRegistration),
+      companyMunicipalRegistration: optionalText(form.companyMunicipalRegistration),
+      companyWebsite: optionalText(form.companyWebsite),
+      companyIndustry: optionalText(form.companyIndustry),
+      companyAddressStreet: optionalText(form.companyAddressStreet),
+      companyAddressNumber: optionalText(form.companyAddressNumber),
+      companyAddressComplement: optionalText(form.companyAddressComplement),
+      companyAddressDistrict: optionalText(form.companyAddressDistrict),
+      companyAddressCity: optionalText(form.companyAddressCity),
+      companyAddressState: optionalText(form.companyAddressState),
+      companyAddressZip: optionalText(form.companyAddressZip),
+      companyAddressCountry: optionalText(form.companyAddressCountry),
+      legalRepresentativeName: optionalText(form.legalRepresentativeName),
+      legalRepresentativeCpf: optionalText(form.legalRepresentativeCpf),
+      legalRepresentativeEmail: optionalText(form.legalRepresentativeEmail),
+      legalRepresentativePhone: optionalText(form.legalRepresentativePhone),
+      billingContactName: optionalText(form.billingContactName),
+      billingContactEmail: optionalText(form.billingContactEmail),
+      billingContactPhone: optionalText(form.billingContactPhone),
+      billingEmail: optionalText(form.billingEmail),
+      financialContactName: optionalText(form.financialContactName),
+      financialContactEmail: optionalText(form.financialContactEmail),
+      financialContactPhone: optionalText(form.financialContactPhone),
+      technicalContactName: optionalText(form.technicalContactName),
+      technicalContactEmail: optionalText(form.technicalContactEmail),
+      technicalContactPhone: optionalText(form.technicalContactPhone),
+      contractPlanName: optionalText(form.contractPlanName),
+      contractStartDate: optionalText(form.contractStartDate),
+      contractEndDate: optionalText(form.contractEndDate),
+      contractPaymentMethod: optionalText(form.contractPaymentMethod),
+      contractNotes: optionalText(form.contractNotes),
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
       disableChatbot: form.disableChatbot,
@@ -150,6 +274,25 @@ export default function TenantEditPage() {
       disableAiFallback: form.disableAiFallback,
       aiBusinessContext: form.aiBusinessContext.trim() || undefined,
     };
+
+    const maxActiveAppUsers = Number(form.maxActiveAppUsers);
+    if (
+      !Number.isInteger(maxActiveAppUsers) ||
+      maxActiveAppUsers < 0
+    ) {
+      setError("Limite de usuarios ativos deve ser um numero inteiro >= 0.");
+      return;
+    }
+    payload.maxActiveAppUsers = maxActiveAppUsers;
+
+    if (form.contractBillingDay.trim()) {
+      const value = Number(form.contractBillingDay);
+      if (!Number.isInteger(value) || value < 1 || value > 31) {
+        setError("Dia de vencimento deve ser um numero inteiro entre 1 e 31.");
+        return;
+      }
+      payload.contractBillingDay = value;
+    }
 
     if (form.quotaMonthlyConversations.trim()) {
       const value = Number(form.quotaMonthlyConversations);
@@ -203,42 +346,6 @@ export default function TenantEditPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/admin/tenants/${encodeURIComponent(tenantId)}/onboarding`}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Onboarding Meta
-            </Link>
-            <Link
-              href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Usuarios
-            </Link>
-            <Link
-              href={`/admin/tenants/${encodeURIComponent(tenantId)}/campaigns`}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Campanhas
-            </Link>
-            <Link
-              href={templatesHref}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Templates
-            </Link>
-            <Link
-              href={departmentsHref}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Setores
-            </Link>
-            <Link
-              href={reportsHref}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-            >
-              Relatorios
-            </Link>
-            <Link
               href="/admin/tenants"
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
             >
@@ -276,6 +383,16 @@ export default function TenantEditPage() {
                 <p className="text-xs uppercase tracking-wide text-white/50">Idioma padrao</p>
                 <p className="mt-2 text-sm font-medium">{tenantSnapshot?.defaultLanguage ?? "-"}</p>
               </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Empresa</p>
+                <p className="mt-2 text-sm font-medium">
+                  {tenantSnapshot?.companyLegalName || tenantSnapshot?.companyTradeName || "-"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Usuarios ativos contratados</p>
+                <p className="mt-2 text-sm font-medium">{tenantSnapshot?.maxActiveAppUsers ?? 5}</p>
+              </div>
             </div>
           </div>
 
@@ -305,6 +422,12 @@ export default function TenantEditPage() {
                 className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
               >
                 Setores do tenant
+              </Link>
+              <Link
+                href={chatbotHref}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Chatbot e automacao
               </Link>
               <Link
                 href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
@@ -396,6 +519,240 @@ export default function TenantEditPage() {
                 display_phone_number quando a Meta retornar essa informação.
               </span>
             </label>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                  Dados da empresa
+                </h2>
+                <p className="mt-1 text-xs text-white/50">
+                  Dados usados para contrato, proposta, faturamento e suporte interno.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Razao social</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyLegalName}
+                    onChange={(event) => updateFormField("companyLegalName", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Nome fantasia</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyTradeName}
+                    onChange={(event) => updateFormField("companyTradeName", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">CNPJ/CPF</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyTaxId}
+                    onChange={(event) => updateFormField("companyTaxId", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Ramo de atividade</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyIndustry}
+                    onChange={(event) => updateFormField("companyIndustry", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Inscricao estadual</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyStateRegistration}
+                    onChange={(event) => updateFormField("companyStateRegistration", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Inscricao municipal</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyMunicipalRegistration}
+                    onChange={(event) => updateFormField("companyMunicipalRegistration", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">
+                  <span className="text-white/70">Site</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyWebsite}
+                    onChange={(event) => updateFormField("companyWebsite", event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Endereco
+              </h2>
+              <div className="grid gap-3 md:grid-cols-4">
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  <span className="text-white/70">Logradouro</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressStreet}
+                    onChange={(event) => updateFormField("companyAddressStreet", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Numero</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressNumber}
+                    onChange={(event) => updateFormField("companyAddressNumber", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Complemento</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressComplement}
+                    onChange={(event) => updateFormField("companyAddressComplement", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Bairro</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressDistrict}
+                    onChange={(event) => updateFormField("companyAddressDistrict", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Cidade</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressCity}
+                    onChange={(event) => updateFormField("companyAddressCity", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">UF</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressState}
+                    onChange={(event) => updateFormField("companyAddressState", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">CEP</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressZip}
+                    onChange={(event) => updateFormField("companyAddressZip", event.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Pais</span>
+                  <input
+                    className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={form.companyAddressCountry}
+                    onChange={(event) => updateFormField("companyAddressCountry", event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Contatos e contrato
+              </h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Representante legal</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.legalRepresentativeName} onChange={(event) => updateFormField("legalRepresentativeName", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">CPF representante</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.legalRepresentativeCpf} onChange={(event) => updateFormField("legalRepresentativeCpf", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Email representante</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.legalRepresentativeEmail} onChange={(event) => updateFormField("legalRepresentativeEmail", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Telefone representante</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.legalRepresentativePhone} onChange={(event) => updateFormField("legalRepresentativePhone", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Contato de cobranca</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.billingContactName} onChange={(event) => updateFormField("billingContactName", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Email cobranca</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.billingContactEmail} onChange={(event) => updateFormField("billingContactEmail", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Telefone cobranca</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.billingContactPhone} onChange={(event) => updateFormField("billingContactPhone", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Email financeiro/NF</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.billingEmail} onChange={(event) => updateFormField("billingEmail", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Contato financeiro</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.financialContactName} onChange={(event) => updateFormField("financialContactName", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Email financeiro</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.financialContactEmail} onChange={(event) => updateFormField("financialContactEmail", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Telefone financeiro</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.financialContactPhone} onChange={(event) => updateFormField("financialContactPhone", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Contato tecnico</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.technicalContactName} onChange={(event) => updateFormField("technicalContactName", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Email tecnico</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.technicalContactEmail} onChange={(event) => updateFormField("technicalContactEmail", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Telefone tecnico</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.technicalContactPhone} onChange={(event) => updateFormField("technicalContactPhone", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Plano contratado</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractPlanName} onChange={(event) => updateFormField("contractPlanName", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Inicio do contrato</span>
+                  <input type="date" className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractStartDate} onChange={(event) => updateFormField("contractStartDate", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Fim/renovacao</span>
+                  <input type="date" className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractEndDate} onChange={(event) => updateFormField("contractEndDate", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Dia de vencimento</span>
+                  <input type="number" min={1} max={31} className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractBillingDay} onChange={(event) => updateFormField("contractBillingDay", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Forma de pagamento</span>
+                  <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractPaymentMethod} onChange={(event) => updateFormField("contractPaymentMethod", event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Usuarios ativos contratados</span>
+                  <input type="number" min={0} className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.maxActiveAppUsers} onChange={(event) => updateFormField("maxActiveAppUsers", event.target.value)} />
+                  <span className="text-xs text-white/50">Padrao: 5. Altere conforme contrato/acordo.</span>
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-3">
+                  <span className="text-white/70">Observacoes contratuais</span>
+                  <textarea className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractNotes} onChange={(event) => updateFormField("contractNotes", event.target.value)} />
+                </label>
+              </div>
+            </section>
 
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Allowlist (um waId por linha)</span>

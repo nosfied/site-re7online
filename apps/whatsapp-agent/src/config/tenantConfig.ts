@@ -8,6 +8,42 @@ export type TenantConfig = {
   name: string;
   metaPhoneNumberId: string;
   displayPhoneNumber?: string;
+  companyLegalName?: string;
+  companyTradeName?: string;
+  companyTaxId?: string;
+  companyStateRegistration?: string;
+  companyMunicipalRegistration?: string;
+  companyWebsite?: string;
+  companyIndustry?: string;
+  companyAddressStreet?: string;
+  companyAddressNumber?: string;
+  companyAddressComplement?: string;
+  companyAddressDistrict?: string;
+  companyAddressCity?: string;
+  companyAddressState?: string;
+  companyAddressZip?: string;
+  companyAddressCountry?: string;
+  legalRepresentativeName?: string;
+  legalRepresentativeCpf?: string;
+  legalRepresentativeEmail?: string;
+  legalRepresentativePhone?: string;
+  billingContactName?: string;
+  billingContactEmail?: string;
+  billingContactPhone?: string;
+  billingEmail?: string;
+  financialContactName?: string;
+  financialContactEmail?: string;
+  financialContactPhone?: string;
+  technicalContactName?: string;
+  technicalContactEmail?: string;
+  technicalContactPhone?: string;
+  contractPlanName?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractBillingDay?: number;
+  contractPaymentMethod?: string;
+  contractNotes?: string;
+  maxActiveAppUsers?: number;
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
@@ -106,6 +142,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     if (nextTenant.appDisableAiFallback === undefined) {
       nextTenant.appDisableAiFallback = false;
     }
+    if (nextTenant.maxActiveAppUsers === undefined) {
+      nextTenant.maxActiveAppUsers = 5;
+    }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
         typeof waId === "string" ? waId.replace(/\D/g, "") : waId
@@ -143,6 +182,64 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.displayPhoneNumber !== undefined && typeof tenant.displayPhoneNumber !== "string") {
       throw new Error(`invalid_tenant_display_phone:${key}`);
+    }
+    const optionalStringFields = [
+      "companyLegalName",
+      "companyTradeName",
+      "companyTaxId",
+      "companyStateRegistration",
+      "companyMunicipalRegistration",
+      "companyWebsite",
+      "companyIndustry",
+      "companyAddressStreet",
+      "companyAddressNumber",
+      "companyAddressComplement",
+      "companyAddressDistrict",
+      "companyAddressCity",
+      "companyAddressState",
+      "companyAddressZip",
+      "companyAddressCountry",
+      "legalRepresentativeName",
+      "legalRepresentativeCpf",
+      "legalRepresentativeEmail",
+      "legalRepresentativePhone",
+      "billingContactName",
+      "billingContactEmail",
+      "billingContactPhone",
+      "billingEmail",
+      "financialContactName",
+      "financialContactEmail",
+      "financialContactPhone",
+      "technicalContactName",
+      "technicalContactEmail",
+      "technicalContactPhone",
+      "contractPlanName",
+      "contractStartDate",
+      "contractEndDate",
+      "contractPaymentMethod",
+      "contractNotes",
+    ];
+    for (const field of optionalStringFields) {
+      if (tenant[field] !== undefined && typeof tenant[field] !== "string") {
+        throw new Error(`invalid_tenant_${field}:${key}`);
+      }
+    }
+    if (
+      tenant.maxActiveAppUsers !== undefined &&
+      (typeof tenant.maxActiveAppUsers !== "number" ||
+        !Number.isInteger(tenant.maxActiveAppUsers) ||
+        tenant.maxActiveAppUsers < 0)
+    ) {
+      throw new Error(`invalid_tenant_max_active_app_users:${key}`);
+    }
+    if (
+      tenant.contractBillingDay !== undefined &&
+      (typeof tenant.contractBillingDay !== "number" ||
+        !Number.isInteger(tenant.contractBillingDay) ||
+        tenant.contractBillingDay < 1 ||
+        tenant.contractBillingDay > 31)
+    ) {
+      throw new Error(`invalid_tenant_contract_billing_day:${key}`);
     }
     if (!Array.isArray(tenant.allowlist) || tenant.allowlist.some((item) => typeof item !== "string")) {
       throw new Error(`invalid_tenant_allowlist:${key}`);

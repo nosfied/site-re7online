@@ -118,6 +118,30 @@ export type AdminClientItem = {
 
 export type ConversationReportRange = "1d" | "7d" | "30d";
 
+export type AdminChatbotFlowItem = {
+  id: string;
+  clientId: string;
+  name: string;
+  isActive: boolean;
+  entryPoint: boolean;
+  definition: {
+    start: string;
+    nodes: Record<string, unknown>;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminAutomationSettings = {
+  disableAutoReply: boolean;
+  disableChatbot: boolean;
+  disableAiFallback: boolean;
+  aiConfigured: boolean;
+  chatbotLocked?: boolean;
+  flowEditingLocked?: boolean;
+  aiLocked?: boolean;
+};
+
 export type ConversationReportByAgentItem = {
   userId: string;
   conversations: number;
@@ -273,6 +297,42 @@ export type TenantConfigResponse = {
     name: string;
     metaPhoneNumberId: string;
     displayPhoneNumber?: string;
+    companyLegalName?: string;
+    companyTradeName?: string;
+    companyTaxId?: string;
+    companyStateRegistration?: string;
+    companyMunicipalRegistration?: string;
+    companyWebsite?: string;
+    companyIndustry?: string;
+    companyAddressStreet?: string;
+    companyAddressNumber?: string;
+    companyAddressComplement?: string;
+    companyAddressDistrict?: string;
+    companyAddressCity?: string;
+    companyAddressState?: string;
+    companyAddressZip?: string;
+    companyAddressCountry?: string;
+    legalRepresentativeName?: string;
+    legalRepresentativeCpf?: string;
+    legalRepresentativeEmail?: string;
+    legalRepresentativePhone?: string;
+    billingContactName?: string;
+    billingContactEmail?: string;
+    billingContactPhone?: string;
+    billingEmail?: string;
+    financialContactName?: string;
+    financialContactEmail?: string;
+    financialContactPhone?: string;
+    technicalContactName?: string;
+    technicalContactEmail?: string;
+    technicalContactPhone?: string;
+    contractPlanName?: string;
+    contractStartDate?: string;
+    contractEndDate?: string;
+    contractBillingDay?: number;
+    contractPaymentMethod?: string;
+    contractNotes?: string;
+    maxActiveAppUsers?: number;
     allowlist: string[];
     handoffAttendantWaid: string;
     defaultLanguage: string;
@@ -1181,6 +1241,98 @@ export async function fetchTemplatesObservability(
   }>;
 }> {
   return requestJson(connection, "/admin/templates");
+}
+
+export async function fetchAdminChatbotFlows(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminChatbotFlowItem[];
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/flows?${params.toString()}`);
+}
+
+export async function fetchAdminChatbotSettings(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  settings: AdminAutomationSettings;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/settings?${params.toString()}`);
+}
+
+export async function updateAdminChatbotSettings(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: Partial<AdminAutomationSettings>
+): Promise<{
+  ok: true;
+  tenantId: string;
+  fieldsChanged: string[];
+  settings: AdminAutomationSettings;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/settings?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAdminChatbotFlow(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: {
+    name: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AdminChatbotFlowItem;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/flows?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminChatbotFlow(
+  connection: AdminConnection,
+  clientKey: string,
+  flowId: string,
+  payload: {
+    name?: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition?: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AdminChatbotFlowItem;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(
+    connection,
+    `/admin/chatbot/flows/${encodeURIComponent(flowId)}?${params.toString()}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export async function fetchAdminTemplateRequests(

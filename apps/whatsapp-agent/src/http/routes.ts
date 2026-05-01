@@ -1996,6 +1996,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
         return;
       }
+      if ((parsed.data.isActive ?? true) === true) {
+        const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+        });
+        if (!activeLimit.ok) {
+          json(
+            res,
+            409,
+            httpError(
+              "user_limit_exceeded",
+              `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+            )
+          );
+          return;
+        }
+      }
       const user = await prisma.user.create({
         data: {
           clientId: client.id,
@@ -2151,6 +2169,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           httpError("forbidden", "Supervisor can only manage users from the same department.")
         );
         return;
+      }
+      if (parsed.data.isActive === true && existingUser.isActive === false) {
+        const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+        });
+        if (!activeLimit.ok) {
+          json(
+            res,
+            409,
+            httpError(
+              "user_limit_exceeded",
+              `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+            )
+          );
+          return;
+        }
       }
       const user = await prisma.user.update({
         where: { id: existingUser.id },
@@ -4607,6 +4643,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
           return;
         }
+        if ((data.isActive ?? true) === true) {
+          const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+            clientId: client.id,
+            clientKey,
+            requestId,
+          });
+          if (!activeLimit.ok) {
+            json(
+              res,
+              409,
+              httpError(
+                "user_limit_exceeded",
+                `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+              )
+            );
+            return;
+          }
+        }
         const user = await prisma.user.create({
           data: {
             clientId: client.id,
@@ -4724,6 +4778,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             )
           );
           return;
+        }
+        if (parsed.data.isActive === true && existingUser.isActive === false) {
+          const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+            clientId: client.id,
+            clientKey,
+            requestId,
+          });
+          if (!activeLimit.ok) {
+            json(
+              res,
+              409,
+              httpError(
+                "user_limit_exceeded",
+                `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+              )
+            );
+            return;
+          }
         }
         const user = await prisma.user.update({
           where: { id: existingUser.id },
@@ -5671,6 +5743,320 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           event: "department.consolidation.failed",
           requestId,
           message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/chatbot/flows") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const items = await prisma.chatbotFlow.findMany({
+          where: { clientId: client.id },
+          orderBy: [{ entryPoint: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            isActive: true,
+            entryPoint: true,
+            definition: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+        json(res, 200, { ok: true, count: items.length, items });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/chatbot/settings") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const tenants = await getTenants();
+        const tenant = tenants[clientKey];
+        if (!tenant) {
+          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          tenantId: clientKey,
+          settings: {
+            disableAutoReply: tenant.disableAutoReply ?? false,
+            disableChatbot: isChatbotDisabledForTenant(tenant),
+            disableAiFallback: isAiFallbackDisabledForTenant(tenant),
+            aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
+            chatbotLocked: Boolean(tenant.disableChatbot),
+            flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+            aiLocked: Boolean(tenant.disableAiFallback),
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.settings.get.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "PUT" && pathname === "/admin/chatbot/settings") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const data = body as Record<string, unknown>;
+        const keys = ["disableChatbot", "disableAiFallback"] as const;
+        const payload: Record<string, boolean> = {};
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(data, key)) {
+            if (typeof data[key] !== "boolean") {
+              json(res, 400, httpError("bad_request", `${key} must be boolean`));
+              return;
+            }
+            payload[key] = data[key] as boolean;
+          }
+        }
+        if (Object.keys(payload).length === 0) {
+          json(
+            res,
+            400,
+            httpError("bad_request", "Provide at least one of disableChatbot or disableAiFallback")
+          );
+          return;
+        }
+        const tenants = await getTenants();
+        const tenant = tenants[clientKey];
+        if (!tenant) {
+          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        if (payload.disableAiFallback === false && !tenant.aiBusinessContext?.trim()) {
+          json(
+            res,
+            409,
+            httpError("ai_context_missing", "AI automatica exige configuracao previa do tenant.")
+          );
+          return;
+        }
+        const saved = await saveTenantPatch(clientKey, {
+          ...(payload.disableChatbot !== undefined
+            ? { appDisableChatbot: payload.disableChatbot }
+            : {}),
+          ...(payload.disableAiFallback !== undefined
+            ? { appDisableAiFallback: payload.disableAiFallback }
+            : {}),
+        });
+        logger.info({
+          event: "admin.chatbot.settings.updated",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          fieldsChanged: saved.fieldsChanged,
+        });
+        json(res, 200, {
+          ok: true,
+          tenantId: clientKey,
+          fieldsChanged: saved.fieldsChanged,
+          settings: {
+            disableAutoReply: Boolean(saved.tenant.disableAutoReply),
+            disableChatbot: isChatbotDisabledForTenant(saved.tenant),
+            disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
+            aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
+            chatbotLocked: Boolean(saved.tenant.disableChatbot),
+            flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
+            aiLocked: Boolean(saved.tenant.disableAiFallback),
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.settings.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/chatbot/flows") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const parsed = parseChatbotFlowUpsertPayload(body, {
+          requireName: true,
+          requireDefinition: true,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const flow = await prisma.$transaction(async (tx) => {
+          if (parsed.data.entryPoint === true) {
+            await tx.chatbotFlow.updateMany({
+              where: { clientId: client.id },
+              data: { entryPoint: false },
+            });
+          }
+          return tx.chatbotFlow.create({
+            data: {
+              clientId: client.id,
+              name: parsed.data.name as string,
+              isActive: parsed.data.isActive ?? false,
+              entryPoint: parsed.data.entryPoint ?? false,
+              definition: parsed.data.definition as Prisma.InputJsonValue,
+            },
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              isActive: true,
+              entryPoint: true,
+              definition: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+        });
+        logger.info({
+          event: "admin.chatbot.flow.created",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          flowId: flow.id,
+          isActive: flow.isActive,
+          entryPoint: flow.entryPoint,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "PUT" &&
+      pathname.startsWith("/admin/chatbot/flows/") &&
+      pathname.split("/").length === 5
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const flowId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!flowId) {
+          json(res, 400, httpError("bad_request", "Flow id is required"));
+          return;
+        }
+        const existing = await prisma.chatbotFlow.findFirst({
+          where: { id: flowId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!existing) {
+          json(res, 404, httpError("chatbot_flow_not_found", "Chatbot flow not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const parsed = parseChatbotFlowUpsertPayload(body);
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const flow = await prisma.$transaction(async (tx) => {
+          if (parsed.data.entryPoint === true) {
+            await tx.chatbotFlow.updateMany({
+              where: {
+                clientId: client.id,
+                id: { not: flowId },
+              },
+              data: { entryPoint: false },
+            });
+          }
+          return tx.chatbotFlow.update({
+            where: { id: flowId },
+            data: {
+              ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+              ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+              ...(parsed.data.entryPoint !== undefined
+                ? { entryPoint: parsed.data.entryPoint }
+                : {}),
+              ...(parsed.data.definition !== undefined
+                ? { definition: parsed.data.definition as Prisma.InputJsonValue }
+                : {}),
+            },
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              isActive: true,
+              entryPoint: true,
+              definition: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+        });
+        logger.info({
+          event: "admin.chatbot.flow.updated",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          flowId: flow.id,
+          isActive: flow.isActive,
+          entryPoint: flow.entryPoint,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.update.error",
+          message: (error as Error).message,
+          requestId,
         });
         json(res, 500, httpError("server_error", "Server error"));
       }
@@ -9518,6 +9904,42 @@ function diffTenantFields(
   compareField("name");
   compareField("metaPhoneNumberId");
   compareField("displayPhoneNumber");
+  compareField("companyLegalName");
+  compareField("companyTradeName");
+  compareField("companyTaxId");
+  compareField("companyStateRegistration");
+  compareField("companyMunicipalRegistration");
+  compareField("companyWebsite");
+  compareField("companyIndustry");
+  compareField("companyAddressStreet");
+  compareField("companyAddressNumber");
+  compareField("companyAddressComplement");
+  compareField("companyAddressDistrict");
+  compareField("companyAddressCity");
+  compareField("companyAddressState");
+  compareField("companyAddressZip");
+  compareField("companyAddressCountry");
+  compareField("legalRepresentativeName");
+  compareField("legalRepresentativeCpf");
+  compareField("legalRepresentativeEmail");
+  compareField("legalRepresentativePhone");
+  compareField("billingContactName");
+  compareField("billingContactEmail");
+  compareField("billingContactPhone");
+  compareField("billingEmail");
+  compareField("financialContactName");
+  compareField("financialContactEmail");
+  compareField("financialContactPhone");
+  compareField("technicalContactName");
+  compareField("technicalContactEmail");
+  compareField("technicalContactPhone");
+  compareField("contractPlanName");
+  compareField("contractStartDate");
+  compareField("contractEndDate");
+  compareField("contractBillingDay");
+  compareField("contractPaymentMethod");
+  compareField("contractNotes");
+  compareField("maxActiveAppUsers");
   compareField("allowlist");
   compareField("handoffAttendantWaid");
   compareField("defaultLanguage");
@@ -10480,6 +10902,51 @@ async function getScopedClientById(
     where: { id: clientId },
     select: { id: true, clientKey: true, status: true },
   });
+}
+
+function getTenantMaxActiveAppUsers(clientKey: string, tenants: Awaited<ReturnType<typeof getTenants>>) {
+  const configuredLimit = tenants[clientKey]?.maxActiveAppUsers;
+  if (
+    typeof configuredLimit === "number" &&
+    Number.isInteger(configuredLimit) &&
+    configuredLimit >= 0
+  ) {
+    return configuredLimit;
+  }
+  return 5;
+}
+
+async function assertTenantActiveUserLimitAvailable(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+  }
+): Promise<
+  | { ok: true; maxActiveAppUsers: number; activeUsers: number }
+  | { ok: false; maxActiveAppUsers: number; activeUsers: number }
+> {
+  const tenants = await getTenants();
+  const maxActiveAppUsers = getTenantMaxActiveAppUsers(params.clientKey, tenants);
+  const activeUsers = await prisma.user.count({
+    where: {
+      clientId: params.clientId,
+      isActive: true,
+    },
+  });
+  const ok = activeUsers < maxActiveAppUsers;
+  if (!ok) {
+    logger.warn({
+      event: "tenant.user_limit.exceeded",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      activeUsers,
+      maxActiveAppUsers,
+    });
+  }
+  return { ok, activeUsers, maxActiveAppUsers };
 }
 
 async function resolveCampaignTemplateInput(
