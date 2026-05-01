@@ -1018,6 +1018,7 @@ export default function AppInboxPage() {
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [adminConnection, setAdminConnection] = useState<AdminConnection | null>(null);
   const [adminClientKey, setAdminClientKey] = useState<string | null>(null);
+  const [tenantNameLabel, setTenantNameLabel] = useState<string | null>(null);
   const [tenantPhoneLabel, setTenantPhoneLabel] = useState<string | null>(null);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
@@ -1169,10 +1170,14 @@ export default function AppInboxPage() {
       .then((response) => {
         if (cancelled) return;
         const phone = response.tenant.phoneDisplay || response.tenant.phoneNumberId || null;
+        setTenantNameLabel(response.tenant.name || null);
         setTenantPhoneLabel(phone);
       })
       .catch(() => {
-        if (!cancelled) setTenantPhoneLabel(null);
+        if (!cancelled) {
+          setTenantNameLabel(null);
+          setTenantPhoneLabel(null);
+        }
       });
     return () => {
       cancelled = true;
@@ -2973,7 +2978,7 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
+      <section className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[350px_minmax(0,1fr)_300px] 2xl:grid-cols-[360px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
             <p
@@ -2986,14 +2991,15 @@ export default function AppInboxPage() {
             </p>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-white" title={tenantPhoneLabel ?? undefined}>
-                  Conversas
-                  {tenantPhoneLabel ? (
-                    <span className="ml-1.5 align-baseline text-[11px] font-normal text-white/55">
-                      • {tenantPhoneLabel}
-                    </span>
-                  ) : null}
-                </h2>
+                <h2 className="truncate text-sm font-semibold text-white">Conversas</h2>
+                {tenantNameLabel || tenantPhoneLabel ? (
+                  <p
+                    className="mt-0.5 truncate text-[11px] font-normal text-white/55"
+                    title={[tenantNameLabel, tenantPhoneLabel].filter(Boolean).join(" • ")}
+                  >
+                    {[tenantNameLabel, tenantPhoneLabel].filter(Boolean).join(" • ")}
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <button

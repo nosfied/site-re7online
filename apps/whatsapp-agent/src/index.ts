@@ -81,7 +81,7 @@ async function bootstrap() {
           data: {
             clientId: client.id,
             phoneNumberId,
-            display: phoneNumberId,
+            display: tenant.displayPhoneNumber?.trim() || phoneNumberId,
           },
         });
         logger.info({
@@ -98,7 +98,11 @@ async function bootstrap() {
       if (existingPhone.clientId === client.id) {
         const phone = await prisma.waPhoneNumber.update({
           where: { phoneNumberId },
-          data: { display: phoneNumberId },
+          data: tenant.displayPhoneNumber?.trim()
+            ? { display: tenant.displayPhoneNumber.trim() }
+            : existingPhone.display?.trim()
+              ? {}
+              : { display: phoneNumberId },
         });
         logger.info({
           event: "bootstrap.tenant.ready",
@@ -129,7 +133,7 @@ async function bootstrap() {
         where: { phoneNumberId },
         data: {
           clientId: client.id,
-          display: phoneNumberId,
+          display: tenant.displayPhoneNumber?.trim() || existingPhone.display || phoneNumberId,
         },
       });
       logger.warn({

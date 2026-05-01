@@ -12,6 +12,7 @@ import {
 } from "@/lib/whatsappAdminApi";
 
 type TenantFormState = {
+  displayPhoneNumber: string;
   allowlistInput: string;
   quotaMonthlyConversations: string;
   quotaWarnAtPct: string;
@@ -83,6 +84,7 @@ export default function TenantEditPage() {
         setClientSnapshot(response.client ?? null);
         setTenantSnapshot(tenant);
         setForm({
+          displayPhoneNumber: tenant.displayPhoneNumber ?? "",
           allowlistInput: (tenant.allowlist ?? []).join("\n"),
           quotaMonthlyConversations:
             typeof tenant.quotaMonthlyConversations === "number"
@@ -131,6 +133,7 @@ export default function TenantEditPage() {
 
     const payload: Record<string, unknown> = {
       ...(tenantSnapshot ?? {}),
+      displayPhoneNumber: form.displayPhoneNumber.trim() || undefined,
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
       disableChatbot: form.disableChatbot,
@@ -295,6 +298,10 @@ export default function TenantEditPage() {
                 <p className="mt-2 font-mono text-xs">{tenantSnapshot?.metaPhoneNumberId ?? "-"}</p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Telefone exibido</p>
+                <p className="mt-2 text-sm">{tenantSnapshot?.displayPhoneNumber ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Template manual handoff</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.templates?.manualHandoff ?? "-"}</p>
               </div>
@@ -333,6 +340,24 @@ export default function TenantEditPage() {
 
         {form ? (
           <form className="grid gap-4 rounded-xl border border-white/10 bg-white/5 p-4" onSubmit={handleSubmit}>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Telefone de contato do WhatsApp</span>
+              <input
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={form.displayPhoneNumber}
+                onChange={(event) =>
+                  setForm((prev) =>
+                    prev ? { ...prev, displayPhoneNumber: event.target.value } : prev
+                  )
+                }
+                placeholder="55 84 9459-6848"
+              />
+              <span className="text-xs text-white/50">
+                Exibido no portal do cliente. No onboarding, este campo é preenchido com
+                display_phone_number quando a Meta retornar essa informação.
+              </span>
+            </label>
+
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Allowlist (um waId por linha)</span>
               <textarea

@@ -272,6 +272,7 @@ export type TenantConfigResponse = {
     id: string;
     name: string;
     metaPhoneNumberId: string;
+    displayPhoneNumber?: string;
     allowlist: string[];
     handoffAttendantWaid: string;
     defaultLanguage: string;

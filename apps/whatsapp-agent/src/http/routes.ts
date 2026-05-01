@@ -252,13 +252,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const phone = client.phoneNumbers[0] ?? null;
+      const tenants = await getTenants();
+      const tenantConfig = tenants[client.clientKey];
       const metaDisplayPhone = extractTenantDisplayPhoneFromRawPayload(client.metaConfig?.rawPayload);
-      const phoneDisplay = metaDisplayPhone || phone?.display || phone?.phoneNumberId || null;
+      const phoneDisplay =
+        tenantConfig?.displayPhoneNumber?.trim() ||
+        metaDisplayPhone ||
+        phone?.display ||
+        phone?.phoneNumberId ||
+        null;
       json(res, 200, {
         ok: true,
         tenant: {
           id: client.id,
-          name: client.name,
+          name: tenantConfig?.name || client.name,
           phoneNumberId: client.metaConfig?.phoneNumberId ?? phone?.phoneNumberId ?? null,
           phoneDisplay,
         },
@@ -7113,9 +7120,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
-        select: { id: true, clientKey: true, status: true },
+        include: {
+          metaConfig: true,
+          phoneNumbers: {
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
-      json(res, 200, { ok: true, tenantId, tenant, client });
+      const phone = client?.phoneNumbers[0] ?? null;
+      const tenantWithDisplayPhone = {
+        ...tenant,
+        displayPhoneNumber:
+          tenant.displayPhoneNumber?.trim() ||
+          extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+          phone?.display ||
+          undefined,
+      };
+      json(res, 200, {
+        ok: true,
+        tenantId,
+        tenant: tenantWithDisplayPhone,
+        client: client
+          ? {
+              id: client.id,
+              clientKey: client.clientKey,
+              status: client.status,
+            }
+          : null,
+      });
       return;
     }
 
@@ -7275,7 +7308,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           exchange.phoneNumberId;
         const enriched =
           exchange.businessToken &&
-          (!exchange.wabaId || !exchange.businessId || !exchange.businessPortfolioId) &&
           candidatePhoneNumberId
             ? await enrichMetaOnboardingResult({
                 businessToken: exchange.businessToken,
@@ -7312,6 +7344,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               }
             : null,
         };
+        const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload(rawPayload);
 
         await prisma.tenantMetaConfig.upsert({
           where: { clientId: client.id },
@@ -7343,10 +7376,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const syncResult = await syncTenantPhoneNumberMapping({
             clientId: client.id,
             phoneNumberId: finalPhoneNumberId,
+            displayPhoneNumber,
           });
           phoneMappingAction = syncResult.action;
           tenantUpdate = await saveTenantPatch(tenantId, {
             metaPhoneNumberId: finalPhoneNumberId,
+            ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
           });
         }
 
@@ -7429,6 +7464,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (!body) return;
       try {
         const saved = await saveTenantPatch(tenantId, body as Record<string, unknown>);
+        const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
+        if (phoneNumberId) {
+          const client = await prisma.client.findUnique({ where: { clientKey: tenantId } });
+          if (client) {
+            await syncTenantPhoneNumberMapping({
+              clientId: client.id,
+              phoneNumberId,
+              displayPhoneNumber: normalizeOptionalString(saved.tenant.displayPhoneNumber),
+            });
+          }
+        }
         logger.info({
           event: "admin.tenant.update",
           tenantId,
@@ -9443,6 +9489,7 @@ function diffTenantFields(
   compareField("id");
   compareField("name");
   compareField("metaPhoneNumberId");
+  compareField("displayPhoneNumber");
   compareField("allowlist");
   compareField("handoffAttendantWaid");
   compareField("defaultLanguage");
@@ -9492,8 +9539,10 @@ async function saveTenantPatch(tenantId: string, body: Record<string, unknown>) 
 async function syncTenantPhoneNumberMapping(params: {
   clientId: string;
   phoneNumberId: string;
+  displayPhoneNumber?: string | null;
 }) {
   const prisma = getPrisma();
+  const display = params.displayPhoneNumber?.trim() || params.phoneNumberId;
   const existingPhone = await prisma.waPhoneNumber.findUnique({
     where: { phoneNumberId: params.phoneNumberId },
     include: {
@@ -9508,7 +9557,7 @@ async function syncTenantPhoneNumberMapping(params: {
       data: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
-        display: params.phoneNumberId,
+        display,
       },
     });
     return { action: "created" as const };
@@ -9522,7 +9571,7 @@ async function syncTenantPhoneNumberMapping(params: {
 
   await prisma.waPhoneNumber.update({
     where: { phoneNumberId: params.phoneNumberId },
-    data: { display: params.phoneNumberId },
+    data: { display },
   });
   return { action: "existing" as const };
 }
@@ -9533,11 +9582,16 @@ function normalizeOptionalString(value: unknown) {
   return trimmed || null;
 }
 
-function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown) {
+function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown): string | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
   const payload = rawPayload as Record<string, unknown>;
+  const enrich = payload.enrich;
+  if (enrich && typeof enrich === "object" && !Array.isArray(enrich)) {
+    const displayPhone = extractTenantDisplayPhoneFromRawPayload(enrich);
+    if (displayPhone) return displayPhone;
+  }
   const phoneNumber = payload.phoneNumber;
   if (phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)) {
     const displayPhone = normalizeOptionalString(

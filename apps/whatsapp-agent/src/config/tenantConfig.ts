@@ -7,6 +7,7 @@ export type TenantConfig = {
   id: string;
   name: string;
   metaPhoneNumberId: string;
+  displayPhoneNumber?: string;
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
@@ -138,6 +139,9 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (typeof tenant.metaPhoneNumberId !== "string") {
       throw new Error(`invalid_tenant_phone:${key}`);
+    }
+    if (tenant.displayPhoneNumber !== undefined && typeof tenant.displayPhoneNumber !== "string") {
+      throw new Error(`invalid_tenant_display_phone:${key}`);
     }
     if (!Array.isArray(tenant.allowlist) || tenant.allowlist.some((item) => typeof item !== "string")) {
       throw new Error(`invalid_tenant_allowlist:${key}`);

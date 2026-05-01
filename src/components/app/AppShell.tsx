@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
-import { AppSession, clearAppSession } from "@/lib/appClientApi";
+import { useEffect, useState, type ReactNode } from "react";
+import { AppSession, clearAppSession, fetchAppTenantSummary } from "@/lib/appClientApi";
 
 type AppShellProps = {
   session: AppSession;
@@ -52,7 +52,27 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   const pathname = usePathname();
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
+  const [tenantSummary, setTenantSummary] = useState<{ name: string; phoneDisplay: string | null } | null>(null);
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
+
+  useEffect(() => {
+    if (fullScreen) return;
+    let cancelled = false;
+    fetchAppTenantSummary(session)
+      .then((response) => {
+        if (cancelled) return;
+        setTenantSummary({
+          name: response.tenant.name,
+          phoneDisplay: response.tenant.phoneDisplay,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setTenantSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fullScreen, session]);
 
   const handleLogout = () => {
     clearAppSession();
@@ -103,9 +123,19 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   const navLinksClasses = "flex min-w-0 flex-wrap items-center justify-center gap-1";
   const userActions = (
     <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
-      <span className="min-w-0 truncate text-right text-xs leading-none text-white/65 lg:text-sm">
-        {session.user.name || session.user.email}
-      </span>
+      <div className="min-w-0 text-right">
+        {tenantSummary ? (
+          <>
+            <p className="truncate text-xs leading-tight text-white/80">{tenantSummary.name}</p>
+            {tenantSummary.phoneDisplay ? (
+              <p className="truncate text-xs leading-tight text-white/55">{tenantSummary.phoneDisplay}</p>
+            ) : null}
+          </>
+        ) : null}
+        <p className="truncate text-xs leading-tight text-white/65 lg:text-sm">
+          {session.user.name || session.user.email}
+        </p>
+      </div>
       <button
         type="button"
         onClick={handleLogout}
