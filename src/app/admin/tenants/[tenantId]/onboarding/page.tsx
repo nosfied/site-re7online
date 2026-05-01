@@ -8,6 +8,7 @@ import {
   createUser,
   fetchTenantById,
   onboardingExchangeCode,
+  onboardingManualBindNumber,
   TenantConfigResponse,
 } from "@/lib/whatsappAdminApi";
 import {
@@ -147,6 +148,7 @@ export default function TenantOnboardingPage() {
   const [code, setCode] = useState("");
   const [wabaId, setWabaId] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
   const [businessId, setBusinessId] = useState("");
   const [businessPortfolioId, setBusinessPortfolioId] = useState("");
   const [rawPayload, setRawPayload] = useState<unknown>(null);
@@ -229,6 +231,7 @@ export default function TenantOnboardingPage() {
         if (cancelled) return;
         setTenantSnapshot(response);
         setPhoneNumberId((current) => current || response.tenant.metaPhoneNumberId || "");
+        setDisplayPhoneNumber((current) => current || response.tenant.displayPhoneNumber || "");
       })
       .catch((error: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -451,6 +454,54 @@ export default function TenantOnboardingPage() {
     }
   };
 
+  const handleManualBind = async () => {
+    if (!tenantId) return;
+    if (!connection.baseUrl || !connection.adminToken) {
+      setStatus("error");
+      setErrorMessage("Configure a conexao admin antes de vincular.");
+      return;
+    }
+    if (!phoneNumberId.trim()) {
+      setStatus("error");
+      setErrorMessage("Informe o phoneNumberId antes de vincular manualmente.");
+      return;
+    }
+
+    setProcessing(true);
+    setStatus("processing");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await onboardingManualBindNumber(connection, tenantId, {
+        phoneNumberId: phoneNumberId.trim(),
+        displayPhoneNumber: displayPhoneNumber.trim() || null,
+        wabaId: wabaId.trim() || null,
+        businessId: businessId.trim() || null,
+        businessPortfolioId: businessPortfolioId.trim() || null,
+        raw: rawPayload ?? null,
+      });
+      setResultSnapshot(response);
+      if (response.phoneNumberId) setPhoneNumberId(response.phoneNumberId);
+      if (response.wabaId) setWabaId(response.wabaId);
+      if (response.businessId) setBusinessId(response.businessId);
+      if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+      setStatus("success");
+      setSuccessMessage(response.warning || "Numero conectado vinculado ao tenant com sucesso.");
+    } catch (error) {
+      const typed = error as { message?: string; status?: number };
+      setStatus("error");
+      setErrorMessage(
+        typed.message ||
+          (typed.status
+            ? `Falha ao vincular numero conectado (${typed.status}).`
+            : "Falha ao vincular numero conectado.")
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const rawPayloadJson = useMemo(
     () => (rawPayload == null ? "-" : JSON.stringify(sanitizeDebugValue(rawPayload), null, 2)),
     [rawPayload]
@@ -548,6 +599,11 @@ export default function TenantOnboardingPage() {
                 <span className="font-semibold text-white">Passo 2: Processar conexao</span> -
                 envia o code ao backend e persiste o TenantMetaConfig do tenant.
               </p>
+              <p>
+                <span className="font-semibold text-white">Numero ja conectado</span> -
+                quando a WABA ja esta no portfolio da operacao, informe o phoneNumberId
+                e use o vinculo manual sem novo Embedded Signup.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -565,6 +621,14 @@ export default function TenantOnboardingPage() {
                 className="rounded-md border border-white/20 px-4 py-2 text-sm text-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {processing ? "Processando..." : "Processar conexao"}
+              </button>
+              <button
+                type="button"
+                onClick={handleManualBind}
+                disabled={processing || !phoneNumberId.trim()}
+                className="rounded-md border border-emerald-300/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {processing ? "Vinculando..." : "Vincular numero conectado"}
               </button>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -597,6 +661,15 @@ export default function TenantOnboardingPage() {
                   className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={phoneNumberId}
                   onChange={(event) => setPhoneNumberId(event.target.value)}
+                />
+              </label>
+              <label className="grid min-w-0 gap-1 text-sm">
+                <span className="text-white/70">Telefone exibido</span>
+                <input
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={displayPhoneNumber}
+                  onChange={(event) => setDisplayPhoneNumber(event.target.value)}
+                  placeholder="55 84 9459-6848"
                 />
               </label>
               <label className="grid min-w-0 gap-1 text-sm">

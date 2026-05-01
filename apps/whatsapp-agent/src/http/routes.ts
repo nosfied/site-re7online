@@ -7864,6 +7864,130 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/onboarding/manual-bind")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+
+      const phoneNumberId = normalizeOptionalString(body.phoneNumberId);
+      if (!phoneNumberId) {
+        json(res, 400, httpError("bad_request", "phoneNumberId is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      try {
+        const displayPhoneNumber = normalizeOptionalString(body.displayPhoneNumber);
+        const businessId = normalizeOptionalString(body.businessId);
+        const businessPortfolioId = normalizeOptionalString(body.businessPortfolioId);
+        const wabaId = normalizeOptionalString(body.wabaId);
+        const rawPayload = {
+          source: "manual_bind_connected_number",
+          phoneNumberId,
+          displayPhoneNumber,
+          businessId,
+          businessPortfolioId,
+          wabaId,
+          raw:
+            body.raw && typeof body.raw === "object" && !Array.isArray(body.raw)
+              ? body.raw
+              : null,
+        };
+
+        await prisma.tenantMetaConfig.upsert({
+          where: { clientId: client.id },
+          update: {
+            businessId: businessId ?? undefined,
+            businessPortfolioId: businessPortfolioId ?? undefined,
+            wabaId: wabaId ?? undefined,
+            phoneNumberId,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+          create: {
+            clientId: client.id,
+            businessId: businessId ?? undefined,
+            businessPortfolioId: businessPortfolioId ?? undefined,
+            wabaId: wabaId ?? undefined,
+            phoneNumberId,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+        });
+
+        const syncResult = await syncTenantPhoneNumberMapping({
+          clientId: client.id,
+          phoneNumberId,
+          displayPhoneNumber,
+        });
+        const tenantUpdate = await saveTenantPatch(tenantId, {
+          metaPhoneNumberId: phoneNumberId,
+          ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
+        });
+
+        logger.info({
+          event: "onboarding.manual_bind.success",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          phoneNumberId,
+          wabaId,
+          businessId,
+          businessPortfolioId,
+          phoneMappingAction: syncResult.action,
+          fieldsChanged: tenantUpdate.fieldsChanged,
+        });
+
+        json(res, 200, {
+          success: true,
+          businessTokenStored: false,
+          phoneNumberId,
+          wabaId,
+          businessId,
+          businessPortfolioId,
+          phoneMappingAction: syncResult.action,
+          warning:
+            "Numero vinculado manualmente. O envio usara o token global se este numero pertencer ao portfolio/token da operacao.",
+        });
+      } catch (error) {
+        logger.error({
+          event: "onboarding.manual_bind.failed",
+          tenantId,
+          requestId,
+          message: (error as Error).message,
+        });
+        if ((error as Error).message.includes("already mapped")) {
+          json(res, 409, httpError("phone_number_conflict", (error as Error).message));
+          return;
+        }
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
       req.method === "PUT" &&
       pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 4

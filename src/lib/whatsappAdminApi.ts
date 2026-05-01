@@ -284,6 +284,15 @@ export type TenantOnboardingExchangePayload = {
   };
 };
 
+export type TenantOnboardingManualBindPayload = {
+  phoneNumberId: string;
+  displayPhoneNumber?: string | null;
+  wabaId?: string | null;
+  businessId?: string | null;
+  businessPortfolioId?: string | null;
+  raw?: unknown;
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -1383,6 +1392,30 @@ export async function onboardingExchangeCode(
   return requestJson(
     connection,
     `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/exchange-code`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function onboardingManualBindNumber(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: TenantOnboardingManualBindPayload
+): Promise<{
+  success: true;
+  businessTokenStored: false;
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  businessId: string | null;
+  businessPortfolioId: string | null;
+  phoneMappingAction?: string | null;
+  warning?: string | null;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/manual-bind`,
     {
       method: "POST",
       body: JSON.stringify(payload),

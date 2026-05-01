@@ -47,6 +47,60 @@ git rev-parse --show-toplevel
    - (opcional) `OUTBOUND_TEMPLATES_BY_CLIENT_JSON`
 3) Separar `.data/` por instância (recomendado 1 instância por cliente).
 
+## Onboarding pelo console interno
+
+O console interno suporta dois caminhos de ativação do WhatsApp por tenant.
+
+### Cenário A — número/WABA já está no portfólio da Re7/Reset
+
+Use quando o número já aparece como conectado no nosso Business Portfolio/WABA e o token global da operação tem acesso a esse `phoneNumberId`.
+
+Fluxo:
+1) Abrir `/admin/tenants`.
+2) Abrir o tenant desejado.
+3) Entrar em `Conexao Meta e onboarding`.
+4) Informar:
+   - `phoneNumberId` obrigatório;
+   - `Telefone exibido`, se disponível;
+   - `WABA ID`, `Business ID` e `Business Portfolio ID`, se disponíveis.
+5) Clicar em `Vincular numero conectado`.
+
+O backend grava:
+- `TenantMetaConfig.phoneNumberId`;
+- `tenants.json -> metaPhoneNumberId`;
+- mapeamento `WaPhoneNumber -> Client`.
+
+Importante:
+- Não há troca de `code`.
+- Não salva token próprio do tenant.
+- O envio outbound usa o token global/env da operação.
+- Só funciona se o token global tiver permissão sobre o número informado.
+
+### Cenário B — número/WABA pertence ao portfólio do cliente
+
+Use quando o cliente precisa conectar o próprio Business Portfolio/WABA e autorizar a aplicação via Embedded Signup.
+
+Fluxo:
+1) Abrir `/admin/tenants`.
+2) Abrir o tenant desejado.
+3) Entrar em `Conexao Meta e onboarding`.
+4) Clicar em `Iniciar conexao`.
+5) Concluir o Embedded Signup da Meta.
+6) Confirmar que o campo `Code` foi capturado.
+7) Clicar em `Processar conexao`.
+
+O backend:
+- troca o `code` com a Meta;
+- salva credenciais em `TenantMetaConfig`;
+- tenta resolver `phoneNumberId`, `WABA ID`, `Business ID` e `Business Portfolio ID`;
+- atualiza `tenants.json -> metaPhoneNumberId`;
+- cria/atualiza o mapeamento `WaPhoneNumber -> Client`.
+
+Importante:
+- Esse caminho é o correto para número do cliente.
+- O tenant passa a usar credenciais próprias quando `businessToken` e `phoneNumberId` estiverem salvos.
+- Se a conexão vier parcial, o console mostra aviso para preencher `WABA ID`/dados faltantes.
+
 ## Onboarding via script
 Caminho oficial para criar tenant novo (DB + `tenants.json`) sem editar arquivo manualmente:
 
