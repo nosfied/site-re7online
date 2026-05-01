@@ -60,6 +60,7 @@ import {
 } from "../utils/waid.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 import {
+  DEFAULT_OPERATIONAL_QUEUE_NAME,
   ensureDefaultOperationalDepartmentAndQueue,
   resolveOperationalDepartmentId,
 } from "../bootstrap/defaultOperationalDepartment.js";
@@ -1820,9 +1821,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const users = await prisma.user.findMany({
         where: {
           clientId: client.id,
-          ...(departmentAccess.requiresDepartmentScope
-            ? { departmentId: departmentAccess.departmentId }
-            : {}),
+          isActive: true,
         },
         orderBy: [{ createdAt: "desc" }],
         select: {
@@ -3118,15 +3117,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const assignedUser = requestedUserId
         ? await prisma.user.findFirst({
-            where: { id: requestedUserId, clientId: client.id },
-            select: { id: true, name: true },
+            where: { id: requestedUserId, clientId: client.id, isActive: true },
+            select: { id: true, name: true, departmentId: true },
           })
         : null;
       if (requestedUserId && !assignedUser) {
         json(res, 404, { error: "user_not_found" });
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const routing = await resolveAssignmentRouting(prisma, {
+        clientId: client.id,
+        assignedUserDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
+        fallbackDepartmentId: conversation.departmentId ?? null,
+      });
       const assignedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
@@ -3139,12 +3142,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: assignedUser?.id ?? clientAuth.userId,
         assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
         assignedAt,
-        departmentId: conversation.departmentId ?? defaults.department.id,
-        queueId: conversation.queueId ?? defaults.queue.id,
+        departmentId: routing.departmentId,
+        queueId: routing.queueId,
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: routing.departmentId,
+      });
       await recordConversationAssignment(prisma, {
         clientId: client.id,
         waId: nextState.waId,
@@ -3349,8 +3358,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const assignedUser = await prisma.user.findFirst({
-        where: { id: toUserId, clientId: client.id },
-        select: { id: true, name: true },
+        where: { id: toUserId, clientId: client.id, isActive: true },
+        select: { id: true, name: true, departmentId: true },
       });
       if (!assignedUser) {
         json(res, 404, { error: "user_not_found" });
@@ -3419,7 +3428,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const routing = await resolveAssignmentRouting(prisma, {
+        clientId: client.id,
+        assignedUserDepartmentId: assignedUser.departmentId,
+        fallbackDepartmentId: conversation.departmentId ?? null,
+      });
       const assignedAt = new Date().toISOString();
       const nextState = {
         ...conversation,
@@ -3427,12 +3440,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: assignedUser.id,
         assignedTo: `user:${assignedUser.id}`,
         assignedAt,
-        departmentId: conversation.departmentId ?? defaults.department.id,
-        queueId: conversation.queueId ?? defaults.queue.id,
+        departmentId: routing.departmentId,
+        queueId: routing.queueId,
         status: ConversationOperationalStatus.IN_PROGRESS,
         closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: routing.departmentId,
+      });
       await recordConversationAssignment(prisma, {
         clientId: client.id,
         waId: nextState.waId,
@@ -5596,8 +5615,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const assignedUser = await prisma.user.findFirst({
-          where: { id: requestedUserId, client: { clientKey } },
-          select: { id: true, name: true },
+          where: { id: requestedUserId, client: { clientKey }, isActive: true },
+          select: { id: true, name: true, departmentId: true },
         });
         if (!assignedUser) {
           json(res, 404, { error: "user_not_found" });
@@ -5618,7 +5637,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "conversation_not_found" });
           return;
         }
-        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser.departmentId,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
         const assignedAt = new Date().toISOString();
         const nextState = {
           ...conversation,
@@ -5631,12 +5654,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedUserId: assignedUser.id,
           assignedTo: `user:${assignedUser.id}`,
           assignedAt,
-          departmentId: conversation.departmentId ?? defaults.department.id,
-          queueId: conversation.queueId ?? defaults.queue.id,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
           status: ConversationOperationalStatus.IN_PROGRESS,
           closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: routing.departmentId,
+        });
         await recordConversationAssignment(prisma, {
           clientId: client.id,
           waId: nextState.waId,
@@ -5703,8 +5732,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const assignedUser = await prisma.user.findFirst({
-          where: { id: requestedUserId, client: { clientKey } },
-          select: { id: true, name: true },
+          where: { id: requestedUserId, client: { clientKey }, isActive: true },
+          select: { id: true, name: true, departmentId: true },
         });
         if (!assignedUser) {
           json(res, 404, { error: "user_not_found" });
@@ -5725,7 +5754,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "conversation_not_found" });
           return;
         }
-        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser.departmentId,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
         const assignedAt = new Date().toISOString();
         const nextState = {
           ...conversation,
@@ -5738,12 +5771,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedUserId: assignedUser.id,
           assignedTo: `user:${assignedUser.id}`,
           assignedAt,
-          departmentId: conversation.departmentId ?? defaults.department.id,
-          queueId: conversation.queueId ?? defaults.queue.id,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
           status: ConversationOperationalStatus.IN_PROGRESS,
           closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: routing.departmentId,
+        });
         await recordConversationAssignment(prisma, {
           clientId: client.id,
           waId: nextState.waId,
@@ -5846,10 +5885,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
 
         const previousDepartmentId = conversation.departmentId ?? null;
+        const queue = await ensureQueueForDepartment(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+        });
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
           departmentId: department.id,
+          queueId: queue.id,
           assignedUserId: null,
           assignedTo: null,
           assignedAt: null,
@@ -6040,15 +6084,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           typeof query.userId === "string" ? query.userId.trim() : "";
         const assignedUser = requestedUserId
           ? await prisma.user.findFirst({
-              where: { id: requestedUserId, client: { clientKey } },
-              select: { id: true, name: true },
+              where: { id: requestedUserId, client: { clientKey }, isActive: true },
+              select: { id: true, name: true, departmentId: true },
             })
           : null;
         if (requestedUserId && !assignedUser) {
           json(res, 404, { error: "user_not_found" });
           return;
         }
-        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser?.departmentId ?? null,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
         const previousAssignedUserId = conversation.assignedUserId ?? null;
         const nextState = {
           ...conversation,
@@ -6061,12 +6109,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           assignedUserId: assignedUser?.id ?? null,
           assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
-          departmentId: conversation.departmentId ?? defaults.department.id,
-          queueId: conversation.queueId ?? defaults.queue.id,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
           status: ConversationOperationalStatus.IN_PROGRESS,
           closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: routing.departmentId,
+        });
         await recordConversationAssignment(prisma, {
           clientId: client.id,
           waId: nextState.waId,
@@ -10120,6 +10174,56 @@ async function findAssignedUserName(
     select: { name: true },
   });
   return user?.name ?? null;
+}
+
+async function ensureQueueForDepartment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentId: string;
+  }
+) {
+  return prisma.queue.upsert({
+    where: {
+      clientId_departmentId_name: {
+        clientId: params.clientId,
+        departmentId: params.departmentId,
+        name: DEFAULT_OPERATIONAL_QUEUE_NAME,
+      },
+    },
+    update: {},
+    create: {
+      clientId: params.clientId,
+      departmentId: params.departmentId,
+      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
+    },
+    select: { id: true, name: true, departmentId: true },
+  });
+}
+
+async function resolveAssignmentRouting(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    assignedUserDepartmentId?: string | null;
+    fallbackDepartmentId?: string | null;
+  }
+) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const departmentId =
+    (await resolveOperationalDepartmentId(
+      prisma,
+      params.clientId,
+      params.assignedUserDepartmentId ?? params.fallbackDepartmentId ?? defaults.department.id
+    )) ?? defaults.department.id;
+  const queue =
+    departmentId === defaults.department.id
+      ? defaults.queue
+      : await ensureQueueForDepartment(prisma, {
+          clientId: params.clientId,
+          departmentId,
+        });
+  return { departmentId, queueId: queue.id };
 }
 
 const CONVERSATION_OPERATIONAL_STATUS_VALUES = [
