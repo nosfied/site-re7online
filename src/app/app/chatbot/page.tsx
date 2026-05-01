@@ -28,11 +28,11 @@ const DEFAULT_DEFINITION_TEXT = JSON.stringify(
         type: "menu",
         text: "Escolha uma opcao:",
         options: [
-          { label: "Atendimento", next: "atendimento" },
+          { label: "Informacoes", next: "informacoes" },
           { label: "Falar com humano", next: "handoff" },
         ],
       },
-      atendimento: {
+      informacoes: {
         type: "text",
         text: "Certo. Vou seguir com voce por aqui.",
       },

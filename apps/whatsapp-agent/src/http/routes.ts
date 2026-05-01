@@ -59,6 +59,7 @@ import {
   normalizeWaIdDigits,
 } from "../utils/waid.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
+import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
 import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
@@ -10252,30 +10253,7 @@ async function ensureDefaultDepartmentAndQueue(
   prisma: ReturnType<typeof getPrisma>,
   clientId: string
 ) {
-  const defaultDepartmentSlug = normalizeDepartmentSlug("Atendimento");
-  const department = await prisma.department.upsert({
-    where: { clientId_slug: { clientId, slug: defaultDepartmentSlug } },
-    update: {},
-    create: { clientId, name: "Atendimento", slug: defaultDepartmentSlug },
-    select: { id: true, name: true },
-  });
-  const queue = await prisma.queue.upsert({
-    where: {
-      clientId_departmentId_name: {
-        clientId,
-        departmentId: department.id,
-        name: "Fila Geral",
-      },
-    },
-    update: {},
-    create: {
-      clientId,
-      departmentId: department.id,
-      name: "Fila Geral",
-    },
-    select: { id: true, name: true, departmentId: true },
-  });
-  return { department, queue };
+  return ensureDefaultOperationalDepartmentAndQueue(prisma, clientId);
 }
 
 async function ensureConversationOperationalState(

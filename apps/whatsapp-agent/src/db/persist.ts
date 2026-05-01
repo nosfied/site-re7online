@@ -1,4 +1,5 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
+import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
@@ -14,17 +15,7 @@ export async function getDefaultDepartment(
   prisma = getPrisma()
 ) {
   if (!clientId) return null;
-  return prisma.department.findFirst({
-    where: {
-      clientId,
-      isActive: true,
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    select: {
-      id: true,
-      name: true,
-    },
-  });
+  return getDefaultOperationalDepartment(prisma, clientId);
 }
 
 export async function persistInboundMessage(params: {
