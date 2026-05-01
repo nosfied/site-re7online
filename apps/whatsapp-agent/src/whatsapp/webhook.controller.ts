@@ -66,6 +66,7 @@ import {
   persistInboundMessage,
   persistOutboundMessage,
 } from "../db/persist.js";
+import { resolveOperationalDepartmentId } from "../bootstrap/defaultOperationalDepartment.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
@@ -1153,6 +1154,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     resolvedDefaultDepartment = await getDefaultDepartment(tenantClientId);
     return resolvedDefaultDepartment;
   };
+  const resolveRuntimeDepartmentId = async (departmentId?: string | null) => {
+    if (!tenantClientId) return departmentId ?? null;
+    return resolveOperationalDepartmentId(prisma, tenantClientId, departmentId ?? null);
+  };
   let resolvedEntryPointChatbotFlow:
     | {
         id: string;
@@ -1213,8 +1218,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   };
   const ensurePendingHandoffRouting = async (state: ConversationState) => {
     if (!tenantClientId) return state;
-    const department = state.departmentId ? { id: state.departmentId } : await loadDefaultDepartment();
+    const departmentId = await resolveRuntimeDepartmentId(state.departmentId ?? null);
+    const department = departmentId ? { id: departmentId } : await loadDefaultDepartment();
     let queueId = state.queueId ?? null;
+    if (state.departmentId !== department?.id) {
+      queueId = null;
+    }
     if (department?.id && !queueId) {
       const queue = await prisma.queue.upsert({
         where: {
@@ -1236,7 +1245,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
     return {
       ...state,
-      departmentId: state.departmentId ?? department?.id ?? null,
+      departmentId: department?.id ?? null,
       queueId,
       status: state.status === "CLOSED" ? "WAITING" : state.status ?? "WAITING",
       closedAt: null,
@@ -1250,13 +1259,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       currentState?.status === "CLOSED" &&
       Number.isFinite(stateLastInboundAt) &&
       (!Number.isFinite(currentClosedAt) || stateLastInboundAt > currentClosedAt);
-    const appliedDefaultDepartment =
-      !state.departmentId && !currentState?.departmentId ? await loadDefaultDepartment() : null;
+    const resolvedDepartmentId = await resolveRuntimeDepartmentId(
+      state.departmentId ?? currentState?.departmentId ?? null
+    );
+    const departmentChanged = (currentState?.departmentId ?? null) !== resolvedDepartmentId;
     const baseState = {
       ...state,
-      departmentId:
-        state.departmentId ?? currentState?.departmentId ?? appliedDefaultDepartment?.id ?? null,
-      queueId: state.queueId ?? currentState?.queueId ?? null,
+      departmentId: resolvedDepartmentId,
+      queueId: departmentChanged ? null : state.queueId ?? currentState?.queueId ?? null,
       status: shouldReopenClosedConversation
         ? "WAITING"
         : state.status ?? currentState?.status ?? null,
@@ -1275,13 +1285,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           }
         : baseState;
     await storage.upsertConversation(nextState);
-    if (appliedDefaultDepartment) {
+    if (departmentChanged && resolvedDepartmentId) {
       logger.info({
         event: "conversation.department.assigned_default",
         clientId: tenantClientId,
         conversationId: state.waId,
         waId: state.waId,
-        departmentId: appliedDefaultDepartment.id,
+        departmentId: resolvedDepartmentId,
         requestId: meta?.requestId ?? null,
       });
     }
