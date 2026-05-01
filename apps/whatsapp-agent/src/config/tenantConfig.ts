@@ -14,6 +14,7 @@ export type TenantConfig = {
   disableAutoReply?: boolean;
   disableChatbot?: boolean;
   appDisableChatbot?: boolean;
+  disableChatbotFlowEditing?: boolean;
   disableLegacyFlows?: boolean;
   disableAiFallback?: boolean;
   appDisableAiFallback?: boolean;
@@ -160,6 +161,12 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.appDisableChatbot !== undefined && typeof tenant.appDisableChatbot !== "boolean") {
       throw new Error(`invalid_tenant_app_disable_chatbot:${key}`);
+    }
+    if (
+      tenant.disableChatbotFlowEditing !== undefined &&
+      typeof tenant.disableChatbotFlowEditing !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_disable_chatbot_flow_editing:${key}`);
     }
     if (tenant.disableLegacyFlows !== undefined && typeof tenant.disableLegacyFlows !== "boolean") {
       throw new Error(`invalid_tenant_disable_legacy_flows:${key}`);

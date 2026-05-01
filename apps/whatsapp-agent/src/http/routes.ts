@@ -2564,6 +2564,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableAiFallback,
           aiConfigured,
           chatbotLocked,
+          flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
           aiLocked,
         },
       });
@@ -2688,6 +2689,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
           chatbotLocked: Boolean(saved.tenant.disableChatbot),
+          flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
           aiLocked: Boolean(saved.tenant.disableAiFallback),
         },
       });
@@ -2718,6 +2720,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (tenant?.disableChatbotFlowEditing) {
+        json(
+          res,
+          409,
+          httpError(
+            "chatbot_flow_editing_locked_by_admin",
+            "Criacao e edicao de flows esta bloqueada no console interno."
+          )
+        );
         return;
       }
       const body = await readJsonBody(req, res);
@@ -2797,6 +2812,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (tenant?.disableChatbotFlowEditing) {
+        json(
+          res,
+          409,
+          httpError(
+            "chatbot_flow_editing_locked_by_admin",
+            "Criacao e edicao de flows esta bloqueada no console interno."
+          )
+        );
         return;
       }
       const flowId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
@@ -9498,6 +9526,7 @@ function diffTenantFields(
   compareField("disableAutoReply");
   compareField("disableChatbot");
   compareField("appDisableChatbot");
+  compareField("disableChatbotFlowEditing");
   compareField("disableLegacyFlows");
   compareField("disableAiFallback");
   compareField("appDisableAiFallback");

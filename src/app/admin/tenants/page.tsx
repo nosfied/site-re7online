@@ -509,6 +509,18 @@ export default function TenantsSummaryPage() {
                       >
                         Usuarios
                       </Link>
+                      <Link
+                        href={`/admin/departments?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
+                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                      >
+                        Setores
+                      </Link>
+                      <Link
+                        href={`/admin/reports?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
+                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
+                      >
+                        Relatorios
+                      </Link>
                     </div>
                   </td>
                 </tr>

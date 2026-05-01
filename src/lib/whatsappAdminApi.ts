@@ -279,6 +279,7 @@ export type TenantConfigResponse = {
     disableAutoReply?: boolean;
     disableChatbot?: boolean;
     disableLegacyFlows?: boolean;
+    disableChatbotFlowEditing?: boolean;
     disableAiFallback?: boolean;
     aiBusinessContext?: string;
     templates: {

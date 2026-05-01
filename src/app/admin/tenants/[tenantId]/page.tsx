@@ -19,6 +19,7 @@ type TenantFormState = {
   quotaExcludeWaIdsInput: string;
   quotaBlockedReplyText: string;
   disableChatbot: boolean;
+  disableChatbotFlowEditing: boolean;
   disableLegacyFlows: boolean;
   disableAiFallback: boolean;
   aiBusinessContext: string;
@@ -68,6 +69,12 @@ export default function TenantEditPage() {
   const templatesHref = clientSnapshot?.clientKey
     ? `/admin/templates/manage?tenantId=${encodeURIComponent(tenantId)}&clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
     : "/admin/templates/manage";
+  const departmentsHref = clientSnapshot?.clientKey
+    ? `/admin/departments?tenantId=${encodeURIComponent(tenantId)}&clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
+    : "/admin/departments";
+  const reportsHref = clientSnapshot?.clientKey
+    ? `/admin/reports?tenantId=${encodeURIComponent(tenantId)}&clientKey=${encodeURIComponent(clientSnapshot.clientKey)}`
+    : "/admin/reports";
 
   useEffect(() => {
     if (!tenantId) return;
@@ -95,6 +102,7 @@ export default function TenantEditPage() {
           quotaExcludeWaIdsInput: (tenant.quotaExcludeWaIds ?? []).join("\n"),
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
           disableChatbot: tenant.disableChatbot ?? false,
+          disableChatbotFlowEditing: tenant.disableChatbotFlowEditing ?? false,
           disableLegacyFlows: tenant.disableLegacyFlows ?? true,
           disableAiFallback: tenant.disableAiFallback ?? false,
           aiBusinessContext: tenant.aiBusinessContext ?? "",
@@ -137,6 +145,7 @@ export default function TenantEditPage() {
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
       disableChatbot: form.disableChatbot,
+      disableChatbotFlowEditing: form.disableChatbotFlowEditing,
       disableLegacyFlows: form.disableLegacyFlows,
       disableAiFallback: form.disableAiFallback,
       aiBusinessContext: form.aiBusinessContext.trim() || undefined,
@@ -218,6 +227,18 @@ export default function TenantEditPage() {
               Templates
             </Link>
             <Link
+              href={departmentsHref}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Setores
+            </Link>
+            <Link
+              href={reportsHref}
+              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+            >
+              Relatorios
+            </Link>
+            <Link
               href="/admin/tenants"
               className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
             >
@@ -280,10 +301,22 @@ export default function TenantEditPage() {
                 Templates por tenant
               </Link>
               <Link
+                href={departmentsHref}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Setores do tenant
+              </Link>
+              <Link
                 href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
                 className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
               >
                 Usuarios do tenant
+              </Link>
+              <Link
+                href={reportsHref}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Relatorios do tenant
               </Link>
             </div>
           </div>
@@ -321,6 +354,12 @@ export default function TenantEditPage() {
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Fluxo configuravel</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.disableChatbot ? "Desligado" : "Ligado"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Edicao de flows</p>
+                <p className="mt-2 text-sm">
+                  {tenantSnapshot?.disableChatbotFlowEditing ? "Bloqueada no /app" : "Liberada no /app"}
+                </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Fluxos prontos</p>
@@ -453,6 +492,27 @@ export default function TenantEditPage() {
                   checked={!form.disableLegacyFlows}
                   onToggle={() =>
                     setForm((prev) => (prev ? { ...prev, disableLegacyFlows: !prev.disableLegacyFlows } : prev))
+                  }
+                />
+              </div>
+              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
+                <span className="space-y-1">
+                  <span className="block font-medium text-white">Edicao de flows no /app</span>
+                  <span className="block text-white/60">
+                    Controla se o ADMIN do tenant pode criar ou editar fluxos em /app/chatbot.
+                  </span>
+                </span>
+                <TogglePill
+                  checked={!form.disableChatbotFlowEditing}
+                  onToggle={() =>
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            disableChatbotFlowEditing: !prev.disableChatbotFlowEditing,
+                          }
+                        : prev
+                    )
                   }
                 />
               </div>

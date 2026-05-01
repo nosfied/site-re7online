@@ -64,6 +64,9 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "chatbot_locked_by_admin") {
     return error.message || "Fluxo configuravel esta desativado no console interno.";
   }
+  if (error.errorCode === "chatbot_flow_editing_locked_by_admin") {
+    return error.message || "Criacao e edicao de flows esta bloqueada no console interno.";
+  }
   if (error.errorCode === "ai_locked_by_admin") {
     return error.message || "IA conversacional esta desativada no console interno.";
   }
@@ -450,6 +453,10 @@ export default function AppChatbotPage() {
       setError("Somente ADMIN pode alterar flows do chatbot.");
       return;
     }
+    if (flowEditingLocked) {
+      setError("Criacao e edicao de flows esta bloqueada no console interno.");
+      return;
+    }
     const trimmedName = newName.trim();
     if (!trimmedName) {
       setError("Informe o nome do flow.");
@@ -489,6 +496,10 @@ export default function AppChatbotPage() {
 
   const handleSave = async (flow: AppChatbotFlowItem) => {
     if (!session) return;
+    if (flowEditingLocked) {
+      setError("Criacao e edicao de flows esta bloqueada no console interno.");
+      return;
+    }
     const draft = drafts[flow.id];
     if (!draft) return;
     const trimmedName = draft.name.trim();
@@ -552,8 +563,11 @@ export default function AppChatbotPage() {
     disableAiFallback: false,
     aiConfigured: false,
     chatbotLocked: false,
+    flowEditingLocked: false,
     aiLocked: false,
   };
+  const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
+  const flowReadOnly = readOnly || flowEditingLocked;
 
   const handleSaveSettings = async () => {
     if (!session || !settings) return;
@@ -678,6 +692,11 @@ export default function AppChatbotPage() {
             Defina o fluxo em JSON com <code className="rounded bg-white/10 px-1 py-0.5">start</code> e{" "}
             <code className="rounded bg-white/10 px-1 py-0.5">nodes</code>. Supervisores podem acompanhar, mas nao editar.
           </p>
+          {flowEditingLocked ? (
+            <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+              Criacao e edicao de flows bloqueadas pelo console interno.
+            </p>
+          ) : null}
         </div>
         <div className="grid gap-3">
           <input
@@ -685,14 +704,14 @@ export default function AppChatbotPage() {
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
             placeholder="Fluxo principal"
-            disabled={readOnly || creating}
+            disabled={flowReadOnly || creating}
           />
           <JsonEditorWithSearch
             id="new-flow-definition"
             value={newDefinition}
             onChange={setNewDefinition}
             search={newSearch}
-            disabled={readOnly || creating}
+            disabled={flowReadOnly || creating}
           />
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
             <input
@@ -734,7 +753,7 @@ export default function AppChatbotPage() {
                 type="checkbox"
                 checked={newIsActive}
                 onChange={(event) => setNewIsActive(event.target.checked)}
-                disabled={readOnly || creating}
+                disabled={flowReadOnly || creating}
               />
               Ativo
             </label>
@@ -743,7 +762,7 @@ export default function AppChatbotPage() {
                 type="checkbox"
                 checked={newEntryPoint}
                 onChange={(event) => setNewEntryPoint(event.target.checked)}
-                disabled={readOnly || creating}
+                disabled={flowReadOnly || creating}
               />
               Entrada principal
             </label>
@@ -752,7 +771,7 @@ export default function AppChatbotPage() {
             <button
               type="button"
               onClick={handleCreate}
-              disabled={readOnly || creating}
+              disabled={flowReadOnly || creating}
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? "Criando..." : "Criar fluxo"}
@@ -766,7 +785,9 @@ export default function AppChatbotPage() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Fluxos cadastrados</h2>
             <p className="mt-1 text-sm text-white/65">
-              {readOnly
+              {flowEditingLocked
+                ? "Edicao bloqueada pelo console interno. Visualizacao liberada."
+                : readOnly
                 ? "Visualizacao somente para leitura."
                 : "Edite nome, JSON e ativacao sem sair do portal."}
             </p>
@@ -794,7 +815,7 @@ export default function AppChatbotPage() {
                         <FlowBadge label={`Atualizado em ${formatDateTime(flow.updatedAt)}`} />
                       </div>
                     </div>
-                    {!readOnly ? (
+                    {!flowReadOnly ? (
                       <button
                         type="button"
                         onClick={() => void handleSave(flow)}
@@ -819,7 +840,7 @@ export default function AppChatbotPage() {
                           },
                         }))
                       }
-                      disabled={readOnly}
+                      disabled={flowReadOnly}
                     />
                     <JsonEditorWithSearch
                       id={`flow-definition-${flow.id}`}
@@ -834,7 +855,7 @@ export default function AppChatbotPage() {
                         }))
                       }
                       search={draftSearches[flow.id] ?? ""}
-                      disabled={readOnly}
+                      disabled={flowReadOnly}
                     />
                     <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-white/75">
                       <input
@@ -906,7 +927,7 @@ export default function AppChatbotPage() {
                               },
                             }))
                           }
-                          disabled={readOnly}
+                          disabled={flowReadOnly}
                         />
                         Ativo
                       </label>
@@ -923,7 +944,7 @@ export default function AppChatbotPage() {
                               },
                             }))
                           }
-                          disabled={readOnly}
+                          disabled={flowReadOnly}
                         />
                         Entry point
                       </label>

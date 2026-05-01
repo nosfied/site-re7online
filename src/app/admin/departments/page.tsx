@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
@@ -46,8 +47,11 @@ function ActionIcon({ children }: { children: ReactNode }) {
 
 export default function AdminDepartmentsPage() {
   const { connection } = useAdminConsole();
+  const searchParams = useSearchParams();
+  const clientKeyParam = searchParams.get("clientKey")?.trim() ?? "";
+  const tenantIdParam = searchParams.get("tenantId")?.trim() ?? "";
   const [clients, setClients] = useState<AdminClientItem[]>([]);
-  const [clientKey, setClientKey] = useState("");
+  const [clientKey, setClientKey] = useState(clientKeyParam);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,7 +78,7 @@ export default function AdminDepartmentsPage() {
       .then((response) => {
         if (cancelled) return;
         setClients(response.items);
-        setClientKey((current) => current || response.items[0]?.clientKey || "");
+        setClientKey((current) => current || clientKeyParam || response.items[0]?.clientKey || "");
       })
       .catch((err: { message?: string }) => {
         if (cancelled) return;
@@ -83,7 +87,7 @@ export default function AdminDepartmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [connection]);
+  }, [clientKeyParam, connection]);
 
   const loadItems = async (activeClientKey: string) => {
     const response = await fetchDepartments(connection, activeClientKey, {
@@ -229,6 +233,11 @@ export default function AdminDepartmentsPage() {
           <div>
             <h1 className="text-2xl font-bold">Departments</h1>
             <p className="text-sm text-white/70">Gestao minima de setores por tenant.</p>
+            {tenantIdParam || clientKeyParam ? (
+              <p className="mt-1 text-xs text-white/50">
+                Tenant filtrado: {tenantIdParam || clientKeyParam}
+              </p>
+            ) : null}
           </div>
           <Link
             href="/admin/tenants"

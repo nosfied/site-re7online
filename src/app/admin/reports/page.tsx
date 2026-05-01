@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
@@ -33,10 +34,13 @@ function formatSeconds(value: number | null) {
 
 export default function AdminReportsPage() {
   const { connection } = useAdminConsole();
+  const searchParams = useSearchParams();
+  const clientKeyParam = searchParams.get("clientKey")?.trim() ?? "";
+  const tenantIdParam = searchParams.get("tenantId")?.trim() ?? "";
   const [clients, setClients] = useState<AdminClientItem[]>([]);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
-  const [clientKey, setClientKey] = useState("");
+  const [clientKey, setClientKey] = useState(clientKeyParam);
   const [range, setRange] = useState<ConversationReportRange>("7d");
   const [userId, setUserId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -66,7 +70,7 @@ export default function AdminReportsPage() {
       .then((response) => {
         if (cancelled) return;
         setClients(response.items);
-        setClientKey((current) => current || response.items[0]?.clientKey || "");
+        setClientKey((current) => current || clientKeyParam || response.items[0]?.clientKey || "");
       })
       .catch((err: { message?: string }) => {
         if (cancelled) return;
@@ -75,7 +79,7 @@ export default function AdminReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [connection]);
+  }, [clientKeyParam, connection]);
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken || !clientKey) return;
@@ -178,6 +182,11 @@ export default function AdminReportsPage() {
           <div>
             <h1 className="text-2xl font-bold">Relatorios</h1>
             <p className="text-sm text-white/70">SLA e tempos medios baseados em ConversationMetrics.</p>
+            {tenantIdParam || clientKeyParam ? (
+              <p className="mt-1 text-xs text-white/50">
+                Tenant filtrado: {tenantIdParam || clientKeyParam}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <button

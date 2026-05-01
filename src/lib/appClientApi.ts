@@ -108,6 +108,7 @@ export type AppAutomationSettings = {
   disableAiFallback: boolean;
   aiConfigured: boolean;
   chatbotLocked?: boolean;
+  flowEditingLocked?: boolean;
   aiLocked?: boolean;
 };
 
