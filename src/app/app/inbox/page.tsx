@@ -28,6 +28,7 @@ import {
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
+  releaseAppConversationToGeneral,
   saveAppSession,
   fetchAppConversationMedia,
   sendAppConversationMessage,
@@ -1044,6 +1045,15 @@ export default function AppInboxPage() {
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
   const [conversationSearch, setConversationSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
+  const [conversationFilterCounts, setConversationFilterCounts] = useState<Record<ConversationFilter, number>>({
+    ALL: 0,
+    WAITING: 0,
+    IN_PROGRESS: 0,
+    WAITING_USER: 0,
+    CLOSED: 0,
+    MINE: 0,
+    UNASSIGNED: 0,
+  });
   const [statusActionDraft, setStatusActionDraft] = useState<ConversationOperationalStatus | "">("");
   const [transferUserId, setTransferUserId] = useState("");
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
@@ -1574,6 +1584,17 @@ export default function AppInboxPage() {
     if (response.readState) {
       setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
     }
+    if (response.filterCounts) {
+      setConversationFilterCounts({
+        ALL: Number(response.filterCounts.ALL ?? 0),
+        WAITING: Number(response.filterCounts.WAITING ?? 0),
+        IN_PROGRESS: Number(response.filterCounts.IN_PROGRESS ?? 0),
+        WAITING_USER: Number(response.filterCounts.WAITING_USER ?? 0),
+        CLOSED: Number(response.filterCounts.CLOSED ?? 0),
+        MINE: Number(response.filterCounts.MINE ?? 0),
+        UNASSIGNED: Number(response.filterCounts.UNASSIGNED ?? 0),
+      });
+    }
     const pageItems = response.conversations ?? response.items;
     if (loadedConversationPageCountRef.current <= 1) {
       setConversationNextCursor(response.nextCursor ?? null);
@@ -2098,55 +2119,6 @@ export default function AppInboxPage() {
     users,
   ]);
   const loggedUserDepartmentLabel = loggedUserDepartmentName ?? "Sem setor definido";
-
-  const conversationFilterCounts = useMemo<Record<ConversationFilter, number>>(() => {
-    const baseItems = conversations.filter((item) => {
-      const searchTerm = conversationSearch.trim().toLowerCase();
-      if (searchTerm) {
-        const haystack = [
-          item.leadName,
-          item.leadPhone,
-          item.waId,
-          item.lastMessage?.bodyText,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(searchTerm)) {
-          return false;
-        }
-      }
-      if (isAdminUser && departmentFilter !== "ALL") {
-        return (item.departmentId ?? null) === departmentFilter;
-      }
-      return true;
-    });
-
-    const counts = {
-      ALL: baseItems.length,
-      WAITING: 0,
-      IN_PROGRESS: 0,
-      WAITING_USER: 0,
-      CLOSED: 0,
-      MINE: 0,
-      UNASSIGNED: 0,
-    } satisfies Record<ConversationFilter, number>;
-
-    baseItems.forEach((item) => {
-      const status = getConversationOperationalStatus(item);
-      if (status && status in counts) {
-        counts[status as ConversationFilter] += 1;
-      }
-      if (item.assignedUserId === session?.user.id) {
-        counts.MINE += 1;
-      }
-      if (!item.assignedUserId) {
-        counts.UNASSIGNED += 1;
-      }
-    });
-
-    return counts;
-  }, [conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
@@ -2747,8 +2719,65 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId) return;
     setConversationAction("release");
     setError(null);
+    setSuccess(null);
     try {
-      const response = await releaseAppConversation(session, selectedConversationWaId);
+      await releaseAppConversation(session, selectedConversationWaId);
+      const releasedKey = selectedConversationKey;
+      detailRequestSeqRef.current += 1;
+      setConversations((prev) =>
+        releasedKey ? prev.filter((item) => getConversationIdentity(item) !== releasedKey) : prev
+      );
+      setSelectedConversationKey(null);
+      setSelectedConversationWaId(null);
+      setMessages([]);
+      setMessagesConversationKey(null);
+      setLeadNotes([]);
+      setActiveConversationIdentity(null);
+      setSuccess("Conversa liberada para automacao.");
+      void refreshConversationList(session).catch((err) => {
+        if ((err as { status?: number }).status === 401) handleUnauthorized();
+      });
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao liberar conversa.");
+    } finally {
+      setConversationAction(null);
+    }
+  };
+
+  const handleReleaseConversationToGeneral = async () => {
+    if (!session || !selectedConversationWaId) return;
+    setConversationAction("release-general");
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await releaseAppConversationToGeneral(session, selectedConversationWaId);
+      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+      if (!stillInUserScope) {
+        detailRequestSeqRef.current += 1;
+        setConversations((prev) =>
+          prev.filter((item) => getConversationIdentity(item) !== responseIdentity)
+        );
+        setSelectedConversationKey(null);
+        setSelectedConversationWaId(null);
+        setMessages([]);
+        setMessagesConversationKey(null);
+        setLeadNotes([]);
+        setActiveConversationIdentity(null);
+        setSuccess("Conversa liberada para Atendimento Geral.");
+        void refreshConversationList(session).catch((err) => {
+          if ((err as { status?: number }).status === 401) handleUnauthorized();
+        });
+        return;
+      }
+
+      setSuccess("Conversa liberada para Atendimento Geral.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
@@ -2757,7 +2786,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setError(typed.message || "Falha ao liberar conversa.");
+      setError(typed.message || "Falha ao liberar conversa para Atendimento Geral.");
     } finally {
       setConversationAction(null);
     }
@@ -3149,14 +3178,26 @@ export default function AppInboxPage() {
                 </button>
               ) : null}
               {selectedConversation?.assignedUserId === session.user.id ? (
-                <button
-                  type="button"
-                  disabled={!selectedConversationWaId || Boolean(conversationAction)}
-                  onClick={handleReleaseConversation}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {conversationAction === "release" ? "Atualizando..." : "Liberar"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                    onClick={handleReleaseConversation}
+                    className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "release" ? "Atualizando..." : "Liberar pra Automação"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                    onClick={handleReleaseConversationToGeneral}
+                    className="rounded-xl border border-emerald-500/25 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {conversationAction === "release-general"
+                      ? "Atualizando..."
+                      : "Liberar para Atendimento Geral"}
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"

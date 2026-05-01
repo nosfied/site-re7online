@@ -562,6 +562,7 @@ export async function fetchAppConversations(
   count: number;
   items: InboxConversationItem[];
   conversations?: InboxConversationItem[];
+  filterCounts?: Record<string, number>;
   nextCursor?: string | null;
   readState?: AppInboxReadState;
 }> {
@@ -707,6 +708,15 @@ export async function releaseAppConversation(
   waId: string
 ): Promise<AppConversationOperationalPayload> {
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/release`, {
+    method: "POST",
+  });
+}
+
+export async function releaseAppConversationToGeneral(
+  session: AppSession,
+  waId: string
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/release-to-general`, {
     method: "POST",
   });
 }

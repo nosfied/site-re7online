@@ -3372,6 +3372,158 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/release-to-general")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_release_to_general",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/release-to-general",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/release-to-general",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode liberar conversas atribuidas a voce.",
+        });
+        return;
+      }
+
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const releasedAt = new Date().toISOString();
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          releasedAt,
+        },
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: defaults.department.id,
+        queueId: defaults.queue.id,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: defaults.department.id,
+      });
+      logger.info({
+        event: "conversation.released_to_general",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        departmentId: defaults.department.id,
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus: "active",
+        departmentId: defaults.department.id,
+        updatedAt: releasedAt,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: null,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.release_to_general.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/transfer")
   ) {
     const prisma = getPrisma();
@@ -11529,6 +11681,48 @@ function conversationListItemIsInHumanFlow(item: {
   );
 }
 
+function buildConversationFilterCounts(
+  items: Array<{
+    lastMessage: { bodyText: string | null } | null;
+    leadName: string | null;
+    leadPhone: string | null;
+    waId: string;
+    status: ConversationOperationalStatus | null;
+    departmentId: string | null;
+    assignedUserId: string | null;
+  }>,
+  filters: ConversationListFilters
+) {
+  const baseFilters = {
+    ...filters,
+    status: null,
+    assignedUserId: null,
+    unassigned: false,
+  };
+  const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters));
+  const counts = {
+    ALL: baseItems.length,
+    WAITING: 0,
+    IN_PROGRESS: 0,
+    WAITING_USER: 0,
+    CLOSED: 0,
+    MINE: 0,
+    UNASSIGNED: 0,
+  };
+  for (const item of baseItems) {
+    if (item.status && Object.prototype.hasOwnProperty.call(counts, item.status)) {
+      counts[item.status] += 1;
+    }
+    if (filters.assignedUserId && item.assignedUserId === filters.assignedUserId) {
+      counts.MINE += 1;
+    }
+    if (!item.assignedUserId) {
+      counts.UNASSIGNED += 1;
+    }
+  }
+  return counts;
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -11837,6 +12031,10 @@ async function buildConversationListPayload(
       conversationListItemIsInHumanFlow(item) &&
       conversationMatchesListFilters(item, params.filters)
   );
+  const filterCounts = buildConversationFilterCounts(
+    allItems.filter(conversationListItemIsInHumanFlow),
+    params.filters
+  );
   const items = filteredItems.slice(0, params.limit);
   const nextCursorSource =
     filteredItems.length > params.limit
@@ -11859,6 +12057,7 @@ async function buildConversationListPayload(
     count: items.length,
     items,
     conversations: items,
+    filterCounts,
     nextCursor,
     readState,
   };
