@@ -88,6 +88,21 @@ function optionalText(value: string) {
   return trimmed || undefined;
 }
 
+function SaveNotice({ error, toast }: { error: string | null; toast: string | null }) {
+  if (!error && !toast) return null;
+  return (
+    <p
+      className={`rounded-md border p-3 text-sm ${
+        error
+          ? "border-red-400/30 bg-red-900/80 text-red-100"
+          : "border-emerald-400/30 bg-emerald-900/80 text-emerald-100"
+      }`}
+    >
+      {error || toast}
+    </p>
+  );
+}
+
 export default function TenantEditPage() {
   const params = useParams<{ tenantId: string }>();
   const tenantId = useMemo(() => {
@@ -321,9 +336,24 @@ export default function TenantEditPage() {
     try {
       const result = await updateTenantById(connection, tenantId, payload);
       setTenantSnapshot(result.tenant);
+      setForm((prev) =>
+        prev
+          ? {
+              ...prev,
+              maxActiveAppUsers:
+                typeof result.tenant.maxActiveAppUsers === "number"
+                  ? String(result.tenant.maxActiveAppUsers)
+                  : prev.maxActiveAppUsers,
+              contractBillingDay:
+                typeof result.tenant.contractBillingDay === "number"
+                  ? String(result.tenant.contractBillingDay)
+                  : prev.contractBillingDay,
+            }
+          : prev
+      );
       setDebugInfo({ fieldsChanged: result.fieldsChanged, backupPath: result.backupPath });
       setToast("Tenant salvo com sucesso.");
-      window.setTimeout(() => setToast(null), 3000);
+      window.setTimeout(() => setToast(null), 5000);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 403) {
@@ -338,6 +368,11 @@ export default function TenantEditPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      {error || toast ? (
+        <div className="fixed left-1/2 top-4 z-50 w-[min(92vw,720px)] -translate-x-1/2 shadow-2xl">
+          <SaveNotice error={error} toast={toast} />
+        </div>
+      ) : null}
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -356,12 +391,7 @@ export default function TenantEditPage() {
 
         {!tenantId ? <p className="text-sm text-white/70">Carregando tenant...</p> : null}
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
-        {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{error}</p>
-        ) : null}
-        {toast ? (
-          <p className="rounded-md border border-emerald-400/30 bg-emerald-900/30 p-3 text-sm text-emerald-100">{toast}</p>
-        ) : null}
+        <SaveNotice error={error} toast={toast} />
 
         <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -519,6 +549,31 @@ export default function TenantEditPage() {
                 display_phone_number quando a Meta retornar essa informação.
               </span>
             </label>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                  Limites contratados
+                </h2>
+                <p className="mt-1 text-xs text-white/50">
+                  Controle comercial aplicado na criacao e ativacao de usuarios do /app.
+                </p>
+              </div>
+              <label className="grid gap-1 text-sm md:max-w-xs">
+                <span className="text-white/70">Usuarios ativos contratados</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={form.maxActiveAppUsers}
+                  onChange={(event) => updateFormField("maxActiveAppUsers", event.target.value)}
+                />
+                <span className="text-xs text-white/50">
+                  Padrao: 5. Use 0 para bloquear novos usuarios ativos.
+                </span>
+              </label>
+            </section>
 
             <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
               <div>
@@ -742,11 +797,6 @@ export default function TenantEditPage() {
                   <span className="text-white/70">Forma de pagamento</span>
                   <input className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractPaymentMethod} onChange={(event) => updateFormField("contractPaymentMethod", event.target.value)} />
                 </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="text-white/70">Usuarios ativos contratados</span>
-                  <input type="number" min={0} className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.maxActiveAppUsers} onChange={(event) => updateFormField("maxActiveAppUsers", event.target.value)} />
-                  <span className="text-xs text-white/50">Padrao: 5. Altere conforme contrato/acordo.</span>
-                </label>
                 <label className="grid gap-1 text-sm md:col-span-3">
                   <span className="text-white/70">Observacoes contratuais</span>
                   <textarea className="min-h-20 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky" value={form.contractNotes} onChange={(event) => updateFormField("contractNotes", event.target.value)} />
@@ -918,6 +968,7 @@ export default function TenantEditPage() {
                 </p>
               ) : null}
             </div>
+            <SaveNotice error={error} toast={toast} />
           </form>
         ) : null}
       </div>
