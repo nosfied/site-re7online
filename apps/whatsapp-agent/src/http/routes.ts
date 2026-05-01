@@ -72,6 +72,7 @@ import {
   markInboxConversationRead,
   markInboxConversationUnread,
 } from "../inbox/readStateStore.js";
+import { publishRealtimeEvent } from "../realtime/hub.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
@@ -3509,6 +3510,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fromUserId: conversation.assignedUserId ?? null,
         toUserId: assignedUser.id,
       });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus:
+          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+            ? nextState.handoff.status
+            : "active",
+        departmentId: routing.departmentId,
+        updatedAt: assignedAt,
+      });
       const payload = await buildConversationActionPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -5959,6 +5973,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           toDepartmentId: department.id,
           userId: resolveAssignedTo(adminAuth),
           requestId,
+        });
+        publishRealtimeEvent({
+          type: "conversation.handoff.updated",
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          mode: "HUMAN",
+          handoffStatus:
+            nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+              ? nextState.handoff.status
+              : "active",
+          departmentId: department.id,
+          updatedAt: new Date().toISOString(),
         });
 
         const payload = await buildConversationActionPayload(prisma, {

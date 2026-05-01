@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
+  canUserReceiveRealtimeEvent,
   createAppRealtimeClient,
   dispatchAppAudioState,
   dispatchAppRealtimeEvent,
@@ -180,7 +181,8 @@ export default function AppRealtimeBridge() {
   }, [enqueueNotification, playNotificationSound, showBrowserNotification]);
 
   const handleInboundNotification = useCallback((
-    event: Extract<AppRealtimeEvent, { type: "message.created" }>
+    event: Extract<AppRealtimeEvent, { type: "message.created" }>,
+    session: AppSession
   ) => {
     if (event.message.direction !== "INBOUND") return;
 
@@ -196,11 +198,15 @@ export default function AppRealtimeBridge() {
       direction: event.message.direction,
       mode: event.mode,
       handoffStatus: event.handoffStatus,
+      departmentId: event.departmentId ?? null,
+      userDepartmentId: session.user.departmentId ?? null,
+      userRole: session.user.role,
     });
   }, []);
 
   const handleHandoffNotification = useCallback((
-    event: Extract<AppRealtimeEvent, { type: "conversation.handoff.updated" }>
+    event: Extract<AppRealtimeEvent, { type: "conversation.handoff.updated" }>,
+    session: AppSession
   ) => {
     handleRealtimeNotificationCandidate({
       source: "websocket",
@@ -210,19 +216,24 @@ export default function AppRealtimeBridge() {
       direction: "INBOUND",
       mode: event.mode,
       handoffStatus: event.handoffStatus,
+      departmentId: event.departmentId ?? null,
+      userDepartmentId: session.user.departmentId ?? null,
+      userRole: session.user.role,
     });
   }, []);
 
   const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
+    if (event.clientId !== session.user.clientId) return;
+    if (!canUserReceiveRealtimeEvent(event, session.user)) return;
+
     dispatchAppRealtimeEvent(event);
 
-    if (event.clientId !== session.user.clientId) return;
     if (event.type === "message.created") {
-      handleInboundNotification(event);
+      handleInboundNotification(event, session);
       return;
     }
     if (event.type === "conversation.handoff.updated") {
-      handleHandoffNotification(event);
+      handleHandoffNotification(event, session);
     }
   }, [handleHandoffNotification, handleInboundNotification]);
 

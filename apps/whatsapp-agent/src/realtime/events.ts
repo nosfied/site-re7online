@@ -22,6 +22,7 @@ export type InboxRealtimeEvent =
       waIdCanonical?: string | null;
       mode?: "BOT" | "HUMAN" | null;
       handoffStatus?: "none" | "pending" | "active" | null;
+      departmentId?: string | null;
       message: InboxRealtimeMessage;
     }
   | {
@@ -42,5 +43,6 @@ export type InboxRealtimeEvent =
       waIdCanonical?: string | null;
       mode: "HUMAN";
       handoffStatus: "pending" | "active";
+      departmentId?: string | null;
       updatedAt: string;
     };

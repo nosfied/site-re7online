@@ -13,6 +13,7 @@ export type AppRealtimeEvent =
       message: InboxMessageItem;
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
+      departmentId?: string | null;
     }
   | {
       type: "message.status.updated";
@@ -32,6 +33,7 @@ export type AppRealtimeEvent =
       waIdCanonical?: string | null;
       mode: "HUMAN";
       handoffStatus: "pending" | "active";
+      departmentId?: string | null;
       updatedAt: string;
     };
 
@@ -89,6 +91,9 @@ export type AppNotificationCandidate = {
   bodyText?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  departmentId?: string | null;
+  userDepartmentId?: string | null;
+  userRole?: string | null;
   title?: string;
   body?: string;
 };
@@ -99,12 +104,18 @@ type InboundOrHandoffNotificationInput = {
   direction?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  departmentId?: string | null;
+  userDepartmentId?: string | null;
+  userRole?: string | null;
   isHandoffTransition?: boolean;
 };
 
 function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
   if (input.direction && input.direction.toUpperCase() !== "INBOUND") return null;
   if (!input.conversationIdentity) return null;
+  if (!canUserReceiveDepartmentNotification(input.userRole, input.userDepartmentId, input.departmentId)) {
+    return null;
+  }
   if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
   if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
 
@@ -233,6 +244,29 @@ function isHumanNotificationContext(
   return mode === "HUMAN" || handoffStatus === "pending" || handoffStatus === "active";
 }
 
+export function isDepartmentScopedRole(role?: string | null) {
+  const normalized = String(role || "").trim().toUpperCase();
+  return normalized === "AGENT" || normalized === "SUPERVISOR";
+}
+
+export function canUserReceiveDepartmentNotification(
+  role?: string | null,
+  userDepartmentId?: string | null,
+  eventDepartmentId?: string | null
+) {
+  if (!isDepartmentScopedRole(role)) return true;
+  if (!userDepartmentId) return false;
+  return eventDepartmentId === userDepartmentId;
+}
+
+export function canUserReceiveRealtimeEvent(
+  event: AppRealtimeEvent,
+  user: { role?: string | null; departmentId?: string | null }
+) {
+  if (event.type !== "message.created" && event.type !== "conversation.handoff.updated") return true;
+  return canUserReceiveDepartmentNotification(user.role, user.departmentId, event.departmentId ?? null);
+}
+
 function isAppVisibleAndFocused() {
   if (typeof document === "undefined") return true;
   return document.visibilityState === "visible" && document.hasFocus();
@@ -267,6 +301,9 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     direction: candidate.direction,
     mode: candidate.mode,
     handoffStatus: candidate.handoffStatus,
+    departmentId: candidate.departmentId,
+    userDepartmentId: candidate.userDepartmentId,
+    userRole: candidate.userRole,
     isHandoffTransition: candidate.kind === "handoff",
   };
   const sound = resolveNotificationSound(notificationInput);

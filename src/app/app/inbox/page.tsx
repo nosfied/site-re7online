@@ -990,6 +990,18 @@ function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
 
+function canSessionAccessConversationDepartment(
+  session: AppSession | null,
+  departmentId?: string | null
+) {
+  if (!session) return false;
+  if (isAppAdmin(session)) return true;
+  const role = String(session.user.role || "").trim().toUpperCase();
+  if (role !== "AGENT" && role !== "SUPERVISOR") return true;
+  if (!session.user.departmentId) return false;
+  return session.user.departmentId === (departmentId ?? null);
+}
+
 function buildInboxErrorToast(error: string | null, errorDetails: string | null, leadError: string | null) {
   if (error && errorDetails && !error.includes(errorDetails)) {
     return `${error}\n${errorDetails}`;
@@ -1414,6 +1426,7 @@ export default function AppInboxPage() {
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             mode: event.mode,
             handoffStatus: event.handoffStatus,
+            departmentId: event.departmentId ?? item.departmentId ?? null,
             status: "WAITING" as const,
             closedAt: null,
           };
@@ -1455,6 +1468,7 @@ export default function AppInboxPage() {
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+            departmentId: event.departmentId ?? item.departmentId ?? null,
             lastMessage: {
               direction: message.direction,
               type: message.type,
@@ -1515,9 +1529,12 @@ export default function AppInboxPage() {
       direction: "INBOUND",
       mode: item.mode,
       handoffStatus: item.handoffStatus ?? "none",
+      departmentId: item.departmentId ?? null,
+      userDepartmentId: session?.user.departmentId ?? null,
+      userRole: session?.user.role ?? null,
     });
     return wasAccepted;
-  }, []);
+  }, [session?.user.departmentId, session?.user.role]);
 
   const isAdminUser = useMemo(() => isAppAdmin(session), [session]);
 
@@ -2692,8 +2709,63 @@ export default function AppInboxPage() {
     if (!session || !selectedConversationWaId || !transferUserId) return;
     setConversationAction("transfer");
     setError(null);
+    setSuccess(null);
     try {
       const response = await transferAppConversation(session, selectedConversationWaId, transferUserId);
+      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+      setConversations((prev) => {
+        const nextItems = prev
+          .map((item) => {
+            if (
+              getConversationIdentity(item) !== responseIdentity &&
+              item.waId !== selectedConversationWaId &&
+              item.waIdCanonical !== response.waIdCanonical
+            ) {
+              return item;
+            }
+            return {
+              ...item,
+              waId: response.waId ?? item.waId,
+              waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
+              mode: response.mode,
+              handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
+              assignedUserId: response.assignedUserId,
+              assignedTo: response.assignedTo,
+              assignedUserName: response.assignedUserName,
+              assignedAt: response.assignedAt,
+              departmentId: response.departmentId,
+              departmentName: response.departmentName,
+              queueId: response.queueId,
+              queueName: response.queueName,
+              status: response.status,
+              closedAt: response.closedAt,
+              lastInboundAt: response.lastInboundAt,
+              lastOutboundAt: response.lastOutboundAt,
+              isUnassigned: response.isUnassigned,
+            };
+          })
+          .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
+        return dedupeConversationsByIdentity(nextItems);
+      });
+
+      if (!stillInUserScope) {
+        detailRequestSeqRef.current += 1;
+        setSelectedConversationKey(null);
+        setSelectedConversationWaId(null);
+        setMessages([]);
+        setMessagesConversationKey(null);
+        setLeadNotes([]);
+        setActiveConversationIdentity(null);
+        setSuccess("Conversa transferida para outro setor.");
+        void refreshConversationList(session).catch((err) => {
+          if ((err as { status?: number }).status === 401) handleUnauthorized();
+        });
+        return;
+      }
+
+      setSuccess("Conversa transferida.");
       await refreshConversationList(session);
       await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
     } catch (err) {
