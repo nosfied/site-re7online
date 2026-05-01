@@ -123,6 +123,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: true,
           role: true,
           passwordHash: true,
+          isActive: true,
           client: {
             select: {
               status: true,
@@ -143,6 +144,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const user = users[0];
       if (user.client.status !== "ACTIVE") {
         json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (!user.isActive) {
+        logger.info({
+          event: "auth.login.inactive_user_blocked",
+          userId: user.id,
+          clientId: user.clientId,
+          email: user.email,
+          requestId,
+        });
+        json(res, 403, {
+          error: "user_inactive",
+          message: "Usuario inativo. Fale com o administrador da conta.",
+        });
         return;
       }
       if (!verifyPassword(password, user.passwordHash)) {
