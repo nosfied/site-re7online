@@ -1080,6 +1080,7 @@ export default function AppInboxPage() {
   const hasInitializedConversationSoundRef = useRef(false);
   const suppressNextConversationRefreshNotificationRef = useRef(false);
   const loadedConversationPageCountRef = useRef(0);
+  const conversationQueryKeyRef = useRef("");
   const notifiedInboundMessageKeysRef = useRef(new Set<string>());
   const primedTimelineNotificationKeysRef = useRef(new Set<string>());
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
@@ -1562,9 +1563,14 @@ export default function AppInboxPage() {
     () => JSON.stringify(buildConversationFetchOptions(null)),
     [buildConversationFetchOptions]
   );
+  conversationQueryKeyRef.current = conversationQueryKey;
 
   const refreshConversationList = useCallback(async (activeSession: AppSession) => {
+    const requestQueryKey = conversationQueryKey;
     const response = await fetchAppConversations(activeSession, buildConversationFetchOptions(null));
+    if (requestQueryKey !== conversationQueryKeyRef.current) {
+      return;
+    }
     if (response.readState) {
       setReadState((current) => mergeReadStatePreservingLocal(current, response.readState!));
     }
@@ -1626,7 +1632,9 @@ export default function AppInboxPage() {
     }
     lastInboundConversationSignatureRef.current = latestInboundSignature;
     lastInboundConversationTimestampRef.current = latestInboundTimestamp;
-    humanFlowConversationKeysRef.current = humanFlowConversationKeys;
+    humanFlowConversationKeys.forEach((key) => {
+      humanFlowConversationKeysRef.current.add(key);
+    });
     suppressNextConversationRefreshNotificationRef.current = false;
     const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
     setConversations((current) => mergeConversationsPreservingStableOrder(current, sortedItems));
@@ -1663,6 +1671,7 @@ export default function AppInboxPage() {
   }, [
     buildConversationFetchOptions,
     buildConversationNotificationRequest,
+    conversationQueryKey,
     loadingMessages,
     markConversationIdentitiesAsRead,
     markConversationIdentitiesAsUnread,
@@ -2089,6 +2098,55 @@ export default function AppInboxPage() {
     users,
   ]);
   const loggedUserDepartmentLabel = loggedUserDepartmentName ?? "Sem setor definido";
+
+  const conversationFilterCounts = useMemo<Record<ConversationFilter, number>>(() => {
+    const baseItems = conversations.filter((item) => {
+      const searchTerm = conversationSearch.trim().toLowerCase();
+      if (searchTerm) {
+        const haystack = [
+          item.leadName,
+          item.leadPhone,
+          item.waId,
+          item.lastMessage?.bodyText,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(searchTerm)) {
+          return false;
+        }
+      }
+      if (isAdminUser && departmentFilter !== "ALL") {
+        return (item.departmentId ?? null) === departmentFilter;
+      }
+      return true;
+    });
+
+    const counts = {
+      ALL: baseItems.length,
+      WAITING: 0,
+      IN_PROGRESS: 0,
+      WAITING_USER: 0,
+      CLOSED: 0,
+      MINE: 0,
+      UNASSIGNED: 0,
+    } satisfies Record<ConversationFilter, number>;
+
+    baseItems.forEach((item) => {
+      const status = getConversationOperationalStatus(item);
+      if (status && status in counts) {
+        counts[status as ConversationFilter] += 1;
+      }
+      if (item.assignedUserId === session?.user.id) {
+        counts.MINE += 1;
+      }
+      if (!item.assignedUserId) {
+        counts.UNASSIGNED += 1;
+      }
+    });
+
+    return counts;
+  }, [conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
@@ -2922,7 +2980,16 @@ export default function AppInboxPage() {
                         : "bg-white/5 text-white/65 hover:bg-white/10"
                     }`}
                   >
-                    {filter.label}
+                    <span>{filter.label}</span>
+                    <span
+                      className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                        conversationFilter === filter.value
+                          ? "bg-white/20 text-white"
+                          : "bg-white/10 text-white/55"
+                      }`}
+                    >
+                      {conversationFilterCounts[filter.value]}
+                    </span>
                   </button>
                 ))}
               </div>
