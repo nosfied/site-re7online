@@ -10993,7 +10993,12 @@ async function deleteConversationPrivacyData(
   const result = await prisma.$transaction(async (tx) => {
     const conversations = await tx.conversation.updateMany({
       where: { clientId: params.clientId, id: { in: conversationIds }, deletedAt: null },
-      data: { deletedAt: now, closedAt: now, historyVisibleAfter: now },
+      data: {
+        deletedAt: now,
+        closedAt: now,
+        historyVisibleAfter: now,
+        departmentId: null,
+      },
     });
     const runtimeStates = await tx.conversationRuntimeState.updateMany({
       where: { clientId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
@@ -11003,6 +11008,8 @@ async function deleteConversationPrivacyData(
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
+        departmentId: null,
+        queueId: null,
         handoffStatus: "NONE",
         handoffReleasedAt: now,
         mode: "BOT",
@@ -11054,6 +11061,8 @@ async function deleteConversationPrivacyData(
       assignedUserId: null,
       assignedTo: null,
       assignedAt: null,
+      departmentId: null,
+      queueId: null,
       handoff: {
         ...currentRuntime.handoff,
         status: "none",

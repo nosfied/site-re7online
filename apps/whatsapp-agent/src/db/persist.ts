@@ -95,8 +95,10 @@ export async function persistConversationWindow(params: {
       deletedAt: true,
     },
   });
-  const existingDepartmentId = existing?.departmentId ?? null;
-  const requestedDepartmentId = params.departmentId ?? existingDepartmentId;
+  const existingDepartmentId = existing?.deletedAt ? null : existing?.departmentId ?? null;
+  const requestedDepartmentId = existing?.deletedAt
+    ? params.departmentId ?? null
+    : params.departmentId ?? existingDepartmentId;
   const resolvedDepartmentId = await resolveOperationalDepartmentId(
     prisma,
     params.clientId,

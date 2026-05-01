@@ -62,6 +62,7 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
           anonymizedAt: now,
           deletedAt: now,
           closedAt: now,
+          departmentId: null,
         },
       }),
       prisma.conversationRuntimeState.updateMany({
@@ -79,6 +80,8 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
           assignedUserId: null,
           assignedTo: null,
           assignedAt: null,
+          departmentId: null,
+          queueId: null,
           handoffStatus: "NONE",
           handoffReleasedAt: now,
           mode: "BOT",
