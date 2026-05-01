@@ -2717,6 +2717,10 @@ export default function AppInboxPage() {
 
   const handleReleaseConversation = async () => {
     if (!session || !selectedConversationWaId) return;
+    const confirmed = window.confirm(
+      "Liberar para automacao remove esta conversa da operacao humana.\n\nEla nao podera ser acessada ou visualizada no inbox, a menos que o numero volte a entrar em contato.\n\nDeseja continuar?"
+    );
+    if (!confirmed) return;
     setConversationAction("release");
     setError(null);
     setSuccess(null);
@@ -3163,6 +3167,8 @@ export default function AppInboxPage() {
               {isAdminUser ? (
                 <button
                   type="button"
+                  title="Privacidade"
+                  aria-label="Abrir privacidade da conversa"
                   disabled={!selectedConversation}
                   onClick={() => {
                     if (!selectedConversation) return;
@@ -3172,48 +3178,54 @@ export default function AppInboxPage() {
                       )}`
                     );
                   }}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Privacidade
+                  🔒
                 </button>
               ) : null}
               {selectedConversation?.assignedUserId === session.user.id ? (
                 <>
                   <button
                     type="button"
+                    title="Liberar pra Automação"
+                    aria-label="Liberar conversa para automação"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleReleaseConversation}
-                    className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {conversationAction === "release" ? "Atualizando..." : "Liberar pra Automação"}
+                    {conversationAction === "release" ? "…" : "🤖"}
                   </button>
                   <button
                     type="button"
+                    title="Liberar para Atendimento Geral"
+                    aria-label="Liberar conversa para Atendimento Geral"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleReleaseConversationToGeneral}
-                    className="rounded-xl border border-emerald-500/25 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {conversationAction === "release-general"
-                      ? "Atualizando..."
-                      : "Liberar para Atendimento Geral"}
+                    {conversationAction === "release-general" ? "…" : "🎧"}
                   </button>
                 </>
               ) : (
                 <button
                   type="button"
+                  title="Assumir conversa"
+                  aria-label="Assumir conversa"
                   disabled={
                     !selectedConversationWaId ||
                     Boolean(conversationAction) ||
                     isSelectedConversationLocked
                   }
                   onClick={handleClaimConversation}
-                  className="rounded-xl border border-[#d4c7b5] bg-white/70 px-3 py-1.5 text-sm text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {conversationAction === "claim" ? "Atualizando..." : "Assumir"}
+                  {conversationAction === "claim" ? "…" : "✓"}
                 </button>
               )}
               <button
                 type="button"
+                title="Marcar como não lida"
+                aria-label="Marcar conversa como não lida"
                 disabled={!selectedConversation}
                 onClick={() => {
                   if (!selectedConversation) return;
@@ -3234,12 +3246,14 @@ export default function AppInboxPage() {
                   setUnreadSeparatorIndex(null);
                   setUnreadAnchorMessageIdentity(null);
                 }}
-                className="rounded-xl border border-[#d4c7b5] bg-white/55 px-3 py-1.5 text-sm text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Não lida
+                ✉
               </button>
               <button
                 type="button"
+                title="Mais ações"
+                aria-label="Mostrar mais ações"
                 disabled={!selectedConversation}
                 onClick={() => setShowMoreActions((current) => !current)}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
