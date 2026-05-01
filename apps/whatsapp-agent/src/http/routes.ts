@@ -2178,10 +2178,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      const includeInactive =
+        clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
       const departments = await prisma.department.findMany({
         where: {
           clientId: client.id,
-          isActive: true,
+          ...(includeInactive ? {} : { isActive: true }),
           ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],

@@ -62,6 +62,13 @@ function normalizeDepartmentError(error: AppApiError, fallback: string) {
   return error.message || fallback;
 }
 
+function getDepartmentStatusActionLabel(item: AdminDepartmentItem, draftIsActive: boolean) {
+  if (item.isActive === draftIsActive) {
+    return draftIsActive ? "Manter ativo" : "Manter inativo";
+  }
+  return draftIsActive ? "Reativar setor" : "Desativar setor";
+}
+
 export default function AppSettingsDepartmentsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -97,7 +104,9 @@ export default function AppSettingsDepartmentsPage() {
 
   const loadDepartments = useCallback(
     async (activeSession: AppSession) => {
-      const response = await fetchAppDepartments(activeSession);
+      const response = await fetchAppDepartments(activeSession, {
+        includeInactive: canManageDepartments(activeSession.user.role),
+      });
       hydrateDepartments(response.items);
     },
     [hydrateDepartments]
@@ -161,6 +170,11 @@ export default function AppSettingsDepartmentsPage() {
       }),
     [departments]
   );
+  const activeDepartmentCount = useMemo(
+    () => departments.filter((item) => item.isActive).length,
+    [departments]
+  );
+  const inactiveDepartmentCount = departments.length - activeDepartmentCount;
 
   const handleCreate = async () => {
     if (!session) return;
@@ -293,7 +307,13 @@ export default function AppSettingsDepartmentsPage() {
                 : "Edite o nome, ative ou desative setores conforme a operacao."}
             </p>
           </div>
-          <DepartmentBadge label={`${departments.length} setores`} />
+          <div className="flex flex-wrap items-center gap-2">
+            <DepartmentBadge label={`${activeDepartmentCount} ativos`} tone="success" />
+            {!readOnly ? (
+              <DepartmentBadge label={`${inactiveDepartmentCount} inativos`} tone="warning" />
+            ) : null}
+            <DepartmentBadge label={`${departments.length} setores`} />
+          </div>
         </div>
 
         {loading ? (
@@ -392,9 +412,7 @@ export default function AppSettingsDepartmentsPage() {
                         >
                           {togglingId === item.id
                             ? "Atualizando..."
-                            : draft.isActive
-                              ? "Manter ativo"
-                              : "Aplicar inativo"}
+                            : getDepartmentStatusActionLabel(item, draft.isActive)}
                         </button>
                         <button
                           type="button"

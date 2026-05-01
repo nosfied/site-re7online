@@ -794,13 +794,19 @@ export async function updateAppUser(
 }
 
 export async function fetchAppDepartments(
-  session: AppSession
+  session: AppSession,
+  options?: { includeInactive?: boolean }
 ): Promise<{
   ok: true;
   count: number;
   items: AdminDepartmentItem[];
 }> {
-  return requestAppJson(session, "/app/departments");
+  const params = new URLSearchParams();
+  if (options?.includeInactive) {
+    params.set("includeInactive", "true");
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/departments${suffix}`);
 }
 
 export async function fetchAppChatbotFlows(
