@@ -2047,6 +2047,18 @@ export default function AppInboxPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [conversations, departments]);
 
+  const loggedUserDepartmentName = useMemo(() => {
+    const sessionDepartmentName = session?.user.departmentName?.trim();
+    if (sessionDepartmentName) return sessionDepartmentName;
+    const sessionDepartmentId = session?.user.departmentId ?? null;
+    if (!sessionDepartmentId) return null;
+    return (
+      departments.find((department) => department.id === sessionDepartmentId)?.name ??
+      departmentOptions.find((department) => department.id === sessionDepartmentId)?.name ??
+      null
+    );
+  }, [departmentOptions, departments, session?.user.departmentId, session?.user.departmentName]);
+
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
       const searchTerm = conversationSearch.trim().toLowerCase();
@@ -2768,7 +2780,10 @@ export default function AppInboxPage() {
       <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
-            <p className="mb-1 text-[11px] text-white/45">{session.user.name || session.user.email}</p>
+            <p className="mb-1 truncate text-[11px] text-white/45">
+              {session.user.name || session.user.email}
+              {loggedUserDepartmentName ? ` • ${loggedUserDepartmentName}` : ""}
+            </p>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">Conversas</h2>
               <div className="flex items-center gap-2">

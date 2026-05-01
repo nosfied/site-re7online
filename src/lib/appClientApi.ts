@@ -17,6 +17,8 @@ export type AppSessionUser = {
   email: string;
   clientId: string;
   role: string;
+  departmentId?: string | null;
+  departmentName?: string | null;
 };
 
 export type AppSession = {
@@ -140,6 +142,8 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
       email: string;
       clientId: string;
       role: string;
+      departmentId?: string | null;
+      departmentName?: string | null;
     }>;
     return {
       id: typeof parsed.sub === "string" ? parsed.sub : undefined,
@@ -147,6 +151,8 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
       email: typeof parsed.email === "string" ? parsed.email : undefined,
       clientId: typeof parsed.clientId === "string" ? parsed.clientId : undefined,
       role: typeof parsed.role === "string" ? parsed.role : undefined,
+      departmentId: typeof parsed.departmentId === "string" ? parsed.departmentId : undefined,
+      departmentName: typeof parsed.departmentName === "string" ? parsed.departmentName : undefined,
     };
   } catch {
     return {};
@@ -165,6 +171,14 @@ function parseStoredSession(raw: string | null): AppSession | null {
       email: String(parsed?.user?.email || tokenUser.email || ""),
       clientId: String(parsed?.user?.clientId || tokenUser.clientId || ""),
       role: String(parsed?.user?.role || tokenUser.role || ""),
+      departmentId:
+        typeof parsed?.user?.departmentId === "string"
+          ? parsed.user.departmentId
+          : tokenUser.departmentId ?? null,
+      departmentName:
+        typeof parsed?.user?.departmentName === "string"
+          ? parsed.user.departmentName
+          : tokenUser.departmentName ?? null,
     };
     if (!token || !resolvedUser.id || !resolvedUser.clientId || !resolvedUser.email) {
       return null;
@@ -526,6 +540,8 @@ export async function loginAppUser(
       email: payload.user.email || tokenUser.email || "",
       clientId: payload.user.clientId || tokenUser.clientId || "",
       role: payload.user.role || tokenUser.role || "",
+      departmentId: payload.user.departmentId ?? tokenUser.departmentId ?? null,
+      departmentName: payload.user.departmentName ?? tokenUser.departmentName ?? null,
     },
   };
 }

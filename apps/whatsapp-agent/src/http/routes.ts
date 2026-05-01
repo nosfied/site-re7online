@@ -124,6 +124,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           role: true,
           passwordHash: true,
           isActive: true,
+          departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
           client: {
             select: {
               status: true,
@@ -181,6 +187,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name: user.name,
           email: user.email,
           clientId: user.clientId,
+          departmentId: user.departmentId,
+          departmentName: user.department?.name ?? null,
         },
       });
     } catch (error) {
@@ -3400,13 +3408,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
         role: clientAuth.role,
       });
-      if (
-        !hasConversationDepartmentAccess({
-          role: clientAuth.role,
-          userDepartmentId: departmentAccess.departmentId,
-          conversationDepartmentId: conversation.departmentId ?? null,
-        })
-      ) {
+      const hasDepartmentAccess = hasConversationDepartmentAccess({
+        role: clientAuth.role,
+        userDepartmentId: departmentAccess.departmentId,
+        conversationDepartmentId: conversation.departmentId ?? null,
+      });
+      const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
+      if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
         logAppDepartmentDenied({
           requestId,
           route: "/app/conversation/:waId/transfer",
