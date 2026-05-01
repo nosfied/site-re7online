@@ -2050,7 +2050,10 @@ export default function AppInboxPage() {
   const loggedUserDepartmentName = useMemo(() => {
     const sessionDepartmentName = session?.user.departmentName?.trim();
     if (sessionDepartmentName) return sessionDepartmentName;
-    const currentUser = users.find((user) => user.id === session?.user.id) ?? null;
+    const currentUser =
+      users.find((user) => user.id === session?.user.id) ??
+      users.find((user) => user.email === session?.user.email) ??
+      null;
     const currentUserDepartmentName = currentUser?.departmentName?.trim();
     if (currentUserDepartmentName) return currentUserDepartmentName;
     const sessionDepartmentId = session?.user.departmentId ?? currentUser?.departmentId ?? null;
@@ -2068,6 +2071,7 @@ export default function AppInboxPage() {
     session?.user.id,
     users,
   ]);
+  const loggedUserDepartmentLabel = loggedUserDepartmentName ?? "Sem setor definido";
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {
@@ -2790,10 +2794,13 @@ export default function AppInboxPage() {
       <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
-            <p className="mb-1 truncate text-[11px] text-white/45">
-              {session.user.name || session.user.email}
-              {loggedUserDepartmentName ? ` • ${loggedUserDepartmentName}` : ""}
-            </p>
+            <div
+              className="mb-1 min-w-0 text-[11px] text-white/50"
+              title={`${session.user.name || session.user.email} - ${loggedUserDepartmentLabel}`}
+            >
+              <p className="truncate">{session.user.name || session.user.email}</p>
+              <p className="truncate font-medium text-white/70">Setor: {loggedUserDepartmentLabel}</p>
+            </div>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">Conversas</h2>
               <div className="flex items-center gap-2">
