@@ -6,6 +6,8 @@ const TARGET_SLUG = "atendimento-geral";
 const TARGET_QUEUE_NAME = "Fila Geral";
 const LEGACY_NAMES = new Set(["Atendimento"]);
 const LEGACY_SLUGS = new Set(["atendimento"]);
+const LEGACY_NAME_PREFIX = "Departamento legado";
+const LEGACY_SLUG_PREFIX = "departamento-legado";
 
 function archivedName(id) {
   return `Departamento legado ${id.slice(-8)}`;
@@ -43,6 +45,9 @@ async function normalizeClient(client) {
       OR: [
         { name: { in: Array.from(LEGACY_NAMES) } },
         { slug: { in: Array.from(LEGACY_SLUGS) } },
+        { name: { startsWith: LEGACY_NAME_PREFIX } },
+        { slug: { startsWith: LEGACY_SLUG_PREFIX } },
+        { isActive: false },
       ],
     },
     select: { id: true, name: true, slug: true },
@@ -53,6 +58,7 @@ async function normalizeClient(client) {
   let users = 0;
   let runtimeQueues = 0;
   let deactivated = 0;
+  let deleted = 0;
 
   for (const legacy of legacyDepartments) {
     const legacyQueues = await prisma.queue.findMany({
@@ -61,7 +67,7 @@ async function normalizeClient(client) {
     });
     const legacyQueueIds = legacyQueues.map((queue) => queue.id);
 
-    const [conversationResult, runtimeResult, runtimeQueueResult, userResult, departmentResult] =
+    const [conversationResult, runtimeResult, runtimeQueueResult, userResult] =
       await prisma.$transaction([
         prisma.conversation.updateMany({
           where: { clientId: client.id, departmentId: legacy.id },
@@ -84,21 +90,26 @@ async function normalizeClient(client) {
           where: { clientId: client.id, departmentId: legacy.id },
           data: { departmentId: target.id },
         }),
-        prisma.department.updateMany({
-          where: { id: legacy.id, clientId: client.id },
-          data: {
-            isActive: false,
-            name: archivedName(legacy.id),
-            slug: archivedSlug(legacy.id),
-          },
-        }),
       ]);
+
+    const departmentResult = await prisma.department.updateMany({
+      where: { id: legacy.id, clientId: client.id },
+      data: {
+        isActive: false,
+        name: archivedName(legacy.id),
+        slug: archivedSlug(legacy.id),
+      },
+    });
+    const deleteResult = await prisma.department.deleteMany({
+      where: { id: legacy.id, clientId: client.id },
+    });
 
     conversations += conversationResult.count;
     runtimeStates += runtimeResult.count;
     users += userResult.count;
     runtimeQueues += runtimeQueueResult.count;
     deactivated += departmentResult.count;
+    deleted += deleteResult.count;
   }
 
   return {
@@ -110,6 +121,7 @@ async function normalizeClient(client) {
     users,
     runtimeQueues,
     deactivated,
+    deleted,
   };
 }
 

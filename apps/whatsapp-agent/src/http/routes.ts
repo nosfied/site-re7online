@@ -73,7 +73,12 @@ import {
 } from "../inbox/readStateStore.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
-  NOT: [{ name: "Atendimento" }, { slug: "atendimento" }],
+  NOT: [
+    { name: "Atendimento" },
+    { slug: "atendimento" },
+    { name: { startsWith: "Departamento legado" } },
+    { slug: { startsWith: "departamento-legado" } },
+  ],
 };
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
