@@ -2050,14 +2050,24 @@ export default function AppInboxPage() {
   const loggedUserDepartmentName = useMemo(() => {
     const sessionDepartmentName = session?.user.departmentName?.trim();
     if (sessionDepartmentName) return sessionDepartmentName;
-    const sessionDepartmentId = session?.user.departmentId ?? null;
+    const currentUser = users.find((user) => user.id === session?.user.id) ?? null;
+    const currentUserDepartmentName = currentUser?.departmentName?.trim();
+    if (currentUserDepartmentName) return currentUserDepartmentName;
+    const sessionDepartmentId = session?.user.departmentId ?? currentUser?.departmentId ?? null;
     if (!sessionDepartmentId) return null;
     return (
       departments.find((department) => department.id === sessionDepartmentId)?.name ??
       departmentOptions.find((department) => department.id === sessionDepartmentId)?.name ??
       null
     );
-  }, [departmentOptions, departments, session?.user.departmentId, session?.user.departmentName]);
+  }, [
+    departmentOptions,
+    departments,
+    session?.user.departmentId,
+    session?.user.departmentName,
+    session?.user.id,
+    users,
+  ]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((item) => {

@@ -1853,11 +1853,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: true,
           role: true,
           departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
           isActive: true,
           createdAt: true,
         },
       });
-      json(res, 200, { ok: true, count: users.length, items: users });
+      json(res, 200, {
+        ok: true,
+        count: users.length,
+        items: users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          departmentName: user.department?.name ?? null,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
+        })),
+      });
     } catch (error) {
       logger.error({
         event: "app.users.list.error",

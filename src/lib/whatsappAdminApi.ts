@@ -90,6 +90,7 @@ export type AdminUserItem = {
   email: string;
   role: string;
   departmentId?: string | null;
+  departmentName?: string | null;
   isActive?: boolean;
   createdAt: string;
 };
