@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { isSelectableDepartment } from "@/lib/departments";
 import {
   AdminClientItem,
   AdminDepartmentItem,
@@ -44,6 +45,10 @@ export default function AdminReportsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
+  const selectableDepartments = useMemo(
+    () => departments.filter(isSelectableDepartment),
+    [departments]
+  );
 
   useEffect(() => {
     if (!error && !success) return;
@@ -249,10 +254,9 @@ export default function AdminReportsPage() {
                 onChange={(event) => setDepartmentId(event.target.value)}
               >
                 <option value="">Todos</option>
-                {departments.map((item) => (
+                {selectableDepartments.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
-                    {!item.isActive ? " (inativo)" : ""}
                   </option>
                 ))}
               </select>

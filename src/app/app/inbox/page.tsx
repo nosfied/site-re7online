@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { isSelectableDepartment } from "@/lib/departments";
 import {
   addAppRealtimeListener,
   handleRealtimeNotificationCandidate,
@@ -2029,10 +2030,12 @@ export default function AppInboxPage() {
 
   const departmentOptions = useMemo<DepartmentOption[]>(() => {
     if (departments.length > 0) {
-      return departments.map((department) => ({
-        id: department.id,
-        name: department.name,
-      }));
+      return departments
+        .filter(isSelectableDepartment)
+        .map((department) => ({
+          id: department.id,
+          name: department.name,
+        }));
     }
     const items = new Map<string, string>();
     conversations.forEach((item) => {

@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { isSelectableDepartment } from "@/lib/departments";
 import {
   AdminDepartmentItem,
   AdminUserItem,
@@ -180,6 +181,10 @@ export default function TenantUsersPage() {
 
   const departmentNameById = useMemo(
     () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
+    [departments]
+  );
+  const selectableDepartments = useMemo(
+    () => departments.filter(isSelectableDepartment),
     [departments]
   );
 
@@ -429,10 +434,9 @@ export default function TenantUsersPage() {
                 }
               >
                 <option value="">-</option>
-                {departments.map((department) => (
+                {selectableDepartments.map((department) => (
                   <option key={department.id} value={department.id}>
                     {department.name}
-                    {!department.isActive ? " (inativo)" : ""}
                   </option>
                 ))}
               </select>
@@ -639,10 +643,9 @@ export default function TenantUsersPage() {
                         }
                       >
                         <option value="">-</option>
-                        {departments.map((department) => (
+                        {selectableDepartments.map((department) => (
                           <option key={department.id} value={department.id}>
                             {department.name}
-                            {!department.isActive ? " (inativo)" : ""}
                           </option>
                         ))}
                       </select>

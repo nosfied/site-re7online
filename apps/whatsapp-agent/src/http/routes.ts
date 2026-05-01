@@ -59,7 +59,10 @@ import {
   normalizeWaIdDigits,
 } from "../utils/waid.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
-import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import {
+  ensureDefaultOperationalDepartmentAndQueue,
+  resolveOperationalDepartmentId,
+} from "../bootstrap/defaultOperationalDepartment.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
 import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
@@ -68,6 +71,10 @@ import {
   markInboxConversationRead,
   markInboxConversationUnread,
 } from "../inbox/readStateStore.js";
+
+const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
+  NOT: [{ name: "Atendimento" }, { slug: "atendimento" }],
+};
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
 
@@ -2128,6 +2135,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const departments = await prisma.department.findMany({
         where: {
           clientId: client.id,
+          isActive: true,
+          ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: {
@@ -4906,6 +4915,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           where: {
             clientId: client.id,
             ...(includeInactive ? {} : { isActive: true }),
+            ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
           },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
@@ -10264,10 +10274,21 @@ async function ensureConversationOperationalState(
     defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
   }
 ) {
-  const conversation = materializeConversationOperationalState(
-    params.conversation,
-    params.defaults
-  );
+  const normalizedDepartmentId = params.conversation
+    ? await resolveOperationalDepartmentId(
+        prisma,
+        params.clientId,
+        params.conversation.departmentId ?? null
+      )
+    : null;
+  const normalizedConversation =
+    params.conversation && normalizedDepartmentId !== (params.conversation.departmentId ?? null)
+      ? {
+          ...params.conversation,
+          departmentId: normalizedDepartmentId,
+        }
+      : params.conversation;
+  const conversation = materializeConversationOperationalState(normalizedConversation, params.defaults);
   if (!conversation) return null;
   const original = params.conversation;
   const shouldPersist =

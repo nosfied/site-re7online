@@ -3,6 +3,17 @@ import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 
 export const DEFAULT_OPERATIONAL_DEPARTMENT_NAME = "Atendimento Geral";
 export const DEFAULT_OPERATIONAL_QUEUE_NAME = "Fila Geral";
+const LEGACY_OPERATIONAL_DEPARTMENT_NAMES = new Set(["atendimento"]);
+const LEGACY_OPERATIONAL_DEPARTMENT_SLUGS = new Set(["atendimento"]);
+
+export function isLegacyOperationalDepartment(department: {
+  name?: string | null;
+  slug?: string | null;
+}) {
+  const name = department.name?.trim().toLowerCase() ?? "";
+  const slug = department.slug?.trim().toLowerCase() ?? "";
+  return LEGACY_OPERATIONAL_DEPARTMENT_NAMES.has(name) || LEGACY_OPERATIONAL_DEPARTMENT_SLUGS.has(slug);
+}
 
 export async function getDefaultOperationalDepartment(
   prisma: PrismaClient,
@@ -56,4 +67,21 @@ export async function ensureDefaultOperationalDepartmentAndQueue(
     select: { id: true, name: true, departmentId: true },
   });
   return { department, queue };
+}
+
+export async function resolveOperationalDepartmentId(
+  prisma: PrismaClient,
+  clientId: string,
+  departmentId?: string | null
+) {
+  const fallback = await getDefaultOperationalDepartment(prisma, clientId);
+  if (!departmentId) return fallback?.id ?? null;
+  const department = await prisma.department.findFirst({
+    where: { clientId, id: departmentId },
+    select: { id: true, name: true, slug: true, isActive: true },
+  });
+  if (!department || !department.isActive || isLegacyOperationalDepartment(department)) {
+    return fallback?.id ?? null;
+  }
+  return department.id;
 }

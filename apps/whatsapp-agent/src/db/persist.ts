@@ -1,5 +1,8 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
-import { getDefaultOperationalDepartment } from "../bootstrap/defaultOperationalDepartment.js";
+import {
+  getDefaultOperationalDepartment,
+  resolveOperationalDepartmentId,
+} from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
@@ -92,11 +95,14 @@ export async function persistConversationWindow(params: {
       deletedAt: true,
     },
   });
-  const resolvedDepartmentId =
-    params.departmentId ??
-    existing?.departmentId ??
-    (await getDefaultDepartment(params.clientId, prisma))?.id ??
-    null;
+  const existingDepartmentId = existing?.departmentId ?? null;
+  const requestedDepartmentId = params.departmentId ?? existingDepartmentId;
+  const resolvedDepartmentId = await resolveOperationalDepartmentId(
+    prisma,
+    params.clientId,
+    requestedDepartmentId
+  );
+  const shouldRewriteDepartment = existingDepartmentId !== resolvedDepartmentId;
   await prisma.conversation.upsert({
     where: {
       clientId_waId: {
@@ -117,7 +123,7 @@ export async function persistConversationWindow(params: {
             closedAt: null,
           }
         : {}),
-      departmentId: existing?.departmentId ? undefined : resolvedDepartmentId ?? undefined,
+      departmentId: shouldRewriteDepartment ? resolvedDepartmentId ?? undefined : undefined,
     },
     create: {
       clientId: params.clientId,
