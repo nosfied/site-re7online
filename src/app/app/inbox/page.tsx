@@ -2794,13 +2794,14 @@ export default function AppInboxPage() {
       <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
           <div className="border-b border-white/10 px-4 py-3">
-            <div
-              className="mb-1 min-w-0 text-[11px] text-white/50"
+            <p
+              className="mb-1 truncate text-[11px] text-white/55"
               title={`${session.user.name || session.user.email} - ${loggedUserDepartmentLabel}`}
             >
-              <p className="truncate">{session.user.name || session.user.email}</p>
-              <p className="truncate font-medium text-white/70">Setor: {loggedUserDepartmentLabel}</p>
-            </div>
+              <span>{session.user.name || session.user.email}</span>
+              <span className="text-white/35"> • </span>
+              <span className="font-medium text-white/70">{loggedUserDepartmentLabel}</span>
+            </p>
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-white">Conversas</h2>
               <div className="flex items-center gap-2">
