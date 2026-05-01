@@ -111,6 +111,13 @@ export type AppAutomationSettings = {
   aiLocked?: boolean;
 };
 
+export type AppTenantSummary = {
+  id: string;
+  name: string;
+  phoneNumberId: string | null;
+  phoneDisplay: string | null;
+};
+
 const SESSION_KEY = "wa_app_session_session_v1";
 const LOCAL_KEY = "wa_app_session_local_v1";
 
@@ -807,6 +814,12 @@ export async function fetchAppDepartments(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/departments${suffix}`);
+}
+
+export async function fetchAppTenantSummary(
+  session: AppSession
+): Promise<{ ok: true; tenant: AppTenantSummary }> {
+  return requestAppJson(session, "/app/tenant");
 }
 
 export async function fetchAppChatbotFlows(

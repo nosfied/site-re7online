@@ -23,6 +23,7 @@ import {
   fetchAppConversation,
   fetchAppConversations,
   fetchAppLeadNotes,
+  fetchAppTenantSummary,
   sendAppConversationMedia,
   fetchAppUsers,
   updateAppLead,
@@ -1017,6 +1018,7 @@ export default function AppInboxPage() {
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [adminConnection, setAdminConnection] = useState<AdminConnection | null>(null);
   const [adminClientKey, setAdminClientKey] = useState<string | null>(null);
+  const [tenantPhoneLabel, setTenantPhoneLabel] = useState<string | null>(null);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState<string | null>(null);
   const [selectedConversationWaId, setSelectedConversationWaId] = useState<string | null>(null);
@@ -1159,6 +1161,23 @@ export default function AppInboxPage() {
     setSession(stored);
     saveAppSession(stored);
   }, [router]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    fetchAppTenantSummary(session)
+      .then((response) => {
+        if (cancelled) return;
+        const phone = response.tenant.phoneDisplay || response.tenant.phoneNumberId || null;
+        setTenantPhoneLabel(phone);
+      })
+      .catch(() => {
+        if (!cancelled) setTenantPhoneLabel(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   useEffect(() => {
     if (!isAppAdmin(session)) {
@@ -2966,7 +2985,16 @@ export default function AppInboxPage() {
               <span className="font-medium text-white/70">{loggedUserDepartmentLabel}</span>
             </p>
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-white">Conversas</h2>
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-semibold text-white" title={tenantPhoneLabel ?? undefined}>
+                  Conversas
+                  {tenantPhoneLabel ? (
+                    <span className="ml-1.5 align-baseline text-[11px] font-normal text-white/55">
+                      • {tenantPhoneLabel}
+                    </span>
+                  ) : null}
+                </h2>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"

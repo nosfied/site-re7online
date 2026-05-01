@@ -229,6 +229,51 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/tenant") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await prisma.client.findFirst({
+        where: {
+          id: clientAuth.clientId,
+          status: "ACTIVE",
+        },
+        include: {
+          metaConfig: true,
+          phoneNumbers: {
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const phone = client.phoneNumbers[0] ?? null;
+      const metaDisplayPhone = extractTenantDisplayPhoneFromRawPayload(client.metaConfig?.rawPayload);
+      const phoneDisplay = metaDisplayPhone || phone?.display || phone?.phoneNumberId || null;
+      json(res, 200, {
+        ok: true,
+        tenant: {
+          id: client.id,
+          name: client.name,
+          phoneNumberId: client.metaConfig?.phoneNumberId ?? phone?.phoneNumberId ?? null,
+          phoneDisplay,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.tenant.get.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (req.method === "PUT" && pathname === "/app/privacy/retention") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -9486,6 +9531,21 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const payload = rawPayload as Record<string, unknown>;
+  const phoneNumber = payload.phoneNumber;
+  if (phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)) {
+    const displayPhone = normalizeOptionalString(
+      (phoneNumber as Record<string, unknown>).display_phone_number
+    );
+    if (displayPhone) return displayPhone;
+  }
+  return normalizeOptionalString(payload.display_phone_number);
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {
