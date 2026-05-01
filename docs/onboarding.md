@@ -62,7 +62,8 @@ Fluxo:
 4) Informar:
    - `phoneNumberId` obrigatório;
    - `Telefone exibido`, se disponível;
-   - `WABA ID`, `Business ID` e `Business Portfolio ID`, se disponíveis.
+   - `WABA ID do tenant`, se conhecido;
+   - `Business ID` e `Business Portfolio ID`, se disponíveis.
 5) Clicar em `Vincular numero conectado`.
 
 O backend grava:
@@ -75,6 +76,13 @@ Importante:
 - Não salva token próprio do tenant.
 - O envio outbound usa o token global/env da operação.
 - Só funciona se o token global tiver permissão sobre o número informado.
+- A WABA precisa estar inscrita no app para entregar webhooks. Se `subscribed_apps`
+  estiver vazio, inscreva a WABA no app antes de validar inbound.
+- Novos tenants nascem com automação desligada; ative somente depois de criar o
+  fluxo configurável ou definir outra política de atendimento.
+- No bootstrap operacional, apenas `Atendimento Geral` fica ativo por padrão.
+  Setores modelo como `Saúde`, `Educação` e `Assistência Social` são criados
+  inativos e podem ser ativados depois pelo admin do tenant, quando fizer sentido.
 
 ### Cenário B — número/WABA pertence ao portfólio do cliente
 

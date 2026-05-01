@@ -673,12 +673,16 @@ export default function TenantOnboardingPage() {
                 />
               </label>
               <label className="grid min-w-0 gap-1 text-sm">
-                <span className="text-white/70">WABA ID (manual opcional)</span>
+                <span className="text-white/70">WABA ID do tenant</span>
                 <input
                   className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={wabaId}
                   onChange={(event) => setWabaId(event.target.value)}
+                  placeholder="Ex.: 1733840571328720"
                 />
+                <span className="text-xs text-white/50">
+                  Use este campo quando o numero ja estiver conectado em uma WABA conhecida.
+                </span>
               </label>
               <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Business ID</span>

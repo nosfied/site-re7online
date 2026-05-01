@@ -1251,6 +1251,65 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       closedAt: null,
     };
   };
+  const routeConversationToHumanQueue = async (
+    state: ConversationState,
+    params: {
+      reason: "automation_layers_disabled" | "no_automation_reply_configured";
+      timestamp: string;
+      messageId: string;
+    }
+  ) => {
+    const activatedHandoff = activateHumanHandoff(
+      clearChatbotRuntime(state),
+      params.timestamp,
+      ""
+    );
+    const routedConversation = await ensurePendingHandoffRouting({
+      ...activatedHandoff.state,
+      mode: "HUMAN" as const,
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+    });
+    await upsertConversationSafe(routedConversation);
+    await persistConversationSafe({
+      waId: routedConversation.waId,
+      windowIsOpen: routedConversation.window.isOpen,
+      windowExpiresAt: routedConversation.window.expiresAt,
+      lastInboundAt: routedConversation.lastInboundAt ?? null,
+      lastOutboundAt: routedConversation.lastOutboundAt ?? null,
+      departmentId: routedConversation.departmentId ?? null,
+    });
+    logger.info({
+      event: "conversation.routed_human",
+      reason: params.reason,
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+      waId: maskNumber(routedConversation.waId),
+      messageId: params.messageId,
+      mode: routedConversation.mode,
+      handoffStatus: routedConversation.handoff.status,
+      departmentId: routedConversation.departmentId ?? null,
+      requestId: meta?.requestId,
+    });
+    if (tenantClientId) {
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: tenantClientId,
+        waId: routedConversation.waId,
+        waIdCanonical: canonicalizeBrazilWaId(routedConversation.waId),
+        mode: "HUMAN",
+        handoffStatus:
+          routedConversation.handoff.status === "pending" ||
+          routedConversation.handoff.status === "active"
+            ? routedConversation.handoff.status
+            : "active",
+        departmentId: routedConversation.departmentId ?? null,
+        updatedAt: parseWebhookTimestampToDate(params.timestamp).toISOString(),
+      });
+    }
+    return routedConversation;
+  };
   const upsertConversationSafe = async (state: ConversationState) => {
     const currentState = await storage.getConversation(state.waId, tenantClientKey);
     const stateLastInboundAt = Date.parse(state.lastInboundAt ?? "");
@@ -3063,6 +3122,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       windowExpiresAt: updatedConversation.window.expiresAt,
       lastInboundAt: updatedConversation.lastInboundAt ?? null,
       lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+      departmentId: updatedConversation.departmentId ?? null,
     });
 
     await storage.saveIncomingMessage(
@@ -3572,10 +3632,45 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !flowReplyText &&
       !handoffResult.replyText
     ) {
+      updatedConversation = await routeConversationToHumanQueue(updatedConversation, {
+        reason: "automation_layers_disabled",
+        timestamp: message.timestamp,
+        messageId: message.messageId,
+      });
       logger.info({
         event: "reply.skipped",
         waId: maskNumber(normalizedFrom),
         reason: "automation_layers_disabled",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    const noAutomationReplyConfigured =
+      hasResolvedTenantConfig &&
+      !env.WHATSAPP_ECHO_ENABLED &&
+      !demoReplyText &&
+      !leadReplyText &&
+      !flowReplyText &&
+      !handoffResult.replyText &&
+      !flowResult.handled &&
+      !handoffResult.handled &&
+      !demoHandled &&
+      !hasDemoSignal &&
+      !leadHandled;
+
+    if (noAutomationReplyConfigured) {
+      updatedConversation = await routeConversationToHumanQueue(updatedConversation, {
+        reason: "no_automation_reply_configured",
+        timestamp: message.timestamp,
+        messageId: message.messageId,
+      });
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "no_automation_reply_configured",
         route: meta?.route,
         method: meta?.method,
         requestId: meta?.requestId,

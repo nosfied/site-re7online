@@ -1,11 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
+import { DEFAULT_OPERATIONAL_DEPARTMENT_NAME } from "./defaultOperationalDepartment.js";
 import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
 
 export const DEFAULT_DEPARTMENTS = [
-  "Atendimento Geral",
-  "Saúde",
-  "Educação",
-  "Assistência Social",
+  { name: DEFAULT_OPERATIONAL_DEPARTMENT_NAME, isActive: true },
+  { name: "Saúde", isActive: false },
+  { name: "Educação", isActive: false },
+  { name: "Assistência Social", isActive: false },
 ] as const;
 
 export type SeedDepartmentsResult = {
@@ -34,7 +35,8 @@ export async function ensureDefaultDepartments(
   let unchanged = 0;
   const items: SeedDepartmentsResult["items"] = [];
 
-  for (const name of DEFAULT_DEPARTMENTS) {
+  for (const defaultDepartment of DEFAULT_DEPARTMENTS) {
+    const { name } = defaultDepartment;
     const slug = normalizeDepartmentSlug(name);
     const existing = await prisma.department.findUnique({
       where: {
@@ -58,12 +60,12 @@ export async function ensureDefaultDepartments(
           slug,
         },
       },
-      update: { isActive: true },
+      update: defaultDepartment.isActive ? { isActive: true } : {},
       create: {
         clientId: params.clientId,
         name,
         slug,
-        isActive: true,
+        isActive: defaultDepartment.isActive,
       },
       select: {
         id: true,
@@ -76,7 +78,7 @@ export async function ensureDefaultDepartments(
 
     const action = !existing
       ? "created"
-      : !existing.isActive
+      : defaultDepartment.isActive && !existing.isActive
         ? "reactivated"
         : "unchanged";
 
