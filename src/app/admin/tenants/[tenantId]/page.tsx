@@ -487,10 +487,6 @@ export default function TenantEditPage() {
                 <p className="text-xs uppercase tracking-wide text-white/50">Telefone exibido</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.displayPhoneNumber ?? "-"}</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-white/50">Template manual handoff</p>
-                <p className="mt-2 text-sm">{tenantSnapshot?.templates?.manualHandoff ?? "-"}</p>
-              </div>
             </div>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">

@@ -61,8 +61,8 @@ export type TenantConfig = {
   quotaWarnAtPct?: number;
   quotaBlockedReplyText?: string;
   quotaExcludeWaIds?: string[];
-  templates: {
-    manualHandoff: string;
+  templates?: {
+    manualHandoff?: string;
   };
 };
 
@@ -328,10 +328,13 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       throw new Error(`invalid_tenant_quota_exclude_waids:${key}`);
     }
     const templates = tenant.templates as Record<string, unknown> | undefined;
-    if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
+    if (templates !== undefined && (!templates || typeof templates !== "object" || Array.isArray(templates))) {
       throw new Error(`invalid_tenant_templates:${key}`);
     }
-    if (typeof templates.manualHandoff !== "string" || !templates.manualHandoff.trim()) {
+    if (
+      templates?.manualHandoff !== undefined &&
+      (typeof templates.manualHandoff !== "string" || !templates.manualHandoff.trim())
+    ) {
       throw new Error(`invalid_tenant_manual_handoff:${key}`);
     }
   }

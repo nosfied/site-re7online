@@ -169,9 +169,6 @@ export default function TenantsSummaryPage() {
           allowlist: [],
           handoffAttendantWaid: "",
           defaultLanguage: "pt_BR",
-          templates: {
-            manualHandoff: "re7_atendente_manual_v1",
-          },
         });
       } catch {
         setCreatedTenant({ tenantId: clientKey, clientKey });
