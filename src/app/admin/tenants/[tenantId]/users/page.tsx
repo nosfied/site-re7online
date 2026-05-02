@@ -498,9 +498,15 @@ export default function TenantUsersPage() {
             </p>
           ) : null}
           <div className="grid gap-3 p-4">
-            {users.map((item) => (
+            {users.map((item, index) => (
               <Fragment key={item.id}>
-                <article className="rounded-xl border border-white/10 bg-re7-navy/30 p-4">
+                <article
+                  className={`rounded-xl border p-4 ${
+                    index % 2 === 0
+                      ? "border-white/10 bg-re7-navy/35"
+                      : "border-white/15 bg-white/[0.075]"
+                  }`}
+                >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
                       <div>

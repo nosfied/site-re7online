@@ -45,6 +45,8 @@ export default function AppPrivacySettingsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [anonymizeModalOpen, setAnonymizeModalOpen] = useState(false);
   const [anonymizeConfirmation, setAnonymizeConfirmation] = useState("");
+  const [retentionModalOpen, setRetentionModalOpen] = useState(false);
+  const [retentionConfirmation, setRetentionConfirmation] = useState("");
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -148,6 +150,8 @@ export default function AppPrivacySettingsPage() {
     setSuccess(null);
     try {
       const response = await executeAppRetention(session);
+      setRetentionModalOpen(false);
+      setRetentionConfirmation("");
       setSuccess(`Retencao executada. Conversas removidas da operacao: ${response.deletedConversations}.`);
     } catch (err) {
       const typed = err as AppApiError;
@@ -222,7 +226,7 @@ export default function AppPrivacySettingsPage() {
       setConversationId("");
       setAnonymizeModalOpen(false);
       setAnonymizeConfirmation("");
-      setSuccess("Dados da conversa anonimizados com sucesso.");
+      setSuccess("Dados anonimizados. A conversa saiu da operacao e nao sera restaurada.");
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
@@ -308,6 +312,10 @@ export default function AppPrivacySettingsPage() {
               Anonimizacao remove permanentemente os dados pessoais. Exclusao remove a conversa
               apenas da operacao.
             </p>
+            <p className="text-xs leading-relaxed text-white/50">
+              Apos anonimizacao, a conversa sai da operacao e nao sera restaurada. Se o contato
+              voltar, um novo atendimento sera iniciado.
+            </p>
           </div>
         </section>
 
@@ -329,6 +337,9 @@ export default function AppPrivacySettingsPage() {
               onChange={(event) => setRetentionDays(event.target.value)}
               className="w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/40"
             />
+            <p className="rounded-xl border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-50/80">
+              Valores baixos (ex: 1-7 dias) podem remover conversas ativas da operacao.
+            </p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="submit"
@@ -339,7 +350,10 @@ export default function AppPrivacySettingsPage() {
               </button>
               <button
                 type="button"
-                onClick={handleExecuteRetention}
+                onClick={() => {
+                  setRetentionConfirmation("");
+                  setRetentionModalOpen(true);
+                }}
                 disabled={loading || executingRetention}
                 className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -375,6 +389,52 @@ export default function AppPrivacySettingsPage() {
                 className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {deleting ? "Excluindo..." : "Excluir conversa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {retentionModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-amber-300/20 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-white">Executar retencao</h2>
+              <span className="rounded-full border border-amber-300/30 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                Acao em massa
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-white/70">
+              Essa acao pode remover multiplas conversas da operacao.
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-amber-50/75">
+              Valores baixos (ex: 1-7 dias) podem remover conversas ativas.
+            </p>
+            <label className="mt-4 block text-sm font-medium text-white/75" htmlFor="retention-confirmation">
+              Digite EXECUTAR RETENÇÃO para confirmar
+            </label>
+            <input
+              id="retention-confirmation"
+              value={retentionConfirmation}
+              onChange={(event) => setRetentionConfirmation(event.target.value)}
+              autoFocus
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-amber-300/50"
+            />
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRetentionModalOpen(false)}
+                disabled={executingRetention}
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteRetention}
+                disabled={executingRetention || retentionConfirmation !== "EXECUTAR RETENÇÃO"}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {executingRetention ? "Executando..." : "Confirmar retencao"}
               </button>
             </div>
           </div>

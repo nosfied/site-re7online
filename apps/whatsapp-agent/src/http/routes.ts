@@ -12046,19 +12046,44 @@ async function anonymizeConversationPrivacyData(
   const anonymizedName = "Usuario Anonimizado";
   const scopedWaWhere = buildConversationPrivacyWhere(target);
   const waIds = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
+  const now = new Date();
 
   const currentRuntime = await runtimeStorage.getConversation(target.waId, params.clientKey);
   if (currentRuntime) {
     await runtimeStorage.upsertConversation({
       ...currentRuntime,
+      waId: anonymizedWaId,
+      waIdCanonical: anonymizedWaId,
+      conversationKey: `${params.clientKey}:${anonymizedWaId}`,
       answers: {},
+      status: "CLOSED",
+      closedAt: now.toISOString(),
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      departmentId: null,
+      queueId: null,
+      handoff: {
+        ...currentRuntime.handoff,
+        status: "none",
+        releasedAt: now.toISOString(),
+      },
+      mode: "BOT",
     });
   }
 
   const [conversation, runtimeStates, inbound, outbound, contacts, leads, events] = await prisma.$transaction([
     prisma.conversation.updateMany({
       where: { clientId: params.clientId, id: target.id },
-      data: { waId: anonymizedWaId, waIdCanonical: anonymizedWaId, anonymizedAt: new Date() },
+      data: {
+        waId: anonymizedWaId,
+        waIdCanonical: anonymizedWaId,
+        anonymizedAt: now,
+        deletedAt: now,
+        closedAt: now,
+        historyVisibleAfter: now,
+        departmentId: null,
+      },
     }),
     prisma.conversationRuntimeState.updateMany({
       where: { clientId: params.clientId, ...scopedWaWhere },
@@ -12067,6 +12092,16 @@ async function anonymizeConversationPrivacyData(
         waIdCanonical: anonymizedWaId,
         conversationKey: `${params.clientKey}:${anonymizedWaId}`,
         answers: {},
+        status: "CLOSED",
+        closedAt: now,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        handoffStatus: "NONE",
+        handoffReleasedAt: now,
+        mode: "BOT",
       },
     }),
     prisma.inboundMessage.updateMany({
@@ -12179,7 +12214,10 @@ async function executeRetentionForClient(
       requestId: `${params.requestId}:retention:${conversation.id}`,
       audit: false,
     });
-    softDeletedConversations += softDeleted.deleted.softDeletedConversations;
+    softDeletedConversations += Math.max(
+      softDeleted.deleted.softDeletedConversations,
+      anonymized.anonymized.conversation
+    );
   }
   const payload = buildPrivacyAuditPayload({
     userId: params.userId,

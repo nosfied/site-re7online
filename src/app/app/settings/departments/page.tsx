@@ -62,13 +62,6 @@ function normalizeDepartmentError(error: AppApiError, fallback: string) {
   return error.message || fallback;
 }
 
-function getDepartmentStatusActionLabel(item: AdminDepartmentItem, draftIsActive: boolean) {
-  if (item.isActive === draftIsActive) {
-    return draftIsActive ? "Manter ativo" : "Manter inativo";
-  }
-  return draftIsActive ? "Reativar setor" : "Desativar setor";
-}
-
 export default function AppSettingsDepartmentsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -283,7 +276,6 @@ export default function AppSettingsDepartmentsPage() {
             className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-60"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Atendimento Geral"
             disabled={readOnly || creating}
           />
           <button
@@ -370,21 +362,16 @@ export default function AppSettingsDepartmentsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (readOnly) return;
-                            setDrafts((current) => ({
-                              ...current,
-                              [item.id]: {
-                                ...current[item.id],
-                                isActive: !current[item.id].isActive,
-                              },
-                            }));
+                            if (readOnly || togglingId === item.id || savingId === item.id) return;
+                            void handleUpdate(item, !draft.isActive);
                           }}
-                          disabled={readOnly}
+                          disabled={readOnly || togglingId === item.id || savingId === item.id}
+                          aria-label={draft.isActive ? "Desativar setor" : "Ativar setor"}
                           className={`relative inline-flex h-7 w-14 items-center rounded-full border transition ${
                             draft.isActive
                               ? "border-emerald-400/40 bg-emerald-500/20"
                               : "border-white/20 bg-white/10"
-                          } ${readOnly ? "cursor-not-allowed opacity-50" : ""}`}
+                          } ${readOnly || togglingId === item.id || savingId === item.id ? "cursor-not-allowed opacity-50" : ""}`}
                         >
                           <span
                             className={`inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-white text-[10px] font-bold text-re7-navy transition ${
@@ -404,16 +391,6 @@ export default function AppSettingsDepartmentsPage() {
                       <p className="text-sm text-white/55">Somente leitura.</p>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdate(item, draft.isActive)}
-                          disabled={togglingId === item.id || savingId === item.id}
-                          className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {togglingId === item.id
-                            ? "Atualizando..."
-                            : getDepartmentStatusActionLabel(item, draft.isActive)}
-                        </button>
                         <button
                           type="button"
                           onClick={() => handleUpdate(item)}

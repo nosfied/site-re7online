@@ -458,7 +458,7 @@ export default function AppSettingsUsersPage() {
           <p className="text-sm text-white/70">Nenhum usuario encontrado.</p>
         ) : (
           <div className="space-y-4">
-            {users.map((item) => {
+            {users.map((item, index) => {
               const draft = userDrafts[item.id];
               if (!draft) return null;
               const departmentLabel = draft.departmentId
@@ -467,7 +467,11 @@ export default function AppSettingsUsersPage() {
               return (
                 <article
                   key={item.id}
-                  className="rounded-xl border border-white/10 bg-re7-navy/40 p-4"
+                  className={`rounded-xl border p-4 ${
+                    index % 2 === 0
+                      ? "border-white/10 bg-re7-navy/45"
+                      : "border-white/15 bg-white/[0.075]"
+                  }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">

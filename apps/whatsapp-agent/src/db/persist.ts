@@ -140,6 +140,44 @@ export async function persistConversationWindow(params: {
     },
   });
   if (existing?.deletedAt && params.lastInboundAt) {
+    const payload = {
+      userId: "system",
+      clientId: params.clientId,
+      conversationId: existing.id,
+      timestamp: new Date().toISOString(),
+      action: "conversation.reactivated_after_retention",
+      details: {
+        reason: "inbound_after_soft_delete",
+        waId: maskWaIdForLog(params.waId),
+      },
+    };
+    try {
+      await prisma.event.create({
+        data: {
+          clientId: params.clientId,
+          conversationId: existing.id,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+          requestId: `reactivation:${existing.id}:${params.lastInboundAt.toISOString()}`,
+          eventName: "conversation.reactivated_after_retention",
+          payloadJson: payload,
+        },
+      });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        )
+      ) {
+        logger.warn({
+          event: "conversation.reactivated_after_retention.audit_failed",
+          clientId: params.clientId,
+          conversationId: existing.id,
+          message: (error as Error).message,
+        });
+      }
+    }
     logger.info({
       event: "conversation.reactivated_after_retention",
       clientId: params.clientId,
