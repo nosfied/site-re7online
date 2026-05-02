@@ -364,8 +364,9 @@ function conversationIdentityMatches(
   left: Array<string | null | undefined>,
   right: Array<string | null | undefined>
 ) {
-  const leftValues = new Set(left.filter(Boolean));
-  return right.some((value) => Boolean(value) && leftValues.has(value));
+  const normalize = (value: string | null | undefined) => String(value ?? "").trim();
+  const leftValues = new Set(left.map(normalize).filter(Boolean));
+  return right.map(normalize).some((value) => Boolean(value) && leftValues.has(value));
 }
 
 type InboxReadState = AppInboxReadState;
@@ -1930,6 +1931,13 @@ export default function AppInboxPage() {
             selectedConversationWaId,
           ])
         ) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[inbox] timeline response ignored by identity mismatch", {
+              expected: selectedIdentityCandidates,
+              received: [responseConversationKey, response.waId, response.waIdCanonical],
+              selectedConversationWaId,
+            });
+          }
           return;
         }
         const visibleConversationKey = selectedConversationKey ?? responseConversationKey;
@@ -2196,6 +2204,11 @@ export default function AppInboxPage() {
     loadingMessages &&
     messages.length > 0 &&
     messagesConversationKey === selectedConversationKey;
+  const isTimelineOutOfSync =
+    Boolean(selectedConversationWaId) &&
+    Boolean(selectedConversationKey) &&
+    !loadingMessages &&
+    messagesConversationKey !== selectedConversationKey;
 
   const isSelectedConversationLocked = useMemo(
     () => (session ? isConversationAssignedToAnotherUser(selectedConversation, session.user.id) : false),
@@ -3128,6 +3141,8 @@ export default function AppInboxPage() {
                     setUnreadSeparatorIndex(null);
                     setUnreadAnchorMessageIdentity(null);
                     setActiveConversationIdentity(conversationIdentity);
+                    setLoadingMessages(true);
+                    setMessagesConversationKey(null);
                     setSelectedConversationKey(conversationIdentity);
                     setSelectedConversationWaId(item.waId);
                     setShowMoreActions(false);
@@ -3409,6 +3424,9 @@ export default function AppInboxPage() {
             ) : null}
             {selectedConversationWaId && isRefreshingSelectedTimeline ? (
               <p className="text-sm text-slate-700/80">Atualizando mensagens...</p>
+            ) : null}
+            {isTimelineOutOfSync ? (
+              <p className="text-sm text-slate-700/80">Preparando mensagens...</p>
             ) : null}
             {selectedConversationWaId &&
             !loadingMessages &&
