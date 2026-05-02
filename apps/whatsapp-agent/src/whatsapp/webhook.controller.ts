@@ -107,6 +107,12 @@ function parseWebhookTimestampToDate(rawTimestamp: string | null | undefined) {
   return new Date();
 }
 
+function addHoursIso(timestamp: string, hours: number) {
+  const parsed = Date.parse(timestamp);
+  const base = Number.isFinite(parsed) ? parsed : Date.now();
+  return new Date(base + hours * 60 * 60 * 1000).toISOString();
+}
+
 function collectStringCandidates(
   input: unknown,
   matchers: RegExp[],
@@ -1158,6 +1164,74 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (!tenantClientId) return departmentId ?? null;
     return resolveOperationalDepartmentId(prisma, tenantClientId, departmentId ?? null);
   };
+  const loadDirectConversationForInbound = async (waId: string) => {
+    if (!tenantClientId) return null;
+    return prisma.conversation.findUnique({
+      where: {
+        clientId_waId: {
+          clientId: tenantClientId,
+          waId,
+        },
+      },
+      select: {
+        id: true,
+        deletedAt: true,
+        anonymizedAt: true,
+      },
+    });
+  };
+  const resetConversationForBotReentry = (
+    state: ConversationState,
+    timestamp: string
+  ): ConversationState => {
+    const inboundIso = parseWebhookTimestampToDate(timestamp).toISOString();
+    const baseState = clearChatbotRuntime({
+      ...state,
+      clientKey: tenantClientKey,
+      conversationKey: makeConversationKey(tenantClientKey, state.waId),
+      waIdCanonical: canonicalizeBrazilWaId(state.waId),
+      firstSeenAt: inboundIso,
+      lastInboundAt: inboundIso,
+      lastOutboundAt: undefined,
+      lastInboundMessageId: undefined,
+      lastOutboundMessageId: undefined,
+      window: { isOpen: true, expiresAt: addHoursIso(inboundIso, 24) },
+      intent: "unknown",
+      handoff: { status: "none" },
+      templateNeeded: false,
+      templateSuggested: undefined,
+      lastNeedAt: undefined,
+      lastIntent: undefined,
+      leadRequestedAt: undefined,
+      leadCapturedAt: undefined,
+      demoStatus: "none",
+      lastDemoRequestedAt: undefined,
+      lastDemoScheduledAt: undefined,
+      demoPreferredSchedule: undefined,
+      lastHandoffDemoScheduledKey: undefined,
+      lastHandoffDemoScheduledAt: undefined,
+      flow: undefined,
+      flowStep: undefined,
+      chatbotNodeId: undefined,
+      chatbotActive: false,
+      answers: {},
+      mode: "BOT",
+      assignedUserId: null,
+      assignedTo: null,
+      assignedAt: null,
+      departmentId: null,
+      queueId: null,
+      status: null,
+      closedAt: null,
+    });
+    return {
+      ...baseState,
+      flow: undefined,
+      flowStep: undefined,
+      chatbotNodeId: undefined,
+      chatbotActive: false,
+    };
+  };
   let resolvedEntryPointChatbotFlow:
     | {
         id: string;
@@ -1318,9 +1392,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       currentState?.status === "CLOSED" &&
       Number.isFinite(stateLastInboundAt) &&
       (!Number.isFinite(currentClosedAt) || stateLastInboundAt > currentClosedAt);
-    const resolvedDepartmentId = await resolveRuntimeDepartmentId(
-      state.departmentId ?? currentState?.departmentId ?? null
-    );
+    const shouldResolveDepartment =
+      state.mode === "HUMAN" ||
+      currentState?.mode === "HUMAN" ||
+      state.handoff?.status !== "none" ||
+      currentState?.handoff?.status !== "none" ||
+      Boolean(state.status ?? currentState?.status);
+    const resolvedDepartmentId = shouldResolveDepartment
+      ? await resolveRuntimeDepartmentId(state.departmentId ?? currentState?.departmentId ?? null)
+      : state.departmentId ?? null;
     const departmentChanged = (currentState?.departmentId ?? null) !== resolvedDepartmentId;
     const baseState = {
       ...state,
@@ -2171,12 +2251,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     }
 
-    const currentConversation = await getOrCreateConversation(
-      storage,
-      tenantClientKey,
-      normalizedFrom,
-      message.timestamp
-    );
+    const existingRuntimeForInbound = await storage.getConversation(normalizedFrom, tenantClientKey);
+    const directConversationForInbound = await loadDirectConversationForInbound(normalizedFrom);
+    let currentConversation =
+      existingRuntimeForInbound ??
+      (await getOrCreateConversation(
+        storage,
+        tenantClientKey,
+        normalizedFrom,
+        message.timestamp
+      ));
+    const shouldResetForBotReentry =
+      Boolean(directConversationForInbound?.deletedAt) ||
+      Boolean(existingRuntimeForInbound && !directConversationForInbound);
+    if (shouldResetForBotReentry) {
+      currentConversation = resetConversationForBotReentry(currentConversation, message.timestamp);
+      await storage.upsertConversation(currentConversation);
+      logger.info({
+        event: "conversation.reentry.reset_to_bot",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        conversationId: directConversationForInbound?.id ?? null,
+        waId: maskNumber(normalizedFrom),
+        reason: directConversationForInbound?.deletedAt
+          ? "inbound_after_soft_delete"
+          : "stale_runtime_without_active_conversation",
+        requestId: meta?.requestId,
+      });
+    }
     const isAdmin =
       env.WHATSAPP_ADMIN_ALLOWLIST.length > 0 &&
       env.WHATSAPP_ADMIN_ALLOWLIST.includes(normalizedFrom);

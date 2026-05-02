@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
 import {
   AdminClientItem,
@@ -54,14 +54,10 @@ export default function AdminReportsPage() {
     [departments]
   );
 
-  useEffect(() => {
-    if (!error && !success) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
       setSuccess(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [error, success]);
+    });
 
   useEffect(() => {
     if (!connection.baseUrl || !connection.adminToken) return;
@@ -175,8 +171,8 @@ export default function AdminReportsPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
-      <FeedbackToast message={success} />
-      <FeedbackToast message={error} variant="error" />
+      <FeedbackToast message={success} {...toastHandlers} />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>

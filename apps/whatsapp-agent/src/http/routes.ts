@@ -11967,24 +11967,7 @@ async function deleteConversationPrivacyData(
   });
 
   for (const waId of waIds) {
-    const currentRuntime = await runtimeStorage.getConversation(waId, params.clientKey);
-    if (!currentRuntime) continue;
-    await runtimeStorage.upsertConversation({
-      ...currentRuntime,
-      status: "CLOSED",
-      closedAt: now.toISOString(),
-      assignedUserId: null,
-      assignedTo: null,
-      assignedAt: null,
-      departmentId: null,
-      queueId: null,
-      handoff: {
-        ...currentRuntime.handoff,
-        status: "none",
-        releasedAt: now.toISOString(),
-      },
-      mode: "BOT",
-    });
+    await runtimeStorage.deleteConversation(waId, params.clientKey);
   }
 
   if (params.audit) {
@@ -12047,30 +12030,6 @@ async function anonymizeConversationPrivacyData(
   const scopedWaWhere = buildConversationPrivacyWhere(target);
   const waIds = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
   const now = new Date();
-
-  const currentRuntime = await runtimeStorage.getConversation(target.waId, params.clientKey);
-  if (currentRuntime) {
-    await runtimeStorage.upsertConversation({
-      ...currentRuntime,
-      waId: anonymizedWaId,
-      waIdCanonical: anonymizedWaId,
-      conversationKey: `${params.clientKey}:${anonymizedWaId}`,
-      answers: {},
-      status: "CLOSED",
-      closedAt: now.toISOString(),
-      assignedUserId: null,
-      assignedTo: null,
-      assignedAt: null,
-      departmentId: null,
-      queueId: null,
-      handoff: {
-        ...currentRuntime.handoff,
-        status: "none",
-        releasedAt: now.toISOString(),
-      },
-      mode: "BOT",
-    });
-  }
 
   const [conversation, runtimeStates, inbound, outbound, contacts, leads, events] = await prisma.$transaction([
     prisma.conversation.updateMany({
@@ -12139,6 +12098,10 @@ async function anonymizeConversationPrivacyData(
       },
     }),
   ]);
+
+  for (const waId of waIds) {
+    await runtimeStorage.deleteConversation(waId, params.clientKey);
+  }
 
   const payload = buildPrivacyAuditPayload({
     userId: params.userId,

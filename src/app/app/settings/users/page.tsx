@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
   AppSession,
@@ -197,14 +197,15 @@ export default function AppSettingsUsersPage() {
     };
   }, [handleUnauthorized, loadPageData, router, session]);
 
-  useEffect(() => {
-    if (!userSuccess && !actionSuccess) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(
+    Boolean(userSuccess || actionSuccess || userError || actionError),
+    () => {
       setUserSuccess(null);
       setActionSuccess(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [actionSuccess, userSuccess]);
+      setUserError(null);
+      setActionError(null);
+    }
+  );
 
   const departmentNameById = useMemo(
     () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
@@ -327,8 +328,8 @@ export default function AppSettingsUsersPage() {
       title="Usuarios"
       subtitle="Cadastre e organize quem atende no portal do cliente."
     >
-      <FeedbackToast message={userSuccess || actionSuccess} variant="success" />
-      <FeedbackToast message={userError || actionError} variant="error" />
+      <FeedbackToast message={userSuccess || actionSuccess} variant="success" {...toastHandlers} />
+      <FeedbackToast message={userError || actionError} variant="error" {...toastHandlers} />
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-2">

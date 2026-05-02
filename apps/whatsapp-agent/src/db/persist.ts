@@ -82,6 +82,7 @@ export async function persistConversationWindow(params: {
 }) {
   if (!params.clientId) return;
   const prisma = getPrisma();
+  const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
   const existing = await prisma.conversation.findUnique({
     where: {
       clientId_waId: {
@@ -95,15 +96,19 @@ export async function persistConversationWindow(params: {
       deletedAt: true,
     },
   });
+  const isInboundAfterSoftDelete = Boolean(existing?.deletedAt && params.lastInboundAt);
   const existingDepartmentId = existing?.deletedAt ? null : existing?.departmentId ?? null;
   const requestedDepartmentId = existing?.deletedAt
     ? params.departmentId ?? null
     : params.departmentId ?? existingDepartmentId;
-  const resolvedDepartmentId = await resolveOperationalDepartmentId(
-    prisma,
-    params.clientId,
-    requestedDepartmentId
-  );
+  const shouldLeaveInboundUnassigned = Boolean(params.lastInboundAt && !requestedDepartmentId);
+  const resolvedDepartmentId = isInboundAfterSoftDelete || shouldLeaveInboundUnassigned
+    ? null
+    : await resolveOperationalDepartmentId(
+        prisma,
+        params.clientId,
+        requestedDepartmentId
+      );
   const shouldRewriteDepartment = existingDepartmentId !== resolvedDepartmentId;
   await prisma.conversation.upsert({
     where: {
@@ -113,7 +118,7 @@ export async function persistConversationWindow(params: {
       },
     },
     update: {
-      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+      waIdCanonical,
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
@@ -125,12 +130,16 @@ export async function persistConversationWindow(params: {
             closedAt: null,
           }
         : {}),
-      departmentId: shouldRewriteDepartment ? resolvedDepartmentId ?? undefined : undefined,
+      departmentId: isInboundAfterSoftDelete
+        ? null
+        : shouldRewriteDepartment
+          ? resolvedDepartmentId
+          : undefined,
     },
     create: {
       clientId: params.clientId,
       waId: params.waId,
-      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+      waIdCanonical,
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
@@ -139,7 +148,32 @@ export async function persistConversationWindow(params: {
       departmentId: resolvedDepartmentId ?? undefined,
     },
   });
-  if (existing?.deletedAt && params.lastInboundAt) {
+  if (isInboundAfterSoftDelete && existing && params.lastInboundAt) {
+    await prisma.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waId: params.waId }, { waIdCanonical }],
+      },
+      data: {
+        mode: "BOT",
+        handoffStatus: "NONE",
+        handoffRequestedAt: null,
+        handoffActivatedAt: null,
+        handoffReleasedAt: null,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        status: null,
+        closedAt: null,
+        flow: null,
+        flowStep: null,
+        chatbotNodeId: null,
+        chatbotActive: false,
+        answers: {},
+      },
+    });
     const payload = {
       userId: "system",
       clientId: params.clientId,
@@ -157,7 +191,7 @@ export async function persistConversationWindow(params: {
           clientId: params.clientId,
           conversationId: existing.id,
           waId: params.waId,
-          waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+          waIdCanonical,
           requestId: `reactivation:${existing.id}:${params.lastInboundAt.toISOString()}`,
           eventName: "conversation.reactivated_after_retention",
           payloadJson: payload,

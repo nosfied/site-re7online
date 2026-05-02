@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
   AppSession,
@@ -79,14 +79,10 @@ export default function AppReportsPage() {
     saveAppSession(stored);
   }, [router]);
 
-  useEffect(() => {
-    if (!error && !success) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
       setSuccess(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [error, success]);
+    });
 
   useEffect(() => {
     if (!session) return;
@@ -221,8 +217,8 @@ export default function AppReportsPage() {
       title="Relatorios"
       subtitle="Acompanhe tempos de resposta e volume de atendimento do seu time."
     >
-      <FeedbackToast message={success} />
-      <FeedbackToast message={error} variant="error" />
+      <FeedbackToast message={success} {...toastHandlers} />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       {retentionDays !== null && retentionDays < 30 ? (
         <section className="rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-sm text-amber-50 sm:p-4">

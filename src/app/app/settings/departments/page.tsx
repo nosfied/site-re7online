@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
   AppSession,
@@ -146,14 +146,10 @@ export default function AppSettingsDepartmentsPage() {
     };
   }, [handleUnauthorized, loadDepartments, router, session]);
 
-  useEffect(() => {
-    if (!error && !success) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
       setSuccess(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [error, success]);
+    });
 
   const sortedDepartments = useMemo(
     () =>
@@ -259,8 +255,8 @@ export default function AppSettingsDepartmentsPage() {
       title="Setores"
       subtitle="Organize as conversas por setor dentro do portal do cliente."
     >
-      <FeedbackToast message={success} />
-      <FeedbackToast message={error} variant="error" />
+      <FeedbackToast message={success} {...toastHandlers} />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 md:p-4">
         <div className="mb-3 flex flex-col gap-1.5">

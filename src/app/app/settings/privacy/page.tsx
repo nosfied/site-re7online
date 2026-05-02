@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   anonymizeAppConversationData,
   AppApiError,
@@ -107,14 +107,10 @@ export default function AppPrivacySettingsPage() {
     };
   }, [handleUnauthorized, loadRetention, router, session]);
 
-  useEffect(() => {
-    if (!error && !success) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
       setSuccess(null);
     }, 3500);
-    return () => window.clearTimeout(timer);
-  }, [error, success]);
 
   const handleSaveRetention = async (event: FormEvent) => {
     event.preventDefault();
@@ -249,8 +245,8 @@ export default function AppPrivacySettingsPage() {
       title="Privacidade"
       subtitle="Ferramentas minimas de LGPD para operacao do tenant."
     >
-      <FeedbackToast message={error} variant="error" />
-      <FeedbackToast message={success} variant="success" />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
+      <FeedbackToast message={success} variant="success" {...toastHandlers} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-xl border border-white/10 bg-white/5">

@@ -1110,7 +1110,7 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (!error && !errorDetails && !success && !leadError) return;
-    if (pauseErrorToast && (error || errorDetails || leadError)) return;
+    if (pauseErrorToast) return;
     const timer = window.setTimeout(() => {
       setError(null);
       setErrorDetails(null);
@@ -2968,7 +2968,13 @@ export default function AppInboxPage() {
       subtitle="Atendimentos do seu WhatsApp em um so lugar."
       fullScreen
     >
-      <FeedbackToast message={success} />
+      <FeedbackToast
+        message={success}
+        onMouseEnter={() => setPauseErrorToast(true)}
+        onMouseLeave={() => setPauseErrorToast(false)}
+        onFocus={() => setPauseErrorToast(true)}
+        onBlur={() => setPauseErrorToast(false)}
+      />
       <FeedbackToast
         message={buildInboxErrorToast(error, errorDetails, leadError)}
         variant="error"

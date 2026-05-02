@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
   AppAutomationSettings,
@@ -419,14 +419,10 @@ export default function AppChatbotPage() {
     };
   }, [handleUnauthorized, loadFlows, router, session]);
 
-  useEffect(() => {
-    if (!error && !success) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
       setError(null);
       setSuccess(null);
     }, 3500);
-    return () => window.clearTimeout(timer);
-  }, [error, success]);
 
   const sortedFlows = useMemo(
     () =>
@@ -600,8 +596,8 @@ export default function AppChatbotPage() {
       title="Chatbot"
       subtitle="Ajuste os fluxos de atendimento automatico sem sair do portal."
     >
-      <FeedbackToast message={success} />
-      <FeedbackToast message={error} variant="error" />
+      <FeedbackToast message={success} {...toastHandlers} />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 type FeedbackToastProps = {
   message: string | null;
   variant?: "success" | "error";
@@ -8,6 +10,34 @@ type FeedbackToastProps = {
   onFocus?: () => void;
   onBlur?: () => void;
 };
+
+export function usePausableFeedbackAutoDismiss(
+  active: boolean,
+  onDismiss: () => void,
+  delayMs = 3000
+) {
+  const [paused, setPaused] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
+  useEffect(() => {
+    if (!active || paused) return;
+    const timer = window.setTimeout(() => {
+      onDismissRef.current();
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [active, delayMs, paused]);
+
+  return {
+    onMouseEnter: () => setPaused(true),
+    onMouseLeave: () => setPaused(false),
+    onFocus: () => setPaused(true),
+    onBlur: () => setPaused(false),
+  };
+}
 
 export function FeedbackToast({
   message,

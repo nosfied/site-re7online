@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
-import { FeedbackToast } from "@/components/ui/FeedbackToast";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
 import {
   AdminDepartmentItem,
@@ -190,14 +190,16 @@ export default function TenantUsersPage() {
 
   const isDepartmentRequired = (role: string) => role === "AGENT" || role === "SUPERVISOR";
 
-  useEffect(() => {
-    if (!userSuccess && !actionSuccess) return;
-    const timer = window.setTimeout(() => {
+  const toastHandlers = usePausableFeedbackAutoDismiss(
+    Boolean(userSuccess || actionSuccess || actionError || userError || error),
+    () => {
       setUserSuccess(null);
       setActionSuccess(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [actionSuccess, userSuccess]);
+      setActionError(null);
+      setUserError(null);
+      setError(null);
+    }
+  );
 
   const handleCreateUser = async () => {
     if (!clientKey) return;
@@ -350,8 +352,8 @@ export default function TenantUsersPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
-      <FeedbackToast message={userSuccess ?? actionSuccess} />
-      <FeedbackToast message={actionError ?? userError ?? error} variant="error" />
+      <FeedbackToast message={userSuccess ?? actionSuccess} {...toastHandlers} />
+      <FeedbackToast message={actionError ?? userError ?? error} variant="error" {...toastHandlers} />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
