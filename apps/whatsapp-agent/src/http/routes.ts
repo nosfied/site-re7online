@@ -52,7 +52,7 @@ import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
 } from "../metrics/conversationMetrics.js";
-import { getFeatures } from "../features/clientFeatures.js";
+import { getFeatures, hasFeature, type ClientFeatureKey } from "../features/clientFeatures.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
@@ -2547,6 +2547,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const items = await prisma.chatbotFlow.findMany({
         where: { clientId: client.id },
         orderBy: [{ entryPoint: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
@@ -2591,6 +2598,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey];
       if (!tenant) {
@@ -2644,6 +2658,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const body = await readJsonBody(req, res);
       if (!body) return;
       const data = body as Record<string, unknown>;
@@ -2769,6 +2790,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey];
       if (tenant?.disableChatbotFlowEditing) {
@@ -2861,6 +2889,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey];
       if (tenant?.disableChatbotFlowEditing) {
@@ -2993,6 +3028,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -3096,6 +3138,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -4271,6 +4320,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const result = await buildCampaignListPayload(prisma, {
         clientId: client.id,
         limit,
@@ -4310,6 +4366,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const result = await buildCampaignDetailPayload(prisma, {
         clientId: client.id,
         campaignId,
@@ -4354,6 +4417,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const cancelled = await cancelScopedCampaign(prisma, {
         clientId: client.id,
         campaignId,
@@ -4431,6 +4501,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!enforceAppFeature(res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      })) return;
       const waIds = dedupeCampaignRecipients(rawWaIds, {
         source: "app_campaign_create",
         clientId: client.id,
@@ -11306,6 +11383,34 @@ function isAiFallbackDisabledForTenant(tenant?: {
   const aiConfigured = Boolean(tenant?.aiBusinessContext?.trim());
   if (!aiConfigured) return true;
   return tenant?.disableAiFallback === true || tenant?.appDisableAiFallback === true;
+}
+
+function enforceAppFeature(
+  res: ServerResponse,
+  params: {
+    client: { id: string; features?: unknown };
+    userId: string;
+    feature: ClientFeatureKey;
+    endpoint: string;
+    requestId: string;
+  }
+) {
+  if (hasFeature(params.client, params.feature)) return true;
+  const timestamp = new Date().toISOString();
+  logger.warn({
+    event: "feature.blocked",
+    clientId: params.client.id,
+    userId: params.userId,
+    feature: params.feature,
+    endpoint: params.endpoint,
+    timestamp,
+    requestId: params.requestId,
+  });
+  json(res, 403, {
+    error: "feature_disabled",
+    message: `Feature '${params.feature}' is not enabled for this tenant`,
+  });
+  return false;
 }
 
 function isConversationInHumanFlow(conversation: {

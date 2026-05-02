@@ -32,3 +32,10 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     chatbot: normalizeFeatureValue(input.chatbot) ?? DEFAULT_CLIENT_FEATURES.chatbot,
   };
 }
+
+export function hasFeature(
+  client: ClientWithFeatures | null | undefined,
+  featureName: ClientFeatureKey
+) {
+  return getFeatures(client)[featureName];
+}

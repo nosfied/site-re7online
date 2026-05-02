@@ -311,6 +311,9 @@ async function requestAppJson<T>(
     error.payload = payload;
     if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
     if (res.status === 403) error.message = "Sem permissao (403).";
+    if (errorCode === "feature_disabled") {
+      error.message = "Este modulo nao esta disponivel para este perfil.";
+    }
     if (errorCode === "window_closed") {
       error.message =
         "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta para reabrir a conversa.";
@@ -396,6 +399,9 @@ async function requestAppText(
         (typeof body.message === "string" && body.message.trim() ? body.message : "") ||
         (typeof body.error === "string" ? body.error : "") ||
         message;
+      if (body.error === "feature_disabled") {
+        message = "Este modulo nao esta disponivel para este perfil.";
+      }
     } catch {
       // noop
     }
@@ -471,6 +477,9 @@ async function requestAppBlob(
           : "") ||
         (typeof body.error === "string" ? body.error : "") ||
         message;
+      if (body.error === "feature_disabled") {
+        message = "Este modulo nao esta disponivel para este perfil.";
+      }
     } catch {
       // noop
     }
