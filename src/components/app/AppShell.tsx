@@ -40,6 +40,7 @@ function isAdminRole(role: string) {
 
 const FULLSCREEN_NAV_ITEMS: NavItem[] = [
   { href: "/app/inbox", label: "Inbox", icon: "📥" },
+  { href: "/app/dashboard", label: "Dashboard", icon: "📊", adminOnly: true },
   { href: "/app/campaigns", label: "Campanhas", icon: "📢" },
   { href: "/app/templates", label: "Templates", icon: "🧾" },
   { href: "/app/chatbot", label: "Configurações Chatbot", icon: "🤖", adminOnly: true },
@@ -86,6 +87,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
         Inbox
       </Link>
+      {canViewAdministration ? (
+        <Link href="/app/dashboard" className={getLinkClasses(pathname === "/app/dashboard")}>
+          Dashboard
+        </Link>
+      ) : null}
       {features.campaigns ? (
         <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
           Campanhas

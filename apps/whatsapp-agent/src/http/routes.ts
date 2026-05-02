@@ -411,6 +411,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/dashboard/overview") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view the operational dashboard.")
+        );
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, buildEmptyDashboardOverview());
+        return;
+      }
+      const overview = await buildAppDashboardOverview(prisma, {
+        clientId: client.id,
+        departmentId: departmentAccess.requiresDepartmentScope
+          ? departmentAccess.departmentId
+          : String(query.departmentId ?? "").trim() || null,
+        assignedUserId: String(query.assignedUserId ?? "").trim() || null,
+        status: normalizeConversationStatusFilter(query.status),
+      });
+      json(res, 200, overview);
+    } catch (error) {
+      logger.error({
+        event: "app.dashboard.overview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/conversations") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -12380,6 +12431,298 @@ type ConversationListCursor = {
   updatedAt: string;
   conversationIdentity: string;
 };
+
+function buildEmptyDashboardOverview() {
+  return {
+    ok: true,
+    kpis: {
+      active: 0,
+      waiting: 0,
+      waitingUser: 0,
+      closedToday: 0,
+      avgFirstResponseTimeSec: null,
+      avgResolutionTimeSec: null,
+      slaBreaches: 0,
+      totalConversations: 0,
+    },
+    queue: [],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function startOfCurrentDay() {
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function getLatestDate(...values: Array<Date | null | undefined>) {
+  const dates = values.filter((value): value is Date => value instanceof Date);
+  if (dates.length === 0) return null;
+  return dates.reduce((latest, current) => (current.getTime() > latest.getTime() ? current : latest));
+}
+
+function resolveDashboardOperationalStatus(state: {
+  status: ConversationOperationalStatus | null;
+  mode: string | null;
+  assignedUserId: string | null;
+}) {
+  if (state.status) return state.status;
+  if (state.mode === "HUMAN") {
+    return state.assignedUserId ? ConversationOperationalStatus.IN_PROGRESS : ConversationOperationalStatus.WAITING;
+  }
+  return null;
+}
+
+async function buildAppDashboardOverview(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentId: string | null;
+    assignedUserId: string | null;
+    status: ConversationOperationalStatus | null;
+  }
+) {
+  const dashboardStatuses = [
+    ConversationOperationalStatus.WAITING,
+    ConversationOperationalStatus.IN_PROGRESS,
+    ConversationOperationalStatus.WAITING_USER,
+    ConversationOperationalStatus.CLOSED,
+  ];
+  const runtimeStates = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      status: params.status ?? { in: dashboardStatuses },
+      ...(params.departmentId ? { departmentId: params.departmentId } : {}),
+      ...(params.assignedUserId ? { assignedUserId: params.assignedUserId } : {}),
+    },
+    select: {
+      waId: true,
+      waIdCanonical: true,
+      mode: true,
+      handoffStatus: true,
+      handoffRequestedAt: true,
+      handoffActivatedAt: true,
+      assignedUserId: true,
+      assignedAt: true,
+      departmentId: true,
+      queueId: true,
+      status: true,
+      closedAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      updatedAt: true,
+    },
+  });
+  if (runtimeStates.length === 0) return buildEmptyDashboardOverview();
+
+  const waIds = Array.from(new Set(runtimeStates.map((item) => item.waId)));
+  const canonicalWaIds = Array.from(
+    new Set(runtimeStates.map((item) => item.waIdCanonical ?? item.waId))
+  );
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      clientId: params.clientId,
+      deletedAt: null,
+      OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+    },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      departmentId: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      updatedAt: true,
+    },
+  });
+  if (conversations.length === 0) return buildEmptyDashboardOverview();
+
+  const conversationIds = conversations.map((item) => item.id);
+  const [metrics, slaConfig, leads] = await Promise.all([
+    prisma.conversationMetrics.findMany({
+      where: {
+        clientId: params.clientId,
+        conversationId: { in: conversationIds },
+      },
+      select: {
+        conversationId: true,
+        firstResponseTimeSec: true,
+        resolutionTimeSec: true,
+      },
+    }),
+    prisma.sLAConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: {
+        firstResponseLimitSec: true,
+        resolutionTimeLimitSec: true,
+      },
+    }),
+    prisma.lead.findMany({
+      where: {
+        tenantId: params.clientId,
+        OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+      },
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        name: true,
+        phone: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const runtimeByWaId = new Map<string, (typeof runtimeStates)[number]>();
+  for (const state of runtimeStates) {
+    runtimeByWaId.set(getWaIdGroupKey(state.waId, state.waIdCanonical), state);
+  }
+  const leadByWaId = new Map<string, (typeof leads)[number]>();
+  for (const lead of leads) {
+    const key = getWaIdGroupKey(lead.waId, lead.waIdCanonical);
+    const current = leadByWaId.get(key);
+    if (!current || lead.updatedAt.getTime() > current.updatedAt.getTime()) {
+      leadByWaId.set(key, lead);
+    }
+  }
+  const operationalItems = conversations
+    .map((conversation) => {
+      const key = getWaIdGroupKey(conversation.waId, conversation.waIdCanonical);
+      const state = runtimeByWaId.get(key);
+      const status = state
+        ? resolveDashboardOperationalStatus(state)
+        : null;
+      const departmentId = state?.departmentId ?? conversation.departmentId ?? null;
+      const assignedUserId = state?.assignedUserId ?? null;
+      const lastInteractionAt = getLatestDate(
+        state?.lastInboundAt,
+        state?.lastOutboundAt,
+        conversation.lastInboundAt,
+        conversation.lastOutboundAt,
+        state?.updatedAt,
+        conversation.updatedAt
+      );
+      const waitingSince =
+        state?.handoffRequestedAt ??
+        state?.handoffActivatedAt ??
+        state?.updatedAt ??
+        conversation.lastInboundAt ??
+        conversation.updatedAt;
+      return {
+        conversation,
+        state,
+        key,
+        status,
+        departmentId,
+        assignedUserId,
+        lastInteractionAt,
+        waitingSince,
+      };
+    })
+    .filter((item) => item.status !== null)
+    .filter((item) => !params.departmentId || item.departmentId === params.departmentId)
+    .filter((item) => !params.assignedUserId || item.assignedUserId === params.assignedUserId)
+    .filter((item) => !params.status || item.status === params.status);
+
+  const operationalIds = new Set(operationalItems.map((item) => item.conversation.id));
+  const scopedMetrics = metrics.filter((metric) => operationalIds.has(metric.conversationId));
+  const firstResponseValues = metrics
+    .filter((metric) => operationalIds.has(metric.conversationId))
+    .map((metric) => metric.firstResponseTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const resolutionValues = metrics
+    .filter((metric) => operationalIds.has(metric.conversationId))
+    .map((metric) => metric.resolutionTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const firstResponseLimitSec =
+    slaConfig && slaConfig.firstResponseLimitSec > 0 ? slaConfig.firstResponseLimitSec : null;
+  const resolutionTimeLimitSec =
+    slaConfig && slaConfig.resolutionTimeLimitSec > 0 ? slaConfig.resolutionTimeLimitSec : null;
+  const slaBreaches = scopedMetrics.reduce((count, metric) => {
+    const firstResponseBreached =
+      firstResponseLimitSec !== null &&
+      metric.firstResponseTimeSec !== null &&
+      metric.firstResponseTimeSec > firstResponseLimitSec;
+    const resolutionBreached =
+      resolutionTimeLimitSec !== null &&
+      metric.resolutionTimeSec !== null &&
+      metric.resolutionTimeSec > resolutionTimeLimitSec;
+    return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+  }, 0);
+
+  const departmentIds = Array.from(
+    new Set(operationalItems.map((item) => item.departmentId).filter((value): value is string => Boolean(value)))
+  );
+  const assignedUserIds = Array.from(
+    new Set(operationalItems.map((item) => item.assignedUserId).filter((value): value is string => Boolean(value)))
+  );
+  const [departments, users] = await Promise.all([
+    departmentIds.length
+      ? prisma.department.findMany({
+          where: { clientId: params.clientId, id: { in: departmentIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    assignedUserIds.length
+      ? prisma.user.findMany({
+          where: { clientId: params.clientId, id: { in: assignedUserIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
+  const userNameById = new Map(users.map((item) => [item.id, item.name]));
+
+  // Uses the server timezone for now; this can be moved to a tenant/business timezone later.
+  const startOfDay = startOfCurrentDay();
+  const queue = operationalItems
+    .filter((item) => item.status === ConversationOperationalStatus.WAITING)
+    .sort((left, right) => left.waitingSince.getTime() - right.waitingSince.getTime())
+    .slice(0, 50)
+    .map((item) => {
+      const lead = leadByWaId.get(item.key);
+      return {
+        id: item.conversation.id,
+        waId: item.conversation.waId,
+        displayName: lead?.name ?? lead?.phone ?? null,
+        status: item.status,
+        departmentId: item.departmentId,
+        departmentName: item.departmentId ? departmentNameById.get(item.departmentId) ?? null : null,
+        assignedUserId: item.assignedUserId,
+        assignedUserName: item.assignedUserId ? userNameById.get(item.assignedUserId) ?? null : null,
+        lastInteractionAt: item.lastInteractionAt ? item.lastInteractionAt.toISOString() : null,
+        waitingSince: item.waitingSince ? item.waitingSince.toISOString() : null,
+      };
+    });
+
+  return {
+    ok: true,
+    kpis: {
+      active: operationalItems.filter((item) => item.status === ConversationOperationalStatus.IN_PROGRESS).length,
+      waiting: operationalItems.filter((item) => item.status === ConversationOperationalStatus.WAITING).length,
+      waitingUser: operationalItems.filter((item) => item.status === ConversationOperationalStatus.WAITING_USER).length,
+      closedToday: operationalItems.filter(
+        (item) =>
+          item.status === ConversationOperationalStatus.CLOSED &&
+          item.state?.closedAt &&
+          item.state.closedAt >= startOfDay
+      ).length,
+      avgFirstResponseTimeSec:
+        firstResponseValues.length > 0
+          ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+          : null,
+      avgResolutionTimeSec:
+        resolutionValues.length > 0
+          ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+          : null,
+      slaBreaches,
+      totalConversations: operationalItems.length,
+    },
+    queue,
+    generatedAt: new Date().toISOString(),
+  };
+}
 
 type ConversationListFilters = {
   status: ConversationOperationalStatus | null;

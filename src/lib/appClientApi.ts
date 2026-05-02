@@ -62,6 +62,35 @@ type AppConversationOperationalPayload = {
   isUnassigned: boolean;
 };
 
+export type AppDashboardQueueItem = {
+  id: string;
+  waId: string;
+  displayName: string | null;
+  status: ConversationOperationalStatus;
+  departmentId: string | null;
+  departmentName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  lastInteractionAt: string | null;
+  waitingSince: string | null;
+};
+
+export type AppDashboardOverview = {
+  ok?: true;
+  kpis: {
+    active: number;
+    waiting: number;
+    waitingUser: number;
+    closedToday: number;
+    avgFirstResponseTimeSec: number | null;
+    avgResolutionTimeSec: number | null;
+    slaBreaches: number;
+    totalConversations: number;
+  };
+  queue: AppDashboardQueueItem[];
+  generatedAt: string;
+};
+
 export type AppTemplateItem = {
   id: string;
   name: string;
@@ -934,6 +963,22 @@ export async function fetchAppConversationReport(
   if (params.userId) query.set("userId", params.userId);
   if (params.departmentId) query.set("departmentId", params.departmentId);
   return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
+}
+
+export async function fetchAppDashboardOverview(
+  session: AppSession,
+  filters?: {
+    departmentId?: string | null;
+    assignedUserId?: string | null;
+    status?: string | null;
+  }
+): Promise<AppDashboardOverview> {
+  const query = new URLSearchParams();
+  if (filters?.departmentId?.trim()) query.set("departmentId", filters.departmentId.trim());
+  if (filters?.assignedUserId?.trim()) query.set("assignedUserId", filters.assignedUserId.trim());
+  if (filters?.status?.trim()) query.set("status", filters.status.trim());
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/dashboard/overview${suffix}`);
 }
 
 export async function exportAppConversationReportCsv(
