@@ -46,8 +46,9 @@ export default function AppRealtimeBridge() {
   const hasPrimedAudioRef = useRef(false);
   const notificationQueueRef = useRef(0);
   const notificationTimerRef = useRef<number | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermissionState);
+  const [notificationPermission, setNotificationPermission] = useState("unsupported");
 
   const syncAudioState = useCallback((unlocked: boolean) => {
     setAudioUnlocked(unlocked);
@@ -238,6 +239,11 @@ export default function AppRealtimeBridge() {
   }, [handleHandoffNotification, handleInboundNotification]);
 
   useEffect(() => {
+    setMounted(true);
+    setNotificationPermission(getNotificationPermissionState());
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const primaryAudio = new window.Audio("/sounds/inbox-notification.wav");
     primaryAudio.preload = "auto";
@@ -320,6 +326,7 @@ export default function AppRealtimeBridge() {
 
   const currentPathname = pathname ?? "";
   const shouldShowAlertActivation =
+    mounted &&
     currentPathname.startsWith("/app") &&
     currentPathname !== "/app/login" &&
     isSoundEnabled() &&
