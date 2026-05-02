@@ -52,6 +52,7 @@ model Client {
   name       String
   status     ClientStatus    @default(ACTIVE)
   adminToken String?
+  features   Json?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
