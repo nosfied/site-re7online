@@ -97,6 +97,33 @@ Recomendacao de operacao:
 - apos teste de retencao curta, voltar para `90` dias antes de continuar a
   validacao funcional.
 
+Automacao atual na VPS:
+
+- host: `admin.re7online.com`;
+- usuario do crontab: `deploy`;
+- escopo: global, para todos os tenants existentes no banco no momento da
+  execucao;
+- horario: diariamente as 03:30;
+- log: `/opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log`.
+
+Entrada instalada:
+
+```cron
+30 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run retention:run >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log 2>&1
+```
+
+Verificar:
+
+```bash
+crontab -l | grep retention
+tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log
+```
+
+Reativar somente se o crontab for removido, se a VPS/usuario `deploy` forem
+recriados, ou se a pasta de producao mudar. Para novos tenants, nao e necessario
+adicionar uma linha propria: a execucao global ja inclui todos os tenants,
+criando `RetentionConfig` default de 90 dias quando ela ainda nao existir.
+
 ## Aviso em relatorios
 
 `/app/reports` consulta `RetentionConfig` para usuarios ADMIN.
@@ -149,4 +176,3 @@ console.log({
 
 await prisma.$disconnect();
 ```
-

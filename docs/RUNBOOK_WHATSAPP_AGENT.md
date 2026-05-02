@@ -275,6 +275,51 @@ removido, ou se a pasta de producao mudar.
 
 Detalhes: `docs/whatsapp-agent/ops/MEDIA_RETENTION.md`.
 
+## Retencao LGPD automatica
+
+A retencao LGPD remove conversas antigas da operacao por soft delete e
+anonimizacao, conforme `RetentionConfig.retentionDays` de cada tenant. A rotina
+nao deve apagar fisicamente mensagens, eventos, metricas, leads ou contacts.
+
+Execucao manual global, para todos os tenants existentes no banco no momento da
+execucao:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run retention:run
+```
+
+Execucao manual limitada a um tenant especifico, quando necessario:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run retention:run -- --client-key justa-advocacia
+```
+
+Cron global instalado na VPS `admin.re7online.com`, no usuario `deploy`, em
+2026-05-02. Ele roda para todos os tenants existentes no momento da execucao:
+
+```cron
+30 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run retention:run >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log 2>&1
+```
+
+Verificacao:
+
+```bash
+crontab -l | grep retention
+tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log
+```
+
+Reativar somente se a VPS/usuario `deploy` forem recriados, se o crontab for
+removido, ou se a pasta de producao mudar. Para novos tenants, nao e necessario
+criar nova linha de cron: a execucao global ja inclui todos os tenants com
+`RetentionConfig` no banco, criando configuracao default de 90 dias quando ela
+ainda nao existir.
+
+Antes de usar retencao curta em producao, validar `RetentionConfig.retentionDays`
+na tela `/app/settings/privacy`. Valores baixos, como 1 a 7 dias, podem retirar
+conversas ativas da operacao.
+
 ## Registro minimo do deploy
 Registrar preferencialmente em:
 - `docs/DEPLOY_LOG.md`
