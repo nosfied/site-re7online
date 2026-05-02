@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppSession, clearAppSession, fetchAppTenantSummary } from "@/lib/appClientApi";
+import { getAppFeatures } from "@/lib/appFeatures";
 
 type AppShellProps = {
   session: AppSession;
@@ -54,6 +55,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [tenantSummary, setTenantSummary] = useState<{ name: string; phoneDisplay: string | null } | null>(null);
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
+  const features = getAppFeatures(session);
 
   useEffect(() => {
     if (fullScreen) return;
@@ -84,9 +86,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
         Inbox
       </Link>
-      <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
-        Campanhas
-      </Link>
+      {features.campaigns ? (
+        <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
+          Campanhas
+        </Link>
+      ) : null}
       <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
         Templates
       </Link>
@@ -98,18 +102,24 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <Link href="/app/settings/users" className={getLinkClasses(pathname === "/app/settings/users")}>
         Usuarios
       </Link>
-      <Link
-        href="/app/settings/departments"
-        className={getLinkClasses(pathname === "/app/settings/departments")}
-      >
-        Setores
-      </Link>
-      <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-        Chatbot
-      </Link>
-      <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
-        Relatorios
-      </Link>
+      {features.departments ? (
+        <Link
+          href="/app/settings/departments"
+          className={getLinkClasses(pathname === "/app/settings/departments")}
+        >
+          Setores
+        </Link>
+      ) : null}
+      {features.chatbot ? (
+        <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
+          Chatbot
+        </Link>
+      ) : null}
+      {features.reports ? (
+        <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
+          Relatorios
+        </Link>
+      ) : null}
       {isAdminRole(session.user.role) ? (
         <Link href="/app/settings/privacy" className={getLinkClasses(pathname === "/app/settings/privacy")}>
           Privacidade

@@ -10,6 +10,7 @@ import type {
   LeadNoteItem,
   LeadStatus,
 } from "@/lib/whatsappAdminApi";
+import { getAppFeatures, type AppFeatures } from "@/lib/appFeatures";
 
 export type AppSessionUser = {
   id: string;
@@ -25,6 +26,7 @@ export type AppSession = {
   baseUrl: string;
   token: string;
   user: AppSessionUser;
+  features: AppFeatures;
 };
 
 export type AppInboxReadState = {
@@ -117,6 +119,7 @@ export type AppTenantSummary = {
   name: string;
   phoneNumberId: string | null;
   phoneDisplay: string | null;
+  features: AppFeatures;
 };
 
 const SESSION_KEY = "wa_app_session_session_v1";
@@ -195,6 +198,7 @@ function parseStoredSession(raw: string | null): AppSession | null {
       baseUrl: normalizeBaseUrl(String(parsed.baseUrl || getDefaultBaseUrl())),
       token,
       user: resolvedUser,
+      features: getAppFeatures(parsed as Partial<AppSession>),
     };
   } catch {
     return null;
@@ -488,7 +492,7 @@ async function requestAppBlob(
 export async function loginAppUser(
   email: string,
   password: string
-): Promise<{ ok: true; token: string; user: AppSessionUser }> {
+): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures }> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
@@ -537,10 +541,16 @@ export async function loginAppUser(
     throw error;
   }
 
-  const payload = (await res.json()) as { ok: true; token: string; user: AppSessionUser };
+  const payload = (await res.json()) as {
+    ok: true;
+    token: string;
+    user: AppSessionUser;
+    features?: Partial<AppFeatures> | null;
+  };
   const tokenUser = decodeClientAuthToken(payload.token);
   return {
     ...payload,
+    features: getAppFeatures({ features: payload.features ?? undefined }),
     user: {
       ...payload.user,
       id: payload.user.id || tokenUser.id || "",

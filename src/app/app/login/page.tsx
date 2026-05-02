@@ -57,6 +57,7 @@ export default function AppLoginPage() {
         baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
         token: response.token,
         user: response.user,
+        features: response.features,
       };
       saveAppSession(session);
       router.replace("/app/inbox");
