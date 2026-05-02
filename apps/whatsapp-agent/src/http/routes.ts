@@ -74,6 +74,13 @@ import {
 } from "../inbox/readStateStore.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 
+const IMMUTABLE_PRIVACY_AUDIT_EVENTS = [
+  "conversation.deleted",
+  "conversation.anonymized",
+  "retention.executed",
+  "conversation.reactivated_after_retention",
+] as const;
+
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
     { name: "Atendimento" },
@@ -12038,12 +12045,12 @@ async function anonymizeConversationPrivacyData(
     prisma.event.updateMany({
       where: {
         clientId: params.clientId,
+        eventName: { notIn: [...IMMUTABLE_PRIVACY_AUDIT_EVENTS] },
         OR: [{ conversationId: target.id }, { waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
       },
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
-        payloadJson: { anonymized: true, action: "conversation.anonymized" },
       },
     }),
   ]);

@@ -8,6 +8,12 @@ const prisma = new PrismaClient();
 const clientKey = process.argv.includes("--client-key")
   ? process.argv[process.argv.indexOf("--client-key") + 1]
   : "";
+const immutablePrivacyAuditEvents = [
+  "conversation.deleted",
+  "conversation.anonymized",
+  "retention.executed",
+  "conversation.reactivated_after_retention",
+];
 
 function maskPersonalWaId(value) {
   const raw = String(value ?? "").trim();
@@ -133,6 +139,7 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
       prisma.event.updateMany({
         where: {
           clientId: client.id,
+          eventName: { notIn: immutablePrivacyAuditEvents },
           OR: [
             { conversationId: conversation.id },
             { waId: { in: waIds } },
@@ -142,7 +149,6 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
         data: {
           waId: anonymizedWaId,
           waIdCanonical: anonymizedWaId,
-          payloadJson: { anonymized: true, action: "retention.anonymized" },
         },
       }),
     ]);
