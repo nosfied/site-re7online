@@ -11778,10 +11778,6 @@ function buildAnonymizedWaId(target: PrivacyConversationTarget) {
   return masked.includes("*") ? `${masked}:${target.id.slice(0, 8)}` : `anon:${target.id.slice(0, 12)}`;
 }
 
-function buildDetachedCrmWaId(target: PrivacyConversationTarget, kind: "lead" | "contact", recordId: string) {
-  return `deleted:${target.id.slice(0, 8)}:${kind}:${recordId.slice(0, 8)}`;
-}
-
 function buildPrivacyAuditPayload(params: {
   userId: string;
   clientId: string;
@@ -11893,25 +11889,12 @@ async function deleteConversationPrivacyData(
     new Set(matchingConversations.flatMap((item) => [item.waId, item.waIdCanonical].filter(Boolean) as string[]))
   );
 
-  const [crmContacts, crmLeads] = await Promise.all([
-    prisma.contact.findMany({
-      where: { clientId: params.clientId, waId: { in: waIds } },
-      select: { id: true },
-    }),
-    prisma.lead.findMany({
-      where: { tenantId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
-      select: { id: true },
-    }),
-  ]);
-  const crmLeadIds = crmLeads.map((lead) => lead.id);
-
   const result = await prisma.$transaction(async (tx) => {
     const conversations = await tx.conversation.updateMany({
       where: { clientId: params.clientId, id: { in: conversationIds }, deletedAt: null },
       data: {
         deletedAt: now,
         closedAt: now,
-        historyVisibleAfter: now,
         departmentId: null,
       },
     });
@@ -11930,40 +11913,7 @@ async function deleteConversationPrivacyData(
         mode: "BOT",
       },
     });
-    let contacts = 0;
-    for (const contact of crmContacts) {
-      const detachedWaId = buildDetachedCrmWaId(target, "contact", contact.id);
-      await tx.contact.update({
-        where: { id: contact.id },
-        data: { waId: detachedWaId, name: null },
-      });
-      contacts += 1;
-    }
-    let leads = 0;
-    for (const lead of crmLeads) {
-      const detachedWaId = buildDetachedCrmWaId(target, "lead", lead.id);
-      await tx.lead.update({
-        where: { id: lead.id },
-        data: {
-          waId: detachedWaId,
-          waIdCanonical: detachedWaId,
-          name: null,
-          phone: null,
-          city: null,
-          service: null,
-          status: "REMOVED",
-        },
-      });
-      leads += 1;
-    }
-    const leadNotes =
-      crmLeadIds.length > 0
-        ? await tx.leadNote.updateMany({
-            where: { tenantId: params.clientId, leadId: { in: crmLeadIds } },
-            data: { body: "[nota removida por exclusao operacional]" },
-          })
-        : { count: 0 };
-    return { conversations, runtimeStates, contacts, leads, leadNotes };
+    return { conversations, runtimeStates };
   });
 
   for (const waId of waIds) {
@@ -11979,9 +11929,8 @@ async function deleteConversationPrivacyData(
       details: {
         action: "soft_delete",
         softDeletedConversations: result.conversations.count,
-        detachedContacts: result.contacts,
-        detachedLeads: result.leads,
-        sanitizedLeadNotes: result.leadNotes.count,
+        preservedIdentity: true,
+        preservedHistory: true,
       },
     });
     await persistPrivacyAuditEvent(prisma, {
@@ -12007,9 +11956,9 @@ async function deleteConversationPrivacyData(
       outboundMessages: 0,
       runtimeStates: result.runtimeStates.count,
       events: 0,
-      contacts: result.contacts,
-      leads: result.leads,
-      leadNotes: result.leadNotes.count,
+      contacts: 0,
+      leads: 0,
+      leadNotes: 0,
     },
   };
 }

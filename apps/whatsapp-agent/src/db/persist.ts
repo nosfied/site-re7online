@@ -128,6 +128,7 @@ export async function persistConversationWindow(params: {
         ? {
             deletedAt: null,
             closedAt: null,
+            historyVisibleAfter: null,
           }
         : {}),
       departmentId: isInboundAfterSoftDelete
