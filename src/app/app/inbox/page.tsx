@@ -3112,20 +3112,19 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
 
-      <section className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[350px_minmax(0,1fr)_300px] 2xl:grid-cols-[360px_minmax(0,1fr)_320px]">
+      <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
-          <div className="border-b border-white/10 px-4 py-3">
-            <p
-              className="mb-1 truncate text-[11px] text-white/55"
-              title={`${session.user.name || session.user.email} - ${loggedUserDepartmentLabel}`}
-            >
-              <span>{session.user.name || session.user.email}</span>
-              <span className="text-white/35"> • </span>
-              <span className="font-medium text-white/70">{loggedUserDepartmentLabel}</span>
-            </p>
-            <div className="flex items-center justify-between gap-2">
+          <div className="border-b border-white/10 bg-[#10213d] px-4 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-white">Conversas</h2>
+                <p
+                  className="truncate text-[11px] text-white/55"
+                  title={`${session.user.name || session.user.email} - ${loggedUserDepartmentLabel}`}
+                >
+                  <span>{session.user.name || session.user.email}</span>
+                  <span className="text-white/35"> • </span>
+                  <span className="font-medium text-white/70">{loggedUserDepartmentLabel}</span>
+                </p>
                 {tenantNameLabel || tenantPhoneLabel ? (
                   <p
                     className="mt-0.5 truncate text-[11px] font-normal text-white/55"
@@ -3135,7 +3134,7 @@ export default function AppInboxPage() {
                   </p>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -3152,16 +3151,23 @@ export default function AppInboxPage() {
                 >
                   {soundEnabled ? "🔔" : "🔕"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => session && refreshConversationList(session)}
-                  className="rounded-lg border border-white/15 px-2.5 py-1 text-xs text-white/75 transition hover:bg-white/10"
-                >
-                  Atualizar
-                </button>
               </div>
             </div>
             <div className="mt-3 space-y-2">
+              {isAdminUser ? (
+                <select
+                  value={departmentFilter}
+                  onChange={(event) => setDepartmentFilter(event.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
+                >
+                  <option value="ALL">Todos os setores</option>
+                  {departmentOptions.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <input
                 type="search"
                 value={conversationSearch}
@@ -3243,20 +3249,6 @@ export default function AppInboxPage() {
                   </div>
                 ) : null}
               </div>
-              {isAdminUser ? (
-                <select
-                  value={departmentFilter}
-                  onChange={(event) => setDepartmentFilter(event.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
-                >
-                  <option value="ALL">Todos os setores</option>
-                  {departmentOptions.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
             </div>
           </div>
           <div ref={conversationListRef} className="min-h-0 flex-1 overflow-y-auto overflow-anchor-none">
