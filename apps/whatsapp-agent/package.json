@@ -23,6 +23,8 @@
     "departments:normalize-operational": "node scripts/normalize-operational-department.mjs",
     "retention:run": "node scripts/run-retention.mjs",
     "demo:seed": "node scripts/seed-demo.mjs",
+    "state:backfill": "node scripts/backfill-runtime-state.mjs",
+    "state:validate": "node scripts/validate-runtime-state.mjs",
     "test:last-outbound": "tsx scripts/test-last-outbound-at.ts",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production"

@@ -345,6 +345,11 @@ export function createDualWriteStorage(
   const cachedClientIds = new Map<string, string>();
   const readMismatchCounts = new Map<string, number>();
   const readSource = options.readSource ?? "json";
+  const shouldWriteShadow =
+    env.CONV_STATE_DUAL_WRITE ||
+    env.STORAGE_MODE === "hybrid" ||
+    env.STORAGE_MODE === "postgres" ||
+    readSource === "postgres";
 
   function validateConversationState(
     state: ConversationState | null,
@@ -831,7 +836,7 @@ export function createDualWriteStorage(
   }
 
   async function writeShadowSafe(state: ConversationState) {
-    if (!env.CONV_STATE_DUAL_WRITE) return;
+    if (!shouldWriteShadow) return;
     try {
       await writeShadow(state);
     } catch (error) {
