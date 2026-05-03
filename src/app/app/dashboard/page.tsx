@@ -18,6 +18,7 @@ import {
   updateAppConversationStatus,
 } from "@/lib/appClientApi";
 import { addAppRealtimeListener } from "@/lib/appRealtime";
+import { getAppProfile, type AppProfile } from "@/lib/appFeatures";
 import type {
   AdminDepartmentItem,
   AdminUserItem,
@@ -64,12 +65,17 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
-function formatElapsed(value: string | null) {
+function getElapsedMinutes(value: string | null, now: number) {
   if (!value) return "-";
   const date = new Date(value);
-  const diffMs = Date.now() - date.getTime();
+  const diffMs = now - date.getTime();
   if (!Number.isFinite(diffMs) || diffMs < 0) return "-";
-  const minutes = Math.floor(diffMs / 60000);
+  return Math.floor(diffMs / 60000);
+}
+
+function formatElapsed(value: string | null, now: number) {
+  const minutes = getElapsedMinutes(value, now);
+  if (minutes === "-") return "-";
   if (minutes < 1) return "agora";
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
@@ -93,6 +99,117 @@ function getStatusLabel(status: ConversationOperationalStatus) {
   }
 }
 
+function getStatusTone(status: ConversationOperationalStatus) {
+  switch (status) {
+    case "WAITING":
+      return "border-amber-300/30 bg-amber-400/10 text-amber-100";
+    case "IN_PROGRESS":
+      return "border-emerald-300/30 bg-emerald-400/10 text-emerald-100";
+    case "WAITING_USER":
+      return "border-sky-300/30 bg-sky-400/10 text-sky-100";
+    case "CLOSED":
+      return "border-white/15 bg-white/10 text-white/65";
+  }
+}
+
+function getQueueAgeTone(waitingSince: string | null, now: number) {
+  const minutes = getElapsedMinutes(waitingSince, now);
+  if (minutes === "-") return "border-white/15 bg-white/10 text-white/65";
+  if (minutes > 120) return "border-red-300/35 bg-red-400/15 text-red-100";
+  if (minutes >= 30) return "border-amber-300/35 bg-amber-400/15 text-amber-100";
+  return "border-white/15 bg-white/10 text-white/75";
+}
+
+function getProfileLabels(profile: AppProfile) {
+  if (profile === "government") {
+    return {
+      people: "Cidadaos",
+      reports: "Indicadores",
+      queue: "Demandas",
+      dashboardSubtitle: "Supervisao das demandas e indicadores quase em tempo real.",
+    };
+  }
+  return {
+    people: "Clientes",
+    reports: "Relatorios",
+    queue: "Fila operacional",
+    dashboardSubtitle: "Supervisao da fila operacional e indicadores quase em tempo real.",
+  };
+}
+
+function StatusBadge({ status }: { status: ConversationOperationalStatus }) {
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${getStatusTone(status)}`}>
+      {getStatusLabel(status)}
+    </span>
+  );
+}
+
+function QueueAgeBadge({ waitingSince, now }: { waitingSince: string | null; now: number }) {
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${getQueueAgeTone(waitingSince, now)}`}>
+      {formatElapsed(waitingSince, now)}
+    </span>
+  );
+}
+
+function DashboardSectionHeader({
+  title,
+  description,
+  right,
+}: {
+  title: string;
+  description?: string;
+  right?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {description ? <p className="mt-0.5 text-xs text-white/55">{description}</p> : null}
+      </div>
+      {right ? <span className="shrink-0 text-xs text-white/45">{right}</span> : null}
+    </div>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number | string | null | undefined;
+  tone?: "neutral" | "ok" | "warning" | "critical";
+}) {
+  const toneClasses = {
+    neutral: "border-white/10 bg-white/5 hover:bg-white/10",
+    ok: "border-emerald-300/25 bg-emerald-400/10 hover:bg-emerald-400/15",
+    warning: "border-amber-300/30 bg-amber-400/10 hover:bg-amber-400/15",
+    critical: "border-red-300/30 bg-red-400/10 hover:bg-red-400/15",
+  }[tone];
+
+  return (
+    <article className={`rounded-xl border p-3 transition-all sm:p-4 ${toneClasses}`}>
+      <p className="text-xs uppercase tracking-wide text-white/50">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value ?? "-"}</p>
+    </article>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Carregando dashboard">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="h-3 w-24 animate-pulse rounded bg-white/15" />
+          <div className="mt-4 h-8 w-16 animate-pulse rounded bg-white/20" />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function AppDashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -107,6 +224,7 @@ export default function AppDashboardPage() {
   const [actionKey, setActionKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -190,6 +308,13 @@ export default function AppDashboardPage() {
     }, 15_000);
     return () => window.clearInterval(timer);
   }, [refreshDashboard, session]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!session || !canAccessDashboard(session.user.role)) return;
@@ -290,12 +415,15 @@ export default function AppDashboardPage() {
   const kpis = overview?.kpis;
   const openConversations =
     (kpis?.waiting ?? 0) + (kpis?.active ?? 0) + (kpis?.waitingUser ?? 0);
+  const profile = getAppProfile(session);
+  const labels = getProfileLabels(profile);
+  const showDashboardContent = Boolean(overview) || !loading;
 
   return (
     <AppShell
       session={session}
       title="Dashboard"
-      subtitle="Supervisao da fila operacional e indicadores quase em tempo real."
+      subtitle={labels.dashboardSubtitle}
     >
       <FeedbackToast message={success} {...toastHandlers} />
       <FeedbackToast message={error} variant="error" {...toastHandlers} />
@@ -360,56 +488,33 @@ export default function AppDashboardPage() {
         </div>
       </section>
 
-      {loading ? <p className="text-sm text-white/70">Carregando dashboard...</p> : null}
+      {loading && !overview ? <DashboardSkeleton /> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ["Atendimentos Ativos", openConversations],
-          ["Fila", kpis?.waiting],
-          ["Em Atendimento", kpis?.active],
-          ["Aguardando Cliente", kpis?.waitingUser],
-          ["Finalizados Hoje", kpis?.closedToday],
-        ].map(([label, value]) => (
-          <article key={label} className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-            <p className="text-xs uppercase tracking-wide text-white/50">{label}</p>
-            <p className="mt-2 text-2xl font-semibold">{value ?? "-"}</p>
-          </article>
-        ))}
-      </section>
+      {showDashboardContent ? (
+        <>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <KpiCard label="Atendimentos Ativos" value={openConversations} tone={openConversations > 0 ? "ok" : "neutral"} />
+            <KpiCard label={labels.queue} value={kpis?.waiting} tone={(kpis?.waiting ?? 0) > 0 ? "warning" : "neutral"} />
+            <KpiCard label="Em Atendimento" value={kpis?.active} tone={(kpis?.active ?? 0) > 0 ? "ok" : "neutral"} />
+            <KpiCard label="Aguardando Cliente" value={kpis?.waitingUser} tone={(kpis?.waitingUser ?? 0) > 0 ? "warning" : "neutral"} />
+            <KpiCard label="Finalizados Hoje" value={kpis?.closedToday} tone={(kpis?.closedToday ?? 0) > 0 ? "ok" : "neutral"} />
+          </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Tempo medio 1a resposta</p>
-          <p className="mt-2 text-2xl font-semibold">{formatSeconds(kpis?.avgFirstResponseTimeSec ?? null)}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Tempo medio resolucao</p>
-          <p className="mt-2 text-2xl font-semibold">{formatSeconds(kpis?.avgResolutionTimeSec ?? null)}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Violacoes SLA</p>
-          <p className="mt-2 text-2xl font-semibold">{kpis?.slaBreaches ?? "-"}</p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Total de conversas</p>
-          <p className="mt-2 text-2xl font-semibold">{kpis?.totalConversations ?? "-"}</p>
-        </article>
-      </section>
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label={labels.reports}>
+            <KpiCard label="Tempo medio 1a resposta" value={formatSeconds(kpis?.avgFirstResponseTimeSec ?? null)} />
+            <KpiCard label="Tempo medio resolucao" value={formatSeconds(kpis?.avgResolutionTimeSec ?? null)} />
+            <KpiCard label="Violacoes SLA" value={kpis?.slaBreaches} tone={(kpis?.slaBreaches ?? 0) > 0 ? "critical" : "neutral"} />
+            <KpiCard label={`Total de ${labels.people}`} value={kpis?.totalConversations} />
+          </section>
 
-      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-          <div>
-            <h2 className="text-sm font-semibold">Fila operacional</h2>
-            <p className="mt-0.5 text-xs text-white/55">
-              Conversas aguardando atendimento, ordenadas pelo maior tempo em fila.
-            </p>
-          </div>
-          <span className="text-xs text-white/45">
-            {overview?.generatedAt ? `Gerado em ${formatDateTime(overview.generatedAt)}` : ""}
-          </span>
-        </div>
-        {overview?.queue.length ? (
-          <table className="w-full min-w-[920px] text-sm">
+          <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+            <DashboardSectionHeader
+              title={labels.queue}
+              description="Conversas aguardando atendimento, ordenadas pelo maior tempo em fila."
+              right={overview?.generatedAt ? `Gerado em ${formatDateTime(overview.generatedAt)}` : ""}
+            />
+            {overview?.queue.length ? (
+              <table className="w-full min-w-[820px] text-sm">
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Contato</th>
@@ -423,7 +528,7 @@ export default function AppDashboardPage() {
             </thead>
             <tbody>
               {overview.queue.map((item) => (
-                <tr key={item.id} className="border-t border-white/10">
+                <tr key={item.id} className="border-t border-white/10 transition-colors hover:bg-white/5">
                   <td className="px-3 py-2">
                     <button
                       type="button"
@@ -434,18 +539,18 @@ export default function AppDashboardPage() {
                       <span className="block text-xs text-white/45">{item.waId}</span>
                     </button>
                   </td>
-                  <td className="px-3 py-2">{getStatusLabel(item.status)}</td>
+                  <td className="px-3 py-2"><StatusBadge status={item.status} /></td>
                   <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
                   <td className="px-3 py-2">{item.assignedUserName ?? "-"}</td>
                   <td className="px-3 py-2">{formatDateTime(item.lastInteractionAt)}</td>
-                  <td className="px-3 py-2">{formatElapsed(item.waitingSince)}</td>
+                  <td className="px-3 py-2"><QueueAgeBadge waitingSince={item.waitingSince} now={now} /></td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => handleClaim(item.waId)}
                         disabled={Boolean(actionKey)}
-                        className="rounded-md border border-emerald-300/30 bg-emerald-400/10 px-2.5 py-1.5 text-xs text-emerald-50 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-md bg-re7-sky px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm shadow-sky-950/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {actionKey === `claim:${item.waId}` ? "Assumindo..." : "Assumir"}
                       </button>
@@ -453,7 +558,7 @@ export default function AppDashboardPage() {
                         type="button"
                         onClick={() => handleClose(item.waId)}
                         disabled={Boolean(actionKey)}
-                        className="rounded-md border border-red-300/30 bg-red-400/10 px-2.5 py-1.5 text-xs text-red-50 hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-md border border-white/20 bg-white/5 px-2.5 py-1.5 text-xs text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {actionKey === `close:${item.waId}` ? "Encerrando..." : "Encerrar"}
                       </button>
@@ -462,11 +567,20 @@ export default function AppDashboardPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
-        ) : (
-          <p className="p-4 text-sm text-white/70">Nenhuma conversa aguardando atendimento.</p>
-        )}
-      </section>
+              </table>
+            ) : (
+              <div className="grid min-h-32 place-items-center p-6 text-center">
+                <div>
+                  <p className="text-sm font-medium text-white">Nenhuma conversa aguardando atendimento.</p>
+                  <p className="mt-1 text-xs text-white/55">
+                    Quando novas conversas entrarem na fila, elas aparecerão aqui.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
     </AppShell>
   );
 }
