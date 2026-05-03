@@ -17,11 +17,13 @@ import {
 } from "@/lib/appRealtime";
 import {
   AppInboxReadState,
+  AppContactTimelineItem,
   AppSession,
   claimAppConversation,
   clearAppSession,
   createAppLeadNote,
   fetchAppConversation,
+  fetchAppConversationTimeline,
   fetchAppConversations,
   fetchAppDepartments,
   fetchAppLeadNotes,
@@ -94,6 +96,34 @@ function getLeadStatusLabel(status?: string | null) {
     default:
       return "Sem andamento";
   }
+}
+
+function getTimelineDateGroup(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sem data";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function getTimelineKindLabel(item: AppContactTimelineItem) {
+  if (item.kind === "message") {
+    return item.direction === "OUTBOUND" ? "Mensagem enviada" : "Mensagem recebida";
+  }
+  if (item.kind === "note") return "Nota";
+  return "Evento";
+}
+
+function getTimelineKindClass(item: AppContactTimelineItem) {
+  if (item.kind === "message") {
+    return item.direction === "OUTBOUND"
+      ? "border-emerald-500/25 bg-emerald-50 text-emerald-900"
+      : "border-sky-500/25 bg-sky-50 text-sky-900";
+  }
+  if (item.kind === "note") return "border-amber-500/25 bg-amber-50 text-amber-900";
+  return "border-slate-300 bg-slate-50 text-slate-700";
 }
 
 function getMessageContentLabel(item: InboxMessageItem) {
@@ -1081,6 +1111,11 @@ export default function AppInboxPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showMoreActions, setShowMoreActions] = useState(false);
   const [showMoreConversationFilters, setShowMoreConversationFilters] = useState(false);
+  const [showContactTimeline, setShowContactTimeline] = useState(false);
+  const [contactTimelineItems, setContactTimelineItems] = useState<AppContactTimelineItem[]>([]);
+  const [contactTimelineCursor, setContactTimelineCursor] = useState<string | null>(null);
+  const [loadingContactTimeline, setLoadingContactTimeline] = useState(false);
+  const [contactTimelineError, setContactTimelineError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pauseErrorToast, setPauseErrorToast] = useState(false);
@@ -1127,6 +1162,54 @@ export default function AppInboxPage() {
     clearAppSession();
     router.replace("/app/login");
   }, [router]);
+
+  const loadContactTimeline = useCallback(
+    async (mode: "reset" | "append" = "reset") => {
+      if (!session || !selectedConversationWaId) return;
+      const cursor = mode === "append" ? contactTimelineCursor : null;
+      setLoadingContactTimeline(true);
+      setContactTimelineError(null);
+      try {
+        const response = await fetchAppConversationTimeline(session, selectedConversationWaId, {
+          limit: 50,
+          cursor,
+        });
+        setContactTimelineItems((current) =>
+          mode === "append" ? [...current, ...response.items] : response.items
+        );
+        setContactTimelineCursor(response.nextCursor);
+      } catch (err) {
+        if ((err as { status?: number }).status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setContactTimelineError((err as Error).message || "Falha ao carregar historico.");
+      } finally {
+        setLoadingContactTimeline(false);
+      }
+    },
+    [contactTimelineCursor, handleUnauthorized, selectedConversationWaId, session]
+  );
+
+  const handleOpenContactTimeline = useCallback(() => {
+    if (!selectedConversationWaId) return;
+    setShowContactTimeline(true);
+    setContactTimelineItems([]);
+    setContactTimelineCursor(null);
+    setContactTimelineError(null);
+    void loadContactTimeline("reset");
+  }, [loadContactTimeline, selectedConversationWaId]);
+
+  const handleCloseContactTimeline = useCallback(() => {
+    setShowContactTimeline(false);
+    setContactTimelineItems([]);
+    setContactTimelineCursor(null);
+    setContactTimelineError(null);
+  }, []);
+
+  useEffect(() => {
+    handleCloseContactTimeline();
+  }, [handleCloseContactTimeline, selectedConversationWaId]);
 
   useEffect(() => {
     if (!error && !errorDetails && !success && !leadError) return;
@@ -3076,6 +3159,20 @@ export default function AppInboxPage() {
     }
   };
 
+  const contactTimelineGroups = contactTimelineItems.reduce<Array<{ date: string; items: AppContactTimelineItem[] }>>(
+    (groups, item) => {
+      const date = getTimelineDateGroup(item.createdAt);
+      const current = groups[groups.length - 1];
+      if (current?.date === date) {
+        current.items.push(item);
+      } else {
+        groups.push({ date, items: [item] });
+      }
+      return groups;
+    },
+    []
+  );
+
   if (!session) {
     return <main className="min-h-screen bg-re7-navy" />;
   }
@@ -3102,6 +3199,96 @@ export default function AppInboxPage() {
         onFocus={() => setPauseErrorToast(true)}
         onBlur={() => setPauseErrorToast(false)}
       />
+
+      {showContactTimeline ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
+          <section className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-slate-950">Histórico do contato</h2>
+                <p className="mt-1 truncate text-sm text-slate-500">
+                  {selectedConversation?.leadName || selectedConversation?.leadPhone || selectedConversation?.waId || "Contato"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseContactTimeline}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Fechar
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {loadingContactTimeline && contactTimelineItems.length === 0 ? (
+                <p className="text-sm text-slate-500">Carregando histórico...</p>
+              ) : null}
+              {contactTimelineError ? (
+                <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {contactTimelineError}
+                </p>
+              ) : null}
+              {!loadingContactTimeline && !contactTimelineError && contactTimelineItems.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center">
+                  <p className="text-sm font-medium text-slate-800">Nenhum histórico encontrado.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Mensagens, eventos e notas deste contato aparecerão aqui.
+                  </p>
+                </div>
+              ) : null}
+              <div className="space-y-5">
+                {contactTimelineGroups.map((group) => (
+                  <section key={group.date}>
+                    <div className="sticky top-0 z-10 mb-3 bg-white/95 py-1">
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                        {group.date}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {group.items.map((item) => (
+                        <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getTimelineKindClass(item)}`}>
+                                {getTimelineKindLabel(item)}
+                              </span>
+                              <h3 className="mt-2 text-sm font-semibold text-slate-900">{item.title}</h3>
+                            </div>
+                            <span className="shrink-0 text-xs text-slate-500">{formatDateTime(item.createdAt)}</span>
+                          </div>
+                          {item.body ? (
+                            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
+                              {item.body}
+                            </p>
+                          ) : null}
+                          {item.eventName ? (
+                            <p className="mt-2 text-xs text-slate-400">{item.eventName}</p>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+            <footer className="border-t border-slate-200 px-5 py-3">
+              {contactTimelineCursor ? (
+                <button
+                  type="button"
+                  disabled={loadingContactTimeline}
+                  onClick={() => void loadContactTimeline("append")}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loadingContactTimeline ? "Carregando..." : "Carregar mais"}
+                </button>
+              ) : loadingContactTimeline && contactTimelineItems.length === 0 ? (
+                <p className="text-center text-xs text-slate-400">Carregando histórico...</p>
+              ) : (
+                <p className="text-center text-xs text-slate-400">Fim do histórico carregado.</p>
+              )}
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
@@ -3367,6 +3554,16 @@ export default function AppInboxPage() {
               ) : null}
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title="Ver histórico"
+                aria-label="Ver histórico do contato"
+                disabled={!selectedConversation}
+                onClick={handleOpenContactTimeline}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
+              >
+                ◷
+              </button>
               {isAdminUser ? (
                 <button
                   type="button"

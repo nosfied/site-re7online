@@ -1266,6 +1266,95 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (
     req.method === "GET" &&
     pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.split("/")[4] === "timeline"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const limitRaw = Number(query.limit ?? 50);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
+      const cursor = decodeContactTimelineCursor(String(query.cursor ?? "").trim());
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_timeline_department_check",
+      });
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/timeline",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+
+      const result = await buildContactTimelinePayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId,
+        limit,
+        cursor,
+        requestId,
+        source: "app_conversation_timeline",
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.timeline.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 4
   ) {
     const prisma = getPrisma();
@@ -12709,6 +12798,7 @@ async function resolveConversationTarget(
     select: {
       waId: true,
       waIdCanonical: true,
+      id: true,
       departmentId: true,
       updatedAt: true,
       lastInboundAt: true,
@@ -12788,6 +12878,10 @@ function dedupeCampaignRecipients(
 type ConversationListCursor = {
   updatedAt: string;
   conversationIdentity: string;
+};
+
+type ContactTimelineCursor = {
+  createdAt: string;
 };
 
 function buildEmptyDashboardOverview() {
@@ -13108,6 +13202,97 @@ function decodeConversationListCursor(raw: string): ConversationListCursor | nul
 
 function encodeConversationListCursor(cursor: ConversationListCursor) {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeContactTimelineCursor(raw: string): ContactTimelineCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<ContactTimelineCursor>;
+    if (!parsed.createdAt || !Number.isFinite(Date.parse(parsed.createdAt))) {
+      return null;
+    }
+    return { createdAt: parsed.createdAt };
+  } catch {
+    return null;
+  }
+}
+
+function encodeContactTimelineCursor(cursor: ContactTimelineCursor) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function getTimelineMessageTitle(direction: "INBOUND" | "OUTBOUND", type: MessageType) {
+  const prefix = direction === "INBOUND" ? "recebida" : "enviada";
+  switch (type) {
+    case "IMAGE":
+      return `Imagem ${prefix}`;
+    case "AUDIO":
+      return `Audio ${prefix}`;
+    case "VIDEO":
+      return `Video ${prefix}`;
+    case "DOCUMENT":
+      return `Documento ${prefix}`;
+    case "TEMPLATE":
+      return `Template ${prefix}`;
+    case "TEXT":
+      return `Mensagem ${prefix}`;
+    default:
+      return `Interacao ${prefix}`;
+  }
+}
+
+function getTimelineEventTitle(eventName: string) {
+  switch (eventName) {
+    case "conversation.assigned":
+      return "Atendimento assumido";
+    case "conversation.transferred":
+      return "Atendimento transferido";
+    case "conversation.department.transferred":
+      return "Setor alterado";
+    case "conversation.handoff.updated":
+      return "Entrada na fila humana";
+    case "conversation.released":
+      return "Liberado para automacao";
+    case "conversation.released_to_general":
+      return "Liberado para Atendimento Geral";
+    case "conversation.status_changed":
+      return "Status alterado";
+    case "conversation.deleted":
+      return "Conversa removida da operacao";
+    case "conversation.anonymized":
+      return "Dados anonimizados";
+    case "conversation.reactivated_after_retention":
+      return "Conversa reativada";
+    case "lead.capture.requested":
+      return "Cadastro solicitado";
+    case "lead.captured":
+      return "Cadastro capturado";
+    case "lead.demo_requested":
+      return "Demo solicitada";
+    case "lead.demo_scheduled":
+      return "Demo agendada";
+    case "message.status.updated":
+      return "Status da mensagem atualizado";
+    default:
+      return eventName.replace(/\./g, " ");
+  }
+}
+
+function getTimelineMessageBody(type: MessageType, bodyText?: string | null, templateName?: string | null) {
+  if (bodyText?.trim()) return bodyText;
+  if (templateName?.trim()) return `Template: ${templateName}`;
+  switch (type) {
+    case "IMAGE":
+      return "Imagem";
+    case "AUDIO":
+      return "Audio";
+    case "VIDEO":
+      return "Video";
+    case "DOCUMENT":
+      return "Documento";
+    default:
+      return null;
+  }
 }
 
 function normalizeConversationStatusFilter(value: unknown): ConversationOperationalStatus | null {
@@ -13772,6 +13957,233 @@ async function buildConversationDetailPayload(
     }),
     count: items.length,
     items,
+  };
+}
+
+async function buildContactTimelinePayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    waId: string;
+    limit: number;
+    cursor: ContactTimelineCursor | null;
+    requestId: string;
+    source: string;
+  }
+) {
+  const resolved = await resolveConversationTarget(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    rawWaId: params.waId,
+    requestId: params.requestId,
+    source: params.source,
+  });
+  const detailWaIds = Array.from(
+    new Set(
+      [
+        ...buildWaIdLookup(params.waId).variants,
+        resolved.resolvedWaId,
+        resolved.resolvedWaIdCanonical,
+        ...resolved.matchedWaIds,
+      ].filter(Boolean)
+    )
+  );
+  const createdBefore = params.cursor ? new Date(params.cursor.createdAt) : null;
+  const historyVisibleAfter = resolved.winner?.historyVisibleAfter ?? null;
+  const createdAtFilter: Prisma.DateTimeFilter = {
+    ...(createdBefore ? { lt: createdBefore } : {}),
+    ...(historyVisibleAfter ? { gt: historyVisibleAfter } : {}),
+  };
+  const hasCreatedAtFilter = Boolean(createdBefore || historyVisibleAfter);
+  const baseCreatedAtWhere = hasCreatedAtFilter ? { createdAt: createdAtFilter } : {};
+  const take = Math.min(params.limit + 1, 101);
+
+  const matchingLeads = await prisma.lead.findMany({
+    where: {
+      tenantId: params.clientId,
+      OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      name: true,
+      phone: true,
+      city: true,
+      service: true,
+      status: true,
+      updatedAt: true,
+      createdAt: true,
+    },
+  });
+  const leadIds = matchingLeads.map((item) => item.id);
+  const lead = matchingLeads[0] ?? null;
+
+  const [contact, inbound, outbound, events, notes] = await Promise.all([
+    prisma.contact.findFirst({
+      where: {
+        clientId: params.clientId,
+        waId: { in: detailWaIds },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, waId: true, name: true, updatedAt: true, createdAt: true },
+    }),
+    prisma.inboundMessage.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+        ...baseCreatedAtWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        waId: true,
+        waIdCanonical: true,
+        messageId: true,
+        type: true,
+        bodyText: true,
+        createdAt: true,
+      },
+    }),
+    prisma.outboundMessage.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+        ...baseCreatedAtWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        waId: true,
+        waIdCanonical: true,
+        messageId: true,
+        metaMessageId: true,
+        type: true,
+        status: true,
+        bodyText: true,
+        templateName: true,
+        createdAt: true,
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        clientId: params.clientId,
+        ...baseCreatedAtWhere,
+        OR: [
+          ...(resolved.winner?.id ? [{ conversationId: resolved.winner.id }] : []),
+          { waIdCanonical: { in: detailWaIds } },
+          { waId: { in: detailWaIds } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        eventName: true,
+        messageId: true,
+        requestId: true,
+        createdAt: true,
+      },
+    }),
+    leadIds.length
+      ? prisma.leadNote.findMany({
+          where: {
+            tenantId: params.clientId,
+            leadId: { in: leadIds },
+            ...baseCreatedAtWhere,
+          },
+          orderBy: { createdAt: "desc" },
+          take,
+          select: {
+            id: true,
+            leadId: true,
+            body: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const items = [
+    ...inbound.map((item) => ({
+      id: `inbound:${item.id}`,
+      kind: "message",
+      direction: "INBOUND",
+      title: getTimelineMessageTitle("INBOUND", item.type),
+      body: getTimelineMessageBody(item.type, item.bodyText),
+      createdAt: item.createdAt,
+      metadata: {
+        type: item.type,
+        messageId: item.messageId,
+      },
+    })),
+    ...outbound.map((item) => ({
+      id: `outbound:${item.id}`,
+      kind: "message",
+      direction: "OUTBOUND",
+      title: getTimelineMessageTitle("OUTBOUND", item.type),
+      body: getTimelineMessageBody(item.type, item.bodyText, item.templateName),
+      createdAt: item.createdAt,
+      metadata: {
+        type: item.type,
+        status: item.status,
+        messageId: item.messageId,
+        metaMessageId: item.metaMessageId,
+      },
+    })),
+    ...events.map((item) => ({
+      id: `event:${item.id}`,
+      kind: "event",
+      eventName: item.eventName,
+      title: getTimelineEventTitle(item.eventName),
+      body: null,
+      createdAt: item.createdAt,
+      metadata: {
+        messageId: item.messageId,
+        requestId: item.requestId,
+      },
+    })),
+    ...notes.map((item) => ({
+      id: `note:${item.id}`,
+      kind: "note",
+      title: "Nota CRM",
+      body: item.body,
+      createdAt: item.createdAt,
+      metadata: {
+        leadId: item.leadId,
+      },
+    })),
+  ]
+    .sort((left, right) => {
+      const diff = right.createdAt.getTime() - left.createdAt.getTime();
+      if (diff !== 0) return diff;
+      return left.id.localeCompare(right.id);
+    });
+  const pageItems = items.slice(0, params.limit);
+  const nextCursorSource = items.length > params.limit ? pageItems[pageItems.length - 1] : null;
+
+  return {
+    ok: true,
+    contact: {
+      waId: resolved.resolvedWaId,
+      waIdCanonical: resolved.resolvedWaIdCanonical,
+      name: lead?.name ?? contact?.name ?? null,
+      phone: lead?.phone ?? resolved.resolvedWaId,
+      leadId: lead?.id ?? null,
+      leadStatus: lead?.status ?? null,
+      contactId: contact?.id ?? null,
+    },
+    items: pageItems.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    nextCursor: nextCursorSource
+      ? encodeContactTimelineCursor({ createdAt: nextCursorSource.createdAt.toISOString() })
+      : null,
   };
 }
 

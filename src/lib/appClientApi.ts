@@ -92,6 +92,32 @@ export type AppDashboardOverview = {
   generatedAt: string;
 };
 
+export type AppContactTimelineItem = {
+  id: string;
+  kind: "message" | "event" | "note";
+  direction?: "INBOUND" | "OUTBOUND";
+  eventName?: string;
+  title: string;
+  body?: string | null;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type AppContactTimelineResponse = {
+  ok: true;
+  contact: {
+    waId: string;
+    waIdCanonical: string | null;
+    name: string | null;
+    phone: string | null;
+    leadId: string | null;
+    leadStatus: string | null;
+    contactId?: string | null;
+  };
+  items: AppContactTimelineItem[];
+  nextCursor: string | null;
+};
+
 export type AppTemplateItem = {
   id: string;
   name: string;
@@ -684,6 +710,22 @@ export async function fetchAppConversation(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}${suffix}`);
+}
+
+export async function fetchAppConversationTimeline(
+  session: AppSession,
+  waId: string,
+  options?: { limit?: number; cursor?: string | null }
+): Promise<AppContactTimelineResponse> {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.cursor?.trim()) {
+    params.set("cursor", options.cursor.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/timeline${suffix}`);
 }
 
 export async function sendAppConversationMessage(
