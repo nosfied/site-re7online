@@ -211,26 +211,26 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white">
+      <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white [@media(max-height:760px)]:h-[100dvh]">
         <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
-          <aside className="flex h-full flex-col items-center border-r border-white/10 bg-[#081327] py-3">
+          <aside className="flex h-full min-h-0 flex-col items-center border-r border-white/10 bg-[#081327] py-3 [@media(max-height:760px)]:py-2">
             <button
               type="button"
               onClick={() => setShowBrandModal(true)}
               title="Ampliar logo da Converta"
-              className="flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5"
+              className="flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa]">
+              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa] [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl">
                 <Image
                   src="/images/converta-check-mark.png"
                   alt="Converta"
                   width={64}
                   height={64}
-                  className="h-9 w-9 translate-x-[2px] object-contain"
+                  className="h-9 w-9 translate-x-[2px] object-contain [@media(max-height:760px)]:h-7 [@media(max-height:760px)]:w-7"
                 />
               </span>
             </button>
-            <nav className="mt-4 flex w-full flex-1 flex-col items-center gap-2 px-2">
+            <nav className="mt-4 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto px-2 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:gap-1">
               {FULLSCREEN_NAV_ITEMS.filter((item) => !item.adminOnly || canViewAdministration).map((item) => {
                 const active = pathname === item.href;
                 return (
@@ -238,13 +238,13 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                     key={item.href}
                     href={item.href}
                     title={item.label}
-                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xs font-semibold transition ${
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl ${
                       active
                         ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <span className="text-xl leading-none">{item.icon}</span>
+                    <span className="text-xl leading-none [@media(max-height:760px)]:text-lg">{item.icon}</span>
                   </Link>
                 );
               })}
@@ -253,9 +253,9 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               type="button"
               onClick={handleLogout}
               title="Sair"
-              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/25 bg-red-900/20 text-xs font-semibold text-red-100 transition hover:bg-red-900/30"
+              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-red-400/25 bg-red-900/20 text-xs font-semibold text-red-100 transition hover:bg-red-900/30 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
             >
-              <span className="text-xl leading-none">🚪</span>
+              <span className="text-xl leading-none [@media(max-height:760px)]:text-lg">🚪</span>
             </button>
           </aside>
 

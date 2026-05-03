@@ -23,6 +23,7 @@ import {
   createAppLeadNote,
   fetchAppConversation,
   fetchAppConversations,
+  fetchAppDepartments,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
   sendAppConversationMedia,
@@ -437,6 +438,11 @@ const CONVERSATION_FILTERS = [
 ] as const;
 
 type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
+const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "MINE", "UNASSIGNED"];
+const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
+  (item) => !PRIMARY_CONVERSATION_FILTERS.includes(item.value)
+);
+const CONVERSATION_FILTER_BY_VALUE = new Map(CONVERSATION_FILTERS.map((item) => [item.value, item]));
 type DepartmentFilter = "ALL" | string;
 
 type DepartmentOption = {
@@ -1074,6 +1080,7 @@ export default function AppInboxPage() {
   const [transferDepartmentId, setTransferDepartmentId] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showMoreActions, setShowMoreActions] = useState(false);
+  const [showMoreConversationFilters, setShowMoreConversationFilters] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pauseErrorToast, setPauseErrorToast] = useState(false);
@@ -1229,24 +1236,36 @@ export default function AppInboxPage() {
   }, [adminConnection, session]);
 
   useEffect(() => {
-    if (!adminConnection || !adminClientKey || session?.user.role !== "ADMIN") {
+    if (!session || session.user.role === "AGENT") {
       setDepartments([]);
       return;
     }
     let cancelled = false;
-    fetchDepartments(adminConnection, adminClientKey)
+    fetchAppDepartments(session)
       .then((response) => {
         if (cancelled) return;
         setDepartments(response.items);
       })
       .catch(() => {
         if (cancelled) return;
+        if (adminConnection && adminClientKey && session.user.role === "ADMIN") {
+          fetchDepartments(adminConnection, adminClientKey)
+            .then((response) => {
+              if (cancelled) return;
+              setDepartments(response.items);
+            })
+            .catch(() => {
+              if (cancelled) return;
+              setDepartments([]);
+            });
+          return;
+        }
         setDepartments([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [adminClientKey, adminConnection, session?.user.role]);
+  }, [adminClientKey, adminConnection, session]);
 
   const scrollTimelineToBottom = useCallback(() => {
     if (!timelineRef.current) return;
@@ -2282,6 +2301,10 @@ export default function AppInboxPage() {
       }
     });
   }, [conversationFilter, conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
+  const selectedMoreConversationFilter = useMemo(
+    () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
+    [conversationFilter]
+  );
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
@@ -3146,12 +3169,18 @@ export default function AppInboxPage() {
                 placeholder="Buscar conversa"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
               />
-              <div className="flex flex-wrap gap-1.5">
-                {CONVERSATION_FILTERS.map((filter) => (
+              <div className="relative flex flex-wrap gap-1.5">
+                {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
+                  const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
+                  if (!filter) return null;
+                  return (
                   <button
                     key={filter.value}
                     type="button"
-                    onClick={() => setConversationFilter(filter.value)}
+                    onClick={() => {
+                      setConversationFilter(filter.value);
+                      setShowMoreConversationFilters(false);
+                    }}
                     className={`rounded-full px-2.5 py-1 text-[11px] transition ${
                       conversationFilter === filter.value
                         ? "bg-re7-sky/30 text-white"
@@ -3169,7 +3198,50 @@ export default function AppInboxPage() {
                       {conversationFilterCounts[filter.value]}
                     </span>
                   </button>
-                ))}
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setShowMoreConversationFilters((current) => !current)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] transition ${
+                    selectedMoreConversationFilter
+                      ? "bg-re7-sky/30 text-white"
+                      : "bg-white/5 text-white/65 hover:bg-white/10"
+                  }`}
+                >
+                  <span>{selectedMoreConversationFilter?.label ?? "Mais"}</span>
+                  {selectedMoreConversationFilter ? (
+                    <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                      {conversationFilterCounts[selectedMoreConversationFilter.value]}
+                    </span>
+                  ) : (
+                    <span className="ml-1 text-[10px] text-white/45">▾</span>
+                  )}
+                </button>
+                {showMoreConversationFilters ? (
+                  <div className="absolute left-0 top-full z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)]">
+                    {MORE_CONVERSATION_FILTERS.map((filter) => (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => {
+                          setConversationFilter(filter.value);
+                          setShowMoreConversationFilters(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
+                          conversationFilter === filter.value
+                            ? "bg-re7-sky/25 text-white"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span>{filter.label}</span>
+                        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] leading-none text-white/65">
+                          {conversationFilterCounts[filter.value]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {isAdminUser ? (
                 <select
@@ -3291,7 +3363,7 @@ export default function AppInboxPage() {
         </aside>
 
         <div className="relative flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
-          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3 max-[1366px]:min-h-14 max-[1366px]:px-3 max-[1366px]:py-2">
+          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3 max-[1366px]:min-h-14 max-[1366px]:px-3 max-[1366px]:py-2 [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold text-slate-900">
                 {selectedConversation
@@ -3411,9 +3483,9 @@ export default function AppInboxPage() {
             </div>
           </header>
 
-          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2 max-[1366px]:px-2 max-[1366px]:py-1.5">
+          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2 max-[1366px]:px-2 max-[1366px]:py-1.5 [@media(max-height:760px)]:py-1">
             <div className="grid grid-cols-[168px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2 max-[1366px]:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)] max-[1366px]:gap-1.5">
-              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
+              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5 [@media(max-height:760px)]:py-1">
                 <select
                   value={statusActionDraft}
                   onChange={async (event) => {
@@ -3423,7 +3495,7 @@ export default function AppInboxPage() {
                     await handleUpdateConversationStatus(nextStatus);
                   }}
                   disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                  className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
+                  className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5"
                 >
                   <option value="" disabled>
                     Status
@@ -3437,13 +3509,13 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5 [@media(max-height:760px)]:py-1">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferUserId}
                     onChange={(event) => setTransferUserId(event.target.value)}
                     disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5"
                   >
                     <option value="">Atendente</option>
                     {users.map((user) => (
@@ -3456,13 +3528,13 @@ export default function AppInboxPage() {
                     type="button"
                     disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
                     onClick={handleTransferConversation}
-                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5"
                   >
                     {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
                   </button>
                 </div>
               </div>
-              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5 [@media(max-height:760px)]:py-1">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferDepartmentId}
@@ -3472,7 +3544,7 @@ export default function AppInboxPage() {
                       departmentOptions.length === 0 ||
                       Boolean(conversationAction)
                     }
-                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [&>option]:bg-white [&>option]:text-slate-900"
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5 [&>option]:bg-white [&>option]:text-slate-900"
                   >
                     <option value="">
                       {selectedConversation?.departmentName || "Setor"}
@@ -3492,7 +3564,7 @@ export default function AppInboxPage() {
                       Boolean(conversationAction)
                     }
                     onClick={handleTransferDepartment}
-                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [@media(max-height:760px)]:py-0.5"
                   >
                     {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
                   </button>
@@ -3508,7 +3580,7 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3">
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3 [@media(max-height:760px)]:py-2">
             {!selectedConversationWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
@@ -3606,7 +3678,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2">
+          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 [@media(max-height:760px)]:py-1.5">
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
@@ -3704,7 +3776,7 @@ export default function AppInboxPage() {
               <label className="min-w-0 flex-1">
                 <textarea
                   ref={composerRef}
-                  className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2"
+                  className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2 [@media(max-height:760px)]:h-14 [@media(max-height:760px)]:min-h-14"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
