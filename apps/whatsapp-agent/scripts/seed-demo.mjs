@@ -128,8 +128,8 @@ function slugify(value) {
 async function upsertClient() {
   return prisma.client.upsert({
     where: { clientKey: CLIENT_KEY },
-    update: { name: CLIENT_NAME, status: "ACTIVE" },
-    create: { clientKey: CLIENT_KEY, name: CLIENT_NAME, status: "ACTIVE" },
+    update: { name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
+    create: { clientKey: CLIENT_KEY, name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
   });
 }
 

@@ -57,6 +57,7 @@ import {
   getFeatures,
   hasFeature,
   type ClientFeatureKey,
+  type ClientProfile,
 } from "../features/clientFeatures.js";
 import {
   buildWaIdLookup,
@@ -7592,11 +7593,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           id: true,
           name: true,
           clientKey: true,
+          profile: true,
           createdAt: true,
           updatedAt: true,
         },
       });
-      json(res, 200, { items: clients });
+      json(res, 200, {
+        items: clients.map((client) => ({
+          ...client,
+          profile: getClientProfile(client),
+        })),
+      });
       return;
     }
 
@@ -7909,6 +7916,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               id: client.id,
               clientKey: client.clientKey,
               status: client.status,
+              profile: getClientProfile(client),
             }
           : null,
       });
@@ -8350,7 +8358,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       try {
-        const saved = await saveTenantPatch(tenantId, body as Record<string, unknown>);
+        const rawBody = body as Record<string, unknown>;
+        const requestedProfile =
+          "profile" in rawBody ? parseClientProfile(rawBody.profile) : undefined;
+        const { profile: _profile, ...tenantPatch } = rawBody;
+        const saved = await saveTenantPatch(tenantId, tenantPatch);
+        const clientFieldsChanged: string[] = [];
+        if (requestedProfile) {
+          const client = await prisma.client.findUnique({
+            where: { clientKey: tenantId },
+            select: { id: true, clientKey: true, profile: true },
+          });
+          if (client && getClientProfile(client) !== requestedProfile) {
+            await prisma.client.update({
+              where: { id: client.id },
+              data: { profile: requestedProfile },
+            });
+            clientFieldsChanged.push("client.profile");
+          }
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
           const client = await prisma.client.findUnique({ where: { clientKey: tenantId } });
@@ -8366,7 +8392,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           event: "admin.tenant.update",
           tenantId,
           authSource: authToken.source,
-          fieldsChanged: saved.fieldsChanged,
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
           backupPath: saved.backupPath,
           requestId,
         });
@@ -8374,7 +8400,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           tenantId,
           backupPath: saved.backupPath,
-          fieldsChanged: saved.fieldsChanged,
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
           tenant: saved.tenant,
         });
       } catch (error) {
@@ -8398,6 +8424,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const clientKey = String(body.clientKey ?? "").trim();
       const name = String(body.name ?? "").trim();
       const phoneNumberId = String(body.phone_number_id ?? "").trim();
+      const profile = parseClientProfile(body.profile);
       if (!clientKey || !name || !phoneNumberId) {
         json(res, 400, { error: "invalid_body" });
         return;
@@ -8411,7 +8438,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         if (!client) {
           client = await prisma.client.create({
-            data: { clientKey, name },
+            data: { clientKey, name, profile },
             include: { phoneNumbers: true },
           });
           created = true;
@@ -8459,7 +8486,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           });
         }
         const status = created || createdPhone ? 201 : 200;
-        json(res, status, updatedClient);
+        json(
+          res,
+          status,
+          updatedClient
+            ? {
+                ...updatedClient,
+                profile: getClientProfile(updatedClient),
+              }
+            : updatedClient
+        );
         return;
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -8482,7 +8518,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             include: { phoneNumbers: true },
           });
           if (existingClient) {
-            json(res, 200, existingClient);
+            json(res, 200, {
+              ...existingClient,
+              profile: getClientProfile(existingClient),
+            });
             return;
           }
         }
@@ -10504,6 +10543,10 @@ function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function parseClientProfile(value: unknown): ClientProfile {
+  return value === "government" ? "government" : "business";
 }
 
 function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown): string | null {

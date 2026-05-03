@@ -107,6 +107,7 @@ export type AdminClientItem = {
   id: string;
   name: string;
   clientKey: string;
+  profile?: "business" | "government";
   createdAt: string;
   updatedAt: string;
   phoneNumbers?: Array<{
@@ -300,6 +301,7 @@ export type TenantConfigResponse = {
     id: string;
     clientKey: string;
     status: string;
+    profile?: "business" | "government";
   } | null;
   tenant: {
     id: string;
@@ -664,6 +666,7 @@ export async function createAdminClient(
     name: string;
     clientKey: string;
     phoneNumberId: string;
+    profile?: "business" | "government";
     initialUser?: {
       name: string;
       email: string;
@@ -680,6 +683,7 @@ export async function createAdminClient(
       name: payload.name,
       clientKey: payload.clientKey,
       phone_number_id: payload.phoneNumberId,
+      profile: payload.profile,
       ...(payload.initialUser ? { initialUser: payload.initialUser } : {}),
     }),
   });

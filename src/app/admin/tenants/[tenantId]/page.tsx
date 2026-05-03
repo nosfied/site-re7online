@@ -12,6 +12,7 @@ import {
 } from "@/lib/whatsappAdminApi";
 
 type TenantFormState = {
+  profile: "business" | "government";
   displayPhoneNumber: string;
   companyLegalName: string;
   companyTradeName: string;
@@ -150,6 +151,7 @@ export default function TenantEditPage() {
         setClientSnapshot(response.client ?? null);
         setTenantSnapshot(tenant);
         setForm({
+          profile: response.client?.profile === "government" ? "government" : "business",
           displayPhoneNumber: tenant.displayPhoneNumber ?? "",
           companyLegalName: tenant.companyLegalName ?? "",
           companyTradeName: tenant.companyTradeName ?? "",
@@ -246,6 +248,7 @@ export default function TenantEditPage() {
 
     const payload: Record<string, unknown> = {
       ...(tenantSnapshot ?? {}),
+      profile: form.profile,
       displayPhoneNumber: form.displayPhoneNumber.trim() || undefined,
       companyLegalName: optionalText(form.companyLegalName),
       companyTradeName: optionalText(form.companyTradeName),
@@ -336,6 +339,7 @@ export default function TenantEditPage() {
     try {
       const result = await updateTenantById(connection, tenantId, payload);
       setTenantSnapshot(result.tenant);
+      setClientSnapshot((prev) => (prev ? { ...prev, profile: form.profile } : prev));
       setForm((prev) =>
         prev
           ? {
@@ -408,6 +412,12 @@ export default function TenantEditPage() {
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Client status</p>
                 <p className="mt-2 text-sm font-medium">{clientSnapshot?.status ?? "-"}</p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-white/50">Perfil do portal</p>
+                <p className="mt-2 text-sm font-medium">
+                  {clientSnapshot?.profile === "government" ? "Governo / edital" : "Empresa privada"}
+                </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Idioma padrao</p>
@@ -568,6 +578,38 @@ export default function TenantEditPage() {
                 <span className="text-xs text-white/50">
                   Padrao: 5. Use 0 para bloquear novos usuarios ativos.
                 </span>
+              </label>
+            </section>
+
+            <section className="grid gap-3 rounded-lg border border-white/10 bg-re7-navy/30 p-3">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                  Perfil do portal
+                </h2>
+                <p className="mt-1 text-xs text-white/50">
+                  Define labels e organizacao do menu no /app sem bloquear rotas ou modulos.
+                </p>
+              </div>
+              <label className="grid gap-1 text-sm md:max-w-sm">
+                <span className="text-white/70">Tipo de experiencia</span>
+                <select
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={form.profile}
+                  onChange={(event) =>
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            profile:
+                              event.target.value === "government" ? "government" : "business",
+                          }
+                        : prev
+                    )
+                  }
+                >
+                  <option value="business">Empresa privada</option>
+                  <option value="government">Governo / edital</option>
+                </select>
               </label>
             </section>
 
