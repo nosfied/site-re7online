@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppSession, clearAppSession, fetchAppTenantSummary } from "@/lib/appClientApi";
-import { getAppFeatures } from "@/lib/appFeatures";
+import { getAppFeatures, getAppProfile, type AppFeatureKey, type AppProfile } from "@/lib/appFeatures";
 
 type AppShellProps = {
   session: AppSession;
@@ -17,9 +17,12 @@ type AppShellProps = {
 
 type NavItem = {
   href: string;
-  label: string;
   icon: string;
-  adminOnly?: boolean;
+  group: "operation" | "administration";
+  labels: Record<AppProfile, string>;
+  feature?: AppFeatureKey;
+  profiles?: AppProfile[];
+  minRole?: "SUPERVISOR" | "ADMIN";
 };
 
 function getLinkClasses(active: boolean) {
@@ -38,28 +41,90 @@ function isAdminRole(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
-const FULLSCREEN_NAV_ITEMS: NavItem[] = [
-  { href: "/app/inbox", label: "Inbox", icon: "📥" },
-  { href: "/app/dashboard", label: "Dashboard", icon: "📊", adminOnly: true },
-  { href: "/app/campaigns", label: "Campanhas", icon: "📢" },
-  { href: "/app/templates", label: "Templates", icon: "🧾" },
-  { href: "/app/chatbot", label: "Configurações Chatbot", icon: "🤖", adminOnly: true },
-  { href: "/app/reports", label: "Relatórios", icon: "📊", adminOnly: true },
-  { href: "/app/settings/users", label: "Usuários", icon: "👤", adminOnly: true },
-  { href: "/app/settings/departments", label: "Setores", icon: "🏢", adminOnly: true },
-  { href: "/app/settings/privacy", label: "Privacidade", icon: "🔒", adminOnly: true },
+const APP_NAV_ITEMS: NavItem[] = [
+  {
+    href: "/app/inbox",
+    icon: "📥",
+    group: "operation",
+    labels: { business: "Inbox", government: "Atendimento" },
+  },
+  {
+    href: "/app/dashboard",
+    icon: "📊",
+    group: "operation",
+    profiles: ["government"],
+    minRole: "SUPERVISOR",
+    labels: { business: "Dashboard", government: "Dashboard" },
+  },
+  {
+    href: "/app/campaigns",
+    icon: "📢",
+    group: "operation",
+    feature: "campaigns",
+    profiles: ["business"],
+    labels: { business: "Campanhas", government: "Comunicados" },
+  },
+  {
+    href: "/app/templates",
+    icon: "🧾",
+    group: "operation",
+    profiles: ["business"],
+    labels: { business: "Templates", government: "Templates" },
+  },
+  {
+    href: "/app/chatbot",
+    icon: "🤖",
+    group: "operation",
+    feature: "chatbot",
+    minRole: "SUPERVISOR",
+    labels: { business: "Automacao", government: "Configuracoes" },
+  },
+  {
+    href: "/app/reports",
+    icon: "📈",
+    group: "operation",
+    feature: "reports",
+    minRole: "SUPERVISOR",
+    labels: { business: "Relatorios", government: "Indicadores" },
+  },
+  {
+    href: "/app/settings/users",
+    icon: "👤",
+    group: "administration",
+    minRole: "SUPERVISOR",
+    labels: { business: "Contatos", government: "Usuarios" },
+  },
+  {
+    href: "/app/settings/departments",
+    icon: "🏢",
+    group: "administration",
+    feature: "departments",
+    minRole: "SUPERVISOR",
+    labels: { business: "Configuracoes", government: "Departamentos" },
+  },
+  {
+    href: "/app/settings/privacy",
+    icon: "🔒",
+    group: "administration",
+    minRole: "ADMIN",
+    labels: { business: "Privacidade", government: "Auditoria" },
+  },
 ];
 
 export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
-  const [tenantSummary, setTenantSummary] = useState<{ name: string; phoneDisplay: string | null } | null>(null);
+  const [tenantSummary, setTenantSummary] = useState<{
+    name: string;
+    phoneDisplay: string | null;
+    profile: AppProfile;
+  } | null>(null);
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
   const features = getAppFeatures(session);
+  const profile = tenantSummary?.profile ?? getAppProfile(session);
 
   useEffect(() => {
-    if (fullScreen) return;
     let cancelled = false;
     fetchAppTenantSummary(session)
       .then((response) => {
@@ -67,6 +132,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         setTenantSummary({
           name: response.tenant.name,
           phoneDisplay: response.tenant.phoneDisplay,
+          profile: response.tenant.profile,
         });
       })
       .catch(() => {
@@ -75,64 +141,31 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     return () => {
       cancelled = true;
     };
-  }, [fullScreen, session]);
+  }, [session]);
 
   const handleLogout = () => {
     clearAppSession();
     router.replace("/app/login");
   };
 
-  const operationLinks = (
-    <>
-      <Link href="/app/inbox" className={getLinkClasses(pathname === "/app/inbox")}>
-        Inbox
-      </Link>
-      {canViewAdministration ? (
-        <Link href="/app/dashboard" className={getLinkClasses(pathname === "/app/dashboard")}>
-          Dashboard
-        </Link>
-      ) : null}
-      {features.campaigns ? (
-        <Link href="/app/campaigns" className={getLinkClasses(pathname === "/app/campaigns")}>
-          Campanhas
-        </Link>
-      ) : null}
-      <Link href="/app/templates" className={getLinkClasses(pathname === "/app/templates")}>
-        Templates
-      </Link>
-    </>
-  );
+  const visibleNavItems = APP_NAV_ITEMS.filter((item) => {
+    if (item.profiles && !item.profiles.includes(profile)) return false;
+    if (item.feature && !features[item.feature]) return false;
+    if (item.minRole === "ADMIN" && !isAdminRole(session.user.role)) return false;
+    if (item.minRole === "SUPERVISOR" && !canViewAdministration) return false;
+    return true;
+  });
+  const operationItems = visibleNavItems.filter((item) => item.group === "operation");
+  const administrationItems = visibleNavItems.filter((item) => item.group === "administration");
 
-  const administrationLinks = canViewAdministration ? (
-    <>
-      <Link href="/app/settings/users" className={getLinkClasses(pathname === "/app/settings/users")}>
-        Usuarios
+  const renderTextLink = (item: NavItem) => {
+    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    return (
+      <Link key={item.href} href={item.href} className={getLinkClasses(active)}>
+        {item.labels[profile]}
       </Link>
-      {features.departments ? (
-        <Link
-          href="/app/settings/departments"
-          className={getLinkClasses(pathname === "/app/settings/departments")}
-        >
-          Setores
-        </Link>
-      ) : null}
-      {features.chatbot ? (
-        <Link href="/app/chatbot" className={getLinkClasses(pathname === "/app/chatbot")}>
-          Chatbot
-        </Link>
-      ) : null}
-      {features.reports ? (
-        <Link href="/app/reports" className={getLinkClasses(pathname === "/app/reports")}>
-          Relatorios
-        </Link>
-      ) : null}
-      {isAdminRole(session.user.role) ? (
-        <Link href="/app/settings/privacy" className={getLinkClasses(pathname === "/app/settings/privacy")}>
-          Privacidade
-        </Link>
-      ) : null}
-    </>
-  ) : null;
+    );
+  };
 
   const navGroupClasses =
     "grid min-w-0 max-w-full gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5";
@@ -231,13 +264,13 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               </span>
             </button>
             <nav className="mt-4 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto px-2 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:gap-1">
-              {FULLSCREEN_NAV_ITEMS.filter((item) => !item.adminOnly || canViewAdministration).map((item) => {
-                const active = pathname === item.href;
+              {visibleNavItems.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={item.label}
+                    title={item.labels[profile]}
                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl ${
                       active
                         ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
@@ -283,14 +316,14 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                   Operacao
                 </p>
-                <div className={navLinksClasses}>{operationLinks}</div>
+                <div className={navLinksClasses}>{operationItems.map(renderTextLink)}</div>
               </div>
-              {administrationLinks ? (
+              {administrationItems.length > 0 ? (
                 <div className={navGroupClasses}>
                   <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
                     Administracao
                   </p>
-                  <div className={navLinksClasses}>{administrationLinks}</div>
+                  <div className={navLinksClasses}>{administrationItems.map(renderTextLink)}</div>
                 </div>
               ) : null}
             </div>

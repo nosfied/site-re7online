@@ -1,4 +1,4 @@
-import type { AppSession } from "@/lib/appClientApi";
+export type AppProfile = "business" | "government";
 
 export type AppFeatureKey =
   | "departments"
@@ -54,4 +54,8 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
 
 export function hasAppFeature(session: SessionLike, featureName: AppFeatureKey) {
   return getAppFeatures(session)[featureName];
+}
+
+export function getAppProfile(session: { profile?: unknown } | null | undefined): AppProfile {
+  return session?.profile === "government" ? "government" : "business";
 }

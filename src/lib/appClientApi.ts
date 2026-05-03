@@ -10,7 +10,7 @@ import type {
   LeadNoteItem,
   LeadStatus,
 } from "@/lib/whatsappAdminApi";
-import { getAppFeatures, type AppFeatures } from "@/lib/appFeatures";
+import { getAppFeatures, getAppProfile, type AppFeatures, type AppProfile } from "@/lib/appFeatures";
 
 export type AppSessionUser = {
   id: string;
@@ -27,6 +27,7 @@ export type AppSession = {
   token: string;
   user: AppSessionUser;
   features: AppFeatures;
+  profile: AppProfile;
 };
 
 export type AppInboxReadState = {
@@ -149,6 +150,7 @@ export type AppTenantSummary = {
   phoneNumberId: string | null;
   phoneDisplay: string | null;
   features: AppFeatures;
+  profile: AppProfile;
 };
 
 const SESSION_KEY = "wa_app_session_session_v1";
@@ -228,6 +230,7 @@ function parseStoredSession(raw: string | null): AppSession | null {
       token,
       user: resolvedUser,
       features: getAppFeatures(parsed as Partial<AppSession>),
+      profile: getAppProfile(parsed as Partial<AppSession>),
     };
   } catch {
     return null;
@@ -530,7 +533,7 @@ async function requestAppBlob(
 export async function loginAppUser(
   email: string,
   password: string
-): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures }> {
+): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile }> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
@@ -584,11 +587,13 @@ export async function loginAppUser(
     token: string;
     user: AppSessionUser;
     features?: Partial<AppFeatures> | null;
+    profile?: AppProfile | null;
   };
   const tokenUser = decodeClientAuthToken(payload.token);
   return {
     ...payload,
     features: getAppFeatures({ features: payload.features ?? undefined }),
+    profile: getAppProfile({ profile: payload.profile ?? undefined }),
     user: {
       ...payload.user,
       id: payload.user.id || tokenUser.id || "",

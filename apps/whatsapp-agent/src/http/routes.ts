@@ -52,7 +52,12 @@ import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
 } from "../metrics/conversationMetrics.js";
-import { getFeatures, hasFeature, type ClientFeatureKey } from "../features/clientFeatures.js";
+import {
+  getClientProfile,
+  getFeatures,
+  hasFeature,
+  type ClientFeatureKey,
+} from "../features/clientFeatures.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
@@ -143,6 +148,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             select: {
               status: true,
               features: true,
+              profile: true,
             },
           },
         },
@@ -201,6 +207,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           departmentName: user.department?.name ?? null,
         },
         features: getFeatures(user.client),
+        profile: getClientProfile(user.client),
       });
     } catch (error) {
       logger.error({
@@ -279,6 +286,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           phoneNumberId: client.metaConfig?.phoneNumberId ?? phone?.phoneNumberId ?? null,
           phoneDisplay,
           features: getFeatures(client),
+          profile: getClientProfile(client),
         },
       });
     } catch (error) {

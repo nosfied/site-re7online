@@ -1,6 +1,7 @@
 export type ClientFeatureKey = "departments" | "sla" | "reports" | "campaigns" | "chatbot";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
+export type ClientProfile = "business" | "government";
 
 export const DEFAULT_CLIENT_FEATURES: ClientFeatures = {
   departments: true,
@@ -12,6 +13,10 @@ export const DEFAULT_CLIENT_FEATURES: ClientFeatures = {
 
 type ClientWithFeatures = {
   features?: unknown;
+};
+
+type ClientWithProfile = {
+  profile?: unknown;
 };
 
 function normalizeFeatureValue(value: unknown) {
@@ -38,4 +43,8 @@ export function hasFeature(
   featureName: ClientFeatureKey
 ) {
   return getFeatures(client)[featureName];
+}
+
+export function getClientProfile(client: ClientWithProfile | null | undefined): ClientProfile {
+  return client?.profile === "government" ? "government" : "business";
 }

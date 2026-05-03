@@ -58,6 +58,7 @@ export default function AppLoginPage() {
         token: response.token,
         user: response.user,
         features: response.features,
+        profile: response.profile,
       };
       saveAppSession(session);
       router.replace("/app/inbox");
