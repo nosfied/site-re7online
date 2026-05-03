@@ -3291,7 +3291,7 @@ export default function AppInboxPage() {
         </aside>
 
         <div className="relative flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
-          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3">
+          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3 max-[1366px]:min-h-14 max-[1366px]:px-3 max-[1366px]:py-2">
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold text-slate-900">
                 {selectedConversation
@@ -3326,7 +3326,7 @@ export default function AppInboxPage() {
                       )}`
                     );
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
                 >
                   🔒
                 </button>
@@ -3339,7 +3339,7 @@ export default function AppInboxPage() {
                     aria-label="Liberar conversa para automação"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleReleaseConversation}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
                   >
                     {conversationAction === "release" ? "…" : "🤖"}
                   </button>
@@ -3349,7 +3349,7 @@ export default function AppInboxPage() {
                     aria-label="Liberar conversa para Atendimento Geral"
                     disabled={!selectedConversationWaId || Boolean(conversationAction)}
                     onClick={handleReleaseConversationToGeneral}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
                   >
                     {conversationAction === "release-general" ? "…" : "🎧"}
                   </button>
@@ -3365,7 +3365,7 @@ export default function AppInboxPage() {
                     isSelectedConversationLocked
                   }
                   onClick={handleClaimConversation}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/70 text-base text-slate-800 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
                 >
                   {conversationAction === "claim" ? "…" : "✓"}
                 </button>
@@ -3394,7 +3394,7 @@ export default function AppInboxPage() {
                   setUnreadSeparatorIndex(null);
                   setUnreadAnchorMessageIdentity(null);
                 }}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
               >
                 ✉
               </button>
@@ -3404,16 +3404,16 @@ export default function AppInboxPage() {
                 aria-label="Mostrar mais ações"
                 disabled={!selectedConversation}
                 onClick={() => setShowMoreActions((current) => !current)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
               >
                 ⋯
               </button>
             </div>
           </header>
 
-          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2">
-            <div className="grid grid-cols-[168px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2">
-              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2 max-[1366px]:px-2 max-[1366px]:py-1.5">
+            <div className="grid grid-cols-[168px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2 max-[1366px]:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)] max-[1366px]:gap-1.5">
+              <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
                 <select
                   value={statusActionDraft}
                   onChange={async (event) => {
@@ -3423,7 +3423,7 @@ export default function AppInboxPage() {
                     await handleUpdateConversationStatus(nextStatus);
                   }}
                   disabled={!canManageSelectedConversation || Boolean(conversationAction)}
-                  className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
                 >
                   <option value="" disabled>
                     Status
@@ -3437,13 +3437,13 @@ export default function AppInboxPage() {
                   ))}
                 </select>
               </div>
-              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferUserId}
                     onChange={(event) => setTransferUserId(event.target.value)}
                     disabled={!canTransferSelectedConversation || users.length === 0 || Boolean(conversationAction)}
-                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
                   >
                     <option value="">Atendente</option>
                     {users.map((user) => (
@@ -3456,13 +3456,13 @@ export default function AppInboxPage() {
                     type="button"
                     disabled={!canTransferSelectedConversation || !transferUserId || Boolean(conversationAction)}
                     onClick={handleTransferConversation}
-                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
                   >
                     {conversationAction === "transfer" ? "Transferindo..." : "Transferir"}
                   </button>
                 </div>
               </div>
-              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2">
+              <div className="min-w-0 rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5">
                 <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <select
                     value={transferDepartmentId}
@@ -3472,7 +3472,7 @@ export default function AppInboxPage() {
                       departmentOptions.length === 0 ||
                       Boolean(conversationAction)
                     }
-                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 [&>option]:bg-white [&>option]:text-slate-900"
+                    className="min-w-0 flex-1 rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs [&>option]:bg-white [&>option]:text-slate-900"
                   >
                     <option value="">
                       {selectedConversation?.departmentName || "Setor"}
@@ -3492,7 +3492,7 @@ export default function AppInboxPage() {
                       Boolean(conversationAction)
                     }
                     onClick={handleTransferDepartment}
-                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap rounded-xl border border-[#e1d4c2] bg-white px-2.5 py-1.5 text-[13px] text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:px-2 max-[1366px]:py-1 max-[1366px]:text-xs"
                   >
                     {conversationAction === "transfer-department" ? "Movendo..." : "Mover"}
                   </button>
@@ -3508,7 +3508,7 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3">
             {!selectedConversationWaId ? (
               <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
             ) : null}
@@ -3606,7 +3606,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3">
+          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2">
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
@@ -3665,7 +3665,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
                 onClick={() => mediaInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl"
               >
                 +
               </button>
@@ -3673,7 +3673,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
                 onClick={() => setShowEmojiPicker((current) => !current)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl"
               >
                 😊
               </button>
@@ -3693,7 +3693,7 @@ export default function AppInboxPage() {
                     ? "Clique novamente para parar e enviar o áudio"
                     : "Gravar áudio"
                 }
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-lg transition disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl ${
                   audioRecordingState === "recording"
                     ? "border-red-300 bg-red-600 text-white shadow-[0_0_0_3px_rgba(220,38,38,0.18)] hover:bg-red-500"
                     : "border-[#d4c7b5] bg-white text-slate-700 hover:bg-slate-50"
@@ -3704,7 +3704,7 @@ export default function AppInboxPage() {
               <label className="min-w-0 flex-1">
                 <textarea
                   ref={composerRef}
-                  className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69]"
+                  className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
@@ -3728,7 +3728,7 @@ export default function AppInboxPage() {
                   sendingMessage
                 }
                 onClick={handlePrimarySend}
-                className="h-10 shrink-0 rounded-2xl bg-[#20b15a] px-3.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-10 shrink-0 rounded-2xl bg-[#20b15a] px-3.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-3"
               >
                 Enviar
               </button>
