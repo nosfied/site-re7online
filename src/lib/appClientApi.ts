@@ -788,6 +788,17 @@ export async function transferAppConversation(
   });
 }
 
+export async function transferAppConversationDepartment(
+  session: AppSession,
+  waId: string,
+  departmentId: string
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/transfer-department`, {
+    method: "POST",
+    body: JSON.stringify({ departmentId }),
+  });
+}
+
 export async function updateAppConversationStatus(
   session: AppSession,
   waId: string,

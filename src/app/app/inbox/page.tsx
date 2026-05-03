@@ -36,6 +36,7 @@ import {
   fetchAppConversationMedia,
   sendAppConversationMessage,
   transferAppConversation,
+  transferAppConversationDepartment,
   updateAppConversationStatus,
   updateAppLeadStatus,
   updateAppConversationReadState,
@@ -53,7 +54,6 @@ import {
   fetchAdminClients,
   fetchDepartments,
   loadAdminConnection,
-  transferConversationDepartment,
 } from "@/lib/whatsappAdminApi";
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = [
@@ -2352,14 +2352,8 @@ export default function AppInboxPage() {
 
   const canTransferDepartment = useMemo(
     () =>
-      Boolean(
-        isAdminUser &&
-          selectedConversationWaId &&
-          adminClientKey &&
-          adminConnection?.baseUrl.trim() &&
-          adminConnection.adminToken.trim()
-      ),
-    [adminClientKey, adminConnection, isAdminUser, selectedConversationWaId]
+      Boolean(selectedConversationWaId && (isAdminUser || isSelectedConversationOwnedByCurrentUser)),
+    [isAdminUser, isSelectedConversationOwnedByCurrentUser, selectedConversationWaId]
   );
 
   useEffect(() => {
@@ -3027,9 +3021,7 @@ export default function AppInboxPage() {
     if (
       !session ||
       !selectedConversationWaId ||
-      !transferDepartmentId ||
-      !adminConnection ||
-      !adminClientKey
+      !transferDepartmentId
     ) {
       return;
     }
@@ -3037,9 +3029,8 @@ export default function AppInboxPage() {
     setError(null);
     setSuccess(null);
     try {
-      const response = await transferConversationDepartment(
-        adminConnection,
-        adminClientKey,
+      const response = await transferAppConversationDepartment(
+        session,
         selectedConversationWaId,
         transferDepartmentId
       );

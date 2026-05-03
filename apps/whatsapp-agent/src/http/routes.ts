@@ -3951,6 +3951,186 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/transfer-department")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const nextDepartmentId =
+        typeof body.departmentId === "string" ? body.departmentId.trim() : "";
+      if (!nextDepartmentId) {
+        json(res, 400, {
+          error: "bad_request",
+          message: "Informe o setor de destino.",
+        });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const department = await prisma.department.findFirst({
+        where: {
+          id: nextDepartmentId,
+          clientId: client.id,
+          isActive: true,
+          ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+        },
+        select: { id: true, name: true },
+      });
+      if (!department) {
+        json(res, 404, { error: "department_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_transfer_department",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const hasDepartmentAccess = hasConversationDepartmentAccess({
+        role: clientAuth.role,
+        userDepartmentId: departmentAccess.departmentId,
+        conversationDepartmentId: conversation.departmentId ?? null,
+      });
+      const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
+      if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer-department",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !isAdminRole(clientAuth.role) &&
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer-department",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode mover conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const queue = await ensureQueueForDepartment(prisma, {
+        clientId: client.id,
+        departmentId: department.id,
+      });
+      const previousDepartmentId = conversation.departmentId ?? null;
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        departmentId: department.id,
+        queueId: queue.id,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: department.id,
+      });
+      logger.info({
+        event: "conversation.department.transferred",
+        requestId,
+        clientId: client.id,
+        conversationId: nextState.waId,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        fromDepartmentId: previousDepartmentId,
+        toDepartmentId: department.id,
+        userId: clientAuth.userId,
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus:
+          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+            ? nextState.handoff.status
+            : "active",
+        assignedUserId: null,
+        departmentId: department.id,
+        updatedAt: new Date().toISOString(),
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: null,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.transfer_department.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/status")
   ) {
     const prisma = getPrisma();
