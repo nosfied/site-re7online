@@ -3564,10 +3564,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
-        status: ConversationOperationalStatus.WAITING,
+        departmentId: null,
+        queueId: null,
+        status: null,
         closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: null,
+      });
       logger.info({
         event: "conversation.released",
         requestId,
