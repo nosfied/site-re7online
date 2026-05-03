@@ -11813,7 +11813,10 @@ async function enforceAppFeature(
     });
   }
   json(res, 403, {
-    error: "feature_not_enabled",
+    error: {
+      code: "feature_not_enabled",
+      message: `Feature '${params.feature}' is not enabled for this tenant`,
+    },
     feature: params.feature,
   });
   return false;
