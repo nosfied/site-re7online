@@ -92,7 +92,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "👤",
     group: "administration",
     minRole: "SUPERVISOR",
-    labels: { business: "Contatos", government: "Usuarios" },
+    labels: { business: "Usuarios", government: "Usuarios" },
   },
   {
     href: "/app/settings/departments",
@@ -100,7 +100,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "administration",
     feature: "departments",
     minRole: "SUPERVISOR",
-    labels: { business: "Configuracoes", government: "Departamentos" },
+    labels: { business: "Setores", government: "Departamentos" },
   },
   {
     href: "/app/settings/privacy",

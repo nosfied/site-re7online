@@ -13,6 +13,7 @@ const CLIENT_NAME = "Prefeitura Municipal Demo";
 const DEMO_PHONE_NUMBER_ID = "demo-prefeitura-controlled";
 const DEMO_PASSWORD = process.env.DEMO_TENANT_PASSWORD || "Demo@2026";
 const DEMO_RETENTION_DAYS = 365;
+const TENANTS_CONFIG_PATH = path.join(process.cwd(), ".data", "tenants.json");
 
 const departmentsSeed = [
   { name: "Atendimento Geral", slug: "atendimento-geral", queueName: "Fila Geral" },
@@ -131,6 +132,43 @@ async function upsertClient() {
     update: { name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
     create: { clientKey: CLIENT_KEY, name: CLIENT_NAME, status: "ACTIVE", profile: "government" },
   });
+}
+
+async function upsertTenantConfig() {
+  await fs.mkdir(path.dirname(TENANTS_CONFIG_PATH), { recursive: true });
+  let tenants = {};
+  try {
+    tenants = JSON.parse(await fs.readFile(TENANTS_CONFIG_PATH, "utf8"));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const current =
+    tenants && typeof tenants === "object" && !Array.isArray(tenants)
+      ? tenants[CLIENT_KEY] ?? {}
+      : {};
+  tenants[CLIENT_KEY] = {
+    ...current,
+    id: CLIENT_KEY,
+    name: CLIENT_NAME,
+    metaPhoneNumberId: DEMO_PHONE_NUMBER_ID,
+    allowlist: Array.isArray(current.allowlist) ? current.allowlist : [],
+    handoffAttendantWaid:
+      typeof current.handoffAttendantWaid === "string" ? current.handoffAttendantWaid : "",
+    defaultLanguage:
+      typeof current.defaultLanguage === "string" && current.defaultLanguage.trim()
+        ? current.defaultLanguage
+        : "pt_BR",
+    maxActiveAppUsers:
+      typeof current.maxActiveAppUsers === "number" && Number.isInteger(current.maxActiveAppUsers)
+        ? current.maxActiveAppUsers
+        : 5,
+    disableChatbot: false,
+    appDisableChatbot: false,
+    disableLegacyFlows: true,
+    disableAiFallback: true,
+    appDisableAiFallback: false,
+  };
+  await fs.writeFile(TENANTS_CONFIG_PATH, `${JSON.stringify(tenants, null, 2)}\n`, "utf8");
 }
 
 async function upsertDepartments(clientId) {
@@ -570,6 +608,7 @@ async function simulateHandoff(client, departments, waId) {
 
 async function main() {
   const client = await upsertClient();
+  await upsertTenantConfig();
   const departments = await upsertDepartments(client.id);
   const users = await upsertUsers(client.id, departments);
 
