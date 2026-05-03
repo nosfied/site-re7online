@@ -66,7 +66,13 @@ async function listClientKeys(requestedClientKey) {
     .sort();
 }
 
-function buildData(clientId, state) {
+function buildData(clientId, state, refs) {
+  const departmentId = state.departmentId && refs.departmentIds.has(state.departmentId)
+    ? state.departmentId
+    : null;
+  const queueId = state.queueId && refs.queueIds.has(state.queueId)
+    ? state.queueId
+    : null;
   return {
     clientId,
     waId: state.waId,
@@ -105,8 +111,8 @@ function buildData(clientId, state) {
     assignedUserId: state.assignedUserId ?? null,
     assignedTo: state.assignedTo ?? null,
     assignedAt: toDate(state.assignedAt),
-    departmentId: state.departmentId ?? null,
-    queueId: state.queueId ?? null,
+    departmentId,
+    queueId,
     status: toOperationalStatus(state.status),
     closedAt: toDate(state.closedAt),
   };
@@ -123,6 +129,7 @@ async function run() {
     recordsUpserted: 0,
     clientsMissing: [],
     filesMissing: [],
+    invalidReferences: 0,
   };
 
   for (const clientKey of clientKeys) {
@@ -140,12 +147,38 @@ async function run() {
       summary.filesMissing.push(filePath);
       continue;
     }
+    const departmentIds = Array.from(new Set(states.map((state) => state?.departmentId).filter(Boolean)));
+    const queueIds = Array.from(new Set(states.map((state) => state?.queueId).filter(Boolean)));
+    const [departments, queues] = await Promise.all([
+      departmentIds.length
+        ? prisma.department.findMany({
+            where: { clientId: client.id, id: { in: departmentIds } },
+            select: { id: true },
+          })
+        : [],
+      queueIds.length
+        ? prisma.queue.findMany({
+            where: { clientId: client.id, id: { in: queueIds } },
+            select: { id: true },
+          })
+        : [],
+    ]);
+    const refs = {
+      departmentIds: new Set(departments.map((item) => item.id)),
+      queueIds: new Set(queues.map((item) => item.id)),
+    };
 
     summary.clientsScanned += 1;
     for (const state of states) {
       if (!state?.waId) continue;
       summary.recordsScanned += 1;
-      const data = buildData(client.id, state);
+      if (state.departmentId && !refs.departmentIds.has(state.departmentId)) {
+        summary.invalidReferences += 1;
+      }
+      if (state.queueId && !refs.queueIds.has(state.queueId)) {
+        summary.invalidReferences += 1;
+      }
+      const data = buildData(client.id, state, refs);
       if (!options.dryRun) {
         await prisma.conversationRuntimeState.upsert({
           where: { clientId_waId: { clientId: client.id, waId: state.waId } },

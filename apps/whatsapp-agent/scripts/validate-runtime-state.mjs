@@ -40,13 +40,19 @@ function normalizeOperationalStatus(value) {
     : null;
 }
 
-function jsonView(state) {
+function jsonView(state, refs) {
+  const departmentId = state.departmentId && refs.departmentIds.has(state.departmentId)
+    ? state.departmentId
+    : null;
+  const queueId = state.queueId && refs.queueIds.has(state.queueId)
+    ? state.queueId
+    : null;
   return {
     mode: state.mode ?? null,
     handoffStatus: normalizeHandoffStatus(state.handoff?.status),
     assignedUserId: state.assignedUserId ?? null,
-    departmentId: state.departmentId ?? null,
-    queueId: state.queueId ?? null,
+    departmentId,
+    queueId,
     status: normalizeOperationalStatus(state.status),
     lastInboundAt: toIso(state.lastInboundAt),
     lastOutboundAt: toIso(state.lastOutboundAt),
@@ -97,6 +103,7 @@ async function run() {
     recordsScanned: 0,
     missingInPostgres: 0,
     mismatches: 0,
+    invalidReferences: 0,
     samples: [],
   };
 
@@ -109,11 +116,37 @@ async function run() {
     const filePath = path.join(dataDir, clientKey, "conversations.json");
     const states = await readJson(filePath);
     if (!Array.isArray(states)) continue;
+    const departmentIds = Array.from(new Set(states.map((state) => state?.departmentId).filter(Boolean)));
+    const queueIds = Array.from(new Set(states.map((state) => state?.queueId).filter(Boolean)));
+    const [departments, queues] = await Promise.all([
+      departmentIds.length
+        ? prisma.department.findMany({
+            where: { clientId: client.id, id: { in: departmentIds } },
+            select: { id: true },
+          })
+        : [],
+      queueIds.length
+        ? prisma.queue.findMany({
+            where: { clientId: client.id, id: { in: queueIds } },
+            select: { id: true },
+          })
+        : [],
+    ]);
+    const refs = {
+      departmentIds: new Set(departments.map((item) => item.id)),
+      queueIds: new Set(queues.map((item) => item.id)),
+    };
     summary.clientsScanned += 1;
 
     for (const state of states) {
       if (!state?.waId) continue;
       summary.recordsScanned += 1;
+      if (state.departmentId && !refs.departmentIds.has(state.departmentId)) {
+        summary.invalidReferences += 1;
+      }
+      if (state.queueId && !refs.queueIds.has(state.queueId)) {
+        summary.invalidReferences += 1;
+      }
       const db = await prisma.conversationRuntimeState.findUnique({
         where: { clientId_waId: { clientId: client.id, waId: state.waId } },
       });
@@ -124,7 +157,7 @@ async function run() {
         }
         continue;
       }
-      const fields = diffFields(jsonView(state), dbView(db));
+      const fields = diffFields(jsonView(state, refs), dbView(db));
       if (fields.length > 0) {
         summary.mismatches += 1;
         if (summary.samples.length < 20) {
