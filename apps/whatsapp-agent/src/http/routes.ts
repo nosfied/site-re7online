@@ -490,7 +490,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
       });
       if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 200, { ok: true, count: 0, items: [], conversations: [], nextCursor: null });
+        json(res, 200, {
+          ok: true,
+          count: 0,
+          items: [],
+          conversations: [],
+          filterCounts: buildEmptyConversationFilterCounts(),
+          nextCursor: null,
+          readState: {
+            lastReadAtByConversationKey: {},
+            manuallyUnreadByConversationKey: {},
+          },
+        });
         return;
       }
       const result = await buildConversationListPayload(prisma, {
@@ -12879,6 +12890,18 @@ function buildConversationFilterCounts(
   return counts;
 }
 
+function buildEmptyConversationFilterCounts() {
+  return {
+    ALL: 0,
+    WAITING: 0,
+    IN_PROGRESS: 0,
+    WAITING_USER: 0,
+    CLOSED: 0,
+    MINE: 0,
+    UNASSIGNED: 0,
+  };
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
@@ -12931,7 +12954,21 @@ async function buildConversationListPayload(
     },
   });
   if (conversations.length === 0) {
-    return { ok: true, count: 0, items: [] };
+    const readState = params.userId
+      ? await getInboxReadState(params.clientId, params.userId)
+      : {
+          lastReadAtByConversationKey: {},
+          manuallyUnreadByConversationKey: {},
+        };
+    return {
+      ok: true,
+      count: 0,
+      items: [],
+      conversations: [],
+      filterCounts: buildEmptyConversationFilterCounts(),
+      nextCursor: null,
+      readState,
+    };
   }
 
   const groupedConversations = new Map<

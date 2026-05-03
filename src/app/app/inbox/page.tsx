@@ -605,6 +605,16 @@ function isConversationUnread(item: InboxConversationItem, state: InboxReadState
   return activityAtTimestamp > lastReadAtTimestamp;
 }
 
+function isConversationUnreadForUser(
+  item: InboxConversationItem,
+  state: InboxReadState,
+  user: AppSession["user"] | null | undefined
+) {
+  if (!user) return false;
+  if (!canUserReceiveTargetedNotification(item, user)) return false;
+  return isConversationUnread(item, state);
+}
+
 function getLatestReadAtForConversation(
   item: Pick<InboxConversationItem, "waId" | "waIdCanonical">,
   state: InboxReadState
@@ -1087,6 +1097,7 @@ export default function AppInboxPage() {
   const pendingUnreadAnchorConversationIdentityRef = useRef<string | null>(null);
   const pendingUnreadLastReadAtRef = useRef<string | null>(null);
   const pendingUnreadAnchorMessageIdRef = useRef<string | null>(null);
+  const timelineOutOfSyncRetryKeyRef = useRef<string | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -1635,6 +1646,17 @@ export default function AppInboxPage() {
       });
     }
     const pageItems = response.conversations ?? response.items;
+    if (!response.filterCounts && pageItems.length === 0) {
+      setConversationFilterCounts({
+        ALL: 0,
+        WAITING: 0,
+        IN_PROGRESS: 0,
+        WAITING_USER: 0,
+        CLOSED: 0,
+        MINE: 0,
+        UNASSIGNED: 0,
+      });
+    }
     if (loadedConversationPageCountRef.current <= 1) {
       setConversationNextCursor(response.nextCursor ?? null);
       loadedConversationPageCountRef.current = 1;
@@ -1802,10 +1824,18 @@ export default function AppInboxPage() {
     });
     if (requestSeq !== detailRequestSeqRef.current) return;
     const responseConversationKey = response.waIdCanonical ?? response.waId ?? waId;
+    const selectedIdentityCandidates =
+      selectedConversationIdentityCandidatesRef.current.length > 0
+        ? selectedConversationIdentityCandidatesRef.current
+        : [selectedConversationKey, selectedConversationWaId, waId].filter(Boolean);
     if (
       selectedConversationKey &&
-      responseConversationKey !== selectedConversationKey &&
-      response.waId !== selectedConversationWaId
+      !conversationIdentityMatches(selectedIdentityCandidates, [
+        responseConversationKey,
+        response.waId,
+        response.waIdCanonical,
+        waId,
+      ])
     ) {
       return;
     }
@@ -1845,6 +1875,7 @@ export default function AppInboxPage() {
       shouldScrollToBottomRef.current = true;
     }
     setMessagesConversationKey(responseConversationKey);
+    timelineOutOfSyncRetryKeyRef.current = null;
     setConversations((prev) =>
       updateConversationInPlace(prev, responseConversationKey, (item) =>
         applyConversationOperationalPayload(item, response)
@@ -1974,6 +2005,7 @@ export default function AppInboxPage() {
           timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
           return nextMessages;
         });
+        timelineOutOfSyncRetryKeyRef.current = null;
         if (shouldStickToBottomAfterHydration) {
           shouldScrollToBottomRef.current = true;
         }
@@ -2000,6 +2032,48 @@ export default function AppInboxPage() {
       cancelled = true;
     };
   }, [handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
+
+  useEffect(() => {
+    if (!session || !selectedConversationWaId || !selectedConversationKey) {
+      timelineOutOfSyncRetryKeyRef.current = null;
+      return;
+    }
+    if (messagesConversationKey === selectedConversationKey) {
+      timelineOutOfSyncRetryKeyRef.current = null;
+      return;
+    }
+    if (loadingMessages) return;
+    const retryKey = `${selectedConversationKey}:${selectedConversationWaId}`;
+    if (timelineOutOfSyncRetryKeyRef.current === retryKey) return;
+    let cancelled = false;
+    timelineOutOfSyncRetryKeyRef.current = retryKey;
+    setLoadingMessages(true);
+    refreshSelectedTimeline(session, selectedConversationWaId, "replace")
+      .catch((err: { status?: number; message?: string }) => {
+        if (cancelled || timelineOutOfSyncRetryKeyRef.current !== retryKey) return;
+        if (err.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(err.message || "Falha ao carregar timeline.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingMessages(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    handleUnauthorized,
+    loadingMessages,
+    messagesConversationKey,
+    refreshSelectedTimeline,
+    selectedConversationKey,
+    selectedConversationWaId,
+    session,
+  ]);
 
   useEffect(() => {
     const selectedChanged = lastSelectedConversationKeyRef.current !== selectedConversationKey;
@@ -3124,7 +3198,7 @@ export default function AppInboxPage() {
               const conversationIdentity = getConversationIdentity(item);
               const conversationIdentityCandidates = getConversationIdentityCandidates(item);
               const isActive = conversationIdentity === selectedConversationKey;
-              const unread = !isActive && isConversationUnread(item, readState);
+              const unread = !isActive && isConversationUnreadForUser(item, readState, session?.user);
               const status = getConversationOperationalStatus(item);
               const label = getConversationLabel(item);
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
@@ -3133,7 +3207,7 @@ export default function AppInboxPage() {
                   key={conversationIdentity}
                   type="button"
                   onClick={() => {
-                    const shouldOpenAtUnread = isConversationUnread(item, readState);
+                    const shouldOpenAtUnread = isConversationUnreadForUser(item, readState, session?.user);
                     const activityAt = getConversationActivityAt(item);
                     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
                       ? {
@@ -3154,6 +3228,7 @@ export default function AppInboxPage() {
                       activityAt,
                       waId: item.waId,
                     };
+                    markConversationIdentitiesAsRead(conversationIdentityCandidates, activityAt, item.waId);
                     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
                     selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
                     setUnreadSeparatorIndex(null);
