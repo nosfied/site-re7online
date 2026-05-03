@@ -3732,6 +3732,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         mode: "HUMAN",
         handoffStatus: "active",
+        assignedUserId: nextState.assignedUserId ?? null,
         departmentId: defaults.department.id,
         updatedAt: releasedAt,
       });
@@ -3909,6 +3910,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           nextState.handoff.status === "pending" || nextState.handoff.status === "active"
             ? nextState.handoff.status
             : "active",
+        assignedUserId: nextState.assignedUserId ?? null,
         departmentId: routing.departmentId,
         updatedAt: assignedAt,
       });
@@ -6751,6 +6753,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             nextState.handoff.status === "pending" || nextState.handoff.status === "active"
               ? nextState.handoff.status
               : "active",
+          assignedUserId: nextState.assignedUserId ?? null,
           departmentId: department.id,
           updatedAt: new Date().toISOString(),
         });

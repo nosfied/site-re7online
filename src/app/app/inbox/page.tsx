@@ -7,6 +7,7 @@ import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
 import {
   addAppRealtimeListener,
+  canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
   requestAppNotificationAudioUnlock,
   requestBrowserNotificationPermission,
@@ -1439,6 +1440,10 @@ export default function AppInboxPage() {
       return;
     }
     if (!session || event.clientId !== session.user.clientId) return;
+    const eventTargetsCurrentUser =
+      event.type === "message.created" || event.type === "conversation.handoff.updated"
+        ? canUserReceiveTargetedNotification(event, session.user)
+        : false;
     if (event.type === "conversation.handoff.updated") {
       const conversationKey = event.waIdCanonical ?? event.waId;
       let matchedConversation = false;
@@ -1472,7 +1477,11 @@ export default function AppInboxPage() {
         }
         return dedupeConversationsByIdentity(nextItems);
       });
-      if (selectedConversationKey !== conversationKey && selectedConversationWaId !== event.waId) {
+      if (
+        eventTargetsCurrentUser &&
+        selectedConversationKey !== conversationKey &&
+        selectedConversationWaId !== event.waId
+      ) {
         markConversationIdentitiesAsUnread(Array.from(matchedConversationKeys), event.waId);
       }
       return;
@@ -1535,7 +1544,9 @@ export default function AppInboxPage() {
       return;
     }
 
-    markConversationAsUnread(conversationKey, event.waId);
+    if (eventTargetsCurrentUser) {
+      markConversationAsUnread(conversationKey, event.waId);
+    }
   }, [
     applyRealtimeStatusUpdated,
     markConversationIdentitiesAsUnread,
@@ -1565,8 +1576,11 @@ export default function AppInboxPage() {
       direction: "INBOUND",
       mode: item.mode,
       handoffStatus: item.handoffStatus ?? "none",
+      assignedUserId: item.assignedUserId ?? null,
       departmentId: item.departmentId ?? null,
+      userId: session?.user.id ?? null,
       userDepartmentId: session?.user.departmentId ?? null,
+      userDepartmentName: session?.user.departmentName ?? null,
       userRole: session?.user.role ?? null,
     });
     return wasAccepted;
@@ -1640,7 +1654,11 @@ export default function AppInboxPage() {
           humanFlowConversationKeys.has(conversationKey) &&
           !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
-          if (conversationKey !== selectedConversationKey) {
+          if (
+            session &&
+            canUserReceiveTargetedNotification(item, session.user) &&
+            conversationKey !== selectedConversationKey
+          ) {
             markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
           }
           if (buildConversationNotificationRequest(item, true)) {

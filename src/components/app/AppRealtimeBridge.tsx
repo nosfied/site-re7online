@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
-  canUserReceiveRealtimeEvent,
   createAppRealtimeClient,
   dispatchAppAudioState,
   dispatchAppRealtimeEvent,
@@ -199,8 +198,11 @@ export default function AppRealtimeBridge() {
       direction: event.message.direction,
       mode: event.mode,
       handoffStatus: event.handoffStatus,
+      assignedUserId: event.assignedUserId ?? null,
       departmentId: event.departmentId ?? null,
+      userId: session.user.id,
       userDepartmentId: session.user.departmentId ?? null,
+      userDepartmentName: session.user.departmentName ?? null,
       userRole: session.user.role,
     });
   }, []);
@@ -217,15 +219,17 @@ export default function AppRealtimeBridge() {
       direction: "INBOUND",
       mode: event.mode,
       handoffStatus: event.handoffStatus,
+      assignedUserId: event.assignedUserId ?? null,
       departmentId: event.departmentId ?? null,
+      userId: session.user.id,
       userDepartmentId: session.user.departmentId ?? null,
+      userDepartmentName: session.user.departmentName ?? null,
       userRole: session.user.role,
     });
   }, []);
 
   const handleRealtimeEvent = useCallback((event: AppRealtimeEvent, session: AppSession) => {
     if (event.clientId !== session.user.clientId) return;
-    if (!canUserReceiveRealtimeEvent(event, session.user)) return;
 
     dispatchAppRealtimeEvent(event);
 

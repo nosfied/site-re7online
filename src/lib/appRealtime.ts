@@ -13,6 +13,7 @@ export type AppRealtimeEvent =
       message: InboxMessageItem;
       mode?: AppConversationMode | null;
       handoffStatus?: AppHandoffStatus | null;
+      assignedUserId?: string | null;
       departmentId?: string | null;
     }
   | {
@@ -33,6 +34,7 @@ export type AppRealtimeEvent =
       waIdCanonical?: string | null;
       mode: "HUMAN";
       handoffStatus: "pending" | "active";
+      assignedUserId?: string | null;
       departmentId?: string | null;
       updatedAt: string;
     };
@@ -91,8 +93,11 @@ export type AppNotificationCandidate = {
   bodyText?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  assignedUserId?: string | null;
   departmentId?: string | null;
+  userId?: string | null;
   userDepartmentId?: string | null;
+  userDepartmentName?: string | null;
   userRole?: string | null;
   title?: string;
   body?: string;
@@ -104,8 +109,11 @@ type InboundOrHandoffNotificationInput = {
   direction?: string | null;
   mode?: AppConversationMode | null;
   handoffStatus?: AppHandoffStatus | null;
+  assignedUserId?: string | null;
   departmentId?: string | null;
+  userId?: string | null;
   userDepartmentId?: string | null;
+  userDepartmentName?: string | null;
   userRole?: string | null;
   isHandoffTransition?: boolean;
 };
@@ -113,7 +121,12 @@ type InboundOrHandoffNotificationInput = {
 function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
   if (input.direction && input.direction.toUpperCase() !== "INBOUND") return null;
   if (!input.conversationIdentity) return null;
-  if (!canUserReceiveDepartmentNotification(input.userRole, input.userDepartmentId, input.departmentId)) {
+  if (!canUserReceiveTargetedNotification(input, {
+    id: input.userId,
+    role: input.userRole,
+    departmentId: input.userDepartmentId,
+    departmentName: input.userDepartmentName,
+  })) {
     return null;
   }
   if (!input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
@@ -259,12 +272,34 @@ export function canUserReceiveDepartmentNotification(
   return eventDepartmentId === userDepartmentId;
 }
 
+export function canUserReceiveTargetedNotification(
+  target: { assignedUserId?: string | null; departmentId?: string | null },
+  user: { id?: string | null; role?: string | null; departmentId?: string | null; departmentName?: string | null }
+) {
+  const assignedUserId = String(target.assignedUserId ?? "").trim();
+  if (assignedUserId) {
+    return String(user.id ?? "").trim() === assignedUserId;
+  }
+  const departmentId = String(target.departmentId ?? "").trim();
+  if (departmentId) {
+    return String(user.departmentId ?? "").trim() === departmentId;
+  }
+  return normalizeDepartmentName(user.departmentName) === "atendimento geral";
+}
+
+function normalizeDepartmentName(value?: string | null) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 export function canUserReceiveRealtimeEvent(
   event: AppRealtimeEvent,
   user: { role?: string | null; departmentId?: string | null }
 ) {
-  if (event.type !== "message.created" && event.type !== "conversation.handoff.updated") return true;
-  return canUserReceiveDepartmentNotification(user.role, user.departmentId, event.departmentId ?? null);
+  return true;
 }
 
 function isAppVisibleAndFocused() {
@@ -301,8 +336,11 @@ export function handleRealtimeNotificationCandidate(candidate: AppNotificationCa
     direction: candidate.direction,
     mode: candidate.mode,
     handoffStatus: candidate.handoffStatus,
+    assignedUserId: candidate.assignedUserId,
     departmentId: candidate.departmentId,
+    userId: candidate.userId,
     userDepartmentId: candidate.userDepartmentId,
+    userDepartmentName: candidate.userDepartmentName,
     userRole: candidate.userRole,
     isHandoffTransition: candidate.kind === "handoff",
   };

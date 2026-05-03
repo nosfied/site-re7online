@@ -1378,6 +1378,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           routedConversation.handoff.status === "active"
             ? routedConversation.handoff.status
             : "active",
+        assignedUserId: routedConversation.assignedUserId ?? null,
         departmentId: routedConversation.departmentId ?? null,
         updatedAt: parseWebhookTimestampToDate(params.timestamp).toISOString(),
       });
@@ -1512,6 +1513,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           waIdCanonical: canonicalizeBrazilWaId(params.waId),
           mode: realtimeConversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
           handoffStatus: realtimeHandoffStatus,
+          assignedUserId: realtimeConversation?.assignedUserId ?? null,
           departmentId: realtimeConversation?.departmentId ?? null,
           message: {
             direction: "INBOUND",
@@ -3406,6 +3408,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             updatedConversation.handoff.status === "active"
               ? updatedConversation.handoff.status
               : "active",
+          assignedUserId: updatedConversation.assignedUserId ?? null,
           departmentId: updatedConversation.departmentId ?? null,
           updatedAt: parseWebhookTimestampToDate(message.timestamp).toISOString(),
         });
