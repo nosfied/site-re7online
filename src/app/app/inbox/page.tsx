@@ -3554,16 +3554,6 @@ export default function AppInboxPage() {
               ) : null}
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                title="Ver histórico"
-                aria-label="Ver histórico do contato"
-                disabled={!selectedConversation}
-                onClick={handleOpenContactTimeline}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d4c7b5] bg-white/55 text-base text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8"
-              >
-                ◷
-              </button>
               {isAdminUser ? (
                 <button
                   type="button"
@@ -3989,8 +3979,19 @@ export default function AppInboxPage() {
         </div>
 
         <aside className="flex min-h-0 flex-col border-l border-white/10 bg-[#0c1930]">
-          <div className="border-b border-white/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <h2 className="text-sm font-semibold text-white">CRM</h2>
+            <button
+              type="button"
+              title="Ver histórico"
+              aria-label="Ver histórico do contato"
+              disabled={!selectedConversation}
+              onClick={handleOpenContactTimeline}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span aria-hidden="true">◷</span>
+              Histórico
+            </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!selectedLead ? (
