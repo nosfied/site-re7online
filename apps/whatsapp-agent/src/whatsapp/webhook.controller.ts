@@ -3369,8 +3369,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       updatedConversation = await ensurePendingHandoffRouting({
         ...activatedHandoff.state,
         mode: "HUMAN" as const,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        status: "WAITING",
+        closedAt: null,
       });
       await upsertConversationSafe(updatedConversation);
+      await persistConversationSafe({
+        waId: updatedConversation.waId,
+        windowIsOpen: updatedConversation.window.isOpen,
+        windowExpiresAt: updatedConversation.window.expiresAt,
+        lastInboundAt: updatedConversation.lastInboundAt ?? null,
+        lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+        departmentId: updatedConversation.departmentId ?? null,
+      });
       logger.info({
         event: "flow.handoff.mode_human.enabled",
         clientId: tenantClientId,

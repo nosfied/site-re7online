@@ -5,6 +5,8 @@ import {
 } from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
+import { runtimeStorage } from "../storage/runtimeStorage.js";
+import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
 function maskWaIdForLog(value: string) {
@@ -150,6 +152,54 @@ export async function persistConversationWindow(params: {
     },
   });
   if (isInboundAfterSoftDelete && existing && params.lastInboundAt) {
+    const client = await prisma.client.findUnique({
+      where: { id: params.clientId },
+      select: { clientKey: true },
+    });
+    if (client?.clientKey) {
+      const lastInboundAtIso = params.lastInboundAt.toISOString();
+      const currentRuntime = await runtimeStorage.getConversation(params.waId, client.clientKey);
+      await runtimeStorage.upsertConversation({
+        ...(currentRuntime ?? {
+          clientKey: client.clientKey,
+          conversationKey: makeConversationKey(client.clientKey, params.waId),
+          waId: params.waId,
+          waIdCanonical,
+          firstSeenAt: lastInboundAtIso,
+          lastInboundAt: lastInboundAtIso,
+          window: {
+            isOpen: params.windowIsOpen,
+            expiresAt: params.windowExpiresAt?.toISOString(),
+          },
+          intent: "unknown",
+          handoff: { status: "none" },
+        }),
+        clientKey: client.clientKey,
+        conversationKey:
+          currentRuntime?.conversationKey ?? makeConversationKey(client.clientKey, params.waId),
+        waId: currentRuntime?.waId ?? params.waId,
+        waIdCanonical: currentRuntime?.waIdCanonical ?? waIdCanonical,
+        lastInboundAt: lastInboundAtIso,
+        window: {
+          isOpen: params.windowIsOpen,
+          expiresAt: params.windowExpiresAt?.toISOString() ?? currentRuntime?.window.expiresAt,
+        },
+        mode: "BOT",
+        handoff: { status: "none" },
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        status: null,
+        closedAt: null,
+        flow: undefined,
+        flowStep: undefined,
+        chatbotNodeId: undefined,
+        chatbotActive: false,
+        answers: {},
+      });
+    }
     await prisma.conversationRuntimeState.updateMany({
       where: {
         clientId: params.clientId,
