@@ -11480,6 +11480,8 @@ type ScopedClientRecord = {
   id: string;
   clientKey: string;
   status: "ACTIVE" | "INACTIVE";
+  features: unknown;
+  profile: string | null;
 };
 
 async function getScopedClientById(
@@ -11488,7 +11490,7 @@ async function getScopedClientById(
 ): Promise<ScopedClientRecord | null> {
   return prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, clientKey: true, status: true },
+    select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
 }
 
