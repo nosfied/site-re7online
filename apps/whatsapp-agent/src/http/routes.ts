@@ -8646,6 +8646,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 },
                 select: {
                   waId: true,
+                  messageId: true,
                   templateName: true,
                   status: true,
                   errorBody: true,
@@ -8655,7 +8656,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : [];
         const campaignMetaMap = new Map<string, CampaignMetaSummary>();
         for (const outbound of outboundMessages) {
-          const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+          const outboundCampaignId = resolveOutboundCampaignId(outbound);
           if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
           const nextItem = buildCampaignMetaStatusItem(outbound);
           const current = campaignMetaMap.get(outboundCampaignId) ?? {
@@ -11245,6 +11246,20 @@ function extractCampaignIdFromRawPayload(rawPayload: unknown) {
   return typeof typed?.campaignId === "string" ? typed.campaignId : null;
 }
 
+function extractCampaignIdFromMessageId(messageId: string | null | undefined) {
+  const value = typeof messageId === "string" ? messageId.trim() : "";
+  if (!value.startsWith("campaign.")) return null;
+  const suffix = value.slice("campaign.".length);
+  const separatorIndex = suffix.lastIndexOf(".");
+  if (separatorIndex <= 0) return null;
+  const campaignId = suffix.slice(0, separatorIndex);
+  return campaignId || null;
+}
+
+function resolveOutboundCampaignId(item: { messageId?: string | null; rawPayload: unknown }) {
+  return extractCampaignIdFromRawPayload(item.rawPayload) ?? extractCampaignIdFromMessageId(item.messageId);
+}
+
 function extractTemplateParamsFromComponents(components: unknown): string[] {
   if (!Array.isArray(components)) return [];
   const firstBody = components.find((item) => {
@@ -11321,6 +11336,7 @@ function stringifyCampaignError(value: unknown) {
 
 function buildCampaignMetaStatusItem(item: {
   waId: string;
+  messageId?: string | null;
   templateName: string | null;
   status: string;
   errorBody: string | null;
@@ -13690,6 +13706,7 @@ async function buildCampaignListPayload(
           },
           select: {
             waId: true,
+            messageId: true,
             templateName: true,
             status: true,
             errorBody: true,
@@ -13699,7 +13716,7 @@ async function buildCampaignListPayload(
       : [];
   const campaignMetaMap = new Map<string, CampaignMetaSummary>();
   for (const outbound of outboundMessages) {
-    const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+    const outboundCampaignId = resolveOutboundCampaignId(outbound);
     if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
     const nextItem = buildCampaignMetaStatusItem(outbound);
     const current = campaignMetaMap.get(outboundCampaignId) ?? {
@@ -13755,6 +13772,7 @@ async function buildCampaignDetailPayload(
     orderBy: { createdAt: "asc" },
     select: {
       waId: true,
+      messageId: true,
       templateName: true,
       status: true,
       errorBody: true,
@@ -13762,7 +13780,7 @@ async function buildCampaignDetailPayload(
     },
   });
   const messagesMetaStatus = outboundMessages
-    .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
+    .filter((item) => resolveOutboundCampaignId(item) === campaign.id)
     .map(buildCampaignMetaStatusItem);
   const draftSeed = await buildCampaignDraftSeed(prisma, {
     clientId: params.clientId,
@@ -13870,6 +13888,7 @@ async function buildCampaignDraftSeed(
     templateName: string;
     outboundMessages: Array<{
       waId: string;
+      messageId?: string | null;
       templateName: string | null;
       status: string;
       errorBody: string | null;
@@ -13892,7 +13911,7 @@ async function buildCampaignDraftSeed(
   }
 
   const matchingOutbound = params.outboundMessages.filter(
-    (item) => extractCampaignIdFromRawPayload(item.rawPayload) === params.campaignId
+    (item) => resolveOutboundCampaignId(item) === params.campaignId
   );
   const recipients = Array.from(new Set(matchingOutbound.map((item) => item.waId).filter(Boolean)));
   const rawPayloadWithComponents = matchingOutbound.find((item) => {
