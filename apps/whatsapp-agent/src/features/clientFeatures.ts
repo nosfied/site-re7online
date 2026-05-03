@@ -1,18 +1,43 @@
-export type ClientFeatureKey = "departments" | "sla" | "reports" | "campaigns" | "chatbot";
+export type ClientFeatureKey =
+  | "dashboard"
+  | "departments"
+  | "users"
+  | "templates"
+  | "reports"
+  | "campaigns"
+  | "chatbot"
+  | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
 export type ClientProfile = "business" | "government";
 
-export const DEFAULT_CLIENT_FEATURES: ClientFeatures = {
+export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
+  dashboard: false,
   departments: true,
+  users: true,
+  templates: true,
   sla: true,
   reports: true,
   campaigns: true,
   chatbot: true,
 };
 
+export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
+  dashboard: true,
+  departments: true,
+  users: true,
+  templates: false,
+  sla: true,
+  reports: true,
+  campaigns: false,
+  chatbot: true,
+};
+
+export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
+
 type ClientWithFeatures = {
   features?: unknown;
+  profile?: unknown;
 };
 
 type ClientWithProfile = {
@@ -24,17 +49,24 @@ function normalizeFeatureValue(value: unknown) {
 }
 
 export function getFeatures(client: ClientWithFeatures | null | undefined): ClientFeatures {
+  const defaults =
+    getClientProfile(client) === "government"
+      ? DEFAULT_GOVERNMENT_CLIENT_FEATURES
+      : DEFAULT_BUSINESS_CLIENT_FEATURES;
   const raw = client?.features;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ...DEFAULT_CLIENT_FEATURES };
+    return { ...defaults };
   }
   const input = raw as Record<string, unknown>;
   return {
-    departments: normalizeFeatureValue(input.departments) ?? DEFAULT_CLIENT_FEATURES.departments,
-    sla: normalizeFeatureValue(input.sla) ?? DEFAULT_CLIENT_FEATURES.sla,
-    reports: normalizeFeatureValue(input.reports) ?? DEFAULT_CLIENT_FEATURES.reports,
-    campaigns: normalizeFeatureValue(input.campaigns) ?? DEFAULT_CLIENT_FEATURES.campaigns,
-    chatbot: normalizeFeatureValue(input.chatbot) ?? DEFAULT_CLIENT_FEATURES.chatbot,
+    dashboard: normalizeFeatureValue(input.dashboard) ?? defaults.dashboard,
+    departments: normalizeFeatureValue(input.departments) ?? defaults.departments,
+    users: normalizeFeatureValue(input.users) ?? defaults.users,
+    templates: normalizeFeatureValue(input.templates) ?? defaults.templates,
+    sla: normalizeFeatureValue(input.sla) ?? defaults.sla,
+    reports: normalizeFeatureValue(input.reports) ?? defaults.reports,
+    campaigns: normalizeFeatureValue(input.campaigns) ?? defaults.campaigns,
+    chatbot: normalizeFeatureValue(input.chatbot) ?? defaults.chatbot,
   };
 }
 

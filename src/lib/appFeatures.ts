@@ -1,54 +1,89 @@
 export type AppProfile = "business" | "government";
 
 export type AppFeatureKey =
+  | "dashboard"
   | "departments"
+  | "users"
+  | "templates"
   | "sla"
   | "reports"
   | "campaigns"
-  | "chatbot"
+  | "chatbot";
+
+export type FutureAppFeatureKey =
   | "governmentReports"
   | "poc"
   | "salesPipeline"
   | "instagramIntegration";
 
-export type AppFeatures = Record<AppFeatureKey, boolean>;
+export type AppFeatures = Record<AppFeatureKey | FutureAppFeatureKey, boolean>;
 
-export const DEFAULT_APP_FEATURES: AppFeatures = {
+export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
+  dashboard: false,
   departments: true,
+  users: true,
+  templates: true,
   sla: true,
   reports: true,
   campaigns: true,
   chatbot: true,
+};
+
+export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
+  dashboard: true,
+  departments: true,
+  users: true,
+  templates: false,
+  sla: true,
+  reports: true,
+  campaigns: false,
+  chatbot: true,
+};
+
+export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> = {
   governmentReports: false,
   poc: false,
   salesPipeline: false,
   instagramIntegration: false,
 };
 
-type SessionLike = { features?: unknown } | null | undefined;
+export const DEFAULT_APP_FEATURES: AppFeatures = {
+  ...DEFAULT_BUSINESS_APP_FEATURES,
+  ...DEFAULT_FUTURE_APP_FEATURES,
+};
+
+type SessionLike = { features?: unknown; profile?: unknown } | null | undefined;
 
 function normalizeBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
 export function getAppFeatures(session: SessionLike): AppFeatures {
+  const defaults =
+    getAppProfile(session) === "government"
+      ? DEFAULT_GOVERNMENT_APP_FEATURES
+      : DEFAULT_BUSINESS_APP_FEATURES;
   const raw = session?.features;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { ...DEFAULT_APP_FEATURES };
+    return { ...defaults, ...DEFAULT_FUTURE_APP_FEATURES };
   }
   const input = raw as Record<string, unknown>;
   return {
-    departments: normalizeBoolean(input.departments) ?? DEFAULT_APP_FEATURES.departments,
-    sla: normalizeBoolean(input.sla) ?? DEFAULT_APP_FEATURES.sla,
-    reports: normalizeBoolean(input.reports) ?? DEFAULT_APP_FEATURES.reports,
-    campaigns: normalizeBoolean(input.campaigns) ?? DEFAULT_APP_FEATURES.campaigns,
-    chatbot: normalizeBoolean(input.chatbot) ?? DEFAULT_APP_FEATURES.chatbot,
+    dashboard: normalizeBoolean(input.dashboard) ?? defaults.dashboard,
+    departments: normalizeBoolean(input.departments) ?? defaults.departments,
+    users: normalizeBoolean(input.users) ?? defaults.users,
+    templates: normalizeBoolean(input.templates) ?? defaults.templates,
+    sla: normalizeBoolean(input.sla) ?? defaults.sla,
+    reports: normalizeBoolean(input.reports) ?? defaults.reports,
+    campaigns: normalizeBoolean(input.campaigns) ?? defaults.campaigns,
+    chatbot: normalizeBoolean(input.chatbot) ?? defaults.chatbot,
     governmentReports:
-      normalizeBoolean(input.governmentReports) ?? DEFAULT_APP_FEATURES.governmentReports,
-    poc: normalizeBoolean(input.poc) ?? DEFAULT_APP_FEATURES.poc,
-    salesPipeline: normalizeBoolean(input.salesPipeline) ?? DEFAULT_APP_FEATURES.salesPipeline,
+      normalizeBoolean(input.governmentReports) ?? DEFAULT_FUTURE_APP_FEATURES.governmentReports,
+    poc: normalizeBoolean(input.poc) ?? DEFAULT_FUTURE_APP_FEATURES.poc,
+    salesPipeline: normalizeBoolean(input.salesPipeline) ?? DEFAULT_FUTURE_APP_FEATURES.salesPipeline,
     instagramIntegration:
-      normalizeBoolean(input.instagramIntegration) ?? DEFAULT_APP_FEATURES.instagramIntegration,
+      normalizeBoolean(input.instagramIntegration) ??
+      DEFAULT_FUTURE_APP_FEATURES.instagramIntegration,
   };
 }
 
