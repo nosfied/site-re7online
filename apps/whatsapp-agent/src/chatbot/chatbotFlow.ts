@@ -1,23 +1,31 @@
-import { ConversationState } from "../conversation/conversation.types.js";
+import { ConversationState, FlowContext } from "../conversation/conversation.types.js";
 
-export type ChatbotMenuNode = {
-  type: "menu";
-  text: string;
-  options: Array<{
-    label: string;
-    next: string;
-  }>;
+export type ChatbotFlowMetadata = {
+  context?: FlowContext;
+  tags?: string[];
 };
 
-export type ChatbotTextNode = {
+export type ChatbotMenuOption = Record<string, unknown> & ChatbotFlowMetadata & {
+  label: string;
+  next: string;
+};
+
+export type ChatbotMenuNode = Record<string, unknown> & ChatbotFlowMetadata & {
+  type: "menu";
+  text: string;
+  options: ChatbotMenuOption[];
+};
+
+export type ChatbotTextNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "text";
   text: string;
   next?: string;
 };
 
-export type ChatbotHandoffNode = {
+export type ChatbotHandoffNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "handoff";
   text?: string;
+  handoffSummary?: string;
 };
 
 export type ChatbotNode = ChatbotMenuNode | ChatbotTextNode | ChatbotHandoffNode;
@@ -44,6 +52,9 @@ export type ChatbotExecutionResult = {
   replyText?: string;
   pendingHandoff?: {
     feedbackText: string;
+    summary: string;
+    tags: string[];
+    nodeId: string;
   };
   events?: ChatbotExecutionEvent[];
 };
@@ -52,12 +63,27 @@ const CHATBOT_MAX_STEPS_PER_EXECUTION = 12;
 const CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION = 5;
 const DEFAULT_HANDOFF_FEEDBACK_TEXT = "Vou te transferir para um atendente humano.";
 
-export type ChatbotExecutionEvent = {
-  event: "flow.node.auto_advanced";
-  flowId: string;
-  fromNodeId: string;
-  toNodeId: string;
-};
+export type ChatbotExecutionEvent =
+  | {
+      event: "flow.node.auto_advanced";
+      flowId: string;
+      fromNodeId: string;
+      toNodeId: string;
+    }
+  | {
+      event: "flow.context.merged";
+      flowId: string;
+      nodeId: string;
+      source: "node" | "option";
+      keys: string[];
+    }
+  | {
+      event: "flow.context.tags_added";
+      flowId: string;
+      nodeId: string;
+      source: "node" | "option";
+      tags: string[];
+    };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -65,6 +91,75 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeJsonValue(value: unknown): FlowContext[string] | undefined {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) {
+    return value as FlowContext[string];
+  }
+  if (Array.isArray(value)) {
+    const normalizedArray = value
+      .map((item) => normalizeJsonValue(item))
+      .filter((item): item is FlowContext[string] => item !== undefined);
+    return normalizedArray;
+  }
+  if (isRecord(value)) {
+    const normalizedObject: FlowContext = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      const normalizedValue = normalizeJsonValue(nestedValue);
+      if (normalizedValue !== undefined) {
+        normalizedObject[key] = normalizedValue;
+      }
+    }
+    return normalizedObject;
+  }
+  return undefined;
+}
+
+function normalizeContext(value: unknown): FlowContext | undefined {
+  if (!isRecord(value)) return undefined;
+  const normalized: FlowContext = {};
+  for (const [key, contextValue] of Object.entries(value)) {
+    const normalizedValue = normalizeJsonValue(contextValue);
+    if (normalizedValue !== undefined) {
+      normalized[key] = normalizedValue;
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeTags(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const tags = Array.from(
+    new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+    )
+  );
+  return tags.length > 0 ? tags : undefined;
+}
+
+function getNodeMetadata(rawNode: Record<string, unknown>): ChatbotFlowMetadata {
+  const context = normalizeContext(rawNode.context);
+  const tags = normalizeTags(rawNode.tags);
+  return {
+    ...(context ? { context } : {}),
+    ...(tags ? { tags } : {}),
+  };
+}
+
+function preserveUnknownFields(
+  rawNode: Record<string, unknown>,
+  knownFields: string[]
+): Record<string, unknown> {
+  const preserved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rawNode)) {
+    if (!knownFields.includes(key)) {
+      preserved[key] = value;
+    }
+  }
+  return preserved;
 }
 
 type ChatbotNodeValidationResult =
@@ -129,14 +224,21 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
           message: `Menu node "${nodeId}" option ${index + 1} requires label and next.`,
         };
       }
-      normalizedOptions.push({ label, next });
+      normalizedOptions.push({
+        ...preserveUnknownFields(rawOption, ["label", "next", "context", "tags"]),
+        label,
+        next,
+        ...getNodeMetadata(rawOption),
+      });
     }
     return {
       ok: true,
       node: {
+        ...preserveUnknownFields(rawNode, ["type", "text", "options", "context", "tags"]),
         type: "menu",
         text,
         options: normalizedOptions,
+        ...getNodeMetadata(rawNode),
       },
     };
   }
@@ -154,19 +256,31 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
     return {
       ok: true,
       node: {
+        ...preserveUnknownFields(rawNode, ["type", "text", "next", "context", "tags"]),
         type: "text",
         text,
         ...(next ? { next } : {}),
+        ...getNodeMetadata(rawNode),
       },
     };
   }
 
   const text = getNonEmptyString(rawNode.text);
+  const handoffSummary = getNonEmptyString(rawNode.handoffSummary);
   return {
     ok: true,
     node: {
+      ...preserveUnknownFields(rawNode, [
+        "type",
+        "text",
+        "context",
+        "tags",
+        "handoffSummary",
+      ]),
       type: "handoff",
       ...(text ? { text } : {}),
+      ...(handoffSummary ? { handoffSummary } : {}),
+      ...getNodeMetadata(rawNode),
     },
   };
 }
@@ -282,6 +396,134 @@ function parseMenuSelection(text: string | null | undefined) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function mergeFlowMetadata(
+  params: {
+    state: ConversationState;
+    metadata: ChatbotFlowMetadata;
+    flowId: string;
+    nodeId: string;
+    source: "node" | "option";
+    events: ChatbotExecutionEvent[];
+  }
+): ConversationState {
+  let nextState = params.state;
+  const context = params.metadata.context;
+  if (context && Object.keys(context).length > 0) {
+    const currentContext = isRecord(nextState.answers?.flowContext)
+      ? nextState.answers?.flowContext
+      : {};
+    nextState = {
+      ...nextState,
+      answers: {
+        ...(nextState.answers ?? {}),
+        flowContext: {
+          ...currentContext,
+          ...context,
+        },
+      },
+    };
+    params.events.push({
+      event: "flow.context.merged",
+      flowId: params.flowId,
+      nodeId: params.nodeId,
+      source: params.source,
+      keys: Object.keys(context),
+    });
+  }
+
+  const tags = params.metadata.tags;
+  if (tags && tags.length > 0) {
+    const currentTags = Array.isArray(nextState.answers?.flowTags)
+      ? nextState.answers?.flowTags ?? []
+      : [];
+    const mergedTags = Array.from(new Set([...currentTags, ...tags]));
+    const addedTags = tags.filter((tag) => !currentTags.includes(tag));
+    if (addedTags.length > 0) {
+      nextState = {
+        ...nextState,
+        answers: {
+          ...(nextState.answers ?? {}),
+          flowTags: mergedTags,
+        },
+      };
+      params.events.push({
+        event: "flow.context.tags_added",
+        flowId: params.flowId,
+        nodeId: params.nodeId,
+        source: params.source,
+        tags: addedTags,
+      });
+    }
+  }
+
+  return nextState;
+}
+
+const HANDOFF_CONTEXT_LABELS: Record<string, string> = {
+  area: "Área",
+  assunto: "Assunto",
+  benefit: "Benefício",
+  beneficio: "Benefício",
+  caseType: "Caso",
+  caso: "Caso",
+  department: "Setor",
+  etapa: "Etapa",
+  interest: "Interesse",
+  interesse: "Interesse",
+  motivo: "Motivo",
+  origem: "Origem",
+  priority: "Prioridade",
+  profile: "Perfil",
+  reason: "Motivo",
+  segment: "Segmento",
+  segmento: "Segmento",
+  service: "Serviço",
+  servico: "Serviço",
+  servicoPretendido: "Serviço",
+  status: "Status",
+  step: "Etapa",
+};
+
+const SENSITIVE_CONTEXT_KEY_PATTERN =
+  /(cpf|cnpj|rg|email|mail|phone|telefone|celular|whatsapp|waid|nome|name|address|endereco|document|documento)/i;
+const SENSITIVE_CONTEXT_VALUE_PATTERN =
+  /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})|(\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b)|(\b\d{10,13}\b)/i;
+
+function formatSafeContextValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (!["string", "number", "boolean"].includes(typeof value)) return null;
+  const text = String(value).trim().replace(/\s+/g, " ");
+  if (!text || SENSITIVE_CONTEXT_VALUE_PATTERN.test(text)) return null;
+  return text.slice(0, 160);
+}
+
+export function buildHandoffSummary(
+  flowContext: FlowContext | null | undefined,
+  node?: Pick<ChatbotHandoffNode, "handoffSummary">
+): string {
+  const lines: string[] = [];
+  const customSummary = getNonEmptyString(node?.handoffSummary);
+  if (customSummary && !SENSITIVE_CONTEXT_VALUE_PATTERN.test(customSummary)) {
+    lines.push(customSummary.slice(0, 500));
+  }
+
+  if (flowContext && isRecord(flowContext)) {
+    for (const [key, value] of Object.entries(flowContext)) {
+      if (SENSITIVE_CONTEXT_KEY_PATTERN.test(key)) continue;
+      const label = HANDOFF_CONTEXT_LABELS[key] ?? key;
+      const formattedValue = formatSafeContextValue(value);
+      if (!formattedValue) continue;
+      lines.push(`${label}: ${formattedValue}`);
+    }
+  }
+
+  if (lines.length === 0) {
+    return "Atendimento encaminhado pela automação. Sem contexto adicional registrado.";
+  }
+
+  return lines.join("\n");
+}
+
 function executeNodeChain(params: {
   definition: ChatbotFlowDefinition;
   state: ConversationState;
@@ -319,6 +561,15 @@ function executeNodeChain(params: {
         state: clearChatbotRuntime(currentState),
       };
     }
+
+    currentState = mergeFlowMetadata({
+      state: currentState,
+      metadata: node,
+      flowId: params.flowId,
+      nodeId: currentNodeId,
+      source: "node",
+      events,
+    });
 
     if (node.type === "menu") {
       currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
@@ -360,12 +611,18 @@ function executeNodeChain(params: {
     }
 
     const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
+    const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
     messages.push(feedbackText);
     return {
       handled: true,
       state: clearChatbotRuntime(currentState),
       replyText: messages.join("\n\n"),
-      pendingHandoff: { feedbackText },
+      pendingHandoff: {
+        feedbackText,
+        summary,
+        tags: currentState.answers?.flowTags ?? [],
+        nodeId: currentNodeId,
+      },
       events,
     };
   }
@@ -421,11 +678,25 @@ export function executeChatbotFlow(params: {
     };
   }
 
-  return executeNodeChain({
-    definition: params.definition,
+  const selectedOption = currentNode.options[choice - 1]!;
+  const events: ChatbotExecutionEvent[] = [];
+  const stateWithOptionContext = mergeFlowMetadata({
     state: params.state,
+    metadata: selectedOption,
     flowId: params.flowId,
-    nodeId: currentNode.options[choice - 1]!.next,
+    nodeId: params.state.chatbotNodeId,
+    source: "option",
+    events,
+  });
+  const result = executeNodeChain({
+    definition: params.definition,
+    state: stateWithOptionContext,
+    flowId: params.flowId,
+    nodeId: selectedOption.next,
     nowIso: params.nowIso,
   });
+  return {
+    ...result,
+    events: [...events, ...(result.events ?? [])],
+  };
 }

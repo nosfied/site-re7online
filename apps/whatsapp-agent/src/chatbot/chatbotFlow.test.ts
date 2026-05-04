@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildHandoffSummary,
   clearChatbotRuntime,
   executeChatbotFlow,
   validateChatbotFlowDefinition,
@@ -202,6 +203,114 @@ test("executeChatbotFlow returns handoff feedback before human activation", () =
   assert.equal(result.state.mode, "BOT");
   assert.equal(result.pendingHandoff?.feedbackText, "Vou encaminhar para um especialista agora.");
   assert.equal(result.replyText, "Vou encaminhar para um especialista agora.");
+});
+
+test("executeChatbotFlow merges node context and tags without changing client reply", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "inicio",
+    nodes: {
+      inicio: {
+        type: "text",
+        text: "Entendi.",
+        context: { area: "previdenciario", servico: "aposentadoria" },
+        tags: ["previdenciario", "qualificado"],
+        next: "handoff_1",
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar para um especialista.",
+        handoffSummary: "Lead qualificado pela automação.",
+        tags: ["qualificado"],
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_context",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:05.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Entendi.\n\nVou encaminhar para um especialista.");
+  assert.match(result.pendingHandoff?.summary ?? "", /Lead qualificado/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Área: previdenciario/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: aposentadoria/);
+  assert.deepEqual(result.pendingHandoff?.tags, ["previdenciario", "qualificado"]);
+  assert.equal(
+    result.events?.some((event) => event.event === "flow.context.merged"),
+    true
+  );
+  assert.equal(
+    result.events?.some((event) => event.event === "flow.context.tags_added"),
+    true
+  );
+});
+
+test("executeChatbotFlow merges selected option context", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu",
+    nodes: {
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [
+          {
+            label: "Aposentadoria",
+            next: "handoff_1",
+            context: { servico: "aposentadoria" },
+            tags: ["previdenciario"],
+          },
+        ],
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_option_context",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_option_context",
+      chatbotActive: true,
+      chatbotNodeId: "menu",
+    }),
+    inboundText: "1",
+    nowIso: "2026-04-17T10:00:06.000Z",
+  });
+
+  assert.equal(result.handled, true);
+  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: aposentadoria/);
+  assert.deepEqual(result.pendingHandoff?.tags, ["previdenciario"]);
+  assert.equal(
+    result.events?.some(
+      (event) => event.event === "flow.context.merged" && event.source === "option"
+    ),
+    true
+  );
+});
+
+test("buildHandoffSummary skips sensitive context values", () => {
+  const summary = buildHandoffSummary({
+    servico: "revisao",
+    telefone: "5584999999999",
+    email: "cliente@example.com",
+    nome: "Maria",
+  });
+
+  assert.match(summary, /Serviço: revisao/);
+  assert.doesNotMatch(summary, /5584999999999/);
+  assert.doesNotMatch(summary, /cliente@example.com/);
+  assert.doesNotMatch(summary, /Maria/);
 });
 
 test("clearChatbotRuntime removes chatbot state", () => {

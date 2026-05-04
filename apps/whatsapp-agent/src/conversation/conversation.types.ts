@@ -13,6 +13,15 @@ export type HandoffState = {
   releasedAt?: string;
 };
 
+export type FlowContextValue =
+  | string
+  | number
+  | boolean
+  | null
+  | FlowContextValue[]
+  | { [key: string]: FlowContextValue };
+export type FlowContext = Record<string, FlowContextValue>;
+
 export type QuoteSiteAnswers = {
   companyCity?: string;
   siteType?: string;
@@ -23,6 +32,8 @@ export type QuoteSiteAnswers = {
   segment?: string;
   siteNew?: boolean;
   email?: string;
+  flowContext?: FlowContext;
+  flowTags?: string[];
 };
 
 export type ConversationState = {

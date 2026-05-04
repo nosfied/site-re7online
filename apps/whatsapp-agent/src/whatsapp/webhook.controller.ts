@@ -3069,13 +3069,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       state: ConversationState;
       replyText?: string;
       flowId: string | null;
-      pendingHandoff?: { feedbackText: string };
+      pendingHandoff?: {
+        feedbackText: string;
+        summary: string;
+        tags: string[];
+        nodeId: string;
+      };
     } = {
       handled: false,
       state: updatedConversation,
       replyText: undefined as string | undefined,
       flowId: null as string | null,
-      pendingHandoff: undefined as { feedbackText: string } | undefined,
+      pendingHandoff: undefined as
+        | { feedbackText: string; summary: string; tags: string[]; nodeId: string }
+        | undefined,
     };
 
     if (!handoffResult.handled) {
@@ -3361,6 +3368,86 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           errorBody: "outbound_disabled",
           requestId: meta?.requestId,
         });
+      }
+
+      const handoffSummary = chatbotFlowResult.pendingHandoff.summary?.trim();
+      if (handoffSummary && tenantClientId) {
+        const summaryRequestId = [
+          "flow-handoff-summary",
+          chatbotFlowResult.flowId ?? "unknown",
+          chatbotFlowResult.pendingHandoff.nodeId,
+          normalizedFrom,
+          message.messageId,
+        ].join(":");
+        try {
+          const prisma = getPrisma();
+          const event = await prisma.event.create({
+            data: {
+              clientId: tenantClientId,
+              waId: updatedConversation.waId,
+              waIdCanonical: canonicalizeBrazilWaId(updatedConversation.waId),
+              messageId: message.messageId,
+              requestId: summaryRequestId,
+              eventName: "flow.handoff.summary.created",
+              payloadJson: {
+                action: "flow_handoff_summary_created",
+                clientId: tenantClientId,
+                clientKey: tenantClientKey,
+                flowId: chatbotFlowResult.flowId,
+                nodeId: chatbotFlowResult.pendingHandoff.nodeId,
+                conversationKey: updatedConversation.conversationKey ?? null,
+                tags: chatbotFlowResult.pendingHandoff.tags,
+                summary: handoffSummary,
+                timestamp: new Date().toISOString(),
+              },
+            },
+          });
+          const lead = await ensureLeadForConversation({
+            tenantId: tenantClientId,
+            waId: updatedConversation.waId,
+          });
+          await prisma.leadNote.create({
+            data: {
+              tenantId: tenantClientId,
+              leadId: lead.id,
+              body: `[Resumo automático]\n${handoffSummary}`,
+            },
+          });
+          logger.info({
+            event: "flow.handoff.summary.created",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            flowId: chatbotFlowResult.flowId,
+            eventId: event.id,
+            leadId: lead.id,
+            waId: maskNumber(normalizedFrom),
+            requestId: meta?.requestId,
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            logger.info({
+              event: "flow.handoff.summary.deduped",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              requestId: meta?.requestId,
+            });
+          } else {
+            logger.error({
+              event: "flow.handoff.summary.failed",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              error: (error as Error).message,
+              requestId: meta?.requestId,
+            });
+          }
+        }
       }
 
       const activatedHandoff = activateHumanHandoff(
