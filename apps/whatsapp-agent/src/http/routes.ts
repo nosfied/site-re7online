@@ -12594,7 +12594,7 @@ async function anonymizeConversationPrivacyData(
   const waIds = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
   const now = new Date();
 
-  const [conversation, runtimeStates, inbound, outbound, contacts, leads, events] = await prisma.$transaction([
+  const [conversation, runtimeStates, inbound, outbound, contacts, leads, leadNotes, events] = await prisma.$transaction([
     prisma.conversation.updateMany({
       where: { clientId: params.clientId, id: target.id },
       data: {
@@ -12649,6 +12649,15 @@ async function anonymizeConversationPrivacyData(
         service: null,
       },
     }),
+    prisma.leadNote.updateMany({
+      where: {
+        tenantId: params.clientId,
+        lead: {
+          OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
+        },
+      },
+      data: { body: "[nota anonimizada]" },
+    }),
     prisma.event.updateMany({
       where: {
         clientId: params.clientId,
@@ -12692,6 +12701,7 @@ async function anonymizeConversationPrivacyData(
       outboundMessages: outbound.count,
       contacts: contacts.count,
       leads: leads.count,
+      leadNotes: leadNotes.count,
       events: events.count,
     },
     waId: anonymizedWaId,

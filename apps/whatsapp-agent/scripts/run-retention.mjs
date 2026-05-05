@@ -58,7 +58,7 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
   const anonymizedName = "Usuario Anonimizado";
   const waIds = conversationWaValues(conversation);
 
-  const [conversationUpdate, runtimeStates, inbound, outbound, contacts, leads, events] =
+  const [conversationUpdate, runtimeStates, inbound, outbound, contacts, leads, leadNotes, events] =
     await prisma.$transaction([
       prisma.conversation.updateMany({
         where: { clientId: client.id, id: conversation.id },
@@ -136,6 +136,15 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
           service: null,
         },
       }),
+      prisma.leadNote.updateMany({
+        where: {
+          tenantId: client.id,
+          lead: {
+            OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
+          },
+        },
+        data: { body: "[nota anonimizada]" },
+      }),
       prisma.event.updateMany({
         where: {
           clientId: client.id,
@@ -161,6 +170,7 @@ async function anonymizeAndSoftDeleteConversation(client, conversation) {
     outboundMessages: outbound.count,
     contacts: contacts.count,
     leads: leads.count,
+    leadNotes: leadNotes.count,
     events: events.count,
   };
 }
