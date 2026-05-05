@@ -57,6 +57,7 @@ import {
   clearChatbotRuntime,
   executeChatbotFlow,
   extractChatbotFlowId,
+  getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
 } from "../chatbot/chatbotFlow.js";
 import {
@@ -3120,6 +3121,99 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 requestId: meta?.requestId,
               });
             } else if (updatedConversation.chatbotActive || updatedConversation.chatbotNodeId) {
+              const initialAwaitingNodeId = getInitialChatbotAwaitingNodeId(validatedDefinition.definition);
+              const isAtInitialAwaitingNode =
+                updatedConversation.chatbotActive === true &&
+                updatedConversation.chatbotNodeId === initialAwaitingNodeId;
+              const isMenuChoice = typeof message.text === "string" && /^\s*\d+\s*$/.test(message.text);
+              if (isAtInitialAwaitingNode && !isMenuChoice) {
+                logger.info({
+                  event: "flow.intent_classifier.checked",
+                  clientId: tenantClientId,
+                  clientKey: tenantClientKey,
+                  flowId: chatbotFlow.id,
+                  waId: maskNumber(normalizedFrom),
+                  reason: "initial_menu_free_text",
+                  nodeId: updatedConversation.chatbotNodeId,
+                  requestId: meta?.requestId,
+                });
+                const classification = classifyFreeTextFlowIntent(message.text);
+                if (!classification) {
+                  logger.info({
+                    event: "flow.intent_classifier.no_match",
+                    clientId: tenantClientId,
+                    clientKey: tenantClientKey,
+                    flowId: chatbotFlow.id,
+                    waId: maskNumber(normalizedFrom),
+                    reason: "no_keyword_match",
+                    requestId: meta?.requestId,
+                  });
+                } else if (!validatedDefinition.definition.nodes[classification.targetNode]) {
+                  logger.info({
+                    event: "flow.intent_classifier.no_match",
+                    clientId: tenantClientId,
+                    clientKey: tenantClientKey,
+                    flowId: chatbotFlow.id,
+                    waId: maskNumber(normalizedFrom),
+                    intent: classification.intent,
+                    targetNode: classification.targetNode,
+                    reason: "target_node_missing",
+                    requestId: meta?.requestId,
+                  });
+                } else {
+                  const context = applyFlowIntentClassificationToContext({
+                    currentContext: updatedConversation.answers?.flowContext,
+                    currentTags: updatedConversation.answers?.flowTags,
+                    classification,
+                  });
+                  updatedConversation = {
+                    ...updatedConversation,
+                    answers: {
+                      ...(updatedConversation.answers ?? {}),
+                      flowContext: context.flowContext,
+                      flowTags: context.flowTags,
+                    },
+                  };
+                  chatbotStartNodeId = classification.targetNode;
+                  logger.info({
+                    event: "flow.intent_classifier.matched",
+                    clientId: tenantClientId,
+                    clientKey: tenantClientKey,
+                    flowId: chatbotFlow.id,
+                    waId: maskNumber(normalizedFrom),
+                    intent: classification.intent,
+                    matchedTerms: classification.matchedTerms,
+                    targetNode: classification.targetNode,
+                    confidence: classification.confidence,
+                    score: classification.score,
+                    requestId: meta?.requestId,
+                  });
+                  if (classification.conflictedIntents.length > 0) {
+                    logger.info({
+                      event: "flow.intent_classifier.conflict_resolved",
+                      clientId: tenantClientId,
+                      clientKey: tenantClientKey,
+                      flowId: chatbotFlow.id,
+                      waId: maskNumber(normalizedFrom),
+                      intent: classification.intent,
+                      conflictedIntents: classification.conflictedIntents,
+                      targetNode: classification.targetNode,
+                      reason: "priority_order",
+                      requestId: meta?.requestId,
+                    });
+                  }
+                  logger.info({
+                    event: "flow.intent_classifier.routed",
+                    clientId: tenantClientId,
+                    clientKey: tenantClientKey,
+                    flowId: chatbotFlow.id,
+                    waId: maskNumber(normalizedFrom),
+                    intent: classification.intent,
+                    targetNode: classification.targetNode,
+                    requestId: meta?.requestId,
+                  });
+                }
+              } else {
               logger.info({
                 event: "flow.intent_classifier.skipped_active_flow",
                 clientId: tenantClientId,
@@ -3127,8 +3221,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 waId: maskNumber(normalizedFrom),
                 active: updatedConversation.chatbotActive ?? false,
                 nodeId: updatedConversation.chatbotNodeId ?? null,
+                reason: isMenuChoice ? "menu_choice" : "active_flow",
                 requestId: meta?.requestId,
               });
+              }
             } else {
               logger.info({
                 event: "flow.intent_classifier.checked",

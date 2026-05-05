@@ -4,6 +4,7 @@ import {
   buildHandoffSummary,
   clearChatbotRuntime,
   executeChatbotFlow,
+  getInitialChatbotAwaitingNodeId,
   validateChatbotFlowDefinition,
 } from "./chatbotFlow.js";
 import {
@@ -181,6 +182,84 @@ test("executeChatbotFlow can start from classified node without menu reply", () 
   assert.equal(result.handled, true);
   assert.equal(result.state.chatbotNodeId, "bpc_tipo");
   assert.match(result.replyText ?? "", /O BPC\/LOAS é para qual situação/);
+  assert.doesNotMatch(result.replyText ?? "", /Como podemos ajudar/);
+});
+
+test("getInitialChatbotAwaitingNodeId follows text intro to first menu", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "boas_vindas",
+    nodes: {
+      boas_vindas: {
+        type: "text",
+        text: "Ola.",
+        next: "menu_principal",
+      },
+      menu_principal: {
+        type: "menu",
+        text: "Como podemos ajudar?",
+        options: [{ label: "BPC", next: "bpc_tipo" }],
+      },
+      bpc_tipo: {
+        type: "menu",
+        text: "O BPC/LOAS é para qual situação?",
+        options: [{ label: "Idoso", next: "handoff_1" }],
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  assert.equal(getInitialChatbotAwaitingNodeId(validated.definition), "menu_principal");
+});
+
+test("executeChatbotFlow can reroute from initial menu free text without repeating default menu", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "boas_vindas",
+    nodes: {
+      boas_vindas: {
+        type: "text",
+        text: "Ola.",
+        next: "menu_principal",
+      },
+      menu_principal: {
+        type: "menu",
+        text: "Como podemos ajudar?",
+        options: [{ label: "Negado", next: "negado_beneficio" }],
+      },
+      negado_beneficio: {
+        type: "menu",
+        text: "Qual benefício foi negado?",
+        options: [{ label: "Aposentadoria", next: "handoff_1" }],
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_classifier",
+    definition: validated.definition,
+    state: makeState({
+      flow: "chatbot:flow_classifier",
+      chatbotActive: true,
+      chatbotNodeId: "menu_principal",
+    }),
+    inboundText: "meu benefício foi negado",
+    nowIso: "2026-04-17T10:00:01.000Z",
+    startNodeId: "negado_beneficio",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "negado_beneficio");
+  assert.match(result.replyText ?? "", /Qual benefício foi negado/);
   assert.doesNotMatch(result.replyText ?? "", /Como podemos ajudar/);
 });
 

@@ -85,6 +85,20 @@ export type ChatbotExecutionEvent =
       tags: string[];
     };
 
+export function getInitialChatbotAwaitingNodeId(definition: ChatbotFlowDefinition) {
+  let nodeId = definition.start;
+  const visited = new Set<string>();
+  for (let step = 0; step < CHATBOT_MAX_AUTO_ADVANCES_PER_EXECUTION; step += 1) {
+    if (visited.has(nodeId)) return nodeId;
+    visited.add(nodeId);
+    const node = definition.nodes[nodeId];
+    if (!node) return nodeId;
+    if (node.type !== "text" || !node.next) return nodeId;
+    nodeId = node.next;
+  }
+  return nodeId;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -720,14 +734,22 @@ export function executeChatbotFlow(params: {
   nowIso: string;
   startNodeId?: string;
 }): ChatbotExecutionResult {
+  if (params.startNodeId && params.definition.nodes[params.startNodeId]) {
+    return executeNodeChain({
+      definition: params.definition,
+      state: params.state,
+      flowId: params.flowId,
+      nodeId: params.startNodeId,
+      nowIso: params.nowIso,
+    });
+  }
+
   if (!params.state.chatbotActive || !params.state.chatbotNodeId) {
     return executeNodeChain({
       definition: params.definition,
       state: params.state,
       flowId: params.flowId,
-      nodeId: params.startNodeId && params.definition.nodes[params.startNodeId]
-        ? params.startNodeId
-        : params.definition.start,
+      nodeId: params.definition.start,
       nowIso: params.nowIso,
     });
   }
