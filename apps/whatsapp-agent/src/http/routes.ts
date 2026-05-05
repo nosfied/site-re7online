@@ -12810,6 +12810,7 @@ async function resolveConversationTarget(
       waIdCanonical: true,
       id: true,
       departmentId: true,
+      createdAt: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
@@ -14001,11 +14002,18 @@ async function buildContactTimelinePayload(
   );
   const createdBefore = params.cursor ? new Date(params.cursor.createdAt) : null;
   const historyVisibleAfter = resolved.winner?.historyVisibleAfter ?? null;
+  const currentOperationStartedAt = resolved.winner?.createdAt ?? null;
+  const visibleAfter =
+    historyVisibleAfter && currentOperationStartedAt
+      ? historyVisibleAfter > currentOperationStartedAt
+        ? historyVisibleAfter
+        : currentOperationStartedAt
+      : historyVisibleAfter ?? currentOperationStartedAt;
   const createdAtFilter: Prisma.DateTimeFilter = {
     ...(createdBefore ? { lt: createdBefore } : {}),
-    ...(historyVisibleAfter ? { gt: historyVisibleAfter } : {}),
+    ...(visibleAfter ? { gt: visibleAfter } : {}),
   };
-  const hasCreatedAtFilter = Boolean(createdBefore || historyVisibleAfter);
+  const hasCreatedAtFilter = Boolean(createdBefore || visibleAfter);
   const baseCreatedAtWhere = hasCreatedAtFilter ? { createdAt: createdAtFilter } : {};
   const take = Math.min(params.limit + 1, 101);
 

@@ -468,11 +468,16 @@ const HANDOFF_CONTEXT_LABELS: Record<string, string> = {
   caso: "Caso",
   department: "Setor",
   etapa: "Etapa",
+  fase: "Fase",
+  handoff_reason: "Motivo do encaminhamento",
   interest: "Interesse",
   interesse: "Interesse",
+  lead_temp: "Temperatura do lead",
   motivo: "Motivo",
   origem: "Origem",
+  perfil: "Perfil",
   priority: "Prioridade",
+  prioridade: "Prioridade",
   profile: "Perfil",
   reason: "Motivo",
   segment: "Segmento",
@@ -480,8 +485,42 @@ const HANDOFF_CONTEXT_LABELS: Record<string, string> = {
   service: "Serviço",
   servico: "Serviço",
   servicoPretendido: "Serviço",
+  situacao: "Situação",
   status: "Status",
   step: "Etapa",
+};
+
+const HANDOFF_CONTEXT_ORDER = [
+  "area",
+  "servico",
+  "service",
+  "servicoPretendido",
+  "perfil",
+  "profile",
+  "situacao",
+  "fase",
+  "priority",
+  "prioridade",
+  "lead_temp",
+  "handoff_reason",
+  "motivo",
+  "reason",
+  "origem",
+  "assunto",
+  "status",
+];
+
+const HANDOFF_CONTEXT_VALUES: Record<string, string> = {
+  alta: "Alta",
+  analise_bpc_loas: "Análise BPC/LOAS",
+  aposentadoria: "Aposentadoria",
+  bpc_loas: "BPC/LOAS",
+  diagnostico_bpc: "Diagnóstico BPC",
+  pedido_negado: "Pedido negado",
+  pessoa_com_deficiencia: "Pessoa com deficiência",
+  previdenciario: "Previdenciário",
+  quente: "Quente",
+  revisao: "Revisão",
 };
 
 const SENSITIVE_CONTEXT_KEY_PATTERN =
@@ -489,39 +528,78 @@ const SENSITIVE_CONTEXT_KEY_PATTERN =
 const SENSITIVE_CONTEXT_VALUE_PATTERN =
   /([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})|(\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b)|(\b\d{10,13}\b)/i;
 
+function formatContextLabel(key: string) {
+  const knownLabel = HANDOFF_CONTEXT_LABELS[key];
+  if (knownLabel) return knownLabel;
+  return key
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatContextValue(text: string) {
+  const knownValue = HANDOFF_CONTEXT_VALUES[text];
+  if (knownValue) return knownValue;
+  if (/^[a-z0-9_-]+$/.test(text) && /[_-]/.test(text)) {
+    return text
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  return text;
+}
+
 function formatSafeContextValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (!["string", "number", "boolean"].includes(typeof value)) return null;
   const text = String(value).trim().replace(/\s+/g, " ");
   if (!text || SENSITIVE_CONTEXT_VALUE_PATTERN.test(text)) return null;
-  return text.slice(0, 160);
+  return formatContextValue(text).slice(0, 160);
+}
+
+function sortContextEntries(entries: Array<[string, FlowContext[string]]>) {
+  return entries.sort(([leftKey], [rightKey]) => {
+    const leftIndex = HANDOFF_CONTEXT_ORDER.indexOf(leftKey);
+    const rightIndex = HANDOFF_CONTEXT_ORDER.indexOf(rightKey);
+    if (leftIndex !== -1 || rightIndex !== -1) {
+      return (leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+        (rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex);
+    }
+    return leftKey.localeCompare(rightKey);
+  });
 }
 
 export function buildHandoffSummary(
   flowContext: FlowContext | null | undefined,
   node?: Pick<ChatbotHandoffNode, "handoffSummary">
 ): string {
-  const lines: string[] = [];
+  const contextLines: string[] = [];
   const customSummary = getNonEmptyString(node?.handoffSummary);
-  if (customSummary && !SENSITIVE_CONTEXT_VALUE_PATTERN.test(customSummary)) {
-    lines.push(customSummary.slice(0, 500));
-  }
 
   if (flowContext && isRecord(flowContext)) {
-    for (const [key, value] of Object.entries(flowContext)) {
+    for (const [key, value] of sortContextEntries(Object.entries(flowContext))) {
       if (SENSITIVE_CONTEXT_KEY_PATTERN.test(key)) continue;
-      const label = HANDOFF_CONTEXT_LABELS[key] ?? key;
+      const label = formatContextLabel(key);
       const formattedValue = formatSafeContextValue(value);
       if (!formattedValue) continue;
-      lines.push(`${label}: ${formattedValue}`);
+      contextLines.push(`${label}: ${formattedValue}`);
     }
   }
 
-  if (lines.length === 0) {
+  if (contextLines.length === 0 && (!customSummary || SENSITIVE_CONTEXT_VALUE_PATTERN.test(customSummary))) {
     return "Atendimento encaminhado pela automação. Sem contexto adicional registrado.";
   }
 
-  return lines.join("\n");
+  return [
+    "Resumo do atendimento",
+    "---------------------",
+    ...contextLines,
+    ...(customSummary && !SENSITIVE_CONTEXT_VALUE_PATTERN.test(customSummary)
+      ? ["", "Observação", "----------", customSummary.slice(0, 500)]
+      : []),
+  ].join("\n");
 }
 
 function executeNodeChain(params: {

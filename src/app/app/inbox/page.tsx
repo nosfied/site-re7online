@@ -4090,7 +4090,7 @@ export default function AppInboxPage() {
                   <div className="mt-3 space-y-2">
                     {leadNotes.map((note) => (
                       <article key={note.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                        <p className="text-sm text-white">{note.body}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white">{note.body}</p>
                         <p className="mt-1 text-[11px] text-white/55">{formatDateTime(note.createdAt)}</p>
                       </article>
                     ))}

@@ -238,8 +238,9 @@ test("executeChatbotFlow merges node context and tags without changing client re
   assert.equal(result.handled, true);
   assert.equal(result.replyText, "Entendi.\n\nVou encaminhar para um especialista.");
   assert.match(result.pendingHandoff?.summary ?? "", /Lead qualificado/);
-  assert.match(result.pendingHandoff?.summary ?? "", /Área: previdenciario/);
-  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: aposentadoria/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Resumo do atendimento/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Área: Previdenciário/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: Aposentadoria/);
   assert.deepEqual(result.pendingHandoff?.tags, ["previdenciario", "qualificado"]);
   assert.equal(
     result.events?.some((event) => event.event === "flow.context.merged"),
@@ -289,7 +290,7 @@ test("executeChatbotFlow merges selected option context", () => {
   });
 
   assert.equal(result.handled, true);
-  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: aposentadoria/);
+  assert.match(result.pendingHandoff?.summary ?? "", /Serviço: Aposentadoria/);
   assert.deepEqual(result.pendingHandoff?.tags, ["previdenciario"]);
   assert.equal(
     result.events?.some(
@@ -307,7 +308,7 @@ test("buildHandoffSummary skips sensitive context values", () => {
     nome: "Maria",
   });
 
-  assert.match(summary, /Serviço: revisao/);
+  assert.match(summary, /Serviço: Revisão/);
   assert.doesNotMatch(summary, /5584999999999/);
   assert.doesNotMatch(summary, /cliente@example.com/);
   assert.doesNotMatch(summary, /Maria/);
