@@ -18,6 +18,7 @@ import {
   activateHumanHandoff,
   clearTemplateNeeded,
   decideOutboundPolicy,
+  detectIntent,
   getHandoffStatus,
   getOrCreateConversation,
   handleHandoff,
@@ -2934,11 +2935,30 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     };
     let updatedConversation = inboundConversation;
     const wasPending = currentConversation.handoff.status === "pending";
-    const handoffResult = handleHandoff(
-      updatedConversation,
-      message.text,
-      message.timestamp
+    const hasConfigurableChatbotFlow = Boolean(
+      await loadChatbotFlowForConversation(updatedConversation, message.text)
     );
+    const shouldRunLegacyHandoff =
+      wasPending || !hasConfigurableChatbotFlow;
+    if (!shouldRunLegacyHandoff && detectIntent(message.text) === "handoff") {
+      logger.info({
+        event: "handoff.legacy.skipped_configurable_chatbot",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        reason: "chatbot_flow_available",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+    }
+    const handoffResult = shouldRunLegacyHandoff
+      ? handleHandoff(
+          updatedConversation,
+          message.text,
+          message.timestamp
+        )
+      : { state: updatedConversation, handled: false };
     if (handoffResult.handled) {
       updatedConversation = clearChatbotRuntime(handoffResult.state);
       if (handoffResult.outcome === "requested") {
