@@ -162,6 +162,9 @@ function normalizeAdminChatbotError(error: { message?: string; errorCode?: strin
   if (error.errorCode === "ai_context_missing") {
     return error.message || "IA automatica exige configuracao previa do tenant.";
   }
+  if (error.errorCode === "intent_classifier_globally_disabled") {
+    return error.message || "Classificacao por mensagem livre esta desativada no ambiente.";
+  }
   return error.message || fallback;
 }
 
@@ -275,10 +278,12 @@ export default function AdminTenantChatbotPage() {
     disableAutoReply: false,
     disableChatbot: false,
     disableAiFallback: false,
+    disableIntentClassifier: true,
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
     aiLocked: false,
+    intentClassifierLocked: true,
   };
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
   const draftJsonErrors = useMemo(
@@ -454,6 +459,13 @@ export default function AdminTenantChatbotPage() {
                       ? "On ativa a IA automatica com o contexto configurado no tenant."
                       : "Indisponivel ate existir contexto de negocio no cadastro do tenant.",
                 },
+                {
+                  key: "disableIntentClassifier" as const,
+                  title: "Classificacao de intencao",
+                  help: automationDraft.intentClassifierLocked
+                    ? "Indisponivel porque a flag global do ambiente esta desligada."
+                    : "On direciona mensagens livres iniciais para o node mais adequado do flow.",
+                },
               ].map((item) => (
                 <div
                   key={item.key}
@@ -469,7 +481,8 @@ export default function AdminTenantChatbotPage() {
                       (item.key === "disableChatbot" && automationDraft.chatbotLocked) ||
                       (item.key === "disableAiFallback" &&
                         (automationDraft.aiLocked ||
-                          (!automationDraft.aiConfigured && automationDraft.disableAiFallback)))
+                          (!automationDraft.aiConfigured && automationDraft.disableAiFallback))) ||
+                      (item.key === "disableIntentClassifier" && automationDraft.intentClassifierLocked)
                     }
                     onToggle={() =>
                       setSettings((current) =>

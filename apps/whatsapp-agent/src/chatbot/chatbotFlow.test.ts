@@ -6,6 +6,10 @@ import {
   executeChatbotFlow,
   validateChatbotFlowDefinition,
 } from "./chatbotFlow.js";
+import {
+  applyFlowIntentClassificationToContext,
+  classifyFreeTextFlowIntent,
+} from "./intentClassifier.js";
 import { ConversationState } from "../conversation/conversation.types.js";
 
 function makeState(overrides?: Partial<ConversationState>): ConversationState {
@@ -87,6 +91,97 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.equal(result.state.chatbotActive, true);
   assert.equal(result.state.chatbotNodeId, "menu");
   assert.match(result.replyText ?? "", /1\. Atendimento/);
+});
+
+test("classifyFreeTextFlowIntent returns no match for greeting", () => {
+  const result = classifyFreeTextFlowIntent("oi");
+  assert.equal(result, null);
+});
+
+test("classifyFreeTextFlowIntent routes BPC free text", () => {
+  const result = classifyFreeTextFlowIntent("quero pedir BPC para meu filho autista");
+
+  assert.equal(result?.intent, "bpc_loas");
+  assert.equal(result?.targetNode, "bpc_tipo");
+  assert.equal(result?.context.intent, "bpc_loas");
+  assert.equal(result?.context.origem_intencao, "mensagem_livre");
+  assert.deepEqual(result?.tags, ["previdenciario", "bpc_loas", "mensagem_livre"]);
+});
+
+test("classifyFreeTextFlowIntent routes denied benefit and resolves retirement conflict", () => {
+  const denied = classifyFreeTextFlowIntent("meu benefício foi negado");
+  const conflict = classifyFreeTextFlowIntent("minha aposentadoria foi negada");
+
+  assert.equal(denied?.intent, "beneficio_negado");
+  assert.equal(denied?.targetNode, "negado_beneficio");
+  assert.equal(conflict?.intent, "beneficio_negado");
+  assert.equal(conflict?.targetNode, "negado_beneficio");
+  assert.equal(conflict?.conflictedIntents.includes("aposentadoria"), true);
+});
+
+test("classifyFreeTextFlowIntent routes other previdenciario intents", () => {
+  assert.equal(classifyFreeTextFlowIntent("meu benefício foi cortado")?.targetNode, "cortado_beneficio");
+  assert.equal(classifyFreeTextFlowIntent("quero revisar minha aposentadoria")?.targetNode, "revisao_beneficio");
+  assert.equal(classifyFreeTextFlowIntent("pensão por morte")?.targetNode, "pensao_situacao");
+});
+
+test("applyFlowIntentClassificationToContext does not overwrite existing context", () => {
+  const classification = classifyFreeTextFlowIntent("meu benefício foi negado");
+  assert.ok(classification);
+  if (!classification) return;
+
+  const result = applyFlowIntentClassificationToContext({
+    currentContext: { intent: "manual", area: "previdenciario" },
+    currentTags: ["previdenciario", "manual"],
+    classification,
+  });
+
+  assert.equal(result.flowContext.intent, "manual");
+  assert.equal(result.flowContext.origem_intencao, "mensagem_livre");
+  assert.deepEqual(result.flowTags, [
+    "previdenciario",
+    "manual",
+    "beneficio_negado",
+    "mensagem_livre",
+  ]);
+});
+
+test("executeChatbotFlow can start from classified node without menu reply", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "menu_principal",
+    nodes: {
+      menu_principal: {
+        type: "menu",
+        text: "Como podemos ajudar?",
+        options: [{ label: "BPC", next: "bpc_tipo" }],
+      },
+      bpc_tipo: {
+        type: "menu",
+        text: "O BPC/LOAS é para qual situação?",
+        options: [{ label: "Idoso", next: "handoff_1" }],
+      },
+      handoff_1: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const result = executeChatbotFlow({
+    flowId: "flow_classifier",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "quero pedir bpc",
+    nowIso: "2026-04-17T10:00:01.000Z",
+    startNodeId: "bpc_tipo",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state.chatbotNodeId, "bpc_tipo");
+  assert.match(result.replyText ?? "", /O BPC\/LOAS é para qual situação/);
+  assert.doesNotMatch(result.replyText ?? "", /Como podemos ajudar/);
 });
 
 test("executeChatbotFlow repeats menu on invalid answer", () => {

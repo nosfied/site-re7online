@@ -164,10 +164,12 @@ export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
   disableAiFallback: boolean;
+  disableIntentClassifier: boolean;
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
   aiLocked?: boolean;
+  intentClassifierLocked?: boolean;
 };
 
 export type AppTenantSummary = {

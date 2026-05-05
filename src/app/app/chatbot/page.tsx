@@ -70,6 +70,12 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "ai_locked_by_admin") {
     return error.message || "IA conversacional esta desativada no console interno.";
   }
+  if (error.errorCode === "intent_classifier_locked_by_admin") {
+    return error.message || "Classificacao por mensagem livre esta desativada no console interno.";
+  }
+  if (error.errorCode === "intent_classifier_globally_disabled") {
+    return error.message || "Classificacao por mensagem livre esta desativada no ambiente.";
+  }
   if (error.status === 403) {
     return "Sem permissao para gerenciar flows do chatbot.";
   }
@@ -557,10 +563,12 @@ export default function AppChatbotPage() {
     disableAutoReply: false,
     disableChatbot: false,
     disableAiFallback: false,
+    disableIntentClassifier: true,
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
     aiLocked: false,
+    intentClassifierLocked: true,
   };
   const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
   const flowReadOnly = readOnly || flowEditingLocked;
@@ -642,6 +650,13 @@ export default function AppChatbotPage() {
                   ? "On ativa a IA automatica com o contexto configurado para este tenant."
                   : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
               },
+              {
+                key: "disableIntentClassifier" as const,
+                title: "Classificacao de intencao",
+                help: automationDraft.intentClassifierLocked
+                  ? "Bloqueado pelo console interno ou desativado no ambiente."
+                  : "On tenta direcionar mensagens livres iniciais para o ponto correto do fluxo.",
+              },
             ].map((item) => (
               <div
                 key={item.key}
@@ -658,7 +673,8 @@ export default function AppChatbotPage() {
                     (item.key === "disableChatbot" && automationDraft.chatbotLocked) ||
                     (item.key === "disableAiFallback" &&
                       (automationDraft.aiLocked ||
-                        (!automationDraft.aiConfigured && automationDraft.disableAiFallback)))
+                        (!automationDraft.aiConfigured && automationDraft.disableAiFallback))) ||
+                    (item.key === "disableIntentClassifier" && automationDraft.intentClassifierLocked)
                   }
                   onToggle={() =>
                     setSettings((current) =>

@@ -54,6 +54,8 @@ export type TenantConfig = {
   disableLegacyFlows?: boolean;
   disableAiFallback?: boolean;
   appDisableAiFallback?: boolean;
+  disableIntentClassifier?: boolean;
+  appDisableIntentClassifier?: boolean;
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -92,6 +94,7 @@ function buildDefaultTenant(): TenantConfigMap {
     handoffAttendantWaid: env.HANDOFF_ATTENDANT_WAID ?? "",
     defaultLanguage: env.OUTBOUND_TEMPLATE_DEFAULT_LANG ?? "pt_BR",
     disableLegacyFlows: true,
+    appDisableIntentClassifier: true,
     templates: {
       manualHandoff: env.HANDOFF_TEMPLATE_NAME || "re7_atendente_manual_v1",
     },
@@ -141,6 +144,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     if (nextTenant.appDisableAiFallback === undefined) {
       nextTenant.appDisableAiFallback = false;
+    }
+    if (nextTenant.appDisableIntentClassifier === undefined) {
+      nextTenant.appDisableIntentClassifier = true;
     }
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
@@ -273,6 +279,18 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.appDisableAiFallback !== undefined && typeof tenant.appDisableAiFallback !== "boolean") {
       throw new Error(`invalid_tenant_app_disable_ai_fallback:${key}`);
+    }
+    if (
+      tenant.disableIntentClassifier !== undefined &&
+      typeof tenant.disableIntentClassifier !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_disable_intent_classifier:${key}`);
+    }
+    if (
+      tenant.appDisableIntentClassifier !== undefined &&
+      typeof tenant.appDisableIntentClassifier !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_app_disable_intent_classifier:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

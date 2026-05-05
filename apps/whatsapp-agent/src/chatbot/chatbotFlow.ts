@@ -718,13 +718,16 @@ export function executeChatbotFlow(params: {
   state: ConversationState;
   inboundText: string | null | undefined;
   nowIso: string;
+  startNodeId?: string;
 }): ChatbotExecutionResult {
   if (!params.state.chatbotActive || !params.state.chatbotNodeId) {
     return executeNodeChain({
       definition: params.definition,
       state: params.state,
       flowId: params.flowId,
-      nodeId: params.definition.start,
+      nodeId: params.startNodeId && params.definition.nodes[params.startNodeId]
+        ? params.startNodeId
+        : params.definition.start,
       nowIso: params.nowIso,
     });
   }

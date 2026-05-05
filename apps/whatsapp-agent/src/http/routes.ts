@@ -2839,10 +2839,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableAutoReply: tenant.disableAutoReply ?? false,
           disableChatbot,
           disableAiFallback,
+          disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
           aiConfigured,
           chatbotLocked,
           flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
           aiLocked,
+          intentClassifierLocked:
+            !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
         },
       });
     } catch (error) {
@@ -2884,7 +2887,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const data = body as Record<string, unknown>;
-      const keys = ["disableChatbot", "disableAiFallback"] as const;
+      const keys = ["disableChatbot", "disableAiFallback", "disableIntentClassifier"] as const;
       const payload: Record<string, boolean> = {};
       for (const key of keys) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -2901,7 +2904,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           400,
           httpError(
             "bad_request",
-            "Provide at least one of disableChatbot or disableAiFallback"
+            "Provide at least one of disableChatbot, disableAiFallback or disableIntentClassifier"
           )
         );
         return;
@@ -2946,6 +2949,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
+      if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
+        json(
+          res,
+          409,
+          httpError(
+            "intent_classifier_globally_disabled",
+            "Classificacao por mensagem livre esta desativada no ambiente."
+          )
+        );
+        return;
+      }
+      if (payload.disableIntentClassifier === false && tenant.disableIntentClassifier) {
+        json(
+          res,
+          409,
+          httpError(
+            "intent_classifier_locked_by_admin",
+            "Classificacao por mensagem livre esta desativada no console interno."
+          )
+        );
+        return;
+      }
 
       const saved = await saveTenantPatch(client.clientKey, {
         ...(payload.disableChatbot !== undefined
@@ -2953,6 +2978,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           : {}),
         ...(payload.disableAiFallback !== undefined
           ? { appDisableAiFallback: payload.disableAiFallback }
+          : {}),
+        ...(payload.disableIntentClassifier !== undefined
+          ? { appDisableIntentClassifier: payload.disableIntentClassifier }
           : {}),
       });
       logger.info({
@@ -2971,10 +2999,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableAutoReply: Boolean(saved.tenant.disableAutoReply),
           disableChatbot: isChatbotDisabledForTenant(saved.tenant),
           disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
+          disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
           chatbotLocked: Boolean(saved.tenant.disableChatbot),
           flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
           aiLocked: Boolean(saved.tenant.disableAiFallback),
+          intentClassifierLocked:
+            !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
         },
       });
     } catch (error) {
@@ -6300,10 +6331,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableAutoReply: tenant.disableAutoReply ?? false,
             disableChatbot: isChatbotDisabledForTenant(tenant),
             disableAiFallback: isAiFallbackDisabledForTenant(tenant),
+            disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(tenant.disableChatbot),
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
             aiLocked: Boolean(tenant.disableAiFallback),
+            intentClassifierLocked:
+              !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
           },
         });
       } catch (error) {
@@ -6329,7 +6363,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const body = await readJsonBody(req, res);
         if (!body) return;
         const data = body as Record<string, unknown>;
-        const keys = ["disableChatbot", "disableAiFallback"] as const;
+        const keys = ["disableChatbot", "disableAiFallback", "disableIntentClassifier"] as const;
         const payload: Record<string, boolean> = {};
         for (const key of keys) {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -6344,7 +6378,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(
             res,
             400,
-            httpError("bad_request", "Provide at least one of disableChatbot or disableAiFallback")
+            httpError(
+              "bad_request",
+              "Provide at least one of disableChatbot, disableAiFallback or disableIntentClassifier"
+            )
           );
           return;
         }
@@ -6362,12 +6399,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
+        if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
+          json(
+            res,
+            409,
+            httpError(
+              "intent_classifier_globally_disabled",
+              "Classificacao por mensagem livre esta desativada no ambiente."
+            )
+          );
+          return;
+        }
         const saved = await saveTenantPatch(clientKey, {
           ...(payload.disableChatbot !== undefined
             ? { appDisableChatbot: payload.disableChatbot }
             : {}),
           ...(payload.disableAiFallback !== undefined
             ? { appDisableAiFallback: payload.disableAiFallback }
+            : {}),
+          ...(payload.disableIntentClassifier !== undefined
+            ? { appDisableIntentClassifier: payload.disableIntentClassifier }
             : {}),
         });
         logger.info({
@@ -6385,10 +6436,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableAutoReply: Boolean(saved.tenant.disableAutoReply),
             disableChatbot: isChatbotDisabledForTenant(saved.tenant),
             disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
+            disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(saved.tenant.disableChatbot),
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
             aiLocked: Boolean(saved.tenant.disableAiFallback),
+            intentClassifierLocked:
+              !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
           },
         });
       } catch (error) {
@@ -10610,6 +10664,8 @@ function diffTenantFields(
   compareField("disableLegacyFlows");
   compareField("disableAiFallback");
   compareField("appDisableAiFallback");
+  compareField("disableIntentClassifier");
+  compareField("appDisableIntentClassifier");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
@@ -11850,6 +11906,15 @@ function isAiFallbackDisabledForTenant(tenant?: {
   const aiConfigured = Boolean(tenant?.aiBusinessContext?.trim());
   if (!aiConfigured) return true;
   return tenant?.disableAiFallback === true || tenant?.appDisableAiFallback === true;
+}
+
+function isIntentClassifierDisabledForTenant(tenant?: {
+  disableIntentClassifier?: boolean;
+  appDisableIntentClassifier?: boolean;
+} | null) {
+  if (!env.FLOW_INTENT_CLASSIFIER_ENABLED) return true;
+  if (tenant?.disableIntentClassifier === true) return true;
+  return tenant?.appDisableIntentClassifier !== false;
 }
 
 async function enforceAppFeature(

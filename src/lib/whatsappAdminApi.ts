@@ -137,10 +137,12 @@ export type AdminAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
   disableAiFallback: boolean;
+  disableIntentClassifier: boolean;
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
   aiLocked?: boolean;
+  intentClassifierLocked?: boolean;
 };
 
 export type ConversationReportByAgentItem = {
@@ -352,6 +354,8 @@ export type TenantConfigResponse = {
     disableLegacyFlows?: boolean;
     disableChatbotFlowEditing?: boolean;
     disableAiFallback?: boolean;
+    disableIntentClassifier?: boolean;
+    appDisableIntentClassifier?: boolean;
     aiBusinessContext?: string;
     templates?: {
       manualHandoff?: string;
