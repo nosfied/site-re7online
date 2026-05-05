@@ -13289,6 +13289,16 @@ function getTimelineEventTitle(eventName: string) {
   }
 }
 
+const CONTACT_TIMELINE_VISIBLE_EVENT_NAMES = [
+  "conversation.assigned",
+  "conversation.transferred",
+  "conversation.department.transferred",
+  "conversation.handoff.updated",
+  "conversation.released",
+  "conversation.released_to_general",
+  "conversation.status_changed",
+] as const;
+
 function getTimelineMessageBody(type: MessageType, bodyText?: string | null, templateName?: string | null) {
   if (bodyText?.trim()) return bodyText;
   if (templateName?.trim()) return `Template: ${templateName}`;
@@ -14091,6 +14101,7 @@ async function buildContactTimelinePayload(
       where: {
         clientId: params.clientId,
         ...baseCreatedAtWhere,
+        eventName: { in: [...CONTACT_TIMELINE_VISIBLE_EVENT_NAMES] },
         OR: [
           ...(resolved.winner?.id ? [{ conversationId: resolved.winner.id }] : []),
           { waIdCanonical: { in: detailWaIds } },

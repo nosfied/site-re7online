@@ -3260,9 +3260,6 @@ export default function AppInboxPage() {
                               {item.body}
                             </p>
                           ) : null}
-                          {item.eventName ? (
-                            <p className="mt-2 text-xs text-slate-400">{item.eventName}</p>
-                          ) : null}
                         </article>
                       ))}
                     </div>
