@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildHandoffSummary,
+  buildSuggestedReply,
   clearChatbotRuntime,
   executeChatbotFlow,
   getInitialChatbotAwaitingNodeId,
@@ -486,6 +487,48 @@ test("buildHandoffSummary skips sensitive context values", () => {
   assert.doesNotMatch(summary, /5584999999999/);
   assert.doesNotMatch(summary, /cliente@example.com/);
   assert.doesNotMatch(summary, /Maria/);
+});
+
+test("buildSuggestedReply returns intent-specific BPC suggestion", () => {
+  const suggestion = buildSuggestedReply({
+    intent: "bpc_loas",
+    servico: "bpc_loas",
+    origem_intencao: "mensagem_livre",
+  });
+
+  assert.match(suggestion, /BPC\/LOAS/);
+  assert.match(suggestion, /próximos passos/);
+});
+
+test("buildSuggestedReply returns intent-specific denied benefit suggestion", () => {
+  const suggestion = buildSuggestedReply({
+    intent: "beneficio_negado",
+    servico: "beneficio_negado",
+    prioridade: "alta",
+  });
+
+  assert.match(suggestion, /benefício negado/i);
+  assert.match(suggestion, /recurso|novo pedido|medida judicial/i);
+});
+
+test("buildSuggestedReply falls back to generic suggestion", () => {
+  const suggestion = buildSuggestedReply({});
+
+  assert.match(suggestion, /Recebi seu atendimento pela automação/);
+  assert.match(suggestion, /orientar pelos próximos passos/);
+});
+
+test("buildSuggestedReply does not include sensitive context values", () => {
+  const suggestion = buildSuggestedReply({
+    servico: "5511999999999",
+    situacao: "cliente@example.com",
+    nome: "Maria",
+  });
+
+  assert.doesNotMatch(suggestion, /5511999999999/);
+  assert.doesNotMatch(suggestion, /cliente@example.com/);
+  assert.doesNotMatch(suggestion, /Maria/);
+  assert.match(suggestion, /Recebi seu atendimento pela automação/);
 });
 
 test("clearChatbotRuntime removes chatbot state", () => {

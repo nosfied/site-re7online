@@ -3097,6 +3097,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       pendingHandoff?: {
         feedbackText: string;
         summary: string;
+        suggestedReply: string;
         tags: string[];
         nodeId: string;
       };
@@ -3106,7 +3107,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       replyText: undefined as string | undefined,
       flowId: null as string | null,
       pendingHandoff: undefined as
-        | { feedbackText: string; summary: string; tags: string[]; nodeId: string }
+        | {
+            feedbackText: string;
+            summary: string;
+            suggestedReply: string;
+            tags: string[];
+            nodeId: string;
+          }
         | undefined,
     };
 
@@ -3671,6 +3678,116 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           } else {
             logger.error({
               event: "flow.handoff.summary.failed",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              error: (error as Error).message,
+              requestId: meta?.requestId,
+            });
+          }
+        }
+      }
+
+      const suggestedReply = chatbotFlowResult.pendingHandoff.suggestedReply?.trim();
+      if (suggestedReply && tenantClientId) {
+        const suggestedReplyRequestId = [
+          "flow-handoff-suggested-reply",
+          chatbotFlowResult.flowId ?? "unknown",
+          chatbotFlowResult.pendingHandoff.nodeId,
+          normalizedFrom,
+          message.messageId,
+        ].join(":");
+        try {
+          const prisma = getPrisma();
+          const existingSuggestedReplyEvent = await prisma.event.findUnique({
+            where: {
+              clientId_eventName_requestId: {
+                clientId: tenantClientId,
+                eventName: "flow.handoff.suggested_reply.created",
+                requestId: suggestedReplyRequestId,
+              },
+            },
+            select: { id: true },
+          });
+          if (existingSuggestedReplyEvent) {
+            logger.info({
+              event: "flow.handoff.suggested_reply.deduped",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              eventId: existingSuggestedReplyEvent.id,
+              waId: maskNumber(normalizedFrom),
+              requestId: meta?.requestId,
+            });
+          } else {
+            const event = await prisma.event.create({
+              data: {
+                clientId: tenantClientId,
+                waId: updatedConversation.waId,
+                waIdCanonical: canonicalizeBrazilWaId(updatedConversation.waId),
+                messageId: message.messageId,
+                requestId: suggestedReplyRequestId,
+                eventName: "flow.handoff.suggested_reply.created",
+                payloadJson: {
+                  action: "flow_handoff_suggested_reply_created",
+                  clientId: tenantClientId,
+                  clientKey: tenantClientKey,
+                  flowId: chatbotFlowResult.flowId,
+                  nodeId: chatbotFlowResult.pendingHandoff.nodeId,
+                  conversationKey: updatedConversation.conversationKey ?? null,
+                  tags: chatbotFlowResult.pendingHandoff.tags,
+                  timestamp: new Date().toISOString(),
+                },
+              },
+            });
+            logger.info({
+              event: "flow.handoff.suggested_reply.created",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              eventId: event.id,
+              waId: maskNumber(normalizedFrom),
+              requestId: meta?.requestId,
+            });
+            const lead = await ensureLeadForConversation({
+              tenantId: tenantClientId,
+              waId: updatedConversation.waId,
+            });
+            await prisma.leadNote.create({
+              data: {
+                tenantId: tenantClientId,
+                leadId: lead.id,
+                body: `[Sugestão de resposta]\n${suggestedReply}`,
+              },
+            });
+            logger.info({
+              event: "flow.handoff.suggested_reply.attached",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              eventId: event.id,
+              leadId: lead.id,
+              waId: maskNumber(normalizedFrom),
+              requestId: meta?.requestId,
+            });
+          }
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002"
+          ) {
+            logger.info({
+              event: "flow.handoff.suggested_reply.deduped",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlowResult.flowId,
+              waId: maskNumber(normalizedFrom),
+              requestId: meta?.requestId,
+            });
+          } else {
+            logger.error({
+              event: "flow.handoff.suggested_reply.failed",
               clientId: tenantClientId,
               clientKey: tenantClientKey,
               flowId: chatbotFlowResult.flowId,

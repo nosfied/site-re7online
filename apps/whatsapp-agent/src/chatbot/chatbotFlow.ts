@@ -53,6 +53,7 @@ export type ChatbotExecutionResult = {
   pendingHandoff?: {
     feedbackText: string;
     summary: string;
+    suggestedReply: string;
     tags: string[];
     nodeId: string;
   };
@@ -616,6 +617,104 @@ export function buildHandoffSummary(
   ].join("\n");
 }
 
+function getSafeContextText(
+  flowContext: FlowContext | null | undefined,
+  keys: string[]
+) {
+  if (!flowContext || !isRecord(flowContext)) return null;
+  for (const key of keys) {
+    if (SENSITIVE_CONTEXT_KEY_PATTERN.test(key)) continue;
+    const value = formatSafeContextValue(flowContext[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function getNormalizedContextValue(
+  flowContext: FlowContext | null | undefined,
+  keys: string[]
+) {
+  if (!flowContext || !isRecord(flowContext)) return null;
+  for (const key of keys) {
+    if (SENSITIVE_CONTEXT_KEY_PATTERN.test(key)) continue;
+    const rawValue = flowContext[key];
+    if (typeof rawValue !== "string") continue;
+    const value = rawValue.trim().toLowerCase();
+    if (value && !SENSITIVE_CONTEXT_VALUE_PATTERN.test(value)) return value;
+  }
+  return null;
+}
+
+export function buildSuggestedReply(
+  flowContext: FlowContext | null | undefined,
+  tags?: string[] | null
+): string {
+  const intent = getNormalizedContextValue(flowContext, ["intent", "servico", "service"]);
+  const service = getSafeContextText(flowContext, ["servico", "service", "servicoPretendido", "intent"]);
+  const situation = getSafeContextText(flowContext, ["situacao", "fase", "status"]);
+  const normalizedTags = new Set((tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+  const hasTag = (tag: string) => normalizedTags.has(tag);
+
+  if (intent === "beneficio_negado" || intent === "pedido_negado" || hasTag("beneficio_negado")) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre benefício negado pelo INSS.",
+      "Vou analisar as informações iniciais e te orientar sobre recurso, novo pedido ou medida judicial, conforme o caso.",
+    ].join("\n");
+  }
+
+  if (intent === "bpc_loas" || intent === "bpc" || hasTag("bpc_loas")) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre BPC/LOAS.",
+      "Vou verificar os pontos principais do caso, como renda familiar, idade ou deficiência, e te orientar sobre os próximos passos.",
+    ].join("\n");
+  }
+
+  if (
+    intent === "beneficio_cortado_suspenso" ||
+    intent === "beneficio_cortado" ||
+    intent === "beneficio_suspenso" ||
+    hasTag("beneficio_cortado_suspenso")
+  ) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre benefício cortado ou suspenso.",
+      "Vou analisar o que ocorreu e te orientar sobre os próximos passos para tentar regularizar a situação.",
+    ].join("\n");
+  }
+
+  if (intent === "revisao_beneficio" || intent === "revisao" || hasTag("revisao_beneficio")) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre revisão de benefício.",
+      "Vou conferir as informações iniciais para avaliar se há possibilidade de correção de valor ou atrasados.",
+    ].join("\n");
+  }
+
+  if (intent === "pensao_por_morte" || hasTag("pensao_por_morte")) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre pensão por morte.",
+      "Vou analisar as informações iniciais para entender vínculo, dependência e documentação necessária.",
+    ].join("\n");
+  }
+
+  if (intent === "aposentadoria" || hasTag("aposentadoria")) {
+    return [
+      "Olá, tudo bem? Vi que seu atendimento chegou sobre aposentadoria.",
+      "Vou analisar idade, contribuições e histórico no INSS para entender qual caminho pode ser mais adequado.",
+    ].join("\n");
+  }
+
+  if (service || situation) {
+    return [
+      "Olá, tudo bem? Recebi seu atendimento pela automação.",
+      `Vi que o tema inicial é ${service ?? situation}. Vou analisar as informações registradas e te orientar pelos próximos passos.`,
+    ].join("\n");
+  }
+
+  return [
+    "Olá, tudo bem? Recebi seu atendimento pela automação.",
+    "Vou analisar as informações iniciais e te orientar pelos próximos passos.",
+  ].join("\n");
+}
+
 function executeNodeChain(params: {
   definition: ChatbotFlowDefinition;
   state: ConversationState;
@@ -704,6 +803,10 @@ function executeNodeChain(params: {
 
     const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
     const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
+    const suggestedReply = buildSuggestedReply(
+      currentState.answers?.flowContext,
+      currentState.answers?.flowTags
+    );
     messages.push(feedbackText);
     return {
       handled: true,
@@ -712,6 +815,7 @@ function executeNodeChain(params: {
       pendingHandoff: {
         feedbackText,
         summary,
+        suggestedReply,
         tags: currentState.answers?.flowTags ?? [],
         nodeId: currentNodeId,
       },
