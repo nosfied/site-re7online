@@ -89,7 +89,7 @@ test("evaluateFollowUpEligibility triggers when customer stopped after bot outbo
   if (eligibility.eligible) {
     assert.equal(eligibility.nextCount, 1);
     assert.equal(eligibility.nodeId, "menu_bpc");
-    assert.match(eligibility.requestId, /^followup:client-1:5584999999999:menu_bpc:1$/);
+    assert.match(eligibility.requestId, /^followup:dry-run:client-1:5584999999999:menu_bpc:1$/);
   }
 });
 
@@ -151,6 +151,29 @@ test("evaluateFollowUpEligibility skips when follow-up limit is reached", () => 
   assert.equal(eligibility.eligible, false);
   if (!eligibility.eligible) {
     assert.equal(eligibility.reason, "limit_reached");
+  }
+});
+
+test("evaluateFollowUpEligibility does not let dry-run count block real send", () => {
+  const eligibility = evaluateFollowUpEligibility(
+    makeState({
+      answers: {
+        followUp: {
+          count: 1,
+          lastSentAt: "2026-05-05T11:00:00.000Z",
+          lastRequestId: "followup:dry-run:previous",
+          dryRun: true,
+        },
+      },
+    }) as never,
+    makeConversation() as never,
+    { now, delayMinutes: 30, maxPerConversation: 1, dryRun: false }
+  );
+
+  assert.equal(eligibility.eligible, true);
+  if (eligibility.eligible) {
+    assert.equal(eligibility.nextCount, 1);
+    assert.match(eligibility.requestId, /^followup:send:client-1:5584999999999:menu_bpc:1$/);
   }
 });
 

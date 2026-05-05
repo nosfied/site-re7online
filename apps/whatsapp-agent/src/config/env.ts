@@ -25,6 +25,7 @@ export type Env = {
   WHATSAPP_AI_TIMEOUT_MS: number;
   FLOW_INTENT_CLASSIFIER_ENABLED: boolean;
   FOLLOWUP_ENABLED: boolean;
+  FOLLOWUP_DRY_RUN: boolean;
   FOLLOWUP_DEFAULT_DELAY_MINUTES: number;
   FOLLOWUP_MAX_PER_CONVERSATION: number;
   FOLLOWUP_MIN_INTERVAL_MINUTES: number;
@@ -135,6 +136,7 @@ export function getEnv(): Env {
   const FLOW_INTENT_CLASSIFIER_ENABLED =
     (process.env.FLOW_INTENT_CLASSIFIER_ENABLED ?? "false") === "true";
   const FOLLOWUP_ENABLED = (process.env.FOLLOWUP_ENABLED ?? "false") === "true";
+  const FOLLOWUP_DRY_RUN = (process.env.FOLLOWUP_DRY_RUN ?? "true") !== "false";
   const FOLLOWUP_DEFAULT_DELAY_MINUTES = toNumber(
     process.env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
     30
@@ -258,6 +260,7 @@ export function getEnv(): Env {
     WHATSAPP_AI_TIMEOUT_MS,
     FLOW_INTENT_CLASSIFIER_ENABLED,
     FOLLOWUP_ENABLED,
+    FOLLOWUP_DRY_RUN,
     FOLLOWUP_DEFAULT_DELAY_MINUTES,
     FOLLOWUP_MAX_PER_CONVERSATION,
     FOLLOWUP_MIN_INTERVAL_MINUTES,

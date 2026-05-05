@@ -1,8 +1,19 @@
-import { ConversationOperationalStatus, HandoffStatus, Prisma, PrismaClient } from "@prisma/client";
+import {
+  ConversationOperationalStatus,
+  HandoffStatus,
+  MessageStatus,
+  MessageType,
+  Prisma,
+  PrismaClient,
+} from "@prisma/client";
 import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
+import { persistOutboundMessage } from "../db/persist.js";
 import { logger } from "../logger/logger.js";
+import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
+import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
 
 type RuntimeStateForFollowUp = {
   id: string;
@@ -47,6 +58,7 @@ type FollowUpControl = {
 
 type FollowUpOptions = {
   now?: Date;
+  dryRun?: boolean;
   delayMinutes?: number;
   maxPerConversation?: number;
   minIntervalMinutes?: number;
@@ -74,11 +86,13 @@ export type FollowUpEligibility =
 
 type FollowUpRunResult = {
   enabled: boolean;
-  dryRun: true;
+  dryRun: boolean;
   scanned: number;
   triggered: number;
   skipped: number;
   deduped: number;
+  sent: number;
+  failed: number;
 };
 
 const SENSITIVE_CONTEXT_KEY_PATTERN =
@@ -202,9 +216,11 @@ function buildFollowUpRequestId(params: {
   waId: string;
   nodeId: string;
   count: number;
+  dryRun: boolean;
 }) {
   return [
     "followup",
+    params.dryRun ? "dry-run" : "send",
     params.clientId,
     params.waIdCanonical || canonicalizeBrazilWaId(params.waId) || params.waId,
     params.nodeId,
@@ -218,6 +234,7 @@ export function evaluateFollowUpEligibility(
   options: FollowUpOptions = {}
 ): FollowUpEligibility {
   const now = options.now ?? new Date();
+  const dryRun = options.dryRun ?? env.FOLLOWUP_DRY_RUN;
   const delayMinutes = Math.max(1, options.delayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES);
   const maxPerConversation = Math.max(0, options.maxPerConversation ?? env.FOLLOWUP_MAX_PER_CONVERSATION);
   const minIntervalMinutes = Math.max(
@@ -226,6 +243,8 @@ export function evaluateFollowUpEligibility(
   );
   const answers = getAnswers(state.answers);
   const followUp = getFollowUpControl(answers);
+  const effectiveFollowUpCount = followUp.dryRun && !dryRun ? 0 : followUp.count;
+  const effectiveLastSentAt = followUp.dryRun && !dryRun ? null : followUp.lastSentAt;
   const flowContext = getFlowContext(answers);
   const flowTags = getFlowTags(answers);
   const intent = normalizeContextValue(flowContext, ["intent", "servico", "service"]);
@@ -271,7 +290,7 @@ export function evaluateFollowUpEligibility(
       nodeId: state.chatbotNodeId,
     };
   }
-  if (followUp.count >= maxPerConversation) {
+  if (effectiveFollowUpCount >= maxPerConversation) {
     return {
       eligible: false,
       reason: "limit_reached",
@@ -281,8 +300,8 @@ export function evaluateFollowUpEligibility(
       nodeId: state.chatbotNodeId,
     };
   }
-  if (followUp.lastSentAt) {
-    const lastSentAt = new Date(followUp.lastSentAt);
+  if (effectiveLastSentAt) {
+    const lastSentAt = new Date(effectiveLastSentAt);
     if (Number.isFinite(lastSentAt.getTime()) && minutesBetween(now, lastSentAt) < minIntervalMinutes) {
       return {
         eligible: false,
@@ -295,7 +314,7 @@ export function evaluateFollowUpEligibility(
     }
   }
 
-  const nextCount = followUp.count + 1;
+  const nextCount = effectiveFollowUpCount + 1;
   return {
     eligible: true,
     requestId: buildFollowUpRequestId({
@@ -304,6 +323,7 @@ export function evaluateFollowUpEligibility(
       waId: state.waId,
       nodeId: state.chatbotNodeId,
       count: nextCount,
+      dryRun,
     }),
     nextCount,
     delayMinutes,
@@ -330,6 +350,7 @@ export async function logFollowUpSkipped(params: {
   state: RuntimeStateForFollowUp;
   eligibility: Extract<FollowUpEligibility, { eligible: false }>;
   now: Date;
+  dryRun: boolean;
 }) {
   const requestId = buildSkipRequestId(params.state, params.eligibility.reason, params.now);
   await params.prisma.event
@@ -349,7 +370,7 @@ export async function logFollowUpSkipped(params: {
           minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound ?? null,
           intent: params.eligibility.intent ?? null,
           nodeId: params.eligibility.nodeId ?? null,
-          dryRun: true,
+          dryRun: params.dryRun,
           timestamp: params.now.toISOString(),
         },
       },
@@ -367,7 +388,7 @@ export async function logFollowUpSkipped(params: {
     minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound ?? null,
     intent: params.eligibility.intent ?? null,
     nodeId: params.eligibility.nodeId ?? null,
-    dryRun: true,
+    dryRun: params.dryRun,
   });
 }
 
@@ -376,70 +397,84 @@ export async function logFollowUpTriggered(params: {
   state: RuntimeStateForFollowUp;
   eligibility: Extract<FollowUpEligibility, { eligible: true }>;
   now: Date;
+  dryRun: boolean;
 }) {
-  const existing = await params.prisma.event.findUnique({
-    where: {
-      clientId_eventName_requestId: {
-        clientId: params.state.clientId,
-        eventName: "followup.triggered",
-        requestId: params.eligibility.requestId,
+  const triggerRequestId = params.dryRun
+    ? params.eligibility.requestId
+    : `${params.eligibility.requestId}:triggered:${params.now.toISOString()}`;
+
+  if (params.dryRun) {
+    const existing = await params.prisma.event.findUnique({
+      where: {
+        clientId_eventName_requestId: {
+          clientId: params.state.clientId,
+          eventName: "followup.triggered",
+          requestId: triggerRequestId,
+        },
       },
-    },
-    select: { id: true },
-  });
-  if (existing) {
-    logger.info({
-      event: "followup.deduped",
-      clientId: params.state.clientId,
-      clientKey: params.state.client.clientKey,
-      requestId: params.eligibility.requestId,
-      nodeId: params.eligibility.nodeId,
-      dryRun: true,
+      select: { id: true },
     });
-    return { deduped: true };
+    if (existing) {
+      logger.info({
+        event: "followup.deduped",
+        clientId: params.state.clientId,
+        clientKey: params.state.client.clientKey,
+        requestId: triggerRequestId,
+        nodeId: params.eligibility.nodeId,
+        dryRun: params.dryRun,
+      });
+      return { deduped: true };
+    }
   }
 
   const answers = getAnswers(params.state.answers);
-  const nextAnswers = {
-    ...answers,
-    followUp: {
-      count: params.eligibility.nextCount,
-      lastSentAt: params.now.toISOString(),
-      lastRequestId: params.eligibility.requestId,
-      dryRun: true,
-    },
-  };
-
-  await params.prisma.$transaction([
-    params.prisma.event.create({
-      data: {
+  const triggerEvent = params.prisma.event.create({
+    data: {
         clientId: params.state.clientId,
         waId: params.state.waId,
         waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
-        requestId: params.eligibility.requestId,
-        eventName: "followup.triggered",
-        payloadJson: {
-          action: "followup.triggered",
-          clientId: params.state.clientId,
-          clientKey: params.state.client.clientKey,
-          delayMinutes: params.eligibility.delayMinutes,
-          minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound,
-          intent: params.eligibility.intent,
-          nodeId: params.eligibility.nodeId,
-          followUpCount: params.eligibility.nextCount,
-          dryRun: true,
-          messagePreview: params.eligibility.message,
-          timestamp: params.now.toISOString(),
+      requestId: triggerRequestId,
+      eventName: "followup.triggered",
+      payloadJson: {
+        action: "followup.triggered",
+        clientId: params.state.clientId,
+        clientKey: params.state.client.clientKey,
+        delayMinutes: params.eligibility.delayMinutes,
+        minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound,
+        intent: params.eligibility.intent,
+        nodeId: params.eligibility.nodeId,
+        followUpCount: params.eligibility.nextCount,
+        dryRun: params.dryRun,
+        messagePreview: params.eligibility.message,
+        sendRequestId: params.dryRun ? null : params.eligibility.requestId,
+        timestamp: params.now.toISOString(),
+      },
+    },
+  });
+
+  if (params.dryRun) {
+    const nextAnswers = {
+      ...answers,
+      followUp: {
+        count: params.eligibility.nextCount,
+        lastSentAt: params.now.toISOString(),
+        lastRequestId: params.eligibility.requestId,
+        dryRun: true,
+      },
+    };
+
+    await params.prisma.$transaction([
+      triggerEvent,
+      params.prisma.conversationRuntimeState.update({
+        where: { id: params.state.id },
+        data: {
+          answers: nextAnswers as Prisma.InputJsonObject,
         },
-      },
-    }),
-    params.prisma.conversationRuntimeState.update({
-      where: { id: params.state.id },
-      data: {
-        answers: nextAnswers as Prisma.InputJsonObject,
-      },
-    }),
-  ]);
+      }),
+    ]);
+  } else {
+    await triggerEvent;
+  }
 
   logger.info({
     event: "followup.triggered",
@@ -451,28 +486,282 @@ export async function logFollowUpTriggered(params: {
     intent: params.eligibility.intent,
     nodeId: params.eligibility.nodeId,
     followUpCount: params.eligibility.nextCount,
-    dryRun: true,
+    dryRun: params.dryRun,
   });
   return { deduped: false };
+}
+
+async function sendFollowUpMessage(params: {
+  prisma: PrismaClient;
+  state: RuntimeStateForFollowUp;
+  eligibility: Extract<FollowUpEligibility, { eligible: true }>;
+  now: Date;
+}) {
+  const outboundMessageId = `followup.send.${params.eligibility.requestId}`;
+  const existingSent = await params.prisma.event.findUnique({
+    where: {
+      clientId_eventName_requestId: {
+        clientId: params.state.clientId,
+        eventName: "followup.sent",
+        requestId: `${params.eligibility.requestId}:sent`,
+      },
+    },
+    select: { id: true },
+  });
+  if (existingSent) {
+    logger.info({
+      event: "followup.deduped",
+      reason: "sent_event_exists",
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+      requestId: params.eligibility.requestId,
+      nodeId: params.eligibility.nodeId,
+      dryRun: false,
+    });
+    return { sent: false, deduped: true };
+  }
+
+  const existingOutbound = await params.prisma.outboundMessage.findUnique({
+    where: {
+      clientId_messageId: {
+        clientId: params.state.clientId,
+        messageId: outboundMessageId,
+      },
+    },
+    select: { id: true, status: true },
+  });
+  if (existingOutbound?.status === MessageStatus.SENT) {
+    logger.info({
+      event: "followup.deduped",
+      reason: "outbound_sent_exists",
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+      requestId: params.eligibility.requestId,
+      outboundMessageId,
+      nodeId: params.eligibility.nodeId,
+      dryRun: false,
+    });
+    return { sent: false, deduped: true };
+  }
+
+  const usageGate = await checkUsageGate({
+    clientId: params.state.clientId,
+    clientKey: params.state.client.clientKey,
+    messageType: "text",
+    requestId: params.eligibility.requestId,
+    waId: params.state.waId,
+  });
+  if (!usageGate.allowed) {
+    await params.prisma.event.create({
+      data: {
+        clientId: params.state.clientId,
+        waId: params.state.waId,
+        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+        requestId: `${params.eligibility.requestId}:usage_limit`,
+        eventName: "followup.failed",
+        payloadJson: {
+          action: "followup.failed",
+          reason: "usage_limit_reached",
+          clientId: params.state.clientId,
+          clientKey: params.state.client.clientKey,
+          intent: params.eligibility.intent,
+          nodeId: params.eligibility.nodeId,
+          dryRun: false,
+          timestamp: params.now.toISOString(),
+        },
+      },
+    });
+    logger.warn({
+      event: "followup.failed",
+      reason: "usage_limit_reached",
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+      requestId: params.eligibility.requestId,
+    });
+    return { sent: false };
+  }
+
+  const credentials = await resolveTenantOutboundCredentials({
+    clientId: params.state.clientId,
+    clientKey: params.state.client.clientKey,
+  });
+  if (!credentials) {
+    await params.prisma.event.create({
+      data: {
+        clientId: params.state.clientId,
+        waId: params.state.waId,
+        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+        requestId: `${params.eligibility.requestId}:credentials_missing`,
+        eventName: "followup.failed",
+        payloadJson: {
+          action: "followup.failed",
+          reason: "tenant_outbound_credentials_missing",
+          clientId: params.state.clientId,
+          clientKey: params.state.client.clientKey,
+          intent: params.eligibility.intent,
+          nodeId: params.eligibility.nodeId,
+          dryRun: false,
+          timestamp: params.now.toISOString(),
+        },
+      },
+    });
+    logger.error({
+      event: "followup.failed",
+      reason: "tenant_outbound_credentials_missing",
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+      requestId: params.eligibility.requestId,
+    });
+    return { sent: false };
+  }
+
+  const sendResult = await sendTextMessage(params.state.waId, params.eligibility.message, {
+    accessToken: credentials.accessToken,
+    phoneNumberId: credentials.phoneNumberId,
+  });
+  const sentAt = new Date();
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+
+  await persistOutboundMessage({
+    clientId: params.state.clientId,
+    phoneNumberId: credentials.phoneNumberId,
+    waId: params.state.waId,
+    waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+    messageId: outboundMessageId,
+    type: MessageType.TEXT,
+    status,
+    bodyText: params.eligibility.message,
+    requestId: params.eligibility.requestId,
+    metaMessageId: sendResult.messageId ?? null,
+    errorBody: sendResult.errorBody ?? null,
+    rawPayload: {
+      source: "followup",
+      dryRun: false,
+      status: sendResult.status ?? null,
+      credentialSource: credentials.source,
+      errorBody: sendResult.errorBody ?? null,
+    },
+  });
+
+  if (!sendResult.ok) {
+    await params.prisma.event.create({
+      data: {
+        clientId: params.state.clientId,
+        waId: params.state.waId,
+        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+        requestId: `${params.eligibility.requestId}:send_failed`,
+        eventName: "followup.failed",
+        payloadJson: {
+          action: "followup.failed",
+          reason: "send_failed",
+          clientId: params.state.clientId,
+          clientKey: params.state.client.clientKey,
+          intent: params.eligibility.intent,
+          nodeId: params.eligibility.nodeId,
+          dryRun: false,
+          status: sendResult.status ?? null,
+          errorBody: sendResult.errorBody ?? null,
+          timestamp: sentAt.toISOString(),
+        },
+      },
+    });
+    logger.error({
+      event: "followup.failed",
+      reason: "send_failed",
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+      requestId: params.eligibility.requestId,
+      status: sendResult.status ?? null,
+      errorBody: sendResult.errorBody ?? null,
+    });
+    return { sent: false };
+  }
+
+  const answers = getAnswers(params.state.answers);
+  const nextAnswers = {
+    ...answers,
+    followUp: {
+      count: params.eligibility.nextCount,
+      lastSentAt: sentAt.toISOString(),
+      lastRequestId: params.eligibility.requestId,
+      dryRun: false,
+      metaMessageId: sendResult.messageId ?? null,
+    },
+  };
+
+  await params.prisma.$transaction([
+    params.prisma.event.create({
+      data: {
+        clientId: params.state.clientId,
+        waId: params.state.waId,
+        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+        messageId: outboundMessageId,
+        requestId: `${params.eligibility.requestId}:sent`,
+        eventName: "followup.sent",
+        payloadJson: {
+          action: "followup.sent",
+          clientId: params.state.clientId,
+          clientKey: params.state.client.clientKey,
+          intent: params.eligibility.intent,
+          nodeId: params.eligibility.nodeId,
+          followUpCount: params.eligibility.nextCount,
+          dryRun: false,
+          metaMessageId: sendResult.messageId ?? null,
+          timestamp: sentAt.toISOString(),
+        },
+      },
+    }),
+    params.prisma.conversationRuntimeState.update({
+      where: { id: params.state.id },
+      data: {
+        answers: nextAnswers as Prisma.InputJsonObject,
+        lastOutboundAt: sentAt,
+      },
+    }),
+    params.prisma.conversation.updateMany({
+      where: {
+        clientId: params.state.clientId,
+        waId: params.state.waId,
+      },
+      data: {
+        lastOutboundAt: sentAt,
+      },
+    }),
+  ]);
+
+  logger.info({
+    event: "followup.sent",
+    clientId: params.state.clientId,
+    clientKey: params.state.client.clientKey,
+    requestId: params.eligibility.requestId,
+    metaMessageId: sendResult.messageId ?? null,
+    nodeId: params.eligibility.nodeId,
+    followUpCount: params.eligibility.nextCount,
+    dryRun: false,
+  });
+  return { sent: true };
 }
 
 export async function findEligibleFollowUps(options: FollowUpOptions & { limit?: number } = {}) {
   const prisma = getPrisma();
   const now = options.now ?? new Date();
+  const dryRun = options.dryRun ?? env.FOLLOWUP_DRY_RUN;
   const result: FollowUpRunResult = {
     enabled: env.FOLLOWUP_ENABLED,
-    dryRun: true,
+    dryRun,
     scanned: 0,
     triggered: 0,
     skipped: 0,
     deduped: 0,
+    sent: 0,
+    failed: 0,
   };
 
   if (!env.FOLLOWUP_ENABLED) {
     logger.info({
       event: "followup.run.skipped",
       reason: "followup_disabled",
-      dryRun: true,
+      dryRun,
     });
     return result;
   }
@@ -514,17 +803,27 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
         windowExpiresAt: true,
       },
     });
-    const eligibility = evaluateFollowUpEligibility(state, conversation, options);
+    const eligibility = evaluateFollowUpEligibility(state, conversation, { ...options, dryRun });
     if (!eligibility.eligible) {
       result.skipped += 1;
-      await logFollowUpSkipped({ prisma, state, eligibility, now });
+      await logFollowUpSkipped({ prisma, state, eligibility, now, dryRun });
       continue;
     }
-    const triggered = await logFollowUpTriggered({ prisma, state, eligibility, now });
+    const triggered = await logFollowUpTriggered({ prisma, state, eligibility, now, dryRun });
     if (triggered.deduped) {
       result.deduped += 1;
     } else {
       result.triggered += 1;
+      if (!dryRun) {
+        const sent = await sendFollowUpMessage({ prisma, state, eligibility, now });
+        if (sent.deduped) {
+          result.deduped += 1;
+        } else if (sent.sent) {
+          result.sent += 1;
+        } else {
+          result.failed += 1;
+        }
+      }
     }
   }
 
