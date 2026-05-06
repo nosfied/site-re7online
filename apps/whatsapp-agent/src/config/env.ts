@@ -48,6 +48,7 @@ export type Env = {
   CONV_STATE_DUAL_WRITE: boolean;
   CONV_STATE_SHADOW_COMPARE: boolean;
   CONV_STATE_DB_WRITE_STRICT: boolean;
+  CONV_STATE_JSON_WRITE_ENABLED: boolean;
   CONV_STATE_READ_SOURCE: "json" | "hybrid" | "postgres";
   CONV_STATE_READ_SOURCE_SET: boolean;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
@@ -192,6 +193,8 @@ export function getEnv(): Env {
     (process.env.CONV_STATE_SHADOW_COMPARE ?? "false") === "true";
   const CONV_STATE_DB_WRITE_STRICT =
     (process.env.CONV_STATE_DB_WRITE_STRICT ?? "false") === "true";
+  const CONV_STATE_JSON_WRITE_ENABLED =
+    (process.env.CONV_STATE_JSON_WRITE_ENABLED ?? "true") !== "false";
   const CONV_STATE_READ_SOURCE_SET = Boolean(
     process.env.CONV_STATE_READ_SOURCE?.trim()
   );
@@ -283,6 +286,7 @@ export function getEnv(): Env {
     CONV_STATE_DUAL_WRITE,
     CONV_STATE_SHADOW_COMPARE,
     CONV_STATE_DB_WRITE_STRICT,
+    CONV_STATE_JSON_WRITE_ENABLED,
     CONV_STATE_READ_SOURCE,
     CONV_STATE_READ_SOURCE_SET,
     STORAGE_MODE,

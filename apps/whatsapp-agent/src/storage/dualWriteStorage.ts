@@ -88,6 +88,16 @@ function getJsonFieldValue(view: ShadowCompareFields, field: string) {
   return (view as Record<string, unknown>)[field] ?? null;
 }
 
+function maskWaId(value?: string | null) {
+  if (!value) return null;
+  const suffix = value.slice(-4);
+  return suffix ? `***${suffix}` : "***";
+}
+
+function maskConversationKey(clientKey: string, waId: string) {
+  return `${clientKey}:${maskWaId(waId) ?? "***"}`;
+}
+
 function getMostRecentJsonTimestamp(state: ConversationState | null) {
   if (!state) return null;
   const timestamps = [
@@ -335,6 +345,7 @@ function toConversationOperationalStatus(value?: string | null): ConversationOpe
 
 type DualWriteOptions = {
   readSource?: "json" | "hybrid" | "postgres";
+  jsonWriteEnabled?: boolean;
 };
 
 export function createDualWriteStorage(
@@ -345,6 +356,7 @@ export function createDualWriteStorage(
   const cachedClientIds = new Map<string, string>();
   const readMismatchCounts = new Map<string, number>();
   const readSource = options.readSource ?? "json";
+  const jsonWriteEnabled = options.jsonWriteEnabled ?? env.CONV_STATE_JSON_WRITE_ENABLED;
   const shouldWriteShadow =
     env.CONV_STATE_DUAL_WRITE ||
     env.STORAGE_MODE === "hybrid" ||
@@ -716,6 +728,7 @@ export function createDualWriteStorage(
   }
 
   function logJsonFallback(params: {
+    clientId?: string | null;
     clientKey: string;
     waId: string;
     reason: string;
@@ -723,13 +736,51 @@ export function createDualWriteStorage(
   }) {
     logger.warn({
       event: "state.read.fallback_json",
+      clientId: params.clientId ?? null,
       clientKey: params.clientKey,
-      waId: params.waId,
-      conversationKey: makeConversationKey(params.clientKey, params.waId),
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
       reason: params.reason,
       readSource,
       fallbackTo: "json",
       error: params.error,
+    });
+  }
+
+  function logJsonFallbackFailed(params: {
+    clientId?: string | null;
+    clientKey: string;
+    waId: string;
+    reason: string;
+    error: string;
+  }) {
+    logger.warn({
+      event: "state.read.fallback_json_failed",
+      clientId: params.clientId ?? null,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
+      reason: params.reason,
+      readSource,
+      fallbackTo: "json",
+      error: params.error,
+    });
+  }
+
+  function logJsonWriteSkipped(params: {
+    clientId?: string | null;
+    clientKey: string;
+    waId: string;
+    operation: "upsertConversation" | "updateConversationWindow" | "deleteConversation";
+  }) {
+    logger.info({
+      event: "state.json.write_skipped",
+      clientId: params.clientId ?? null,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
+      operation: params.operation,
+      reason: "json_write_disabled",
     });
   }
 
@@ -902,6 +953,13 @@ export function createDualWriteStorage(
       const [shadowResult, jsonResult] = await Promise.allSettled([shadowPromise, primaryPromise]);
 
       if (jsonResult.status === "rejected") {
+        logJsonFallbackFailed({
+          clientId: shadowResult.status === "fulfilled" ? shadowResult.value?.clientId : null,
+          clientKey,
+          waId,
+          reason: "json_read_error",
+          error: (jsonResult.reason as Error).message,
+        });
         if (shadowResult.status === "rejected") {
           throw shadowResult.reason;
         }
@@ -918,6 +976,7 @@ export function createDualWriteStorage(
 
       if (shadowResult.status === "rejected") {
         logJsonFallback({
+          clientId: null,
           clientKey,
           waId,
           reason: "postgres_read_error",
@@ -942,6 +1001,7 @@ export function createDualWriteStorage(
       }
 
       logJsonFallback({
+        clientId: shadowResult.value?.clientId ?? null,
         clientKey,
         waId,
         reason:
@@ -953,20 +1013,64 @@ export function createDualWriteStorage(
       return jsonResult.value;
     },
     async upsertConversation(state: ConversationState) {
-      await primary.upsertConversation(state);
+      if (jsonWriteEnabled) {
+        await primary.upsertConversation(state);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey: state.clientKey ?? "default",
+          waId: state.waId,
+          operation: "upsertConversation",
+        });
+      }
       await writeShadowSafe(state);
     },
     async updateConversationWindow(waId: string, lastInboundAt: string, clientKey = "default") {
-      const updated = await primary.updateConversationWindow(
-        waId,
-        lastInboundAt,
-        clientKey
-      );
+      let updated: ConversationState;
+      if (jsonWriteEnabled) {
+        updated = await primary.updateConversationWindow(waId, lastInboundAt, clientKey);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey,
+          waId,
+          operation: "updateConversationWindow",
+        });
+        const shadowResult = await readShadowState(waId, clientKey);
+        const shadowValidation = validateConversationState(
+          shadowResult?.state ?? null,
+          clientKey,
+          waId
+        );
+        if (!shadowValidation.ok) {
+          throw new Error(`conversation_state_not_found:${shadowValidation.reason}`);
+        }
+        const inboundTime = Number.isNaN(Date.parse(lastInboundAt))
+          ? Date.now()
+          : Date.parse(lastInboundAt);
+        updated = {
+          ...shadowValidation.state,
+          lastInboundAt,
+          window: {
+            isOpen: true,
+            expiresAt: new Date(inboundTime + 24 * 60 * 60 * 1000).toISOString(),
+          },
+        };
+      }
       await writeShadowSafe(updated);
       return updated;
     },
     async deleteConversation(waId: string, clientKey = "default") {
-      await primary.deleteConversation(waId, clientKey);
+      if (jsonWriteEnabled) {
+        await primary.deleteConversation(waId, clientKey);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey,
+          waId,
+          operation: "deleteConversation",
+        });
+      }
       const clientId = await getClientId(clientKey, "delete");
       if (!clientId) return;
       try {
