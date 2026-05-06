@@ -3628,6 +3628,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         toUserId: nextState.assignedUserId ?? null,
         assignedAt,
       });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.assigned",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: nextState.assignedUserId ?? null,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: nextState.status,
+        },
+      });
       logger.info({
         event: "conversation.assigned",
         requestId,
@@ -3772,6 +3790,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: null,
       });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.released",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromMode: conversation.mode ?? null,
+          toMode: nextState.mode,
+          fromStatus: conversation.status ?? null,
+          toStatus: nextState.status ?? null,
+          fromDepartmentId: conversation.departmentId ?? null,
+          toDepartmentId: nextState.departmentId ?? null,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+        },
+      });
       logger.info({
         event: "conversation.released",
         requestId,
@@ -3912,6 +3950,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: defaults.department.id,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.released_to_general",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromMode: conversation.mode ?? null,
+          toMode: nextState.mode,
+          fromStatus: conversation.status ?? null,
+          toStatus: nextState.status ?? null,
+          fromDepartmentId: conversation.departmentId ?? null,
+          toDepartmentId: defaults.department.id,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+        },
       });
       logger.info({
         event: "conversation.released_to_general",
@@ -4086,6 +4144,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fromUserId: conversation.assignedUserId ?? null,
         toUserId: assignedUser.id,
         assignedAt,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.transferred",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: nextState.status,
+        },
       });
       logger.info({
         event: "conversation.transferred",
@@ -4266,6 +4342,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: department.id,
       });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.department.transferred",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromDepartmentId: previousDepartmentId,
+          toDepartmentId: department.id,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+          status: nextState.status,
+          queueId: queue.id,
+        },
+      });
       logger.info({
         event: "conversation.department.transferred",
         requestId,
@@ -4412,22 +4506,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...conversation,
         mode:
           nextStatus === ConversationOperationalStatus.CLOSED
-            ? ("BOT" as const)
+            ? (conversation.mode ?? "HUMAN")
             : "HUMAN" as const,
-        handoff:
-          nextStatus === ConversationOperationalStatus.CLOSED
-            ? {
-                ...conversation.handoff,
-                status: "none" as const,
-                releasedAt: new Date().toISOString(),
-              }
-            : conversation.handoff,
-        assignedUserId:
-          nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedUserId,
-        assignedTo:
-          nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedTo,
-        assignedAt:
-          nextStatus === ConversationOperationalStatus.CLOSED ? null : conversation.assignedAt,
         departmentId: conversation.departmentId ?? defaults.department.id,
         queueId: conversation.queueId ?? defaults.queue.id,
         status: nextStatus,
@@ -4447,6 +4527,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
       }
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.status_changed",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromStatus: conversation.status ?? null,
+          toStatus: nextStatus,
+          closedAt: nextState.closedAt ?? null,
+          assignedUserId: nextState.assignedUserId ?? null,
+          departmentId: nextState.departmentId ?? null,
+          queueId: nextState.queueId ?? null,
+          mode: nextState.mode ?? null,
+          handoffStatus: nextState.handoff?.status ?? null,
+        },
+      });
       logger.info({
         event: "conversation.status_changed",
         requestId,
@@ -12197,6 +12297,63 @@ async function recordConversationAssignment(
       assignedAt: new Date(params.assignedAt),
     },
   });
+}
+
+async function recordConversationAuditEvent(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    eventName:
+      | "conversation.assigned"
+      | "conversation.transferred"
+      | "conversation.department.transferred"
+      | "conversation.released"
+      | "conversation.released_to_general"
+      | "conversation.status_changed";
+    actorUserId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    conversationId?: string | null;
+    payload?: Record<string, unknown>;
+  }
+) {
+  const timestamp = new Date().toISOString();
+  const eventRequestId = `${params.requestId}:${params.eventName}`;
+  try {
+    await prisma.event.create({
+      data: {
+        clientId: params.clientId,
+        conversationId: params.conversationId ?? null,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical ?? null,
+        requestId: eventRequestId,
+        eventName: params.eventName,
+        payloadJson: {
+          action: params.eventName,
+          userId: params.actorUserId,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          conversationId: params.conversationId ?? null,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical ?? null,
+          timestamp,
+          ...(params.payload ?? {}),
+        },
+      },
+    });
+  } catch (error) {
+    logger.warn({
+      event: "conversation.audit_event_failed",
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      userId: params.actorUserId,
+      eventName: params.eventName,
+      requestId: eventRequestId,
+      message: (error as Error).message,
+    });
+  }
 }
 
 async function persistConversationDepartment(
