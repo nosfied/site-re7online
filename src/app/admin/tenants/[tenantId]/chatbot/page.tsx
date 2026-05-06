@@ -284,6 +284,12 @@ export default function AdminTenantChatbotPage() {
     flowEditingLocked: false,
     aiLocked: false,
     intentClassifierLocked: true,
+    followUpEnabled: false,
+    followUpDelayMinutes: 10,
+    followUpMaxCount: 1,
+    followUpUseTemplate: false,
+    followUpTemplateName: "",
+    followUpTemplateLang: "pt_BR",
   };
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
   const draftJsonErrors = useMemo(
@@ -497,6 +503,125 @@ export default function AdminTenantChatbotPage() {
                   />
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {settings ? (
+            <div className="mt-4 rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Follow-up automatico</h3>
+                  <p className="mt-1 text-xs text-white/60">
+                    Reengaja contatos parados no fluxo. Fora da janela, envia somente template aprovado configurado aqui.
+                  </p>
+                </div>
+                <TogglePill
+                  checked={automationDraft.followUpEnabled === true}
+                  onToggle={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            followUpEnabled: !current.followUpEnabled,
+                          }
+                        : current
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <label className="space-y-1 text-xs text-white/65">
+                  <span>Delay em minutos</span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={automationDraft.followUpDelayMinutes ?? 10}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              followUpDelayMinutes: Math.max(1, Number(event.target.value) || 1),
+                            }
+                          : current
+                      )
+                    }
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-white/65">
+                  <span>Maximo por conversa</span>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={automationDraft.followUpMaxCount ?? 1}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              followUpMaxCount: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                            }
+                          : current
+                      )
+                    }
+                  />
+                </label>
+                <label className="space-y-1 text-xs text-white/65">
+                  <span>Template fora da janela</span>
+                  <div className="flex min-h-10 items-center justify-between rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2">
+                    <span className="text-sm text-white/80">Usar template</span>
+                    <TogglePill
+                      checked={automationDraft.followUpUseTemplate === true}
+                      onToggle={() =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                followUpUseTemplate: !current.followUpUseTemplate,
+                              }
+                            : current
+                        )
+                      }
+                    />
+                  </div>
+                </label>
+                <label className="space-y-1 text-xs text-white/65">
+                  <span>Idioma</span>
+                  <input
+                    className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={automationDraft.followUpTemplateLang ?? "pt_BR"}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              followUpTemplateLang: event.target.value,
+                            }
+                          : current
+                      )
+                    }
+                  />
+                </label>
+              </div>
+              <label className="mt-3 block space-y-1 text-xs text-white/65">
+                <span>Nome do template aprovado</span>
+                <input
+                  className="w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                  value={automationDraft.followUpTemplateName ?? ""}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            followUpTemplateName: event.target.value,
+                          }
+                        : current
+                    )
+                  }
+                />
+              </label>
             </div>
           ) : null}
         </section>

@@ -56,6 +56,12 @@ export type TenantConfig = {
   appDisableAiFallback?: boolean;
   disableIntentClassifier?: boolean;
   appDisableIntentClassifier?: boolean;
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  followUpMaxCount?: number;
+  followUpUseTemplate?: boolean;
+  followUpTemplateName?: string;
+  followUpTemplateLang?: string;
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -147,6 +153,18 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     if (nextTenant.appDisableIntentClassifier === undefined) {
       nextTenant.appDisableIntentClassifier = true;
+    }
+    if (nextTenant.followUpEnabled === undefined) {
+      nextTenant.followUpEnabled = false;
+    }
+    if (nextTenant.followUpDelayMinutes === undefined) {
+      nextTenant.followUpDelayMinutes = env.FOLLOWUP_DEFAULT_DELAY_MINUTES;
+    }
+    if (nextTenant.followUpMaxCount === undefined) {
+      nextTenant.followUpMaxCount = env.FOLLOWUP_MAX_PER_CONVERSATION;
+    }
+    if (nextTenant.followUpUseTemplate === undefined) {
+      nextTenant.followUpUseTemplate = false;
     }
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
@@ -291,6 +309,40 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       typeof tenant.appDisableIntentClassifier !== "boolean"
     ) {
       throw new Error(`invalid_tenant_app_disable_intent_classifier:${key}`);
+    }
+    if (tenant.followUpEnabled !== undefined && typeof tenant.followUpEnabled !== "boolean") {
+      throw new Error(`invalid_tenant_follow_up_enabled:${key}`);
+    }
+    if (
+      tenant.followUpDelayMinutes !== undefined &&
+      (typeof tenant.followUpDelayMinutes !== "number" ||
+        !Number.isFinite(tenant.followUpDelayMinutes) ||
+        tenant.followUpDelayMinutes < 1)
+    ) {
+      throw new Error(`invalid_tenant_follow_up_delay_minutes:${key}`);
+    }
+    if (
+      tenant.followUpMaxCount !== undefined &&
+      (typeof tenant.followUpMaxCount !== "number" ||
+        !Number.isInteger(tenant.followUpMaxCount) ||
+        tenant.followUpMaxCount < 0)
+    ) {
+      throw new Error(`invalid_tenant_follow_up_max_count:${key}`);
+    }
+    if (tenant.followUpUseTemplate !== undefined && typeof tenant.followUpUseTemplate !== "boolean") {
+      throw new Error(`invalid_tenant_follow_up_use_template:${key}`);
+    }
+    if (
+      tenant.followUpTemplateName !== undefined &&
+      (typeof tenant.followUpTemplateName !== "string" || !tenant.followUpTemplateName.trim())
+    ) {
+      throw new Error(`invalid_tenant_follow_up_template_name:${key}`);
+    }
+    if (
+      tenant.followUpTemplateLang !== undefined &&
+      (typeof tenant.followUpTemplateLang !== "string" || !tenant.followUpTemplateLang.trim())
+    ) {
+      throw new Error(`invalid_tenant_follow_up_template_lang:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

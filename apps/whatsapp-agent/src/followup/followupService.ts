@@ -7,9 +7,11 @@ import {
   PrismaClient,
 } from "@prisma/client";
 import { env } from "../config/env.js";
+import { getTenant, type TenantConfig } from "../config/tenantConfig.js";
 import { getPrisma } from "../db.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { logger } from "../logger/logger.js";
+import { sendTemplate } from "../services/outboundTemplateService.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
@@ -54,6 +56,7 @@ type FollowUpControl = {
   lastSentAt: string | null;
   lastRequestId: string | null;
   dryRun?: boolean;
+  lastChannel?: "text" | "template";
 };
 
 type FollowUpOptions = {
@@ -62,6 +65,17 @@ type FollowUpOptions = {
   delayMinutes?: number;
   maxPerConversation?: number;
   minIntervalMinutes?: number;
+  tenantConfig?: FollowUpTenantConfig;
+  templateApproved?: boolean;
+};
+
+type FollowUpTenantConfig = {
+  enabled: boolean;
+  delayMinutes: number;
+  maxCount: number;
+  useTemplate: boolean;
+  templateName: string | null;
+  templateLang: string | null;
 };
 
 export type FollowUpEligibility =
@@ -74,6 +88,9 @@ export type FollowUpEligibility =
       message: string;
       intent: string | null;
       nodeId: string;
+      channel: "text" | "template";
+      templateName?: string | null;
+      templateLang?: string | null;
     }
   | {
       eligible: false;
@@ -82,6 +99,9 @@ export type FollowUpEligibility =
       minutesSinceLastOutbound?: number;
       intent?: string | null;
       nodeId?: string | null;
+      channel?: "text" | "template";
+      templateName?: string | null;
+      templateLang?: string | null;
     };
 
 type FollowUpRunResult = {
@@ -129,6 +149,7 @@ function getFollowUpControl(answers: Record<string, unknown>): FollowUpControl {
     lastSentAt: typeof raw.lastSentAt === "string" ? raw.lastSentAt : null,
     lastRequestId: typeof raw.lastRequestId === "string" ? raw.lastRequestId : null,
     dryRun: raw.dryRun === true,
+    lastChannel: raw.lastChannel === "template" ? "template" : raw.lastChannel === "text" ? "text" : undefined,
   };
 }
 
@@ -217,15 +238,32 @@ function buildFollowUpRequestId(params: {
   nodeId: string;
   count: number;
   dryRun: boolean;
+  channel: "text" | "template";
 }) {
   return [
     "followup",
-    params.dryRun ? "dry-run" : "send",
+    params.dryRun ? "dry-run" : params.channel,
+    ...(params.dryRun ? [params.channel] : []),
     params.clientId,
     params.waIdCanonical || canonicalizeBrazilWaId(params.waId) || params.waId,
     params.nodeId,
     params.count,
   ].join(":");
+}
+
+function resolveFollowUpTenantConfig(tenant?: TenantConfig | null): FollowUpTenantConfig {
+  return {
+    enabled: tenant?.followUpEnabled === true,
+    delayMinutes: Math.max(1, tenant?.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES),
+    maxCount: Math.max(0, tenant?.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION),
+    useTemplate: tenant?.followUpUseTemplate === true,
+    templateName: tenant?.followUpTemplateName?.trim() || null,
+    templateLang:
+      tenant?.followUpTemplateLang?.trim() ||
+      tenant?.defaultLanguage?.trim() ||
+      env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
+      null,
+  };
 }
 
 export function evaluateFollowUpEligibility(
@@ -235,8 +273,9 @@ export function evaluateFollowUpEligibility(
 ): FollowUpEligibility {
   const now = options.now ?? new Date();
   const dryRun = options.dryRun ?? env.FOLLOWUP_DRY_RUN;
-  const delayMinutes = Math.max(1, options.delayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES);
-  const maxPerConversation = Math.max(0, options.maxPerConversation ?? env.FOLLOWUP_MAX_PER_CONVERSATION);
+  const tenantConfig = options.tenantConfig ?? resolveFollowUpTenantConfig();
+  const delayMinutes = Math.max(1, options.delayMinutes ?? tenantConfig.delayMinutes);
+  const maxPerConversation = Math.max(0, options.maxPerConversation ?? tenantConfig.maxCount);
   const minIntervalMinutes = Math.max(
     1,
     options.minIntervalMinutes ?? env.FOLLOWUP_MIN_INTERVAL_MINUTES
@@ -249,6 +288,7 @@ export function evaluateFollowUpEligibility(
   const flowTags = getFlowTags(answers);
   const intent = normalizeContextValue(flowContext, ["intent", "servico", "service"]);
 
+  if (!tenantConfig.enabled) return { eligible: false, reason: "tenant_followup_disabled", delayMinutes, intent, nodeId: state.chatbotNodeId };
   if (conversation?.deletedAt) return { eligible: false, reason: "conversation_deleted", delayMinutes, intent, nodeId: state.chatbotNodeId };
   if (conversation?.anonymizedAt) return { eligible: false, reason: "conversation_anonymized", delayMinutes, intent, nodeId: state.chatbotNodeId };
   if (conversation?.closedAt || state.closedAt) return { eligible: false, reason: "conversation_closed", delayMinutes, intent, nodeId: state.chatbotNodeId };
@@ -280,15 +320,43 @@ export function evaluateFollowUpEligibility(
       nodeId: state.chatbotNodeId,
     };
   }
-  if (!isWindowOpen(state, conversation, now)) {
-    return {
-      eligible: false,
-      reason: "window_closed",
-      delayMinutes,
-      minutesSinceLastOutbound,
-      intent,
-      nodeId: state.chatbotNodeId,
-    };
+  const channel = isWindowOpen(state, conversation, now) ? "text" : "template";
+  if (channel === "template") {
+    if (!tenantConfig.useTemplate) {
+      return {
+        eligible: false,
+        reason: "template_disabled",
+        delayMinutes,
+        minutesSinceLastOutbound,
+        intent,
+        nodeId: state.chatbotNodeId,
+        channel,
+      };
+    }
+    if (!tenantConfig.templateName) {
+      return {
+        eligible: false,
+        reason: "template_name_missing",
+        delayMinutes,
+        minutesSinceLastOutbound,
+        intent,
+        nodeId: state.chatbotNodeId,
+        channel,
+      };
+    }
+    if (options.templateApproved !== true) {
+      return {
+        eligible: false,
+        reason: "template_not_approved",
+        delayMinutes,
+        minutesSinceLastOutbound,
+        intent,
+        nodeId: state.chatbotNodeId,
+        channel,
+        templateName: tenantConfig.templateName,
+        templateLang: tenantConfig.templateLang,
+      };
+    }
   }
   if (effectiveFollowUpCount >= maxPerConversation) {
     return {
@@ -324,6 +392,7 @@ export function evaluateFollowUpEligibility(
       nodeId: state.chatbotNodeId,
       count: nextCount,
       dryRun,
+      channel,
     }),
     nextCount,
     delayMinutes,
@@ -331,7 +400,14 @@ export function evaluateFollowUpEligibility(
     message: buildFollowUpMessage(flowContext, flowTags),
     intent,
     nodeId: state.chatbotNodeId,
+    channel,
+    templateName: channel === "template" ? tenantConfig.templateName : null,
+    templateLang: channel === "template" ? tenantConfig.templateLang : null,
   };
+}
+
+function isTemplateSkipReason(reason: string) {
+  return reason.startsWith("template_");
 }
 
 function buildSkipRequestId(state: RuntimeStateForFollowUp, reason: string, now: Date) {
@@ -353,6 +429,9 @@ export async function logFollowUpSkipped(params: {
   dryRun: boolean;
 }) {
   const requestId = buildSkipRequestId(params.state, params.eligibility.reason, params.now);
+  const eventName = isTemplateSkipReason(params.eligibility.reason)
+    ? "followup.template.skipped"
+    : "followup.skipped";
   await params.prisma.event
     .create({
       data: {
@@ -360,9 +439,9 @@ export async function logFollowUpSkipped(params: {
         waId: params.state.waId,
         waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
         requestId,
-        eventName: "followup.skipped",
+        eventName,
         payloadJson: {
-          action: "followup.skipped",
+          action: eventName,
           clientId: params.state.clientId,
           clientKey: params.state.client.clientKey,
           reason: params.eligibility.reason,
@@ -370,6 +449,9 @@ export async function logFollowUpSkipped(params: {
           minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound ?? null,
           intent: params.eligibility.intent ?? null,
           nodeId: params.eligibility.nodeId ?? null,
+          channel: params.eligibility.channel ?? null,
+          templateName: params.eligibility.templateName ?? null,
+          templateLang: params.eligibility.templateLang ?? null,
           dryRun: params.dryRun,
           timestamp: params.now.toISOString(),
         },
@@ -380,7 +462,7 @@ export async function logFollowUpSkipped(params: {
       throw error;
     });
   logger.info({
-    event: "followup.skipped",
+    event: eventName,
     clientId: params.state.clientId,
     clientKey: params.state.client.clientKey,
     reason: params.eligibility.reason,
@@ -388,6 +470,9 @@ export async function logFollowUpSkipped(params: {
     minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound ?? null,
     intent: params.eligibility.intent ?? null,
     nodeId: params.eligibility.nodeId ?? null,
+    channel: params.eligibility.channel ?? null,
+    templateName: params.eligibility.templateName ?? null,
+    templateLang: params.eligibility.templateLang ?? null,
     dryRun: params.dryRun,
   });
 }
@@ -443,6 +528,9 @@ export async function logFollowUpTriggered(params: {
         minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound,
         intent: params.eligibility.intent,
         nodeId: params.eligibility.nodeId,
+        channel: params.eligibility.channel,
+        templateName: params.eligibility.templateName ?? null,
+        templateLang: params.eligibility.templateLang ?? null,
         followUpCount: params.eligibility.nextCount,
         dryRun: params.dryRun,
         messagePreview: params.eligibility.message,
@@ -485,10 +573,108 @@ export async function logFollowUpTriggered(params: {
     minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound,
     intent: params.eligibility.intent,
     nodeId: params.eligibility.nodeId,
+    channel: params.eligibility.channel,
+    templateName: params.eligibility.templateName ?? null,
+    templateLang: params.eligibility.templateLang ?? null,
     followUpCount: params.eligibility.nextCount,
     dryRun: params.dryRun,
   });
   return { deduped: false };
+}
+
+async function createFollowUpFailedEvent(params: {
+  prisma: PrismaClient;
+  state: RuntimeStateForFollowUp;
+  eligibility: Extract<FollowUpEligibility, { eligible: true }>;
+  now: Date;
+  reason: string;
+  status?: number | null;
+  errorBody?: string | null;
+}) {
+  await params.prisma.event.create({
+    data: {
+      clientId: params.state.clientId,
+      waId: params.state.waId,
+      waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
+      requestId: `${params.eligibility.requestId}:${params.reason}:${params.now.toISOString()}`,
+      eventName: "followup.failed",
+      payloadJson: {
+        action: "followup.failed",
+        reason: params.reason,
+        clientId: params.state.clientId,
+        clientKey: params.state.client.clientKey,
+        intent: params.eligibility.intent,
+        nodeId: params.eligibility.nodeId,
+        channel: params.eligibility.channel,
+        templateName: params.eligibility.templateName ?? null,
+        templateLang: params.eligibility.templateLang ?? null,
+        dryRun: false,
+        status: params.status ?? null,
+        errorBody: params.errorBody ?? null,
+        timestamp: params.now.toISOString(),
+      },
+    },
+  });
+  logger.warn({
+    event: "followup.failed",
+    reason: params.reason,
+    clientId: params.state.clientId,
+    clientKey: params.state.client.clientKey,
+    requestId: params.eligibility.requestId,
+    channel: params.eligibility.channel,
+    templateName: params.eligibility.templateName ?? null,
+    templateLang: params.eligibility.templateLang ?? null,
+    status: params.status ?? null,
+  });
+}
+
+async function logTenantFollowUpConfigLoaded(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  clientKey: string;
+  config: FollowUpTenantConfig;
+  now: Date;
+}) {
+  const requestId = [
+    "followup-tenant-config",
+    params.clientId,
+    params.now.toISOString().slice(0, 13),
+  ].join(":");
+  await params.prisma.event
+    .create({
+      data: {
+        clientId: params.clientId,
+        requestId,
+        eventName: "followup.tenant.config.loaded",
+        payloadJson: {
+          action: "followup.tenant.config.loaded",
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          enabled: params.config.enabled,
+          delayMinutes: params.config.delayMinutes,
+          maxCount: params.config.maxCount,
+          useTemplate: params.config.useTemplate,
+          templateName: params.config.templateName,
+          templateLang: params.config.templateLang,
+          timestamp: params.now.toISOString(),
+        },
+      },
+    })
+    .catch((error) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+      throw error;
+    });
+  logger.info({
+    event: "followup.tenant.config.loaded",
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    enabled: params.config.enabled,
+    delayMinutes: params.config.delayMinutes,
+    maxCount: params.config.maxCount,
+    useTemplate: params.config.useTemplate,
+    templateName: params.config.templateName,
+    templateLang: params.config.templateLang,
+  });
 }
 
 async function sendFollowUpMessage(params: {
@@ -498,11 +684,13 @@ async function sendFollowUpMessage(params: {
   now: Date;
 }) {
   const outboundMessageId = `followup.send.${params.eligibility.requestId}`;
+  const sentEventName =
+    params.eligibility.channel === "template" ? "followup.template.sent" : "followup.sent";
   const existingSent = await params.prisma.event.findUnique({
     where: {
       clientId_eventName_requestId: {
         clientId: params.state.clientId,
-        eventName: "followup.sent",
+        eventName: sentEventName,
         requestId: `${params.eligibility.requestId}:sent`,
       },
     },
@@ -516,6 +704,7 @@ async function sendFollowUpMessage(params: {
       clientKey: params.state.client.clientKey,
       requestId: params.eligibility.requestId,
       nodeId: params.eligibility.nodeId,
+      channel: params.eligibility.channel,
       dryRun: false,
     });
     return { sent: false, deduped: true };
@@ -539,131 +728,127 @@ async function sendFollowUpMessage(params: {
       requestId: params.eligibility.requestId,
       outboundMessageId,
       nodeId: params.eligibility.nodeId,
+      channel: params.eligibility.channel,
       dryRun: false,
     });
     return { sent: false, deduped: true };
-  }
-
-  const usageGate = await checkUsageGate({
-    clientId: params.state.clientId,
-    clientKey: params.state.client.clientKey,
-    messageType: "text",
-    requestId: params.eligibility.requestId,
-    waId: params.state.waId,
-  });
-  if (!usageGate.allowed) {
-    await params.prisma.event.create({
-      data: {
-        clientId: params.state.clientId,
-        waId: params.state.waId,
-        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
-        requestId: `${params.eligibility.requestId}:usage_limit`,
-        eventName: "followup.failed",
-        payloadJson: {
-          action: "followup.failed",
-          reason: "usage_limit_reached",
-          clientId: params.state.clientId,
-          clientKey: params.state.client.clientKey,
-          intent: params.eligibility.intent,
-          nodeId: params.eligibility.nodeId,
-          dryRun: false,
-          timestamp: params.now.toISOString(),
-        },
-      },
-    });
-    logger.warn({
-      event: "followup.failed",
-      reason: "usage_limit_reached",
-      clientId: params.state.clientId,
-      clientKey: params.state.client.clientKey,
-      requestId: params.eligibility.requestId,
-    });
-    return { sent: false };
   }
 
   const credentials = await resolveTenantOutboundCredentials({
     clientId: params.state.clientId,
     clientKey: params.state.client.clientKey,
   });
-  if (!credentials) {
-    await params.prisma.event.create({
-      data: {
-        clientId: params.state.clientId,
-        waId: params.state.waId,
-        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
-        requestId: `${params.eligibility.requestId}:credentials_missing`,
-        eventName: "followup.failed",
-        payloadJson: {
-          action: "followup.failed",
-          reason: "tenant_outbound_credentials_missing",
-          clientId: params.state.clientId,
-          clientKey: params.state.client.clientKey,
-          intent: params.eligibility.intent,
-          nodeId: params.eligibility.nodeId,
-          dryRun: false,
-          timestamp: params.now.toISOString(),
-        },
-      },
-    });
-    logger.error({
-      event: "followup.failed",
-      reason: "tenant_outbound_credentials_missing",
+  let phoneNumberId = credentials?.phoneNumberId;
+  let sendResult: { ok: boolean; status?: number; messageId?: string; metaMessageId?: string; errorBody?: string };
+  if (params.eligibility.channel === "text") {
+    const usageGate = await checkUsageGate({
       clientId: params.state.clientId,
       clientKey: params.state.client.clientKey,
+      messageType: "text",
       requestId: params.eligibility.requestId,
+      waId: params.state.waId,
     });
-    return { sent: false };
+    if (!usageGate.allowed) {
+      await createFollowUpFailedEvent({
+        prisma: params.prisma,
+        state: params.state,
+        eligibility: params.eligibility,
+        now: params.now,
+        reason: "usage_limit_reached",
+      });
+      return { sent: false };
+    }
+    if (!credentials) {
+      await createFollowUpFailedEvent({
+        prisma: params.prisma,
+        state: params.state,
+        eligibility: params.eligibility,
+        now: params.now,
+        reason: "tenant_outbound_credentials_missing",
+      });
+      return { sent: false };
+    }
+    sendResult = await sendTextMessage(params.state.waId, params.eligibility.message, {
+      accessToken: credentials.accessToken,
+      phoneNumberId: credentials.phoneNumberId,
+    });
+  } else {
+    const templateName = params.eligibility.templateName?.trim();
+    if (!templateName) {
+      await logFollowUpSkipped({
+        prisma: params.prisma,
+        state: params.state,
+        eligibility: {
+          eligible: false,
+          reason: "template_name_missing",
+          delayMinutes: params.eligibility.delayMinutes,
+          minutesSinceLastOutbound: params.eligibility.minutesSinceLastOutbound,
+          intent: params.eligibility.intent,
+          nodeId: params.eligibility.nodeId,
+          channel: "template",
+        },
+        now: params.now,
+        dryRun: false,
+      });
+      return { sent: false };
+    }
+    const templateResult = await sendTemplate({
+      toE164: params.state.waId,
+      waId: params.state.waId,
+      intent: undefined,
+      templateName,
+      lang: params.eligibility.templateLang ?? undefined,
+      requestId: params.eligibility.requestId,
+      messageId: outboundMessageId,
+      clientId: params.state.clientId,
+      clientKey: params.state.client.clientKey,
+    });
+    sendResult = {
+      ok: templateResult.ok,
+      status: templateResult.status,
+      messageId: templateResult.metaMessageId,
+      metaMessageId: templateResult.metaMessageId,
+      errorBody: templateResult.errorBody,
+    };
   }
-
-  const sendResult = await sendTextMessage(params.state.waId, params.eligibility.message, {
-    accessToken: credentials.accessToken,
-    phoneNumberId: credentials.phoneNumberId,
-  });
   const sentAt = new Date();
   const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
 
   await persistOutboundMessage({
     clientId: params.state.clientId,
-    phoneNumberId: credentials.phoneNumberId,
+    phoneNumberId,
     waId: params.state.waId,
     waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
     messageId: outboundMessageId,
-    type: MessageType.TEXT,
+    type: params.eligibility.channel === "template" ? MessageType.TEMPLATE : MessageType.TEXT,
     status,
-    bodyText: params.eligibility.message,
+    bodyText: params.eligibility.channel === "text" ? params.eligibility.message : null,
+    templateName: params.eligibility.channel === "template" ? params.eligibility.templateName : null,
+    templateLang: params.eligibility.channel === "template" ? params.eligibility.templateLang : null,
     requestId: params.eligibility.requestId,
-    metaMessageId: sendResult.messageId ?? null,
+    metaMessageId: sendResult.messageId ?? sendResult.metaMessageId ?? null,
     errorBody: sendResult.errorBody ?? null,
     rawPayload: {
       source: "followup",
       dryRun: false,
+      channel: params.eligibility.channel,
+      templateName: params.eligibility.templateName ?? null,
+      templateLang: params.eligibility.templateLang ?? null,
       status: sendResult.status ?? null,
-      credentialSource: credentials.source,
+      credentialSource: credentials?.source ?? null,
       errorBody: sendResult.errorBody ?? null,
     },
   });
 
   if (!sendResult.ok) {
-    await params.prisma.event.create({
-      data: {
-        clientId: params.state.clientId,
-        waId: params.state.waId,
-        waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
-        requestId: `${params.eligibility.requestId}:send_failed`,
-        eventName: "followup.failed",
-        payloadJson: {
-          action: "followup.failed",
-          reason: "send_failed",
-          clientId: params.state.clientId,
-          clientKey: params.state.client.clientKey,
-          intent: params.eligibility.intent,
-          nodeId: params.eligibility.nodeId,
-          dryRun: false,
-          status: sendResult.status ?? null,
-          errorBody: sendResult.errorBody ?? null,
-          timestamp: sentAt.toISOString(),
-        },
-      },
+    await createFollowUpFailedEvent({
+      prisma: params.prisma,
+      state: params.state,
+      eligibility: params.eligibility,
+      now: sentAt,
+      reason: "send_failed",
+      status: sendResult.status ?? null,
+      errorBody: sendResult.errorBody ?? null,
     });
     logger.error({
       event: "followup.failed",
@@ -671,6 +856,7 @@ async function sendFollowUpMessage(params: {
       clientId: params.state.clientId,
       clientKey: params.state.client.clientKey,
       requestId: params.eligibility.requestId,
+      channel: params.eligibility.channel,
       status: sendResult.status ?? null,
       errorBody: sendResult.errorBody ?? null,
     });
@@ -685,7 +871,10 @@ async function sendFollowUpMessage(params: {
       lastSentAt: sentAt.toISOString(),
       lastRequestId: params.eligibility.requestId,
       dryRun: false,
-      metaMessageId: sendResult.messageId ?? null,
+      lastChannel: params.eligibility.channel,
+      templateName: params.eligibility.templateName ?? null,
+      templateLang: params.eligibility.templateLang ?? null,
+      metaMessageId: sendResult.messageId ?? sendResult.metaMessageId ?? null,
     },
   };
 
@@ -697,16 +886,19 @@ async function sendFollowUpMessage(params: {
         waIdCanonical: params.state.waIdCanonical ?? canonicalizeBrazilWaId(params.state.waId),
         messageId: outboundMessageId,
         requestId: `${params.eligibility.requestId}:sent`,
-        eventName: "followup.sent",
+        eventName: sentEventName,
         payloadJson: {
-          action: "followup.sent",
+          action: sentEventName,
           clientId: params.state.clientId,
           clientKey: params.state.client.clientKey,
           intent: params.eligibility.intent,
           nodeId: params.eligibility.nodeId,
+          channel: params.eligibility.channel,
+          templateName: params.eligibility.templateName ?? null,
+          templateLang: params.eligibility.templateLang ?? null,
           followUpCount: params.eligibility.nextCount,
           dryRun: false,
-          metaMessageId: sendResult.messageId ?? null,
+          metaMessageId: sendResult.messageId ?? sendResult.metaMessageId ?? null,
           timestamp: sentAt.toISOString(),
         },
       },
@@ -730,12 +922,15 @@ async function sendFollowUpMessage(params: {
   ]);
 
   logger.info({
-    event: "followup.sent",
+    event: sentEventName,
     clientId: params.state.clientId,
     clientKey: params.state.client.clientKey,
     requestId: params.eligibility.requestId,
-    metaMessageId: sendResult.messageId ?? null,
+    metaMessageId: sendResult.messageId ?? sendResult.metaMessageId ?? null,
     nodeId: params.eligibility.nodeId,
+    channel: params.eligibility.channel,
+    templateName: params.eligibility.templateName ?? null,
+    templateLang: params.eligibility.templateLang ?? null,
     followUpCount: params.eligibility.nextCount,
     dryRun: false,
   });
@@ -785,8 +980,23 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
     take: Math.max(1, Math.min(options.limit ?? 200, 500)),
   });
 
+  const configByClientKey = new Map<string, FollowUpTenantConfig>();
+  const templateApprovalByClientAndName = new Map<string, boolean>();
+
   for (const state of states) {
     result.scanned += 1;
+    let tenantConfig = configByClientKey.get(state.client.clientKey);
+    if (!tenantConfig) {
+      tenantConfig = resolveFollowUpTenantConfig(await getTenant(state.client.clientKey));
+      configByClientKey.set(state.client.clientKey, tenantConfig);
+      await logTenantFollowUpConfigLoaded({
+        prisma,
+        clientId: state.clientId,
+        clientKey: state.client.clientKey,
+        config: tenantConfig,
+        now,
+      });
+    }
     const conversation = await prisma.conversation.findUnique({
       where: {
         clientId_waId: {
@@ -803,7 +1013,30 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
         windowExpiresAt: true,
       },
     });
-    const eligibility = evaluateFollowUpEligibility(state, conversation, { ...options, dryRun });
+    let templateApproved = false;
+    if (!isWindowOpen(state, conversation, now) && tenantConfig.templateName) {
+      const approvalKey = `${state.clientId}:${tenantConfig.templateName}:${tenantConfig.templateLang ?? ""}`;
+      if (templateApprovalByClientAndName.has(approvalKey)) {
+        templateApproved = templateApprovalByClientAndName.get(approvalKey) === true;
+      } else {
+        const template = await prisma.template.findFirst({
+          where: {
+            clientId: state.clientId,
+            name: tenantConfig.templateName,
+            ...(tenantConfig.templateLang ? { language: tenantConfig.templateLang } : {}),
+          },
+          select: { status: true },
+        });
+        templateApproved = String(template?.status ?? "").toUpperCase() === "APPROVED";
+        templateApprovalByClientAndName.set(approvalKey, templateApproved);
+      }
+    }
+    const eligibility = evaluateFollowUpEligibility(state, conversation, {
+      ...options,
+      dryRun,
+      tenantConfig,
+      templateApproved,
+    });
     if (!eligibility.eligible) {
       result.skipped += 1;
       await logFollowUpSkipped({ prisma, state, eligibility, now, dryRun });

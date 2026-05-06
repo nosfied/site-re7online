@@ -10,6 +10,14 @@ const now = new Date("2026-05-05T12:00:00.000Z");
 const lastInboundAt = new Date("2026-05-05T10:00:00.000Z");
 const lastOutboundAt = new Date("2026-05-05T10:30:00.000Z");
 const windowExpiresAt = new Date("2026-05-06T10:00:00.000Z");
+const followUpConfig = {
+  enabled: true,
+  delayMinutes: 30,
+  maxCount: 1,
+  useTemplate: false,
+  templateName: null,
+  templateLang: "pt_BR",
+};
 
 function makeState(overrides: Record<string, unknown> = {}) {
   return {
@@ -80,8 +88,7 @@ test("buildFollowUpMessage falls back to generic message", () => {
 test("evaluateFollowUpEligibility triggers when customer stopped after bot outbound", () => {
   const eligibility = evaluateFollowUpEligibility(makeState() as never, makeConversation() as never, {
     now,
-    delayMinutes: 30,
-    maxPerConversation: 1,
+    tenantConfig: followUpConfig,
     minIntervalMinutes: 60,
   });
 
@@ -89,7 +96,8 @@ test("evaluateFollowUpEligibility triggers when customer stopped after bot outbo
   if (eligibility.eligible) {
     assert.equal(eligibility.nextCount, 1);
     assert.equal(eligibility.nodeId, "menu_bpc");
-    assert.match(eligibility.requestId, /^followup:dry-run:client-1:5584999999999:menu_bpc:1$/);
+    assert.equal(eligibility.channel, "text");
+    assert.match(eligibility.requestId, /^followup:dry-run:text:client-1:5584999999999:menu_bpc:1$/);
   }
 });
 
@@ -97,7 +105,7 @@ test("evaluateFollowUpEligibility skips when customer already replied", () => {
   const eligibility = evaluateFollowUpEligibility(
     makeState({ lastInboundAt: new Date("2026-05-05T10:45:00.000Z") }) as never,
     makeConversation() as never,
-    { now, delayMinutes: 30 }
+    { now, tenantConfig: followUpConfig }
   );
 
   assert.equal(eligibility.eligible, false);
@@ -110,7 +118,7 @@ test("evaluateFollowUpEligibility skips human mode", () => {
   const eligibility = evaluateFollowUpEligibility(
     makeState({ mode: "HUMAN" }) as never,
     makeConversation() as never,
-    { now, delayMinutes: 30 }
+    { now, tenantConfig: followUpConfig }
   );
 
   assert.equal(eligibility.eligible, false);
@@ -119,16 +127,76 @@ test("evaluateFollowUpEligibility skips human mode", () => {
   }
 });
 
-test("evaluateFollowUpEligibility skips closed window", () => {
+test("evaluateFollowUpEligibility skips closed window without template config", () => {
   const eligibility = evaluateFollowUpEligibility(
     makeState({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
     makeConversation({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
-    { now, delayMinutes: 30 }
+    { now, tenantConfig: followUpConfig }
   );
 
   assert.equal(eligibility.eligible, false);
   if (!eligibility.eligible) {
-    assert.equal(eligibility.reason, "window_closed");
+    assert.equal(eligibility.reason, "template_disabled");
+    assert.equal(eligibility.channel, "template");
+  }
+});
+
+test("evaluateFollowUpEligibility uses approved template when window is closed", () => {
+  const eligibility = evaluateFollowUpEligibility(
+    makeState({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
+    makeConversation({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
+    {
+      now,
+      tenantConfig: {
+        ...followUpConfig,
+        useTemplate: true,
+        templateName: "followup_reengagement_v1",
+        templateLang: "pt_BR",
+      },
+      templateApproved: true,
+    }
+  );
+
+  assert.equal(eligibility.eligible, true);
+  if (eligibility.eligible) {
+    assert.equal(eligibility.channel, "template");
+    assert.equal(eligibility.templateName, "followup_reengagement_v1");
+    assert.equal(eligibility.templateLang, "pt_BR");
+    assert.match(eligibility.requestId, /^followup:dry-run:template:client-1:5584999999999:menu_bpc:1$/);
+  }
+});
+
+test("evaluateFollowUpEligibility skips closed window when template is not approved", () => {
+  const eligibility = evaluateFollowUpEligibility(
+    makeState({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
+    makeConversation({ windowExpiresAt: new Date("2026-05-05T11:00:00.000Z") }) as never,
+    {
+      now,
+      tenantConfig: {
+        ...followUpConfig,
+        useTemplate: true,
+        templateName: "followup_reengagement_v1",
+      },
+      templateApproved: false,
+    }
+  );
+
+  assert.equal(eligibility.eligible, false);
+  if (!eligibility.eligible) {
+    assert.equal(eligibility.reason, "template_not_approved");
+    assert.equal(eligibility.channel, "template");
+  }
+});
+
+test("evaluateFollowUpEligibility skips when tenant follow-up is disabled", () => {
+  const eligibility = evaluateFollowUpEligibility(makeState() as never, makeConversation() as never, {
+    now,
+    tenantConfig: { ...followUpConfig, enabled: false },
+  });
+
+  assert.equal(eligibility.eligible, false);
+  if (!eligibility.eligible) {
+    assert.equal(eligibility.reason, "tenant_followup_disabled");
   }
 });
 
@@ -145,7 +213,7 @@ test("evaluateFollowUpEligibility skips when follow-up limit is reached", () => 
       },
     }) as never,
     makeConversation() as never,
-    { now, delayMinutes: 30, maxPerConversation: 1 }
+    { now, tenantConfig: followUpConfig }
   );
 
   assert.equal(eligibility.eligible, false);
@@ -167,13 +235,13 @@ test("evaluateFollowUpEligibility does not let dry-run count block real send", (
       },
     }) as never,
     makeConversation() as never,
-    { now, delayMinutes: 30, maxPerConversation: 1, dryRun: false }
+    { now, tenantConfig: followUpConfig, dryRun: false }
   );
 
   assert.equal(eligibility.eligible, true);
   if (eligibility.eligible) {
     assert.equal(eligibility.nextCount, 1);
-    assert.match(eligibility.requestId, /^followup:send:client-1:5584999999999:menu_bpc:1$/);
+    assert.match(eligibility.requestId, /^followup:text:client-1:5584999999999:menu_bpc:1$/);
   }
 });
 
@@ -181,7 +249,7 @@ test("evaluateFollowUpEligibility skips operationally closed conversation", () =
   const eligibility = evaluateFollowUpEligibility(
     makeState({ status: ConversationOperationalStatus.CLOSED }) as never,
     makeConversation() as never,
-    { now, delayMinutes: 30 }
+    { now, tenantConfig: followUpConfig }
   );
 
   assert.equal(eligibility.eligible, false);

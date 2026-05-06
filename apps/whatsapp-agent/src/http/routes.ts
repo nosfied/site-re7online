@@ -6338,6 +6338,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiLocked: Boolean(tenant.disableAiFallback),
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
+            followUpEnabled: tenant.followUpEnabled === true,
+            followUpDelayMinutes: tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
+            followUpMaxCount: tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
+            followUpUseTemplate: tenant.followUpUseTemplate === true,
+            followUpTemplateName: tenant.followUpTemplateName ?? "",
+            followUpTemplateLang:
+              tenant.followUpTemplateLang ?? tenant.defaultLanguage ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
           },
         });
       } catch (error) {
@@ -6374,7 +6381,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             payload[key] = data[key] as boolean;
           }
         }
-        if (Object.keys(payload).length === 0) {
+        const followUpPatch: Record<string, unknown> = {};
+        if (Object.prototype.hasOwnProperty.call(data, "followUpEnabled")) {
+          if (typeof data.followUpEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "followUpEnabled must be boolean"));
+            return;
+          }
+          followUpPatch.followUpEnabled = data.followUpEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpUseTemplate")) {
+          if (typeof data.followUpUseTemplate !== "boolean") {
+            json(res, 400, httpError("bad_request", "followUpUseTemplate must be boolean"));
+            return;
+          }
+          followUpPatch.followUpUseTemplate = data.followUpUseTemplate;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpDelayMinutes")) {
+          if (
+            typeof data.followUpDelayMinutes !== "number" ||
+            !Number.isFinite(data.followUpDelayMinutes) ||
+            data.followUpDelayMinutes < 1
+          ) {
+            json(res, 400, httpError("bad_request", "followUpDelayMinutes must be a positive number"));
+            return;
+          }
+          followUpPatch.followUpDelayMinutes = Math.floor(data.followUpDelayMinutes);
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpMaxCount")) {
+          if (
+            typeof data.followUpMaxCount !== "number" ||
+            !Number.isInteger(data.followUpMaxCount) ||
+            data.followUpMaxCount < 0
+          ) {
+            json(res, 400, httpError("bad_request", "followUpMaxCount must be a non-negative integer"));
+            return;
+          }
+          followUpPatch.followUpMaxCount = data.followUpMaxCount;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateName")) {
+          if (typeof data.followUpTemplateName !== "string") {
+            json(res, 400, httpError("bad_request", "followUpTemplateName must be string"));
+            return;
+          }
+          const templateName = data.followUpTemplateName.trim();
+          if (templateName && !/^[a-z0-9_]+$/.test(templateName)) {
+            json(res, 400, httpError("bad_request", "followUpTemplateName must use lowercase letters, numbers and underscore"));
+            return;
+          }
+          followUpPatch.followUpTemplateName = templateName || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateLang")) {
+          if (typeof data.followUpTemplateLang !== "string") {
+            json(res, 400, httpError("bad_request", "followUpTemplateLang must be string"));
+            return;
+          }
+          const templateLang = data.followUpTemplateLang.trim();
+          if (templateLang && !/^[a-z]{2}_[A-Z]{2}$/.test(templateLang)) {
+            json(res, 400, httpError("bad_request", "followUpTemplateLang must use format pt_BR"));
+            return;
+          }
+          followUpPatch.followUpTemplateLang = templateLang || undefined;
+        }
+        if (Object.keys(payload).length === 0 && Object.keys(followUpPatch).length === 0) {
           json(
             res,
             400,
@@ -6420,6 +6488,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ...(payload.disableIntentClassifier !== undefined
             ? { appDisableIntentClassifier: payload.disableIntentClassifier }
             : {}),
+          ...followUpPatch,
         });
         logger.info({
           event: "admin.chatbot.settings.updated",
@@ -6443,6 +6512,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiLocked: Boolean(saved.tenant.disableAiFallback),
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
+            followUpEnabled: saved.tenant.followUpEnabled === true,
+            followUpDelayMinutes: saved.tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
+            followUpMaxCount: saved.tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
+            followUpUseTemplate: saved.tenant.followUpUseTemplate === true,
+            followUpTemplateName: saved.tenant.followUpTemplateName ?? "",
+            followUpTemplateLang:
+              saved.tenant.followUpTemplateLang ??
+              saved.tenant.defaultLanguage ??
+              env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
           },
         });
       } catch (error) {
@@ -10666,6 +10744,12 @@ function diffTenantFields(
   compareField("appDisableAiFallback");
   compareField("disableIntentClassifier");
   compareField("appDisableIntentClassifier");
+  compareField("followUpEnabled");
+  compareField("followUpDelayMinutes");
+  compareField("followUpMaxCount");
+  compareField("followUpUseTemplate");
+  compareField("followUpTemplateName");
+  compareField("followUpTemplateLang");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

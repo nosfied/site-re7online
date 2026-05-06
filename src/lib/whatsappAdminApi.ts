@@ -138,6 +138,12 @@ export type AdminAutomationSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
   disableIntentClassifier: boolean;
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  followUpMaxCount?: number;
+  followUpUseTemplate?: boolean;
+  followUpTemplateName?: string;
+  followUpTemplateLang?: string;
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
