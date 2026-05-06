@@ -1302,6 +1302,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_timeline_department_check",
       });
+      if (!resolvedConversation.winner) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
       const scopedConversation = materializeConversationOperationalState(
         await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
         await ensureDefaultDepartmentAndQueue(prisma, client.id)
@@ -1395,6 +1399,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_detail_department_check",
       });
+      if (!resolvedConversation.winner) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
       const scopedConversation = materializeConversationOperationalState(
         await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
         await ensureDefaultDepartmentAndQueue(prisma, client.id)
@@ -13109,6 +13117,7 @@ async function resolveConversationTarget(
     where: {
       clientId: params.clientId,
       deletedAt: null,
+      anonymizedAt: null,
       ...buildScopedWaIdWhere(lookup.raw),
     },
     select: {
@@ -13768,6 +13777,7 @@ async function buildConversationListPayload(
   const conversationWhere: Prisma.ConversationWhereInput = {
     clientId: params.clientId,
     deletedAt: null,
+    anonymizedAt: null,
     lastInboundAt: { not: null },
     ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
     ...(params.cursor
@@ -14127,10 +14137,12 @@ async function buildConversationDetailPayload(
     requestId: params.requestId,
     source: params.source,
   });
-  const conversation = materializeConversationOperationalState(
-    await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
-    defaults
-  );
+  const conversation = resolved.winner
+    ? materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
+        defaults
+      )
+    : null;
   const detailWaIds = Array.from(
     new Set(
       [

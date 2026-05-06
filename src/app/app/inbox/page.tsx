@@ -42,6 +42,7 @@ import {
   updateAppConversationStatus,
   updateAppLeadStatus,
   updateAppConversationReadState,
+  type AppApiError,
 } from "@/lib/appClientApi";
 import {
   ConversationOperationalStatus,
@@ -399,6 +400,15 @@ function conversationIdentityMatches(
   const normalize = (value: string | null | undefined) => String(value ?? "").trim();
   const leftValues = new Set(left.map(normalize).filter(Boolean));
   return right.map(normalize).some((value) => Boolean(value) && leftValues.has(value));
+}
+
+function isConversationGoneError(error: unknown) {
+  const typed = error as AppApiError;
+  return (
+    typed.status === 404 ||
+    typed.status === 410 ||
+    typed.errorCode === "conversation_not_found"
+  );
 }
 
 type InboxReadState = AppInboxReadState;
@@ -1162,6 +1172,26 @@ export default function AppInboxPage() {
     clearAppSession();
     router.replace("/app/login");
   }, [router]);
+
+  const clearSelectedConversation = useCallback(() => {
+    detailRequestSeqRef.current += 1;
+    selectedConversationIdentityCandidatesRef.current = [];
+    timelineOutOfSyncRetryKeyRef.current = null;
+    pendingUnreadScrollTargetRef.current = null;
+    pendingReadAfterHydrationRef.current = null;
+    pendingUnreadAnchorConversationIdentityRef.current = null;
+    pendingUnreadLastReadAtRef.current = null;
+    pendingUnreadAnchorMessageIdRef.current = null;
+    setSelectedConversationKey(null);
+    setSelectedConversationWaId(null);
+    setMessages([]);
+    setMessagesConversationKey(null);
+    setLoadingMessages(false);
+    setShowContactTimeline(false);
+    setContactTimelineItems([]);
+    setContactTimelineCursor(null);
+    setContactTimelineError(null);
+  }, []);
 
   const loadContactTimeline = useCallback(
     async (mode: "reset" | "append" = "reset") => {
@@ -2124,6 +2154,11 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
+        if (isConversationGoneError(err)) {
+          clearSelectedConversation();
+          setError(null);
+          return;
+        }
         setError(err.message || "Falha ao carregar timeline.");
       })
       .finally(() => {
@@ -2133,7 +2168,14 @@ export default function AppInboxPage() {
     return () => {
       cancelled = true;
     };
-  }, [handleUnauthorized, isTimelineNearBottom, selectedConversationKey, selectedConversationWaId, session]);
+  }, [
+    clearSelectedConversation,
+    handleUnauthorized,
+    isTimelineNearBottom,
+    selectedConversationKey,
+    selectedConversationWaId,
+    session,
+  ]);
 
   useEffect(() => {
     if (!session || !selectedConversationWaId || !selectedConversationKey) {
@@ -2157,6 +2199,11 @@ export default function AppInboxPage() {
           handleUnauthorized();
           return;
         }
+        if (isConversationGoneError(err)) {
+          clearSelectedConversation();
+          setError(null);
+          return;
+        }
         setError(err.message || "Falha ao carregar timeline.");
       })
       .finally(() => {
@@ -2169,6 +2216,7 @@ export default function AppInboxPage() {
     };
   }, [
     handleUnauthorized,
+    clearSelectedConversation,
     loadingMessages,
     messagesConversationKey,
     refreshSelectedTimeline,
@@ -2272,6 +2320,10 @@ export default function AppInboxPage() {
       } catch (err) {
         if ((err as { status?: number }).status === 401) {
           handleUnauthorized();
+          return;
+        }
+        if (isConversationGoneError(err)) {
+          clearSelectedConversation();
         }
       } finally {
         polling = false;
@@ -2281,6 +2333,7 @@ export default function AppInboxPage() {
     return () => window.clearInterval(interval);
   }, [
     handleUnauthorized,
+    clearSelectedConversation,
     loadingMessages,
     messagesConversationKey,
     refreshConversationList,
@@ -2295,6 +2348,17 @@ export default function AppInboxPage() {
       conversations.find((item) => getConversationIdentity(item) === selectedConversationKey) ?? null,
     [conversations, selectedConversationKey]
   );
+
+  useEffect(() => {
+    if (!loadingConversations && selectedConversationKey && !selectedConversation) {
+      clearSelectedConversation();
+    }
+  }, [
+    clearSelectedConversation,
+    loadingConversations,
+    selectedConversation,
+    selectedConversationKey,
+  ]);
 
   useEffect(() => {
     setActiveInboxConversation(selectedConversationWaId, selectedConversation?.waIdCanonical ?? null);
