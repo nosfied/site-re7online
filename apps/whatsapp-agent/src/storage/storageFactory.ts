@@ -4,24 +4,15 @@ import { jsonFileStorage } from "./jsonFileStorage.js";
 import { Storage } from "./storage.js";
 import { createDualWriteStorage } from "./dualWriteStorage.js";
 
-type EffectiveStorageMode = "json" | "hybrid";
+type EffectiveStorageMode = "json" | "hybrid" | "postgres";
 type EffectiveReadSource = "json" | "hybrid" | "postgres";
 
 function resolveStorageMode(): {
   requestedMode: "json" | "hybrid" | "postgres";
   effectiveMode: EffectiveStorageMode;
   source: "default" | "legacy_flags" | "storage_mode";
-  fallbackReason?: "postgres_not_implemented";
 } {
   if (env.STORAGE_MODE_SET) {
-    if (env.STORAGE_MODE === "postgres") {
-      return {
-        requestedMode: env.STORAGE_MODE,
-        effectiveMode: "json",
-        source: "storage_mode",
-        fallbackReason: "postgres_not_implemented",
-      };
-    }
     return {
       requestedMode: env.STORAGE_MODE,
       effectiveMode: env.STORAGE_MODE,
@@ -75,21 +66,12 @@ function resolveConversationReadSource(): {
 export function createStorage(): Storage {
   const mode = resolveStorageMode();
   const readSource = resolveConversationReadSource();
-  if (mode.fallbackReason) {
-    logger.warn({
-      event: "storage.mode.fallback",
-      requestedMode: mode.requestedMode,
-      effectiveMode: mode.effectiveMode,
-      reason: mode.fallbackReason,
-    });
-  } else {
-    logger.info({
-      event: "storage.mode.resolved",
-      requestedMode: mode.requestedMode,
-      effectiveMode: mode.effectiveMode,
-      source: mode.source,
-    });
-  }
+  logger.info({
+    event: "storage.mode.resolved",
+    requestedMode: mode.requestedMode,
+    effectiveMode: mode.effectiveMode,
+    source: mode.source,
+  });
 
   logger.info({
     event: "storage.read_source.resolved",
@@ -97,6 +79,13 @@ export function createStorage(): Storage {
     effectiveReadSource: readSource.effectiveReadSource,
     source: readSource.source,
   });
+
+  if (mode.effectiveMode === "postgres") {
+    return createDualWriteStorage(jsonFileStorage, {
+      readSource: "postgres",
+      jsonWriteEnabled: false,
+    });
+  }
 
   if (mode.effectiveMode === "hybrid" || readSource.effectiveReadSource !== "json") {
     return createDualWriteStorage(jsonFileStorage, {
