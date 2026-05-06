@@ -65,6 +65,7 @@ type FollowUpOptions = {
   delayMinutes?: number;
   maxPerConversation?: number;
   minIntervalMinutes?: number;
+  waId?: string;
   tenantConfig?: FollowUpTenantConfig;
   templateApproved?: boolean;
 };
@@ -941,6 +942,8 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
   const prisma = getPrisma();
   const now = options.now ?? new Date();
   const dryRun = options.dryRun ?? env.FOLLOWUP_DRY_RUN;
+  const waIdFilter = options.waId?.replace(/\D/g, "").trim() || null;
+  const waIdCanonicalFilter = waIdFilter ? canonicalizeBrazilWaId(waIdFilter) : null;
   const result: FollowUpRunResult = {
     enabled: env.FOLLOWUP_ENABLED,
     dryRun,
@@ -966,7 +969,19 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
       chatbotActive: true,
       chatbotNodeId: { not: null },
       handoffStatus: HandoffStatus.NONE,
-      OR: [{ mode: null }, { mode: { not: "HUMAN" } }],
+      AND: [
+        { OR: [{ mode: null }, { mode: { not: "HUMAN" } }] },
+        ...(waIdFilter
+          ? [
+              {
+                OR: [
+                  { waId: waIdFilter },
+                  ...(waIdCanonicalFilter ? [{ waIdCanonical: waIdCanonicalFilter }] : []),
+                ],
+              },
+            ]
+          : []),
+      ],
     },
     include: {
       client: {
