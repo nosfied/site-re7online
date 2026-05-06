@@ -727,27 +727,24 @@ export function createDualWriteStorage(
     });
   }
 
-  function logJsonFallback(params: {
+  function logPostgresReadMissing(params: {
     clientId?: string | null;
     clientKey: string;
     waId: string;
     reason: string;
-    error?: string;
   }) {
     logger.warn({
-      event: "state.read.fallback_json",
+      event: "state.postgres.read_missing",
       clientId: params.clientId ?? null,
       clientKey: params.clientKey,
       waId: maskWaId(params.waId),
       conversationKey: maskConversationKey(params.clientKey, params.waId),
       reason: params.reason,
       readSource,
-      fallbackTo: "json",
-      error: params.error,
     });
   }
 
-  function logJsonFallbackFailed(params: {
+  function logPostgresReadFailed(params: {
     clientId?: string | null;
     clientKey: string;
     waId: string;
@@ -755,14 +752,13 @@ export function createDualWriteStorage(
     error: string;
   }) {
     logger.warn({
-      event: "state.read.fallback_json_failed",
+      event: "state.postgres.read_failed",
       clientId: params.clientId ?? null,
       clientKey: params.clientKey,
       waId: maskWaId(params.waId),
       conversationKey: maskConversationKey(params.clientKey, params.waId),
       reason: params.reason,
       readSource,
-      fallbackTo: "json",
       error: params.error,
     });
   }
@@ -924,10 +920,10 @@ export function createDualWriteStorage(
         return primary.getConversation(waId, clientKey);
       }
 
-      const primaryPromise = primary.getConversation(waId, clientKey);
       const shadowPromise = readShadowState(waId, clientKey);
 
       if (readSource === "hybrid") {
+        const primaryPromise = primary.getConversation(waId, clientKey);
         const [jsonResult, shadowResult] = await Promise.allSettled([
           primaryPromise,
           shadowPromise,
@@ -950,45 +946,22 @@ export function createDualWriteStorage(
         return jsonResult.value;
       }
 
-      const [shadowResult, jsonResult] = await Promise.allSettled([shadowPromise, primaryPromise]);
-
-      if (jsonResult.status === "rejected") {
-        logJsonFallbackFailed({
-          clientId: shadowResult.status === "fulfilled" ? shadowResult.value?.clientId : null,
-          clientKey,
-          waId,
-          reason: "json_read_error",
-          error: (jsonResult.reason as Error).message,
-        });
-        if (shadowResult.status === "rejected") {
-          throw shadowResult.reason;
-        }
-        const shadowValidation = validateConversationState(
-          shadowResult.value?.state ?? null,
-          clientKey,
-          waId
-        );
-        if (shadowValidation.ok) {
-          return shadowValidation.state;
-        }
-        throw jsonResult.reason;
-      }
-
-      if (shadowResult.status === "rejected") {
-        logJsonFallback({
+      let shadowResult: Awaited<ReturnType<typeof readShadowState>>;
+      try {
+        shadowResult = await shadowPromise;
+      } catch (error) {
+        logPostgresReadFailed({
           clientId: null,
           clientKey,
           waId,
           reason: "postgres_read_error",
-          error: (shadowResult.reason as Error).message,
+          error: (error as Error).message,
         });
-        return jsonResult.value;
+        throw error;
       }
 
-      logShadowReadMismatch(jsonResult.value, waId, clientKey, shadowResult.value);
-
       const shadowValidation = validateConversationState(
-        shadowResult.value?.state ?? null,
+        shadowResult?.state ?? null,
         clientKey,
         waId
       );
@@ -996,21 +969,25 @@ export function createDualWriteStorage(
         return shadowValidation.state;
       }
 
-      if (shadowValidation.reason === "not_found" && !jsonResult.value) {
+      if (shadowValidation.reason === "not_found") {
+        logPostgresReadMissing({
+          clientId: shadowResult?.clientId ?? null,
+          clientKey,
+          waId,
+          reason: "postgres_not_found",
+        });
         return null;
       }
 
-      logJsonFallback({
-        clientId: shadowResult.value?.clientId ?? null,
+      const errorMessage = `postgres_conversation_state_invalid:${shadowValidation.reason}`;
+      logPostgresReadFailed({
+        clientId: shadowResult?.clientId ?? null,
         clientKey,
         waId,
-        reason:
-          shadowValidation.reason === "not_found"
-            ? "postgres_not_found_with_json_state"
-            : "postgres_invalid_state",
-        error: shadowValidation.error,
+        reason: "postgres_invalid_state",
+        error: shadowValidation.error ?? errorMessage,
       });
-      return jsonResult.value;
+      throw new Error(errorMessage);
     },
     async upsertConversation(state: ConversationState) {
       if (jsonWriteEnabled) {

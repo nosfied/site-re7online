@@ -235,7 +235,7 @@ test("dual write reads Postgres state when read source is postgres", async () =>
       return [makeDbRow({ status: ConversationOperationalStatus.WAITING })];
     },
   });
-  const { storage: primary } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
   const storage = createDualWriteStorage(primary, {
     readSource: "postgres",
     jsonWriteEnabled: false,
@@ -244,15 +244,48 @@ test("dual write reads Postgres state when read source is postgres", async () =>
   const state = await storage.getConversation("5584999999999", "justa-advocacia");
 
   assert.equal(state?.status, "WAITING");
+  assert.equal(calls.get, 0);
 });
 
-test("dual write falls back to JSON when Postgres read fails", async () => {
+test("dual write does not read JSON when Postgres read fails", async () => {
   installPrismaMock({
     async findMany() {
       throw new Error("db unavailable");
     },
   });
-  const { storage: primary } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const consoleCapture = captureConsole();
+  try {
+    const storage = createDualWriteStorage(primary, {
+      readSource: "postgres",
+      jsonWriteEnabled: false,
+    });
+
+    await assert.rejects(
+      storage.getConversation("5584999999999", "justa-advocacia"),
+      /db unavailable/
+    );
+
+    assert.equal(calls.get, 0);
+    assert.ok(
+      consoleCapture.records.some(
+        (record) =>
+          record.event === "state.postgres.read_failed" &&
+          record.reason === "postgres_read_error"
+      )
+    );
+  } finally {
+    consoleCapture.restore();
+  }
+});
+
+test("dual write returns null without JSON fallback when Postgres state is missing", async () => {
+  installPrismaMock({
+    async findMany() {
+      return [];
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
   const consoleCapture = captureConsole();
   try {
     const storage = createDualWriteStorage(primary, {
@@ -262,15 +295,34 @@ test("dual write falls back to JSON when Postgres read fails", async () => {
 
     const state = await storage.getConversation("5584999999999", "justa-advocacia");
 
-    assert.equal(state?.status, "CLOSED");
+    assert.equal(state, null);
+    assert.equal(calls.get, 0);
     assert.ok(
       consoleCapture.records.some(
         (record) =>
-          record.event === "state.read.fallback_json" &&
-          record.reason === "postgres_read_error"
+          record.event === "state.postgres.read_missing" &&
+          record.reason === "postgres_not_found"
       )
     );
   } finally {
     consoleCapture.restore();
   }
+});
+
+test("dual write still supports explicit JSON read source", async () => {
+  installPrismaMock({
+    async findMany() {
+      throw new Error("postgres should not be read");
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "json",
+    jsonWriteEnabled: true,
+  });
+
+  const state = await storage.getConversation("5584999999999", "justa-advocacia");
+
+  assert.equal(state?.status, "CLOSED");
+  assert.equal(calls.get, 1);
 });
