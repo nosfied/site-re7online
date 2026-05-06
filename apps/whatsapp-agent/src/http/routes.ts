@@ -301,6 +301,64 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/app/inbox/events") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const eventName = String(body.event ?? "").trim();
+      if (!isAllowedInboxUxEvent(eventName)) {
+        json(res, 400, { error: "invalid_event" });
+        return;
+      }
+      const payload = sanitizeInboxUxEventPayload(body.payload);
+      const timestamp = new Date().toISOString();
+      logger.info({
+        event: eventName,
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+        ...payload,
+      });
+      try {
+        await prisma.event.create({
+          data: {
+            clientId: clientAuth.clientId,
+            requestId: `${requestId}:${eventName}`,
+            eventName,
+            payloadJson: {
+              action: eventName,
+              clientId: clientAuth.clientId,
+              userId: clientAuth.userId,
+              timestamp,
+              ...payload,
+            },
+          },
+        });
+      } catch (error) {
+        logger.warn({
+          event: "inbox.ux_event.audit_failed",
+          clientId: clientAuth.clientId,
+          userId: clientAuth.userId,
+          requestId,
+          eventName,
+          message: (error as Error).message,
+        });
+      }
+      json(res, 200, { ok: true });
+    } catch (error) {
+      logger.error({
+        event: "app.inbox.events.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (req.method === "PUT" && pathname === "/app/privacy/retention") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -12591,12 +12649,17 @@ function serializeConversationOperationalFields(params: {
     closedAt?: string | null;
     lastInboundAt?: string | null;
     lastOutboundAt?: string | null;
+    answers?: {
+      flowContext?: Record<string, unknown> | null;
+      flowTags?: string[] | null;
+    } | null;
   } | null;
   assignedUserName: string | null;
   departmentName: string | null;
   queueName: string | null;
 }) {
   const conversation = params.conversation;
+  const flowContext = sanitizeInboxFlowContext(conversation?.answers?.flowContext ?? null);
   return {
     mode: conversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
     handoffStatus: conversation?.handoff?.status ?? "none",
@@ -12613,7 +12676,82 @@ function serializeConversationOperationalFields(params: {
     lastInboundAt: conversation?.lastInboundAt ?? null,
     lastOutboundAt: conversation?.lastOutboundAt ?? null,
     isUnassigned: !conversation?.assignedUserId,
+    flowContext,
+    flowTags: sanitizeInboxFlowTags(conversation?.answers?.flowTags ?? null),
   };
+}
+
+const INBOX_UX_EVENT_NAMES = [
+  "inbox.priority.rendered",
+  "inbox.sorted",
+  "inbox.suggestion.used",
+] as const;
+
+function isAllowedInboxUxEvent(value: string): value is (typeof INBOX_UX_EVENT_NAMES)[number] {
+  return (INBOX_UX_EVENT_NAMES as readonly string[]).includes(value);
+}
+
+function sanitizeInboxUxEventPayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const key of ["conversationKey", "leadId", "leadTemp", "topPriority"] as const) {
+    const item = source[key];
+    if (typeof item === "string") {
+      result[key] = item.slice(0, 180);
+    } else if (item === null) {
+      result[key] = null;
+    }
+  }
+  const count = source.count;
+  if (typeof count === "number" && Number.isFinite(count)) {
+    result.count = Math.max(0, Math.min(Math.floor(count), 1000));
+  }
+  return result;
+}
+
+const INBOX_FLOW_CONTEXT_KEYS = [
+  "area",
+  "servico",
+  "situacao",
+  "prioridade",
+  "lead_temp",
+  "intent",
+  "origem_intencao",
+] as const;
+
+function sanitizeInboxFlowContext(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const key of INBOX_FLOW_CONTEXT_KEYS) {
+    const item = source[key];
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "number" ||
+      typeof item === "boolean"
+    ) {
+      result[key] = item;
+    }
+  }
+  return result;
+}
+
+function sanitizeInboxFlowTags(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 20)
+    )
+  );
 }
 
 async function buildConversationActionPayload(
@@ -13705,6 +13843,39 @@ function conversationListItemIsInHumanFlow(item: {
   );
 }
 
+function getInboxPriorityScore(item: { flowContext?: Record<string, unknown> | null }) {
+  const leadTemp = String(item.flowContext?.lead_temp ?? "").trim().toLowerCase();
+  if (leadTemp === "quente") return 3;
+  if (leadTemp === "morno") return 2;
+  if (leadTemp === "frio") return 1;
+  return 0;
+}
+
+function getInboxWaitingTimestamp(item: {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}) {
+  const raw = item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
+  const timestamp = raw instanceof Date ? raw.getTime() : Date.parse(String(raw));
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+function sortConversationItemsByPriorityAndWait<T extends {
+  flowContext?: Record<string, unknown> | null;
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const priorityDiff = getInboxPriorityScore(right) - getInboxPriorityScore(left);
+    if (priorityDiff !== 0) return priorityDiff;
+    const waitDiff = getInboxWaitingTimestamp(left) - getInboxWaitingTimestamp(right);
+    if (waitDiff !== 0) return waitDiff;
+    return String(left.updatedAt).localeCompare(String(right.updatedAt));
+  });
+}
+
 function buildConversationFilterCounts(
   items: Array<{
     lastMessage: { bodyText: string | null } | null;
@@ -14077,10 +14248,12 @@ async function buildConversationListPayload(
       updatedAt: conversation.updatedAt,
     };
   });
-  const filteredItems = allItems.filter(
-    (item) =>
-      conversationListItemIsInHumanFlow(item) &&
-      conversationMatchesListFilters(item, params.filters)
+  const filteredItems = sortConversationItemsByPriorityAndWait(
+    allItems.filter(
+      (item) =>
+        conversationListItemIsInHumanFlow(item) &&
+        conversationMatchesListFilters(item, params.filters)
+    )
   );
   const filterCounts = buildConversationFilterCounts(
     allItems.filter(conversationListItemIsInHumanFlow),

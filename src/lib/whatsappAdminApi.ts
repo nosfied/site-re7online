@@ -75,6 +75,8 @@ export type InboxConversationItem = {
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   isUnassigned: boolean;
+  flowContext?: Record<string, string | number | boolean | null>;
+  flowTags?: string[];
   updatedAt: string;
 };
 

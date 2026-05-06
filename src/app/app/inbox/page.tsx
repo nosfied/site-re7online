@@ -42,6 +42,7 @@ import {
   updateAppConversationStatus,
   updateAppLeadStatus,
   updateAppConversationReadState,
+  logAppInboxEvent,
   type AppApiError,
 } from "@/lib/appClientApi";
 import {
@@ -97,6 +98,89 @@ function getLeadStatusLabel(status?: string | null) {
     default:
       return "Sem andamento";
   }
+}
+
+function getFlowContextValue(
+  item: Pick<InboxConversationItem, "flowContext"> | null,
+  key: string
+) {
+  const value = item?.flowContext?.[key];
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text || null;
+}
+
+function formatFlowContextValue(value: string | null) {
+  if (!value) return null;
+  return value
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getLeadTemperature(item: Pick<InboxConversationItem, "flowContext"> | null) {
+  const value = getFlowContextValue(item, "lead_temp")?.toLowerCase() ?? "";
+  if (value === "quente" || value === "morno" || value === "frio") return value;
+  return null;
+}
+
+function getLeadTemperatureScore(item: Pick<InboxConversationItem, "flowContext"> | null) {
+  const temperature = getLeadTemperature(item);
+  if (temperature === "quente") return 3;
+  if (temperature === "morno") return 2;
+  if (temperature === "frio") return 1;
+  return 0;
+}
+
+function getLeadTemperatureLabel(item: Pick<InboxConversationItem, "flowContext"> | null) {
+  const temperature = getLeadTemperature(item);
+  if (temperature === "quente") return "Quente";
+  if (temperature === "morno") return "Morno";
+  if (temperature === "frio") return "Frio";
+  return null;
+}
+
+function getLeadTemperatureClass(item: Pick<InboxConversationItem, "flowContext"> | null) {
+  const temperature = getLeadTemperature(item);
+  if (temperature === "quente") return "border-red-300 bg-red-100 text-red-800";
+  if (temperature === "morno") return "border-amber-300 bg-amber-100 text-amber-800";
+  if (temperature === "frio") return "border-slate-300 bg-slate-100 text-slate-700";
+  return "border-slate-300 bg-slate-100 text-slate-600";
+}
+
+function buildConversationContextSummary(item: Pick<InboxConversationItem, "flowContext"> | null) {
+  if (!item?.flowContext) return [];
+  return [
+    { label: "Área", value: formatFlowContextValue(getFlowContextValue(item, "area")) },
+    { label: "Serviço", value: formatFlowContextValue(getFlowContextValue(item, "servico")) },
+    { label: "Situação", value: formatFlowContextValue(getFlowContextValue(item, "situacao")) },
+    {
+      label: "Prioridade",
+      value:
+        formatFlowContextValue(getFlowContextValue(item, "prioridade")) ??
+        getLeadTemperatureLabel(item),
+    },
+  ].filter((entry): entry is { label: string; value: string } => Boolean(entry.value));
+}
+
+function extractSuggestedReply(notes: LeadNoteItem[]) {
+  const note = notes.find((item) => item.body.trim().startsWith("[Sugestão de resposta]"));
+  if (!note) return null;
+  const body = note.body.replace(/^\[Sugestão de resposta\]\s*/i, "").trim();
+  return body || null;
+}
+
+function logInboxUxEvent(
+  session: AppSession | null,
+  event: "inbox.priority.rendered" | "inbox.sorted" | "inbox.suggestion.used",
+  payload: Record<string, unknown>
+) {
+  console.info(JSON.stringify({ event, ...payload }));
+  if (!session) return;
+  void logAppInboxEvent(session, event, payload).catch(() => {
+    // UI logging must never affect inbox usage.
+  });
 }
 
 function getTimelineDateGroup(value: string) {
@@ -567,12 +651,14 @@ function getConversationActivityTimestamp(item: InboxConversationItem) {
 
 function sortConversationsByRecent(items: InboxConversationItem[]) {
   return [...items].sort((a, b) => {
+    const priorityDiff = getLeadTemperatureScore(b) - getLeadTemperatureScore(a);
+    if (priorityDiff !== 0) return priorityDiff;
     const aTs = getConversationActivityTimestamp(a);
     const bTs = getConversationActivityTimestamp(b);
     if (aTs === null && bTs === null) return 0;
     if (aTs === null) return 1;
     if (bTs === null) return -1;
-    return bTs - aTs;
+    return aTs - bTs;
   });
 }
 
@@ -935,6 +1021,8 @@ function applyConversationOperationalPayload(
     lastInboundAt: string | null;
     lastOutboundAt: string | null;
     isUnassigned: boolean;
+    flowContext?: Record<string, string | number | boolean | null>;
+    flowTags?: string[];
   }
 ) {
   return {
@@ -956,6 +1044,8 @@ function applyConversationOperationalPayload(
     lastInboundAt: payload.lastInboundAt,
     lastOutboundAt: payload.lastOutboundAt,
     isUnassigned: payload.isUnassigned,
+    flowContext: payload.flowContext ?? item.flowContext,
+    flowTags: payload.flowTags ?? item.flowTags,
   };
 }
 
@@ -1167,6 +1257,8 @@ export default function AppInboxPage() {
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
+  const renderedPriorityLogKeysRef = useRef(new Set<string>());
+  const sortedLogSignatureRef = useRef<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -2448,6 +2540,19 @@ export default function AppInboxPage() {
       }
     });
   }, [conversationFilter, conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
+  useEffect(() => {
+    const signature = filteredConversations
+      .slice(0, 20)
+      .map((item) => `${getConversationIdentity(item)}:${getLeadTemperature(item) ?? "none"}`)
+      .join("|");
+    if (signature && sortedLogSignatureRef.current !== signature) {
+      sortedLogSignatureRef.current = signature;
+      logInboxUxEvent(session, "inbox.sorted", {
+        count: filteredConversations.length,
+        topPriority: getLeadTemperature(filteredConversations[0] ?? null),
+      });
+    }
+  }, [filteredConversations, session]);
   const selectedMoreConversationFilter = useMemo(
     () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
     [conversationFilter]
@@ -2561,6 +2666,25 @@ export default function AppInboxPage() {
       status: selectedConversation.leadStatus as LeadStatus | null,
     };
   }, [selectedConversation]);
+  const selectedContextSummary = useMemo(
+    () => buildConversationContextSummary(selectedConversation),
+    [selectedConversation]
+  );
+  const selectedLeadTemperature = getLeadTemperature(selectedConversation);
+  const selectedSuggestedReply = useMemo(() => extractSuggestedReply(leadNotes), [leadNotes]);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+    const temperature = getLeadTemperature(selectedConversation);
+    if (!temperature) return;
+    const key = `${getConversationIdentity(selectedConversation)}:${temperature}`;
+    if (renderedPriorityLogKeysRef.current.has(key)) return;
+    renderedPriorityLogKeysRef.current.add(key);
+    logInboxUxEvent(session, "inbox.priority.rendered", {
+      conversationKey: getConversationIdentity(selectedConversation),
+      leadTemp: temperature,
+    });
+  }, [selectedConversation, session]);
 
   useEffect(() => {
     setStatusDraft((selectedLead?.status as LeadStatus | null) ?? "");
@@ -2651,6 +2775,18 @@ export default function AppInboxPage() {
     } finally {
       setSavingLeadNote(false);
     }
+  };
+
+  const handleUseSuggestedReply = () => {
+    if (!selectedSuggestedReply) return;
+    setMessageDraft((current) =>
+      current.trim() ? `${current.trimEnd()}\n${selectedSuggestedReply}` : selectedSuggestedReply
+    );
+    logInboxUxEvent(session, "inbox.suggestion.used", {
+      conversationKey: selectedConversation ? getConversationIdentity(selectedConversation) : null,
+      leadId: selectedLead?.id ?? null,
+    });
+    focusComposer();
   };
 
   const handleSaveLeadName = async () => {
@@ -3505,6 +3641,7 @@ export default function AppInboxPage() {
               const status = getConversationOperationalStatus(item);
               const label = getConversationLabel(item);
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
+              const leadTemperatureLabel = getLeadTemperatureLabel(item);
               return (
                 <button
                   key={conversationIdentity}
@@ -3552,9 +3689,16 @@ export default function AppInboxPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
-                        {label}
-                      </p>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
+                          {label}
+                        </p>
+                        {leadTemperatureLabel ? (
+                          <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
+                            {leadTemperatureLabel}
+                          </span>
+                        ) : null}
+                      </div>
                       {phoneLine ? (
                         <p className={`mt-0.5 text-xs ${isActive ? "text-white/75" : "text-white/55"}`}>
                           {phoneLine}
@@ -3596,11 +3740,18 @@ export default function AppInboxPage() {
         <div className="relative flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
           <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3 max-[1366px]:min-h-14 max-[1366px]:px-3 max-[1366px]:py-2 [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <div className="min-w-0">
-              <h2 className="truncate text-base font-semibold text-slate-900">
-                {selectedConversation
-                  ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
-                  : "Conversa"}
-              </h2>
+              <div className="flex min-w-0 items-center gap-2">
+                <h2 className="truncate text-base font-semibold text-slate-900">
+                  {selectedConversation
+                    ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
+                    : "Conversa"}
+                </h2>
+                {selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getLeadTemperatureClass(selectedConversation)}`}>
+                    {getLeadTemperatureLabel(selectedConversation)}
+                  </span>
+                ) : null}
+              </div>
               {selectedConversation ? (
                 <p className="mt-0.5 truncate text-sm text-slate-600">
                   {getConversationModeLabel(selectedConversation)}
@@ -3810,6 +3961,28 @@ export default function AppInboxPage() {
               </p>
             ) : null}
           </div>
+
+          {selectedConversation && (selectedContextSummary.length > 0 || selectedLeadTemperature === "quente") ? (
+            <section className="border-b border-black/8 bg-white/50 px-4 py-2 max-[1366px]:px-3 max-[1366px]:py-1.5">
+              {selectedLeadTemperature === "quente" ? (
+                <p className="mb-1.5 inline-flex rounded-full border border-red-300 bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">
+                  ⚠️ Atendimento prioritário
+                </p>
+              ) : null}
+              {selectedContextSummary.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-4">
+                  {selectedContextSummary.map((entry) => (
+                    <div key={entry.label} className="min-w-0 rounded-xl border border-[#dccfbe] bg-white/70 px-2.5 py-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{entry.label}</p>
+                      <p className="truncate font-semibold text-slate-900" title={entry.value}>
+                        {entry.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3 [@media(max-height:760px)]:py-2">
             {!selectedConversationWaId ? (
@@ -4061,6 +4234,25 @@ export default function AppInboxPage() {
               </p>
             ) : (
               <>
+                {selectedSuggestedReply ? (
+                  <section className="border-b border-white/10 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-white">Sugestão de resposta</h3>
+                      <button
+                        type="button"
+                        onClick={handleUseSuggestedReply}
+                        disabled={!canReply}
+                        className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Usar sugestão
+                      </button>
+                    </div>
+                    <p className="mt-3 line-clamp-5 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/5 p-3 text-sm leading-relaxed text-white/85">
+                      {selectedSuggestedReply}
+                    </p>
+                  </section>
+                ) : null}
+
                 <section className="border-b border-white/10 px-4 py-4">
                   <h3 className="text-sm font-semibold text-white">Contato</h3>
                   <div className="mt-3 space-y-2 text-sm text-white/85">

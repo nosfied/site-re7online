@@ -61,6 +61,8 @@ type AppConversationOperationalPayload = {
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
   isUnassigned: boolean;
+  flowContext?: Record<string, string | number | boolean | null>;
+  flowTags?: string[];
 };
 
 export type AppDashboardQueueItem = {
@@ -1197,6 +1199,18 @@ export async function createAppLeadNote(
   return requestAppJson(session, `/app/lead/${encodeURIComponent(leadId)}/notes`, {
     method: "POST",
     body: JSON.stringify({ body }),
+  });
+}
+
+export function logAppInboxEvent(
+  session: AppSession,
+  event: "inbox.priority.rendered" | "inbox.sorted" | "inbox.suggestion.used",
+  payload: Record<string, unknown>
+) {
+  return requestAppJson<{ ok: true }>(session, "/app/inbox/events", {
+    method: "POST",
+    body: JSON.stringify({ event, payload }),
+    timeoutMs: 3000,
   });
 }
 
