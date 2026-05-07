@@ -6,6 +6,7 @@ import {
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
+  validateOrchestratorOutput,
 } from "./controlledAssistant.js";
 import { AgentBrain } from "./agent.types.js";
 import { ConversationState } from "../conversation/conversation.types.js";
@@ -111,8 +112,80 @@ test("generateControlledAssistantReply sanitizes context and appends required su
 
   assert.equal(result.ok, true);
   assert.match(result.ok ? result.text : "", /Se quiser, posso te orientar melhor conforme sua situação\./);
+  assert.equal(result.ok ? result.output.stage : null, "triage");
+  assert.equal(result.ok ? result.output.next_action : null, "answer");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].businessContext?.includes("cpf"), false);
+});
+
+test("generateControlledAssistantReply accepts structured orchestrator output", async () => {
+  const brain: AgentBrain = {
+    async generateReply() {
+      return {
+        text: JSON.stringify({
+          reply: "BPC/LOAS é um benefício assistencial explicado de forma geral.",
+          stage: "qualification",
+          goal: "discover_service",
+          confidence: 0.82,
+          missing_information: ["tipo_de_beneficio"],
+          next_action: "ask_question",
+          next_question: "Você quer entender requisitos ou próximos passos?",
+          handoff_recommended: false,
+          lead_temp: "morno",
+          priority: "media",
+        }),
+        source: "ai",
+        model: "test-model",
+      };
+    },
+  };
+
+  const result = await generateControlledAssistantReply({
+    brain,
+    text: "O que é BPC?",
+    tenant: {
+      name: "Justa",
+      defaultLanguage: "pt_BR",
+      aiBusinessContext: "Direito previdenciario.",
+    },
+    state: baseState,
+    nowIso: "2026-05-07T10:00:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ok ? result.output.stage : null, "qualification");
+  assert.equal(result.ok ? result.output.next_action : null, "ask_question");
+  assert.deepEqual(result.ok ? result.output.missing_information : [], ["tipo_de_beneficio"]);
+});
+
+test("validateOrchestratorOutput rejects invalid schema", () => {
+  assert.equal(
+    validateOrchestratorOutput({
+      reply: "Resposta segura.",
+      stage: "unknown",
+      confidence: 0.7,
+      next_action: "answer",
+    }).ok,
+    false
+  );
+  assert.equal(
+    validateOrchestratorOutput({
+      reply: "Resposta segura.",
+      stage: "triage",
+      confidence: 1.2,
+      next_action: "answer",
+    }).ok,
+    false
+  );
+  assert.equal(
+    validateOrchestratorOutput({
+      reply: "Resposta segura.",
+      stage: "triage",
+      confidence: 0.7,
+      next_action: "execute_transfer",
+    }).ok,
+    false
+  );
 });
 
 test("generateControlledAssistantReply does not call brain for complex questions", async () => {

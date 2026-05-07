@@ -4338,8 +4338,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       };
       try {
         if (assistantState.lastMessageId === message.messageId) {
+          await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "duplicate_message" });
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "duplicate_message" });
         } else if (!isWindowOpen(updatedConversation, Date.now())) {
+          await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "window_closed" });
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
           const isSimple = isSimpleQuestion(message.text, assistantQuestionOptions);
@@ -4348,8 +4350,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
           if (!isSimple && !risk) {
+            await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "not_simple_question" });
             await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
           } else if (risk) {
+            await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "guardrail_risk" });
             const flowContext = updatedConversation.answers?.flowContext ?? {};
             await logAiAssistantEvent("ai.guardrail.detected", {
               risk,
@@ -4381,11 +4385,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               countConsumed: false,
             });
           } else if (assistantState.count >= maxReplies) {
+            await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "assistant_limit_reached" });
             await logAiAssistantEvent("ai.assistant.limit_reached", {
               count: assistantState.count,
               maxReplies,
             });
           } else {
+            await logAiAssistantEvent("ai.orchestrator.invoked", {
+              count: assistantState.count,
+              maxReplies,
+            });
             await logAiAssistantEvent("ai.assistant.invoked", {
               count: assistantState.count,
               maxReplies,
@@ -4407,6 +4416,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             if (aiReply.ok) {
               replyText = aiReply.text;
               aiAssistantResponded = true;
+              await logAiAssistantEvent("ai.orchestrator.validated", {
+                stage: aiReply.output.stage,
+                goal: aiReply.output.goal,
+                nextAction: aiReply.output.next_action,
+                confidence: aiReply.output.confidence,
+                handoffRecommended: aiReply.output.handoff_recommended,
+              });
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -4416,8 +4432,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastRespondedAt: new Date().toISOString(),
                     lastMessageId: message.messageId,
                   },
+                  aiOrchestrator: {
+                    stage: aiReply.output.stage,
+                    goal: aiReply.output.goal,
+                    missingInformation: aiReply.output.missing_information,
+                    lastAction: aiReply.output.next_action,
+                    lastConfidence: aiReply.output.confidence,
+                    handoffRecommended: aiReply.output.handoff_recommended,
+                    lastMessageId: message.messageId,
+                  },
                 },
               };
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                stage: aiReply.output.stage,
+                goal: aiReply.output.goal,
+                nextAction: aiReply.output.next_action,
+                confidence: aiReply.output.confidence,
+                handoffRecommended: aiReply.output.handoff_recommended,
+              });
               await logAiAssistantEvent("ai.assistant.responded", {
                 model: aiReply.model ?? null,
                 latency_ms: Date.now() - start,
@@ -4425,6 +4457,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 maxReplies,
               });
             } else {
+              await logAiAssistantEvent("ai.orchestrator.rejected", { reason: aiReply.reason });
               await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
             }
           }

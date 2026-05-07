@@ -6,6 +6,42 @@ export type ConversationOperationalStatus =
   | "WAITING_USER"
   | "CLOSED";
 
+export type ConversationStage =
+  | "greeting"
+  | "triage"
+  | "qualification"
+  | "clarification"
+  | "waiting_user"
+  | "handoff_recommended"
+  | "handoff_active"
+  | "closed";
+
+export type ConversationGoal =
+  | "identify_need"
+  | "explain_general_topic"
+  | "discover_service"
+  | "discover_urgency"
+  | "collect_safe_context"
+  | "recommend_handoff";
+
+export type OrchestratorNextAction =
+  | "answer"
+  | "ask_question"
+  | "handoff_recommend"
+  | "handoff_force"
+  | "fallback_menu"
+  | "no_reply";
+
+export type AIOrchestratorState = {
+  stage?: ConversationStage;
+  goal?: ConversationGoal | string | null;
+  missingInformation?: string[];
+  lastAction?: OrchestratorNextAction;
+  lastConfidence?: number;
+  handoffRecommended?: boolean;
+  lastMessageId?: string | null;
+};
+
 export type HandoffState = {
   status: "none" | "pending" | "active";
   requestedAt?: string;
@@ -39,6 +75,7 @@ export type QuoteSiteAnswers = {
     lastRespondedAt?: string | null;
     lastMessageId?: string | null;
   };
+  aiOrchestrator?: AIOrchestratorState;
 };
 
 export type ConversationState = {

@@ -1,5 +1,11 @@
 import { TenantConfig } from "../config/tenantConfig.js";
-import { ConversationState, FlowContext } from "../conversation/conversation.types.js";
+import {
+  ConversationGoal,
+  ConversationStage,
+  ConversationState,
+  FlowContext,
+  OrchestratorNextAction,
+} from "../conversation/conversation.types.js";
 import { AgentBrain } from "./agent.types.js";
 
 export type ControlledAssistantInput = {
@@ -19,7 +25,13 @@ export type ControlledAssistantInput = {
 };
 
 export type ControlledAssistantResult =
-  | { ok: true; text: string; model?: string; usage?: unknown }
+  | {
+      ok: true;
+      text: string;
+      output: ValidatedOrchestratorOutput;
+      model?: string;
+      usage?: unknown;
+    }
   | { ok: false; reason: string };
 
 export type GuardrailRisk =
@@ -36,6 +48,35 @@ export type AssistantTenantContext = {
   defaultLanguage?: string | null;
   flowContext?: FlowContext;
   flowTags?: string[];
+};
+
+export type OrchestratorLeadTemp = "quente" | "morno" | "frio";
+export type OrchestratorPriority = "alta" | "media" | "baixa";
+
+export type RawOrchestratorOutput = {
+  reply?: unknown;
+  stage?: unknown;
+  goal?: unknown;
+  confidence?: unknown;
+  missing_information?: unknown;
+  next_action?: unknown;
+  next_question?: unknown;
+  handoff_recommended?: unknown;
+  lead_temp?: unknown;
+  priority?: unknown;
+};
+
+export type ValidatedOrchestratorOutput = {
+  reply: string;
+  stage: ConversationStage;
+  goal: ConversationGoal | string | null;
+  confidence: number;
+  missing_information: string[];
+  next_action: OrchestratorNextAction;
+  next_question: string | null;
+  handoff_recommended: boolean;
+  lead_temp: OrchestratorLeadTemp | null;
+  priority: OrchestratorPriority | null;
 };
 
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
@@ -100,6 +141,37 @@ const SAFE_CONTEXT_KEYS = [
 
 const REQUIRED_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
 export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
+export const ORCHESTRATOR_MAX_REPLY_CHARS = 700;
+export const ORCHESTRATOR_MAX_LIST_ITEMS = 8;
+
+const CONVERSATION_STAGE_ALLOWLIST: readonly ConversationStage[] = [
+  "greeting",
+  "triage",
+  "qualification",
+  "clarification",
+  "waiting_user",
+  "handoff_recommended",
+  "handoff_active",
+  "closed",
+];
+
+const ORCHESTRATOR_NEXT_ACTION_ALLOWLIST: readonly OrchestratorNextAction[] = [
+  "answer",
+  "ask_question",
+  "handoff_recommend",
+  "handoff_force",
+  "fallback_menu",
+  "no_reply",
+];
+
+const ORCHESTRATOR_GOAL_ALLOWLIST: readonly ConversationGoal[] = [
+  "identify_need",
+  "explain_general_topic",
+  "discover_service",
+  "discover_urgency",
+  "collect_safe_context",
+  "recommend_handoff",
+];
 
 type SimpleQuestionOptions = {
   allowedTopics?: string[] | null;
@@ -356,6 +428,8 @@ function buildBusinessContext(params: ControlledAssistantInput) {
       : null,
     `Contexto categórico: ${JSON.stringify(context)}`,
     "Regras: responda apenas dúvidas gerais e educativas. Não dê parecer jurídico, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
+    "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
+    "Nesta fase, next_action é apenas informativo. Use preferencialmente next_action=\"answer\" para dúvidas gerais.",
     `Finalize exatamente com: ${REQUIRED_SUFFIX}`,
   ]
     .filter(Boolean)
@@ -378,6 +452,109 @@ function sanitizeReply(text: string) {
   }
   const withoutSuffix = trimmed.replace(REQUIRED_SUFFIX, "").trim();
   return `${withoutSuffix.slice(0, 620)}\n\n${REQUIRED_SUFFIX}`.trim();
+}
+
+function sanitizeShortString(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => sanitizeShortString(item, 80))
+    .filter((item): item is string => Boolean(item))
+    .slice(0, ORCHESTRATOR_MAX_LIST_ITEMS);
+}
+
+function parseMaybeJsonObject(text: string): RawOrchestratorOutput | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as RawOrchestratorOutput)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function validateOrchestratorOutput(
+  raw: RawOrchestratorOutput,
+  fallbackReply?: string
+): { ok: true; output: ValidatedOrchestratorOutput } | { ok: false; reason: string } {
+  const reply = sanitizeReply(
+    sanitizeShortString(raw.reply, ORCHESTRATOR_MAX_REPLY_CHARS) ?? fallbackReply ?? ""
+  );
+  if (!reply) return { ok: false, reason: "invalid_reply" };
+
+  const stage =
+    typeof raw.stage === "string" &&
+    CONVERSATION_STAGE_ALLOWLIST.includes(raw.stage as ConversationStage)
+      ? (raw.stage as ConversationStage)
+      : null;
+  if (!stage) return { ok: false, reason: "invalid_stage" };
+
+  const nextAction =
+    typeof raw.next_action === "string" &&
+    ORCHESTRATOR_NEXT_ACTION_ALLOWLIST.includes(raw.next_action as OrchestratorNextAction)
+      ? (raw.next_action as OrchestratorNextAction)
+      : null;
+  if (!nextAction) return { ok: false, reason: "invalid_next_action" };
+
+  const confidence = typeof raw.confidence === "number" ? raw.confidence : Number.NaN;
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+    return { ok: false, reason: "invalid_confidence" };
+  }
+
+  const goal =
+    typeof raw.goal === "string" && raw.goal.trim()
+      ? ORCHESTRATOR_GOAL_ALLOWLIST.includes(raw.goal as ConversationGoal)
+        ? (raw.goal as ConversationGoal)
+        : raw.goal.trim().slice(0, 60)
+      : null;
+  const leadTemp =
+    raw.lead_temp === "quente" || raw.lead_temp === "morno" || raw.lead_temp === "frio"
+      ? raw.lead_temp
+      : null;
+  const priority =
+    raw.priority === "alta" || raw.priority === "media" || raw.priority === "baixa"
+      ? raw.priority
+      : null;
+
+  return {
+    ok: true,
+    output: {
+      reply,
+      stage,
+      goal,
+      confidence,
+      missing_information: normalizeStringList(raw.missing_information),
+      next_action: nextAction,
+      next_question: sanitizeShortString(raw.next_question, 180),
+      handoff_recommended: raw.handoff_recommended === true,
+      lead_temp: leadTemp,
+      priority,
+    },
+  };
+}
+
+function buildLegacyOrchestratorOutput(reply: string): RawOrchestratorOutput {
+  return {
+    reply,
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.7,
+    missing_information: [],
+    next_action: "answer",
+    next_question: null,
+    handoff_recommended: false,
+    lead_temp: null,
+    priority: null,
+  };
 }
 
 export async function generateControlledAssistantReply(
@@ -404,9 +581,19 @@ export async function generateControlledAssistantReply(
       answers: sanitizeFlowContext(input.state.answers?.flowContext),
     },
   });
-  const text = sanitizeReply(aiReply.text);
-  if (!text) {
-    return { ok: false, reason: "empty_or_unsafe_reply" };
+  const parsedOutput = parseMaybeJsonObject(aiReply.text);
+  const validation = validateOrchestratorOutput(
+    parsedOutput ?? buildLegacyOrchestratorOutput(aiReply.text),
+    aiReply.text
+  );
+  if (!validation.ok) {
+    return { ok: false, reason: validation.reason };
   }
-  return { ok: true, text, model: aiReply.model, usage: aiReply.usage };
+  return {
+    ok: true,
+    text: validation.output.reply,
+    output: validation.output,
+    model: aiReply.model,
+    usage: aiReply.usage,
+  };
 }
