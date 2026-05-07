@@ -171,6 +171,15 @@ export type AppAutomationSettings = {
   aiAssistantMaxReplies?: number;
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
   aiAssistantFallbackToHandoff?: boolean;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
+  aiAssistantGlobalSafety?: {
+    questionStarters: string[];
+    topicTerms: string[];
+    blockedTerms: string[];
+    maxInputChars: number;
+    personalDataBlocked: boolean;
+  };
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;

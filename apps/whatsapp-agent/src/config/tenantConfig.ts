@@ -67,6 +67,8 @@ export type TenantConfig = {
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
   aiAssistantSystemPrompt?: string;
   aiAssistantFallbackToHandoff?: boolean;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -177,6 +179,16 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     if (nextTenant.aiAssistantMaxReplies === undefined) {
       nextTenant.aiAssistantMaxReplies = 2;
     }
+    nextTenant.aiAssistantAllowedTopics = Array.isArray(tenant.aiAssistantAllowedTopics)
+      ? tenant.aiAssistantAllowedTopics
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
+    nextTenant.aiAssistantBlockedTerms = Array.isArray(tenant.aiAssistantBlockedTerms)
+      ? tenant.aiAssistantBlockedTerms
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
     }
@@ -385,6 +397,20 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       typeof tenant.aiAssistantFallbackToHandoff !== "boolean"
     ) {
       throw new Error(`invalid_tenant_ai_assistant_fallback_to_handoff:${key}`);
+    }
+    if (
+      tenant.aiAssistantAllowedTopics !== undefined &&
+      (!Array.isArray(tenant.aiAssistantAllowedTopics) ||
+        tenant.aiAssistantAllowedTopics.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_allowed_topics:${key}`);
+    }
+    if (
+      tenant.aiAssistantBlockedTerms !== undefined &&
+      (!Array.isArray(tenant.aiAssistantBlockedTerms) ||
+        tenant.aiAssistantBlockedTerms.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_blocked_terms:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

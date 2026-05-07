@@ -149,6 +149,15 @@ export type AdminAutomationSettings = {
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
   aiAssistantSystemPrompt?: string;
   aiAssistantFallbackToHandoff?: boolean;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
+  aiAssistantGlobalSafety?: {
+    questionStarters: string[];
+    topicTerms: string[];
+    blockedTerms: string[];
+    maxInputChars: number;
+    personalDataBlocked: boolean;
+  };
   aiBusinessContext?: string;
   followUpEnabled?: boolean;
   followUpDelayMinutes?: number;

@@ -4307,6 +4307,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const start = Date.now();
       const assistantState = getAiAssistantState(updatedConversation);
       const maxReplies = Math.max(0, appliedTenantConfig.aiAssistantMaxReplies ?? 2);
+      const assistantQuestionOptions = {
+        allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+        blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
+      };
       try {
         if (assistantState.lastMessageId === message.messageId) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "duplicate_message" });
@@ -4317,11 +4321,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         } else if (!isWindowOpen(updatedConversation, Date.now())) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
-        } else if (!isSimpleQuestion(message.text)) {
+        } else if (!isSimpleQuestion(message.text, assistantQuestionOptions)) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
         } else {
           await logAiAssistantEvent("ai.assistant.invoked", {
-            profile: appliedTenantConfig.aiAssistantProfile ?? "business",
             count: assistantState.count,
             maxReplies,
           });
@@ -4332,8 +4335,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               name: appliedTenantConfig.name,
               defaultLanguage: appliedTenantConfig.defaultLanguage,
               aiBusinessContext,
-              aiAssistantProfile: appliedTenantConfig.aiAssistantProfile,
               aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
+              aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+              aiAssistantBlockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
             },
             state: updatedConversation,
             nowIso: new Date().toISOString(),

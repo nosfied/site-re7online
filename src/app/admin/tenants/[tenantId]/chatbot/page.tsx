@@ -88,6 +88,17 @@ function countOccurrences(text: string, query: string) {
   return total;
 }
 
+function joinTermList(terms: string[] | undefined) {
+  return (terms ?? []).join("\n");
+}
+
+function splitTermList(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
 function selectJsonOccurrence(textareaId: string, text: string, query: string, backwards = false) {
   const textarea = document.getElementById(textareaId);
   if (!(textarea instanceof HTMLTextAreaElement)) return;
@@ -283,9 +294,9 @@ export default function AdminTenantChatbotPage() {
     disableChatbotFlowEditing: false,
     aiAssistantEnabled: false,
     aiAssistantMaxReplies: 2,
-    aiAssistantProfile: "business" as const,
     aiAssistantSystemPrompt: "",
-    aiAssistantFallbackToHandoff: false,
+    aiAssistantAllowedTopics: [],
+    aiAssistantBlockedTerms: [],
     aiBusinessContext: "",
     aiConfigured: false,
     chatbotLocked: false,
@@ -579,45 +590,99 @@ export default function AdminTenantChatbotPage() {
                     className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                   />
                 </label>
+              </div>
+              <details className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 px-3 py-2 text-xs text-white/60">
+                <summary className="cursor-pointer text-re7-sky underline decoration-re7-sky/40 underline-offset-4">
+                  Entender termos globais de segurança
+                </summary>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="font-medium text-white/80">Aberturas aceitas</p>
+                    <p className="mt-1 text-white/55">
+                      A mensagem precisa começar com uma dessas expressões e conter um tema permitido.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(automationDraft.aiAssistantGlobalSafety?.questionStarters ?? []).map((term) => (
+                        <span key={term} className="rounded-full bg-white/10 px-2 py-1 text-[11px] text-white/70">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-3 font-medium text-white/80">Temas globais aceitos</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(automationDraft.aiAssistantGlobalSafety?.topicTerms ?? []).map((term) => (
+                        <span key={term} className="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-100">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium text-white/80">Bloqueios globais fixos</p>
+                    <p className="mt-1 text-white/55">
+                      Sempre bloqueia dados pessoais
+                      {automationDraft.aiAssistantGlobalSafety?.maxInputChars
+                        ? `, mensagens acima de ${automationDraft.aiAssistantGlobalSafety.maxInputChars} caracteres`
+                        : ""}
+                      e os termos abaixo.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(automationDraft.aiAssistantGlobalSafety?.blockedTerms ?? []).map((term) => (
+                        <span key={term} className="rounded-full bg-red-500/15 px-2 py-1 text-[11px] text-red-100">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-white/55">
+                      Os campos abaixo apenas adicionam temas ou bloqueios por tenant. Eles não removem essas travas globais.
+                    </p>
+                  </div>
+                </div>
+              </details>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Perfil
-                  <select
-                    value={automationDraft.aiAssistantProfile ?? "business"}
+                  Temas permitidos para IA
+                  <textarea
+                    value={joinTermList(automationDraft.aiAssistantAllowedTopics)}
                     disabled={automationDraft.aiAssistantLocked}
                     onChange={(event) =>
                       setSettings((current) =>
                         current
                           ? {
                               ...current,
-                              aiAssistantProfile: event.target.value as AdminAutomationSettings["aiAssistantProfile"],
+                              aiAssistantAllowedTopics: splitTermList(event.target.value),
                             }
                           : current
                       )
                     }
-                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  >
-                    <option value="business">Business</option>
-                    <option value="government">Government</option>
-                    <option value="legal_previdenciario">Juridico previdenciario</option>
-                  </select>
-                </label>
-                <label className="flex items-center gap-2 self-end text-xs text-white/70">
-                  <input
-                    type="checkbox"
-                    checked={automationDraft.aiAssistantFallbackToHandoff === true}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantFallbackToHandoff: event.target.checked,
-                            }
-                          : current
-                      )
-                    }
+                    placeholder={"Um termo por linha\nEx.: plano\npedido\nsegunda via"}
+                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                   />
-                  Encaminhar dúvidas complexas futuramente
+                  <span className="text-[11px] text-white/45">
+                    Amplia o vocabulário aceito pelo filtro simples sem remover as travas globais.
+                  </span>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-white/60">
+                  Termos bloqueados adicionais
+                  <textarea
+                    value={joinTermList(automationDraft.aiAssistantBlockedTerms)}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantBlockedTerms: splitTermList(event.target.value),
+                            }
+                          : current
+                      )
+                    }
+                    placeholder={"Um termo por linha\nEx.: orçamento fechado\ncontrato\ncancelamento"}
+                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                  />
+                  <span className="text-[11px] text-white/45">
+                    Bloqueia termos específicos do tenant além das restrições padrão de segurança.
+                  </span>
                 </label>
               </div>
               <textarea

@@ -2,8 +2,6 @@ import { TenantConfig } from "../config/tenantConfig.js";
 import { ConversationState, FlowContext } from "../conversation/conversation.types.js";
 import { AgentBrain } from "./agent.types.js";
 
-export type AiAssistantProfile = "business" | "government" | "legal_previdenciario";
-
 export type ControlledAssistantInput = {
   brain: AgentBrain;
   text: string;
@@ -12,10 +10,10 @@ export type ControlledAssistantInput = {
     | "name"
     | "defaultLanguage"
     | "aiBusinessContext"
-    | "aiAssistantProfile"
     | "aiAssistantSystemPrompt"
+    | "aiAssistantAllowedTopics"
+    | "aiAssistantBlockedTerms"
   >;
-  clientProfile?: string | null;
   state: ConversationState;
   nowIso: string;
 };
@@ -24,7 +22,7 @@ export type ControlledAssistantResult =
   | { ok: true; text: string; model?: string; usage?: unknown }
   | { ok: false; reason: string };
 
-const SIMPLE_QUESTION_STARTERS = [
+export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
   "como",
@@ -38,7 +36,7 @@ const SIMPLE_QUESTION_STARTERS = [
   "explique",
 ];
 
-const SIMPLE_TOPIC_TERMS = [
+export const AI_ASSISTANT_GLOBAL_TOPIC_TERMS = [
   "bpc",
   "loas",
   "aposentadoria",
@@ -53,7 +51,7 @@ const SIMPLE_TOPIC_TERMS = [
   "demora",
 ];
 
-const BLOCKED_TERMS = [
+export const AI_ASSISTANT_GLOBAL_BLOCKED_TERMS = [
   "tenho direito",
   "tenho chance",
   "meu caso",
@@ -85,6 +83,12 @@ const SAFE_CONTEXT_KEYS = [
 ] as const;
 
 const REQUIRED_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
+export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
+
+type SimpleQuestionOptions = {
+  allowedTopics?: string[] | null;
+  blockedTerms?: string[] | null;
+};
 
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "")
@@ -104,19 +108,37 @@ function containsPersonalData(text: string) {
   return false;
 }
 
-export function isSimpleQuestion(text: string | null | undefined) {
+function normalizeTermList(values: string[] | null | undefined) {
+  return (values ?? [])
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 80);
+}
+
+export function isSimpleQuestion(
+  text: string | null | undefined,
+  options: SimpleQuestionOptions = {}
+) {
   const raw = String(text ?? "").trim();
   const normalized = normalizeText(raw);
   if (!normalized) return false;
-  if (raw.length > 220) return false;
+  if (raw.length > AI_ASSISTANT_MAX_INPUT_CHARS) return false;
   if (containsPersonalData(raw)) return false;
-  if (BLOCKED_TERMS.some((term) => normalized.includes(normalizeText(term)))) {
+  const blockedTerms = [
+    ...AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+    ...normalizeTermList(options.blockedTerms),
+  ];
+  if (blockedTerms.some((term) => normalized.includes(normalizeText(term)))) {
     return false;
   }
-  const startsLikeQuestion = SIMPLE_QUESTION_STARTERS.some((term) =>
+  const startsLikeQuestion = AI_ASSISTANT_SIMPLE_QUESTION_STARTERS.some((term) =>
     normalized.startsWith(normalizeText(term))
   );
-  const hasTopic = SIMPLE_TOPIC_TERMS.some((term) => normalized.includes(normalizeText(term)));
+  const topicTerms = [
+    ...AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
+    ...normalizeTermList(options.allowedTopics),
+  ];
+  const hasTopic = topicTerms.some((term) => normalized.includes(normalizeText(term)));
   return startsLikeQuestion && hasTopic;
 }
 
@@ -152,12 +174,10 @@ function sanitizeFlowContext(context: FlowContext | undefined) {
 }
 
 function buildBusinessContext(params: ControlledAssistantInput) {
-  const profile = params.tenant.aiAssistantProfile ?? params.clientProfile ?? "business";
   const context = sanitizeFlowContext(params.state.answers?.flowContext);
   return [
     `Tenant: ${params.tenant.name}`,
     `Idioma: ${params.tenant.defaultLanguage ?? "pt_BR"}`,
-    `Perfil: ${profile}`,
     `Contexto aprovado do tenant: ${params.tenant.aiBusinessContext ?? "nao informado"}`,
     params.tenant.aiAssistantSystemPrompt
       ? `Instrucao adicional aprovada: ${params.tenant.aiAssistantSystemPrompt}`
@@ -191,14 +211,19 @@ function sanitizeReply(text: string) {
 export async function generateControlledAssistantReply(
   input: ControlledAssistantInput
 ): Promise<ControlledAssistantResult> {
-  if (!isSimpleQuestion(input.text)) {
+  if (
+    !isSimpleQuestion(input.text, {
+      allowedTopics: input.tenant.aiAssistantAllowedTopics,
+      blockedTerms: input.tenant.aiAssistantBlockedTerms,
+    })
+  ) {
     return { ok: false, reason: "not_simple_question" };
   }
   const aiReply = await input.brain.generateReply({
     waId: input.state.waId,
     intent: input.state.intent ?? "unknown",
     lastMessages: [],
-    inboundText: input.text.trim().slice(0, 220),
+    inboundText: input.text.trim().slice(0, AI_ASSISTANT_MAX_INPUT_CHARS),
     nowIso: input.nowIso,
     businessContext: buildBusinessContext(input),
     stateSummary: {

@@ -568,6 +568,8 @@ export default function AppChatbotPage() {
     aiAssistantMaxReplies: 2,
     aiAssistantProfile: "business" as const,
     aiAssistantFallbackToHandoff: false,
+    aiAssistantAllowedTopics: [],
+    aiAssistantBlockedTerms: [],
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,

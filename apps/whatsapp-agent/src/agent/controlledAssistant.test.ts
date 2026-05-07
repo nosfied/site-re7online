@@ -36,6 +36,17 @@ test("isSimpleQuestion blocks concrete legal or sensitive questions", () => {
   assert.equal(isSimpleQuestion("Meu CPF é 123.456.789-00, analise meu caso"), false);
 });
 
+test("isSimpleQuestion supports tenant-specific topics and extra blocked terms", () => {
+  assert.equal(isSimpleQuestion("Como funciona o plano?", { allowedTopics: ["plano"] }), true);
+  assert.equal(
+    isSimpleQuestion("Como funciona o plano?", {
+      allowedTopics: ["plano"],
+      blockedTerms: ["plano"],
+    }),
+    false
+  );
+});
+
 test("generateControlledAssistantReply sanitizes context and appends required suffix", async () => {
   const calls: Array<{ businessContext?: string; inboundText: string }> = [];
   const brain: AgentBrain = {
@@ -59,9 +70,7 @@ test("generateControlledAssistantReply sanitizes context and appends required su
       name: "Justa",
       defaultLanguage: "pt_BR",
       aiBusinessContext: "Direito previdenciario.",
-      aiAssistantProfile: "legal_previdenciario",
     },
-    clientProfile: "business",
     state: baseState,
     nowIso: "2026-05-07T10:00:00.000Z",
   });

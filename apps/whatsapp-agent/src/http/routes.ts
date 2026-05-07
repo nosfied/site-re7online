@@ -73,6 +73,12 @@ import {
 } from "../bootstrap/defaultOperationalDepartment.js";
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
+import {
+  AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+  AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
+  AI_ASSISTANT_MAX_INPUT_CHARS,
+  AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
+} from "../agent/controlledAssistant.js";
 import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
 import {
   getInboxReadState,
@@ -2911,6 +2917,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
           aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
           aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiConfigured,
           chatbotLocked,
           flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
@@ -2979,7 +2988,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           !Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled") &&
           !Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies") &&
           !Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff") &&
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics") &&
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")
         ) {
         json(
           res,
@@ -3105,6 +3116,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
       }
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics")) {
+        const terms = normalizeAiAssistantTermList(data.aiAssistantAllowedTopics);
+        if (!terms) {
+          json(res, 400, httpError("bad_request", "aiAssistantAllowedTopics must be an array of strings"));
+          return;
+        }
+        aiAssistantPatch.aiAssistantAllowedTopics = terms;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
+        const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
+        if (!terms) {
+          json(res, 400, httpError("bad_request", "aiAssistantBlockedTerms must be an array of strings"));
+          return;
+        }
+        aiAssistantPatch.aiAssistantBlockedTerms = terms;
+      }
 
       const saved = await saveTenantPatch(client.clientKey, {
         ...(payload.disableChatbot !== undefined
@@ -3139,6 +3166,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
           aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
           aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
           chatbotLocked: Boolean(saved.tenant.disableChatbot),
           flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
@@ -6601,6 +6631,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
             aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+            aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
             chatbotLocked: false,
@@ -6763,6 +6796,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim() || undefined;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantAllowedTopics);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantAllowedTopics must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantAllowedTopics = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantBlockedTerms must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantBlockedTerms = terms;
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
           if (typeof data.aiBusinessContext !== "string") {
             json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
@@ -6851,6 +6900,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
             aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+            aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
             chatbotLocked: false,
@@ -11017,6 +11069,26 @@ function getRequestedClientKey(req: IncomingMessage, query: Record<string, strin
   return queryClientKey || null;
 }
 
+function normalizeAiAssistantTermList(input: unknown) {
+  if (!Array.isArray(input)) return null;
+  if (input.some((term) => typeof term !== "string")) return null;
+  const terms = input
+    .map((term) => term.trim())
+    .filter((term): term is string => Boolean(term))
+    .slice(0, 80);
+  return [...new Set(terms)];
+}
+
+function getAiAssistantGlobalSafetyConfig() {
+  return {
+    questionStarters: AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
+    topicTerms: AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
+    blockedTerms: AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+    maxInputChars: AI_ASSISTANT_MAX_INPUT_CHARS,
+    personalDataBlocked: true,
+  };
+}
+
 function diffTenantFields(
   previousTenant: Record<string, unknown> | undefined,
   nextTenant: Record<string, unknown>
@@ -11104,6 +11176,8 @@ function diffTenantFields(
   compareField("aiAssistantProfile");
   compareField("aiAssistantSystemPrompt");
   compareField("aiAssistantFallbackToHandoff");
+  compareField("aiAssistantAllowedTopics");
+  compareField("aiAssistantBlockedTerms");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
