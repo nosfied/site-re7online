@@ -110,15 +110,6 @@ function getFlowContextValue(
   return text || null;
 }
 
-function formatFlowContextValue(value: string | null) {
-  if (!value) return null;
-  return value
-    .replace(/_/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function getLeadTemperature(item: Pick<InboxConversationItem, "flowContext"> | null) {
   const value = getFlowContextValue(item, "lead_temp")?.toLowerCase() ?? "";
   if (value === "quente" || value === "morno" || value === "frio") return value;
@@ -147,21 +138,6 @@ function getLeadTemperatureClass(item: Pick<InboxConversationItem, "flowContext"
   if (temperature === "morno") return "border-amber-300 bg-amber-100 text-amber-800";
   if (temperature === "frio") return "border-slate-300 bg-slate-100 text-slate-700";
   return "border-slate-300 bg-slate-100 text-slate-600";
-}
-
-function buildConversationContextSummary(item: Pick<InboxConversationItem, "flowContext"> | null) {
-  if (!item?.flowContext) return [];
-  return [
-    { label: "Área", value: formatFlowContextValue(getFlowContextValue(item, "area")) },
-    { label: "Serviço", value: formatFlowContextValue(getFlowContextValue(item, "servico")) },
-    { label: "Situação", value: formatFlowContextValue(getFlowContextValue(item, "situacao")) },
-    {
-      label: "Prioridade",
-      value:
-        formatFlowContextValue(getFlowContextValue(item, "prioridade")) ??
-        getLeadTemperatureLabel(item),
-    },
-  ].filter((entry): entry is { label: string; value: string } => Boolean(entry.value));
 }
 
 function extractSuggestedReply(notes: LeadNoteItem[]) {
@@ -2698,11 +2674,6 @@ export default function AppInboxPage() {
       status: selectedConversation.leadStatus as LeadStatus | null,
     };
   }, [selectedConversation]);
-  const selectedContextSummary = useMemo(
-    () => buildConversationContextSummary(selectedConversation),
-    [selectedConversation]
-  );
-  const selectedLeadTemperature = getLeadTemperature(selectedConversation);
   const selectedSuggestedReply = useMemo(() => extractSuggestedReply(leadNotes), [leadNotes]);
 
   useEffect(() => {
@@ -4031,24 +4002,6 @@ export default function AppInboxPage() {
               </p>
             ) : null}
           </div>
-
-          {isBusinessTenant && selectedConversation && (selectedContextSummary.length > 0 || selectedLeadTemperature === "quente") ? (
-            <section className="border-b border-black/8 bg-white/50 px-4 py-1.5 max-[1366px]:px-3 max-[1366px]:py-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700">
-              {selectedLeadTemperature === "quente" ? (
-                <span className="inline-flex shrink-0 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
-                  ⚠️ Atendimento prioritário
-                </span>
-              ) : null}
-                {selectedContextSummary.map((entry) => (
-                  <span key={entry.label} className="min-w-0 truncate" title={`${entry.label}: ${entry.value}`}>
-                    <span className="font-semibold text-slate-500">{entry.label}:</span>{" "}
-                    <span className="font-semibold text-slate-900">{entry.value}</span>
-                  </span>
-                ))}
-              </div>
-            </section>
-          ) : null}
 
           <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3 [@media(max-height:760px)]:py-2">
             {!selectedConversationWaId ? (
