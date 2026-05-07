@@ -4744,7 +4744,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const status = String(body.status ?? "").trim().toUpperCase();
-      const allowed = new Set(["NEW", "QUALIFIED", "WAITING_ATTENDANT", "IN_ATTENDANCE", "CLOSED"]);
+      const allowed = new Set([
+        "NEW",
+        "QUALIFIED",
+        "WAITING_ATTENDANT",
+        "IN_ATTENDANCE",
+        "CLOSED",
+        "OPEN",
+        "WON",
+        "LOST",
+        "FOLLOW_UP",
+        "NO_RESPONSE",
+        "NURTURE",
+      ]);
       if (!allowed.has(status)) {
         json(res, 400, { error: "bad_request" });
         return;

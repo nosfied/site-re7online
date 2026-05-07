@@ -61,11 +61,13 @@ import {
 } from "@/lib/whatsappAdminApi";
 
 const LEAD_STATUS_OPTIONS: LeadStatus[] = [
-  "NEW",
   "QUALIFIED",
-  "WAITING_ATTENDANT",
-  "IN_ATTENDANCE",
-  "CLOSED",
+  "OPEN",
+  "FOLLOW_UP",
+  "WON",
+  "LOST",
+  "NO_RESPONSE",
+  "NURTURE",
 ];
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
@@ -89,6 +91,18 @@ function getLeadStatusLabel(status?: string | null) {
       return "Novo";
     case "QUALIFIED":
       return "Qualificado";
+    case "OPEN":
+      return "Em aberto";
+    case "WON":
+      return "Fechado";
+    case "LOST":
+      return "Não fechado";
+    case "FOLLOW_UP":
+      return "Follow-up";
+    case "NO_RESPONSE":
+      return "Sem resposta";
+    case "NURTURE":
+      return "Nutrir";
     case "WAITING_ATTENDANT":
       return "Aguardando atendimento";
     case "IN_ATTENDANCE":
@@ -4255,27 +4269,25 @@ export default function AppInboxPage() {
               <>
                 {selectedSuggestedReply ? (
                   <section className="border-b border-white/10 px-3 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-white/80">Sugestão</p>
+                    <div className="group relative inline-flex">
                       <button
                         type="button"
                         onClick={handleUseSuggestedReply}
                         disabled={!canReply}
                         className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Usar sugestão
+                        Usar sugestão de resposta
                       </button>
+                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-72 rounded-xl border border-white/15 bg-[#101f3a] p-3 text-xs leading-relaxed text-white/90 shadow-xl group-hover:block">
+                        <p className="line-clamp-6 whitespace-pre-wrap">{selectedSuggestedReply}</p>
+                      </div>
                     </div>
-                    <p className="mt-2 line-clamp-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/5 p-2.5 text-xs leading-relaxed text-white/85">
-                      {selectedSuggestedReply}
-                    </p>
                   </section>
                 ) : null}
 
                 <section className="border-b border-white/10 px-3 py-3">
                   <div className="space-y-2 text-sm text-white/85">
-                    <label className="grid gap-1">
-                      <span className="text-white/55">Nome</span>
+                    <label className="grid">
                       <input
                         className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
                         value={leadNameDraft}
@@ -4291,8 +4303,7 @@ export default function AppInboxPage() {
                         disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
                       />
                     </label>
-                    <label className="grid gap-1">
-                      <span className="text-white/55">Email</span>
+                    <label className="grid">
                       <input
                         className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
                         value={leadEmailDraft}
@@ -4302,8 +4313,7 @@ export default function AppInboxPage() {
                         disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
                       />
                     </label>
-                    <label className="grid gap-1">
-                      <span className="text-white/55">Empresa</span>
+                    <label className="grid">
                       <input
                         className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
                         value={leadCompanyDraft}
@@ -4313,9 +4323,7 @@ export default function AppInboxPage() {
                         disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
                       />
                     </label>
-                    <p className="truncate text-xs text-white/60">
-                      {savingLeadName ? "Salvando..." : selectedLead.phone || selectedConversation?.waId || "-"}
-                    </p>
+                    {savingLeadName ? <p className="truncate text-xs text-white/60">Salvando...</p> : null}
                   </div>
                 </section>
 
@@ -4328,7 +4336,7 @@ export default function AppInboxPage() {
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadStatus}
                     >
                       <option value="" disabled>
-                        Selecione
+                        Situação do negócio
                       </option>
                       {LEAD_STATUS_OPTIONS.map((status) => (
                         <option key={status} value={status}>
@@ -4353,7 +4361,7 @@ export default function AppInboxPage() {
                       type="button"
                       disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
                       onClick={handleAddLeadNote}
-                      className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl bg-re7-orange px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {savingLeadNote ? "Salvando..." : "Add nota"}
                     </button>

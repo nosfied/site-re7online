@@ -186,7 +186,13 @@ export type LeadStatus =
   | "QUALIFIED"
   | "WAITING_ATTENDANT"
   | "IN_ATTENDANCE"
-  | "CLOSED";
+  | "CLOSED"
+  | "OPEN"
+  | "WON"
+  | "LOST"
+  | "FOLLOW_UP"
+  | "NO_RESPONSE"
+  | "NURTURE";
 
 export type LeadNoteItem = {
   id: string;
