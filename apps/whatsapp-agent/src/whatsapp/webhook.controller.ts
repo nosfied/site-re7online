@@ -3365,22 +3365,32 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             updatedConversation.intent !== "handoff" &&
             updatedConversation.mode !== "HUMAN" &&
             updatedConversation.handoff.status === "none" &&
-            isWindowOpen(updatedConversation, Date.now()) &&
-            isSimpleQuestion(message.text, {
+            isWindowOpen(updatedConversation, Date.now())
+          ) {
+            const preMenuRisk = classifyRisk(message.text, {
+              tenantName: appliedTenantConfig.name,
+              aiBusinessContext: appliedTenantConfig.aiBusinessContext,
+              defaultLanguage: appliedTenantConfig.defaultLanguage,
+              flowContext: updatedConversation.answers?.flowContext,
+              flowTags: updatedConversation.answers?.flowTags,
+            });
+            const preMenuSimpleQuestion = isSimpleQuestion(message.text, {
               allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
               blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
-            })
-          ) {
-            shouldDeferInitialMenuToAssistant = true;
-            logger.info({
-              event: "chatbot.initial_menu.deferred_to_ai",
-              clientId: tenantClientId,
-              clientKey: tenantClientKey,
-              flowId: chatbotFlow.id,
-              waId: maskNumber(normalizedFrom),
-              reason: "simple_question_before_initial_menu",
-              requestId: meta?.requestId,
             });
+            if (preMenuRisk || preMenuSimpleQuestion) {
+              shouldDeferInitialMenuToAssistant = true;
+              logger.info({
+                event: "chatbot.initial_menu.deferred_to_ai",
+                clientId: tenantClientId,
+                clientKey: tenantClientKey,
+                flowId: chatbotFlow.id,
+                waId: maskNumber(normalizedFrom),
+                reason: preMenuRisk ? "guardrail_before_initial_menu" : "simple_question_before_initial_menu",
+                risk: preMenuRisk,
+                requestId: meta?.requestId,
+              });
+            }
           }
 
           if (!shouldDeferInitialMenuToAssistant) {
