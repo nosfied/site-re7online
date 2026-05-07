@@ -1420,7 +1420,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         ? null
         : state.closedAt ?? currentState?.closedAt ?? null,
     };
-    const nextState =
+    const nextStateCandidate =
       currentState?.mode === "HUMAN" && state.mode !== "HUMAN"
         ? {
             ...baseState,
@@ -1430,6 +1430,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             assignedAt: currentState.assignedAt ?? null,
           }
         : baseState;
+    const nextState = {
+      ...nextStateCandidate,
+      status:
+        nextStateCandidate.assignedUserId && nextStateCandidate.status === "WAITING"
+          ? "IN_PROGRESS"
+          : nextStateCandidate.status,
+    };
     await storage.upsertConversation(nextState);
     if (departmentChanged && resolvedDepartmentId) {
       logger.info({

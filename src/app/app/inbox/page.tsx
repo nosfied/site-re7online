@@ -649,22 +649,24 @@ function getConversationActivityTimestamp(item: InboxConversationItem) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function sortConversationsByRecent(items: InboxConversationItem[]) {
+function sortConversationsByRecent(items: InboxConversationItem[], prioritizeLeads = false) {
   return [...items].sort((a, b) => {
-    const priorityDiff = getLeadTemperatureScore(b) - getLeadTemperatureScore(a);
-    if (priorityDiff !== 0) return priorityDiff;
+    if (prioritizeLeads) {
+      const priorityDiff = getLeadTemperatureScore(b) - getLeadTemperatureScore(a);
+      if (priorityDiff !== 0) return priorityDiff;
+    }
     const aTs = getConversationActivityTimestamp(a);
     const bTs = getConversationActivityTimestamp(b);
     if (aTs === null && bTs === null) return 0;
     if (aTs === null) return 1;
     if (bTs === null) return -1;
-    return aTs - bTs;
+    return prioritizeLeads ? aTs - bTs : bTs - aTs;
   });
 }
 
-function dedupeConversationsByIdentity(items: InboxConversationItem[]) {
+function dedupeConversationsByIdentity(items: InboxConversationItem[], prioritizeLeads = false) {
   const byIdentity = new Map<string, InboxConversationItem>();
-  for (const item of sortConversationsByRecent(items)) {
+  for (const item of sortConversationsByRecent(items, prioritizeLeads)) {
     const identity = getConversationIdentity(item);
     if (!byIdentity.has(identity)) {
       byIdentity.set(identity, item);
@@ -686,12 +688,13 @@ function dedupeConversationsByIdentity(items: InboxConversationItem[]) {
       });
     }
   }
-  return sortConversationsByRecent(Array.from(byIdentity.values()));
+  return sortConversationsByRecent(Array.from(byIdentity.values()), prioritizeLeads);
 }
 
 function mergeConversationsPreservingStableOrder(
   current: InboxConversationItem[],
-  incoming: InboxConversationItem[]
+  incoming: InboxConversationItem[],
+  prioritizeLeads = false
 ) {
   if (current.length === 0) return incoming;
   const currentIndexByIdentity = new Map<string, number>();
@@ -712,7 +715,7 @@ function mergeConversationsPreservingStableOrder(
 
   // Keep unchanged conversations stable, but promote conversations with newer activity.
   // A support inbox must reflect the operational queue without requiring a page refresh.
-  return sortConversationsByRecent(merged);
+  return sortConversationsByRecent(merged, prioritizeLeads);
 }
 
 function updateConversationInPlace(
@@ -1025,13 +1028,16 @@ function applyConversationOperationalPayload(
     flowTags?: string[];
   }
 ) {
+  const nextAssignedUserId = payload.assignedUserId;
+  const nextStatus =
+    nextAssignedUserId && payload.status === "WAITING" ? ("IN_PROGRESS" as const) : payload.status;
   return {
     ...item,
     waId: payload.waId ?? item.waId,
     waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
     mode: payload.mode,
     handoffStatus: payload.handoffStatus ?? item.handoffStatus ?? "none",
-    assignedUserId: payload.assignedUserId,
+    assignedUserId: nextAssignedUserId,
     assignedTo: payload.assignedTo,
     assignedUserName: payload.assignedUserName,
     assignedAt: payload.assignedAt,
@@ -1039,7 +1045,7 @@ function applyConversationOperationalPayload(
     departmentName: payload.departmentName,
     queueId: payload.queueId,
     queueName: payload.queueName,
-    status: payload.status,
+    status: nextStatus,
     closedAt: payload.closedAt,
     lastInboundAt: payload.lastInboundAt,
     lastOutboundAt: payload.lastOutboundAt,
@@ -1050,6 +1056,7 @@ function applyConversationOperationalPayload(
 }
 
 function getConversationOperationalStatus(item: Pick<InboxConversationItem, "status" | "mode" | "assignedUserId">) {
+  if (item.assignedUserId && item.status === "WAITING") return "IN_PROGRESS";
   if (item.status) return item.status;
   if (item.mode === "HUMAN") {
     return item.assignedUserId ? "IN_PROGRESS" : "WAITING";
@@ -1140,6 +1147,10 @@ function isAppAdmin(session: AppSession | null) {
   return session?.user.role === "ADMIN";
 }
 
+function isBusinessSession(session: AppSession | null) {
+  return session?.profile !== "government";
+}
+
 function canSessionAccessConversationDepartment(
   session: AppSession | null,
   departmentId?: string | null
@@ -1176,6 +1187,8 @@ export default function AppInboxPage() {
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
   const [leadNameDraft, setLeadNameDraft] = useState("");
+  const [leadEmailDraft, setLeadEmailDraft] = useState("");
+  const [leadCompanyDraft, setLeadCompanyDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [conversationNextCursor, setConversationNextCursor] = useState<string | null>(null);
@@ -1220,6 +1233,7 @@ export default function AppInboxPage() {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [pauseErrorToast, setPauseErrorToast] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
+  const isBusinessTenant = isBusinessSession(session);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -1697,20 +1711,23 @@ export default function AppInboxPage() {
           matchedConversationKeys.add(itemKey);
           matchedConversationKeys.add(item.waId);
           if (item.waIdCanonical) matchedConversationKeys.add(item.waIdCanonical);
+          const nextAssignedUserId =
+            event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
             mode: event.mode,
             handoffStatus: event.handoffStatus,
+            assignedUserId: nextAssignedUserId ?? null,
             departmentId: event.departmentId ?? item.departmentId ?? null,
-            status: "WAITING" as const,
+            status: nextAssignedUserId ? ("IN_PROGRESS" as const) : ("WAITING" as const),
             closedAt: null,
           };
         });
         if (!matchedConversation) {
           void refreshConversationListRef.current?.(session);
         }
-        return dedupeConversationsByIdentity(nextItems);
+        return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
       });
       if (
         eventTargetsCurrentUser &&
@@ -1745,10 +1762,16 @@ export default function AppInboxPage() {
             return item;
           }
           matchedConversation = true;
+          const nextAssignedUserId =
+            event.assignedUserId !== undefined ? event.assignedUserId : item.assignedUserId;
           return {
             ...item,
             waIdCanonical: item.waIdCanonical ?? event.waIdCanonical ?? null,
+            mode: event.mode ?? item.mode,
+            handoffStatus: event.handoffStatus ?? item.handoffStatus,
+            assignedUserId: nextAssignedUserId,
             departmentId: event.departmentId ?? item.departmentId ?? null,
+            status: nextAssignedUserId ? ("IN_PROGRESS" as const) : item.status,
             lastMessage: {
               direction: message.direction,
               type: message.type,
@@ -1764,7 +1787,7 @@ export default function AppInboxPage() {
       if (!matchedConversation) {
         void refreshConversationListRef.current?.(session);
       }
-      return dedupeConversationsByIdentity(nextItems);
+      return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
     });
 
     if (selectedConversationKey === conversationKey || selectedConversationWaId === event.waId) {
@@ -1790,6 +1813,7 @@ export default function AppInboxPage() {
     selectedConversationKey,
     selectedConversationWaId,
     session,
+    isBusinessTenant,
   ]);
 
   useEffect(() => {
@@ -1885,7 +1909,8 @@ export default function AppInboxPage() {
       setConversationNextCursor(response.nextCursor ?? null);
       loadedConversationPageCountRef.current = 1;
     }
-    const sortedItems = dedupeConversationsByIdentity(pageItems);
+    const prioritizeLeads = isBusinessSession(activeSession);
+    const sortedItems = dedupeConversationsByIdentity(pageItems, prioritizeLeads);
     const latestInboundSignature = getLatestInboundConversationSignature(sortedItems);
     const latestInboundTimestamp = getLatestInboundConversationTimestamp(sortedItems);
     const humanFlowConversationKeys = getHumanFlowConversationKeys(sortedItems);
@@ -1901,8 +1926,7 @@ export default function AppInboxPage() {
           !humanFlowConversationKeysRef.current.has(conversationKey)
         ) {
           if (
-            session &&
-            canUserReceiveTargetedNotification(item, session.user) &&
+            canUserReceiveTargetedNotification(item, activeSession.user) &&
             conversationKey !== selectedConversationKey
           ) {
             markConversationIdentitiesAsUnread(getConversationIdentityCandidates(item), item.waId);
@@ -1947,7 +1971,9 @@ export default function AppInboxPage() {
     });
     suppressNextConversationRefreshNotificationRef.current = false;
     const previousListScrollTop = conversationListRef.current?.scrollTop ?? null;
-    setConversations((current) => mergeConversationsPreservingStableOrder(current, sortedItems));
+    setConversations((current) =>
+      mergeConversationsPreservingStableOrder(current, sortedItems, prioritizeLeads)
+    );
     if (previousListScrollTop !== null) {
       window.requestAnimationFrame(() => {
         if (conversationListRef.current) {
@@ -2002,8 +2028,13 @@ export default function AppInboxPage() {
       }
       setConversationNextCursor(response.nextCursor ?? null);
       loadedConversationPageCountRef.current += 1;
-      const pageItems = dedupeConversationsByIdentity(response.conversations ?? response.items);
-      setConversations((current) => dedupeConversationsByIdentity([...current, ...pageItems]));
+      const pageItems = dedupeConversationsByIdentity(
+        response.conversations ?? response.items,
+        isBusinessSession(session)
+      );
+      setConversations((current) =>
+        dedupeConversationsByIdentity([...current, ...pageItems], isBusinessSession(session))
+      );
     } catch (err) {
       if ((err as { status?: number }).status === 401) {
         handleUnauthorized();
@@ -2541,6 +2572,7 @@ export default function AppInboxPage() {
     });
   }, [conversationFilter, conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
   useEffect(() => {
+    if (!isBusinessTenant) return;
     const signature = filteredConversations
       .slice(0, 20)
       .map((item) => `${getConversationIdentity(item)}:${getLeadTemperature(item) ?? "none"}`)
@@ -2552,7 +2584,7 @@ export default function AppInboxPage() {
         topPriority: getLeadTemperature(filteredConversations[0] ?? null),
       });
     }
-  }, [filteredConversations, session]);
+  }, [filteredConversations, isBusinessTenant, session]);
   const selectedMoreConversationFilter = useMemo(
     () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
     [conversationFilter]
@@ -2674,6 +2706,7 @@ export default function AppInboxPage() {
   const selectedSuggestedReply = useMemo(() => extractSuggestedReply(leadNotes), [leadNotes]);
 
   useEffect(() => {
+    if (!isBusinessTenant) return;
     if (!selectedConversation) return;
     const temperature = getLeadTemperature(selectedConversation);
     if (!temperature) return;
@@ -2684,7 +2717,7 @@ export default function AppInboxPage() {
       conversationKey: getConversationIdentity(selectedConversation),
       leadTemp: temperature,
     });
-  }, [selectedConversation, session]);
+  }, [isBusinessTenant, selectedConversation, session]);
 
   useEffect(() => {
     setStatusDraft((selectedLead?.status as LeadStatus | null) ?? "");
@@ -2693,6 +2726,14 @@ export default function AppInboxPage() {
   useEffect(() => {
     setLeadNameDraft(selectedLead?.name ?? "");
   }, [selectedLead?.id, selectedLead?.name]);
+
+  useEffect(() => {
+    setLeadEmailDraft(selectedLead?.city ?? "");
+  }, [selectedLead?.city, selectedLead?.id]);
+
+  useEffect(() => {
+    setLeadCompanyDraft(selectedLead?.service ?? "");
+  }, [selectedLead?.id, selectedLead?.service]);
 
   useEffect(() => {
     if (!session || !selectedLead?.id) {
@@ -2724,8 +2765,8 @@ export default function AppInboxPage() {
     };
   }, [handleUnauthorized, selectedLead?.id, session]);
 
-  const handleSaveLeadStatus = async () => {
-    if (!session || !selectedLead?.id || !statusDraft) return;
+  const handleSaveLeadStatus = async (nextStatus = statusDraft) => {
+    if (!session || !selectedLead?.id || !nextStatus) return;
     if (!isSelectedConversationOwnedByCurrentUser) {
       setLeadError("Assuma a conversa para editar os dados do CRM.");
       return;
@@ -2733,7 +2774,7 @@ export default function AppInboxPage() {
     setSavingLeadStatus(true);
     setLeadError(null);
     try {
-      const response = await updateAppLeadStatus(session, selectedLead.id, statusDraft);
+      const response = await updateAppLeadStatus(session, selectedLead.id, nextStatus);
       setConversations((prev) =>
         prev.map((item) =>
           item.leadId === response.lead.id ? { ...item, leadStatus: response.lead.status } : item
@@ -2749,6 +2790,12 @@ export default function AppInboxPage() {
     } finally {
       setSavingLeadStatus(false);
     }
+  };
+
+  const handleLeadStatusChange = async (nextStatus: LeadStatus) => {
+    setStatusDraft(nextStatus);
+    if (!nextStatus || nextStatus === selectedLead?.status) return;
+    await handleSaveLeadStatus(nextStatus);
   };
 
   const handleAddLeadNote = async () => {
@@ -2789,19 +2836,40 @@ export default function AppInboxPage() {
     focusComposer();
   };
 
-  const handleSaveLeadName = async () => {
+  const handleSaveLeadDetails = async () => {
     if (!session || !selectedLead?.id) return;
     if (!isSelectedConversationOwnedByCurrentUser) {
       setLeadError("Assuma a conversa para editar os dados do CRM.");
       return;
     }
+    const nextName = leadNameDraft.trim();
+    const nextEmail = leadEmailDraft.trim();
+    const nextCompany = leadCompanyDraft.trim();
+    if (
+      nextName === (selectedLead.name ?? "") &&
+      nextEmail === (selectedLead.city ?? "") &&
+      nextCompany === (selectedLead.service ?? "")
+    ) {
+      return;
+    }
     setSavingLeadName(true);
     setLeadError(null);
     try {
-      const response = await updateAppLead(session, selectedLead.id, { name: leadNameDraft.trim() || null });
+      const response = await updateAppLead(session, selectedLead.id, {
+        name: nextName || null,
+        city: nextEmail || null,
+        service: nextCompany || null,
+      });
       setConversations((prev) =>
         prev.map((item) =>
-          item.leadId === response.lead.id ? { ...item, leadName: response.lead.name } : item
+          item.leadId === response.lead.id
+            ? {
+                ...item,
+                leadName: response.lead.name,
+                leadCity: response.lead.city,
+                leadService: response.lead.service,
+              }
+            : item
         )
       );
     } catch (err) {
@@ -2810,7 +2878,7 @@ export default function AppInboxPage() {
         handleUnauthorized();
         return;
       }
-      setLeadError(typed.message || "Falha ao salvar nome do contato.");
+      setLeadError(typed.message || "Falha ao salvar dados do contato.");
     } finally {
       setSavingLeadName(false);
     }
@@ -2869,7 +2937,8 @@ export default function AppInboxPage() {
                       updatedAt: response.message.createdAt,
                     }
                   : item
-              )
+              ),
+              isBusinessTenant
             )
           );
           markConversationIdentitiesAsRead(
@@ -2992,7 +3061,8 @@ export default function AppInboxPage() {
                     updatedAt: response.message.createdAt,
                   }
                 : item
-            )
+            ),
+            isBusinessTenant
           )
         );
         markConversationIdentitiesAsRead(
@@ -3267,7 +3337,7 @@ export default function AppInboxPage() {
             };
           })
           .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
-        return dedupeConversationsByIdentity(nextItems);
+        return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
       });
 
       if (!stillInUserScope) {
@@ -3693,7 +3763,7 @@ export default function AppInboxPage() {
                         <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
                           {label}
                         </p>
-                        {leadTemperatureLabel ? (
+                        {isBusinessTenant && leadTemperatureLabel ? (
                           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
                             {leadTemperatureLabel}
                           </span>
@@ -3746,7 +3816,7 @@ export default function AppInboxPage() {
                     ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
                     : "Conversa"}
                 </h2>
-                {selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
+                {isBusinessTenant && selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getLeadTemperatureClass(selectedConversation)}`}>
                     {getLeadTemperatureLabel(selectedConversation)}
                   </span>
@@ -3962,25 +4032,21 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          {selectedConversation && (selectedContextSummary.length > 0 || selectedLeadTemperature === "quente") ? (
-            <section className="border-b border-black/8 bg-white/50 px-4 py-2 max-[1366px]:px-3 max-[1366px]:py-1.5">
+          {isBusinessTenant && selectedConversation && (selectedContextSummary.length > 0 || selectedLeadTemperature === "quente") ? (
+            <section className="border-b border-black/8 bg-white/50 px-4 py-1.5 max-[1366px]:px-3 max-[1366px]:py-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700">
               {selectedLeadTemperature === "quente" ? (
-                <p className="mb-1.5 inline-flex rounded-full border border-red-300 bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">
+                <span className="inline-flex shrink-0 rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
                   ⚠️ Atendimento prioritário
-                </p>
+                </span>
               ) : null}
-              {selectedContextSummary.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 md:grid-cols-4">
-                  {selectedContextSummary.map((entry) => (
-                    <div key={entry.label} className="min-w-0 rounded-xl border border-[#dccfbe] bg-white/70 px-2.5 py-1.5">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{entry.label}</p>
-                      <p className="truncate font-semibold text-slate-900" title={entry.value}>
-                        {entry.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+                {selectedContextSummary.map((entry) => (
+                  <span key={entry.label} className="min-w-0 truncate" title={`${entry.label}: ${entry.value}`}>
+                    <span className="font-semibold text-slate-500">{entry.label}:</span>{" "}
+                    <span className="font-semibold text-slate-900">{entry.value}</span>
+                  </span>
+                ))}
+              </div>
             </section>
           ) : null}
 
@@ -4191,7 +4257,7 @@ export default function AppInboxPage() {
                         : "Digite uma mensagem"
                       : "Assuma a conversa para responder"
                   }
-                  disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
+                  disabled={!selectedConversationWaId || !canReply}
                 />
               </label>
               <button
@@ -4213,7 +4279,7 @@ export default function AppInboxPage() {
         </div>
 
         <aside className="flex min-h-0 flex-col border-l border-white/10 bg-[#0c1930]">
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
             <h2 className="text-sm font-semibold text-white">CRM</h2>
             <button
               type="button"
@@ -4235,9 +4301,9 @@ export default function AppInboxPage() {
             ) : (
               <>
                 {selectedSuggestedReply ? (
-                  <section className="border-b border-white/10 px-4 py-4">
+                  <section className="border-b border-white/10 px-3 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-semibold text-white">Sugestão de resposta</h3>
+                      <p className="text-xs font-semibold text-white/80">Sugestão</p>
                       <button
                         type="button"
                         onClick={handleUseSuggestedReply}
@@ -4247,48 +4313,65 @@ export default function AppInboxPage() {
                         Usar sugestão
                       </button>
                     </div>
-                    <p className="mt-3 line-clamp-5 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/5 p-3 text-sm leading-relaxed text-white/85">
+                    <p className="mt-2 line-clamp-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/5 p-2.5 text-xs leading-relaxed text-white/85">
                       {selectedSuggestedReply}
                     </p>
                   </section>
                 ) : null}
 
-                <section className="border-b border-white/10 px-4 py-4">
-                  <h3 className="text-sm font-semibold text-white">Contato</h3>
-                  <div className="mt-3 space-y-2 text-sm text-white/85">
+                <section className="border-b border-white/10 px-3 py-3">
+                  <div className="space-y-2 text-sm text-white/85">
                     <label className="grid gap-1">
                       <span className="text-white/55">Nome</span>
-                      <div className="flex gap-2">
-                        <input
-                          className="min-w-0 flex-1 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                          value={leadNameDraft}
-                          onChange={(event) => setLeadNameDraft(event.target.value)}
-                          placeholder="Como este contato deve aparecer"
-                          disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
-                        />
-                        <button
-                          type="button"
-                          disabled={savingLeadName || !isSelectedConversationOwnedByCurrentUser}
-                          onClick={handleSaveLeadName}
-                          className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {savingLeadName ? "Salvando..." : "Salvar"}
-                        </button>
-                      </div>
+                      <input
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        value={leadNameDraft}
+                        onChange={(event) => setLeadNameDraft(event.target.value)}
+                        onBlur={() => void handleSaveLeadDetails()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        placeholder="Nome"
+                        disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
+                      />
                     </label>
-                    <p><span className="text-white/55">Telefone:</span> {selectedLead.phone || selectedConversation?.waId || "-"}</p>
-                    <p><span className="text-white/55">Cidade:</span> {selectedLead.city || "-"}</p>
-                    <p><span className="text-white/55">Serviço:</span> {selectedLead.service || "-"}</p>
+                    <label className="grid gap-1">
+                      <span className="text-white/55">Email</span>
+                      <input
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        value={leadEmailDraft}
+                        onChange={(event) => setLeadEmailDraft(event.target.value)}
+                        onBlur={() => void handleSaveLeadDetails()}
+                        placeholder="email@empresa.com"
+                        disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
+                      />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-white/55">Empresa</span>
+                      <input
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        value={leadCompanyDraft}
+                        onChange={(event) => setLeadCompanyDraft(event.target.value)}
+                        onBlur={() => void handleSaveLeadDetails()}
+                        placeholder="Empresa"
+                        disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadName}
+                      />
+                    </label>
+                    <p className="truncate text-xs text-white/60">
+                      {savingLeadName ? "Salvando..." : selectedLead.phone || selectedConversation?.waId || "-"}
+                    </p>
                   </div>
                 </section>
 
-                <section className="border-b border-white/10 px-4 py-4">
-                  <h3 className="text-sm font-semibold text-white">Andamento</h3>
-                  <div className="mt-3 space-y-3">
+                <section className="border-b border-white/10 px-3 py-3">
+                  <div className="space-y-2">
                     <select
-                      className="w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      className="w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
                       value={statusDraft}
-                      onChange={(event) => setStatusDraft(event.target.value as LeadStatus)}
+                      onChange={(event) => void handleLeadStatusChange(event.target.value as LeadStatus)}
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadStatus}
                     >
                       <option value="" disabled>
@@ -4300,47 +4383,38 @@ export default function AppInboxPage() {
                         </option>
                       ))}
                     </select>
-                    <button
-                      type="button"
-                      disabled={!statusDraft || savingLeadStatus || !isSelectedConversationOwnedByCurrentUser}
-                      onClick={handleSaveLeadStatus}
-                      className="rounded-xl bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {savingLeadStatus ? "Salvando..." : "Salvar"}
-                    </button>
+                    {savingLeadStatus ? <p className="text-xs text-white/55">Salvando andamento...</p> : null}
                   </div>
                 </section>
 
-                <section className="border-b border-white/10 px-4 py-4">
-                  <h3 className="text-sm font-semibold text-white">Nota interna</h3>
-                  <div className="mt-3 space-y-3">
+                <section className="border-b border-white/10 px-3 py-3">
+                  <div className="space-y-2">
                     <textarea
-                      className="min-h-24 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                      className="min-h-20 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
-                      placeholder="Registre um detalhe importante do atendimento..."
+                      placeholder="Add nota"
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadNote}
                     />
                     <button
                       type="button"
                       disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
                       onClick={handleAddLeadNote}
-                      className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-white/90 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {savingLeadNote ? "Salvando..." : "Salvar nota"}
+                      {savingLeadNote ? "Salvando..." : "Add nota"}
                     </button>
                   </div>
                 </section>
 
-                <section className="px-4 py-4">
-                  <h3 className="text-sm font-semibold text-white">Histórico de notas</h3>
+                <section className="px-3 py-3">
                   {loadingLeadNotes ? (
-                    <p className="mt-3 text-sm text-white/70">Carregando notas...</p>
+                    <p className="text-sm text-white/70">Carregando notas...</p>
                   ) : null}
                   {!loadingLeadNotes && leadNotes.length === 0 ? (
-                    <p className="mt-3 text-sm text-white/70">Nenhuma nota registrada.</p>
+                    <p className="text-sm text-white/70">Nenhuma nota registrada.</p>
                   ) : null}
-                  <div className="mt-3 space-y-2">
+                  <div className="space-y-2">
                     {leadNotes.map((note) => (
                       <article key={note.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
                         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white">{note.body}</p>

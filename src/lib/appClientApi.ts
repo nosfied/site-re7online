@@ -1162,12 +1162,14 @@ export async function updateAppLeadStatus(
 export async function updateAppLead(
   session: AppSession,
   leadId: string,
-  payload: { name?: string | null }
+  payload: { name?: string | null; city?: string | null; service?: string | null }
 ): Promise<{
   ok: true;
   lead: {
     id: string;
     name: string | null;
+    city: string | null;
+    service: string | null;
     updatedAt: string;
   };
 }> {

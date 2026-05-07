@@ -594,6 +594,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           search: searchFilter,
         },
         includeAssignedUserName: true,
+        profile: getClientProfile(client),
       });
       json(res, 200, result);
     } catch (error) {
@@ -4668,6 +4669,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+      const city = typeof body.city === "string" ? body.city.trim().slice(0, 160) : undefined;
+      const service = typeof body.service === "string" ? body.service.trim().slice(0, 160) : undefined;
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
         select: { id: true, waId: true, waIdCanonical: true },
@@ -4695,8 +4698,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const lead = await prisma.lead.update({
         where: { id: leadId },
-        data: { name: name || null },
-        select: { id: true, name: true, updatedAt: true },
+        data: {
+          name: name || null,
+          ...(city !== undefined ? { city: city || null } : {}),
+          ...(service !== undefined ? { service: service || null } : {}),
+        },
+        select: { id: true, name: true, city: true, service: true, updatedAt: true },
       });
       json(res, 200, { ok: true, lead });
     } catch (error) {
@@ -12309,13 +12316,17 @@ function materializeConversationOperationalState(
     ? null
     : deriveConversationOperationalStatus(conversation);
   const resolvedStatus = explicitStatus ?? derivedStatus ?? null;
+  const normalizedStatus =
+    conversation.assignedUserId && resolvedStatus === ConversationOperationalStatus.WAITING
+      ? ConversationOperationalStatus.IN_PROGRESS
+      : resolvedStatus;
   return {
     ...conversation,
     departmentId: conversation.departmentId ?? defaults.department.id,
     queueId: conversation.queueId ?? defaults.queue.id,
-    status: resolvedStatus,
+    status: normalizedStatus,
     closedAt:
-      resolvedStatus === ConversationOperationalStatus.CLOSED
+      normalizedStatus === ConversationOperationalStatus.CLOSED
         ? conversation.closedAt ?? new Date().toISOString()
         : null,
   };
@@ -12660,10 +12671,16 @@ function serializeConversationOperationalFields(params: {
 }) {
   const conversation = params.conversation;
   const flowContext = sanitizeInboxFlowContext(conversation?.answers?.flowContext ?? null);
+  const assignedUserId = conversation?.assignedUserId ?? null;
+  const normalizedStatus = normalizeConversationOperationalStatus(conversation?.status);
+  const status =
+    assignedUserId && normalizedStatus === ConversationOperationalStatus.WAITING
+      ? ConversationOperationalStatus.IN_PROGRESS
+      : normalizedStatus;
   return {
     mode: conversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
     handoffStatus: conversation?.handoff?.status ?? "none",
-    assignedUserId: conversation?.assignedUserId ?? null,
+    assignedUserId,
     assignedTo: conversation?.assignedTo ?? null,
     assignedUserName: params.assignedUserName,
     assignedAt: conversation?.assignedAt ?? null,
@@ -12671,7 +12688,7 @@ function serializeConversationOperationalFields(params: {
     departmentName: params.departmentName,
     queueId: conversation?.queueId ?? null,
     queueName: params.queueName,
-    status: normalizeConversationOperationalStatus(conversation?.status),
+    status,
     closedAt: conversation?.closedAt ?? null,
     lastInboundAt: conversation?.lastInboundAt ?? null,
     lastOutboundAt: conversation?.lastOutboundAt ?? null,
@@ -13861,6 +13878,17 @@ function getInboxWaitingTimestamp(item: {
   return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
 }
 
+function getInboxActivityTimestamp(item: {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}) {
+  const timestamps = [item.lastInboundAt, item.lastOutboundAt, item.updatedAt]
+    .map((value) => (value instanceof Date ? value.getTime() : Date.parse(String(value ?? ""))))
+    .filter((timestamp) => Number.isFinite(timestamp));
+  return timestamps.length > 0 ? Math.max(...timestamps) : Number.NEGATIVE_INFINITY;
+}
+
 function sortConversationItemsByPriorityAndWait<T extends {
   flowContext?: Record<string, unknown> | null;
   lastInboundAt?: string | null;
@@ -13873,6 +13901,19 @@ function sortConversationItemsByPriorityAndWait<T extends {
     const waitDiff = getInboxWaitingTimestamp(left) - getInboxWaitingTimestamp(right);
     if (waitDiff !== 0) return waitDiff;
     return String(left.updatedAt).localeCompare(String(right.updatedAt));
+  });
+}
+
+function sortConversationItemsByRecent<T extends {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const leftTimestamp = getInboxActivityTimestamp(left);
+    const rightTimestamp = getInboxActivityTimestamp(right);
+    if (leftTimestamp !== rightTimestamp) return rightTimestamp - leftTimestamp;
+    return String(right.updatedAt).localeCompare(String(left.updatedAt));
   });
 }
 
@@ -13940,6 +13981,7 @@ async function buildConversationListPayload(
     cursor: ConversationListCursor | null;
     filters: ConversationListFilters;
     includeAssignedUserName: boolean;
+    profile?: string | null;
   }
 ) {
   const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
@@ -14248,7 +14290,11 @@ async function buildConversationListPayload(
       updatedAt: conversation.updatedAt,
     };
   });
-  const filteredItems = sortConversationItemsByPriorityAndWait(
+  const filteredItems = (
+    params.profile === "business"
+      ? sortConversationItemsByPriorityAndWait
+      : sortConversationItemsByRecent
+  )(
     allItems.filter(
       (item) =>
         conversationListItemIsInHumanFlow(item) &&
@@ -15229,6 +15275,10 @@ async function adminSendMessage(params: {
     await runtimeStorage.upsertConversation({
       ...conversation,
       lastOutboundAt: createdAt,
+      status:
+        conversation.assignedUserId && conversation.status === ConversationOperationalStatus.WAITING
+          ? ConversationOperationalStatus.IN_PROGRESS
+          : conversation.status,
     });
     await recordConversationAgentOutboundMetrics({
       prisma: getPrisma(),
