@@ -62,6 +62,11 @@ export type TenantConfig = {
   followUpUseTemplate?: boolean;
   followUpTemplateName?: string;
   followUpTemplateLang?: string;
+  aiAssistantEnabled?: boolean;
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
+  aiAssistantSystemPrompt?: string;
+  aiAssistantFallbackToHandoff?: boolean;
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -165,6 +170,12 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     if (nextTenant.followUpUseTemplate === undefined) {
       nextTenant.followUpUseTemplate = false;
+    }
+    if (nextTenant.aiAssistantEnabled === undefined) {
+      nextTenant.aiAssistantEnabled = false;
+    }
+    if (nextTenant.aiAssistantMaxReplies === undefined) {
+      nextTenant.aiAssistantMaxReplies = 2;
     }
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
@@ -343,6 +354,37 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       (typeof tenant.followUpTemplateLang !== "string" || !tenant.followUpTemplateLang.trim())
     ) {
       throw new Error(`invalid_tenant_follow_up_template_lang:${key}`);
+    }
+    if (tenant.aiAssistantEnabled !== undefined && typeof tenant.aiAssistantEnabled !== "boolean") {
+      throw new Error(`invalid_tenant_ai_assistant_enabled:${key}`);
+    }
+    if (
+      tenant.aiAssistantMaxReplies !== undefined &&
+      (typeof tenant.aiAssistantMaxReplies !== "number" ||
+        !Number.isInteger(tenant.aiAssistantMaxReplies) ||
+        tenant.aiAssistantMaxReplies < 0)
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_max_replies:${key}`);
+    }
+    if (
+      tenant.aiAssistantProfile !== undefined &&
+      tenant.aiAssistantProfile !== "business" &&
+      tenant.aiAssistantProfile !== "government" &&
+      tenant.aiAssistantProfile !== "legal_previdenciario"
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_profile:${key}`);
+    }
+    if (
+      tenant.aiAssistantSystemPrompt !== undefined &&
+      (typeof tenant.aiAssistantSystemPrompt !== "string" || !tenant.aiAssistantSystemPrompt.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_system_prompt:${key}`);
+    }
+    if (
+      tenant.aiAssistantFallbackToHandoff !== undefined &&
+      typeof tenant.aiAssistantFallbackToHandoff !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_fallback_to_handoff:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

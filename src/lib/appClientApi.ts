@@ -167,10 +167,15 @@ export type AppAutomationSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
   disableIntentClassifier: boolean;
+  aiAssistantEnabled?: boolean;
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
+  aiAssistantFallbackToHandoff?: boolean;
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
   aiLocked?: boolean;
+  aiAssistantLocked?: boolean;
   intentClassifierLocked?: boolean;
 };
 

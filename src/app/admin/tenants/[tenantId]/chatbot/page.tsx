@@ -279,10 +279,16 @@ export default function AdminTenantChatbotPage() {
     disableChatbot: false,
     disableAiFallback: false,
     disableIntentClassifier: true,
+    aiAssistantEnabled: false,
+    aiAssistantMaxReplies: 2,
+    aiAssistantProfile: "business" as const,
+    aiAssistantSystemPrompt: "",
+    aiAssistantFallbackToHandoff: false,
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
     aiLocked: false,
+    aiAssistantLocked: true,
     intentClassifierLocked: true,
     followUpEnabled: false,
     followUpDelayMinutes: 10,
@@ -502,9 +508,112 @@ export default function AdminTenantChatbotPage() {
                     }
                   />
                 </div>
-              ))}
+            ))}
+            <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <span className="block font-medium text-white">IA controlada</span>
+                  <span className="mt-1 block text-white/60">
+                    Camada segura para dúvidas simples. Não substitui fluxo nem atendimento humano.
+                  </span>
+                </div>
+                <TogglePill
+                  checked={automationDraft.aiAssistantEnabled === true}
+                  disabled={automationDraft.aiAssistantLocked}
+                  onToggle={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            aiAssistantEnabled: !current.aiAssistantEnabled,
+                          }
+                        : current
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <label className="flex flex-col gap-1 text-xs text-white/60">
+                  Maximo por conversa
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    value={automationDraft.aiAssistantMaxReplies ?? 2}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantMaxReplies: Math.max(0, Number(event.target.value) || 0),
+                            }
+                          : current
+                      )
+                    }
+                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-white/60">
+                  Perfil
+                  <select
+                    value={automationDraft.aiAssistantProfile ?? "business"}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantProfile: event.target.value as AdminAutomationSettings["aiAssistantProfile"],
+                            }
+                          : current
+                      )
+                    }
+                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                  >
+                    <option value="business">Business</option>
+                    <option value="government">Government</option>
+                    <option value="legal_previdenciario">Juridico previdenciario</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 self-end text-xs text-white/70">
+                  <input
+                    type="checkbox"
+                    checked={automationDraft.aiAssistantFallbackToHandoff === true}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantFallbackToHandoff: event.target.checked,
+                            }
+                          : current
+                      )
+                    }
+                  />
+                  Encaminhar dúvidas complexas futuramente
+                </label>
+              </div>
+              <textarea
+                value={automationDraft.aiAssistantSystemPrompt ?? ""}
+                disabled={automationDraft.aiAssistantLocked}
+                onChange={(event) =>
+                  setSettings((current) =>
+                    current
+                      ? {
+                          ...current,
+                          aiAssistantSystemPrompt: event.target.value,
+                        }
+                      : current
+                  )
+                }
+                placeholder="Instrução adicional aprovada para a IA controlada"
+                className="mt-3 min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+              />
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
           {settings ? (
             <div className="mt-4 rounded-lg border border-white/10 bg-re7-navy/40 p-3">

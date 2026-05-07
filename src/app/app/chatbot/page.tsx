@@ -564,10 +564,15 @@ export default function AppChatbotPage() {
     disableChatbot: false,
     disableAiFallback: false,
     disableIntentClassifier: true,
+    aiAssistantEnabled: false,
+    aiAssistantMaxReplies: 2,
+    aiAssistantProfile: "business" as const,
+    aiAssistantFallbackToHandoff: false,
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
     aiLocked: false,
+    aiAssistantLocked: true,
     intentClassifierLocked: true,
   };
   const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
@@ -689,6 +694,49 @@ export default function AppChatbotPage() {
                 />
               </div>
             ))}
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
+              <span className="space-y-1">
+                <span className="block font-medium text-white">IA controlada</span>
+                <span className="block text-white/60">
+                  Responde apenas perguntas simples quando o fluxo e o atendimento humano nao estiverem ativos.
+                </span>
+              </span>
+              <TogglePill
+                checked={automationDraft.aiAssistantEnabled === true}
+                disabled={readOnly || automationDraft.aiAssistantLocked}
+                onToggle={() =>
+                  setSettings((current) =>
+                    current
+                      ? {
+                          ...current,
+                          aiAssistantEnabled: !current.aiAssistantEnabled,
+                        }
+                      : current
+                  )
+                }
+              />
+              <label className="flex w-full max-w-xs flex-col gap-1 text-xs text-white/60">
+                Maximo por conversa
+                <input
+                  type="number"
+                  min={0}
+                  max={5}
+                  value={automationDraft.aiAssistantMaxReplies ?? 2}
+                  disabled={readOnly || automationDraft.aiAssistantLocked}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            aiAssistantMaxReplies: Math.max(0, Number(event.target.value) || 0),
+                          }
+                        : current
+                    )
+                  }
+                  className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                />
+              </label>
+            </div>
           </div>
         ) : (
             <p className="text-sm text-white/70">Carregando configuracoes...</p>

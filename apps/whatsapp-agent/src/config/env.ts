@@ -23,6 +23,7 @@ export type Env = {
   WHATSAPP_AI_TEMPERATURE: number;
   WHATSAPP_AI_SYSTEM_PROMPT: string;
   WHATSAPP_AI_TIMEOUT_MS: number;
+  AI_ASSISTANT_ENABLED: boolean;
   FLOW_INTENT_CLASSIFIER_ENABLED: boolean;
   FOLLOWUP_ENABLED: boolean;
   FOLLOWUP_DRY_RUN: boolean;
@@ -134,6 +135,7 @@ export function getEnv(): Env {
   );
   const WHATSAPP_AI_SYSTEM_PROMPT = process.env.WHATSAPP_AI_SYSTEM_PROMPT ?? "";
   const WHATSAPP_AI_TIMEOUT_MS = toNumber(process.env.WHATSAPP_AI_TIMEOUT_MS, 8000);
+  const AI_ASSISTANT_ENABLED = (process.env.AI_ASSISTANT_ENABLED ?? "false") === "true";
   const FLOW_INTENT_CLASSIFIER_ENABLED =
     (process.env.FLOW_INTENT_CLASSIFIER_ENABLED ?? "false") === "true";
   const FOLLOWUP_ENABLED = (process.env.FOLLOWUP_ENABLED ?? "false") === "true";
@@ -261,6 +263,7 @@ export function getEnv(): Env {
     WHATSAPP_AI_TEMPERATURE,
     WHATSAPP_AI_SYSTEM_PROMPT,
     WHATSAPP_AI_TIMEOUT_MS,
+    AI_ASSISTANT_ENABLED,
     FLOW_INTENT_CLASSIFIER_ENABLED,
     FOLLOWUP_ENABLED,
     FOLLOWUP_DRY_RUN,

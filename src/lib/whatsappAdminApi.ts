@@ -142,6 +142,11 @@ export type AdminAutomationSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
   disableIntentClassifier: boolean;
+  aiAssistantEnabled?: boolean;
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
+  aiAssistantSystemPrompt?: string;
+  aiAssistantFallbackToHandoff?: boolean;
   followUpEnabled?: boolean;
   followUpDelayMinutes?: number;
   followUpMaxCount?: number;
@@ -152,6 +157,7 @@ export type AdminAutomationSettings = {
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
   aiLocked?: boolean;
+  aiAssistantLocked?: boolean;
   intentClassifierLocked?: boolean;
 };
 

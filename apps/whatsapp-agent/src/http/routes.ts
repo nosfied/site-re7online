@@ -2907,10 +2907,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableChatbot,
           disableAiFallback,
           disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
+          aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
           aiConfigured,
           chatbotLocked,
           flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
           aiLocked,
+          aiAssistantLocked:
+            !env.AI_ASSISTANT_ENABLED ||
+            !env.WHATSAPP_AI_ENABLED ||
+            tenant.disableAiFallback === true ||
+            !aiConfigured,
           intentClassifierLocked:
             !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
         },
@@ -2966,6 +2975,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
       }
       if (Object.keys(payload).length === 0) {
+        if (
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled") &&
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies") &&
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile") &&
+          !Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")
+        ) {
         json(
           res,
           400,
@@ -2975,6 +2990,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           )
         );
         return;
+        }
       }
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey];
@@ -3038,6 +3054,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
+      const aiAssistantPatch: Record<string, unknown> = {};
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
+        if (typeof data.aiAssistantEnabled !== "boolean") {
+          json(res, 400, httpError("bad_request", "aiAssistantEnabled must be boolean"));
+          return;
+        }
+        if (data.aiAssistantEnabled === true) {
+          if (!env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED) {
+            json(res, 409, httpError("ai_assistant_globally_disabled", "IA controlada esta desativada no ambiente."));
+            return;
+          }
+          if (!tenant.aiBusinessContext?.trim()) {
+            json(res, 409, httpError("ai_context_missing", "IA controlada exige contexto previo do tenant."));
+            return;
+          }
+          if (tenant.disableAiFallback) {
+            json(res, 409, httpError("ai_locked_by_admin", "IA esta desativada no console interno."));
+            return;
+          }
+        }
+        aiAssistantPatch.aiAssistantEnabled = data.aiAssistantEnabled;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies")) {
+        if (
+          typeof data.aiAssistantMaxReplies !== "number" ||
+          !Number.isInteger(data.aiAssistantMaxReplies) ||
+          data.aiAssistantMaxReplies < 0
+        ) {
+          json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
+          return;
+        }
+        aiAssistantPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile")) {
+        if (
+          data.aiAssistantProfile !== "business" &&
+          data.aiAssistantProfile !== "government" &&
+          data.aiAssistantProfile !== "legal_previdenciario"
+        ) {
+          json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
+          return;
+        }
+        aiAssistantPatch.aiAssistantProfile = data.aiAssistantProfile;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")) {
+        if (typeof data.aiAssistantFallbackToHandoff !== "boolean") {
+          json(res, 400, httpError("bad_request", "aiAssistantFallbackToHandoff must be boolean"));
+          return;
+        }
+        aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
+      }
 
       const saved = await saveTenantPatch(client.clientKey, {
         ...(payload.disableChatbot !== undefined
@@ -3049,6 +3116,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...(payload.disableIntentClassifier !== undefined
           ? { appDisableIntentClassifier: payload.disableIntentClassifier }
           : {}),
+        ...aiAssistantPatch,
       });
       logger.info({
         event: "app.chatbot.settings.updated",
@@ -3067,10 +3135,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableChatbot: isChatbotDisabledForTenant(saved.tenant),
           disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
           disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
+          aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
           aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
           chatbotLocked: Boolean(saved.tenant.disableChatbot),
           flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
           aiLocked: Boolean(saved.tenant.disableAiFallback),
+          aiAssistantLocked:
+            !env.AI_ASSISTANT_ENABLED ||
+            !env.WHATSAPP_AI_ENABLED ||
+            saved.tenant.disableAiFallback === true ||
+            !saved.tenant.aiBusinessContext?.trim(),
           intentClassifierLocked:
             !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
         },
@@ -6517,10 +6594,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableChatbot: isChatbotDisabledForTenant(tenant),
             disableAiFallback: isAiFallbackDisabledForTenant(tenant),
             disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
+            aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+            aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
+            aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+            aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(tenant.disableChatbot),
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
             aiLocked: Boolean(tenant.disableAiFallback),
+            aiAssistantLocked:
+              !env.AI_ASSISTANT_ENABLED ||
+              !env.WHATSAPP_AI_ENABLED ||
+              Boolean(tenant.disableAiFallback) ||
+              !tenant.aiBusinessContext?.trim(),
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
             followUpEnabled: tenant.followUpEnabled === true,
@@ -6627,7 +6714,55 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           followUpPatch.followUpTemplateLang = templateLang || undefined;
         }
-        if (Object.keys(payload).length === 0 && Object.keys(followUpPatch).length === 0) {
+        const aiAssistantPatch: Record<string, unknown> = {};
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
+          if (typeof data.aiAssistantEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "aiAssistantEnabled must be boolean"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantEnabled = data.aiAssistantEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")) {
+          if (typeof data.aiAssistantFallbackToHandoff !== "boolean") {
+            json(res, 400, httpError("bad_request", "aiAssistantFallbackToHandoff must be boolean"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies")) {
+          if (
+            typeof data.aiAssistantMaxReplies !== "number" ||
+            !Number.isInteger(data.aiAssistantMaxReplies) ||
+            data.aiAssistantMaxReplies < 0
+          ) {
+            json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile")) {
+          if (
+            data.aiAssistantProfile !== "business" &&
+            data.aiAssistantProfile !== "government" &&
+            data.aiAssistantProfile !== "legal_previdenciario"
+          ) {
+            json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantProfile = data.aiAssistantProfile;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSystemPrompt")) {
+          if (typeof data.aiAssistantSystemPrompt !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantSystemPrompt must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim() || undefined;
+        }
+        if (
+          Object.keys(payload).length === 0 &&
+          Object.keys(followUpPatch).length === 0 &&
+          Object.keys(aiAssistantPatch).length === 0
+        ) {
           json(
             res,
             400,
@@ -6674,6 +6809,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? { appDisableIntentClassifier: payload.disableIntentClassifier }
             : {}),
           ...followUpPatch,
+          ...aiAssistantPatch,
         });
         logger.info({
           event: "admin.chatbot.settings.updated",
@@ -6691,10 +6827,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableChatbot: isChatbotDisabledForTenant(saved.tenant),
             disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
             disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
+            aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
+            aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
+            aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
+            aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(saved.tenant.disableChatbot),
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
             aiLocked: Boolean(saved.tenant.disableAiFallback),
+            aiAssistantLocked:
+              !env.AI_ASSISTANT_ENABLED ||
+              !env.WHATSAPP_AI_ENABLED ||
+              Boolean(saved.tenant.disableAiFallback) ||
+              !saved.tenant.aiBusinessContext?.trim(),
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
             followUpEnabled: saved.tenant.followUpEnabled === true,
@@ -10937,6 +11083,11 @@ function diffTenantFields(
   compareField("followUpUseTemplate");
   compareField("followUpTemplateName");
   compareField("followUpTemplateLang");
+  compareField("aiAssistantEnabled");
+  compareField("aiAssistantMaxReplies");
+  compareField("aiAssistantProfile");
+  compareField("aiAssistantSystemPrompt");
+  compareField("aiAssistantFallbackToHandoff");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

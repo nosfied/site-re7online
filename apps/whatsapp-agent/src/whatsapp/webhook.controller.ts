@@ -34,6 +34,11 @@ import {
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
+  generateControlledAssistantReply,
+  getAiAssistantState,
+  isSimpleQuestion,
+} from "../agent/controlledAssistant.js";
+import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
@@ -4262,6 +4267,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
     const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
+    const logAiAssistantEvent = async (
+      event: string,
+      payload: Record<string, unknown> = {}
+    ) => {
+      const safePayload = {
+        action: event,
+        clientId: tenantClientId || null,
+        clientKey: tenantClientKey || null,
+        waId: maskNumber(normalizedFrom),
+        messageId: message.messageId,
+        ...payload,
+      };
+      logger.info({ event, requestId: meta?.requestId, ...safePayload });
+      await persistEventSafe(event, safePayload as Prisma.InputJsonValue, normalizedFrom, message.messageId);
+    };
 
     if (
       !leadHandled &&
@@ -4271,49 +4291,95 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !hasDemoSignal &&
       !leadHandled &&
       !demoAwaitingSchedule &&
+      env.AI_ASSISTANT_ENABLED &&
       env.WHATSAPP_AI_ENABLED &&
+      appliedTenantConfig?.aiAssistantEnabled === true &&
       !isAiFallbackDisabledForTenant() &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
       updatedConversation.intent !== "handoff" &&
+      updatedConversation.mode !== "HUMAN" &&
+      updatedConversation.handoff.status === "none" &&
+      !updatedConversation.chatbotActive &&
+      !updatedConversation.chatbotNodeId &&
       message.text
     ) {
       const start = Date.now();
+      const assistantState = getAiAssistantState(updatedConversation);
+      const maxReplies = Math.max(0, appliedTenantConfig.aiAssistantMaxReplies ?? 2);
       try {
-        const aiReply = await agentBrain.generateReply({
-          waId: normalizedFrom,
-          intent: updatedConversation.intent ?? "unknown",
-          lastMessages: [message.text],
-          inboundText: message.text,
-          nowIso: new Date().toISOString(),
-          businessContext: aiBusinessContext,
-          stateSummary: {
-            segment: updatedConversation.answers?.segment,
-            flow: updatedConversation.flow,
-            flowStep: updatedConversation.flowStep,
-            answers: updatedConversation.answers,
-          },
-        });
-        if (aiReply.text) {
-          replyText = aiReply.text;
-          logger.info({
-            event: "agent.reply",
-            source: aiReply.source,
-            model: aiReply.model,
-            latency_ms: Date.now() - start,
-            route: meta?.route,
-            method: meta?.method,
-            requestId: meta?.requestId,
+        if (assistantState.lastMessageId === message.messageId) {
+          await logAiAssistantEvent("ai.assistant.skipped", { reason: "duplicate_message" });
+        } else if (assistantState.count >= maxReplies) {
+          await logAiAssistantEvent("ai.assistant.limit_reached", {
+            count: assistantState.count,
+            maxReplies,
           });
+        } else if (!isWindowOpen(updatedConversation, Date.now())) {
+          await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
+        } else if (!isSimpleQuestion(message.text)) {
+          await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
+        } else {
+          await logAiAssistantEvent("ai.assistant.invoked", {
+            profile: appliedTenantConfig.aiAssistantProfile ?? "business",
+            count: assistantState.count,
+            maxReplies,
+          });
+          const aiReply = await generateControlledAssistantReply({
+            brain: agentBrain,
+            text: message.text,
+            tenant: {
+              name: appliedTenantConfig.name,
+              defaultLanguage: appliedTenantConfig.defaultLanguage,
+              aiBusinessContext,
+              aiAssistantProfile: appliedTenantConfig.aiAssistantProfile,
+              aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
+            },
+            state: updatedConversation,
+            nowIso: new Date().toISOString(),
+          });
+          if (aiReply.ok) {
+            replyText = aiReply.text;
+            updatedConversation = {
+              ...updatedConversation,
+              answers: {
+                ...(updatedConversation.answers ?? {}),
+                aiAssistant: {
+                  count: assistantState.count + 1,
+                  lastRespondedAt: new Date().toISOString(),
+                  lastMessageId: message.messageId,
+                },
+              },
+            };
+            await logAiAssistantEvent("ai.assistant.responded", {
+              model: aiReply.model ?? null,
+              latency_ms: Date.now() - start,
+              count: assistantState.count + 1,
+              maxReplies,
+            });
+          } else {
+            await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
+          }
         }
       } catch (error) {
         logger.error({
-          event: "agent.error",
+          event: "ai.assistant.failed",
           message: (error as Error).message,
           route: meta?.route,
           method: meta?.method,
           requestId: meta?.requestId,
         });
+        await persistEventSafe(
+          "ai.assistant.failed",
+          {
+            action: "ai.assistant.failed",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+            reason: "generation_failed",
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
       }
     }
 

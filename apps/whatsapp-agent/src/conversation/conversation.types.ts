@@ -34,6 +34,11 @@ export type QuoteSiteAnswers = {
   email?: string;
   flowContext?: FlowContext;
   flowTags?: string[];
+  aiAssistant?: {
+    count?: number;
+    lastRespondedAt?: string | null;
+    lastMessageId?: string | null;
+  };
 };
 
 export type ConversationState = {
