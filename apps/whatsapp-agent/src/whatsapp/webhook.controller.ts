@@ -4339,11 +4339,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       try {
         if (assistantState.lastMessageId === message.messageId) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "duplicate_message" });
-        } else if (assistantState.count >= maxReplies) {
-          await logAiAssistantEvent("ai.assistant.limit_reached", {
-            count: assistantState.count,
-            maxReplies,
-          });
         } else if (!isWindowOpen(updatedConversation, Date.now())) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
@@ -4372,7 +4367,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               answers: {
                 ...(updatedConversation.answers ?? {}),
                 aiAssistant: {
-                  count: assistantState.count + 1,
+                  count: assistantState.count,
                   lastRespondedAt: new Date().toISOString(),
                   lastMessageId: message.messageId,
                 },
@@ -4381,7 +4376,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await logAiAssistantEvent("ai.guardrail.responded", {
               risk,
               latency_ms: Date.now() - start,
-              count: assistantState.count + 1,
+              count: assistantState.count,
+              maxReplies,
+              countConsumed: false,
+            });
+          } else if (assistantState.count >= maxReplies) {
+            await logAiAssistantEvent("ai.assistant.limit_reached", {
+              count: assistantState.count,
               maxReplies,
             });
           } else {
