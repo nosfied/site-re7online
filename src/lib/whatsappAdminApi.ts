@@ -142,6 +142,8 @@ export type AdminAutomationSettings = {
   disableChatbot: boolean;
   disableAiFallback: boolean;
   disableIntentClassifier: boolean;
+  disableLegacyFlows?: boolean;
+  disableChatbotFlowEditing?: boolean;
   aiAssistantEnabled?: boolean;
   aiAssistantMaxReplies?: number;
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";

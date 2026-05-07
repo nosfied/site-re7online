@@ -6591,9 +6591,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenantId: clientKey,
           settings: {
             disableAutoReply: tenant.disableAutoReply ?? false,
-            disableChatbot: isChatbotDisabledForTenant(tenant),
-            disableAiFallback: isAiFallbackDisabledForTenant(tenant),
-            disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
+            disableChatbot: Boolean(tenant.disableChatbot),
+            disableAiFallback: Boolean(tenant.disableAiFallback),
+            disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+            disableLegacyFlows: tenant.disableLegacyFlows !== false,
+            disableChatbotFlowEditing: Boolean(tenant.disableChatbotFlowEditing),
             aiAssistantEnabled: tenant.aiAssistantEnabled === true,
             aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
             aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
@@ -6601,14 +6603,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
             aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
-            chatbotLocked: Boolean(tenant.disableChatbot),
+            chatbotLocked: false,
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
-            aiLocked: Boolean(tenant.disableAiFallback),
-            aiAssistantLocked:
-              !env.AI_ASSISTANT_ENABLED ||
-              !env.WHATSAPP_AI_ENABLED ||
-              Boolean(tenant.disableAiFallback) ||
-              !tenant.aiBusinessContext?.trim(),
+            aiLocked: false,
+            aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
             followUpEnabled: tenant.followUpEnabled === true,
@@ -6643,7 +6641,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const body = await readJsonBody(req, res);
         if (!body) return;
         const data = body as Record<string, unknown>;
-        const keys = ["disableChatbot", "disableAiFallback", "disableIntentClassifier"] as const;
+        const keys = [
+          "disableChatbot",
+          "disableAiFallback",
+          "disableIntentClassifier",
+          "disableLegacyFlows",
+          "disableChatbotFlowEditing",
+        ] as const;
         const payload: Record<string, boolean> = {};
         for (const key of keys) {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -6794,14 +6798,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("tenant_not_found", "Tenant not found"));
           return;
         }
-        if (payload.disableAiFallback === false && !tenant.aiBusinessContext?.trim()) {
-          json(
-            res,
-            409,
-            httpError("ai_context_missing", "AI automatica exige configuracao previa do tenant.")
-          );
-          return;
-        }
         if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
           json(
             res,
@@ -6815,13 +6811,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const saved = await saveTenantPatch(clientKey, {
           ...(payload.disableChatbot !== undefined
-            ? { appDisableChatbot: payload.disableChatbot }
+            ? { disableChatbot: payload.disableChatbot }
             : {}),
           ...(payload.disableAiFallback !== undefined
-            ? { appDisableAiFallback: payload.disableAiFallback }
+            ? { disableAiFallback: payload.disableAiFallback }
             : {}),
           ...(payload.disableIntentClassifier !== undefined
-            ? { appDisableIntentClassifier: payload.disableIntentClassifier }
+            ? { disableIntentClassifier: payload.disableIntentClassifier }
+            : {}),
+          ...(payload.disableLegacyFlows !== undefined
+            ? { disableLegacyFlows: payload.disableLegacyFlows }
+            : {}),
+          ...(payload.disableChatbotFlowEditing !== undefined
+            ? { disableChatbotFlowEditing: payload.disableChatbotFlowEditing }
             : {}),
           ...followUpPatch,
           ...aiAssistantPatch,
@@ -6839,9 +6841,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fieldsChanged: saved.fieldsChanged,
           settings: {
             disableAutoReply: Boolean(saved.tenant.disableAutoReply),
-            disableChatbot: isChatbotDisabledForTenant(saved.tenant),
-            disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
-            disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
+            disableChatbot: Boolean(saved.tenant.disableChatbot),
+            disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+            disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
+            disableLegacyFlows: saved.tenant.disableLegacyFlows !== false,
+            disableChatbotFlowEditing: Boolean(saved.tenant.disableChatbotFlowEditing),
             aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
             aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
             aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
@@ -6849,14 +6853,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
-            chatbotLocked: Boolean(saved.tenant.disableChatbot),
+            chatbotLocked: false,
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
-            aiLocked: Boolean(saved.tenant.disableAiFallback),
-            aiAssistantLocked:
-              !env.AI_ASSISTANT_ENABLED ||
-              !env.WHATSAPP_AI_ENABLED ||
-              Boolean(saved.tenant.disableAiFallback) ||
-              !saved.tenant.aiBusinessContext?.trim(),
+            aiLocked: false,
+            aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked:
               !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
             followUpEnabled: saved.tenant.followUpEnabled === true,

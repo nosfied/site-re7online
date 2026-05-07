@@ -55,32 +55,7 @@ type TenantFormState = {
   quotaWarnAtPct: string;
   quotaExcludeWaIdsInput: string;
   quotaBlockedReplyText: string;
-  disableChatbot: boolean;
-  disableChatbotFlowEditing: boolean;
-  disableLegacyFlows: boolean;
 };
-
-function TogglePill({
-  checked,
-  onToggle,
-}: {
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
-        checked
-          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
-          : "border-white/15 bg-white/5 text-white/70"
-      }`}
-    >
-      {checked ? "On" : "Off"}
-    </button>
-  );
-}
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -202,9 +177,6 @@ export default function TenantEditPage() {
             typeof tenant.quotaWarnAtPct === "number" ? String(tenant.quotaWarnAtPct) : "",
           quotaExcludeWaIdsInput: (tenant.quotaExcludeWaIds ?? []).join("\n"),
           quotaBlockedReplyText: tenant.quotaBlockedReplyText ?? "",
-          disableChatbot: tenant.disableChatbot ?? false,
-          disableChatbotFlowEditing: tenant.disableChatbotFlowEditing ?? false,
-          disableLegacyFlows: tenant.disableLegacyFlows ?? true,
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -282,9 +254,6 @@ export default function TenantEditPage() {
       contractNotes: optionalText(form.contractNotes),
       allowlist: normalizeWaIdList(form.allowlistInput),
       quotaExcludeWaIds: normalizeWaIdList(form.quotaExcludeWaIdsInput),
-      disableChatbot: form.disableChatbot,
-      disableChatbotFlowEditing: form.disableChatbotFlowEditing,
-      disableLegacyFlows: form.disableLegacyFlows,
     };
 
     const maxActiveAppUsers = Number(form.maxActiveAppUsers);
@@ -916,54 +885,6 @@ export default function TenantEditPage() {
                 placeholder="Use placeholders: {tenantName} {period} {used} {limit} {attendantWaidMasked}"
               />
             </label>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
-                <span className="space-y-1">
-                  <span className="block font-medium text-white">Fluxo configuravel</span>
-                  <span className="block text-white/60">Controla os flows personalizados disponiveis no /app/chatbot.</span>
-                </span>
-                <TogglePill
-                  checked={!form.disableChatbot}
-                  onToggle={() =>
-                    setForm((prev) => (prev ? { ...prev, disableChatbot: !prev.disableChatbot } : prev))
-                  }
-                />
-              </div>
-              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
-                <span className="space-y-1">
-                  <span className="block font-medium text-white">Fluxos prontos</span>
-                  <span className="block text-white/60">Camada interna da plataforma. Fica desligada por padrao para tenants.</span>
-                </span>
-                <TogglePill
-                  checked={!form.disableLegacyFlows}
-                  onToggle={() =>
-                    setForm((prev) => (prev ? { ...prev, disableLegacyFlows: !prev.disableLegacyFlows } : prev))
-                  }
-                />
-              </div>
-              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm">
-                <span className="space-y-1">
-                  <span className="block font-medium text-white">Edicao de flows no /app</span>
-                  <span className="block text-white/60">
-                    Controla se o ADMIN do tenant pode criar ou editar fluxos em /app/chatbot.
-                  </span>
-                </span>
-                <TogglePill
-                  checked={!form.disableChatbotFlowEditing}
-                  onToggle={() =>
-                    setForm((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            disableChatbotFlowEditing: !prev.disableChatbotFlowEditing,
-                          }
-                        : prev
-                    )
-                  }
-                />
-              </div>
-            </div>
 
             <div className="flex items-center gap-3">
               <button

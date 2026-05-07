@@ -279,6 +279,8 @@ export default function AdminTenantChatbotPage() {
     disableChatbot: false,
     disableAiFallback: false,
     disableIntentClassifier: true,
+    disableLegacyFlows: true,
+    disableChatbotFlowEditing: false,
     aiAssistantEnabled: false,
     aiAssistantMaxReplies: 2,
     aiAssistantProfile: "business" as const,
@@ -298,6 +300,8 @@ export default function AdminTenantChatbotPage() {
     followUpTemplateName: "",
     followUpTemplateLang: "pt_BR",
   };
+  const aiBaseReady = !automationDraft.disableAiFallback && Boolean(automationDraft.aiBusinessContext?.trim());
+  const aiControlledDisabled = Boolean(automationDraft.aiAssistantLocked) || !aiBaseReady;
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
   const draftJsonErrors = useMemo(
     () =>
@@ -459,18 +463,24 @@ export default function AdminTenantChatbotPage() {
                 {
                   key: "disableChatbot" as const,
                   title: "Fluxo configuravel",
-                  help: automationDraft.chatbotLocked
-                    ? "Bloqueado no console interno. Remova o bloqueio no cadastro do tenant para reativar no /app."
-                    : "On ativa os flows personalizados criados nesta tela.",
+                  help: "On libera os flows personalizados para este tenant.",
+                },
+                {
+                  key: "disableChatbotFlowEditing" as const,
+                  title: "Edicao de flows no /app",
+                  help: "On permite que o ADMIN do tenant crie ou edite fluxos em /app/chatbot.",
+                },
+                {
+                  key: "disableLegacyFlows" as const,
+                  title: "Fluxos prontos",
+                  help: "Camada interna da plataforma. Mantenha Off quando o tenant usa apenas flows configuraveis.",
                 },
                 {
                   key: "disableAiFallback" as const,
                   title: "Base de IA do tenant",
-                  help: automationDraft.aiLocked
-                    ? "Bloqueada no console interno."
-                    : automationDraft.aiConfigured
-                      ? "On permite recursos de IA neste tenant."
-                      : "Configure o contexto de negocio abaixo antes de liberar a base de IA.",
+                  help: automationDraft.aiConfigured
+                    ? "On permite recursos de IA neste tenant."
+                    : "Configure o contexto de negocio abaixo antes de liberar a IA controlada.",
                 },
                 {
                   key: "disableIntentClassifier" as const,
@@ -490,13 +500,7 @@ export default function AdminTenantChatbotPage() {
                   </span>
                   <TogglePill
                     checked={!automationDraft[item.key]}
-                    disabled={
-                      (item.key === "disableChatbot" && automationDraft.chatbotLocked) ||
-                      (item.key === "disableAiFallback" &&
-                        (automationDraft.aiLocked ||
-                          (!automationDraft.aiConfigured && automationDraft.disableAiFallback))) ||
-                      (item.key === "disableIntentClassifier" && automationDraft.intentClassifierLocked)
-                    }
+                    disabled={item.key === "disableIntentClassifier" && automationDraft.intentClassifierLocked}
                     onToggle={() =>
                       setSettings((current) =>
                         current
@@ -535,12 +539,12 @@ export default function AdminTenantChatbotPage() {
                 <div>
                   <span className="block font-medium text-white">IA controlada</span>
                   <span className="mt-1 block text-white/60">
-                    Camada segura para dúvidas simples. Não substitui fluxo nem atendimento humano.
+                    Camada segura para dúvidas simples. Exige base de IA liberada e contexto preenchido.
                   </span>
                 </div>
                 <TogglePill
                   checked={automationDraft.aiAssistantEnabled === true}
-                  disabled={automationDraft.aiAssistantLocked}
+                  disabled={aiControlledDisabled}
                   onToggle={() =>
                     setSettings((current) =>
                       current
