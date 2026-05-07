@@ -11982,7 +11982,7 @@ function isChatbotDisabledForTenant(tenant?: {
   disableChatbot?: boolean;
   appDisableChatbot?: boolean;
 } | null) {
-  return tenant?.disableChatbot === true || tenant?.appDisableChatbot === true;
+  return tenant?.disableChatbot === true;
 }
 
 function isAiFallbackDisabledForTenant(tenant?: {
@@ -11992,7 +11992,7 @@ function isAiFallbackDisabledForTenant(tenant?: {
 } | null) {
   const aiConfigured = Boolean(tenant?.aiBusinessContext?.trim());
   if (!aiConfigured) return true;
-  return tenant?.disableAiFallback === true || tenant?.appDisableAiFallback === true;
+  return tenant?.disableAiFallback === true;
 }
 
 function isIntentClassifierDisabledForTenant(tenant?: {
@@ -12000,8 +12000,7 @@ function isIntentClassifierDisabledForTenant(tenant?: {
   appDisableIntentClassifier?: boolean;
 } | null) {
   if (!env.FLOW_INTENT_CLASSIFIER_ENABLED) return true;
-  if (tenant?.disableIntentClassifier === true) return true;
-  return tenant?.appDisableIntentClassifier !== false;
+  return tenant?.disableIntentClassifier === true;
 }
 
 async function enforceAppFeature(

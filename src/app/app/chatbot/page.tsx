@@ -620,11 +620,11 @@ export default function AppChatbotPage() {
               },
               {
                 key: "disableAiFallback" as const,
-                title: "IA conversacional",
+                title: "Base de IA do tenant",
                 help: automationDraft.aiLocked
                   ? "Bloqueado pelo console interno. O tenant nao pode reativar esta camada no /app."
                   : automationDraft.aiConfigured
-                  ? "On ativa a IA automatica com o contexto configurado para este tenant."
+                  ? "On libera os recursos de IA configurados para este tenant."
                   : "Indisponivel ate existir configuracao previa de contexto para este tenant.",
               },
               {

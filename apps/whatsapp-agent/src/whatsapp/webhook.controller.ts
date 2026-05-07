@@ -1270,11 +1270,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return resolvedEntryPointChatbotFlow;
   };
   const isChatbotDisabledForTenant = () =>
-    appliedTenantConfig?.disableChatbot === true || appliedTenantConfig?.appDisableChatbot === true;
+    appliedTenantConfig?.disableChatbot === true;
   const isAiFallbackDisabledForTenant = () =>
     !appliedTenantConfig?.aiBusinessContext?.trim() ||
-    appliedTenantConfig?.disableAiFallback === true ||
-    appliedTenantConfig?.appDisableAiFallback === true;
+    appliedTenantConfig?.disableAiFallback === true;
   const loadChatbotFlowForConversation = async (
     state: ConversationState,
     inboundText: string | null | undefined,
@@ -3151,8 +3150,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           let shouldDeferInitialMenuToAssistant = false;
           const intentClassifierEnabled =
             env.FLOW_INTENT_CLASSIFIER_ENABLED &&
-            appliedTenantConfig?.disableIntentClassifier !== true &&
-            appliedTenantConfig?.appDisableIntentClassifier === false;
+            appliedTenantConfig?.disableIntentClassifier !== true;
           if (intentClassifierEnabled) {
             if (updatedConversation.mode === "HUMAN") {
               logger.info({

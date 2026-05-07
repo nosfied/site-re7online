@@ -107,7 +107,7 @@ function buildDefaultTenant(): TenantConfigMap {
     handoffAttendantWaid: env.HANDOFF_ATTENDANT_WAID ?? "",
     defaultLanguage: env.OUTBOUND_TEMPLATE_DEFAULT_LANG ?? "pt_BR",
     disableLegacyFlows: true,
-    appDisableIntentClassifier: true,
+    appDisableIntentClassifier: false,
     templates: {
       manualHandoff: env.HANDOFF_TEMPLATE_NAME || "re7_atendente_manual_v1",
     },
@@ -159,7 +159,7 @@ function normalizeTenantConfigMap(input: unknown): unknown {
       nextTenant.appDisableAiFallback = false;
     }
     if (nextTenant.appDisableIntentClassifier === undefined) {
-      nextTenant.appDisableIntentClassifier = true;
+      nextTenant.appDisableIntentClassifier = false;
     }
     if (nextTenant.followUpEnabled === undefined) {
       nextTenant.followUpEnabled = false;

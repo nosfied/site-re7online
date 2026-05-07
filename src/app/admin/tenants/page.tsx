@@ -172,9 +172,10 @@ export default function TenantsSummaryPage() {
           handoffAttendantWaid: "",
           defaultLanguage: "pt_BR",
           disableChatbot: true,
-          appDisableChatbot: true,
+          appDisableChatbot: false,
           disableLegacyFlows: true,
           disableAiFallback: true,
+          appDisableIntentClassifier: false,
         });
       } catch {
         setCreatedTenant({ tenantId: clientKey, clientKey });
