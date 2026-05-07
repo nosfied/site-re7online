@@ -34,6 +34,8 @@ import {
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
+  buildSafeResponse,
+  classifyRisk,
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
@@ -4311,6 +4313,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
         blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
       };
+      const assistantTenantContext = {
+        tenantName: appliedTenantConfig.name,
+        aiBusinessContext,
+        defaultLanguage: appliedTenantConfig.defaultLanguage,
+        flowContext: updatedConversation.answers?.flowContext,
+        flowTags: updatedConversation.answers?.flowTags,
+      };
       try {
         if (assistantState.lastMessageId === message.messageId) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "duplicate_message" });
@@ -4321,29 +4330,26 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         } else if (!isWindowOpen(updatedConversation, Date.now())) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
-        } else if (!isSimpleQuestion(message.text, assistantQuestionOptions)) {
-          await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
         } else {
-          await logAiAssistantEvent("ai.assistant.invoked", {
-            count: assistantState.count,
-            maxReplies,
-          });
-          const aiReply = await generateControlledAssistantReply({
-            brain: agentBrain,
-            text: message.text,
-            tenant: {
-              name: appliedTenantConfig.name,
-              defaultLanguage: appliedTenantConfig.defaultLanguage,
-              aiBusinessContext,
-              aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
-              aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
-              aiAssistantBlockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
-            },
-            state: updatedConversation,
-            nowIso: new Date().toISOString(),
-          });
-          if (aiReply.ok) {
-            replyText = aiReply.text;
+          const isSimple = isSimpleQuestion(message.text, assistantQuestionOptions);
+          const risk = classifyRisk(message.text, assistantTenantContext);
+          if (!risk) {
+            await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
+          }
+          if (!isSimple && !risk) {
+            await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
+          } else if (risk) {
+            const flowContext = updatedConversation.answers?.flowContext ?? {};
+            await logAiAssistantEvent("ai.guardrail.detected", {
+              risk,
+              count: assistantState.count,
+              maxReplies,
+              tenantName: appliedTenantConfig.name,
+              contextArea: typeof flowContext.area === "string" ? flowContext.area : null,
+              contextServico: typeof flowContext.servico === "string" ? flowContext.servico : null,
+              contextIntent: typeof flowContext.intent === "string" ? flowContext.intent : null,
+            });
+            replyText = buildSafeResponse(risk, assistantTenantContext);
             updatedConversation = {
               ...updatedConversation,
               answers: {
@@ -4355,14 +4361,53 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 },
               },
             };
-            await logAiAssistantEvent("ai.assistant.responded", {
-              model: aiReply.model ?? null,
+            await logAiAssistantEvent("ai.guardrail.responded", {
+              risk,
               latency_ms: Date.now() - start,
               count: assistantState.count + 1,
               maxReplies,
             });
           } else {
-            await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
+            await logAiAssistantEvent("ai.assistant.invoked", {
+              count: assistantState.count,
+              maxReplies,
+            });
+            const aiReply = await generateControlledAssistantReply({
+              brain: agentBrain,
+              text: message.text,
+              tenant: {
+                name: appliedTenantConfig.name,
+                defaultLanguage: appliedTenantConfig.defaultLanguage,
+                aiBusinessContext,
+                aiAssistantSystemPrompt: appliedTenantConfig.aiAssistantSystemPrompt,
+                aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+                aiAssistantBlockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
+              },
+              state: updatedConversation,
+              nowIso: new Date().toISOString(),
+            });
+            if (aiReply.ok) {
+              replyText = aiReply.text;
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: new Date().toISOString(),
+                    lastMessageId: message.messageId,
+                  },
+                },
+              };
+              await logAiAssistantEvent("ai.assistant.responded", {
+                model: aiReply.model ?? null,
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+            } else {
+              await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
+            }
           }
         }
       } catch (error) {

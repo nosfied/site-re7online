@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildSafeResponse,
+  classifyRisk,
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
@@ -45,6 +47,38 @@ test("isSimpleQuestion supports tenant-specific topics and extra blocked terms",
     }),
     false
   );
+});
+
+test("classifyRisk detects concrete or sensitive requests", () => {
+  assert.equal(classifyRisk("tenho direito ao BPC?"), "legal_specific_case");
+  assert.equal(classifyRisk("quanto vou receber?"), "benefit_amount");
+  assert.equal(classifyRisk("meu caso ganha?"), "outcome_prediction");
+  assert.equal(classifyRisk("analise meu documento"), "document_analysis");
+  assert.equal(classifyRisk("meu CPF é 123.456.789-00"), "personal_data");
+  assert.equal(classifyRisk("como burlar o cadastro?"), "fraud_or_illicit");
+});
+
+test("classifyRisk does not block educational questions", () => {
+  assert.equal(classifyRisk("o que é BPC?"), null);
+  assert.equal(classifyRisk("como funciona aposentadoria?"), null);
+  assert.equal(classifyRisk("quanto tempo demora?"), null);
+});
+
+test("buildSafeResponse adapts to legal and generic contexts", () => {
+  const legal = buildSafeResponse("legal_specific_case", {
+    tenantName: "Justa Advocacia",
+    aiBusinessContext: "Direito previdenciario",
+    flowContext: { area: "previdenciario", servico: "bpc_loas" },
+  });
+  assert.match(legal, /Não posso afirmar isso sem uma análise individual do caso/);
+  assert.match(legal, /especialista/);
+
+  const generic = buildSafeResponse("legal_specific_case", {
+    tenantName: "Loja Exemplo",
+    aiBusinessContext: "Venda de planos empresariais",
+  });
+  assert.match(generic, /Não consigo confirmar uma situação específica/);
+  assert.doesNotMatch(generic.toLowerCase(), /advogado|advocacia|jurídico|juridico/);
 });
 
 test("generateControlledAssistantReply sanitizes context and appends required suffix", async () => {
