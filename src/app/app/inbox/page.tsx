@@ -4268,8 +4268,8 @@ export default function AppInboxPage() {
             ) : (
               <>
                 {selectedSuggestedReply ? (
-                  <section className="border-b border-white/10 px-3 py-3">
-                    <div className="group relative inline-flex">
+                  <section className="relative z-30 flex justify-end border-b border-white/10 px-3 py-3">
+                    <div className="group relative inline-flex justify-end">
                       <button
                         type="button"
                         onClick={handleUseSuggestedReply}
@@ -4278,7 +4278,7 @@ export default function AppInboxPage() {
                       >
                         Usar sugestão de resposta
                       </button>
-                      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-72 rounded-xl border border-white/15 bg-[#101f3a] p-3 text-xs leading-relaxed text-white/90 shadow-xl group-hover:block">
+                      <div className="pointer-events-none absolute right-0 top-full z-[9999] mt-2 hidden w-72 rounded-xl border border-white/15 bg-[#101f3a] p-3 text-xs leading-relaxed text-white/90 shadow-2xl ring-1 ring-black/30 group-hover:block">
                         <p className="line-clamp-6 whitespace-pre-wrap">{selectedSuggestedReply}</p>
                       </div>
                     </div>
