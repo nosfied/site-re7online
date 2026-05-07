@@ -685,22 +685,25 @@ export default function AdminTenantChatbotPage() {
                   </span>
                 </label>
               </div>
-              <textarea
-                value={automationDraft.aiAssistantSystemPrompt ?? ""}
-                disabled={automationDraft.aiAssistantLocked}
-                onChange={(event) =>
-                  setSettings((current) =>
-                    current
-                      ? {
-                          ...current,
-                          aiAssistantSystemPrompt: event.target.value,
-                        }
-                      : current
-                  )
-                }
-                placeholder="Instrução adicional aprovada para a IA controlada"
-                className="mt-3 min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-              />
+              <label className="mt-3 flex flex-col gap-1 text-xs text-white/60">
+                Instrução adicional aprovada
+                <textarea
+                  value={automationDraft.aiAssistantSystemPrompt ?? ""}
+                  disabled={automationDraft.aiAssistantLocked}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            aiAssistantSystemPrompt: event.target.value,
+                          }
+                        : current
+                    )
+                  }
+                  placeholder="Orientação complementar para a IA controlada"
+                  className="min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                />
+              </label>
             </div>
           </div>
         ) : null}
