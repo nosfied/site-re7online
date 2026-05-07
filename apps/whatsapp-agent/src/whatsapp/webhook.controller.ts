@@ -3148,6 +3148,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           });
         } else {
           let chatbotStartNodeId: string | undefined;
+          let shouldDeferInitialMenuToAssistant = false;
           const intentClassifierEnabled =
             env.FLOW_INTENT_CLASSIFIER_ENABLED &&
             appliedTenantConfig?.disableIntentClassifier !== true &&
@@ -3353,57 +3354,90 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               }
             }
           }
-          const chatbotResult = executeChatbotFlow({
-            flowId: chatbotFlow.id,
-            definition: validatedDefinition.definition,
-            state: updatedConversation,
-            inboundText: message.text,
-            nowIso: message.timestamp,
-            startNodeId: chatbotStartNodeId,
-          });
-          updatedConversation = chatbotResult.state;
-          chatbotFlowResult = {
-            handled: chatbotResult.handled,
-            state: chatbotResult.state,
-            replyText: chatbotResult.replyText,
-            flowId: chatbotFlow.id,
-            pendingHandoff: chatbotResult.pendingHandoff,
-          };
-          for (const event of chatbotResult.events ?? []) {
+          if (
+            !chatbotStartNodeId &&
+            !updatedConversation.chatbotActive &&
+            !updatedConversation.chatbotNodeId &&
+            message.text &&
+            env.AI_ASSISTANT_ENABLED &&
+            env.WHATSAPP_AI_ENABLED &&
+            appliedTenantConfig?.aiAssistantEnabled === true &&
+            !isAiFallbackDisabledForTenant() &&
+            !env.WHATSAPP_SANDBOX &&
+            updatedConversation.intent !== "handoff" &&
+            updatedConversation.mode !== "HUMAN" &&
+            updatedConversation.handoff.status === "none" &&
+            isWindowOpen(updatedConversation, Date.now()) &&
+            isSimpleQuestion(message.text, {
+              allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+              blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
+            })
+          ) {
+            shouldDeferInitialMenuToAssistant = true;
             logger.info({
-              ...event,
+              event: "chatbot.initial_menu.deferred_to_ai",
               clientId: tenantClientId,
               clientKey: tenantClientKey,
+              flowId: chatbotFlow.id,
+              waId: maskNumber(normalizedFrom),
+              reason: "simple_question_before_initial_menu",
               requestId: meta?.requestId,
             });
           }
-          if (
-            !chatbotResult.pendingHandoff &&
-            previousHandoffStatus !== chatbotResult.state.handoff.status &&
-            (chatbotResult.state.handoff.status === "pending" ||
-              chatbotResult.state.handoff.status === "active")
-          ) {
-            updatedConversation = await ensurePendingHandoffRouting(chatbotResult.state);
-            chatbotFlowResult.state = updatedConversation;
-            if (tenantHandoffAttendantWaid) {
-              await notifyAttendantHumanRequested({
-                attendantWaId: tenantHandoffAttendantWaid,
-                leadWaId: normalizedFrom,
-                snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
+
+          if (!shouldDeferInitialMenuToAssistant) {
+            const chatbotResult = executeChatbotFlow({
+              flowId: chatbotFlow.id,
+              definition: validatedDefinition.definition,
+              state: updatedConversation,
+              inboundText: message.text,
+              nowIso: message.timestamp,
+              startNodeId: chatbotStartNodeId,
+            });
+            updatedConversation = chatbotResult.state;
+            chatbotFlowResult = {
+              handled: chatbotResult.handled,
+              state: chatbotResult.state,
+              replyText: chatbotResult.replyText,
+              flowId: chatbotFlow.id,
+              pendingHandoff: chatbotResult.pendingHandoff,
+            };
+            for (const event of chatbotResult.events ?? []) {
+              logger.info({
+                ...event,
+                clientId: tenantClientId,
+                clientKey: tenantClientKey,
                 requestId: meta?.requestId,
               });
             }
+            if (
+              !chatbotResult.pendingHandoff &&
+              previousHandoffStatus !== chatbotResult.state.handoff.status &&
+              (chatbotResult.state.handoff.status === "pending" ||
+                chatbotResult.state.handoff.status === "active")
+            ) {
+              updatedConversation = await ensurePendingHandoffRouting(chatbotResult.state);
+              chatbotFlowResult.state = updatedConversation;
+              if (tenantHandoffAttendantWaid) {
+                await notifyAttendantHumanRequested({
+                  attendantWaId: tenantHandoffAttendantWaid,
+                  leadWaId: normalizedFrom,
+                  snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
+                  requestId: meta?.requestId,
+                });
+              }
+            }
+            logger.info({
+              event: "chatbot.executor.checked",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              flowId: chatbotFlow.id,
+              handled: chatbotResult.handled,
+              active: updatedConversation.chatbotActive ?? false,
+              nodeId: updatedConversation.chatbotNodeId ?? null,
+              requestId: meta?.requestId,
+            });
           }
-          logger.info({
-            event: "chatbot.executor.checked",
-            clientId: tenantClientId,
-            clientKey: tenantClientKey,
-            flowId: chatbotFlow.id,
-            handled: chatbotResult.handled,
-            active: updatedConversation.chatbotActive ?? false,
-            nodeId: updatedConversation.chatbotNodeId ?? null,
-            requestId: meta?.requestId,
-          });
         }
       }
     }
@@ -4229,43 +4263,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !hasDemoSignal &&
       !leadHandled;
 
-    if (noAutomationReplyConfigured) {
-      updatedConversation = await routeConversationToHumanQueue(updatedConversation, {
-        reason: "no_automation_reply_configured",
-        timestamp: message.timestamp,
-        messageId: message.messageId,
-      });
-      logger.info({
-        event: "reply.skipped",
-        waId: maskNumber(normalizedFrom),
-        reason: "no_automation_reply_configured",
-        route: meta?.route,
-        method: meta?.method,
-        requestId: meta?.requestId,
-      });
-      continue;
-    }
-
     let replyText = demoReplyText ?? leadReplyText ?? flowReplyText ?? handoffResult.replyText ?? (env.WHATSAPP_ECHO_ENABLED
       ? message.type === "text" && message.text
         ? `ECO: ${message.text}`
         : `ECO: (mensagem ${message.type} recebida)`
       : env.WHATSAPP_DEFAULT_REPLY);
+    let aiAssistantResponded = false;
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
       : message.from;
-
-    logger.info({
-      event: "reply.sending",
-      messageId: message.messageId,
-      replyType,
-      to: maskNumber(message.from),
-      toResolved: maskNumber(toForReply),
-      route: meta?.route,
-      method: meta?.method,
-      requestId: meta?.requestId,
-    });
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
     const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
@@ -4350,6 +4357,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               contextIntent: typeof flowContext.intent === "string" ? flowContext.intent : null,
             });
             replyText = buildSafeResponse(risk, assistantTenantContext);
+            aiAssistantResponded = true;
             updatedConversation = {
               ...updatedConversation,
               answers: {
@@ -4388,6 +4396,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
             if (aiReply.ok) {
               replyText = aiReply.text;
+              aiAssistantResponded = true;
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -4431,6 +4440,34 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         );
       }
     }
+
+    if (noAutomationReplyConfigured && !aiAssistantResponded) {
+      updatedConversation = await routeConversationToHumanQueue(updatedConversation, {
+        reason: "no_automation_reply_configured",
+        timestamp: message.timestamp,
+        messageId: message.messageId,
+      });
+      logger.info({
+        event: "reply.skipped",
+        waId: maskNumber(normalizedFrom),
+        reason: "no_automation_reply_configured",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      continue;
+    }
+
+    logger.info({
+      event: "reply.sending",
+      messageId: message.messageId,
+      replyType,
+      to: maskNumber(message.from),
+      toResolved: maskNumber(toForReply),
+      route: meta?.route,
+      method: meta?.method,
+      requestId: meta?.requestId,
+    });
 
     const sendPromise =
       replyType === "template"

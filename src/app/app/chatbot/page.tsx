@@ -16,7 +16,6 @@ import {
   loadAppSession,
   saveAppSession,
   updateAppChatbotFlow,
-  updateAppChatbotSettings,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -75,6 +74,9 @@ function normalizeChatbotError(error: AppApiError, fallback: string) {
   }
   if (error.errorCode === "intent_classifier_globally_disabled") {
     return error.message || "Classificacao por mensagem livre esta desativada no ambiente.";
+  }
+  if (error.errorCode === "managed_by_internal_admin") {
+    return error.message || "Estas configuracoes sao gerenciadas no console interno.";
   }
   if (error.status === 403) {
     return "Sem permissao para gerenciar flows do chatbot.";
@@ -327,7 +329,6 @@ export default function AppChatbotPage() {
   const [flows, setFlows] = useState<AppChatbotFlowItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -578,32 +579,8 @@ export default function AppChatbotPage() {
     intentClassifierLocked: true,
   };
   const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
-  const flowReadOnly = readOnly || flowEditingLocked;
-
-  const handleSaveSettings = async () => {
-    if (!session || !settings) return;
-    if (readOnly) {
-      setError("Somente administradores podem alterar essas configuracoes.");
-      return;
-    }
-    setSavingSettings(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const response = await updateAppChatbotSettings(session, automationDraft);
-      setSettings(response.settings);
-      setSuccess("Automacao atualizada com sucesso.");
-    } catch (err) {
-      const typed = err as AppApiError;
-      if (typed.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-      setError(typed.message || "Falha ao salvar automacao.");
-    } finally {
-      setSavingSettings(false);
-    }
-  };
+  const automationReadOnly = true;
+  const flowReadOnly = true;
 
   return (
     <AppShell
@@ -619,23 +596,16 @@ export default function AppChatbotPage() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
             <p className="mt-1 text-sm text-white/65">
-              Ligue ou desligue os recursos disponiveis para este cliente.
+              Acompanhe os recursos liberados no console interno para este cliente.
             </p>
             <p className="mt-1 text-xs text-white/50">
               Configuracao de IA: {automationDraft.aiConfigured ? "pronta" : "pendente"}.
               {!automationDraft.aiConfigured ? " Sem isso, a IA conversacional fica indisponivel." : ""}
             </p>
           </div>
-          {!readOnly ? (
-            <button
-              type="button"
-              onClick={handleSaveSettings}
-              disabled={savingSettings || !settings}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSettings ? "Salvando..." : "Salvar ajustes"}
-            </button>
-          ) : null}
+          <span className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/60">
+            Somente leitura
+          </span>
         </div>
 
         {settings ? (
@@ -676,23 +646,14 @@ export default function AppChatbotPage() {
                 <TogglePill
                   checked={!automationDraft[item.key]}
                   disabled={
-                    readOnly ||
+                    automationReadOnly ||
                     (item.key === "disableChatbot" && automationDraft.chatbotLocked) ||
                     (item.key === "disableAiFallback" &&
                       (automationDraft.aiLocked ||
                         (!automationDraft.aiConfigured && automationDraft.disableAiFallback))) ||
                     (item.key === "disableIntentClassifier" && automationDraft.intentClassifierLocked)
                   }
-                  onToggle={() =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            [item.key]: !current[item.key],
-                          }
-                        : current
-                    )
-                  }
+                  onToggle={() => undefined}
                 />
               </div>
             ))}
@@ -705,17 +666,8 @@ export default function AppChatbotPage() {
               </span>
               <TogglePill
                 checked={automationDraft.aiAssistantEnabled === true}
-                disabled={readOnly || automationDraft.aiAssistantLocked}
-                onToggle={() =>
-                  setSettings((current) =>
-                    current
-                      ? {
-                          ...current,
-                          aiAssistantEnabled: !current.aiAssistantEnabled,
-                        }
-                      : current
-                  )
-                }
+                disabled={automationReadOnly || automationDraft.aiAssistantLocked}
+                onToggle={() => undefined}
               />
               <label className="flex w-full max-w-xs flex-col gap-1 text-xs text-white/60">
                 Maximo por conversa
@@ -724,17 +676,8 @@ export default function AppChatbotPage() {
                   min={0}
                   max={5}
                   value={automationDraft.aiAssistantMaxReplies ?? 2}
-                  disabled={readOnly || automationDraft.aiAssistantLocked}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            aiAssistantMaxReplies: Math.max(0, Number(event.target.value) || 0),
-                          }
-                        : current
-                    )
-                  }
+                  disabled={automationReadOnly || automationDraft.aiAssistantLocked}
+                  onChange={() => undefined}
                   className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                 />
               </label>
@@ -751,12 +694,11 @@ export default function AppChatbotPage() {
             Novo flow
           </span>
           <p className="text-sm text-white/65">
-            Defina o fluxo em JSON com <code className="rounded bg-white/10 px-1 py-0.5">start</code> e{" "}
-            <code className="rounded bg-white/10 px-1 py-0.5">nodes</code>. Supervisores podem acompanhar, mas nao editar.
+            Fluxos configuraveis sao definidos no console interno. Esta tela mostra o estado liberado para acompanhamento.
           </p>
-          {flowEditingLocked ? (
+          {flowEditingLocked || flowReadOnly ? (
             <p className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-              Criacao e edicao de flows bloqueadas pelo console interno.
+              Criacao e edicao de flows bloqueadas no /app. Use o console interno para alterar.
             </p>
           ) : null}
         </div>

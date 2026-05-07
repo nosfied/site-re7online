@@ -2903,16 +2903,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
       const chatbotLocked = Boolean(tenant.disableChatbot);
       const aiLocked = Boolean(tenant.disableAiFallback);
-      const disableChatbot = isChatbotDisabledForTenant(tenant);
-      const disableAiFallback = isAiFallbackDisabledForTenant(tenant);
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
-          disableChatbot,
-          disableAiFallback,
-          disableIntentClassifier: isIntentClassifierDisabledForTenant(tenant),
+          disableChatbot: Boolean(tenant.disableChatbot),
+          disableAiFallback: Boolean(tenant.disableAiFallback),
+          disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
           aiAssistantEnabled: tenant.aiAssistantEnabled === true,
           aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
           aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
@@ -2929,8 +2927,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             !env.WHATSAPP_AI_ENABLED ||
             tenant.disableAiFallback === true ||
             !aiConfigured,
-          intentClassifierLocked:
-            !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
+          intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
         },
       });
     } catch (error) {
@@ -2945,346 +2942,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (req.method === "PUT" && pathname === "/app/chatbot/settings") {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
-        json(res, 403, httpError("forbidden", "Only admin can manage chatbot settings."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "chatbot",
-        endpoint: pathname,
-        requestId,
-      }))) return;
-      const body = await readJsonBody(req, res);
-      if (!body) return;
-      const data = body as Record<string, unknown>;
-      const keys = ["disableChatbot", "disableAiFallback", "disableIntentClassifier"] as const;
-      const payload: Record<string, boolean> = {};
-      for (const key of keys) {
-        if (Object.prototype.hasOwnProperty.call(data, key)) {
-          if (typeof data[key] !== "boolean") {
-            json(res, 400, httpError("bad_request", `${key} must be boolean`));
-            return;
-          }
-          payload[key] = data[key] as boolean;
-        }
-      }
-      if (Object.keys(payload).length === 0) {
-        if (
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics") &&
-          !Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")
-        ) {
-        json(
-          res,
-          400,
-          httpError(
-            "bad_request",
-            "Provide at least one of disableChatbot, disableAiFallback or disableIntentClassifier"
-          )
-        );
-        return;
-        }
-      }
-      const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (!tenant) {
-        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
-        return;
-      }
-      const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
-      if (payload.disableChatbot === false && tenant.disableChatbot) {
-        json(
-          res,
-          409,
-          httpError(
-            "chatbot_locked_by_admin",
-            "Fluxo configuravel esta desativado no console interno."
-          )
-        );
-        return;
-      }
-      if (payload.disableAiFallback === false && !aiConfigured) {
-        json(
-          res,
-          409,
-          httpError(
-            "ai_context_missing",
-            "AI automatica exige configuracao previa do tenant."
-          )
-        );
-        return;
-      }
-      if (payload.disableAiFallback === false && tenant.disableAiFallback) {
-        json(
-          res,
-          409,
-          httpError(
-            "ai_locked_by_admin",
-            "IA conversacional esta desativada no console interno."
-          )
-        );
-        return;
-      }
-      if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
-        json(
-          res,
-          409,
-          httpError(
-            "intent_classifier_globally_disabled",
-            "Classificacao por mensagem livre esta desativada no ambiente."
-          )
-        );
-        return;
-      }
-      if (payload.disableIntentClassifier === false && tenant.disableIntentClassifier) {
-        json(
-          res,
-          409,
-          httpError(
-            "intent_classifier_locked_by_admin",
-            "Classificacao por mensagem livre esta desativada no console interno."
-          )
-        );
-        return;
-      }
-      const aiAssistantPatch: Record<string, unknown> = {};
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
-        if (typeof data.aiAssistantEnabled !== "boolean") {
-          json(res, 400, httpError("bad_request", "aiAssistantEnabled must be boolean"));
-          return;
-        }
-        if (data.aiAssistantEnabled === true) {
-          if (!env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED) {
-            json(res, 409, httpError("ai_assistant_globally_disabled", "IA controlada esta desativada no ambiente."));
-            return;
-          }
-          if (!tenant.aiBusinessContext?.trim()) {
-            json(res, 409, httpError("ai_context_missing", "IA controlada exige contexto previo do tenant."));
-            return;
-          }
-          if (tenant.disableAiFallback) {
-            json(res, 409, httpError("ai_locked_by_admin", "IA esta desativada no console interno."));
-            return;
-          }
-        }
-        aiAssistantPatch.aiAssistantEnabled = data.aiAssistantEnabled;
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies")) {
-        if (
-          typeof data.aiAssistantMaxReplies !== "number" ||
-          !Number.isInteger(data.aiAssistantMaxReplies) ||
-          data.aiAssistantMaxReplies < 0
-        ) {
-          json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
-          return;
-        }
-        aiAssistantPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile")) {
-        if (
-          data.aiAssistantProfile !== "business" &&
-          data.aiAssistantProfile !== "government" &&
-          data.aiAssistantProfile !== "legal_previdenciario"
-        ) {
-          json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
-          return;
-        }
-        aiAssistantPatch.aiAssistantProfile = data.aiAssistantProfile;
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")) {
-        if (typeof data.aiAssistantFallbackToHandoff !== "boolean") {
-          json(res, 400, httpError("bad_request", "aiAssistantFallbackToHandoff must be boolean"));
-          return;
-        }
-        aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics")) {
-        const terms = normalizeAiAssistantTermList(data.aiAssistantAllowedTopics);
-        if (!terms) {
-          json(res, 400, httpError("bad_request", "aiAssistantAllowedTopics must be an array of strings"));
-          return;
-        }
-        aiAssistantPatch.aiAssistantAllowedTopics = terms;
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
-        const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
-        if (!terms) {
-          json(res, 400, httpError("bad_request", "aiAssistantBlockedTerms must be an array of strings"));
-          return;
-        }
-        aiAssistantPatch.aiAssistantBlockedTerms = terms;
-      }
-
-      const saved = await saveTenantPatch(client.clientKey, {
-        ...(payload.disableChatbot !== undefined
-          ? { appDisableChatbot: payload.disableChatbot }
-          : {}),
-        ...(payload.disableAiFallback !== undefined
-          ? { appDisableAiFallback: payload.disableAiFallback }
-          : {}),
-        ...(payload.disableIntentClassifier !== undefined
-          ? { appDisableIntentClassifier: payload.disableIntentClassifier }
-          : {}),
-        ...aiAssistantPatch,
-      });
-      logger.info({
-        event: "app.chatbot.settings.updated",
-        requestId,
-        clientId: client.id,
-        clientKey: client.clientKey,
-        userId: clientAuth.userId,
-        fieldsChanged: saved.fieldsChanged,
-      });
-      json(res, 200, {
-        ok: true,
-        tenantId: client.clientKey,
-        fieldsChanged: saved.fieldsChanged,
-        settings: {
-          disableAutoReply: Boolean(saved.tenant.disableAutoReply),
-          disableChatbot: isChatbotDisabledForTenant(saved.tenant),
-          disableAiFallback: isAiFallbackDisabledForTenant(saved.tenant),
-          disableIntentClassifier: isIntentClassifierDisabledForTenant(saved.tenant),
-          aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
-          aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
-          aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
-          aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
-          aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
-          aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
-          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
-          aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
-          chatbotLocked: Boolean(saved.tenant.disableChatbot),
-          flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
-          aiLocked: Boolean(saved.tenant.disableAiFallback),
-          aiAssistantLocked:
-            !env.AI_ASSISTANT_ENABLED ||
-            !env.WHATSAPP_AI_ENABLED ||
-            saved.tenant.disableAiFallback === true ||
-            !saved.tenant.aiBusinessContext?.trim(),
-          intentClassifierLocked:
-            !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
-        },
-      });
-    } catch (error) {
-      logger.error({
-        event: "app.chatbot.settings.update.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    logger.warn({
+      event: "app.chatbot.settings.update.denied",
+      requestId,
+      clientId: clientAuth.clientId,
+      userId: clientAuth.userId,
+      reason: "managed_by_internal_admin",
+    });
+    json(
+      res,
+      403,
+      httpError("managed_by_internal_admin", "Automacoes sao gerenciadas no console interno.")
+    );
     return;
   }
 
   if (req.method === "POST" && pathname === "/app/chatbot/flows") {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
-        json(res, 403, httpError("forbidden", "Only admin can manage chatbot flows."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "chatbot",
-        endpoint: pathname,
-        requestId,
-      }))) return;
-      const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (tenant?.disableChatbotFlowEditing) {
-        json(
-          res,
-          409,
-          httpError(
-            "chatbot_flow_editing_locked_by_admin",
-            "Criacao e edicao de flows esta bloqueada no console interno."
-          )
-        );
-        return;
-      }
-      const body = await readJsonBody(req, res);
-      if (!body) return;
-      const parsed = parseChatbotFlowUpsertPayload(body, { requireName: true, requireDefinition: true });
-      if (!parsed.ok) {
-        json(res, parsed.status, httpError(parsed.code, parsed.message));
-        return;
-      }
-
-      const flow = await prisma.$transaction(async (tx) => {
-        if (parsed.data.entryPoint === true) {
-          await tx.chatbotFlow.updateMany({
-            where: { clientId: client.id },
-            data: { entryPoint: false },
-          });
-        }
-        return tx.chatbotFlow.create({
-          data: {
-            clientId: client.id,
-            name: parsed.data.name as string,
-            isActive: parsed.data.isActive ?? false,
-            entryPoint: parsed.data.entryPoint ?? false,
-            definition: parsed.data.definition as Prisma.InputJsonValue,
-          },
-          select: {
-            id: true,
-            clientId: true,
-            name: true,
-            isActive: true,
-            entryPoint: true,
-            definition: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-      });
-
-      logger.info({
-        event: "chatbot.flow.created",
-        requestId,
-        clientId: client.id,
-        userId: clientAuth.userId,
-        flowId: flow.id,
-        isActive: flow.isActive,
-        entryPoint: flow.entryPoint,
-      });
-      json(res, 200, { ok: true, flow });
-    } catch (error) {
-      logger.error({
-        event: "app.chatbot.flows.create.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    logger.warn({
+      event: "app.chatbot.flows.create.denied",
+      requestId,
+      clientId: clientAuth.clientId,
+      userId: clientAuth.userId,
+      reason: "managed_by_internal_admin",
+    });
+    json(
+      res,
+      403,
+      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
+    );
     return;
   }
 
@@ -3293,132 +2982,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.startsWith("/app/chatbot/flows/") &&
     pathname.split("/").length === 5
   ) {
-    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    try {
-      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
-        json(res, 403, httpError("forbidden", "Only admin can manage chatbot flows."));
-        return;
-      }
-      const client = await getScopedClientById(prisma, clientAuth.clientId);
-      if (!client) {
-        json(res, 404, httpError("client_not_found", "Client not found"));
-        return;
-      }
-      if (client.status !== "ACTIVE") {
-        json(res, 403, httpError("client_inactive", "Client inactive"));
-        return;
-      }
-      if (!(await enforceAppFeature(prisma, res, {
-        client,
-        userId: clientAuth.userId,
-        feature: "chatbot",
-        endpoint: pathname,
-        requestId,
-      }))) return;
-      const tenants = await getTenants();
-      const tenant = tenants[client.clientKey];
-      if (tenant?.disableChatbotFlowEditing) {
-        json(
-          res,
-          409,
-          httpError(
-            "chatbot_flow_editing_locked_by_admin",
-            "Criacao e edicao de flows esta bloqueada no console interno."
-          )
-        );
-        return;
-      }
-      const flowId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
-      if (!flowId) {
-        json(res, 400, httpError("bad_request", "Flow id is required"));
-        return;
-      }
-      const existing = await prisma.chatbotFlow.findFirst({
-        where: {
-          id: flowId,
-          clientId: client.id,
-        },
-        select: {
-          id: true,
-          name: true,
-          isActive: true,
-          entryPoint: true,
-          definition: true,
-        },
-      });
-      if (!existing) {
-        json(res, 404, httpError("chatbot_flow_not_found", "Chatbot flow not found"));
-        return;
-      }
-      const body = await readJsonBody(req, res);
-      if (!body) return;
-      const parsed = parseChatbotFlowUpsertPayload(body, {
-        requireName: false,
-        requireDefinition: false,
-      });
-      if (!parsed.ok) {
-        json(res, parsed.status, httpError(parsed.code, parsed.message));
-        return;
-      }
-      if (Object.keys(parsed.data).length === 0) {
-        json(res, 400, httpError("bad_request", "Provide name, definition, isActive and/or entryPoint"));
-        return;
-      }
-      const flow = await prisma.$transaction(async (tx) => {
-        if (parsed.data.entryPoint === true) {
-          await tx.chatbotFlow.updateMany({
-            where: {
-              clientId: client.id,
-              NOT: { id: existing.id },
-            },
-            data: { entryPoint: false },
-          });
-        }
-        return tx.chatbotFlow.update({
-          where: { id: existing.id },
-          data: {
-            ...(parsed.data.name ? { name: parsed.data.name } : {}),
-            ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
-            ...(typeof parsed.data.entryPoint === "boolean"
-              ? { entryPoint: parsed.data.entryPoint }
-              : {}),
-            ...(parsed.data.definition
-              ? { definition: parsed.data.definition as Prisma.InputJsonValue }
-              : {}),
-          },
-          select: {
-            id: true,
-            clientId: true,
-            name: true,
-            isActive: true,
-            entryPoint: true,
-            definition: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-      });
-
-      logger.info({
-        event: "chatbot.flow.updated",
-        requestId,
-        clientId: client.id,
-        userId: clientAuth.userId,
-        flowId: flow.id,
-        isActive: flow.isActive,
-        entryPoint: flow.entryPoint,
-      });
-      json(res, 200, { ok: true, flow });
-    } catch (error) {
-      logger.error({
-        event: "app.chatbot.flows.update.error",
-        message: (error as Error).message,
-        requestId,
-      });
-      json(res, 500, httpError("server_error", "Server error"));
-    }
+    logger.warn({
+      event: "app.chatbot.flows.update.denied",
+      requestId,
+      clientId: clientAuth.clientId,
+      userId: clientAuth.userId,
+      reason: "managed_by_internal_admin",
+    });
+    json(
+      res,
+      403,
+      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
+    );
     return;
   }
 
@@ -6640,8 +6217,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
-            intentClassifierLocked:
-              !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(tenant.disableIntentClassifier),
+            intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
             followUpEnabled: tenant.followUpEnabled === true,
             followUpDelayMinutes: tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
             followUpMaxCount: tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
@@ -6909,8 +6485,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
-            intentClassifierLocked:
-              !env.FLOW_INTENT_CLASSIFIER_ENABLED || Boolean(saved.tenant.disableIntentClassifier),
+            intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
             followUpEnabled: saved.tenant.followUpEnabled === true,
             followUpDelayMinutes: saved.tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
             followUpMaxCount: saved.tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
