@@ -4669,8 +4669,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
-      const city = typeof body.city === "string" ? body.city.trim().slice(0, 160) : undefined;
-      const service = typeof body.service === "string" ? body.service.trim().slice(0, 160) : undefined;
+      const email = typeof body.email === "string" ? body.email.trim().slice(0, 160) : undefined;
+      const company = typeof body.company === "string" ? body.company.trim().slice(0, 160) : undefined;
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
         select: { id: true, waId: true, waIdCanonical: true },
@@ -4700,10 +4700,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         where: { id: leadId },
         data: {
           name: name || null,
-          ...(city !== undefined ? { city: city || null } : {}),
-          ...(service !== undefined ? { service: service || null } : {}),
+          ...(email !== undefined ? { email: email || null } : {}),
+          ...(company !== undefined ? { company: company || null } : {}),
         },
-        select: { id: true, name: true, city: true, service: true, updatedAt: true },
+        select: { id: true, name: true, email: true, company: true, updatedAt: true },
       });
       json(res, 200, { ok: true, lead });
     } catch (error) {
@@ -10016,6 +10016,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             name: l.name,
             city: l.city,
             service: l.service,
+            email: l.email,
+            company: l.company,
             status: l.status,
             createdAt: l.createdAt,
           })),
@@ -13116,6 +13118,8 @@ async function anonymizeConversationPrivacyData(
         phone: anonymizedWaId,
         city: null,
         service: null,
+        email: null,
+        company: null,
       },
     }),
     prisma.leadNote.updateMany({
@@ -14102,6 +14106,8 @@ async function buildConversationListPayload(
         phone: true,
         city: true,
         service: true,
+        email: true,
+        company: true,
         status: true,
         updatedAt: true,
         createdAt: true,
@@ -14285,6 +14291,8 @@ async function buildConversationListPayload(
       leadPhone: lead?.phone ?? null,
       leadCity: lead?.city ?? null,
       leadService: lead?.service ?? null,
+      leadEmail: lead?.email ?? null,
+      leadCompany: lead?.company ?? null,
       ...operationalFields,
       departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
       updatedAt: conversation.updatedAt,
@@ -14578,6 +14586,8 @@ async function buildContactTimelinePayload(
       phone: true,
       city: true,
       service: true,
+      email: true,
+      company: true,
       status: true,
       updatedAt: true,
       createdAt: true,

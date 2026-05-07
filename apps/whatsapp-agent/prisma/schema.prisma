@@ -471,6 +471,8 @@ model Lead {
   phone     String?
   city      String?
   service   String?
+  email     String?
+  company   String?
 
   status    String   @default("NEW")
 

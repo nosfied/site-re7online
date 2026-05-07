@@ -2693,8 +2693,8 @@ export default function AppInboxPage() {
       id: selectedConversation.leadId,
       name: selectedConversation.leadName,
       phone: selectedConversation.leadPhone,
-      city: selectedConversation.leadCity,
-      service: selectedConversation.leadService,
+      email: selectedConversation.leadEmail,
+      company: selectedConversation.leadCompany,
       status: selectedConversation.leadStatus as LeadStatus | null,
     };
   }, [selectedConversation]);
@@ -2728,12 +2728,12 @@ export default function AppInboxPage() {
   }, [selectedLead?.id, selectedLead?.name]);
 
   useEffect(() => {
-    setLeadEmailDraft(selectedLead?.city ?? "");
-  }, [selectedLead?.city, selectedLead?.id]);
+    setLeadEmailDraft(selectedLead?.email ?? "");
+  }, [selectedLead?.email, selectedLead?.id]);
 
   useEffect(() => {
-    setLeadCompanyDraft(selectedLead?.service ?? "");
-  }, [selectedLead?.id, selectedLead?.service]);
+    setLeadCompanyDraft(selectedLead?.company ?? "");
+  }, [selectedLead?.company, selectedLead?.id]);
 
   useEffect(() => {
     if (!session || !selectedLead?.id) {
@@ -2847,8 +2847,8 @@ export default function AppInboxPage() {
     const nextCompany = leadCompanyDraft.trim();
     if (
       nextName === (selectedLead.name ?? "") &&
-      nextEmail === (selectedLead.city ?? "") &&
-      nextCompany === (selectedLead.service ?? "")
+      nextEmail === (selectedLead.email ?? "") &&
+      nextCompany === (selectedLead.company ?? "")
     ) {
       return;
     }
@@ -2857,8 +2857,8 @@ export default function AppInboxPage() {
     try {
       const response = await updateAppLead(session, selectedLead.id, {
         name: nextName || null,
-        city: nextEmail || null,
-        service: nextCompany || null,
+        email: nextEmail || null,
+        company: nextCompany || null,
       });
       setConversations((prev) =>
         prev.map((item) =>
@@ -2866,8 +2866,8 @@ export default function AppInboxPage() {
             ? {
                 ...item,
                 leadName: response.lead.name,
-                leadCity: response.lead.city,
-                leadService: response.lead.service,
+                leadEmail: response.lead.email,
+                leadCompany: response.lead.company,
               }
             : item
         )

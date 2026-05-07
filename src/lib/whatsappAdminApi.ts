@@ -60,6 +60,8 @@ export type InboxConversationItem = {
   leadPhone: string | null;
   leadCity: string | null;
   leadService: string | null;
+  leadEmail: string | null;
+  leadCompany: string | null;
   mode: "BOT" | "HUMAN";
   handoffStatus?: "none" | "pending" | "active" | null;
   assignedUserId: string | null;
