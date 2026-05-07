@@ -3151,7 +3151,49 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           const intentClassifierEnabled =
             env.FLOW_INTENT_CLASSIFIER_ENABLED &&
             appliedTenantConfig?.disableIntentClassifier !== true;
-          if (intentClassifierEnabled) {
+          if (
+            !updatedConversation.chatbotActive &&
+            !updatedConversation.chatbotNodeId &&
+            message.text &&
+            env.AI_ASSISTANT_ENABLED &&
+            env.WHATSAPP_AI_ENABLED &&
+            appliedTenantConfig?.aiAssistantEnabled === true &&
+            !isAiFallbackDisabledForTenant() &&
+            !env.WHATSAPP_SANDBOX &&
+            updatedConversation.intent !== "handoff" &&
+            updatedConversation.mode !== "HUMAN" &&
+            updatedConversation.handoff.status === "none" &&
+            isWindowOpen(updatedConversation, Date.now())
+          ) {
+            const preClassifierRisk = classifyRisk(message.text, {
+              tenantName: appliedTenantConfig.name,
+              aiBusinessContext: appliedTenantConfig.aiBusinessContext,
+              defaultLanguage: appliedTenantConfig.defaultLanguage,
+              flowContext: updatedConversation.answers?.flowContext,
+              flowTags: updatedConversation.answers?.flowTags,
+            });
+            const preClassifierSimpleQuestion = isSimpleQuestion(message.text, {
+              allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+              blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
+            });
+            if (preClassifierRisk || preClassifierSimpleQuestion) {
+              shouldDeferInitialMenuToAssistant = true;
+              logger.info({
+                event: "chatbot.initial_menu.deferred_to_ai",
+                clientId: tenantClientId,
+                clientKey: tenantClientKey,
+                flowId: chatbotFlow.id,
+                waId: maskNumber(normalizedFrom),
+                reason: preClassifierRisk
+                  ? "guardrail_before_initial_menu"
+                  : "simple_question_before_initial_menu",
+                risk: preClassifierRisk,
+                stage: "before_intent_classifier",
+                requestId: meta?.requestId,
+              });
+            }
+          }
+          if (intentClassifierEnabled && !shouldDeferInitialMenuToAssistant) {
             if (updatedConversation.mode === "HUMAN") {
               logger.info({
                 event: "flow.intent_classifier.skipped_human_mode",
@@ -3352,47 +3394,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               }
             }
           }
-          if (
-            !chatbotStartNodeId &&
-            !updatedConversation.chatbotActive &&
-            !updatedConversation.chatbotNodeId &&
-            message.text &&
-            env.AI_ASSISTANT_ENABLED &&
-            env.WHATSAPP_AI_ENABLED &&
-            appliedTenantConfig?.aiAssistantEnabled === true &&
-            !isAiFallbackDisabledForTenant() &&
-            !env.WHATSAPP_SANDBOX &&
-            updatedConversation.intent !== "handoff" &&
-            updatedConversation.mode !== "HUMAN" &&
-            updatedConversation.handoff.status === "none" &&
-            isWindowOpen(updatedConversation, Date.now())
-          ) {
-            const preMenuRisk = classifyRisk(message.text, {
-              tenantName: appliedTenantConfig.name,
-              aiBusinessContext: appliedTenantConfig.aiBusinessContext,
-              defaultLanguage: appliedTenantConfig.defaultLanguage,
-              flowContext: updatedConversation.answers?.flowContext,
-              flowTags: updatedConversation.answers?.flowTags,
-            });
-            const preMenuSimpleQuestion = isSimpleQuestion(message.text, {
-              allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
-              blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
-            });
-            if (preMenuRisk || preMenuSimpleQuestion) {
-              shouldDeferInitialMenuToAssistant = true;
-              logger.info({
-                event: "chatbot.initial_menu.deferred_to_ai",
-                clientId: tenantClientId,
-                clientKey: tenantClientKey,
-                flowId: chatbotFlow.id,
-                waId: maskNumber(normalizedFrom),
-                reason: preMenuRisk ? "guardrail_before_initial_menu" : "simple_question_before_initial_menu",
-                risk: preMenuRisk,
-                requestId: meta?.requestId,
-              });
-            }
-          }
-
           if (!shouldDeferInitialMenuToAssistant) {
             const chatbotResult = executeChatbotFlow({
               flowId: chatbotFlow.id,
