@@ -6599,6 +6599,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
             aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+            aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(tenant.disableChatbot),
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
@@ -6758,6 +6759,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim() || undefined;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
+          if (typeof data.aiBusinessContext !== "string") {
+            json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
+            return;
+          }
+          aiAssistantPatch.aiBusinessContext = data.aiBusinessContext.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
+          if (typeof data.disableAiFallback !== "boolean") {
+            json(res, 400, httpError("bad_request", "disableAiFallback must be boolean"));
+            return;
+          }
+          aiAssistantPatch.disableAiFallback = data.disableAiFallback;
+        }
         if (
           Object.keys(payload).length === 0 &&
           Object.keys(followUpPatch).length === 0 &&
@@ -6832,6 +6847,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
             aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+            aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
             chatbotLocked: Boolean(saved.tenant.disableChatbot),
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),

@@ -284,6 +284,7 @@ export default function AdminTenantChatbotPage() {
     aiAssistantProfile: "business" as const,
     aiAssistantSystemPrompt: "",
     aiAssistantFallbackToHandoff: false,
+    aiBusinessContext: "",
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
@@ -464,12 +465,12 @@ export default function AdminTenantChatbotPage() {
                 },
                 {
                   key: "disableAiFallback" as const,
-                  title: "IA conversacional",
+                  title: "Base de IA do tenant",
                   help: automationDraft.aiLocked
                     ? "Bloqueada no console interno."
                     : automationDraft.aiConfigured
-                      ? "On ativa a IA automatica com o contexto configurado no tenant."
-                      : "Indisponivel ate existir contexto de negocio no cadastro do tenant.",
+                      ? "On permite recursos de IA neste tenant."
+                      : "Configure o contexto de negocio abaixo antes de liberar a base de IA.",
                 },
                 {
                   key: "disableIntentClassifier" as const,
@@ -510,6 +511,26 @@ export default function AdminTenantChatbotPage() {
                 </div>
             ))}
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
+              <div className="mb-4 grid gap-3">
+                <label className="grid gap-1 text-xs text-white/60">
+                  Contexto de negocio da IA
+                  <textarea
+                    value={automationDraft.aiBusinessContext ?? ""}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiBusinessContext: event.target.value,
+                            }
+                          : current
+                      )
+                    }
+                    placeholder="Descreva a empresa, servicos, tom de voz, publico e limites da IA para este tenant."
+                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                  />
+                </label>
+              </div>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <span className="block font-medium text-white">IA controlada</span>

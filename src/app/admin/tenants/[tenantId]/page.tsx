@@ -58,8 +58,6 @@ type TenantFormState = {
   disableChatbot: boolean;
   disableChatbotFlowEditing: boolean;
   disableLegacyFlows: boolean;
-  disableAiFallback: boolean;
-  aiBusinessContext: string;
 };
 
 function TogglePill({
@@ -207,8 +205,6 @@ export default function TenantEditPage() {
           disableChatbot: tenant.disableChatbot ?? false,
           disableChatbotFlowEditing: tenant.disableChatbotFlowEditing ?? false,
           disableLegacyFlows: tenant.disableLegacyFlows ?? true,
-          disableAiFallback: tenant.disableAiFallback ?? false,
-          aiBusinessContext: tenant.aiBusinessContext ?? "",
         });
       })
       .catch((err: { status?: number; message?: string }) => {
@@ -289,8 +285,6 @@ export default function TenantEditPage() {
       disableChatbot: form.disableChatbot,
       disableChatbotFlowEditing: form.disableChatbotFlowEditing,
       disableLegacyFlows: form.disableLegacyFlows,
-      disableAiFallback: form.disableAiFallback,
-      aiBusinessContext: form.aiBusinessContext.trim() || undefined,
     };
 
     const maxActiveAppUsers = Number(form.maxActiveAppUsers);
@@ -526,11 +520,19 @@ export default function TenantEditPage() {
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">IA conversacional</p>
-                <p className="mt-2 text-sm">{tenantSnapshot?.disableAiFallback ? "Desligada" : "Ligada"}</p>
+                <p className="mt-2 text-sm">
+                  {tenantSnapshot?.disableAiFallback ? "Bloqueada" : "Liberada"}
+                </p>
               </div>
               <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
                 <p className="text-xs uppercase tracking-wide text-white/50">Contexto da IA</p>
                 <p className="mt-2 text-sm">{tenantSnapshot?.aiBusinessContext?.trim() ? "Configurado" : "Ausente"}</p>
+                <Link
+                  href={chatbotHref}
+                  className="mt-2 inline-flex text-xs font-semibold text-re7-sky hover:text-white"
+                >
+                  Ajustar em Chatbot
+                </Link>
               </div>
             </div>
           </div>
@@ -961,36 +963,7 @@ export default function TenantEditPage() {
                   }
                 />
               </div>
-              <div className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
-                <span className="space-y-1">
-                  <span className="block font-medium text-white">IA conversacional</span>
-                  <span className="block text-white/60">Use junto com um contexto de negocio abaixo. O tenant admin so consegue ligar no /app quando esse contexto existe.</span>
-                </span>
-                <TogglePill
-                  checked={!form.disableAiFallback}
-                  onToggle={() =>
-                    setForm((prev) => (prev ? { ...prev, disableAiFallback: !prev.disableAiFallback } : prev))
-                  }
-                />
-              </div>
             </div>
-
-            <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Contexto de negocio da IA</span>
-              <textarea
-                className="min-h-28 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                value={form.aiBusinessContext}
-                onChange={(event) =>
-                  setForm((prev) =>
-                    prev ? { ...prev, aiBusinessContext: event.target.value } : prev
-                  )
-                }
-                placeholder="Descreva a empresa, servicos, tom de voz, publico e limites da IA para este tenant."
-              />
-              <span className="text-xs text-white/50">
-                Sem esse contexto, a IA conversacional permanece indisponivel no /app.
-              </span>
-            </label>
 
             <div className="flex items-center gap-3">
               <button

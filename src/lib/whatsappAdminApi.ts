@@ -147,6 +147,7 @@ export type AdminAutomationSettings = {
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
   aiAssistantSystemPrompt?: string;
   aiAssistantFallbackToHandoff?: boolean;
+  aiBusinessContext?: string;
   followUpEnabled?: boolean;
   followUpDelayMinutes?: number;
   followUpMaxCount?: number;
