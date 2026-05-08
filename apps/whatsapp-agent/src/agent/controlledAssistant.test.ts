@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildHandoffConfirmationPrompt,
+  buildAssistantGreetingReply,
   buildAssistantFallbackGuidance,
   buildSafeResponse,
   calculateHandoffScore,
@@ -194,6 +195,37 @@ test("generateControlledAssistantReply accepts structured orchestrator output", 
   assert.equal(result.ok ? result.output.stage : null, "qualification");
   assert.equal(result.ok ? result.output.next_action : null, "ask_question");
   assert.deepEqual(result.ok ? result.output.missing_information : [], ["tipo_de_beneficio"]);
+});
+
+test("generateControlledAssistantReply rejects truncated JSON instead of sending code", async () => {
+  const brain: AgentBrain = {
+    async generateReply() {
+      return {
+        text: '{"reply":"Olá!","stage":"triage","goal":"explain_general_topic","confidence":0.9',
+        source: "ai",
+        model: "test-model",
+      };
+    },
+  };
+
+  const result = await generateControlledAssistantReply({
+    brain,
+    text: "sou homem, posso me aposentar com quantos anos em 2026?",
+    tenant: {
+      name: "Justa",
+      defaultLanguage: "pt_BR",
+      aiBusinessContext: "Direito previdenciario.",
+      aiAssistantAllowedTopics: ["aposentar", "aposentadoria"],
+    },
+    state: baseState,
+    nowIso: "2026-05-07T10:00:00.000Z",
+  });
+
+  assert.deepEqual(result, { ok: false, reason: "invalid_json_output" });
+});
+
+test("buildAssistantGreetingReply is short and neutral", () => {
+  assert.equal(buildAssistantGreetingReply(), "Boa tarde! Me diga em poucas palavras como posso te ajudar.");
 });
 
 test("validateOrchestratorOutput rejects invalid schema", () => {

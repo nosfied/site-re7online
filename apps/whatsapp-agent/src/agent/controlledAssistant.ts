@@ -154,6 +154,9 @@ export type AssistantFallbackDecision = {
   reason: string;
 };
 
+const GENERIC_GREETING_REPLY =
+  "Boa tarde! Me diga em poucas palavras como posso te ajudar.";
+
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
@@ -435,6 +438,10 @@ export function buildAssistantFallbackGuidance(context: AssistantTenantContext) 
   ].join("\n\n");
 }
 
+export function buildAssistantGreetingReply() {
+  return GENERIC_GREETING_REPLY;
+}
+
 export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantTenantContext) {
   if (risk === "personal_data") {
     return [
@@ -586,6 +593,9 @@ function buildBusinessContext(params: ControlledAssistantInput) {
 function sanitizeReply(text: string) {
   const trimmed = text.replace(/\s+/g, " ").trim();
   if (!trimmed) return "";
+  if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.includes('{"reply"')) {
+    return "";
+  }
   const forbidden = [
     "você tem direito",
     "voce tem direito",
@@ -753,9 +763,11 @@ export function shouldSendHandoffConfirmationPrompt(input: {
 
 function parseMaybeJsonObject(text: string): RawOrchestratorOutput | null {
   const trimmed = text.trim();
-  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null;
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
   try {
-    const parsed = JSON.parse(trimmed);
+    const parsed = JSON.parse(trimmed.slice(start, end + 1));
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as RawOrchestratorOutput)
       : null;
@@ -922,6 +934,9 @@ export async function generateControlledAssistantReply(
     },
   });
   const parsedOutput = parseMaybeJsonObject(aiReply.text);
+  if (!parsedOutput && aiReply.text.trim().startsWith("{")) {
+    return { ok: false, reason: "invalid_json_output" };
+  }
   const validation = validateOrchestratorOutput(
     parsedOutput ?? buildLegacyOrchestratorOutput(aiReply.text),
     aiReply.text

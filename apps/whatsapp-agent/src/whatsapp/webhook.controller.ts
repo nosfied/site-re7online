@@ -35,6 +35,7 @@ import {
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
+  buildAssistantGreetingReply,
   buildSafeResponse,
   buildAssistantFallbackGuidance,
   calculateHandoffScore,
@@ -5304,7 +5305,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 maxReplies,
               });
             } else {
-              replyText = buildAssistantFallbackGuidance(assistantTenantContext);
+              replyText =
+                fallbackDecision?.reason === "vague_message"
+                  ? buildAssistantGreetingReply()
+                  : buildAssistantFallbackGuidance(assistantTenantContext);
               aiAssistantResponded = true;
               if (!assistantTenantContext.fallbackMessage?.trim()) {
                 await logAiAssistantEvent("ai.assistant.generic_fallback_used", {
