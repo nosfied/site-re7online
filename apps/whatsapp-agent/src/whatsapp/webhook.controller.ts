@@ -39,11 +39,11 @@ import {
   buildAssistantFallbackGuidance,
   calculateHandoffScore,
   classifyAssistantFallback,
+  classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
   getAiAssistantState,
-  isSimpleQuestion,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
 } from "../agent/controlledAssistant.js";
@@ -3877,7 +3877,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               flowContext: updatedConversation.answers?.flowContext,
               flowTags: updatedConversation.answers?.flowTags,
             });
-            const preClassifierSimpleQuestion = isSimpleQuestion(message.text, {
+            const preClassifierEducationalIntent = classifyEducationalIntent(message.text, {
               allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
               blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
             });
@@ -3886,7 +3886,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
                 })?.intent === "handoff_prompt"
               : false;
-            if (preClassifierRisk || preClassifierSimpleQuestion || preClassifierHandoffRequest) {
+            if (preClassifierRisk || preClassifierEducationalIntent.allowed || preClassifierHandoffRequest) {
               shouldDeferInitialMenuToAssistant = true;
               logger.info({
                 event: "chatbot.initial_menu.deferred_to_ai",
@@ -3898,8 +3898,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   ? "guardrail_before_initial_menu"
                   : preClassifierHandoffRequest
                     ? "handoff_request_before_initial_menu"
-                    : "simple_question_before_initial_menu",
+                    : "educational_question_before_initial_menu",
                 risk: preClassifierRisk,
+                educationalReason: preClassifierEducationalIntent.reason ?? null,
+                educationalTopic: preClassifierEducationalIntent.topic ?? null,
                 stage: "before_intent_classifier",
                 requestId: meta?.requestId,
               });
@@ -5082,17 +5084,28 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "window_closed" });
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
-          const isSimple = isSimpleQuestion(message.text, assistantQuestionOptions);
+          const educationalIntent = classifyEducationalIntent(message.text, assistantQuestionOptions);
           const risk = classifyRisk(message.text, assistantTenantContext);
           if (!risk) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
-          if (!isSimple && !risk) {
+          if (educationalIntent.allowed) {
+            await logAiAssistantEvent("ai.assistant.educational_routed", {
+              topic: educationalIntent.topic ?? null,
+              reason: educationalIntent.reason ?? null,
+            });
+          }
+          if (!educationalIntent.allowed && !risk) {
             const fallbackDecision = classifyAssistantFallback(message.text, {
               handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
             });
+            await logAiAssistantEvent("ai.assistant.educational_blocked", {
+              reason: educationalIntent.reason ?? "not_allowed",
+              concreteRisk: educationalIntent.concreteRisk === true,
+              fallbackIntent: fallbackDecision?.intent ?? null,
+            });
             await logAiAssistantEvent("ai.orchestrator.skipped", {
-              reason: "not_simple_question",
+              reason: "educational_intent_not_allowed",
               fallbackIntent: fallbackDecision?.intent ?? null,
               fallbackReason: fallbackDecision?.reason ?? null,
             });
@@ -5200,6 +5213,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                       reason: "handoff_prompt_not_sent",
                     });
                   }
+                  await logAiAssistantEvent("ai.assistant.fallback_used", {
+                    reason: "handoff_prompt_not_sent",
+                    configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
+                  });
                   await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
                     source: "deterministic_fallback",
                     reason:
@@ -5218,6 +5235,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     reason: "handoff_denied",
                   });
                 }
+                await logAiAssistantEvent("ai.assistant.fallback_used", {
+                  reason: "handoff_denied",
+                  configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
+                });
                 await logAiAssistantEvent("ai.orchestrator.handoff_denied", {
                   source: "deterministic_fallback",
                   reason: deniedReason,
@@ -5290,6 +5311,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   reason: fallbackDecision?.reason ?? "not_simple_question",
                 });
               }
+              await logAiAssistantEvent("ai.assistant.fallback_used", {
+                reason: fallbackDecision?.reason ?? "educational_intent_not_allowed",
+                configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
+              });
               updatedConversation = {
                 ...updatedConversation,
                 answers: {

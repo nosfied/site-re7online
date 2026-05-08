@@ -283,6 +283,14 @@ type SimpleQuestionOptions = {
   blockedTerms?: string[] | null;
 };
 
+export type EducationalIntentResult = {
+  allowed: boolean;
+  educational: boolean;
+  topic?: string;
+  reason?: string;
+  concreteRisk?: boolean;
+};
+
 function normalizeText(value: string | null | undefined) {
   return String(value ?? "")
     .normalize("NFD")
@@ -461,26 +469,68 @@ export function isSimpleQuestion(
   text: string | null | undefined,
   options: SimpleQuestionOptions = {}
 ) {
+  return classifyEducationalIntent(text, options).allowed;
+}
+
+export function classifyEducationalIntent(
+  text: string | null | undefined,
+  options: SimpleQuestionOptions = {}
+): EducationalIntentResult {
   const raw = String(text ?? "").trim();
   const normalized = normalizeText(raw);
-  if (!normalized) return false;
-  if (raw.length > AI_ASSISTANT_MAX_INPUT_CHARS) return false;
-  if (containsPersonalData(raw)) return false;
+  if (!normalized) return { allowed: false, educational: false, reason: "empty" };
+  if (raw.length > AI_ASSISTANT_MAX_INPUT_CHARS) {
+    return { allowed: false, educational: false, reason: "too_long" };
+  }
+  if (containsPersonalData(raw)) {
+    return { allowed: false, educational: false, concreteRisk: true, reason: "personal_data" };
+  }
+  const risk = classifyRisk(raw);
+  if (risk) {
+    return { allowed: false, educational: false, concreteRisk: true, reason: risk };
+  }
   const blockedTerms = [
     ...AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
     ...normalizeTermList(options.blockedTerms),
   ];
   if (blockedTerms.some((term) => normalized.includes(normalizeText(term)))) {
-    return false;
+    return { allowed: false, educational: false, concreteRisk: true, reason: "blocked_term" };
   }
   const startsLikeQuestion = AI_ASSISTANT_SIMPLE_QUESTION_STARTERS.some((term) =>
     normalized.startsWith(normalizeText(term))
   );
-  const topicTerms = [
-    ...normalizeTermList(options.allowedTopics),
+  const educationalPatterns = [
+    "com quantos",
+    "quanto custa",
+    "qual preco",
+    "qual preço",
+    "preco",
+    "preço",
+    "honorario",
+    "honorário",
+    "honorarios",
+    "honorários",
+    "valor do servico",
+    "valor do serviço",
+    "o que preciso",
+    "para comecar",
+    "para começar",
   ];
-  const hasTopic = topicTerms.some((term) => normalized.includes(normalizeText(term)));
-  return startsLikeQuestion && hasTopic;
+  const looksEducational = startsLikeQuestion || containsAnyTerm(normalized, educationalPatterns);
+  if (!looksEducational) {
+    return { allowed: false, educational: false, reason: "not_educational_shape" };
+  }
+  const topicTerms = normalizeTermList(options.allowedTopics);
+  const matchedTopic = topicTerms.find((term) => normalized.includes(normalizeText(term)));
+  if (!matchedTopic) {
+    return { allowed: false, educational: true, reason: "topic_not_allowed" };
+  }
+  return {
+    allowed: true,
+    educational: true,
+    topic: matchedTopic,
+    reason: startsLikeQuestion ? "question_starter_and_allowed_topic" : "educational_pattern_and_allowed_topic",
+  };
 }
 
 export function getAiAssistantState(state: ConversationState) {
@@ -851,13 +901,12 @@ function buildLegacyOrchestratorOutput(reply: string): RawOrchestratorOutput {
 export async function generateControlledAssistantReply(
   input: ControlledAssistantInput
 ): Promise<ControlledAssistantResult> {
-  if (
-    !isSimpleQuestion(input.text, {
+  const educationalIntent = classifyEducationalIntent(input.text, {
       allowedTopics: input.tenant.aiAssistantAllowedTopics,
       blockedTerms: input.tenant.aiAssistantBlockedTerms,
-    })
-  ) {
-    return { ok: false, reason: "not_simple_question" };
+  });
+  if (!educationalIntent.allowed) {
+    return { ok: false, reason: educationalIntent.reason ?? "educational_intent_blocked" };
   }
   const aiReply = await input.brain.generateReply({
     waId: input.state.waId,

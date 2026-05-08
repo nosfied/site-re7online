@@ -6,6 +6,7 @@ import {
   buildSafeResponse,
   calculateHandoffScore,
   classifyAssistantFallback,
+  classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
@@ -56,6 +57,32 @@ test("isSimpleQuestion supports tenant-specific topics and extra blocked terms",
       blockedTerms: ["plano"],
     }),
     false
+  );
+});
+
+test("classifyEducationalIntent routes broader tenant educational questions", () => {
+  assert.deepEqual(
+    classifyEducationalIntent("sou homem, posso me aposentar com quantos anos em 2026?", {
+      allowedTopics: ["aposentar", "aposentadoria"],
+    }),
+    {
+      allowed: true,
+      educational: true,
+      topic: "aposentar",
+      reason: "educational_pattern_and_allowed_topic",
+    }
+  );
+  assert.equal(
+    classifyEducationalIntent("qual preço é cobrado pelos serviços?", {
+      allowedTopics: ["serviço", "preço"],
+    }).allowed,
+    true
+  );
+  assert.equal(
+    classifyEducationalIntent("qual preço é cobrado?", {
+      allowedTopics: ["aposentadoria"],
+    }).reason,
+    "topic_not_allowed"
   );
 });
 
