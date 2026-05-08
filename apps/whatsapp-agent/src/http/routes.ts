@@ -75,6 +75,7 @@ import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
 import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+  AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
   AI_ASSISTANT_MAX_INPUT_CHARS,
   AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
@@ -2917,6 +2918,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
           aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
           aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
+          aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiConfigured,
           chatbotLocked,
@@ -6210,6 +6214,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
             aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
             aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
+            aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
@@ -6388,6 +6395,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiAssistantBlockedTerms = terms;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffKeywords")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantHandoffKeywords);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantHandoffKeywords must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantHandoffKeywords = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackMessage")) {
+          if (typeof data.aiAssistantFallbackMessage !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantFallbackMessage must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantFallbackMessage =
+            data.aiAssistantFallbackMessage.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffPrompt")) {
+          if (typeof data.aiAssistantHandoffPrompt !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantHandoffPrompt must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantHandoffPrompt =
+            data.aiAssistantHandoffPrompt.trim() || undefined;
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
           if (typeof data.aiBusinessContext !== "string") {
             json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
@@ -6478,6 +6509,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
             aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
             aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
+            aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
@@ -10659,6 +10693,7 @@ function getAiAssistantGlobalSafetyConfig() {
     questionStarters: AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
     topicTerms: AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
     blockedTerms: AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+    handoffTerms: AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
     maxInputChars: AI_ASSISTANT_MAX_INPUT_CHARS,
     personalDataBlocked: true,
   };
@@ -10753,6 +10788,9 @@ function diffTenantFields(
   compareField("aiAssistantFallbackToHandoff");
   compareField("aiAssistantAllowedTopics");
   compareField("aiAssistantBlockedTerms");
+  compareField("aiAssistantHandoffKeywords");
+  compareField("aiAssistantFallbackMessage");
+  compareField("aiAssistantHandoffPrompt");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

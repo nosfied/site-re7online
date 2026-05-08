@@ -151,10 +151,14 @@ export type AdminAutomationSettings = {
   aiAssistantFallbackToHandoff?: boolean;
   aiAssistantAllowedTopics?: string[];
   aiAssistantBlockedTerms?: string[];
+  aiAssistantHandoffKeywords?: string[];
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
   aiAssistantGlobalSafety?: {
     questionStarters: string[];
     topicTerms: string[];
     blockedTerms: string[];
+    handoffTerms?: string[];
     maxInputChars: number;
     personalDataBlocked: boolean;
   };

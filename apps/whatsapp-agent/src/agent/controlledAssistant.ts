@@ -48,6 +48,8 @@ export type AssistantTenantContext = {
   defaultLanguage?: string | null;
   flowContext?: FlowContext;
   flowTags?: string[];
+  handoffPrompt?: string | null;
+  fallbackMessage?: string | null;
 };
 
 export type OrchestratorLeadTemp = "quente" | "morno" | "frio";
@@ -145,6 +147,13 @@ export type HandoffPromptInput = {
   context: AssistantTenantContext;
 };
 
+export type AssistantFallbackIntent = "handoff_prompt" | "generic_guidance";
+
+export type AssistantFallbackDecision = {
+  intent: AssistantFallbackIntent;
+  reason: string;
+};
+
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
@@ -194,6 +203,45 @@ export const AI_ASSISTANT_GLOBAL_BLOCKED_TERMS = [
   "diagnostico",
   "doenca",
   "cid",
+];
+
+export const AI_ASSISTANT_GLOBAL_HANDOFF_TERMS = [
+  "atendente",
+  "atendimento humano",
+  "falar com alguem",
+  "falar com alguém",
+  "falar com uma pessoa",
+  "pessoa da equipe",
+  "humano",
+  "especialista",
+  "encaminhar",
+  "me chama",
+  "preciso de ajuda",
+  "preciso de uma analise",
+  "preciso de uma análise",
+  "analise mais especifica",
+  "análise mais específica",
+  "nao entendi",
+  "não entendi",
+  "nao resolveu",
+  "não resolveu",
+];
+
+const AI_ASSISTANT_VAGUE_MESSAGE_TERMS = [
+  "oi",
+  "ola",
+  "olá",
+  "bom dia",
+  "boa tarde",
+  "boa noite",
+  "tudo bem",
+  "ok",
+  "sim",
+  "nao",
+  "não",
+  "obrigado",
+  "obrigada",
+  "valeu",
 ];
 
 const SAFE_CONTEXT_KEYS = [
@@ -378,10 +426,51 @@ function isLegalLikeContext(context: AssistantTenantContext) {
 }
 
 export function buildHandoffConfirmationPrompt(input: HandoffPromptInput) {
+  const configuredPrompt = input.context.handoffPrompt?.trim();
+  if (configuredPrompt) {
+    return configuredPrompt.slice(0, 500);
+  }
   if (isLegalLikeContext(input.context)) {
     return "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?";
   }
   return "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?";
+}
+
+export function classifyAssistantFallback(
+  text: string | null | undefined,
+  options: { handoffKeywords?: string[] | null } = {}
+): AssistantFallbackDecision | null {
+  const raw = String(text ?? "").trim();
+  if (!raw) return null;
+  const normalized = normalizeText(raw);
+  const handoffTerms = [
+    ...AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
+    ...normalizeTermList(options.handoffKeywords),
+  ];
+  if (containsAnyTerm(normalized, handoffTerms)) {
+    return { intent: "handoff_prompt", reason: "handoff_signal" };
+  }
+  if (AI_ASSISTANT_VAGUE_MESSAGE_TERMS.some((term) => normalized === normalizeText(term))) {
+    return { intent: "generic_guidance", reason: "vague_message" };
+  }
+  return { intent: "generic_guidance", reason: "not_simple_question" };
+}
+
+export function buildAssistantFallbackGuidance(context: AssistantTenantContext) {
+  const configuredMessage = context.fallbackMessage?.trim();
+  if (configuredMessage) {
+    return configuredMessage.slice(0, 700);
+  }
+  if (isLegalLikeContext(context)) {
+    return [
+      'Posso te ajudar com dúvidas gerais, como "o que é BPC?" ou "como funciona aposentadoria?".',
+      'Se quiser falar com alguém da equipe, escreva "quero falar com atendente".',
+    ].join("\n\n");
+  }
+  return [
+    'Posso te ajudar com dúvidas gerais sobre o atendimento, serviços ou próximos passos.',
+    'Se quiser falar com uma pessoa da equipe, escreva "quero falar com atendente".',
+  ].join("\n\n");
 }
 
 export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantTenantContext) {

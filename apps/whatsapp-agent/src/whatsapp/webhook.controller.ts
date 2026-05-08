@@ -36,7 +36,9 @@ import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
   buildSafeResponse,
+  buildAssistantFallbackGuidance,
   calculateHandoffScore,
+  classifyAssistantFallback,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
@@ -4342,6 +4344,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         defaultLanguage: appliedTenantConfig.defaultLanguage,
         flowContext: updatedConversation.answers?.flowContext,
         flowTags: updatedConversation.answers?.flowTags,
+        handoffPrompt: appliedTenantConfig.aiAssistantHandoffPrompt,
+        fallbackMessage: appliedTenantConfig.aiAssistantFallbackMessage,
       };
       try {
         if (assistantState.lastMessageId === message.messageId) {
@@ -4357,9 +4361,238 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
           if (!isSimple && !risk) {
-            aiAssistantSkippedNotSimpleQuestion = true;
-            await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "not_simple_question" });
-            await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
+            const fallbackDecision = classifyAssistantFallback(message.text, {
+              handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
+            });
+            await logAiAssistantEvent("ai.orchestrator.skipped", {
+              reason: "not_simple_question",
+              fallbackIntent: fallbackDecision?.intent ?? null,
+              fallbackReason: fallbackDecision?.reason ?? null,
+            });
+            if (assistantState.count >= maxReplies) {
+              aiAssistantSkippedNotSimpleQuestion = true;
+              await logAiAssistantEvent("ai.assistant.limit_reached", {
+                count: assistantState.count,
+                maxReplies,
+                fallbackIntent: fallbackDecision?.intent ?? null,
+              });
+              await logAiAssistantEvent("ai.assistant.skipped", {
+                reason: "assistant_limit_reached",
+                source: "not_simple_question_fallback",
+              });
+            } else if (fallbackDecision?.intent === "handoff_prompt") {
+              const scoreResult = calculateHandoffScore({
+                explicitHumanRequest: true,
+                assistantLimitReached: assistantState.count + 1 >= maxReplies,
+              });
+              const eligibility = canEvaluateHandoffRecommendation({
+                state: updatedConversation,
+                duplicateMessage: assistantState.lastMessageId === message.messageId,
+                windowOpen: isWindowOpen(updatedConversation, Date.now()),
+                tenantAiEnabled:
+                  env.AI_ASSISTANT_ENABLED &&
+                  env.WHATSAPP_AI_ENABLED &&
+                  appliedTenantConfig.aiAssistantEnabled === true,
+                tenantFallbackToHandoff:
+                  appliedTenantConfig.aiAssistantFallbackToHandoff === true,
+              });
+              const allowed = eligibility.ok && scoreResult.allowed;
+              const deniedReason = eligibility.ok ? "score_below_threshold" : eligibility.reason;
+              const lastReason = allowed
+                ? (scoreResult.primaryReason ?? "threshold_reached")
+                : deniedReason;
+              await logAiAssistantEvent("ai.orchestrator.handoff_recommended", {
+                source: "deterministic_fallback",
+                score: scoreResult.score,
+                threshold: scoreResult.threshold,
+                reasons: scoreResult.reasons,
+                primaryReason: scoreResult.primaryReason,
+                eligibility: eligibility.ok ? "allowed_to_evaluate" : eligibility.reason,
+              });
+              await logAiAssistantEvent("ai.orchestrator.handoff_reason", {
+                source: "deterministic_fallback",
+                reason: lastReason,
+                score: scoreResult.score,
+                threshold: scoreResult.threshold,
+                reasons: scoreResult.reasons,
+              });
+              const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
+              const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
+              let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
+              if (allowed) {
+                await logAiAssistantEvent("ai.orchestrator.handoff_threshold_reached", {
+                  source: "deterministic_fallback",
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                  reasons: scoreResult.reasons,
+                });
+                await logAiAssistantEvent("ai.orchestrator.handoff_allowed", {
+                  source: "deterministic_fallback",
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                  reasons: scoreResult.reasons,
+                  mode: updatedConversation.mode ?? "BOT",
+                  handoffStatus: updatedConversation.handoff.status,
+                });
+                const shouldPrompt = shouldSendHandoffConfirmationPrompt({
+                  allowed,
+                  state: updatedConversation,
+                  messageId: message.messageId,
+                });
+                if (shouldPrompt) {
+                  replyText = buildHandoffConfirmationPrompt({
+                    context: assistantTenantContext,
+                  });
+                  aiAssistantResponded = true;
+                  nextHandoffPrompt = {
+                    prompted: true,
+                    promptedAt: new Date().toISOString(),
+                    messageId: message.messageId,
+                    reason: lastReason,
+                    score: scoreResult.score,
+                    awaitingConfirmation: true,
+                  };
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
+                    source: "deterministic_fallback",
+                    reason: lastReason,
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
+                    promptType: "confirmation",
+                  });
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.awaiting_confirmation", {
+                    source: "deterministic_fallback",
+                    reason: lastReason,
+                    score: scoreResult.score,
+                    messageId: message.messageId,
+                  });
+                } else {
+                  replyText = buildAssistantFallbackGuidance(assistantTenantContext);
+                  aiAssistantResponded = true;
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
+                    source: "deterministic_fallback",
+                    reason:
+                      previousAiOrchestrator?.handoffPrompt?.awaitingConfirmation === true
+                        ? "already_awaiting_confirmation"
+                        : "not_allowed",
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
+                  });
+                }
+              } else {
+                replyText = buildAssistantFallbackGuidance(assistantTenantContext);
+                aiAssistantResponded = true;
+                await logAiAssistantEvent("ai.orchestrator.handoff_denied", {
+                  source: "deterministic_fallback",
+                  reason: deniedReason,
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                  reasons: scoreResult.reasons,
+                  eligibility: eligibility.ok ? "allowed_to_evaluate" : eligibility.reason,
+                  mode: updatedConversation.mode ?? "BOT",
+                  handoffStatus: updatedConversation.handoff.status,
+                });
+                await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
+                  source: "deterministic_fallback",
+                  reason: deniedReason,
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                });
+              }
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: new Date().toISOString(),
+                    lastMessageId: message.messageId,
+                  },
+                  aiOrchestrator: {
+                    ...(previousAiOrchestrator ?? {}),
+                    stage: "handoff_recommended",
+                    goal: "recommend_handoff",
+                    missingInformation: previousAiOrchestrator?.missingInformation ?? [],
+                    lastAction: "handoff_recommend",
+                    lastConfidence: 1,
+                    handoffRecommended: true,
+                    lastMessageId: message.messageId,
+                    lastQuestion: null,
+                    lastNextActionAt: new Date().toISOString(),
+                    handoffSignals: {
+                      count: (previousHandoffSignals.count ?? 0) + 1,
+                      lastReason,
+                      lastRecommendedAt: new Date().toISOString(),
+                      guardrailCount: previousHandoffSignals.guardrailCount ?? 0,
+                      lowConfidenceCount: previousHandoffSignals.lowConfidenceCount ?? 0,
+                    },
+                    handoffPrompt: nextHandoffPrompt,
+                  },
+                },
+              };
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                source: "deterministic_fallback",
+                stage: "handoff_recommended",
+                goal: "recommend_handoff",
+                nextAction: "handoff_recommend",
+                resolvedAction: "handoff_prompt",
+                confidence: 1,
+                handoffRecommended: true,
+              });
+              await logAiAssistantEvent("ai.assistant.responded", {
+                source: "not_simple_question_fallback",
+                fallbackIntent: fallbackDecision.intent,
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+            } else {
+              replyText = buildAssistantFallbackGuidance(assistantTenantContext);
+              aiAssistantResponded = true;
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: new Date().toISOString(),
+                    lastMessageId: message.messageId,
+                  },
+                  aiOrchestrator: {
+                    ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+                    stage: "clarification",
+                    goal: "identify_need",
+                    missingInformation:
+                      updatedConversation.answers?.aiOrchestrator?.missingInformation ?? [],
+                    lastAction: "fallback_menu",
+                    lastConfidence: 1,
+                    handoffRecommended: false,
+                    lastMessageId: message.messageId,
+                    lastQuestion: null,
+                    lastNextActionAt: new Date().toISOString(),
+                  },
+                },
+              };
+              await logAiAssistantEvent("ai.orchestrator.fallback_menu", {
+                source: "not_simple_question_fallback",
+                reason: fallbackDecision?.reason ?? "not_simple_question",
+              });
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                source: "not_simple_question_fallback",
+                stage: "clarification",
+                goal: "identify_need",
+                nextAction: "fallback_menu",
+                resolvedAction: "generic_guidance",
+                confidence: 1,
+                handoffRecommended: false,
+              });
+              await logAiAssistantEvent("ai.assistant.responded", {
+                source: "not_simple_question_fallback",
+                fallbackIntent: fallbackDecision?.intent ?? "generic_guidance",
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+            }
           } else if (risk) {
             await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "guardrail_risk" });
             const flowContext = updatedConversation.answers?.flowContext ?? {};

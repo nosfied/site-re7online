@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildHandoffConfirmationPrompt,
+  buildAssistantFallbackGuidance,
   buildSafeResponse,
   calculateHandoffScore,
+  classifyAssistantFallback,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
@@ -382,6 +384,63 @@ test("buildHandoffConfirmationPrompt adapts to legal and generic contexts", () =
       },
     }),
     "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?"
+  );
+});
+
+test("assistant fallback classification uses universal and tenant handoff signals", () => {
+  assert.deepEqual(classifyAssistantFallback("quero falar com atendente"), {
+    intent: "handoff_prompt",
+    reason: "handoff_signal",
+  });
+  assert.deepEqual(
+    classifyAssistantFallback("preciso falar com consultor", {
+      handoffKeywords: ["consultor"],
+    }),
+    {
+      intent: "handoff_prompt",
+      reason: "handoff_signal",
+    }
+  );
+  assert.deepEqual(classifyAssistantFallback("oi"), {
+    intent: "generic_guidance",
+    reason: "vague_message",
+  });
+  assert.deepEqual(classifyAssistantFallback("nao sei explicar direito"), {
+    intent: "generic_guidance",
+    reason: "not_simple_question",
+  });
+});
+
+test("assistant fallback guidance adapts to tenant context and supports custom text", () => {
+  const legal = buildAssistantFallbackGuidance({
+    tenantName: "Justa Advocacia",
+    aiBusinessContext: "Direito previdenciario",
+  });
+  assert.match(legal, /o que é BPC/);
+
+  const generic = buildAssistantFallbackGuidance({
+    tenantName: "Loja Exemplo",
+    aiBusinessContext: "Varejo",
+  });
+  assert.match(generic, /dúvidas gerais sobre o atendimento/);
+  assert.doesNotMatch(generic.toLowerCase(), /bpc|aposentadoria/);
+
+  assert.equal(
+    buildAssistantFallbackGuidance({
+      fallbackMessage: "Mensagem personalizada do tenant.",
+    }),
+    "Mensagem personalizada do tenant."
+  );
+});
+
+test("buildHandoffConfirmationPrompt supports tenant custom prompt", () => {
+  assert.equal(
+    buildHandoffConfirmationPrompt({
+      context: {
+        handoffPrompt: "Posso direcionar para nosso time de suporte?",
+      },
+    }),
+    "Posso direcionar para nosso time de suporte?"
   );
 });
 

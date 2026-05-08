@@ -69,6 +69,9 @@ export type TenantConfig = {
   aiAssistantFallbackToHandoff?: boolean;
   aiAssistantAllowedTopics?: string[];
   aiAssistantBlockedTerms?: string[];
+  aiAssistantHandoffKeywords?: string[];
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -411,6 +414,27 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         tenant.aiAssistantBlockedTerms.some((term) => typeof term !== "string"))
     ) {
       throw new Error(`invalid_tenant_ai_assistant_blocked_terms:${key}`);
+    }
+    if (
+      tenant.aiAssistantHandoffKeywords !== undefined &&
+      (!Array.isArray(tenant.aiAssistantHandoffKeywords) ||
+        tenant.aiAssistantHandoffKeywords.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_handoff_keywords:${key}`);
+    }
+    if (
+      tenant.aiAssistantFallbackMessage !== undefined &&
+      (typeof tenant.aiAssistantFallbackMessage !== "string" ||
+        !tenant.aiAssistantFallbackMessage.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_fallback_message:${key}`);
+    }
+    if (
+      tenant.aiAssistantHandoffPrompt !== undefined &&
+      (typeof tenant.aiAssistantHandoffPrompt !== "string" ||
+        !tenant.aiAssistantHandoffPrompt.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_handoff_prompt:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

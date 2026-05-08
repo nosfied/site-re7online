@@ -298,6 +298,9 @@ export default function AdminTenantChatbotPage() {
     aiAssistantSystemPrompt: "",
     aiAssistantAllowedTopics: [],
     aiAssistantBlockedTerms: [],
+    aiAssistantHandoffKeywords: [],
+    aiAssistantFallbackMessage: "",
+    aiAssistantHandoffPrompt: "",
     aiBusinessContext: "",
     aiConfigured: false,
     chatbotLocked: false,
@@ -640,6 +643,14 @@ export default function AdminTenantChatbotPage() {
                         </span>
                       ))}
                     </div>
+                    <p className="mt-3 font-medium text-white/80">Sinais globais de encaminhamento</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(automationDraft.aiAssistantGlobalSafety?.handoffTerms ?? []).map((term) => (
+                        <span key={term} className="rounded-full bg-sky-500/15 px-2 py-1 text-[11px] text-sky-100">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <p className="font-medium text-white/80">Bloqueios globais fixos</p>
@@ -709,6 +720,68 @@ export default function AdminTenantChatbotPage() {
                   </span>
                 </label>
               </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="flex flex-col gap-1 text-xs text-white/60">
+                  Sinais de encaminhamento humano
+                  <textarea
+                    value={joinTermList(automationDraft.aiAssistantHandoffKeywords)}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantHandoffKeywords: splitTermList(event.target.value),
+                            }
+                          : current
+                      )
+                    }
+                    placeholder={"Um termo por linha\nEx.: especialista\nconsultor\nsuporte humano"}
+                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                  />
+                  <span className="text-[11px] text-white/45">
+                    Acrescenta expressões do tenant que devem gerar pergunta de encaminhamento, sem ativar humano automaticamente.
+                  </span>
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-white/60">
+                  Pergunta de encaminhamento personalizada
+                  <textarea
+                    value={automationDraft.aiAssistantHandoffPrompt ?? ""}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantHandoffPrompt: event.target.value,
+                            }
+                          : current
+                      )
+                    }
+                    placeholder="Ex.: Posso direcionar seu atendimento para um especialista da equipe?"
+                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                  />
+                </label>
+              </div>
+              <label className="mt-3 flex flex-col gap-1 text-xs text-white/60">
+                Mensagem para dúvida vaga ou fora do escopo simples
+                <textarea
+                  value={automationDraft.aiAssistantFallbackMessage ?? ""}
+                  disabled={automationDraft.aiAssistantLocked}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            aiAssistantFallbackMessage: event.target.value,
+                          }
+                        : current
+                    )
+                  }
+                  placeholder='Ex.: Posso ajudar com dúvidas gerais. Para falar com a equipe, escreva "quero atendimento".'
+                  className="min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                />
+              </label>
               <label className="mt-3 flex flex-col gap-1 text-xs text-white/60">
                 Instrução adicional aprovada
                 <textarea
