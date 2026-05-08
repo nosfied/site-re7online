@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildHandoffConfirmationPrompt,
   buildSafeResponse,
   calculateHandoffScore,
   canEvaluateHandoffRecommendation,
@@ -9,6 +10,7 @@ import {
   getAiAssistantState,
   isSimpleQuestion,
   resolveOrchestratorAction,
+  shouldSendHandoffConfirmationPrompt,
   validateOrchestratorOutput,
 } from "./controlledAssistant.js";
 import { AgentBrain } from "./agent.types.js";
@@ -358,6 +360,86 @@ test("canEvaluateHandoffRecommendation blocks unsafe operational states", () => 
       tenantFallbackToHandoff: false,
     }),
     { ok: false, reason: "tenant_handoff_fallback_disabled" }
+  );
+});
+
+test("buildHandoffConfirmationPrompt adapts to legal and generic contexts", () => {
+  assert.equal(
+    buildHandoffConfirmationPrompt({
+      context: {
+        tenantName: "Justa Advocacia",
+        aiBusinessContext: "Direito previdenciario",
+        flowContext: { area: "previdenciario" },
+      },
+    }),
+    "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?"
+  );
+  assert.equal(
+    buildHandoffConfirmationPrompt({
+      context: {
+        tenantName: "Loja Exemplo",
+        aiBusinessContext: "Atendimento comercial",
+      },
+    }),
+    "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?"
+  );
+});
+
+test("shouldSendHandoffConfirmationPrompt enforces idempotency and operational safety", () => {
+  assert.equal(
+    shouldSendHandoffConfirmationPrompt({
+      allowed: true,
+      state: baseState,
+      messageId: "m1",
+    }),
+    true
+  );
+  assert.equal(
+    shouldSendHandoffConfirmationPrompt({
+      allowed: false,
+      state: baseState,
+      messageId: "m1",
+    }),
+    false
+  );
+  assert.equal(
+    shouldSendHandoffConfirmationPrompt({
+      allowed: true,
+      state: { ...baseState, mode: "HUMAN" },
+      messageId: "m1",
+    }),
+    false
+  );
+  assert.equal(
+    shouldSendHandoffConfirmationPrompt({
+      allowed: true,
+      state: { ...baseState, handoff: { status: "pending" } },
+      messageId: "m1",
+    }),
+    false
+  );
+  assert.equal(
+    shouldSendHandoffConfirmationPrompt({
+      allowed: true,
+      state: {
+        ...baseState,
+        answers: {
+          ...baseState.answers,
+          aiOrchestrator: {
+            handoffPrompt: {
+              prompted: true,
+              promptedAt: "2026-05-08T10:00:00.000Z",
+              messageId: "m1",
+              reason: "explicit_human_request",
+              score: 3,
+              awaitingConfirmation: true,
+            },
+          },
+        },
+      },
+      messageId: "m1",
+    }),
+    false
   );
 });
 

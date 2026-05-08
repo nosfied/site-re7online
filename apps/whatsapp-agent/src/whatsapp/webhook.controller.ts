@@ -34,6 +34,7 @@ import {
 } from "../conversation/conversation.service.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
+  buildHandoffConfirmationPrompt,
   buildSafeResponse,
   calculateHandoffScore,
   canEvaluateHandoffRecommendation,
@@ -42,6 +43,7 @@ import {
   getAiAssistantState,
   isSimpleQuestion,
   resolveOrchestratorAction,
+  shouldSendHandoffConfirmationPrompt,
 } from "../agent/controlledAssistant.js";
 import {
   parseTemplateCommand,
@@ -4464,6 +4466,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
               const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
               let nextHandoffSignals = previousHandoffSignals;
+              let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
               if (aiReply.output.handoff_recommended) {
                 const scoreResult = calculateHandoffScore({
                   output: aiReply.output,
@@ -4491,6 +4494,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 const lastReason = allowed
                   ? (scoreResult.primaryReason ?? "threshold_reached")
                   : deniedReason;
+                const shouldPrompt = shouldSendHandoffConfirmationPrompt({
+                  allowed,
+                  state: updatedConversation,
+                  messageId: message.messageId,
+                });
                 nextHandoffSignals = {
                   count: (previousHandoffSignals.count ?? 0) + 1,
                   lastReason,
@@ -4528,6 +4536,44 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     mode: updatedConversation.mode ?? "BOT",
                     handoffStatus: updatedConversation.handoff.status,
                   });
+                  if (shouldPrompt) {
+                    const promptText = buildHandoffConfirmationPrompt({
+                      context: assistantTenantContext,
+                    });
+                    replyText = promptText;
+                    aiAssistantResponded = true;
+                    nextHandoffPrompt = {
+                      prompted: true,
+                      promptedAt: new Date().toISOString(),
+                      messageId: message.messageId,
+                      reason: lastReason,
+                      score: scoreResult.score,
+                      awaitingConfirmation: true,
+                    };
+                    await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
+                      reason: lastReason,
+                      score: scoreResult.score,
+                      threshold: scoreResult.threshold,
+                      promptType: "confirmation",
+                    });
+                    await logAiAssistantEvent(
+                      "ai.orchestrator.handoff_prompt.awaiting_confirmation",
+                      {
+                        reason: lastReason,
+                        score: scoreResult.score,
+                        messageId: message.messageId,
+                      }
+                    );
+                  } else {
+                    await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
+                      reason:
+                        previousAiOrchestrator?.handoffPrompt?.awaitingConfirmation === true
+                          ? "already_awaiting_confirmation"
+                          : "not_allowed",
+                      score: scoreResult.score,
+                      threshold: scoreResult.threshold,
+                    });
+                  }
                 } else {
                   await logAiAssistantEvent("ai.orchestrator.handoff_denied", {
                     reason: deniedReason,
@@ -4537,6 +4583,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     eligibility: eligibility.ok ? "allowed_to_evaluate" : eligibility.reason,
                     mode: updatedConversation.mode ?? "BOT",
                     handoffStatus: updatedConversation.handoff.status,
+                  });
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
+                    reason: deniedReason,
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
                   });
                 }
               }
@@ -4564,6 +4615,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastQuestion: resolvedAction.lastQuestion,
                     lastNextActionAt: new Date().toISOString(),
                     handoffSignals: nextHandoffSignals,
+                    handoffPrompt: nextHandoffPrompt,
                   },
                 },
               };

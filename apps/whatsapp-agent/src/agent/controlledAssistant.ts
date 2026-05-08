@@ -141,6 +141,10 @@ export type HandoffRecommendationEligibility =
         | "flow_active";
     };
 
+export type HandoffPromptInput = {
+  context: AssistantTenantContext;
+};
+
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
@@ -371,6 +375,13 @@ function isLegalLikeContext(context: AssistantTenantContext) {
     "beneficio",
     "pensao",
   ]);
+}
+
+export function buildHandoffConfirmationPrompt(input: HandoffPromptInput) {
+  if (isLegalLikeContext(input.context)) {
+    return "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?";
+  }
+  return "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?";
 }
 
 export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantTenantContext) {
@@ -653,6 +664,19 @@ export function canEvaluateHandoffRecommendation(
     return { ok: false, reason: "flow_active" };
   }
   return { ok: true };
+}
+
+export function shouldSendHandoffConfirmationPrompt(input: {
+  allowed: boolean;
+  state: ConversationState;
+  messageId: string;
+}) {
+  if (!input.allowed) return false;
+  if (input.state.mode === "HUMAN") return false;
+  if (input.state.handoff.status !== "none") return false;
+  const prompt = input.state.answers?.aiOrchestrator?.handoffPrompt;
+  if (!prompt?.awaitingConfirmation) return true;
+  return prompt.messageId !== input.messageId && prompt.awaitingConfirmation !== true;
 }
 
 function parseMaybeJsonObject(text: string): RawOrchestratorOutput | null {

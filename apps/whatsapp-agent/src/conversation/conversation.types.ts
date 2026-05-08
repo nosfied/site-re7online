@@ -49,6 +49,14 @@ export type AIOrchestratorState = {
     guardrailCount?: number;
     lowConfidenceCount?: number;
   };
+  handoffPrompt?: {
+    prompted: boolean;
+    promptedAt: string;
+    messageId: string;
+    reason: string;
+    score: number;
+    awaitingConfirmation: boolean;
+  };
 };
 
 export type HandoffState = {
