@@ -315,7 +315,7 @@ export default function AdminTenantChatbotPage() {
     followUpTemplateName: "",
     followUpTemplateLang: "pt_BR",
   };
-  const aiBaseReady = !automationDraft.disableAiFallback && Boolean(automationDraft.aiBusinessContext?.trim());
+  const aiBaseReady = !automationDraft.disableAiFallback && Boolean(automationDraft.aiConfigured);
   const aiControlledDisabled = Boolean(automationDraft.aiAssistantLocked) || !aiBaseReady;
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
   const draftJsonErrors = useMemo(
@@ -674,13 +674,9 @@ export default function AdminTenantChatbotPage() {
                       ))}
                     </div>
                     <p className="mt-3 font-medium text-white/80">Temas globais aceitos</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {(automationDraft.aiAssistantGlobalSafety?.topicTerms ?? []).map((term) => (
-                        <span key={term} className="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-100">
-                          {term}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="mt-1 text-white/55">
+                      Nenhum tema de negócio é global. O vocabulário do ramo deve ser configurado nos temas permitidos do tenant.
+                    </p>
                     <p className="mt-3 font-medium text-white/80">Sinais globais de encaminhamento</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {(automationDraft.aiAssistantGlobalSafety?.handoffTerms ?? []).map((term) => (
@@ -707,7 +703,7 @@ export default function AdminTenantChatbotPage() {
                       ))}
                     </div>
                     <p className="mt-3 text-white/55">
-                      Os campos abaixo apenas adicionam temas ou bloqueios por tenant. Eles não removem essas travas globais.
+                      Os campos abaixo definem o domínio do tenant. As travas globais são apenas de segurança e não carregam temas de negócio.
                     </p>
                   </div>
                 </div>
@@ -717,7 +713,7 @@ export default function AdminTenantChatbotPage() {
                 <div className="mb-3">
                   <h3 className="text-sm font-semibold text-white">Regras por tenant</h3>
                   <p className="mt-1 text-xs text-white/55">
-                    Ajustes de vocabulário que complementam as travas globais sem removê-las.
+                    Ajustes de vocabulário que definem o domínio da IA para este tenant.
                   </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">

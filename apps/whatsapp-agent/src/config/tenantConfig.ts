@@ -88,6 +88,21 @@ export type TenantConfigMap = Record<string, TenantConfig>;
 
 let cachedTenants: TenantConfigMap | null = null;
 
+export function isAiAssistantConfigured(tenant?: Pick<
+  TenantConfig,
+  | "aiBusinessContext"
+  | "aiAssistantAllowedTopics"
+  | "aiAssistantFallbackMessage"
+  | "aiAssistantHandoffPrompt"
+> | null) {
+  return Boolean(
+    tenant?.aiBusinessContext?.trim() &&
+      tenant.aiAssistantAllowedTopics?.some((term) => term.trim()) &&
+      tenant.aiAssistantFallbackMessage?.trim() &&
+      tenant.aiAssistantHandoffPrompt?.trim()
+  );
+}
+
 function getTenantsPath() {
   return path.join(process.cwd(), ".data", "tenants.json");
 }

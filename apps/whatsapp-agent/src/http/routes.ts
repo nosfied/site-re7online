@@ -12,7 +12,7 @@ import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
-import { getTenants, saveTenants } from "../config/tenantConfig.js";
+import { getTenants, isAiAssistantConfigured, saveTenants } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -2901,7 +2901,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
-      const aiConfigured = Boolean(tenant.aiBusinessContext?.trim());
+      const aiConfigured = isAiAssistantConfigured(tenant);
       const chatbotLocked = Boolean(tenant.disableChatbot);
       const aiLocked = Boolean(tenant.disableAiFallback);
       json(res, 200, {
@@ -6219,7 +6219,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
-            aiConfigured: Boolean(tenant.aiBusinessContext?.trim()),
+            aiConfigured: isAiAssistantConfigured(tenant),
             chatbotLocked: false,
             flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
             aiLocked: false,
@@ -6514,7 +6514,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
-            aiConfigured: Boolean(saved.tenant.aiBusinessContext?.trim()),
+            aiConfigured: isAiAssistantConfigured(saved.tenant),
             chatbotLocked: false,
             flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
             aiLocked: false,
@@ -12027,8 +12027,11 @@ function isAiFallbackDisabledForTenant(tenant?: {
   disableAiFallback?: boolean;
   appDisableAiFallback?: boolean;
   aiBusinessContext?: string;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
 } | null) {
-  const aiConfigured = Boolean(tenant?.aiBusinessContext?.trim());
+  const aiConfigured = isAiAssistantConfigured(tenant);
   if (!aiConfigured) return true;
   return tenant?.disableAiFallback === true;
 }

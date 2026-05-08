@@ -36,8 +36,10 @@ const baseState: ConversationState = {
 };
 
 test("isSimpleQuestion accepts general educational questions", () => {
-  assert.equal(isSimpleQuestion("O que é BPC?"), true);
-  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), true);
+  assert.equal(isSimpleQuestion("O que é BPC?"), false);
+  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), false);
+  assert.equal(isSimpleQuestion("O que é BPC?", { allowedTopics: ["bpc"] }), true);
+  assert.equal(isSimpleQuestion("Como funciona aposentadoria?", { allowedTopics: ["aposentadoria"] }), true);
 });
 
 test("isSimpleQuestion blocks concrete legal or sensitive questions", () => {
@@ -78,8 +80,8 @@ test("buildSafeResponse adapts to legal and generic contexts", () => {
     aiBusinessContext: "Direito previdenciario",
     flowContext: { area: "previdenciario", servico: "bpc_loas" },
   });
-  assert.match(legal, /Não posso afirmar isso sem uma análise individual do caso/);
-  assert.match(legal, /especialista/);
+  assert.match(legal, /Não consigo confirmar uma situação específica/);
+  assert.doesNotMatch(legal.toLowerCase(), /advogado|advocacia|jurídico|juridico|previdenci/);
 
   const generic = buildSafeResponse("legal_specific_case", {
     tenantName: "Loja Exemplo",
@@ -112,6 +114,7 @@ test("generateControlledAssistantReply sanitizes context and appends required su
       name: "Justa",
       defaultLanguage: "pt_BR",
       aiBusinessContext: "Direito previdenciario.",
+      aiAssistantAllowedTopics: ["bpc", "loas"],
     },
     state: baseState,
     nowIso: "2026-05-07T10:00:00.000Z",
@@ -154,6 +157,7 @@ test("generateControlledAssistantReply accepts structured orchestrator output", 
       name: "Justa",
       defaultLanguage: "pt_BR",
       aiBusinessContext: "Direito previdenciario.",
+      aiAssistantAllowedTopics: ["bpc", "loas"],
     },
     state: baseState,
     nowIso: "2026-05-07T10:00:00.000Z",
@@ -365,7 +369,7 @@ test("canEvaluateHandoffRecommendation blocks unsafe operational states", () => 
   );
 });
 
-test("buildHandoffConfirmationPrompt adapts to legal and generic contexts", () => {
+test("buildHandoffConfirmationPrompt uses neutral global fallback", () => {
   assert.equal(
     buildHandoffConfirmationPrompt({
       context: {
@@ -374,7 +378,7 @@ test("buildHandoffConfirmationPrompt adapts to legal and generic contexts", () =
         flowContext: { area: "previdenciario" },
       },
     }),
-    "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?"
+    "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?"
   );
   assert.equal(
     buildHandoffConfirmationPrompt({
@@ -416,13 +420,14 @@ test("assistant fallback guidance adapts to tenant context and supports custom t
     tenantName: "Justa Advocacia",
     aiBusinessContext: "Direito previdenciario",
   });
-  assert.match(legal, /o que é BPC/);
+  assert.match(legal, /serviços disponíveis/);
+  assert.doesNotMatch(legal.toLowerCase(), /bpc|aposentadoria|previdenci/);
 
   const generic = buildAssistantFallbackGuidance({
     tenantName: "Loja Exemplo",
     aiBusinessContext: "Varejo",
   });
-  assert.match(generic, /dúvidas gerais sobre o atendimento/);
+  assert.match(generic, /serviços disponíveis/);
   assert.doesNotMatch(generic.toLowerCase(), /bpc|aposentadoria/);
 
   assert.equal(
@@ -434,6 +439,15 @@ test("assistant fallback guidance adapts to tenant context and supports custom t
 });
 
 test("buildHandoffConfirmationPrompt supports tenant custom prompt", () => {
+  assert.equal(
+    buildHandoffConfirmationPrompt({
+      context: {
+        tenantName: "Justa Advocacia",
+        aiBusinessContext: "Direito previdenciario",
+      },
+    }),
+    "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?"
+  );
   assert.equal(
     buildHandoffConfirmationPrompt({
       context: {

@@ -168,31 +168,17 @@ export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "explique",
 ];
 
-export const AI_ASSISTANT_GLOBAL_TOPIC_TERMS = [
-  "bpc",
-  "loas",
-  "aposentadoria",
-  "beneficio",
-  "beneficio assistencial",
-  "pensao",
-  "inss",
-  "revisao",
-  "contribuicao",
-  "contribuir",
-  "contribui",
-  "demora",
-];
+export const AI_ASSISTANT_GLOBAL_TOPIC_TERMS: string[] = [];
 
 export const AI_ASSISTANT_GLOBAL_BLOCKED_TERMS = [
   "tenho direito",
   "tenho chance",
   "meu caso",
-  "meu processo",
-  "meu recurso",
-  "meu documento",
+  "minha situacao",
+  "minha situação",
+  "me enquadro",
   "analise",
   "analisar",
-  "posso processar",
   "vou ganhar",
   "caso ganha",
   "quanto vou receber",
@@ -201,7 +187,9 @@ export const AI_ASSISTANT_GLOBAL_BLOCKED_TERMS = [
   "calcular",
   "laudo",
   "diagnostico",
+  "diagnóstico",
   "doenca",
+  "doença",
   "cid",
 ];
 
@@ -254,6 +242,7 @@ const SAFE_CONTEXT_KEYS = [
 ] as const;
 
 const REQUIRED_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
+const GENERIC_SAFE_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
 export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
 export const ORCHESTRATOR_MAX_REPLY_CHARS = 700;
 export const ORCHESTRATOR_MAX_LIST_ITEMS = 8;
@@ -399,39 +388,10 @@ export function classifyRisk(
   return null;
 }
 
-function isLegalLikeContext(context: AssistantTenantContext) {
-  const flowContext = context.flowContext ?? {};
-  const summary = [
-    context.tenantName,
-    context.aiBusinessContext,
-    flowContext.area,
-    flowContext.servico,
-    flowContext.intent,
-    ...(context.flowTags ?? []),
-  ]
-    .filter((value) => typeof value === "string" || typeof value === "number")
-    .join(" ");
-  const normalized = normalizeText(summary);
-  return containsAnyTerm(normalized, [
-    "juridico",
-    "advocacia",
-    "previdenciario",
-    "inss",
-    "bpc",
-    "loas",
-    "aposentadoria",
-    "beneficio",
-    "pensao",
-  ]);
-}
-
 export function buildHandoffConfirmationPrompt(input: HandoffPromptInput) {
   const configuredPrompt = input.context.handoffPrompt?.trim();
   if (configuredPrompt) {
     return configuredPrompt.slice(0, 500);
-  }
-  if (isLegalLikeContext(input.context)) {
-    return "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?";
   }
   return "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?";
 }
@@ -461,51 +421,25 @@ export function buildAssistantFallbackGuidance(context: AssistantTenantContext) 
   if (configuredMessage) {
     return configuredMessage.slice(0, 700);
   }
-  if (isLegalLikeContext(context)) {
-    return [
-      'Posso te ajudar com dúvidas gerais, como "o que é BPC?" ou "como funciona aposentadoria?".',
-      'Se quiser falar com alguém da equipe, escreva "quero falar com atendente".',
-    ].join("\n\n");
-  }
   return [
-    'Posso te ajudar com dúvidas gerais sobre o atendimento, serviços ou próximos passos.',
-    'Se quiser falar com uma pessoa da equipe, escreva "quero falar com atendente".',
+    "Posso te ajudar com dúvidas gerais sobre os serviços disponíveis.",
+    "Se quiser atendimento especializado, posso direcionar você para uma pessoa da equipe.",
   ].join("\n\n");
 }
 
 export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantTenantContext) {
-  const legalLike = isLegalLikeContext(tenantContext);
   if (risk === "personal_data") {
     return [
       "Para sua segurança, não envie CPF, documentos, telefone, e-mail ou outros dados pessoais por aqui sem necessidade.",
-      legalLike
-        ? "Posso te explicar o tema de forma geral, sem analisar dados individuais."
-        : "Posso te explicar o assunto de forma geral, sem analisar informações pessoais.",
-      REQUIRED_SUFFIX,
+      "Posso te explicar o assunto de forma geral, sem analisar informações pessoais.",
+      GENERIC_SAFE_SUFFIX,
     ].join("\n\n");
   }
   if (risk === "fraud_or_illicit") {
     return [
       "Não posso orientar sobre fraude, falsificação, omissão de informações ou qualquer procedimento irregular.",
-      legalLike
-        ? "Posso explicar caminhos regulares e seguros para buscar orientação sobre o tema."
-        : "Posso explicar alternativas regulares e seguras para seguir com o atendimento.",
-      REQUIRED_SUFFIX,
-    ].join("\n\n");
-  }
-  if (legalLike) {
-    const detail =
-      risk === "benefit_amount"
-        ? "Não posso calcular ou estimar valores sem análise individual e documentação adequada."
-        : risk === "outcome_prediction"
-          ? "Não posso prever resultado ou afirmar chance de êxito sem análise individual do caso."
-          : risk === "document_analysis"
-            ? "Não posso analisar laudos, documentos, exames ou diagnósticos por aqui."
-            : "Não posso afirmar isso sem uma análise individual do caso.";
-    return [
-      detail,
-      "Posso te explicar de forma geral como esse tema funciona e, se preferir, te direcionar para um especialista.",
-      REQUIRED_SUFFIX,
+      "Posso explicar alternativas regulares e seguras para seguir com o atendimento.",
+      GENERIC_SAFE_SUFFIX,
     ].join("\n\n");
   }
   const detail =
@@ -519,7 +453,7 @@ export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantT
   return [
     detail,
     "Posso te explicar de forma geral como isso funciona e, se preferir, te direcionar para atendimento.",
-    REQUIRED_SUFFIX,
+    GENERIC_SAFE_SUFFIX,
   ].join("\n\n");
 }
 
@@ -543,7 +477,6 @@ export function isSimpleQuestion(
     normalized.startsWith(normalizeText(term))
   );
   const topicTerms = [
-    ...AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
     ...normalizeTermList(options.allowedTopics),
   ];
   const hasTopic = topicTerms.some((term) => normalized.includes(normalizeText(term)));
@@ -591,7 +524,7 @@ function buildBusinessContext(params: ControlledAssistantInput) {
       ? `Instrucao adicional aprovada: ${params.tenant.aiAssistantSystemPrompt}`
       : null,
     `Contexto categórico: ${JSON.stringify(context)}`,
-    "Regras: responda apenas dúvidas gerais e educativas. Não dê parecer jurídico, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
+    "Regras: responda apenas dúvidas gerais e educativas dentro do contexto aprovado do tenant. Não dê orientação profissional individualizada, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
     "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
     "Ações permitidas: answer, ask_question, fallback_menu e no_reply. handoff_recommend e handoff_force são apenas informativos e não ativam atendimento humano.",
     `Finalize exatamente com: ${REQUIRED_SUFFIX}`,

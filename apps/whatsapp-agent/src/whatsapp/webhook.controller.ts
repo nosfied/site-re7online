@@ -54,6 +54,7 @@ import {
 import {
   getDefaultTenant,
   getTenantByClientKeyOrPhoneNumberId,
+  isAiAssistantConfigured,
 } from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
@@ -1279,7 +1280,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const isChatbotDisabledForTenant = () =>
     appliedTenantConfig?.disableChatbot === true;
   const isAiFallbackDisabledForTenant = () =>
-    !appliedTenantConfig?.aiBusinessContext?.trim() ||
+    !isAiAssistantConfigured(appliedTenantConfig) ||
     appliedTenantConfig?.disableAiFallback === true;
   const isSupervisedAiHandoffEnabled = () =>
     env.AI_ASSISTANT_ENABLED &&
@@ -4998,6 +4999,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
     const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
+    const aiAssistantConfigured = isAiAssistantConfigured(appliedTenantConfig);
     const logAiAssistantEvent = async (
       event: string,
       payload: Record<string, unknown> = {}
@@ -5013,6 +5015,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       logger.info({ event, requestId: meta?.requestId, ...safePayload });
       await persistEventSafe(event, safePayload as Prisma.InputJsonValue, normalizedFrom, message.messageId);
     };
+
+    if (
+      env.AI_ASSISTANT_ENABLED &&
+      env.WHATSAPP_AI_ENABLED &&
+      appliedTenantConfig?.aiAssistantEnabled === true &&
+      !aiAssistantConfigured
+    ) {
+      await logAiAssistantEvent("ai.assistant.config_missing", {
+        hasBusinessContext: Boolean(appliedTenantConfig.aiBusinessContext?.trim()),
+        hasAllowedTopics: Boolean(appliedTenantConfig.aiAssistantAllowedTopics?.length),
+        hasFallbackMessage: Boolean(appliedTenantConfig.aiAssistantFallbackMessage?.trim()),
+        hasHandoffPrompt: Boolean(appliedTenantConfig.aiAssistantHandoffPrompt?.trim()),
+      });
+    }
 
     if (
       !leadHandled &&
@@ -5036,6 +5052,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       message.text
     ) {
       const start = Date.now();
+      await logAiAssistantEvent("ai.assistant.domain_loaded", {
+        allowedTopicCount: appliedTenantConfig.aiAssistantAllowedTopics?.length ?? 0,
+        blockedTermCount: appliedTenantConfig.aiAssistantBlockedTerms?.length ?? 0,
+        handoffKeywordCount: appliedTenantConfig.aiAssistantHandoffKeywords?.length ?? 0,
+        hasFallbackMessage: Boolean(appliedTenantConfig.aiAssistantFallbackMessage?.trim()),
+        hasHandoffPrompt: Boolean(appliedTenantConfig.aiAssistantHandoffPrompt?.trim()),
+      });
       const assistantState = getAiAssistantState(updatedConversation);
       const maxReplies = Math.max(0, appliedTenantConfig.aiAssistantMaxReplies ?? 2);
       const assistantQuestionOptions = {
@@ -5172,6 +5195,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 } else {
                   replyText = buildAssistantFallbackGuidance(assistantTenantContext);
                   aiAssistantResponded = true;
+                  if (!assistantTenantContext.fallbackMessage?.trim()) {
+                    await logAiAssistantEvent("ai.assistant.generic_fallback_used", {
+                      reason: "handoff_prompt_not_sent",
+                    });
+                  }
                   await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
                     source: "deterministic_fallback",
                     reason:
@@ -5185,6 +5213,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               } else {
                 replyText = buildAssistantFallbackGuidance(assistantTenantContext);
                 aiAssistantResponded = true;
+                if (!assistantTenantContext.fallbackMessage?.trim()) {
+                  await logAiAssistantEvent("ai.assistant.generic_fallback_used", {
+                    reason: "handoff_denied",
+                  });
+                }
                 await logAiAssistantEvent("ai.orchestrator.handoff_denied", {
                   source: "deterministic_fallback",
                   reason: deniedReason,
@@ -5252,6 +5285,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             } else {
               replyText = buildAssistantFallbackGuidance(assistantTenantContext);
               aiAssistantResponded = true;
+              if (!assistantTenantContext.fallbackMessage?.trim()) {
+                await logAiAssistantEvent("ai.assistant.generic_fallback_used", {
+                  reason: fallbackDecision?.reason ?? "not_simple_question",
+                });
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
