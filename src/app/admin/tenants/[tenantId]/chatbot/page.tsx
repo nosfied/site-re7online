@@ -530,94 +530,132 @@ export default function AdminTenantChatbotPage() {
                 </div>
             ))}
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3 text-sm md:col-span-2">
-              <div className="mb-4 grid gap-3">
-                <label className="grid gap-1 text-xs text-white/60">
-                  Contexto de negocio da IA
-                  <textarea
-                    value={automationDraft.aiBusinessContext ?? ""}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiBusinessContext: event.target.value,
-                            }
-                          : current
-                      )
-                    }
-                    placeholder="Descreva a empresa, servicos, tom de voz, publico e limites da IA para este tenant."
-                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                  />
-                </label>
-              </div>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <span className="block font-medium text-white">IA controlada</span>
-                  <span className="mt-1 block text-white/60">
-                    Camada segura para dúvidas simples. Exige base de IA liberada e contexto preenchido.
-                  </span>
+              <div className="mb-4 rounded-md border border-white/10 bg-re7-navy/50 p-3">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-white">Base da IA</h3>
+                  <p className="mt-1 text-xs text-white/55">
+                    Conteudo aprovado que define contexto, tom e limites. A IA controlada so pode ser liberada quando
+                    o contexto de negocio estiver preenchido.
+                  </p>
                 </div>
-                <TogglePill
-                  checked={automationDraft.aiAssistantEnabled === true}
-                  disabled={aiControlledDisabled}
-                  onToggle={() =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            aiAssistantEnabled: !current.aiAssistantEnabled,
-                          }
-                        : current
-                    )
-                  }
-                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="grid gap-1 text-xs text-white/60">
+                    Contexto de negocio da IA
+                    <textarea
+                      value={automationDraft.aiBusinessContext ?? ""}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiBusinessContext: event.target.value,
+                              }
+                            : current
+                        )
+                      }
+                      placeholder="Descreva a empresa, servicos, tom de voz, publico e limites da IA para este tenant."
+                      className="min-h-32 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-white/60">
+                    Instrução adicional aprovada
+                    <textarea
+                      value={automationDraft.aiAssistantSystemPrompt ?? ""}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantSystemPrompt: event.target.value,
+                              }
+                            : current
+                        )
+                      }
+                      placeholder="Orientação complementar para a IA controlada"
+                      className="min-h-32 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                  </label>
+                </div>
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Maximo por conversa
-                  <input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={automationDraft.aiAssistantMaxReplies ?? 2}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantMaxReplies: Math.max(0, Number(event.target.value) || 0),
-                            }
-                          : current
-                      )
-                    }
-                    className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  />
-                </label>
-                <div className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-re7-navy/50 px-3 py-2">
-                  <span className="space-y-1 text-xs text-white/60">
-                    <span className="block font-medium text-white/80">Fallback para handoff</span>
-                    <span className="block">
-                      Permite registrar recomendacao supervisionada quando a IA sugerir encaminhamento. Nesta fase nao
-                      ativa humano automaticamente.
+
+              <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-white">Controles da IA</h3>
+                  <p className="mt-1 text-xs text-white/55">
+                    Liberação operacional, limite por conversa e recomendação supervisionada de handoff.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <span className="block font-medium text-white">IA controlada</span>
+                    <span className="mt-1 block text-white/60">
+                      Camada segura para dúvidas simples. Exige base de IA liberada e contexto preenchido.
                     </span>
-                  </span>
+                  </div>
                   <TogglePill
-                    checked={automationDraft.aiAssistantFallbackToHandoff === true}
-                    disabled={automationDraft.aiAssistantLocked}
+                    checked={automationDraft.aiAssistantEnabled === true}
+                    disabled={aiControlledDisabled}
                     onToggle={() =>
                       setSettings((current) =>
                         current
                           ? {
                               ...current,
-                              aiAssistantFallbackToHandoff: !current.aiAssistantFallbackToHandoff,
+                              aiAssistantEnabled: !current.aiAssistantEnabled,
                             }
                           : current
                       )
                     }
                   />
                 </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Maximo por conversa
+                    <input
+                      type="number"
+                      min={0}
+                      max={5}
+                      value={automationDraft.aiAssistantMaxReplies ?? 2}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantMaxReplies: Math.max(0, Number(event.target.value) || 0),
+                              }
+                            : current
+                        )
+                      }
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                  </label>
+                  <div className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-re7-navy/70 px-3 py-2">
+                    <span className="space-y-1 text-xs text-white/60">
+                      <span className="block font-medium text-white/80">Fallback para handoff</span>
+                      <span className="block">
+                        Permite registrar recomendacao supervisionada quando a IA sugerir encaminhamento. Nesta fase nao
+                        ativa humano automaticamente.
+                      </span>
+                    </span>
+                    <TogglePill
+                      checked={automationDraft.aiAssistantFallbackToHandoff === true}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onToggle={() =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantFallbackToHandoff: !current.aiAssistantFallbackToHandoff,
+                              }
+                            : current
+                        )
+                      }
+                    />
+                  </div>
+                </div>
               </div>
+
               <details className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 px-3 py-2 text-xs text-white/60">
                 <summary className="cursor-pointer text-re7-sky underline decoration-re7-sky/40 underline-offset-4">
                   Entender termos globais de segurança
@@ -674,95 +712,112 @@ export default function AdminTenantChatbotPage() {
                   </div>
                 </div>
               </details>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Temas permitidos para IA
-                  <textarea
-                    value={joinTermList(automationDraft.aiAssistantAllowedTopics)}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantAllowedTopics: splitTermList(event.target.value),
-                            }
-                          : current
-                      )
-                    }
-                    placeholder={"Um termo por linha\nEx.: plano\npedido\nsegunda via"}
-                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  />
-                  <span className="text-[11px] text-white/45">
-                    Amplia o vocabulário aceito pelo filtro simples sem remover as travas globais.
-                  </span>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Termos bloqueados adicionais
-                  <textarea
-                    value={joinTermList(automationDraft.aiAssistantBlockedTerms)}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantBlockedTerms: splitTermList(event.target.value),
-                            }
-                          : current
-                      )
-                    }
-                    placeholder={"Um termo por linha\nEx.: orçamento fechado\ncontrato\ncancelamento"}
-                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  />
-                  <span className="text-[11px] text-white/45">
-                    Bloqueia termos específicos do tenant além das restrições padrão de segurança.
-                  </span>
-                </label>
+
+              <div className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 p-3">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-white">Regras por tenant</h3>
+                  <p className="mt-1 text-xs text-white/55">
+                    Ajustes de vocabulário que complementam as travas globais sem removê-las.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Temas permitidos para IA
+                    <textarea
+                      value={joinTermList(automationDraft.aiAssistantAllowedTopics)}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantAllowedTopics: splitTermList(event.target.value),
+                              }
+                            : current
+                        )
+                      }
+                      placeholder={"Um termo por linha\nEx.: plano\npedido\nsegunda via"}
+                      className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                    <span className="text-[11px] text-white/45">
+                      Amplia o vocabulário aceito pelo filtro simples sem remover as travas globais.
+                    </span>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Termos bloqueados adicionais
+                    <textarea
+                      value={joinTermList(automationDraft.aiAssistantBlockedTerms)}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantBlockedTerms: splitTermList(event.target.value),
+                              }
+                            : current
+                        )
+                      }
+                      placeholder={"Um termo por linha\nEx.: orçamento fechado\ncontrato\ncancelamento"}
+                      className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                    <span className="text-[11px] text-white/45">
+                      Bloqueia termos específicos do tenant além das restrições padrão de segurança.
+                    </span>
+                  </label>
+                </div>
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Sinais de encaminhamento humano
-                  <textarea
-                    value={joinTermList(automationDraft.aiAssistantHandoffKeywords)}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantHandoffKeywords: splitTermList(event.target.value),
-                            }
-                          : current
-                      )
-                    }
-                    placeholder={"Um termo por linha\nEx.: especialista\nconsultor\nsuporte humano"}
-                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  />
-                  <span className="text-[11px] text-white/45">
-                    Acrescenta expressões do tenant que devem gerar pergunta de encaminhamento, sem ativar humano automaticamente.
-                  </span>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-white/60">
-                  Pergunta de encaminhamento personalizada
-                  <textarea
-                    value={automationDraft.aiAssistantHandoffPrompt ?? ""}
-                    disabled={automationDraft.aiAssistantLocked}
-                    onChange={(event) =>
-                      setSettings((current) =>
-                        current
-                          ? {
-                              ...current,
-                              aiAssistantHandoffPrompt: event.target.value,
-                            }
-                          : current
-                      )
-                    }
-                    placeholder="Ex.: Posso direcionar seu atendimento para um especialista da equipe?"
-                    className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                  />
-                </label>
-              </div>
+
+              <div className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 p-3">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-white">Encaminhamento e mensagens</h3>
+                  <p className="mt-1 text-xs text-white/55">
+                    Textos usados quando a IA identifica pedido de atendimento humano ou mensagem vaga.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Sinais de encaminhamento humano
+                    <textarea
+                      value={joinTermList(automationDraft.aiAssistantHandoffKeywords)}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantHandoffKeywords: splitTermList(event.target.value),
+                              }
+                            : current
+                        )
+                      }
+                      placeholder={"Um termo por linha\nEx.: especialista\nconsultor\nsuporte humano"}
+                      className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                    <span className="text-[11px] text-white/45">
+                      Acrescenta expressões do tenant que devem gerar pergunta de encaminhamento, sem ativar humano automaticamente.
+                    </span>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Pergunta de encaminhamento personalizada
+                    <textarea
+                      value={automationDraft.aiAssistantHandoffPrompt ?? ""}
+                      disabled={automationDraft.aiAssistantLocked}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantHandoffPrompt: event.target.value,
+                              }
+                            : current
+                        )
+                      }
+                      placeholder="Ex.: Posso direcionar seu atendimento para um especialista da equipe?"
+                      className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                  </label>
+                </div>
               <label className="mt-3 flex flex-col gap-1 text-xs text-white/60">
                 Mensagem para dúvida vaga ou fora do escopo simples
                 <textarea
@@ -782,25 +837,7 @@ export default function AdminTenantChatbotPage() {
                   className="min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                 />
               </label>
-              <label className="mt-3 flex flex-col gap-1 text-xs text-white/60">
-                Instrução adicional aprovada
-                <textarea
-                  value={automationDraft.aiAssistantSystemPrompt ?? ""}
-                  disabled={automationDraft.aiAssistantLocked}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      current
-                        ? {
-                            ...current,
-                            aiAssistantSystemPrompt: event.target.value,
-                          }
-                        : current
-                    )
-                  }
-                  placeholder="Orientação complementar para a IA controlada"
-                  className="min-h-20 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
-                />
-              </label>
+              </div>
             </div>
           </div>
         ) : null}
