@@ -56,6 +56,7 @@ export type AIOrchestratorState = {
     reason: string;
     score: number;
     awaitingConfirmation: boolean;
+    confirmationRetryCount?: number;
   };
 };
 

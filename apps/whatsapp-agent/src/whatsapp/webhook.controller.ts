@@ -1718,6 +1718,142 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  const persistAiHandoffLeadNotes = async (params: {
+    clientId: string;
+    clientKey: string;
+    waId: string;
+    conversationKey: string | null;
+    messageId: string;
+    promptReason: string;
+    promptScore: number;
+  }) => {
+    const prisma = getPrisma();
+    const summaryRequestId = [
+      "ai-handoff-summary",
+      params.clientId,
+      params.waId,
+      params.messageId,
+    ].join(":");
+    const suggestedReplyRequestId = [
+      "ai-handoff-suggested-reply",
+      params.clientId,
+      params.waId,
+      params.messageId,
+    ].join(":");
+    const lead = await ensureLeadForConversation({
+      tenantId: params.clientId,
+      waId: params.waId,
+    });
+    const createEventAndNote = async (input: {
+      requestId: string;
+      eventName: "flow.handoff.summary.created" | "flow.handoff.suggested_reply.created";
+      noteBody: string;
+      payload: Record<string, unknown>;
+    }) => {
+      const existing = await prisma.event.findUnique({
+        where: {
+          clientId_eventName_requestId: {
+            clientId: params.clientId,
+            eventName: input.eventName,
+            requestId: input.requestId,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        logger.info({
+          event:
+            input.eventName === "flow.handoff.summary.created"
+              ? "flow.handoff.summary.deduped"
+              : "flow.handoff.suggested_reply.deduped",
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          eventId: existing.id,
+          waId: maskNumber(params.waId),
+          requestId: meta?.requestId,
+        });
+        return;
+      }
+      const event = await prisma.event.create({
+        data: {
+          clientId: params.clientId,
+          waId: params.waId,
+          waIdCanonical: canonicalizeBrazilWaId(params.waId),
+          messageId: params.messageId,
+          requestId: input.requestId,
+          eventName: input.eventName,
+          payloadJson: input.payload as Prisma.InputJsonValue,
+        },
+      });
+      await prisma.leadNote.create({
+        data: {
+          tenantId: params.clientId,
+          leadId: lead.id,
+          body: input.noteBody,
+        },
+      });
+      logger.info({
+        event: input.eventName,
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        eventId: event.id,
+        leadId: lead.id,
+        waId: maskNumber(params.waId),
+        requestId: meta?.requestId,
+      });
+    };
+    try {
+      await createEventAndNote({
+        requestId: summaryRequestId,
+        eventName: "flow.handoff.summary.created",
+        noteBody: [
+          "[Resumo automático]",
+          "Resumo do atendimento",
+          "---------------------",
+          "Origem: IA controlada",
+          "Encaminhamento confirmado pelo cliente",
+          `Motivo: ${params.promptReason}`,
+          `Score: ${params.promptScore}`,
+        ].join("\n"),
+        payload: {
+          action: "ai_handoff_summary_created",
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          conversationKey: params.conversationKey,
+          reason: params.promptReason,
+          score: params.promptScore,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      await createEventAndNote({
+        requestId: suggestedReplyRequestId,
+        eventName: "flow.handoff.suggested_reply.created",
+        noteBody: [
+          "[Sugestão de resposta]",
+          "Olá, vi que você pediu atendimento com a equipe. Vou revisar o contexto e te orientar pelos próximos passos.",
+        ].join("\n"),
+        payload: {
+          action: "ai_handoff_suggested_reply_created",
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          conversationKey: params.conversationKey,
+          reason: params.promptReason,
+          score: params.promptScore,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "ai.orchestrator.handoff_notes.failed",
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: maskNumber(params.waId),
+        error: (error as Error).message,
+        requestId: meta?.requestId,
+      });
+    }
+  };
+
   const serializeWebhookStatuses = (input: unknown) => {
     if (!Array.isArray(input)) return [];
     return input.map((item) => {
@@ -2726,6 +2862,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await storage.saveIncomingMessage(
         toStoredIncomingMessage(message, status, allowlistHit)
       );
+      await persistInboundSafe({
+        waId: message.from,
+        messageId: message.messageId,
+        type: mapMessageType(message.type),
+        bodyText: message.text,
+        allowlistHit,
+        occurredAt: parseWebhookTimestampToDate(message.timestamp),
+        rawPayload: {
+          ...message.raw,
+          text: message.text,
+          timestamp: message.timestamp,
+        },
+      });
 
       logger.info({
         event: "webhook.message",
@@ -2954,6 +3103,349 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       lastInboundAt: inboundConversation.lastInboundAt,
     };
     let updatedConversation = inboundConversation;
+    const aiHandoffPrompt = updatedConversation.answers?.aiOrchestrator?.handoffPrompt;
+    if (
+      aiHandoffPrompt?.awaitingConfirmation === true &&
+      updatedConversation.mode !== "HUMAN" &&
+      updatedConversation.handoff.status === "none"
+    ) {
+      const normalizedConfirmation = normalizeHandoffConfirmationText(message.text);
+      const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
+      const persistCurrentInboundForHandoff = async (state: ConversationState) => {
+        await upsertConversationSafe(state);
+        await persistConversationSafe({
+          waId: state.waId,
+          windowIsOpen: state.window.isOpen,
+          windowExpiresAt: state.window.expiresAt,
+          lastInboundAt: state.lastInboundAt ?? null,
+          lastOutboundAt: state.lastOutboundAt ?? null,
+          departmentId: state.departmentId ?? null,
+        });
+        await storage.saveIncomingMessage(
+          toStoredIncomingMessage(message, status, allowlistHit)
+        );
+        await persistInboundSafe({
+          waId: message.from,
+          messageId: message.messageId,
+          type: mapMessageType(message.type),
+          bodyText: message.text,
+          allowlistHit,
+          occurredAt: parseWebhookTimestampToDate(message.timestamp),
+          rawPayload: {
+            ...message.raw,
+            text: message.text,
+            timestamp: message.timestamp,
+          },
+        });
+        logger.info({
+          event: "webhook.message",
+          messageId: message.messageId,
+          from: maskNumber(message.from),
+          type: message.type,
+          status,
+          allowlistHit,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      };
+      logger.info({
+        event: "ai.orchestrator.handoff_confirmation.received",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        messageId: message.messageId,
+        decision: normalizedConfirmation,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_confirmation.received",
+        {
+          action: "ai.orchestrator.handoff_confirmation.received",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          decision: normalizedConfirmation,
+          promptMessageId: aiHandoffPrompt.messageId,
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+
+      if (normalizedConfirmation === "accepted") {
+        const clearedAnswers = {
+          ...(updatedConversation.answers ?? {}),
+          aiOrchestrator: {
+            ...(previousAiOrchestrator ?? {}),
+            handoffPrompt: {
+              ...aiHandoffPrompt,
+              awaitingConfirmation: false,
+              confirmationRetryCount: aiHandoffPrompt.confirmationRetryCount ?? 0,
+            },
+            handoffRecommended: true,
+            lastMessageId: message.messageId,
+            lastNextActionAt: new Date().toISOString(),
+          },
+        };
+        const confirmationPersistedState: ConversationState = {
+          ...updatedConversation,
+          answers: clearedAnswers,
+          mode: "BOT",
+          handoff: {
+            ...updatedConversation.handoff,
+            status: "none",
+          },
+        };
+        await persistCurrentInboundForHandoff(confirmationPersistedState);
+        const activatedHandoff = activateHumanHandoff(
+          clearChatbotRuntime({
+            ...confirmationPersistedState,
+            answers: clearedAnswers,
+          }),
+          message.timestamp,
+          "Perfeito. Vou encaminhar seu atendimento para uma pessoa da equipe."
+        );
+        updatedConversation = await ensurePendingHandoffRouting({
+          ...activatedHandoff.state,
+          mode: "HUMAN" as const,
+          assignedUserId: null,
+          assignedTo: null,
+          assignedAt: null,
+          status: "WAITING",
+          closedAt: null,
+        });
+        await upsertConversationSafe(updatedConversation);
+        await persistConversationSafe({
+          waId: updatedConversation.waId,
+          windowIsOpen: updatedConversation.window.isOpen,
+          windowExpiresAt: updatedConversation.window.expiresAt,
+          lastInboundAt: updatedConversation.lastInboundAt ?? null,
+          lastOutboundAt: updatedConversation.lastOutboundAt ?? null,
+          departmentId: updatedConversation.departmentId ?? null,
+        });
+        if (tenantClientId) {
+          await persistAiHandoffLeadNotes({
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: updatedConversation.waId,
+            conversationKey: updatedConversation.conversationKey ?? null,
+            messageId: message.messageId,
+            promptReason: aiHandoffPrompt.reason,
+            promptScore: aiHandoffPrompt.score,
+          });
+          publishRealtimeEvent({
+            type: "conversation.handoff.updated",
+            clientId: tenantClientId,
+            waId: updatedConversation.waId,
+            waIdCanonical: canonicalizeBrazilWaId(updatedConversation.waId),
+            mode: "HUMAN",
+            handoffStatus:
+              updatedConversation.handoff.status === "pending" ||
+              updatedConversation.handoff.status === "active"
+                ? updatedConversation.handoff.status
+                : "active",
+            assignedUserId: updatedConversation.assignedUserId ?? null,
+            departmentId: updatedConversation.departmentId ?? null,
+            updatedAt: parseWebhookTimestampToDate(message.timestamp).toISOString(),
+          });
+        }
+        logger.info({
+          event: "ai.orchestrator.handoff_confirmation.accepted",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          mode: updatedConversation.mode,
+          handoffStatus: updatedConversation.handoff.status,
+          status: updatedConversation.status ?? null,
+          requestId: meta?.requestId,
+        });
+        logger.info({
+          event: "ai.orchestrator.handoff_activated",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          mode: updatedConversation.mode,
+          handoffStatus: updatedConversation.handoff.status,
+          status: updatedConversation.status ?? null,
+          departmentId: updatedConversation.departmentId ?? null,
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "ai.orchestrator.handoff_confirmation.accepted",
+          {
+            action: "ai.orchestrator.handoff_confirmation.accepted",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+            mode: updatedConversation.mode,
+            handoffStatus: updatedConversation.handoff.status,
+            status: updatedConversation.status ?? null,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+        await persistEventSafe(
+          "ai.orchestrator.handoff_activated",
+          {
+            action: "ai.orchestrator.handoff_activated",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+            mode: updatedConversation.mode,
+            handoffStatus: updatedConversation.handoff.status,
+            status: updatedConversation.status ?? null,
+            departmentId: updatedConversation.departmentId ?? null,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+        if (tenantHandoffAttendantWaid) {
+          await notifyAttendantHumanRequested({
+            attendantWaId: tenantHandoffAttendantWaid,
+            leadWaId: normalizedFrom,
+            snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
+            requestId: meta?.requestId,
+          });
+        }
+        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+          const handoffReply = activatedHandoff.replyText;
+          const result = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `ai.handoff.confirmation.${message.messageId}`,
+            replyText: handoffReply,
+            guard: inboundGuard,
+          });
+          if (result.ok) {
+            updatedConversation = await persistOutboundConversation(
+              updatedConversation,
+              result.messageId
+            );
+          }
+        }
+        continue;
+      }
+
+      if (normalizedConfirmation === "declined") {
+        updatedConversation = {
+          ...updatedConversation,
+          handoff: {
+            ...updatedConversation.handoff,
+            status: "none",
+            releasedAt: message.timestamp,
+          },
+          mode: "BOT",
+          answers: {
+            ...(updatedConversation.answers ?? {}),
+            aiOrchestrator: {
+              ...(previousAiOrchestrator ?? {}),
+              handoffPrompt: {
+                ...aiHandoffPrompt,
+                awaitingConfirmation: false,
+                confirmationRetryCount: aiHandoffPrompt.confirmationRetryCount ?? 0,
+              },
+              handoffRecommended: false,
+              lastMessageId: message.messageId,
+              lastNextActionAt: new Date().toISOString(),
+            },
+          },
+        };
+        await persistCurrentInboundForHandoff(updatedConversation);
+        logger.info({
+          event: "ai.orchestrator.handoff_confirmation.declined",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "ai.orchestrator.handoff_confirmation.declined",
+          {
+            action: "ai.orchestrator.handoff_confirmation.declined",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+          const result = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `ai.handoff.declined.${message.messageId}`,
+            replyText: "Tudo bem. Posso continuar te orientando por aqui.",
+            guard: inboundGuard,
+          });
+          if (result.ok) {
+            updatedConversation = await persistOutboundConversation(
+              updatedConversation,
+              result.messageId
+            );
+          }
+        }
+        continue;
+      }
+
+      const nextRetryCount = (aiHandoffPrompt.confirmationRetryCount ?? 0) + 1;
+      const shouldClosePrompt = nextRetryCount >= 2;
+      updatedConversation = {
+        ...updatedConversation,
+        answers: {
+          ...(updatedConversation.answers ?? {}),
+          aiOrchestrator: {
+            ...(previousAiOrchestrator ?? {}),
+            handoffPrompt: {
+              ...aiHandoffPrompt,
+              awaitingConfirmation: !shouldClosePrompt,
+              confirmationRetryCount: nextRetryCount,
+            },
+            handoffRecommended: !shouldClosePrompt,
+            lastMessageId: message.messageId,
+            lastNextActionAt: new Date().toISOString(),
+          },
+        },
+      };
+      await persistCurrentInboundForHandoff(updatedConversation);
+      logger.info({
+        event: "ai.orchestrator.handoff_confirmation.invalid",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        retryCount: nextRetryCount,
+        awaitingConfirmation: !shouldClosePrompt,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_confirmation.invalid",
+        {
+          action: "ai.orchestrator.handoff_confirmation.invalid",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          retryCount: nextRetryCount,
+          awaitingConfirmation: !shouldClosePrompt,
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+      if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+        const result = await sendOutboundText({
+          toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+          waId: normalizedFrom,
+          intent: updatedConversation.intent,
+          messageId: `ai.handoff.invalid.${message.messageId}`,
+          replyText: shouldClosePrompt
+            ? "Tudo bem. Vou continuar te orientando por aqui."
+            : "Só para confirmar: você deseja falar com uma pessoa da equipe?",
+          guard: inboundGuard,
+        });
+        if (result.ok) {
+          updatedConversation = await persistOutboundConversation(
+            updatedConversation,
+            result.messageId
+          );
+        }
+      }
+      continue;
+    }
     const wasPending = currentConversation.handoff.status === "pending";
     const hasConfigurableChatbotFlow = Boolean(
       await loadChatbotFlowForConversation(updatedConversation, message.text)
@@ -5024,6 +5516,41 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 function maskNumber(number: string) {
   const tail = number.slice(-6);
   return `***${tail}`;
+}
+
+function normalizeHandoffConfirmationText(text: string | null | undefined) {
+  const normalized = String(text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "invalid" as const;
+  const positiveTerms = [
+    "sim",
+    "quero",
+    "pode",
+    "pode encaminhar",
+    "ok",
+    "claro",
+    "atendimento humano",
+    "falar com atendente",
+    "quero falar com atendente",
+  ];
+  const negativeTerms = [
+    "nao",
+    "agora nao",
+    "depois",
+    "continuar aqui",
+  ];
+  if (positiveTerms.some((term) => normalized === term || normalized.includes(term))) {
+    return "accepted" as const;
+  }
+  if (negativeTerms.some((term) => normalized === term || normalized.includes(term))) {
+    return "declined" as const;
+  }
+  return "invalid" as const;
 }
 
 function renderQuotaBlockedText(
