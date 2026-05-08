@@ -35,6 +35,7 @@ import {
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
+  buildAssistantLimitReachedReply,
   buildContextualFallbackReply,
   buildSafeResponse,
   buildAssistantFallbackGuidance,
@@ -5014,7 +5015,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       : env.WHATSAPP_DEFAULT_REPLY);
     let aiAssistantResponded = false;
     let aiOrchestratorNoReply = false;
-    let aiAssistantSkippedNotSimpleQuestion = false;
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
@@ -5099,6 +5099,86 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
         secondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
       };
+      const applyAssistantLimitFallback = async (source: string) => {
+        const canOfferHandoff = appliedTenantConfig.aiAssistantFallbackToHandoff === true;
+        replyText = buildAssistantLimitReachedReply({
+          context: assistantTenantContext,
+          canOfferHandoff,
+        });
+        aiAssistantResponded = true;
+        const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
+        const nowIso = new Date().toISOString();
+        updatedConversation = {
+          ...updatedConversation,
+          answers: {
+            ...(updatedConversation.answers ?? {}),
+            aiAssistant: {
+              count: assistantState.count,
+              lastRespondedAt: nowIso,
+              lastMessageId: message.messageId,
+              lastFallbackType: assistantState.lastFallbackType,
+              lastFallbackAt: assistantState.lastFallbackAt,
+              fallbackCount: assistantState.fallbackCount,
+            },
+            aiOrchestrator: {
+              ...(previousAiOrchestrator ?? {}),
+              stage: canOfferHandoff ? "handoff_recommended" : "clarification",
+              goal: canOfferHandoff ? "recommend_handoff" : "identify_need",
+              missingInformation: previousAiOrchestrator?.missingInformation ?? [],
+              lastAction: canOfferHandoff ? "handoff_recommend" : "fallback_menu",
+              lastConfidence: previousAiOrchestrator?.lastConfidence ?? 1,
+              handoffRecommended: canOfferHandoff,
+              lastMessageId: message.messageId,
+              lastQuestion: null,
+              lastNextActionAt: nowIso,
+              handoffPrompt: canOfferHandoff
+                ? {
+                    prompted: true,
+                    promptedAt: nowIso,
+                    messageId: message.messageId,
+                    reason: "assistant_limit_reached",
+                    score: 3,
+                    awaitingConfirmation: true,
+                  }
+                : previousAiOrchestrator?.handoffPrompt,
+            },
+          },
+        };
+        await logAiAssistantEvent("ai.assistant.limit_fallback_sent", {
+          source,
+          count: assistantState.count,
+          maxReplies,
+          countConsumed: false,
+          handoffPrompt: canOfferHandoff,
+        });
+        if (canOfferHandoff) {
+          await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
+            source,
+            reason: "assistant_limit_reached",
+            score: 3,
+            threshold: 3,
+            promptType: "confirmation",
+          });
+          await logAiAssistantEvent("ai.orchestrator.handoff_prompt.awaiting_confirmation", {
+            source,
+            reason: "assistant_limit_reached",
+            score: 3,
+            messageId: message.messageId,
+          });
+        } else {
+          await logAiAssistantEvent("ai.orchestrator.fallback_menu", {
+            source,
+            reason: "assistant_limit_reached",
+          });
+        }
+        await logAiAssistantEvent("ai.assistant.responded", {
+          source,
+          latency_ms: Date.now() - start,
+          count: assistantState.count,
+          maxReplies,
+          countConsumed: false,
+        });
+      };
       try {
         if (assistantState.lastMessageId === message.messageId) {
           await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "duplicate_message" });
@@ -5133,16 +5213,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               fallbackReason: fallbackDecision?.reason ?? null,
             });
             if (assistantState.count >= maxReplies && fallbackDecision?.intent !== "handoff_prompt") {
-              aiAssistantSkippedNotSimpleQuestion = true;
               await logAiAssistantEvent("ai.assistant.limit_reached", {
                 count: assistantState.count,
                 maxReplies,
                 fallbackIntent: fallbackDecision?.intent ?? null,
               });
-              await logAiAssistantEvent("ai.assistant.skipped", {
-                reason: "assistant_limit_reached",
-                source: "not_simple_question_fallback",
-              });
+              await applyAssistantLimitFallback("not_simple_question_fallback");
             } else if (fallbackDecision?.intent === "handoff_prompt") {
               const scoreResult = calculateHandoffScore({
                 explicitHumanRequest: true,
@@ -5468,6 +5544,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               count: assistantState.count,
               maxReplies,
             });
+            await applyAssistantLimitFallback("educational_question");
           } else {
             await logAiAssistantEvent("ai.orchestrator.invoked", {
               count: assistantState.count,
@@ -5739,17 +5816,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (noAutomationReplyConfigured && !aiAssistantResponded) {
-      if (aiAssistantSkippedNotSimpleQuestion) {
-        logger.info({
-          event: "reply.skipped",
-          waId: maskNumber(normalizedFrom),
-          reason: "ai_not_simple_question_no_handoff",
-          route: meta?.route,
-          method: meta?.method,
-          requestId: meta?.requestId,
-        });
-        continue;
-      }
       if (aiOrchestratorNoReply) {
         logger.info({
           event: "reply.skipped",

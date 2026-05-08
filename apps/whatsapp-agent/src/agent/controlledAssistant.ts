@@ -541,6 +541,16 @@ export function buildContextualFallbackReply(input: {
   return CONTEXTUAL_FALLBACK_REPLIES[input.result.type] || CONTEXTUAL_FALLBACK_REPLIES.unknown;
 }
 
+export function buildAssistantLimitReachedReply(input: {
+  context: AssistantTenantContext;
+  canOfferHandoff?: boolean;
+}) {
+  if (input.canOfferHandoff) {
+    return buildHandoffConfirmationPrompt({ context: input.context });
+  }
+  return "Para continuar com segurança, posso direcionar você para uma pessoa da equipe.";
+}
+
 export function buildAssistantFallbackGuidance(context: AssistantTenantContext) {
   const configuredMessage = context.fallbackMessage?.trim();
   if (configuredMessage) {

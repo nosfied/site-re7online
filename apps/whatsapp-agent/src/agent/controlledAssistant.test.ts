@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildHandoffConfirmationPrompt,
+  buildAssistantLimitReachedReply,
   buildAssistantGreetingReply,
   buildAssistantFallbackGuidance,
   buildContextualFallbackReply,
@@ -135,6 +136,27 @@ test("buildContextualFallbackReply uses short universal replies and anti-repeat"
       repeated: true,
     }),
     "Entendi. Quer que eu direcione para uma pessoa da equipe?"
+  );
+});
+
+test("buildAssistantLimitReachedReply does not depend on LLM output", () => {
+  assert.equal(
+    buildAssistantLimitReachedReply({
+      context: {
+        fallbackMessage: "Mensagem longa do tenant.",
+      },
+      canOfferHandoff: false,
+    }),
+    "Para continuar com segurança, posso direcionar você para uma pessoa da equipe."
+  );
+  assert.equal(
+    buildAssistantLimitReachedReply({
+      context: {
+        handoffPrompt: "Posso encaminhar para a equipe?",
+      },
+      canOfferHandoff: true,
+    }),
+    "Posso encaminhar para a equipe?"
   );
 });
 
