@@ -294,6 +294,7 @@ export default function AdminTenantChatbotPage() {
     disableChatbotFlowEditing: false,
     aiAssistantEnabled: false,
     aiAssistantMaxReplies: 2,
+    aiAssistantFallbackToHandoff: false,
     aiAssistantSystemPrompt: "",
     aiAssistantAllowedTopics: [],
     aiAssistantBlockedTerms: [],
@@ -568,7 +569,7 @@ export default function AdminTenantChatbotPage() {
                   }
                 />
               </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <label className="flex flex-col gap-1 text-xs text-white/60">
                   Maximo por conversa
                   <input
@@ -590,6 +591,29 @@ export default function AdminTenantChatbotPage() {
                     className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                   />
                 </label>
+                <div className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-re7-navy/50 px-3 py-2">
+                  <span className="space-y-1 text-xs text-white/60">
+                    <span className="block font-medium text-white/80">Fallback para handoff</span>
+                    <span className="block">
+                      Permite registrar recomendacao supervisionada quando a IA sugerir encaminhamento. Nesta fase nao
+                      ativa humano automaticamente.
+                    </span>
+                  </span>
+                  <TogglePill
+                    checked={automationDraft.aiAssistantFallbackToHandoff === true}
+                    disabled={automationDraft.aiAssistantLocked}
+                    onToggle={() =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              aiAssistantFallbackToHandoff: !current.aiAssistantFallbackToHandoff,
+                            }
+                          : current
+                      )
+                    }
+                  />
+                </div>
               </div>
               <details className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 px-3 py-2 text-xs text-white/60">
                 <summary className="cursor-pointer text-re7-sky underline decoration-re7-sky/40 underline-offset-4">
