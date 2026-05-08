@@ -1281,6 +1281,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   const isAiFallbackDisabledForTenant = () =>
     !appliedTenantConfig?.aiBusinessContext?.trim() ||
     appliedTenantConfig?.disableAiFallback === true;
+  const isSupervisedAiHandoffEnabled = () =>
+    env.AI_ASSISTANT_ENABLED &&
+    env.WHATSAPP_AI_ENABLED &&
+    appliedTenantConfig?.aiAssistantEnabled === true &&
+    appliedTenantConfig?.aiAssistantFallbackToHandoff === true &&
+    !isAiFallbackDisabledForTenant();
   const loadChatbotFlowForConversation = async (
     state: ConversationState,
     inboundText: string | null | undefined,
@@ -2725,12 +2731,46 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     const currentHandoffStatus = getHandoffStatus(currentConversation);
+    const supervisedAiHandoffEnabled = isSupervisedAiHandoffEnabled();
     if (currentHandoffStatus === "active") {
-      const blockedState = updateInboundMeta(
+      let blockedState = updateInboundMeta(
         currentConversation,
         message.messageId,
         message.timestamp
       );
+      if (blockedState.mode !== "HUMAN") {
+        logger.warn({
+          event: "ai.orchestrator.invalid_state_detected",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          reason: "active_handoff_without_human_mode",
+          mode: blockedState.mode,
+          handoffStatus: blockedState.handoff.status,
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "ai.orchestrator.invalid_state_detected",
+          {
+            action: "ai.orchestrator.invalid_state_detected",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+            reason: "active_handoff_without_human_mode",
+            mode: blockedState.mode,
+            handoffStatus: blockedState.handoff.status,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+        blockedState = clearChatbotRuntime({
+          ...blockedState,
+          mode: "HUMAN",
+          status: blockedState.status ?? "WAITING",
+          assignedUserId: blockedState.assignedUserId ?? null,
+          assignedTo: blockedState.assignedTo ?? null,
+          assignedAt: blockedState.assignedAt ?? null,
+        });
+      }
       await upsertConversationSafe(blockedState);
       await persistConversationSafe({
         waId: blockedState.waId,
@@ -2774,7 +2814,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       continue;
     }
 
-    if (currentHandoffStatus === "pending") {
+    if (currentHandoffStatus === "pending" && !supervisedAiHandoffEnabled) {
       const pendingState = updateInboundMeta(
         currentConversation,
         message.messageId,
@@ -2785,7 +2825,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.text,
         message.timestamp
       );
-      const updatedConversation = handoffResult.state;
+      let updatedConversation = handoffResult.state;
 
       if (handoffResult.outcome === "requested") {
         logger.info({
@@ -2799,6 +2839,40 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
       }
       if (handoffResult.outcome === "accepted") {
+        if (updatedConversation.mode !== "HUMAN") {
+          logger.warn({
+            event: "ai.orchestrator.invalid_state_detected",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: maskNumber(normalizedFrom),
+            reason: "legacy_pending_handoff_acceptance_without_human_mode",
+            mode: updatedConversation.mode,
+            handoffStatus: updatedConversation.handoff.status,
+            requestId: meta?.requestId,
+          });
+          await persistEventSafe(
+            "ai.orchestrator.invalid_state_detected",
+            {
+              action: "ai.orchestrator.invalid_state_detected",
+              clientId: tenantClientId || null,
+              clientKey: tenantClientKey || null,
+              reason: "legacy_pending_handoff_acceptance_without_human_mode",
+              mode: updatedConversation.mode,
+              handoffStatus: updatedConversation.handoff.status,
+            } as Prisma.InputJsonValue,
+            normalizedFrom,
+            message.messageId
+          );
+        }
+        updatedConversation = await ensurePendingHandoffRouting({
+          ...clearChatbotRuntime(updatedConversation),
+          mode: "HUMAN" as const,
+          assignedUserId: null,
+          assignedTo: null,
+          assignedAt: null,
+          status: "WAITING",
+          closedAt: null,
+        });
         logger.info({
           event: "handoff.confirm.accepted",
           waId: maskNumber(normalizedFrom),
@@ -3103,6 +3177,58 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       lastInboundAt: inboundConversation.lastInboundAt,
     };
     let updatedConversation = inboundConversation;
+    if (
+      supervisedAiHandoffEnabled &&
+      updatedConversation.handoff.status === "pending"
+    ) {
+      logger.info({
+        event: "ai.orchestrator.handoff_legacy_blocked",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        reason: "legacy_pending_replaced_by_supervised_handoff",
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_legacy_blocked",
+        {
+          action: "ai.orchestrator.handoff_legacy_blocked",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          reason: "legacy_pending_replaced_by_supervised_handoff",
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+      updatedConversation = {
+        ...updatedConversation,
+        mode: "BOT",
+        handoff: {
+          ...updatedConversation.handoff,
+          status: "none",
+          releasedAt: message.timestamp,
+        },
+      };
+      logger.info({
+        event: "ai.orchestrator.handoff_unified",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        reason: "legacy_pending_cleared",
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_unified",
+        {
+          action: "ai.orchestrator.handoff_unified",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          reason: "legacy_pending_cleared",
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+    }
     const aiHandoffPrompt = updatedConversation.answers?.aiOrchestrator?.handoffPrompt;
     if (
       aiHandoffPrompt?.awaitingConfirmation === true &&
@@ -3450,9 +3576,54 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const hasConfigurableChatbotFlow = Boolean(
       await loadChatbotFlowForConversation(updatedConversation, message.text)
     );
+    const inboundIntent = detectIntent(message.text);
     const shouldRunLegacyHandoff =
-      wasPending || !hasConfigurableChatbotFlow;
-    if (!shouldRunLegacyHandoff && detectIntent(message.text) === "handoff") {
+      !supervisedAiHandoffEnabled && (wasPending || !hasConfigurableChatbotFlow);
+    if (supervisedAiHandoffEnabled && inboundIntent === "handoff") {
+      logger.info({
+        event: "ai.orchestrator.handoff_legacy_blocked",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        reason: "supervised_ai_handoff_enabled",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_legacy_blocked",
+        {
+          action: "ai.orchestrator.handoff_legacy_blocked",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          reason: "supervised_ai_handoff_enabled",
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+      logger.info({
+        event: "ai.orchestrator.handoff_unified",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        reason: "explicit_human_request_routed_to_orchestrator",
+        route: meta?.route,
+        method: meta?.method,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.orchestrator.handoff_unified",
+        {
+          action: "ai.orchestrator.handoff_unified",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          reason: "explicit_human_request_routed_to_orchestrator",
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+    }
+    if (!shouldRunLegacyHandoff && inboundIntent === "handoff" && !supervisedAiHandoffEnabled) {
       logger.info({
         event: "handoff.legacy.skipped_configurable_chatbot",
         clientId: tenantClientId,
@@ -3501,6 +3672,40 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
       }
       if (handoffResult.outcome === "accepted") {
+        if (updatedConversation.mode !== "HUMAN") {
+          logger.warn({
+            event: "ai.orchestrator.invalid_state_detected",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: maskNumber(normalizedFrom),
+            reason: "legacy_handoff_acceptance_without_human_mode",
+            mode: updatedConversation.mode,
+            handoffStatus: updatedConversation.handoff.status,
+            requestId: meta?.requestId,
+          });
+          await persistEventSafe(
+            "ai.orchestrator.invalid_state_detected",
+            {
+              action: "ai.orchestrator.invalid_state_detected",
+              clientId: tenantClientId || null,
+              clientKey: tenantClientKey || null,
+              reason: "legacy_handoff_acceptance_without_human_mode",
+              mode: updatedConversation.mode,
+              handoffStatus: updatedConversation.handoff.status,
+            } as Prisma.InputJsonValue,
+            normalizedFrom,
+            message.messageId
+          );
+        }
+        updatedConversation = await ensurePendingHandoffRouting({
+          ...clearChatbotRuntime(updatedConversation),
+          mode: "HUMAN" as const,
+          assignedUserId: null,
+          assignedTo: null,
+          assignedAt: null,
+          status: "WAITING",
+          closedAt: null,
+        });
         logger.info({
           event: "handoff.confirm.accepted",
           waId: maskNumber(normalizedFrom),
@@ -3659,7 +3864,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             appliedTenantConfig?.aiAssistantEnabled === true &&
             !isAiFallbackDisabledForTenant() &&
             !env.WHATSAPP_SANDBOX &&
-            updatedConversation.intent !== "handoff" &&
+            (supervisedAiHandoffEnabled || updatedConversation.intent !== "handoff") &&
             updatedConversation.mode !== "HUMAN" &&
             updatedConversation.handoff.status === "none" &&
             isWindowOpen(updatedConversation, Date.now())
@@ -3675,7 +3880,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
               blockedTerms: appliedTenantConfig.aiAssistantBlockedTerms,
             });
-            if (preClassifierRisk || preClassifierSimpleQuestion) {
+            const preClassifierHandoffRequest = supervisedAiHandoffEnabled
+              ? classifyAssistantFallback(message.text, {
+                  handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
+                })?.intent === "handoff_prompt"
+              : false;
+            if (preClassifierRisk || preClassifierSimpleQuestion || preClassifierHandoffRequest) {
               shouldDeferInitialMenuToAssistant = true;
               logger.info({
                 event: "chatbot.initial_menu.deferred_to_ai",
@@ -3685,7 +3895,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 waId: maskNumber(normalizedFrom),
                 reason: preClassifierRisk
                   ? "guardrail_before_initial_menu"
-                  : "simple_question_before_initial_menu",
+                  : preClassifierHandoffRequest
+                    ? "handoff_request_before_initial_menu"
+                    : "simple_question_before_initial_menu",
                 risk: preClassifierRisk,
                 stage: "before_intent_classifier",
                 requestId: meta?.requestId,
@@ -4816,7 +5028,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !isAiFallbackDisabledForTenant() &&
       !env.WHATSAPP_SANDBOX &&
       replyType === "text" &&
-      updatedConversation.intent !== "handoff" &&
+      (supervisedAiHandoffEnabled || updatedConversation.intent !== "handoff") &&
       updatedConversation.mode !== "HUMAN" &&
       updatedConversation.handoff.status === "none" &&
       !updatedConversation.chatbotActive &&
@@ -4861,7 +5073,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               fallbackIntent: fallbackDecision?.intent ?? null,
               fallbackReason: fallbackDecision?.reason ?? null,
             });
-            if (assistantState.count >= maxReplies) {
+            if (assistantState.count >= maxReplies && fallbackDecision?.intent !== "handoff_prompt") {
               aiAssistantSkippedNotSimpleQuestion = true;
               await logAiAssistantEvent("ai.assistant.limit_reached", {
                 count: assistantState.count,
