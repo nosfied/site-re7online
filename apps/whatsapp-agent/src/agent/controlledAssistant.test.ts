@@ -6,6 +6,7 @@ import {
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
+  resolveOrchestratorAction,
   validateOrchestratorOutput,
 } from "./controlledAssistant.js";
 import { AgentBrain } from "./agent.types.js";
@@ -186,6 +187,75 @@ test("validateOrchestratorOutput rejects invalid schema", () => {
     }).ok,
     false
   );
+});
+
+test("resolveOrchestratorAction handles allowed 60B actions", () => {
+  const baseOutput = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.8,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+  });
+  assert.equal(baseOutput.ok, true);
+  if (!baseOutput.ok) return;
+
+  assert.deepEqual(resolveOrchestratorAction(baseOutput.output, "Menu seguro.").action, "answer");
+
+  const askOutput = {
+    ...baseOutput.output,
+    next_action: "ask_question" as const,
+    next_question: "Você quer entender requisitos ou próximos passos?",
+  };
+  const askAction = resolveOrchestratorAction(askOutput, "Menu seguro.");
+  assert.equal(askAction.shouldSend, true);
+  assert.equal(askAction.action, "ask_question");
+  assert.equal(askAction.shouldSend ? askAction.text : "", askOutput.next_question);
+
+  const invalidAskAction = resolveOrchestratorAction(
+    {
+      ...baseOutput.output,
+      next_action: "ask_question",
+      next_question: "Qual seu CPF?",
+    },
+    "Menu seguro."
+  );
+  assert.equal(invalidAskAction.shouldSend, true);
+  assert.equal(invalidAskAction.action, "answer");
+
+  const noReplyAction = resolveOrchestratorAction(
+    { ...baseOutput.output, next_action: "no_reply" },
+    "Menu seguro."
+  );
+  assert.equal(noReplyAction.shouldSend, false);
+  assert.equal(noReplyAction.action, "no_reply");
+
+  const fallbackAction = resolveOrchestratorAction(
+    { ...baseOutput.output, next_action: "fallback_menu" },
+    "Menu seguro."
+  );
+  assert.equal(fallbackAction.shouldSend, true);
+  assert.equal(fallbackAction.action, "fallback_menu");
+});
+
+test("resolveOrchestratorAction ignores handoff actions in 60B", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Posso te direcionar para atendimento, se preferir.",
+    stage: "handoff_recommended",
+    goal: "recommend_handoff",
+    confidence: 0.8,
+    missing_information: [],
+    next_action: "handoff_force",
+    handoff_recommended: true,
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const action = resolveOrchestratorAction(output.output, "Menu seguro.");
+  assert.equal(action.shouldSend, true);
+  assert.equal(action.action, "handoff_force_ignored");
+  assert.equal(action.ignoredAction, "handoff_force");
 });
 
 test("generateControlledAssistantReply does not call brain for complex questions", async () => {

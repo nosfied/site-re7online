@@ -39,6 +39,7 @@ import {
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
+  resolveOrchestratorAction,
 } from "../agent/controlledAssistant.js";
 import {
   parseTemplateCommand,
@@ -4278,6 +4279,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         : `ECO: (mensagem ${message.type} recebida)`
       : env.WHATSAPP_DEFAULT_REPLY);
     let aiAssistantResponded = false;
+    let aiOrchestratorNoReply = false;
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
@@ -4414,8 +4416,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               nowIso: new Date().toISOString(),
             });
             if (aiReply.ok) {
-              replyText = aiReply.text;
-              aiAssistantResponded = true;
+              const resolvedAction = resolveOrchestratorAction(
+                aiReply.output,
+                env.WHATSAPP_DEFAULT_REPLY
+              );
+              aiAssistantResponded = resolvedAction.shouldSend;
               await logAiAssistantEvent("ai.orchestrator.validated", {
                 stage: aiReply.output.stage,
                 goal: aiReply.output.goal,
@@ -4423,13 +4428,48 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 confidence: aiReply.output.confidence,
                 handoffRecommended: aiReply.output.handoff_recommended,
               });
+              await logAiAssistantEvent("ai.orchestrator.next_action", {
+                nextAction: aiReply.output.next_action,
+                resolvedAction: resolvedAction.action,
+                shouldSend: resolvedAction.shouldSend,
+                ignoredAction: resolvedAction.ignoredAction ?? null,
+              });
+              if (resolvedAction.action === "ask_question") {
+                await logAiAssistantEvent("ai.orchestrator.question_sent", {
+                  nextAction: aiReply.output.next_action,
+                  confidence: aiReply.output.confidence,
+                });
+              } else if (resolvedAction.action === "fallback_menu") {
+                await logAiAssistantEvent("ai.orchestrator.fallback_menu", {
+                  nextAction: aiReply.output.next_action,
+                  confidence: aiReply.output.confidence,
+                });
+              } else if (resolvedAction.action === "no_reply") {
+                await logAiAssistantEvent("ai.orchestrator.no_reply", {
+                  reason: resolvedAction.reason,
+                  confidence: aiReply.output.confidence,
+                });
+              } else if (resolvedAction.ignoredAction) {
+                await logAiAssistantEvent("ai.orchestrator.action_ignored", {
+                  ignoredAction: resolvedAction.ignoredAction,
+                  resolvedAction: resolvedAction.action,
+                  reason: "handoff_actions_disabled_in_60b",
+                });
+              }
+              if (resolvedAction.shouldSend) {
+                replyText = resolvedAction.text;
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
                   ...(updatedConversation.answers ?? {}),
                   aiAssistant: {
-                    count: assistantState.count + 1,
-                    lastRespondedAt: new Date().toISOString(),
+                    count: resolvedAction.shouldSend
+                      ? assistantState.count + 1
+                      : assistantState.count,
+                    lastRespondedAt: resolvedAction.shouldSend
+                      ? new Date().toISOString()
+                      : assistantState.lastRespondedAt,
                     lastMessageId: message.messageId,
                   },
                   aiOrchestrator: {
@@ -4440,6 +4480,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastConfidence: aiReply.output.confidence,
                     handoffRecommended: aiReply.output.handoff_recommended,
                     lastMessageId: message.messageId,
+                    lastQuestion: resolvedAction.lastQuestion,
+                    lastNextActionAt: new Date().toISOString(),
                   },
                 },
               };
@@ -4447,15 +4489,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 stage: aiReply.output.stage,
                 goal: aiReply.output.goal,
                 nextAction: aiReply.output.next_action,
+                resolvedAction: resolvedAction.action,
                 confidence: aiReply.output.confidence,
                 handoffRecommended: aiReply.output.handoff_recommended,
               });
-              await logAiAssistantEvent("ai.assistant.responded", {
-                model: aiReply.model ?? null,
-                latency_ms: Date.now() - start,
-                count: assistantState.count + 1,
-                maxReplies,
-              });
+              if (resolvedAction.shouldSend) {
+                await logAiAssistantEvent("ai.assistant.responded", {
+                  model: aiReply.model ?? null,
+                  latency_ms: Date.now() - start,
+                  count: assistantState.count + 1,
+                  maxReplies,
+                });
+              } else {
+                aiOrchestratorNoReply = true;
+                await upsertConversationSafe(updatedConversation);
+              }
             } else {
               await logAiAssistantEvent("ai.orchestrator.rejected", { reason: aiReply.reason });
               await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
@@ -4485,6 +4533,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (noAutomationReplyConfigured && !aiAssistantResponded) {
+      if (aiOrchestratorNoReply) {
+        logger.info({
+          event: "reply.skipped",
+          waId: maskNumber(normalizedFrom),
+          reason: "ai_orchestrator_no_reply",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        continue;
+      }
       updatedConversation = await routeConversationToHumanQueue(updatedConversation, {
         reason: "no_automation_reply_configured",
         timestamp: message.timestamp,

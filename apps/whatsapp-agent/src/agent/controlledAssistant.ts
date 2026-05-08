@@ -79,6 +79,22 @@ export type ValidatedOrchestratorOutput = {
   priority: OrchestratorPriority | null;
 };
 
+export type ResolvedOrchestratorAction =
+  | {
+      shouldSend: true;
+      action: "answer" | "ask_question" | "fallback_menu" | "handoff_recommend_ignored" | "handoff_force_ignored";
+      text: string;
+      lastQuestion: string | null;
+      ignoredAction?: OrchestratorNextAction;
+    }
+  | {
+      shouldSend: false;
+      action: "no_reply";
+      reason: string;
+      lastQuestion: null;
+      ignoredAction?: OrchestratorNextAction;
+    };
+
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
@@ -143,6 +159,7 @@ const REQUIRED_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situa�
 export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
 export const ORCHESTRATOR_MAX_REPLY_CHARS = 700;
 export const ORCHESTRATOR_MAX_LIST_ITEMS = 8;
+export const ORCHESTRATOR_MAX_QUESTION_CHARS = 180;
 
 const CONVERSATION_STAGE_ALLOWLIST: readonly ConversationStage[] = [
   "greeting",
@@ -429,7 +446,7 @@ function buildBusinessContext(params: ControlledAssistantInput) {
     `Contexto categórico: ${JSON.stringify(context)}`,
     "Regras: responda apenas dúvidas gerais e educativas. Não dê parecer jurídico, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
     "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
-    "Nesta fase, next_action é apenas informativo. Use preferencialmente next_action=\"answer\" para dúvidas gerais.",
+    "Ações permitidas: answer, ask_question, fallback_menu e no_reply. handoff_recommend e handoff_force são apenas informativos e não ativam atendimento humano.",
     `Finalize exatamente com: ${REQUIRED_SUFFIX}`,
   ]
     .filter(Boolean)
@@ -452,6 +469,32 @@ function sanitizeReply(text: string) {
   }
   const withoutSuffix = trimmed.replace(REQUIRED_SUFFIX, "").trim();
   return `${withoutSuffix.slice(0, 620)}\n\n${REQUIRED_SUFFIX}`.trim();
+}
+
+function sanitizeQuestion(text: string | null | undefined) {
+  const trimmed = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed || trimmed.length > ORCHESTRATOR_MAX_QUESTION_CHARS) return "";
+  if (containsPersonalData(trimmed)) return "";
+  if (classifyRisk(trimmed)) return "";
+  const questionCount = (trimmed.match(/\?/g) ?? []).length;
+  if (questionCount > 1) return "";
+  const normalized = normalizeText(trimmed);
+  const forbidden = [
+    "voce tem direito",
+    "você tem direito",
+    "garanto",
+    "resultado garantido",
+    "causa ganha",
+    "cpf",
+    "documento",
+    "rg",
+    "envie seu cpf",
+    "mande seu cpf",
+    "envie documento",
+    "mande documento",
+  ];
+  if (forbidden.some((term) => normalized.includes(normalizeText(term)))) return "";
+  return trimmed;
 }
 
 function sanitizeShortString(value: unknown, maxLength: number) {
@@ -534,11 +577,70 @@ export function validateOrchestratorOutput(
       confidence,
       missing_information: normalizeStringList(raw.missing_information),
       next_action: nextAction,
-      next_question: sanitizeShortString(raw.next_question, 180),
+      next_question:
+        sanitizeQuestion(sanitizeShortString(raw.next_question, ORCHESTRATOR_MAX_QUESTION_CHARS)) ||
+        null,
       handoff_recommended: raw.handoff_recommended === true,
       lead_temp: leadTemp,
       priority,
     },
+  };
+}
+
+export function resolveOrchestratorAction(
+  output: ValidatedOrchestratorOutput,
+  fallbackMenuText: string
+): ResolvedOrchestratorAction {
+  if (output.next_action === "no_reply") {
+    return {
+      shouldSend: false,
+      action: "no_reply",
+      reason: "orchestrator_no_reply",
+      lastQuestion: null,
+    };
+  }
+  if (output.next_action === "ask_question") {
+    const question = sanitizeQuestion(output.next_question);
+    if (question) {
+      return {
+        shouldSend: true,
+        action: "ask_question",
+        text: question,
+        lastQuestion: question,
+      };
+    }
+    return {
+      shouldSend: true,
+      action: "answer",
+      text: output.reply,
+      lastQuestion: null,
+    };
+  }
+  if (output.next_action === "fallback_menu") {
+    return {
+      shouldSend: true,
+      action: "fallback_menu",
+      text: sanitizeReply(fallbackMenuText) || output.reply,
+      lastQuestion: null,
+    };
+  }
+  if (output.next_action === "handoff_recommend" || output.next_action === "handoff_force") {
+    return {
+      shouldSend: true,
+      action:
+        output.next_action === "handoff_recommend"
+          ? "handoff_recommend_ignored"
+          : "handoff_force_ignored",
+      text: output.reply,
+      lastQuestion: null,
+      ignoredAction: output.next_action,
+    };
+  }
+  return {
+    shouldSend: true,
+    action: "answer",
+    text: output.reply,
+    lastQuestion: null,
   };
 }
 

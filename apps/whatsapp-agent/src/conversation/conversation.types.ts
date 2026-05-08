@@ -40,6 +40,8 @@ export type AIOrchestratorState = {
   lastConfidence?: number;
   handoffRecommended?: boolean;
   lastMessageId?: string | null;
+  lastQuestion?: string | null;
+  lastNextActionAt?: string | null;
 };
 
 export type HandoffState = {
