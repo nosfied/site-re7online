@@ -150,6 +150,7 @@ export type AdminAutomationSettings = {
   aiAssistantSystemPrompt?: string;
   aiAssistantFallbackToHandoff?: boolean;
   aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
   aiAssistantBlockedTerms?: string[];
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;

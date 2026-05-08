@@ -102,6 +102,7 @@ function splitTermList(value: string) {
 const AI_CONFIG_LABELS: Record<string, string> = {
   aiBusinessContext: "Contexto de negócio",
   aiAssistantAllowedTopics: "Temas permitidos",
+  aiAssistantSecondaryTopics: "Temas secundários",
   aiAssistantFallbackMessage: "Mensagem de fallback",
   aiAssistantHandoffPrompt: "Pergunta de encaminhamento",
   aiAssistantBlockedTerms: "Termos bloqueados adicionais",
@@ -117,6 +118,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Não afirme direito, chance de êxito ou estratégia sem análise individual. Explique conceitos gerais e encaminhe pedidos específicos para a equipe.",
     aiAssistantAllowedTopics: ["consulta", "processo", "contrato", "benefício", "revisão", "documentos", "prazo"],
+    aiAssistantSecondaryTopics: ["família", "consumidor", "civil", "contrato", "indenização"],
     aiAssistantBlockedTerms: ["tenho direito", "meu caso", "quanto vou receber", "vou ganhar", "analise meu documento"],
     aiAssistantHandoffKeywords: ["advogado", "especialista", "análise específica", "falar com alguém"],
     aiAssistantFallbackMessage:
@@ -131,6 +133,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Use linguagem institucional clara. Oriente de forma geral e encaminhe demandas específicas para atendimento humano.",
     aiAssistantAllowedTopics: ["serviço", "protocolo", "documentos", "prazo", "agendamento", "departamento"],
+    aiAssistantSecondaryTopics: ["ouvidoria", "cadastro", "benefício", "licença", "fiscalização"],
     aiAssistantBlockedTerms: ["meu processo", "aprovar", "indeferir", "cpf", "documento pessoal"],
     aiAssistantHandoffKeywords: ["servidor", "atendente", "protocolo", "departamento", "falar com alguém"],
     aiAssistantFallbackMessage:
@@ -145,6 +148,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Responda dúvidas gerais sobre atendimento comercial. Encaminhe negociação, reclamação ou caso específico para a equipe.",
     aiAssistantAllowedTopics: ["produto", "pedido", "entrega", "troca", "devolução", "pagamento", "garantia"],
+    aiAssistantSecondaryTopics: ["orçamento", "consultoria", "assistência", "instalação"],
     aiAssistantBlockedTerms: ["desconto garantido", "meu pedido", "meu pagamento", "dados do cartão"],
     aiAssistantHandoffKeywords: ["vendedor", "suporte", "atendente", "reclamação", "troca"],
     aiAssistantFallbackMessage:
@@ -159,6 +163,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Explique informações gerais sobre cursos e atendimento educacional. Encaminhe matrícula, cobrança ou caso específico para a equipe.",
     aiAssistantAllowedTopics: ["curso", "matrícula", "aula", "certificado", "calendário", "mensalidade"],
+    aiAssistantSecondaryTopics: ["bolsa", "transferência", "estágio", "documentação"],
     aiAssistantBlockedTerms: ["minha nota", "meu pagamento", "aprovação garantida", "dados pessoais"],
     aiAssistantHandoffKeywords: ["secretaria", "coordenação", "professor", "suporte", "atendente"],
     aiAssistantFallbackMessage:
@@ -173,6 +178,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Explique conceitos gerais de seguros. Encaminhe cotação, sinistro e análise específica para a equipe.",
     aiAssistantAllowedTopics: ["seguro", "cobertura", "cotação", "sinistro", "apólice", "assistência"],
+    aiAssistantSecondaryTopics: ["financiamento", "proteção", "vistoria", "indenização"],
     aiAssistantBlockedTerms: ["meu sinistro", "quanto vou receber", "cobertura garantida", "aprovar"],
     aiAssistantHandoffKeywords: ["corretor", "consultor", "sinistro", "cotação", "atendente"],
     aiAssistantFallbackMessage:
@@ -187,6 +193,7 @@ const AI_SEGMENT_PRESETS = {
     aiAssistantSystemPrompt:
       "Responda dúvidas gerais com linguagem simples e encaminhe casos específicos para atendimento humano.",
     aiAssistantAllowedTopics: ["serviço", "atendimento", "pedido", "suporte", "prazo", "informações"],
+    aiAssistantSecondaryTopics: ["orçamento", "consultoria", "cadastro", "contrato"],
     aiAssistantBlockedTerms: ["meu caso", "garantido", "valor exato", "dados pessoais"],
     aiAssistantHandoffKeywords: ["atendente", "suporte", "especialista", "falar com alguém"],
     aiAssistantFallbackMessage:
@@ -414,6 +421,7 @@ export default function AdminTenantChatbotPage() {
     aiAssistantFallbackToHandoff: false,
     aiAssistantSystemPrompt: "",
     aiAssistantAllowedTopics: [],
+    aiAssistantSecondaryTopics: [],
     aiAssistantBlockedTerms: [],
     aiAssistantHandoffKeywords: [],
     aiAssistantFallbackMessage: "",
@@ -482,6 +490,7 @@ export default function AdminTenantChatbotPage() {
             aiBusinessContext: preset.aiBusinessContext,
             aiAssistantSystemPrompt: preset.aiAssistantSystemPrompt,
             aiAssistantAllowedTopics: [...preset.aiAssistantAllowedTopics],
+            aiAssistantSecondaryTopics: [...(preset.aiAssistantSecondaryTopics ?? [])],
             aiAssistantBlockedTerms: [...preset.aiAssistantBlockedTerms],
             aiAssistantHandoffKeywords: [...preset.aiAssistantHandoffKeywords],
             aiAssistantFallbackMessage: preset.aiAssistantFallbackMessage,
@@ -947,6 +956,27 @@ export default function AdminTenantChatbotPage() {
                     />
                     <span className="text-[11px] text-white/45">
                       Amplia o vocabulário aceito pelo filtro simples sem remover as travas globais.
+                    </span>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-white/60">
+                    Temas secundários
+                    <textarea
+                      value={joinTermList(automationDraft.aiAssistantSecondaryTopics)}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantSecondaryTopics: splitTermList(event.target.value),
+                              }
+                            : current
+                        )
+                      }
+                      placeholder={"Um termo por linha\nEx.: contrato\nfamília\nconsumidor"}
+                      className="min-h-24 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                    <span className="text-[11px] text-white/45">
+                      Assuntos próximos ao negócio que não devem ser respondidos em profundidade; a IA oferece encaminhamento.
                     </span>
                   </label>
                   <label className="flex flex-col gap-1 text-xs text-white/60">

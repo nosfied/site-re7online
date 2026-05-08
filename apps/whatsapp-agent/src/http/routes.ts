@@ -2923,6 +2923,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
           aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
           aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
           aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
           aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
@@ -6220,6 +6221,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
             aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
             aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
             aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
@@ -6395,6 +6397,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiAssistantAllowedTopics = terms;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSecondaryTopics")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantSecondaryTopics);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantSecondaryTopics must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantSecondaryTopics = terms;
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
           const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
           if (!terms) {
@@ -6568,6 +6578,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
             aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
             aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
             aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
@@ -10848,6 +10859,7 @@ function diffTenantFields(
   compareField("aiAssistantSystemPrompt");
   compareField("aiAssistantFallbackToHandoff");
   compareField("aiAssistantAllowedTopics");
+  compareField("aiAssistantSecondaryTopics");
   compareField("aiAssistantBlockedTerms");
   compareField("aiAssistantHandoffKeywords");
   compareField("aiAssistantFallbackMessage");
@@ -12089,6 +12101,7 @@ function isAiFallbackDisabledForTenant(tenant?: {
   appDisableAiFallback?: boolean;
   aiBusinessContext?: string;
   aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
 } | null) {

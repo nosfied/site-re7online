@@ -19,6 +19,7 @@ export type ControlledAssistantInput = {
     | "aiAssistantSystemPrompt"
     | "aiAssistantAllowedTopics"
     | "aiAssistantBlockedTerms"
+    | "aiAssistantSecondaryTopics"
   >;
   state: ConversationState;
   nowIso: string;
@@ -50,6 +51,23 @@ export type AssistantTenantContext = {
   flowTags?: string[];
   handoffPrompt?: string | null;
   fallbackMessage?: string | null;
+  allowedTopics?: string[] | null;
+  secondaryTopics?: string[] | null;
+};
+
+export type ContextualFallbackType =
+  | "greeting"
+  | "negative"
+  | "out_of_scope"
+  | "near_domain"
+  | "clarification"
+  | "help"
+  | "unknown";
+
+export type ContextualFallbackResult = {
+  type: ContextualFallbackType;
+  confidence: number;
+  reason: string;
 };
 
 export type OrchestratorLeadTemp = "quente" | "morno" | "frio";
@@ -155,7 +173,20 @@ export type AssistantFallbackDecision = {
 };
 
 const GENERIC_GREETING_REPLY =
-  "Boa tarde! Me diga em poucas palavras como posso te ajudar.";
+  "Olá! Me diga em poucas palavras como posso te ajudar.";
+const CONTEXTUAL_FALLBACK_REPLIES: Record<ContextualFallbackType, string> = {
+  greeting: GENERIC_GREETING_REPLY,
+  negative: "Tudo bem. Se precisar de algo, é só me chamar.",
+  clarification: "Claro. Me diga em poucas palavras qual ponto você quer entender melhor.",
+  out_of_scope:
+    "Esse tema pode fugir do atendimento automático configurado aqui. Posso direcionar você para uma pessoa da equipe?",
+  near_domain:
+    "Esse assunto parece próximo do atendimento da equipe, mas pode precisar de uma análise mais específica. Posso encaminhar você para uma pessoa da equipe?",
+  help: "",
+  unknown: "Não consegui identificar bem o assunto. Você pode me dizer em poucas palavras o que precisa?",
+};
+const REPEATED_CONTEXTUAL_FALLBACK_REPLY =
+  "Entendi. Quer que eu direcione para uma pessoa da equipe?";
 
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
@@ -212,8 +243,6 @@ export const AI_ASSISTANT_GLOBAL_HANDOFF_TERMS = [
   "preciso de uma análise",
   "analise mais especifica",
   "análise mais específica",
-  "nao entendi",
-  "não entendi",
   "nao resolveu",
   "não resolveu",
 ];
@@ -427,6 +456,91 @@ export function classifyAssistantFallback(
   return { intent: "generic_guidance", reason: "not_simple_question" };
 }
 
+export function classifyContextualFallback(
+  text: string | null | undefined,
+  tenant: {
+    aiAssistantAllowedTopics?: string[] | null;
+    aiAssistantSecondaryTopics?: string[] | null;
+  } = {},
+): ContextualFallbackResult {
+  const raw = String(text ?? "").trim();
+  const normalized = normalizeText(raw);
+  if (!normalized) return { type: "unknown", confidence: 0.4, reason: "empty" };
+  if (AI_ASSISTANT_VAGUE_MESSAGE_TERMS.some((term) => normalized === normalizeText(term))) {
+    const negativeTerms = ["nao", "não", "obrigado", "obrigada", "valeu"];
+    if (negativeTerms.some((term) => normalized === normalizeText(term))) {
+      return { type: "negative", confidence: 0.9, reason: "negative_short" };
+    }
+    return { type: "greeting", confidence: 0.9, reason: "greeting_exact" };
+  }
+  if (
+    containsAnyTerm(normalized, [
+      "nao quero",
+      "não quero",
+      "agora nao",
+      "agora não",
+      "depois",
+      "nao precisa",
+      "não precisa",
+      "obrigado",
+      "obrigada",
+      "valeu",
+    ])
+  ) {
+    return { type: "negative", confidence: 0.86, reason: "negative_phrase" };
+  }
+  if (
+    containsAnyTerm(normalized, [
+      "ajuda",
+      "o que voces fazem",
+      "o que vocês fazem",
+      "quais servicos",
+      "quais serviços",
+      "o que voces atendem",
+      "o que vocês atendem",
+    ])
+  ) {
+    return { type: "help", confidence: 0.84, reason: "help_request" };
+  }
+  if (
+    containsAnyTerm(normalized, [
+      "nao entendi",
+      "não entendi",
+      "explique melhor",
+      "como assim",
+      "nao ficou claro",
+      "não ficou claro",
+    ])
+  ) {
+    return { type: "clarification", confidence: 0.84, reason: "clarification_request" };
+  }
+  const secondaryTopic = normalizeTermList(tenant.aiAssistantSecondaryTopics).find((term) =>
+    normalized.includes(normalizeText(term))
+  );
+  if (secondaryTopic) {
+    return { type: "near_domain", confidence: 0.78, reason: "secondary_topic" };
+  }
+  const allowedTopic = normalizeTermList(tenant.aiAssistantAllowedTopics).find((term) =>
+    normalized.includes(normalizeText(term))
+  );
+  if (!allowedTopic) {
+    return { type: "out_of_scope", confidence: 0.7, reason: "topic_not_allowed" };
+  }
+  return { type: "unknown", confidence: 0.5, reason: "unclassified_allowed_topic" };
+}
+
+export function buildContextualFallbackReply(input: {
+  result: ContextualFallbackResult;
+  fallbackMessage?: string | null;
+  repeated?: boolean;
+}) {
+  if (input.repeated) return REPEATED_CONTEXTUAL_FALLBACK_REPLY;
+  if (input.result.type === "help" && input.fallbackMessage?.trim()) {
+    return input.fallbackMessage.trim().slice(0, 700);
+  }
+  return CONTEXTUAL_FALLBACK_REPLIES[input.result.type] || CONTEXTUAL_FALLBACK_REPLIES.unknown;
+}
+
 export function buildAssistantFallbackGuidance(context: AssistantTenantContext) {
   const configuredMessage = context.fallbackMessage?.trim();
   if (configuredMessage) {
@@ -544,7 +658,14 @@ export function getAiAssistantState(state: ConversationState) {
   const answers = state.answers ?? {};
   const current = answers.aiAssistant;
   if (!current || typeof current !== "object" || Array.isArray(current)) {
-    return { count: 0, lastRespondedAt: null, lastMessageId: null };
+    return {
+      count: 0,
+      lastRespondedAt: null,
+      lastMessageId: null,
+      lastFallbackType: null,
+      lastFallbackAt: null,
+      fallbackCount: 0,
+    };
   }
   const record = current as Record<string, unknown>;
   return {
@@ -552,6 +673,13 @@ export function getAiAssistantState(state: ConversationState) {
     lastRespondedAt:
       typeof record.lastRespondedAt === "string" ? record.lastRespondedAt : null,
     lastMessageId: typeof record.lastMessageId === "string" ? record.lastMessageId : null,
+    lastFallbackType:
+      typeof record.lastFallbackType === "string" ? record.lastFallbackType : null,
+    lastFallbackAt: typeof record.lastFallbackAt === "string" ? record.lastFallbackAt : null,
+    fallbackCount:
+      typeof record.fallbackCount === "number" && Number.isFinite(record.fallbackCount)
+        ? record.fallbackCount
+        : 0,
   };
 }
 
@@ -914,8 +1042,8 @@ export async function generateControlledAssistantReply(
   input: ControlledAssistantInput
 ): Promise<ControlledAssistantResult> {
   const educationalIntent = classifyEducationalIntent(input.text, {
-      allowedTopics: input.tenant.aiAssistantAllowedTopics,
-      blockedTerms: input.tenant.aiAssistantBlockedTerms,
+    allowedTopics: input.tenant.aiAssistantAllowedTopics,
+    blockedTerms: input.tenant.aiAssistantBlockedTerms,
   });
   if (!educationalIntent.allowed) {
     return { ok: false, reason: educationalIntent.reason ?? "educational_intent_blocked" };

@@ -570,6 +570,7 @@ export default function AppChatbotPage() {
     aiAssistantProfile: "business" as const,
     aiAssistantFallbackToHandoff: false,
     aiAssistantAllowedTopics: [],
+    aiAssistantSecondaryTopics: [],
     aiAssistantBlockedTerms: [],
     aiAssistantHandoffKeywords: [],
     aiAssistantFallbackMessage: "",

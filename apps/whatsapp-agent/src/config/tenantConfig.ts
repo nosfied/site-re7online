@@ -68,6 +68,7 @@ export type TenantConfig = {
   aiAssistantSystemPrompt?: string;
   aiAssistantFallbackToHandoff?: boolean;
   aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
   aiAssistantBlockedTerms?: string[];
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;
@@ -92,6 +93,7 @@ export function isAiAssistantConfigured(tenant?: Pick<
   TenantConfig,
   | "aiBusinessContext"
   | "aiAssistantAllowedTopics"
+  | "aiAssistantSecondaryTopics"
   | "aiAssistantFallbackMessage"
   | "aiAssistantHandoffPrompt"
 > | null) {
@@ -109,6 +111,7 @@ export function getAiAssistantConfigurationStatus(tenant?: Pick<
   TenantConfig,
   | "aiBusinessContext"
   | "aiAssistantAllowedTopics"
+  | "aiAssistantSecondaryTopics"
   | "aiAssistantFallbackMessage"
   | "aiAssistantHandoffPrompt"
   | "aiAssistantBlockedTerms"
@@ -230,6 +233,11 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     }
     nextTenant.aiAssistantAllowedTopics = Array.isArray(tenant.aiAssistantAllowedTopics)
       ? tenant.aiAssistantAllowedTopics
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
+    nextTenant.aiAssistantSecondaryTopics = Array.isArray(tenant.aiAssistantSecondaryTopics)
+      ? tenant.aiAssistantSecondaryTopics
           .map((term) => (typeof term === "string" ? term.trim() : ""))
           .filter(Boolean)
       : [];
@@ -453,6 +461,13 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         tenant.aiAssistantAllowedTopics.some((term) => typeof term !== "string"))
     ) {
       throw new Error(`invalid_tenant_ai_assistant_allowed_topics:${key}`);
+    }
+    if (
+      tenant.aiAssistantSecondaryTopics !== undefined &&
+      (!Array.isArray(tenant.aiAssistantSecondaryTopics) ||
+        tenant.aiAssistantSecondaryTopics.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_secondary_topics:${key}`);
     }
     if (
       tenant.aiAssistantBlockedTerms !== undefined &&

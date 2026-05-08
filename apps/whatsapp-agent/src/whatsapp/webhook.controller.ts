@@ -35,11 +35,12 @@ import {
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
-  buildAssistantGreetingReply,
+  buildContextualFallbackReply,
   buildSafeResponse,
   buildAssistantFallbackGuidance,
   calculateHandoffScore,
   classifyAssistantFallback,
+  classifyContextualFallback,
   classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
@@ -3887,7 +3888,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
                 })?.intent === "handoff_prompt"
               : false;
-            if (preClassifierRisk || preClassifierEducationalIntent.allowed || preClassifierHandoffRequest) {
+            const preClassifierContextualFallback = classifyContextualFallback(message.text, {
+              aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+              aiAssistantSecondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
+            });
+            const preClassifierContextualFallbackAllowed =
+              preClassifierContextualFallback.type === "greeting" ||
+              preClassifierContextualFallback.type === "negative" ||
+              preClassifierContextualFallback.type === "help" ||
+              preClassifierContextualFallback.type === "clarification" ||
+              preClassifierContextualFallback.type === "near_domain";
+            if (
+              preClassifierRisk ||
+              preClassifierEducationalIntent.allowed ||
+              preClassifierHandoffRequest ||
+              preClassifierContextualFallbackAllowed
+            ) {
               shouldDeferInitialMenuToAssistant = true;
               logger.info({
                 event: "chatbot.initial_menu.deferred_to_ai",
@@ -3899,10 +3915,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   ? "guardrail_before_initial_menu"
                   : preClassifierHandoffRequest
                     ? "handoff_request_before_initial_menu"
-                    : "educational_question_before_initial_menu",
+                    : preClassifierEducationalIntent.allowed
+                      ? "educational_question_before_initial_menu"
+                      : "contextual_fallback_before_initial_menu",
                 risk: preClassifierRisk,
                 educationalReason: preClassifierEducationalIntent.reason ?? null,
                 educationalTopic: preClassifierEducationalIntent.topic ?? null,
+                contextualFallbackType: preClassifierContextualFallback.type,
+                contextualFallbackReason: preClassifierContextualFallback.reason,
                 stage: "before_intent_classifier",
                 requestId: meta?.requestId,
               });
@@ -5076,6 +5096,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         flowTags: updatedConversation.answers?.flowTags,
         handoffPrompt: appliedTenantConfig.aiAssistantHandoffPrompt,
         fallbackMessage: appliedTenantConfig.aiAssistantFallbackMessage,
+        allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+        secondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
       };
       try {
         if (assistantState.lastMessageId === message.messageId) {
@@ -5305,18 +5327,58 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 maxReplies,
               });
             } else {
-              replyText =
-                fallbackDecision?.reason === "vague_message"
-                  ? buildAssistantGreetingReply()
-                  : buildAssistantFallbackGuidance(assistantTenantContext);
+              const contextualFallback = classifyContextualFallback(message.text, {
+                aiAssistantAllowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
+                aiAssistantSecondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
+              });
+              const lastFallbackAtMs = assistantState.lastFallbackAt
+                ? Date.parse(assistantState.lastFallbackAt)
+                : Number.NaN;
+              const fallbackRepeated =
+                assistantState.lastFallbackType === contextualFallback.type &&
+                Number.isFinite(lastFallbackAtMs) &&
+                Date.now() - lastFallbackAtMs < 15 * 60 * 1000;
+              replyText = buildContextualFallbackReply({
+                result: contextualFallback,
+                fallbackMessage: assistantTenantContext.fallbackMessage,
+                repeated: fallbackRepeated,
+              });
               aiAssistantResponded = true;
-              if (!assistantTenantContext.fallbackMessage?.trim()) {
+              if (
+                contextualFallback.type === "help" &&
+                !assistantTenantContext.fallbackMessage?.trim()
+              ) {
                 await logAiAssistantEvent("ai.assistant.generic_fallback_used", {
-                  reason: fallbackDecision?.reason ?? "not_simple_question",
+                  reason: contextualFallback.reason,
+                });
+              }
+              await logAiAssistantEvent("ai.assistant.contextual_fallback_used", {
+                type: contextualFallback.type,
+                confidence: contextualFallback.confidence,
+                reason: contextualFallback.reason,
+                repeated: fallbackRepeated,
+                configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
+              });
+              if (contextualFallback.type === "greeting") {
+                await logAiAssistantEvent("ai.assistant.greeting_detected", {
+                  reason: contextualFallback.reason,
+                });
+              } else if (contextualFallback.type === "negative") {
+                await logAiAssistantEvent("ai.assistant.negative_intent_detected", {
+                  reason: contextualFallback.reason,
+                });
+              } else if (contextualFallback.type === "near_domain") {
+                await logAiAssistantEvent("ai.assistant.near_domain_detected", {
+                  reason: contextualFallback.reason,
+                });
+              } else if (contextualFallback.type === "out_of_scope") {
+                await logAiAssistantEvent("ai.assistant.out_of_scope_detected", {
+                  reason: contextualFallback.reason,
                 });
               }
               await logAiAssistantEvent("ai.assistant.fallback_used", {
-                reason: fallbackDecision?.reason ?? "educational_intent_not_allowed",
+                reason: contextualFallback.reason,
+                type: contextualFallback.type,
                 configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
               });
               updatedConversation = {
@@ -5327,6 +5389,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     count: assistantState.count + 1,
                     lastRespondedAt: new Date().toISOString(),
                     lastMessageId: message.messageId,
+                    lastFallbackType: contextualFallback.type,
+                    lastFallbackAt: new Date().toISOString(),
+                    fallbackCount: assistantState.fallbackCount + 1,
                   },
                   aiOrchestrator: {
                     ...(updatedConversation.answers?.aiOrchestrator ?? {}),
@@ -5345,7 +5410,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               };
               await logAiAssistantEvent("ai.orchestrator.fallback_menu", {
                 source: "not_simple_question_fallback",
-                reason: fallbackDecision?.reason ?? "not_simple_question",
+                reason: contextualFallback.reason,
+                type: contextualFallback.type,
               });
               await logAiAssistantEvent("ai.orchestrator.state_updated", {
                 source: "not_simple_question_fallback",

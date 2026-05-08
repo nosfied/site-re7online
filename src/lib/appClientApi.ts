@@ -172,6 +172,7 @@ export type AppAutomationSettings = {
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
   aiAssistantFallbackToHandoff?: boolean;
   aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
   aiAssistantBlockedTerms?: string[];
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;

@@ -92,6 +92,9 @@ export type QuoteSiteAnswers = {
     count?: number;
     lastRespondedAt?: string | null;
     lastMessageId?: string | null;
+    lastFallbackType?: string | null;
+    lastFallbackAt?: string | null;
+    fallbackCount?: number;
   };
   aiOrchestrator?: AIOrchestratorState;
 };

@@ -4,9 +4,11 @@ import {
   buildHandoffConfirmationPrompt,
   buildAssistantGreetingReply,
   buildAssistantFallbackGuidance,
+  buildContextualFallbackReply,
   buildSafeResponse,
   calculateHandoffScore,
   classifyAssistantFallback,
+  classifyContextualFallback,
   classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
@@ -84,6 +86,55 @@ test("classifyEducationalIntent routes broader tenant educational questions", ()
       allowedTopics: ["aposentadoria"],
     }).reason,
     "topic_not_allowed"
+  );
+});
+
+test("classifyContextualFallback handles light intents and tenant secondary topics", () => {
+  assert.deepEqual(classifyContextualFallback("boa noite"), {
+    type: "greeting",
+    confidence: 0.9,
+    reason: "greeting_exact",
+  });
+  assert.equal(classifyContextualFallback("não quero").type, "negative");
+  assert.equal(classifyContextualFallback("não entendi bem").type, "clarification");
+  assert.equal(
+    classifyContextualFallback("vocês fazem divórcio?", {
+      aiAssistantSecondaryTopics: ["divórcio", "família"],
+    }).type,
+    "near_domain"
+  );
+  assert.equal(
+    classifyContextualFallback("vocês vendem material esportivo?", {
+      aiAssistantAllowedTopics: ["aposentadoria", "bpc"],
+    }).type,
+    "out_of_scope"
+  );
+  assert.equal(
+    classifyEducationalIntent("qual a carência para gravidez?", {
+      allowedTopics: ["carência gravidez", "gravidez"],
+    }).allowed,
+    true
+  );
+});
+
+test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {
+  assert.equal(
+    buildContextualFallbackReply({ result: classifyContextualFallback("boa noite") }),
+    "Olá! Me diga em poucas palavras como posso te ajudar."
+  );
+  assert.equal(
+    buildContextualFallbackReply({
+      result: { type: "help", confidence: 0.8, reason: "help_request" },
+      fallbackMessage: "Mensagem do tenant.",
+    }),
+    "Mensagem do tenant."
+  );
+  assert.equal(
+    buildContextualFallbackReply({
+      result: { type: "out_of_scope", confidence: 0.7, reason: "topic_not_allowed" },
+      repeated: true,
+    }),
+    "Entendi. Quer que eu direcione para uma pessoa da equipe?"
   );
 });
 
@@ -225,7 +276,7 @@ test("generateControlledAssistantReply rejects truncated JSON instead of sending
 });
 
 test("buildAssistantGreetingReply is short and neutral", () => {
-  assert.equal(buildAssistantGreetingReply(), "Boa tarde! Me diga em poucas palavras como posso te ajudar.");
+  assert.equal(buildAssistantGreetingReply(), "Olá! Me diga em poucas palavras como posso te ajudar.");
 });
 
 test("validateOrchestratorOutput rejects invalid schema", () => {
@@ -605,5 +656,8 @@ test("getAiAssistantState normalizes missing state", () => {
     count: 0,
     lastRespondedAt: null,
     lastMessageId: null,
+    lastFallbackType: null,
+    lastFallbackAt: null,
+    fallbackCount: 0,
   });
 });
