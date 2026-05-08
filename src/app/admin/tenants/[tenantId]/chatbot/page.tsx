@@ -99,6 +99,123 @@ function splitTermList(value: string) {
     .filter(Boolean);
 }
 
+const AI_CONFIG_LABELS: Record<string, string> = {
+  aiBusinessContext: "Contexto de negócio",
+  aiAssistantAllowedTopics: "Temas permitidos",
+  aiAssistantFallbackMessage: "Mensagem de fallback",
+  aiAssistantHandoffPrompt: "Pergunta de encaminhamento",
+  aiAssistantBlockedTerms: "Termos bloqueados adicionais",
+  aiAssistantHandoffKeywords: "Sinais de encaminhamento",
+  aiAssistantSystemPrompt: "Instrução adicional aprovada",
+};
+
+const AI_SEGMENT_PRESETS = {
+  juridico: {
+    label: "Jurídico",
+    aiBusinessContext:
+      "Atendimento inicial para escritório jurídico. Responder dúvidas gerais sobre serviços, explicar próximos passos em linguagem simples e encaminhar casos específicos para atendimento humano. Não dar parecer, não prometer resultado e não analisar documentos.",
+    aiAssistantSystemPrompt:
+      "Não afirme direito, chance de êxito ou estratégia sem análise individual. Explique conceitos gerais e encaminhe pedidos específicos para a equipe.",
+    aiAssistantAllowedTopics: ["consulta", "processo", "contrato", "benefício", "revisão", "documentos", "prazo"],
+    aiAssistantBlockedTerms: ["tenho direito", "meu caso", "quanto vou receber", "vou ganhar", "analise meu documento"],
+    aiAssistantHandoffKeywords: ["advogado", "especialista", "análise específica", "falar com alguém"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre os serviços jurídicos disponíveis. Se a sua dúvida exigir análise do caso, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Esse caso pode precisar de uma análise mais específica. Posso encaminhar você para um especialista da equipe?",
+  },
+  governo: {
+    label: "Governo",
+    aiBusinessContext:
+      "Atendimento institucional para orientar cidadãos sobre serviços públicos, etapas de atendimento, canais oficiais e próximos passos. Não tomar decisões administrativas nem solicitar dados sensíveis.",
+    aiAssistantSystemPrompt:
+      "Use linguagem institucional clara. Oriente de forma geral e encaminhe demandas específicas para atendimento humano.",
+    aiAssistantAllowedTopics: ["serviço", "protocolo", "documentos", "prazo", "agendamento", "departamento"],
+    aiAssistantBlockedTerms: ["meu processo", "aprovar", "indeferir", "cpf", "documento pessoal"],
+    aiAssistantHandoffKeywords: ["servidor", "atendente", "protocolo", "departamento", "falar com alguém"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre os serviços disponíveis. Para uma demanda específica, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?",
+  },
+  varejo: {
+    label: "Varejo",
+    aiBusinessContext:
+      "Atendimento comercial para orientar clientes sobre produtos, pedidos, trocas, entrega, disponibilidade e próximos passos. Não confirmar condições individuais sem verificação da equipe.",
+    aiAssistantSystemPrompt:
+      "Responda dúvidas gerais sobre atendimento comercial. Encaminhe negociação, reclamação ou caso específico para a equipe.",
+    aiAssistantAllowedTopics: ["produto", "pedido", "entrega", "troca", "devolução", "pagamento", "garantia"],
+    aiAssistantBlockedTerms: ["desconto garantido", "meu pedido", "meu pagamento", "dados do cartão"],
+    aiAssistantHandoffKeywords: ["vendedor", "suporte", "atendente", "reclamação", "troca"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre produtos, pedidos e atendimento. Para verificar uma situação específica, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Para te ajudar melhor, posso direcionar seu atendimento para uma pessoa da equipe?",
+  },
+  educacao: {
+    label: "Educação",
+    aiBusinessContext:
+      "Atendimento educacional para orientar sobre cursos, matrícula, calendário, aulas, certificados e suporte acadêmico. Não confirmar situação individual sem validação da equipe.",
+    aiAssistantSystemPrompt:
+      "Explique informações gerais sobre cursos e atendimento educacional. Encaminhe matrícula, cobrança ou caso específico para a equipe.",
+    aiAssistantAllowedTopics: ["curso", "matrícula", "aula", "certificado", "calendário", "mensalidade"],
+    aiAssistantBlockedTerms: ["minha nota", "meu pagamento", "aprovação garantida", "dados pessoais"],
+    aiAssistantHandoffKeywords: ["secretaria", "coordenação", "professor", "suporte", "atendente"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre cursos, matrícula e atendimento. Para uma situação específica, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?",
+  },
+  seguros: {
+    label: "Seguros",
+    aiBusinessContext:
+      "Atendimento para orientar sobre seguros, coberturas, cotação, sinistro, assistência e próximos passos. Não aprovar cobertura nem confirmar valores individuais.",
+    aiAssistantSystemPrompt:
+      "Explique conceitos gerais de seguros. Encaminhe cotação, sinistro e análise específica para a equipe.",
+    aiAssistantAllowedTopics: ["seguro", "cobertura", "cotação", "sinistro", "apólice", "assistência"],
+    aiAssistantBlockedTerms: ["meu sinistro", "quanto vou receber", "cobertura garantida", "aprovar"],
+    aiAssistantHandoffKeywords: ["corretor", "consultor", "sinistro", "cotação", "atendente"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre seguros, coberturas e atendimento. Para analisar uma situação específica, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?",
+  },
+  generico: {
+    label: "Genérico",
+    aiBusinessContext:
+      "Atendimento inicial para orientar clientes sobre serviços disponíveis, próximos passos e canais de atendimento. Não confirmar situações individuais sem validação da equipe.",
+    aiAssistantSystemPrompt:
+      "Responda dúvidas gerais com linguagem simples e encaminhe casos específicos para atendimento humano.",
+    aiAssistantAllowedTopics: ["serviço", "atendimento", "pedido", "suporte", "prazo", "informações"],
+    aiAssistantBlockedTerms: ["meu caso", "garantido", "valor exato", "dados pessoais"],
+    aiAssistantHandoffKeywords: ["atendente", "suporte", "especialista", "falar com alguém"],
+    aiAssistantFallbackMessage:
+      "Posso ajudar com dúvidas gerais sobre os serviços disponíveis. Para uma situação específica, posso direcionar você para uma pessoa da equipe.",
+    aiAssistantHandoffPrompt:
+      "Para te orientar melhor, posso direcionar seu atendimento para uma pessoa da equipe?",
+  },
+} as const;
+
+function getDraftAiStatus(settings: Partial<AdminAutomationSettings>) {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (!settings.aiBusinessContext?.trim()) missing.push("aiBusinessContext");
+  if (!settings.aiAssistantAllowedTopics?.some((term) => term.trim())) missing.push("aiAssistantAllowedTopics");
+  if (!settings.aiAssistantFallbackMessage?.trim()) missing.push("aiAssistantFallbackMessage");
+  if (!settings.aiAssistantHandoffPrompt?.trim()) missing.push("aiAssistantHandoffPrompt");
+  if (!settings.aiAssistantBlockedTerms?.some((term) => term.trim())) warnings.push("aiAssistantBlockedTerms");
+  if (!settings.aiAssistantHandoffKeywords?.some((term) => term.trim())) warnings.push("aiAssistantHandoffKeywords");
+  if (!settings.aiAssistantSystemPrompt?.trim()) warnings.push("aiAssistantSystemPrompt");
+  const requiredScore = 4 - missing.length;
+  const recommendedScore = 3 - warnings.length;
+  return {
+    ready: missing.length === 0,
+    missing,
+    warnings,
+    score: Math.max(0, Math.round(((requiredScore + recommendedScore * 0.5) / 5.5) * 100)),
+  };
+}
+
 function selectJsonOccurrence(textareaId: string, text: string, query: string, backwards = false) {
   const textarea = document.getElementById(textareaId);
   if (!(textarea instanceof HTMLTextAreaElement)) return;
@@ -315,8 +432,14 @@ export default function AdminTenantChatbotPage() {
     followUpTemplateName: "",
     followUpTemplateLang: "pt_BR",
   };
-  const aiBaseReady = !automationDraft.disableAiFallback && Boolean(automationDraft.aiConfigured);
+  const aiConfigStatus = getDraftAiStatus(automationDraft);
+  const aiBaseReady = !automationDraft.disableAiFallback && aiConfigStatus.ready;
   const aiControlledDisabled = Boolean(automationDraft.aiAssistantLocked) || !aiBaseReady;
+  const aiConfigLabel = aiConfigStatus.ready
+    ? aiConfigStatus.warnings.length
+      ? "parcialmente configurado"
+      : "configurado"
+    : "incompleto";
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
   const draftJsonErrors = useMemo(
     () =>
@@ -328,6 +451,14 @@ export default function AdminTenantChatbotPage() {
 
   const handleSaveSettings = async () => {
     if (!clientKey || !settings) return;
+    if (automationDraft.aiAssistantEnabled && !aiConfigStatus.ready) {
+      setError(
+        `IA supervisionada ainda não está pronta: ${aiConfigStatus.missing
+          .map((item) => AI_CONFIG_LABELS[item] ?? item)
+          .join(", ")}.`
+      );
+      return;
+    }
     setSavingSettings(true);
     setError(null);
     setSuccess(null);
@@ -340,6 +471,27 @@ export default function AdminTenantChatbotPage() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const applyAiPreset = (presetKey: keyof typeof AI_SEGMENT_PRESETS) => {
+    const preset = AI_SEGMENT_PRESETS[presetKey];
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            aiBusinessContext: preset.aiBusinessContext,
+            aiAssistantSystemPrompt: preset.aiAssistantSystemPrompt,
+            aiAssistantAllowedTopics: [...preset.aiAssistantAllowedTopics],
+            aiAssistantBlockedTerms: [...preset.aiAssistantBlockedTerms],
+            aiAssistantHandoffKeywords: [...preset.aiAssistantHandoffKeywords],
+            aiAssistantFallbackMessage: preset.aiAssistantFallbackMessage,
+            aiAssistantHandoffPrompt: preset.aiAssistantHandoffPrompt,
+            aiAssistantPresetApplied: presetKey,
+            aiAssistantEnabled: current.aiAssistantEnabled,
+          }
+        : current
+    );
+    setSuccess(`Preset ${preset.label} aplicado como sugestão. Revise e salve para confirmar.`);
   };
 
   const handleCreate = async () => {
@@ -538,6 +690,68 @@ export default function AdminTenantChatbotPage() {
                     o contexto de negocio estiver preenchido.
                   </p>
                 </div>
+                <div className="mb-3 rounded-md border border-white/10 bg-black/10 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                        Status da IA
+                      </span>
+                      <p className="text-sm font-semibold text-white">
+                        {aiConfigLabel} · {aiConfigStatus.score}%
+                      </p>
+                    </div>
+                    <FlowBadge
+                      label={aiConfigStatus.ready ? "Pronta para ativar" : "Configuração pendente"}
+                      tone={aiConfigStatus.ready ? "success" : "warning"}
+                    />
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className={`h-full rounded-full ${
+                        aiConfigStatus.ready ? "bg-emerald-400" : "bg-amber-300"
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, aiConfigStatus.score))}%` }}
+                    />
+                  </div>
+                  {aiConfigStatus.missing.length ? (
+                    <div className="mt-3 rounded-md border border-amber-300/25 bg-amber-500/10 p-2 text-xs text-amber-100">
+                      <span className="font-semibold">IA supervisionada ainda não está pronta:</span>
+                      <ul className="mt-1 list-disc pl-4">
+                        {aiConfigStatus.missing.map((item) => (
+                          <li key={item}>Falta {AI_CONFIG_LABELS[item] ?? item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {aiConfigStatus.warnings.length ? (
+                    <div className="mt-3 rounded-md border border-white/10 bg-white/5 p-2 text-xs text-white/60">
+                      <span className="font-semibold text-white/80">Recomendado para melhorar governança:</span>
+                      <ul className="mt-1 list-disc pl-4">
+                        {aiConfigStatus.warnings.map((item) => (
+                          <li key={item}>{AI_CONFIG_LABELS[item] ?? item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mb-3 rounded-md border border-white/10 bg-black/10 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">Presets de segmento</span>
+                    <span className="text-xs text-white/45">Preenche sugestões, não ativa automaticamente.</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(AI_SEGMENT_PRESETS).map(([key, preset]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => applyAiPreset(key as keyof typeof AI_SEGMENT_PRESETS)}
+                        className="rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-white/75 hover:bg-white/10"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="grid gap-1 text-xs text-white/60">
                     Contexto de negocio da IA
@@ -561,7 +775,6 @@ export default function AdminTenantChatbotPage() {
                     Instrução adicional aprovada
                     <textarea
                       value={automationDraft.aiAssistantSystemPrompt ?? ""}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -616,7 +829,6 @@ export default function AdminTenantChatbotPage() {
                       min={0}
                       max={5}
                       value={automationDraft.aiAssistantMaxReplies ?? 2}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -640,7 +852,6 @@ export default function AdminTenantChatbotPage() {
                     </span>
                     <TogglePill
                       checked={automationDraft.aiAssistantFallbackToHandoff === true}
-                      disabled={automationDraft.aiAssistantLocked}
                       onToggle={() =>
                         setSettings((current) =>
                           current
@@ -721,7 +932,6 @@ export default function AdminTenantChatbotPage() {
                     Temas permitidos para IA
                     <textarea
                       value={joinTermList(automationDraft.aiAssistantAllowedTopics)}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -743,7 +953,6 @@ export default function AdminTenantChatbotPage() {
                     Termos bloqueados adicionais
                     <textarea
                       value={joinTermList(automationDraft.aiAssistantBlockedTerms)}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -776,7 +985,6 @@ export default function AdminTenantChatbotPage() {
                     Sinais de encaminhamento humano
                     <textarea
                       value={joinTermList(automationDraft.aiAssistantHandoffKeywords)}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -798,7 +1006,6 @@ export default function AdminTenantChatbotPage() {
                     Pergunta de encaminhamento personalizada
                     <textarea
                       value={automationDraft.aiAssistantHandoffPrompt ?? ""}
-                      disabled={automationDraft.aiAssistantLocked}
                       onChange={(event) =>
                         setSettings((current) =>
                           current
@@ -818,7 +1025,6 @@ export default function AdminTenantChatbotPage() {
                 Mensagem para dúvida vaga ou fora do escopo simples
                 <textarea
                   value={automationDraft.aiAssistantFallbackMessage ?? ""}
-                  disabled={automationDraft.aiAssistantLocked}
                   onChange={(event) =>
                     setSettings((current) =>
                       current

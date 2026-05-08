@@ -154,6 +154,7 @@ export type AdminAutomationSettings = {
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
+  aiAssistantPresetApplied?: string;
   aiAssistantGlobalSafety?: {
     questionStarters: string[];
     topicTerms: string[];
@@ -161,6 +162,12 @@ export type AdminAutomationSettings = {
     handoffTerms?: string[];
     maxInputChars: number;
     personalDataBlocked: boolean;
+  };
+  aiAssistantConfigurationStatus?: {
+    ready: boolean;
+    missing: string[];
+    warnings: string[];
+    score: number;
   };
   aiBusinessContext?: string;
   followUpEnabled?: boolean;

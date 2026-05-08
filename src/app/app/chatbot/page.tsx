@@ -584,6 +584,12 @@ export default function AppChatbotPage() {
   const flowEditingLocked = Boolean(automationDraft.flowEditingLocked);
   const automationReadOnly = true;
   const flowReadOnly = true;
+  const aiConfigStatus = automationDraft.aiAssistantConfigurationStatus ?? {
+    ready: Boolean(automationDraft.aiConfigured),
+    missing: [],
+    warnings: [],
+    score: automationDraft.aiConfigured ? 100 : 0,
+  };
 
   return (
     <AppShell
@@ -602,9 +608,14 @@ export default function AppChatbotPage() {
               Acompanhe os recursos liberados no console interno para este cliente.
             </p>
             <p className="mt-1 text-xs text-white/50">
-              Configuracao de IA: {automationDraft.aiConfigured ? "pronta" : "pendente"}.
-              {!automationDraft.aiConfigured ? " Sem isso, a IA conversacional fica indisponivel." : ""}
+              Configuracao de IA: {aiConfigStatus.ready ? "pronta" : "pendente"} · {aiConfigStatus.score}%.
+              {!aiConfigStatus.ready ? " Sem isso, a IA conversacional fica indisponivel." : ""}
             </p>
+            {!aiConfigStatus.ready && aiConfigStatus.missing.length ? (
+              <p className="mt-2 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                Pendências no console interno: {aiConfigStatus.missing.join(", ")}.
+              </p>
+            ) : null}
           </div>
           <span className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/60">
             Somente leitura

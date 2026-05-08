@@ -95,12 +95,43 @@ export function isAiAssistantConfigured(tenant?: Pick<
   | "aiAssistantFallbackMessage"
   | "aiAssistantHandoffPrompt"
 > | null) {
-  return Boolean(
-    tenant?.aiBusinessContext?.trim() &&
-      tenant.aiAssistantAllowedTopics?.some((term) => term.trim()) &&
-      tenant.aiAssistantFallbackMessage?.trim() &&
-      tenant.aiAssistantHandoffPrompt?.trim()
-  );
+  return getAiAssistantConfigurationStatus(tenant).ready;
+}
+
+export type AiAssistantConfigurationStatus = {
+  ready: boolean;
+  missing: string[];
+  warnings: string[];
+  score: number;
+};
+
+export function getAiAssistantConfigurationStatus(tenant?: Pick<
+  TenantConfig,
+  | "aiBusinessContext"
+  | "aiAssistantAllowedTopics"
+  | "aiAssistantFallbackMessage"
+  | "aiAssistantHandoffPrompt"
+  | "aiAssistantBlockedTerms"
+  | "aiAssistantHandoffKeywords"
+  | "aiAssistantSystemPrompt"
+> | null): AiAssistantConfigurationStatus {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (!tenant?.aiBusinessContext?.trim()) missing.push("aiBusinessContext");
+  if (!tenant?.aiAssistantAllowedTopics?.some((term) => term.trim())) missing.push("aiAssistantAllowedTopics");
+  if (!tenant?.aiAssistantFallbackMessage?.trim()) missing.push("aiAssistantFallbackMessage");
+  if (!tenant?.aiAssistantHandoffPrompt?.trim()) missing.push("aiAssistantHandoffPrompt");
+  if (!tenant?.aiAssistantBlockedTerms?.some((term) => term.trim())) warnings.push("aiAssistantBlockedTerms");
+  if (!tenant?.aiAssistantHandoffKeywords?.some((term) => term.trim())) warnings.push("aiAssistantHandoffKeywords");
+  if (!tenant?.aiAssistantSystemPrompt?.trim()) warnings.push("aiAssistantSystemPrompt");
+  const requiredScore = 4 - missing.length;
+  const recommendedScore = 3 - warnings.length;
+  return {
+    ready: missing.length === 0,
+    missing,
+    warnings,
+    score: Math.max(0, Math.round(((requiredScore + recommendedScore * 0.5) / 5.5) * 100)),
+  };
 }
 
 function getTenantsPath() {

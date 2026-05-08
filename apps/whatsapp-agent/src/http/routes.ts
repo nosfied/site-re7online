@@ -12,7 +12,12 @@ import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
-import { getTenants, isAiAssistantConfigured, saveTenants } from "../config/tenantConfig.js";
+import {
+  getAiAssistantConfigurationStatus,
+  getTenants,
+  isAiAssistantConfigured,
+  saveTenants,
+} from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -2901,7 +2906,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
-      const aiConfigured = isAiAssistantConfigured(tenant);
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
+      const aiConfigured = aiConfigurationStatus.ready;
       const chatbotLocked = Boolean(tenant.disableChatbot);
       const aiLocked = Boolean(tenant.disableAiFallback);
       json(res, 200, {
@@ -2922,6 +2928,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+          aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
           chatbotLocked,
           flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
@@ -6218,6 +6225,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: isAiAssistantConfigured(tenant),
             chatbotLocked: false,
@@ -6433,6 +6441,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.disableAiFallback = data.disableAiFallback;
         }
+        const presetApplied =
+          typeof data.aiAssistantPresetApplied === "string"
+            ? data.aiAssistantPresetApplied.trim().slice(0, 40)
+            : null;
         if (
           Object.keys(payload).length === 0 &&
           Object.keys(followUpPatch).length === 0 &&
@@ -6452,6 +6464,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const tenant = tenants[clientKey];
         if (!tenant) {
           json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        const proposedTenant = {
+          ...tenant,
+          ...payload,
+          ...followUpPatch,
+          ...aiAssistantPatch,
+        };
+        const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
+        if (aiAssistantPatch.aiAssistantEnabled === true && !proposedAiStatus.ready) {
+          logger.warn({
+            event: "ai.assistant.config_incomplete",
+            requestId,
+            clientId: client.id,
+            clientKey,
+            missing: proposedAiStatus.missing,
+            warnings: proposedAiStatus.warnings,
+            score: proposedAiStatus.score,
+            reason: "activation_blocked",
+          });
+          json(
+            res,
+            409,
+            httpError(
+              "ai_assistant_config_incomplete",
+              `IA supervisionada ainda não está pronta: ${proposedAiStatus.missing.join(", ")}`
+            )
+          );
           return;
         }
         if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
@@ -6491,6 +6531,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientKey,
           fieldsChanged: saved.fieldsChanged,
         });
+        const savedAiStatus = getAiAssistantConfigurationStatus(saved.tenant);
+        logger.info({
+          event: savedAiStatus.ready ? "ai.assistant.config_ready" : "ai.assistant.config_incomplete",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          missing: savedAiStatus.missing,
+          warnings: savedAiStatus.warnings,
+          score: savedAiStatus.score,
+        });
+        if (presetApplied) {
+          logger.info({
+            event: "ai.assistant.preset_applied",
+            requestId,
+            clientId: client.id,
+            clientKey,
+            preset: presetApplied,
+            score: savedAiStatus.score,
+          });
+        }
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -6513,6 +6573,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: isAiAssistantConfigured(saved.tenant),
             chatbotLocked: false,

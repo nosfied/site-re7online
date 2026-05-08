@@ -184,6 +184,12 @@ export type AppAutomationSettings = {
     maxInputChars: number;
     personalDataBlocked: boolean;
   };
+  aiAssistantConfigurationStatus?: {
+    ready: boolean;
+    missing: string[];
+    warnings: string[];
+    score: number;
+  };
   aiConfigured: boolean;
   chatbotLocked?: boolean;
   flowEditingLocked?: boolean;
