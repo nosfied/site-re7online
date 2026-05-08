@@ -4284,6 +4284,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       : env.WHATSAPP_DEFAULT_REPLY);
     let aiAssistantResponded = false;
     let aiOrchestratorNoReply = false;
+    let aiAssistantSkippedNotSimpleQuestion = false;
 
     const toForReply = env.WHATSAPP_SANDBOX
       ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
@@ -4356,6 +4357,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
           if (!isSimple && !risk) {
+            aiAssistantSkippedNotSimpleQuestion = true;
             await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "not_simple_question" });
             await logAiAssistantEvent("ai.assistant.skipped", { reason: "not_simple_question" });
           } else if (risk) {
@@ -4667,6 +4669,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (noAutomationReplyConfigured && !aiAssistantResponded) {
+      if (aiAssistantSkippedNotSimpleQuestion) {
+        logger.info({
+          event: "reply.skipped",
+          waId: maskNumber(normalizedFrom),
+          reason: "ai_not_simple_question_no_handoff",
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+        continue;
+      }
       if (aiOrchestratorNoReply) {
         logger.info({
           event: "reply.skipped",
