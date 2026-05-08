@@ -42,6 +42,13 @@ export type AIOrchestratorState = {
   lastMessageId?: string | null;
   lastQuestion?: string | null;
   lastNextActionAt?: string | null;
+  handoffSignals?: {
+    count?: number;
+    lastReason?: string | null;
+    lastRecommendedAt?: string | null;
+    guardrailCount?: number;
+    lowConfidenceCount?: number;
+  };
 };
 
 export type HandoffState = {

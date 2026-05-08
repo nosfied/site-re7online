@@ -95,6 +95,52 @@ export type ResolvedOrchestratorAction =
       ignoredAction?: OrchestratorNextAction;
     };
 
+export type HandoffScoreInput = {
+  output?: Pick<
+    ValidatedOrchestratorOutput,
+    | "confidence"
+    | "missing_information"
+    | "next_action"
+    | "handoff_recommended"
+    | "lead_temp"
+    | "priority"
+  >;
+  previousMissingInformation?: string[];
+  explicitHumanRequest?: boolean;
+  guardrailRisk?: GuardrailRisk | null;
+  assistantLimitReached?: boolean;
+};
+
+export type HandoffScoreResult = {
+  score: number;
+  allowed: boolean;
+  threshold: number;
+  reasons: string[];
+  primaryReason: string | null;
+};
+
+export type HandoffRecommendationEligibilityInput = {
+  state: ConversationState;
+  duplicateMessage?: boolean;
+  windowOpen?: boolean;
+  tenantAiEnabled?: boolean;
+  tenantFallbackToHandoff?: boolean;
+};
+
+export type HandoffRecommendationEligibility =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | "duplicate_message"
+        | "window_closed"
+        | "tenant_ai_disabled"
+        | "tenant_handoff_fallback_disabled"
+        | "human_mode"
+        | "handoff_active"
+        | "flow_active";
+    };
+
 export const AI_ASSISTANT_SIMPLE_QUESTION_STARTERS = [
   "o que",
   "oq",
@@ -160,6 +206,7 @@ export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
 export const ORCHESTRATOR_MAX_REPLY_CHARS = 700;
 export const ORCHESTRATOR_MAX_LIST_ITEMS = 8;
 export const ORCHESTRATOR_MAX_QUESTION_CHARS = 180;
+export const ORCHESTRATOR_HANDOFF_THRESHOLD = 3;
 
 const CONVERSATION_STAGE_ALLOWLIST: readonly ConversationStage[] = [
   "greeting",
@@ -510,6 +557,102 @@ function normalizeStringList(value: unknown) {
     .map((item) => sanitizeShortString(item, 80))
     .filter((item): item is string => Boolean(item))
     .slice(0, ORCHESTRATOR_MAX_LIST_ITEMS);
+}
+
+function countRepeatedMissingInformation(current: string[], previous: string[] | null | undefined) {
+  if (!current.length || !previous?.length) return 0;
+  const previousSet = new Set(previous.map((item) => normalizeText(item)));
+  return current.filter((item) => previousSet.has(normalizeText(item))).length;
+}
+
+export function calculateHandoffScore(
+  input: HandoffScoreInput,
+  threshold = ORCHESTRATOR_HANDOFF_THRESHOLD
+): HandoffScoreResult {
+  const reasons: string[] = [];
+  let score = 0;
+  const output = input.output;
+  const explicitHumanRequest =
+    input.explicitHumanRequest === true ||
+    output?.next_action === "handoff_recommend" ||
+    output?.next_action === "handoff_force";
+
+  if (explicitHumanRequest) {
+    score += 3;
+    reasons.push("explicit_human_request");
+  }
+
+  if (
+    input.guardrailRisk === "legal_specific_case" ||
+    input.guardrailRisk === "document_analysis" ||
+    input.guardrailRisk === "benefit_amount" ||
+    input.guardrailRisk === "outcome_prediction"
+  ) {
+    score += 3;
+    reasons.push(`guardrail_${input.guardrailRisk}`);
+  }
+
+  if (output?.lead_temp === "quente") {
+    score += 2;
+    reasons.push("lead_hot");
+  }
+
+  if (output?.priority === "alta") {
+    score += 2;
+    reasons.push("priority_high");
+  }
+
+  if (typeof output?.confidence === "number") {
+    if (output.confidence < 0.45) {
+      score += 2;
+      reasons.push("confidence_below_045");
+    } else if (output.confidence < 0.6) {
+      score += 1;
+      reasons.push("confidence_below_060");
+    }
+  }
+
+  if (input.assistantLimitReached) {
+    score += 1;
+    reasons.push("assistant_limit_reached");
+  }
+
+  if (
+    countRepeatedMissingInformation(
+      output?.missing_information ?? [],
+      input.previousMissingInformation
+    ) > 0
+  ) {
+    score += 1;
+    reasons.push("missing_information_repeated");
+  }
+
+  return {
+    score,
+    allowed: score >= threshold,
+    threshold,
+    reasons,
+    primaryReason: reasons[0] ?? null,
+  };
+}
+
+export function canEvaluateHandoffRecommendation(
+  input: HandoffRecommendationEligibilityInput
+): HandoffRecommendationEligibility {
+  if (input.duplicateMessage) return { ok: false, reason: "duplicate_message" };
+  if (input.windowOpen === false) return { ok: false, reason: "window_closed" };
+  if (!input.tenantAiEnabled) return { ok: false, reason: "tenant_ai_disabled" };
+  if (!input.tenantFallbackToHandoff) {
+    return { ok: false, reason: "tenant_handoff_fallback_disabled" };
+  }
+  if (input.state.mode === "HUMAN") return { ok: false, reason: "human_mode" };
+  if (input.state.handoff.status === "active" || input.state.handoff.status === "pending") {
+    return { ok: false, reason: "handoff_active" };
+  }
+  if (input.state.chatbotActive || input.state.chatbotNodeId) {
+    return { ok: false, reason: "flow_active" };
+  }
+  return { ok: true };
 }
 
 function parseMaybeJsonObject(text: string): RawOrchestratorOutput | null {

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildSafeResponse,
+  calculateHandoffScore,
+  canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
   getAiAssistantState,
@@ -256,6 +258,107 @@ test("resolveOrchestratorAction ignores handoff actions in 60B", () => {
   assert.equal(action.shouldSend, true);
   assert.equal(action.action, "handoff_force_ignored");
   assert.equal(action.ignoredAction, "handoff_force");
+});
+
+test("calculateHandoffScore allows high-confidence supervised recommendation with strong signals", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Posso te direcionar para atendimento, se preferir.",
+    stage: "handoff_recommended",
+    goal: "recommend_handoff",
+    confidence: 0.8,
+    missing_information: [],
+    next_action: "handoff_recommend",
+    handoff_recommended: true,
+    lead_temp: "quente",
+    priority: "alta",
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const score = calculateHandoffScore({ output: output.output });
+  assert.equal(score.allowed, true);
+  assert.equal(score.score >= 3, true);
+  assert.equal(score.reasons.includes("explicit_human_request"), true);
+  assert.equal(score.reasons.includes("lead_hot"), true);
+  assert.equal(score.reasons.includes("priority_high"), true);
+});
+
+test("calculateHandoffScore denies low signal recommendation", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Posso seguir explicando de forma geral.",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.92,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: true,
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const score = calculateHandoffScore({ output: output.output });
+  assert.equal(score.allowed, false);
+  assert.equal(score.score, 0);
+});
+
+test("calculateHandoffScore includes guardrail, low confidence and repeated missing information", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Posso te explicar o caminho geral.",
+    stage: "clarification",
+    goal: "collect_safe_context",
+    confidence: 0.42,
+    missing_information: ["benefit_type"],
+    next_action: "answer",
+    handoff_recommended: true,
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const score = calculateHandoffScore({
+    output: output.output,
+    previousMissingInformation: ["benefit_type"],
+    guardrailRisk: "document_analysis",
+  });
+  assert.equal(score.allowed, true);
+  assert.equal(score.reasons.includes("guardrail_document_analysis"), true);
+  assert.equal(score.reasons.includes("confidence_below_045"), true);
+  assert.equal(score.reasons.includes("missing_information_repeated"), true);
+});
+
+test("canEvaluateHandoffRecommendation blocks unsafe operational states", () => {
+  assert.deepEqual(
+    canEvaluateHandoffRecommendation({
+      state: { ...baseState, mode: "HUMAN" },
+      windowOpen: true,
+      tenantAiEnabled: true,
+      tenantFallbackToHandoff: true,
+    }),
+    { ok: false, reason: "human_mode" }
+  );
+  assert.deepEqual(
+    canEvaluateHandoffRecommendation({
+      state: { ...baseState, handoff: { status: "active" } },
+      windowOpen: true,
+      tenantAiEnabled: true,
+      tenantFallbackToHandoff: true,
+    }),
+    { ok: false, reason: "handoff_active" }
+  );
+  assert.deepEqual(
+    canEvaluateHandoffRecommendation({
+      state: { ...baseState, chatbotActive: true, chatbotNodeId: "menu_principal" },
+      windowOpen: true,
+      tenantAiEnabled: true,
+      tenantFallbackToHandoff: true,
+    }),
+    { ok: false, reason: "flow_active" }
+  );
+  assert.deepEqual(
+    canEvaluateHandoffRecommendation({
+      state: baseState,
+      windowOpen: true,
+      tenantAiEnabled: true,
+      tenantFallbackToHandoff: false,
+    }),
+    { ok: false, reason: "tenant_handoff_fallback_disabled" }
+  );
 });
 
 test("generateControlledAssistantReply does not call brain for complex questions", async () => {

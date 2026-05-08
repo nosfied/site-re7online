@@ -35,6 +35,8 @@ import {
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildSafeResponse,
+  calculateHandoffScore,
+  canEvaluateHandoffRecommendation,
   classifyRisk,
   generateControlledAssistantReply,
   getAiAssistantState,
@@ -4459,6 +4461,85 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               if (resolvedAction.shouldSend) {
                 replyText = resolvedAction.text;
               }
+              const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
+              const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
+              let nextHandoffSignals = previousHandoffSignals;
+              if (aiReply.output.handoff_recommended) {
+                const scoreResult = calculateHandoffScore({
+                  output: aiReply.output,
+                  previousMissingInformation: previousAiOrchestrator?.missingInformation,
+                  explicitHumanRequest:
+                    aiReply.output.next_action === "handoff_recommend" ||
+                    aiReply.output.next_action === "handoff_force",
+                  assistantLimitReached: assistantState.count + 1 >= maxReplies,
+                });
+                const eligibility = canEvaluateHandoffRecommendation({
+                  state: updatedConversation,
+                  duplicateMessage: assistantState.lastMessageId === message.messageId,
+                  windowOpen: isWindowOpen(updatedConversation, Date.now()),
+                  tenantAiEnabled:
+                    env.AI_ASSISTANT_ENABLED &&
+                    env.WHATSAPP_AI_ENABLED &&
+                    appliedTenantConfig.aiAssistantEnabled === true,
+                  tenantFallbackToHandoff:
+                    appliedTenantConfig.aiAssistantFallbackToHandoff === true,
+                });
+                const allowed = eligibility.ok && scoreResult.allowed;
+                const deniedReason = eligibility.ok
+                  ? "score_below_threshold"
+                  : eligibility.reason;
+                const lastReason = allowed
+                  ? (scoreResult.primaryReason ?? "threshold_reached")
+                  : deniedReason;
+                nextHandoffSignals = {
+                  count: (previousHandoffSignals.count ?? 0) + 1,
+                  lastReason,
+                  lastRecommendedAt: new Date().toISOString(),
+                  guardrailCount: previousHandoffSignals.guardrailCount ?? 0,
+                  lowConfidenceCount:
+                    (previousHandoffSignals.lowConfidenceCount ?? 0) +
+                    (aiReply.output.confidence < 0.6 ? 1 : 0),
+                };
+                await logAiAssistantEvent("ai.orchestrator.handoff_recommended", {
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                  reasons: scoreResult.reasons,
+                  primaryReason: scoreResult.primaryReason,
+                  confidence: aiReply.output.confidence,
+                  nextAction: aiReply.output.next_action,
+                  eligibility: eligibility.ok ? "allowed_to_evaluate" : eligibility.reason,
+                });
+                await logAiAssistantEvent("ai.orchestrator.handoff_reason", {
+                  reason: lastReason,
+                  score: scoreResult.score,
+                  threshold: scoreResult.threshold,
+                  reasons: scoreResult.reasons,
+                });
+                if (allowed) {
+                  await logAiAssistantEvent("ai.orchestrator.handoff_threshold_reached", {
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
+                    reasons: scoreResult.reasons,
+                  });
+                  await logAiAssistantEvent("ai.orchestrator.handoff_allowed", {
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
+                    reasons: scoreResult.reasons,
+                    mode: updatedConversation.mode ?? "BOT",
+                    handoffStatus: updatedConversation.handoff.status,
+                  });
+                } else {
+                  await logAiAssistantEvent("ai.orchestrator.handoff_denied", {
+                    reason: deniedReason,
+                    score: scoreResult.score,
+                    threshold: scoreResult.threshold,
+                    reasons: scoreResult.reasons,
+                    eligibility: eligibility.ok ? "allowed_to_evaluate" : eligibility.reason,
+                    mode: updatedConversation.mode ?? "BOT",
+                    handoffStatus: updatedConversation.handoff.status,
+                  });
+                }
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -4482,6 +4563,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastMessageId: message.messageId,
                     lastQuestion: resolvedAction.lastQuestion,
                     lastNextActionAt: new Date().toISOString(),
+                    handoffSignals: nextHandoffSignals,
                   },
                 },
               };
