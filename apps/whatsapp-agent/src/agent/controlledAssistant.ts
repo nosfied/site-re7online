@@ -605,11 +605,15 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "me",
   "minha",
   "meu",
+  "idade",
+  "idades",
+  "ano",
+  "anos",
 ]);
 
 function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
   const normalizedText = normalizeText(raw);
-  const messageTokens = topicTokens(raw);
+  const messageTokens = topicTokens(raw).filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
   let best: { topic: string; score: number; specificity: number } | null = null;
   for (const candidate of candidates) {
     const normalizedTopic = normalizeText(candidate);
@@ -951,13 +955,13 @@ export function resolveContextualContinuationTopic(state: ConversationState) {
   const context = state.answers?.flowContext ?? {};
   const memory = state.answers?.aiMemory;
   const candidates = [
+    ...(memory?.lastTopics ?? []),
+    memory?.facts?.servico,
+    memory?.facts?.intent,
     context.servico,
     context.intent,
     context.area,
-    memory?.facts?.servico,
-    memory?.facts?.intent,
     memory?.facts?.area,
-    ...(memory?.lastTopics ?? []),
   ];
   for (const candidate of candidates) {
     const topic = normalizeContinuationTopic(candidate);

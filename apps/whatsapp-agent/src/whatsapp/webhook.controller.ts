@@ -5445,8 +5445,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               reason: educationalIntent.reason ?? null,
             });
           }
+          const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
           const tenantIntent = !risk
-            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog)
+            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog) ??
+              (continuationTopicForIntent
+                ? resolveTenantIntent(
+                    `${message.text} ${continuationTopicForIntent}`,
+                    appliedTenantConfig.aiAssistantIntentCatalog
+                  )
+                : null)
             : null;
           const tenantIntentReply = tenantIntent
             ? buildTenantIntentCatalogReply(tenantIntent)

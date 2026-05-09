@@ -230,6 +230,21 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
   assert.equal(resolveTenantIntent("vocês fazem divórcio?", catalog)?.key, "area_civil");
   assert.equal(resolveTenantIntent("qual preço do serviço?", catalog)?.key, "honorarios");
   assert.equal(resolveTenantIntent("vcs fazem aposentadoria?", [catalog[1]]), null);
+  assert.equal(
+    resolveTenantIntent("qual a idade em 2026?", [
+      {
+        key: "salario_maternidade",
+        title: "Salario maternidade",
+        topics: ["salario maternidade", "maternidade"],
+        response: "Resposta de maternidade.",
+      },
+    ]),
+    null
+  );
+  assert.equal(
+    resolveTenantIntent("qual a idade em 2026? aposentadoria", catalog)?.key,
+    "servico_aposentadoria"
+  );
 });
 
 test("intent catalog output enriches CRM with configured classification", () => {
@@ -277,12 +292,12 @@ test("contextual ack continues recent CRM or memory topic without handoff prompt
     ...baseState,
     answers: {
       flowContext: {
-        servico: "aposentadoria",
-        intent: "aposentadoria",
+        servico: "servico_aposentadoria",
+        intent: "servico_aposentadoria",
       },
       aiMemory: {
         lastTopics: ["out of scope", "aposentadoria"],
-        facts: { servico: "aposentadoria" },
+        facts: { servico: "servico_aposentadoria" },
       },
     },
   };
