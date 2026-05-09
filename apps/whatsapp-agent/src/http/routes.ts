@@ -17,6 +17,7 @@ import {
   getTenants,
   isAiAssistantConfigured,
   saveTenants,
+  type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
@@ -2928,6 +2929,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -6226,6 +6228,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
@@ -6437,6 +6440,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantPatch.aiAssistantHandoffPrompt =
             data.aiAssistantHandoffPrompt.trim() || undefined;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantIntentCatalog")) {
+          const catalog = normalizeAiAssistantIntentCatalog(data.aiAssistantIntentCatalog);
+          if (!catalog) {
+            json(res, 400, httpError("bad_request", "aiAssistantIntentCatalog must be an array of intent objects"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantIntentCatalog = catalog;
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
           if (typeof data.aiBusinessContext !== "string") {
             json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
@@ -6583,6 +6594,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
@@ -10760,6 +10772,62 @@ function normalizeAiAssistantTermList(input: unknown) {
   return [...new Set(terms)];
 }
 
+function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] | null {
+  if (!Array.isArray(input)) return null;
+  const normalized: AiAssistantIntentCatalogItem[] = [];
+  const seen = new Set<string>();
+  for (const rawItem of input.slice(0, 60)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) return null;
+    const item = rawItem as Record<string, unknown>;
+    const key = typeof item.key === "string" ? item.key.trim().toLowerCase() : "";
+    if (!key || !/^[a-z0-9_:-]{2,80}$/.test(key) || seen.has(key)) return null;
+    seen.add(key);
+    const topics = normalizeAiAssistantTermList(item.topics ?? []);
+    const tags = normalizeAiAssistantTermList(item.tags ?? []);
+    if (!topics || !tags) return null;
+    const title = typeof item.title === "string" ? item.title.trim().slice(0, 120) : "";
+    const response = typeof item.response === "string" ? item.response.trim().slice(0, 900) : "";
+    const nextQuestion =
+      typeof item.nextQuestion === "string" ? item.nextQuestion.trim().slice(0, 240) : "";
+    if (item.response !== undefined && typeof item.response !== "string") return null;
+    if (item.nextQuestion !== undefined && typeof item.nextQuestion !== "string") return null;
+    if (item.title !== undefined && typeof item.title !== "string") return null;
+    if (
+      item.leadTemp !== undefined &&
+      item.leadTemp !== "quente" &&
+      item.leadTemp !== "morno" &&
+      item.leadTemp !== "frio"
+    ) {
+      return null;
+    }
+    if (
+      item.priority !== undefined &&
+      item.priority !== "alta" &&
+      item.priority !== "media" &&
+      item.priority !== "baixa"
+    ) {
+      return null;
+    }
+    if (item.handoff !== undefined && typeof item.handoff !== "boolean") return null;
+    normalized.push({
+      key,
+      ...(title ? { title } : {}),
+      topics,
+      ...(response ? { response } : {}),
+      ...(nextQuestion ? { nextQuestion } : {}),
+      ...(item.leadTemp === "quente" || item.leadTemp === "morno" || item.leadTemp === "frio"
+        ? { leadTemp: item.leadTemp }
+        : {}),
+      ...(item.priority === "alta" || item.priority === "media" || item.priority === "baixa"
+        ? { priority: item.priority }
+        : {}),
+      ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      tags: tags.filter((tag) => /^[a-z0-9_:-]{2,80}$/.test(tag.toLowerCase())),
+    });
+  }
+  return normalized;
+}
+
 function getAiAssistantGlobalSafetyConfig() {
   return {
     questionStarters: AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
@@ -10864,6 +10932,7 @@ function diffTenantFields(
   compareField("aiAssistantHandoffKeywords");
   compareField("aiAssistantFallbackMessage");
   compareField("aiAssistantHandoffPrompt");
+  compareField("aiAssistantIntentCatalog");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

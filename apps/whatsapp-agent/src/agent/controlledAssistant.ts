@@ -21,6 +21,7 @@ export type ControlledAssistantInput = {
     | "aiAssistantAllowedTopics"
     | "aiAssistantBlockedTerms"
     | "aiAssistantSecondaryTopics"
+    | "aiAssistantIntentCatalog"
   >;
   state: ConversationState;
   nowIso: string;
@@ -54,6 +55,19 @@ export type AssistantTenantContext = {
   fallbackMessage?: string | null;
   allowedTopics?: string[] | null;
   secondaryTopics?: string[] | null;
+  intentCatalog?: TenantConfig["aiAssistantIntentCatalog"] | null;
+};
+
+export type ResolvedTenantIntent = {
+  key: string;
+  title: string | null;
+  topic: string;
+  response: string | null;
+  nextQuestion: string | null;
+  leadTemp: OrchestratorLeadTemp | null;
+  priority: OrchestratorPriority | null;
+  handoff: boolean;
+  tags: string[];
 };
 
 export type ContextualFallbackType =
@@ -106,6 +120,7 @@ export type AICrmEnrichmentInput = {
   state: ConversationState;
   output: ValidatedOrchestratorOutput;
   topic?: string | null;
+  catalogTags?: string[] | null;
   nowIso: string;
 };
 
@@ -514,6 +529,82 @@ export function resolveTenantTopic(
     }
   }
   return best?.topic ?? null;
+}
+
+export function resolveTenantIntent(
+  text: string | null | undefined,
+  catalog: TenantConfig["aiAssistantIntentCatalog"] | null | undefined
+): ResolvedTenantIntent | null {
+  const raw = String(text ?? "").trim();
+  if (!raw || !Array.isArray(catalog) || !catalog.length) return null;
+  let best: (ResolvedTenantIntent & { specificity: number }) | null = null;
+  for (const item of catalog) {
+    if (!item?.key) continue;
+    const candidates = [
+      ...(Array.isArray(item.topics) ? item.topics : []),
+      item.title ?? "",
+      item.key.replace(/[_:-]/g, " "),
+    ].filter((term): term is string => Boolean(term && term.trim()));
+    const topic = resolveTenantTopic(raw, candidates);
+    if (!topic) continue;
+    const key = sanitizeCrmToken(item.key) ?? item.key.trim().toLowerCase();
+    const specificity = Math.max(
+      ...candidates.map((candidate) => topicTokens(candidate).join("").length),
+      key.length
+    );
+    const resolved: ResolvedTenantIntent & { specificity: number } = {
+      key,
+      title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : null,
+      topic,
+      response: typeof item.response === "string" && item.response.trim() ? item.response.trim() : null,
+      nextQuestion:
+        typeof item.nextQuestion === "string" && item.nextQuestion.trim()
+          ? item.nextQuestion.trim()
+          : null,
+      leadTemp: item.leadTemp ?? null,
+      priority: item.priority ?? null,
+      handoff: item.handoff === true,
+      tags: Array.isArray(item.tags)
+        ? item.tags
+            .map((tag) => sanitizeCrmTag(tag))
+            .filter((tag): tag is string => Boolean(tag))
+        : [],
+      specificity,
+    };
+    if (!best || resolved.specificity > best.specificity) best = resolved;
+  }
+  if (!best) return null;
+  const { specificity: _specificity, ...resolved } = best;
+  return resolved;
+}
+
+export function buildTenantIntentCatalogReply(intent: ResolvedTenantIntent) {
+  const response = intent.response?.trim();
+  if (!response) return null;
+  const nextQuestion = intent.nextQuestion?.trim();
+  const text = nextQuestion && !response.includes(nextQuestion)
+    ? `${response}\n\n${nextQuestion}`
+    : response;
+  return text.slice(0, ORCHESTRATOR_MAX_REPLY_CHARS).trim();
+}
+
+export function buildTenantIntentOrchestratorOutput(
+  intent: ResolvedTenantIntent,
+  reply: string
+): ValidatedOrchestratorOutput {
+  return {
+    reply,
+    intent: intent.key,
+    stage: intent.handoff ? "handoff_recommended" : "triage",
+    goal: intent.handoff ? "recommend_handoff" : "explain_general_topic",
+    confidence: 1,
+    missing_information: [],
+    next_action: intent.handoff ? "handoff_recommend" : "answer",
+    next_question: intent.nextQuestion,
+    handoff_recommended: intent.handoff,
+    lead_temp: intent.leadTemp,
+    priority: intent.priority,
+  };
 }
 
 export function classifyRisk(
@@ -1217,6 +1308,7 @@ export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnr
     topic ? `topic:${topic}` : null,
     derivedPriority.leadTemp ? `lead:${derivedPriority.leadTemp}` : null,
     derivedPriority.priority ? `priority:${derivedPriority.priority}` : null,
+    ...(input.catalogTags ?? []),
   ].filter((tag): tag is string => Boolean(tag));
   for (const tag of tagCandidates) {
     if (addUniqueTag(nextTags, tag)) addedTags.push(tag);
@@ -1335,6 +1427,19 @@ function sanitizeCrmToken(value: unknown, maxLength = 80) {
   const raw = sanitizeShortString(value, maxLength);
   if (!raw || containsPersonalData(raw) || classifyRisk(raw)) return null;
   return normalizeText(raw).replace(/[^a-z0-9_ -]/g, "").trim().replace(/\s+/g, "_").slice(0, maxLength) || null;
+}
+
+function sanitizeCrmTag(value: unknown, maxLength = 80) {
+  const raw = sanitizeShortString(value, maxLength);
+  if (!raw || containsPersonalData(raw) || classifyRisk(raw)) return null;
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_:-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, maxLength) || null;
 }
 
 function hasOperationalContextValue(value: unknown) {

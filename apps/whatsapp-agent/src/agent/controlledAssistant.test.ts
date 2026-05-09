@@ -8,6 +8,8 @@ import {
   buildContextualFallbackReply,
   buildContextualContinuationReply,
   buildSafeResponse,
+  buildTenantIntentCatalogReply,
+  buildTenantIntentOrchestratorOutput,
   calculateHandoffScore,
   classifyAssistantFallback,
   classifyContextualFallback,
@@ -21,6 +23,7 @@ import {
   isContextualAck,
   isSimpleQuestion,
   resolveTenantTopic,
+  resolveTenantIntent,
   resolveOrchestratorAction,
   resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
@@ -170,6 +173,70 @@ test("resolveTenantTopic matches only tenant configured topics with typo toleran
     resolveTenantTopic("quero saber sobre seguro residencial", ["software", "suporte técnico"]),
     null
   );
+});
+
+test("resolveTenantIntent maps tenant service phrases without global domain hardcode", () => {
+  const catalog = [
+    {
+      key: "servico_aposentadoria",
+      title: "Aposentadoria",
+      topics: [
+        "aposentadoria",
+        "voces fazem aposentadoria",
+        "dar entrada na aposentadoria",
+        "preciso me aposentar",
+      ],
+      response: "Sim, a equipe pode orientar pedidos de aposentadoria de forma geral.",
+      nextQuestion: "Voce quer entender requisitos gerais, documentos ou como funciona o atendimento?",
+      leadTemp: "morno" as const,
+      priority: "media" as const,
+      tags: ["service:aposentadoria"],
+    },
+    {
+      key: "servico_seguro",
+      title: "Seguro",
+      topics: ["seguro residencial"],
+      response: "Atendemos duvidas gerais sobre seguros configurados para este tenant.",
+    },
+  ];
+  const retirement = resolveTenantIntent("vcs fazem aposentadoria?", catalog);
+  assert.equal(retirement?.key, "servico_aposentadoria");
+  assert.equal(retirement?.topic, "voces fazem aposentadoria");
+  assert.equal(buildTenantIntentCatalogReply(retirement!), [
+    "Sim, a equipe pode orientar pedidos de aposentadoria de forma geral.",
+    "Voce quer entender requisitos gerais, documentos ou como funciona o atendimento?",
+  ].join("\n\n"));
+  assert.equal(resolveTenantIntent("quero saber sobre seguro residencial", catalog)?.key, "servico_seguro");
+  assert.equal(resolveTenantIntent("vcs fazem aposentadoria?", [catalog[1]]), null);
+});
+
+test("intent catalog output enriches CRM with configured classification", () => {
+  const intent = resolveTenantIntent("dar entrada na minha aposentadoria", [
+    {
+      key: "servico_aposentadoria",
+      topics: ["dar entrada na aposentadoria", "aposentadoria"],
+      response: "Sim, podemos explicar como funciona o atendimento.",
+      leadTemp: "quente",
+      priority: "alta",
+      tags: ["service:aposentadoria"],
+    },
+  ]);
+  assert.ok(intent);
+  const output = buildTenantIntentOrchestratorOutput(
+    intent!,
+    buildTenantIntentCatalogReply(intent!)!
+  );
+  const result = enrichCrmFromOrchestrator({
+    state: { answers: {}, handoff: { status: "none" } } as any,
+    output,
+    topic: intent!.topic,
+    catalogTags: intent!.tags,
+    nowIso: new Date().toISOString(),
+  });
+  assert.equal(result.enriched, true);
+  assert.equal(result.state.answers?.flowContext?.intent, "servico_aposentadoria");
+  assert.equal(result.state.answers?.flowContext?.lead_temp, "quente");
+  assert.ok(result.state.answers?.flowTags?.includes("service:aposentadoria"));
 });
 
 test("pending offer helpers interpret short contextual confirmations", () => {

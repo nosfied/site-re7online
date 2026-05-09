@@ -177,6 +177,7 @@ export type AppAutomationSettings = {
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
+  aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
   aiAssistantGlobalSafety?: {
     questionStarters: string[];
     topicTerms: string[];
@@ -197,6 +198,18 @@ export type AppAutomationSettings = {
   aiLocked?: boolean;
   aiAssistantLocked?: boolean;
   intentClassifierLocked?: boolean;
+};
+
+export type AiAssistantIntentCatalogItem = {
+  key: string;
+  title?: string;
+  topics?: string[];
+  response?: string;
+  nextQuestion?: string;
+  leadTemp?: "quente" | "morno" | "frio";
+  priority?: "alta" | "media" | "baixa";
+  handoff?: boolean;
+  tags?: string[];
 };
 
 export type AppTenantSummary = {

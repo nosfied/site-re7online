@@ -73,6 +73,7 @@ export type TenantConfig = {
   aiAssistantHandoffKeywords?: string[];
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
+  aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -83,6 +84,18 @@ export type TenantConfig = {
   templates?: {
     manualHandoff?: string;
   };
+};
+
+export type AiAssistantIntentCatalogItem = {
+  key: string;
+  title?: string;
+  topics?: string[];
+  response?: string;
+  nextQuestion?: string;
+  leadTemp?: "quente" | "morno" | "frio";
+  priority?: "alta" | "media" | "baixa";
+  handoff?: boolean;
+  tags?: string[];
 };
 
 export type TenantConfigMap = Record<string, TenantConfig>;
@@ -246,6 +259,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
           .map((term) => (typeof term === "string" ? term.trim() : ""))
           .filter(Boolean)
       : [];
+    nextTenant.aiAssistantIntentCatalog = normalizeAiAssistantIntentCatalog(
+      tenant.aiAssistantIntentCatalog
+    );
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
     }
@@ -257,6 +273,61 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     normalized[key] = nextTenant;
   }
   return normalized;
+}
+
+function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
+  if (!Array.isArray(input)) return [];
+  const items: AiAssistantIntentCatalogItem[] = [];
+  const seen = new Set<string>();
+  for (const rawItem of input.slice(0, 60)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+    const item = rawItem as Record<string, unknown>;
+    const key = typeof item.key === "string" ? item.key.trim().toLowerCase() : "";
+    if (!key || !/^[a-z0-9_:-]{2,80}$/.test(key) || seen.has(key)) continue;
+    seen.add(key);
+    const topics = Array.isArray(item.topics)
+      ? [
+          ...new Set(
+            item.topics
+              .map((term) => (typeof term === "string" ? term.trim() : ""))
+              .filter(Boolean)
+              .slice(0, 40)
+          ),
+        ]
+      : [];
+    const tags = Array.isArray(item.tags)
+      ? [
+          ...new Set(
+            item.tags
+              .map((tag) => (typeof tag === "string" ? tag.trim().toLowerCase() : ""))
+              .filter((tag) => /^[a-z0-9_:-]{2,80}$/.test(tag))
+              .slice(0, 20)
+          ),
+        ]
+      : [];
+    items.push({
+      key,
+      ...(typeof item.title === "string" && item.title.trim()
+        ? { title: item.title.trim().slice(0, 120) }
+        : {}),
+      topics,
+      ...(typeof item.response === "string" && item.response.trim()
+        ? { response: item.response.trim().slice(0, 900) }
+        : {}),
+      ...(typeof item.nextQuestion === "string" && item.nextQuestion.trim()
+        ? { nextQuestion: item.nextQuestion.trim().slice(0, 240) }
+        : {}),
+      ...(item.leadTemp === "quente" || item.leadTemp === "morno" || item.leadTemp === "frio"
+        ? { leadTemp: item.leadTemp }
+        : {}),
+      ...(item.priority === "alta" || item.priority === "media" || item.priority === "baixa"
+        ? { priority: item.priority }
+        : {}),
+      ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      tags,
+    });
+  }
+  return items;
 }
 
 function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap {
@@ -496,6 +567,26 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         !tenant.aiAssistantHandoffPrompt.trim())
     ) {
       throw new Error(`invalid_tenant_ai_assistant_handoff_prompt:${key}`);
+    }
+    if (
+      tenant.aiAssistantIntentCatalog !== undefined &&
+      (!Array.isArray(tenant.aiAssistantIntentCatalog) ||
+        tenant.aiAssistantIntentCatalog.some(
+          (item) =>
+            !item ||
+            typeof item !== "object" ||
+            Array.isArray(item) ||
+            typeof (item as AiAssistantIntentCatalogItem).key !== "string" ||
+            !/^[a-z0-9_:-]{2,80}$/.test((item as AiAssistantIntentCatalogItem).key) ||
+            ((item as AiAssistantIntentCatalogItem).topics !== undefined &&
+              (!Array.isArray((item as AiAssistantIntentCatalogItem).topics) ||
+                (item as AiAssistantIntentCatalogItem).topics?.some((term) => typeof term !== "string"))) ||
+            ((item as AiAssistantIntentCatalogItem).tags !== undefined &&
+              (!Array.isArray((item as AiAssistantIntentCatalogItem).tags) ||
+                (item as AiAssistantIntentCatalogItem).tags?.some((tag) => typeof tag !== "string")))
+        ))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_intent_catalog:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

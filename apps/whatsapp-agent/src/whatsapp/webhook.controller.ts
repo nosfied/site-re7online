@@ -40,6 +40,8 @@ import {
   buildContextualFallbackReply,
   buildSafeResponse,
   buildAssistantFallbackGuidance,
+  buildTenantIntentCatalogReply,
+  buildTenantIntentOrchestratorOutput,
   calculateHandoffScore,
   classifyAssistantFallback,
   classifyContextualFallback,
@@ -51,6 +53,7 @@ import {
   generateControlledAssistantReply,
   getAiAssistantState,
   isContextualAck,
+  resolveTenantIntent,
   resolveOrchestratorAction,
   resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
@@ -5245,6 +5248,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       const start = Date.now();
       await logAiAssistantEvent("ai.assistant.domain_loaded", {
         allowedTopicCount: appliedTenantConfig.aiAssistantAllowedTopics?.length ?? 0,
+        intentCatalogCount: appliedTenantConfig.aiAssistantIntentCatalog?.length ?? 0,
         blockedTermCount: appliedTenantConfig.aiAssistantBlockedTerms?.length ?? 0,
         handoffKeywordCount: appliedTenantConfig.aiAssistantHandoffKeywords?.length ?? 0,
         hasFallbackMessage: Boolean(appliedTenantConfig.aiAssistantFallbackMessage?.trim()),
@@ -5266,6 +5270,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         fallbackMessage: appliedTenantConfig.aiAssistantFallbackMessage,
         allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
         secondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
+        intentCatalog: appliedTenantConfig.aiAssistantIntentCatalog,
       };
       const applyAiMemoryUpdate = async (input: {
         topic?: string | null;
@@ -5440,7 +5445,133 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               reason: educationalIntent.reason ?? null,
             });
           }
-          if (!educationalIntent.allowed && !risk) {
+          const tenantIntent = !risk
+            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog)
+            : null;
+          const tenantIntentReply = tenantIntent
+            ? buildTenantIntentCatalogReply(tenantIntent)
+            : null;
+          if (tenantIntent) {
+            await logAiAssistantEvent("ai.intent_catalog.matched", {
+              key: tenantIntent.key,
+              topic: tenantIntent.topic,
+              hasResponse: Boolean(tenantIntentReply),
+              handoff: tenantIntent.handoff,
+            });
+          }
+          if (tenantIntent && tenantIntentReply && !risk) {
+            if (assistantState.count >= maxReplies) {
+              await logAiAssistantEvent("ai.assistant.limit_reached", {
+                count: assistantState.count,
+                maxReplies,
+                source: "intent_catalog",
+              });
+              await applyAssistantLimitFallback("intent_catalog");
+            } else {
+              const nowIso = new Date().toISOString();
+              const catalogOutput = buildTenantIntentOrchestratorOutput(
+                tenantIntent,
+                tenantIntentReply
+              );
+              replyText = tenantIntentReply;
+              aiAssistantResponded = true;
+              await applyAiMemoryUpdate({
+                topic: tenantIntent.topic || tenantIntent.key,
+                stage: catalogOutput.stage,
+                goal: catalogOutput.goal,
+                leadTemp: tenantIntent.leadTemp,
+                priority: tenantIntent.priority,
+                handoffRecommended: tenantIntent.handoff,
+                source: "intent_catalog",
+              });
+              const crmEnrichment = enrichCrmFromOrchestrator({
+                state: updatedConversation,
+                output: catalogOutput,
+                topic: tenantIntent.topic || tenantIntent.key,
+                catalogTags: tenantIntent.tags,
+                nowIso,
+              });
+              updatedConversation = crmEnrichment.state;
+              if (crmEnrichment.enriched) {
+                await logAiAssistantEvent("ai.crm.enriched", {
+                  source: "intent_catalog",
+                  changedFields: crmEnrichment.changedFields,
+                  addedTags: crmEnrichment.addedTags,
+                  confidence: catalogOutput.confidence,
+                });
+                if (crmEnrichment.addedTags.length) {
+                  await logAiAssistantEvent("ai.crm.tag_added", {
+                    source: "intent_catalog",
+                    tags: crmEnrichment.addedTags,
+                  });
+                }
+                if (crmEnrichment.priorityUpdated) {
+                  await logAiAssistantEvent("ai.crm.priority_updated", {
+                    source: "intent_catalog",
+                    leadTemp: catalogOutput.lead_temp,
+                    priority: catalogOutput.priority,
+                  });
+                }
+              } else {
+                await logAiAssistantEvent("ai.crm.enrichment_skipped", {
+                  source: "intent_catalog",
+                  reason: crmEnrichment.skippedReason ?? "no_changes",
+                  confidence: catalogOutput.confidence,
+                });
+              }
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: nowIso,
+                    lastMessageId: message.messageId,
+                    lastFallbackType: assistantState.lastFallbackType,
+                    lastFallbackAt: assistantState.lastFallbackAt,
+                    fallbackCount: assistantState.fallbackCount,
+                  },
+                  aiOrchestrator: {
+                    ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+                    stage: catalogOutput.stage,
+                    goal: catalogOutput.goal,
+                    missingInformation: catalogOutput.missing_information,
+                    lastAction: catalogOutput.next_action,
+                    lastConfidence: catalogOutput.confidence,
+                    handoffRecommended: catalogOutput.handoff_recommended,
+                    lastMessageId: message.messageId,
+                    lastQuestion: catalogOutput.next_question,
+                    lastNextActionAt: nowIso,
+                    lastContinuationTopic: tenantIntent.topic || tenantIntent.key,
+                    activePrompt: updatedConversation.answers?.aiOrchestrator?.activePrompt,
+                    handoffPrompt: updatedConversation.answers?.aiOrchestrator?.handoffPrompt,
+                    pendingOffer: updatedConversation.answers?.aiOrchestrator?.pendingOffer,
+                  },
+                },
+              };
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                source: "intent_catalog",
+                stage: catalogOutput.stage,
+                goal: catalogOutput.goal,
+                nextAction: catalogOutput.next_action,
+                resolvedAction: "answer",
+                confidence: catalogOutput.confidence,
+                handoffRecommended: catalogOutput.handoff_recommended,
+              });
+              await logAiAssistantEvent("ai.intent_catalog.responded", {
+                key: tenantIntent.key,
+                topic: tenantIntent.topic,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+              await logAiAssistantEvent("ai.assistant.responded", {
+                source: "intent_catalog",
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+            }
+          } else if (!educationalIntent.allowed && !risk) {
             let handledContextualAck = false;
             const hasFormalHandoffPrompt =
               updatedConversation.answers?.aiOrchestrator?.activePrompt?.type ===
