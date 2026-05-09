@@ -175,6 +175,7 @@ export type AppAutomationSettings = {
   aiAssistantSecondaryTopics?: string[];
   aiAssistantBlockedTerms?: string[];
   aiAssistantHandoffKeywords?: string[];
+  aiAssistantGreetingMessage?: string;
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];

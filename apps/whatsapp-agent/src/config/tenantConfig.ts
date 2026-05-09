@@ -71,6 +71,7 @@ export type TenantConfig = {
   aiAssistantSecondaryTopics?: string[];
   aiAssistantBlockedTerms?: string[];
   aiAssistantHandoffKeywords?: string[];
+  aiAssistantGreetingMessage?: string;
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
@@ -553,6 +554,13 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         tenant.aiAssistantHandoffKeywords.some((term) => typeof term !== "string"))
     ) {
       throw new Error(`invalid_tenant_ai_assistant_handoff_keywords:${key}`);
+    }
+    if (
+      tenant.aiAssistantGreetingMessage !== undefined &&
+      (typeof tenant.aiAssistantGreetingMessage !== "string" ||
+        !tenant.aiAssistantGreetingMessage.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_greeting_message:${key}`);
     }
     if (
       tenant.aiAssistantFallbackMessage !== undefined &&

@@ -2927,6 +2927,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
           aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
           aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
@@ -6226,6 +6227,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
             aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
             aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
@@ -6432,6 +6434,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantPatch.aiAssistantFallbackMessage =
             data.aiAssistantFallbackMessage.trim() || undefined;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantGreetingMessage")) {
+          if (typeof data.aiAssistantGreetingMessage !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantGreetingMessage must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantGreetingMessage =
+            data.aiAssistantGreetingMessage.trim() || undefined;
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffPrompt")) {
           if (typeof data.aiAssistantHandoffPrompt !== "string") {
             json(res, 400, httpError("bad_request", "aiAssistantHandoffPrompt must be string"));
@@ -6592,6 +6602,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
             aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
             aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
@@ -10930,6 +10941,7 @@ function diffTenantFields(
   compareField("aiAssistantSecondaryTopics");
   compareField("aiAssistantBlockedTerms");
   compareField("aiAssistantHandoffKeywords");
+  compareField("aiAssistantGreetingMessage");
   compareField("aiAssistantFallbackMessage");
   compareField("aiAssistantHandoffPrompt");
   compareField("aiAssistantIntentCatalog");

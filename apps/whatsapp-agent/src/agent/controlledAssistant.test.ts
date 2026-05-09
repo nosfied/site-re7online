@@ -735,6 +735,10 @@ test("generateControlledAssistantReply rejects truncated JSON instead of sending
 
 test("buildAssistantGreetingReply is short and neutral", () => {
   assert.equal(buildAssistantGreetingReply(), "Olá! Me diga em poucas palavras como posso te ajudar.");
+  assert.equal(
+    buildAssistantGreetingReply({ greetingMessage: "Olá, somos a equipe da Justa. Como podemos ajudar?" }),
+    "Olá, somos a equipe da Justa. Como podemos ajudar?"
+  );
 });
 
 test("validateOrchestratorOutput rejects invalid schema", () => {

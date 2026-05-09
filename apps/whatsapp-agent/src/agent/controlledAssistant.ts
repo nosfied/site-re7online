@@ -53,6 +53,7 @@ export type AssistantTenantContext = {
   flowTags?: string[];
   handoffPrompt?: string | null;
   fallbackMessage?: string | null;
+  greetingMessage?: string | null;
   allowedTopics?: string[] | null;
   secondaryTopics?: string[] | null;
   intentCatalog?: TenantConfig["aiAssistantIntentCatalog"] | null;
@@ -864,9 +865,13 @@ export function classifyContextualFallback(
 export function buildContextualFallbackReply(input: {
   result: ContextualFallbackResult;
   fallbackMessage?: string | null;
+  greetingMessage?: string | null;
   repeated?: boolean;
 }) {
   if (input.repeated) return REPEATED_CONTEXTUAL_FALLBACK_REPLY;
+  if (input.result.type === "greeting" && input.greetingMessage?.trim()) {
+    return input.greetingMessage.trim().slice(0, 700);
+  }
   if (input.result.type === "help" && input.fallbackMessage?.trim()) {
     return input.fallbackMessage.trim().slice(0, 700);
   }
@@ -999,8 +1004,8 @@ export function buildAssistantFallbackGuidance(context: AssistantTenantContext) 
   ].join("\n\n");
 }
 
-export function buildAssistantGreetingReply() {
-  return GENERIC_GREETING_REPLY;
+export function buildAssistantGreetingReply(context: Pick<AssistantTenantContext, "greetingMessage"> = {}) {
+  return context.greetingMessage?.trim().slice(0, 700) || GENERIC_GREETING_REPLY;
 }
 
 export function buildSafeResponse(risk: GuardrailRisk, tenantContext: AssistantTenantContext) {

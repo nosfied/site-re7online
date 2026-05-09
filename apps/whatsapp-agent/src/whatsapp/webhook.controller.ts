@@ -5268,6 +5268,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         flowTags: updatedConversation.answers?.flowTags,
         handoffPrompt: appliedTenantConfig.aiAssistantHandoffPrompt,
         fallbackMessage: appliedTenantConfig.aiAssistantFallbackMessage,
+        greetingMessage: appliedTenantConfig.aiAssistantGreetingMessage,
         allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
         secondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
         intentCatalog: appliedTenantConfig.aiAssistantIntentCatalog,
@@ -5969,6 +5970,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 : buildContextualFallbackReply({
                     result: contextualFallback,
                     fallbackMessage: assistantTenantContext.fallbackMessage,
+                    greetingMessage: assistantTenantContext.greetingMessage,
                     repeated: fallbackRepeated,
                   });
               aiAssistantResponded = true;
