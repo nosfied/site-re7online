@@ -414,6 +414,106 @@ function containsAnyTerm(normalizedText: string, terms: string[]) {
   return terms.some((term) => normalizedText.includes(normalizeText(term)));
 }
 
+const TOPIC_STOPWORDS = new Set([
+  "a",
+  "o",
+  "as",
+  "os",
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "em",
+  "para",
+  "por",
+  "com",
+  "sem",
+  "que",
+  "qual",
+  "quais",
+  "quanto",
+  "quantos",
+  "tempo",
+  "precisa",
+  "preciso",
+  "receber",
+  "beneficio",
+  "benefício",
+  "servico",
+  "serviço",
+]);
+
+function topicTokens(value: string | null | undefined) {
+  return normalizeText(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !TOPIC_STOPWORDS.has(token));
+}
+
+function editDistanceWithin(a: string, b: string, maxDistance: number) {
+  if (Math.abs(a.length - b.length) > maxDistance) return false;
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = previous[0];
+    previous[0] = i;
+    let rowMin = previous[0];
+    for (let j = 1; j <= b.length; j += 1) {
+      const above = previous[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      previous[j] = Math.min(previous[j] + 1, previous[j - 1] + 1, diagonal + cost);
+      diagonal = above;
+      rowMin = Math.min(rowMin, previous[j]);
+    }
+    if (rowMin > maxDistance) return false;
+  }
+  return previous[b.length] <= maxDistance;
+}
+
+function topicTokenMatches(messageToken: string, topicToken: string) {
+  if (messageToken === topicToken) return true;
+  if (messageToken.includes(topicToken) || topicToken.includes(messageToken)) return true;
+  const sharedPrefix = Math.min(messageToken.length, topicToken.length);
+  if (sharedPrefix >= 5 && messageToken.slice(0, 5) === topicToken.slice(0, 5)) return true;
+  const maxDistance = Math.max(messageToken.length, topicToken.length) >= 8 ? 2 : 1;
+  return editDistanceWithin(messageToken, topicToken, maxDistance);
+}
+
+export function resolveTenantTopic(
+  text: string | null | undefined,
+  allowedTopics: string[] | null | undefined
+) {
+  const raw = String(text ?? "").trim();
+  const normalizedText = normalizeText(raw);
+  if (!normalizedText) return null;
+  const messageTokens = topicTokens(raw);
+  let best: { topic: string; score: number; specificity: number } | null = null;
+  for (const topic of normalizeTermList(allowedTopics)) {
+    const normalizedTopic = normalizeText(topic);
+    const safeTopic = normalizeContinuationTopic(topic);
+    if (!normalizedTopic || !safeTopic) continue;
+    const tokens = topicTokens(topic);
+    if (!tokens.length) continue;
+    let score = normalizedText.includes(normalizedTopic) ? 1 : 0;
+    if (!score) {
+      const matched = tokens.filter((topicToken) =>
+        messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
+      ).length;
+      score = matched / tokens.length;
+    }
+    if (score < 0.66) continue;
+    const specificity = tokens.join("").length;
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && specificity > best.specificity)
+    ) {
+      best = { topic: safeTopic, score, specificity };
+    }
+  }
+  return best?.topic ?? null;
+}
+
 export function classifyRisk(
   text: string | null | undefined,
   _context: AssistantTenantContext = {}
@@ -581,13 +681,11 @@ export function classifyContextualFallback(
   }
   const secondaryTopic = normalizeTermList(tenant.aiAssistantSecondaryTopics).find((term) =>
     normalized.includes(normalizeText(term))
-  );
+  ) ?? resolveTenantTopic(raw, tenant.aiAssistantSecondaryTopics);
   if (secondaryTopic) {
     return { type: "near_domain", confidence: 0.78, reason: "secondary_topic" };
   }
-  const allowedTopic = normalizeTermList(tenant.aiAssistantAllowedTopics).find((term) =>
-    normalized.includes(normalizeText(term))
-  );
+  const allowedTopic = resolveTenantTopic(raw, tenant.aiAssistantAllowedTopics);
   if (!allowedTopic) {
     return { type: "out_of_scope", confidence: 0.7, reason: "topic_not_allowed" };
   }
@@ -821,11 +919,7 @@ export function classifyEducationalIntent(
   if (!looksEducational) {
     return { allowed: false, educational: false, reason: "not_educational_shape" };
   }
-  const topicTerms = normalizeTermList(options.allowedTopics);
-  const matchedTopics = topicTerms.filter((term) => normalized.includes(normalizeText(term)));
-  const matchedTopic =
-    matchedTopics.find((term) => !["homem", "mulher", "masculino", "feminino"].includes(normalizeText(term))) ??
-    matchedTopics[0];
+  const matchedTopic = resolveTenantTopic(raw, options.allowedTopics);
   if (!matchedTopic) {
     return { allowed: false, educational: true, reason: "topic_not_allowed" };
   }
@@ -887,7 +981,14 @@ function sanitizeMemoryTopic(topic: string | null | undefined) {
   if (!trimmed || trimmed.length > 60 || containsPersonalData(trimmed) || classifyRisk(trimmed)) {
     return null;
   }
-  return normalizeText(trimmed).replace(/[^a-z0-9_ -]/g, "").trim().slice(0, 60) || null;
+  const normalized = normalizeText(trimmed);
+  if (!normalized || NON_BUSINESS_TOPIC_TERMS.has(normalized)) return null;
+  if (NON_BUSINESS_TOPIC_TERMS.has(normalized.replace(/[_-]+/g, " "))) return null;
+  if (/^\d+$/.test(normalized) || /\b(19|20)\d{2}\b/.test(normalized)) return null;
+  if (["homem", "mulher", "masculino", "feminino", "idade", "anos", "ano"].includes(normalized)) {
+    return null;
+  }
+  return normalized.replace(/[^a-z0-9_ -]/g, "").trim().slice(0, 60) || null;
 }
 
 function sanitizeAiMemory(memory: AIMemoryState | null | undefined): AIMemoryState | null {
@@ -1021,6 +1122,27 @@ function addUniqueTag(tags: string[], tag: string) {
   return true;
 }
 
+function deriveAiCrmPriority(input: {
+  output: ValidatedOrchestratorOutput;
+  topic?: string | null;
+}): { leadTemp: OrchestratorLeadTemp | null; priority: OrchestratorPriority | null } {
+  if (input.output.handoff_recommended) {
+    return {
+      leadTemp: input.output.lead_temp ?? "quente",
+      priority: input.output.priority ?? "alta",
+    };
+  }
+  if (input.output.lead_temp || input.output.priority) {
+    return {
+      leadTemp: input.output.lead_temp,
+      priority: input.output.priority,
+    };
+  }
+  const topic = sanitizeCrmToken(input.topic ?? input.output.intent);
+  if (!topic) return { leadTemp: null, priority: null };
+  return { leadTemp: "morno", priority: "media" };
+}
+
 export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnrichmentResult {
   if (input.output.confidence < 0.65) {
     return {
@@ -1053,6 +1175,7 @@ export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnr
   const topic = sanitizeCrmToken(input.topic);
   const intent = input.output.intent ?? topic ?? sanitizeCrmToken(memoryFacts.intent);
   const service = intent ?? sanitizeCrmToken(memoryFacts.servico);
+  const derivedPriority = deriveAiCrmPriority({ output: input.output, topic });
   if (canClaimAiOrigin) {
     setField("origem_intencao", "ai_orchestrator");
   }
@@ -1061,14 +1184,14 @@ export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnr
   setField("area", sanitizeCrmToken(memoryFacts.area) ?? undefined);
   setField("situacao", input.output.stage);
   setField("fase", input.output.stage);
-  setField("lead_temp", input.output.lead_temp ?? undefined);
-  setField("prioridade", input.output.priority ?? undefined);
+  setField("lead_temp", derivedPriority.leadTemp ?? undefined);
+  setField("prioridade", derivedPriority.priority ?? undefined);
 
   const tagCandidates = [
     intent ? `intent:${intent}` : null,
     topic ? `topic:${topic}` : null,
-    input.output.lead_temp ? `lead:${input.output.lead_temp}` : null,
-    input.output.priority ? `priority:${input.output.priority}` : null,
+    derivedPriority.leadTemp ? `lead:${derivedPriority.leadTemp}` : null,
+    derivedPriority.priority ? `priority:${derivedPriority.priority}` : null,
   ].filter((tag): tag is string => Boolean(tag));
   for (const tag of tagCandidates) {
     if (addUniqueTag(nextTags, tag)) addedTags.push(tag);

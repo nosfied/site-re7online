@@ -20,6 +20,7 @@ import {
   getAiAssistantState,
   isContextualAck,
   isSimpleQuestion,
+  resolveTenantTopic,
   resolveOrchestratorAction,
   resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
@@ -78,7 +79,7 @@ test("classifyEducationalIntent routes broader tenant educational questions", ()
     {
       allowed: true,
       educational: true,
-      topic: "aposentar",
+      topic: "aposentadoria",
       reason: "educational_pattern_and_allowed_topic",
     }
   );
@@ -123,6 +124,26 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
       allowedTopics: ["carência gravidez", "gravidez"],
     }).allowed,
     true
+  );
+  assert.equal(
+    classifyEducationalIntent("quanto tempo de carência para salário materninade?", {
+      allowedTopics: ["salário maternidade", "carência gravidez"],
+    }).topic,
+    "salario maternidade"
+  );
+});
+
+test("resolveTenantTopic matches only tenant configured topics with typo tolerance", () => {
+  assert.equal(
+    resolveTenantTopic("quanto tempo de carência para salário materninade?", [
+      "salário maternidade",
+      "aposentadoria",
+    ]),
+    "salario maternidade"
+  );
+  assert.equal(
+    resolveTenantTopic("quero saber sobre seguro residencial", ["software", "suporte técnico"]),
+    null
   );
 });
 
@@ -418,6 +439,36 @@ test("enrichCrmFromOrchestrator fills safe CRM context and tags from AI", () => 
   assert.equal(result.state.answers?.flowTags?.includes("topic:aposentadoria"), true);
   assert.equal(result.state.answers?.flowTags?.includes("lead:morno"), true);
   assert.equal(result.priorityUpdated, true);
+});
+
+test("enrichCrmFromOrchestrator derives CRM priority from safe tenant topic", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    intent: null,
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.84,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+    lead_temp: null,
+    priority: null,
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const result = enrichCrmFromOrchestrator({
+    state: { ...baseState, answers: {} },
+    output: output.output,
+    topic: "salario maternidade",
+    nowIso: "2026-05-09T00:00:00.000Z",
+  });
+  assert.equal(result.enriched, true);
+  assert.equal(result.state.answers?.flowContext?.intent, "salario_maternidade");
+  assert.equal(result.state.answers?.flowContext?.servico, "salario_maternidade");
+  assert.equal(result.state.answers?.flowContext?.lead_temp, "morno");
+  assert.equal(result.state.answers?.flowContext?.prioridade, "media");
+  assert.equal(result.state.answers?.flowTags?.includes("lead:morno"), true);
+  assert.equal(result.state.answers?.flowTags?.includes("priority:media"), true);
 });
 
 test("enrichCrmFromOrchestrator respects confidence and stronger context", () => {
