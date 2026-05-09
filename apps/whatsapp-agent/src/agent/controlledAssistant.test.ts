@@ -270,6 +270,55 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
   );
 });
 
+test("resolveTenantIntent prefers explicit pension death intent over denied benefit false positives", () => {
+  const catalog = [
+    {
+      key: "beneficio_negado",
+      title: "Beneficio negado ou suspenso",
+      topics: [
+        "beneficio negado",
+        "pedido negado",
+        "indeferido",
+        "beneficio suspenso",
+        "cessado",
+        "corte do beneficio",
+        "recurso inss",
+      ],
+      response: "Resposta de beneficio negado.",
+    },
+    {
+      key: "pensao_por_morte",
+      title: "Pensao por morte",
+      topics: [
+        "pensao por morte",
+        "pensão por morte",
+        "pedido de pensao por morte",
+        "dar entrada na pensao por morte",
+        "pensao por falecimento",
+        "morte segurado",
+      ],
+      response: "Resposta de pensao por morte.",
+    },
+  ];
+
+  assert.equal(
+    resolveTenantIntent("quero dar entrada na pensão por morte", catalog)?.key,
+    "pensao_por_morte"
+  );
+  assert.equal(
+    resolveTenantIntent("pensão por falecimento", catalog)?.key,
+    "pensao_por_morte"
+  );
+  assert.equal(
+    resolveTenantIntent("meu benefício foi negado", catalog)?.key,
+    "beneficio_negado"
+  );
+  assert.equal(
+    resolveTenantIntent("houve corte do benefício", catalog)?.key,
+    "beneficio_negado"
+  );
+});
+
 test("intent catalog output enriches CRM with configured classification", () => {
   const intent = resolveTenantIntent("dar entrada na minha aposentadoria", [
     {

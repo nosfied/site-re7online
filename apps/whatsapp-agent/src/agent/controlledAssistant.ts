@@ -638,6 +638,7 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "fazem",
   "dao",
   "dão",
+  "dar",
   "entrada",
   "preciso",
   "quero",
@@ -661,6 +662,16 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "anos",
 ]);
 
+function intentCatalogTokenMatches(messageToken: string, topicToken: string) {
+  if (messageToken === topicToken) return true;
+  if (messageToken.includes(topicToken) || topicToken.includes(messageToken)) return true;
+  const sharedPrefix = Math.min(messageToken.length, topicToken.length);
+  if (sharedPrefix >= 5 && messageToken.slice(0, 5) === topicToken.slice(0, 5)) return true;
+  if (Math.max(messageToken.length, topicToken.length) < 7) return false;
+  if (messageToken.slice(0, 4) !== topicToken.slice(0, 4)) return false;
+  return editDistanceWithin(messageToken, topicToken, 1);
+}
+
 function resolveTenantIntentCatalogMatch(
   raw: string,
   candidates: string[],
@@ -683,7 +694,7 @@ function resolveTenantIntentCatalogMatch(
     if (!contentTokens.length) continue;
     const preferredMatched = preferredTokens.length
       ? contentTokens.filter((topicToken) =>
-          preferredTokens.some((preferredToken) => topicTokenMatches(preferredToken, topicToken))
+          preferredTokens.some((preferredToken) => intentCatalogTokenMatches(preferredToken, topicToken))
         ).length
       : 0;
     const genericOperationalRequest =
@@ -702,14 +713,14 @@ function resolveTenantIntentCatalogMatch(
       ]);
     const hasContentMatch =
       contentTokens.some((topicToken) =>
-        messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
+        messageTokens.some((messageToken) => intentCatalogTokenMatches(messageToken, topicToken))
       ) ||
       (preferredMatched > 0 && genericOperationalRequest);
     if (!hasContentMatch) continue;
     let score = normalizedText.includes(normalizedTopic) ? 1 : 0;
     if (!score) {
       const matched = tokens.filter((topicToken) =>
-        messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
+        messageTokens.some((messageToken) => intentCatalogTokenMatches(messageToken, topicToken))
       ).length;
       score = matched / tokens.length;
     }
