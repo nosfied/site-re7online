@@ -36,6 +36,7 @@ import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
   buildAssistantLimitReachedReply,
+  buildAiHandoffCrmArtifacts,
   buildContextualContinuationReply,
   buildContextualFallbackReply,
   buildSafeResponse,
@@ -1745,6 +1746,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     messageId: string;
     promptReason: string;
     promptScore: number;
+    state: ConversationState;
   }) => {
     const prisma = getPrisma();
     const summaryRequestId = [
@@ -1822,18 +1824,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     };
     try {
+      const crmArtifacts = buildAiHandoffCrmArtifacts({
+        state: params.state,
+        reason: params.promptReason,
+        score: params.promptScore,
+      });
       await createEventAndNote({
         requestId: summaryRequestId,
         eventName: "flow.handoff.summary.created",
-        noteBody: [
-          "[Resumo automático]",
-          "Resumo do atendimento",
-          "---------------------",
-          "Origem: IA controlada",
-          "Encaminhamento confirmado pelo cliente",
-          `Motivo: ${params.promptReason}`,
-          `Score: ${params.promptScore}`,
-        ].join("\n"),
+        noteBody: crmArtifacts.summaryNote,
         payload: {
           action: "ai_handoff_summary_created",
           clientId: params.clientId,
@@ -1847,10 +1846,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await createEventAndNote({
         requestId: suggestedReplyRequestId,
         eventName: "flow.handoff.suggested_reply.created",
-        noteBody: [
-          "[Sugestão de resposta]",
-          "Olá, vi que você pediu atendimento com a equipe. Vou revisar o contexto e te orientar pelos próximos passos.",
-        ].join("\n"),
+        noteBody: crmArtifacts.suggestedReplyNote,
         payload: {
           action: "ai_handoff_suggested_reply_created",
           clientId: params.clientId,
@@ -3402,6 +3398,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             messageId: message.messageId,
             promptReason: aiHandoffPrompt.reason,
             promptScore: aiHandoffPrompt.score,
+            state: updatedConversation,
           });
           publishRealtimeEvent({
             type: "conversation.handoff.updated",
@@ -5476,7 +5473,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             fallbackDecision?.intent === "handoff_prompt" ||
             (contextualAckForIntent && !hasFormalHandoffPromptForIntent);
           const tenantIntent = !risk && !shouldSkipCatalogForTurn
-            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog)
+            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
+                preferredTopics: [
+                  resolveContextualContinuationTopic(updatedConversation),
+                  updatedConversation.answers?.aiMemory?.lastTopics?.[0],
+                  updatedConversation.answers?.flowContext?.servico,
+                  updatedConversation.answers?.flowContext?.intent,
+                ],
+              })
             : null;
           const tenantIntentReply = tenantIntent
             ? buildTenantIntentCatalogReply(tenantIntent)

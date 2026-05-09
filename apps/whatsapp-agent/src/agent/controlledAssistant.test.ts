@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildHandoffConfirmationPrompt,
+  buildAiHandoffCrmArtifacts,
   buildAssistantLimitReachedReply,
   buildAssistantGreetingReply,
   buildAssistantFallbackGuidance,
@@ -106,6 +107,7 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
     confidence: 0.9,
     reason: "greeting_exact",
   });
+  assert.equal(classifyContextualFallback("opa").type, "greeting");
   assert.equal(classifyContextualFallback("não quero").type, "negative");
   assert.notEqual(classifyContextualFallback("sim").type, "greeting");
   assert.notEqual(classifyContextualFallback("ok").type, "greeting");
@@ -245,6 +247,27 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
     resolveTenantIntent("qual a idade em 2026? aposentadoria", catalog)?.key,
     "servico_aposentadoria"
   );
+  assert.equal(
+    resolveTenantIntent(
+      "o que precisa pra dar entrada?",
+      [
+        {
+          key: "documentos_aposentadoria",
+          title: "Documentos para aposentadoria",
+          topics: ["documentos aposentadoria", "dar entrada aposentadoria"],
+          response: "Documentos de aposentadoria.",
+        },
+        {
+          key: "bpc_loas",
+          title: "BPC/LOAS",
+          topics: ["bpc", "loas"],
+          response: "Critérios e documentos de BPC/LOAS.",
+        },
+      ],
+      { preferredTopics: ["bpc loas"] }
+    )?.key,
+    "bpc_loas"
+  );
 });
 
 test("intent catalog output enriches CRM with configured classification", () => {
@@ -326,6 +349,8 @@ test("contextual continuation ignores years and demographic fragments as topics"
   assert.match(buildContextualContinuationReply("homem"), /esse assunto/);
   assert.match(buildContextualContinuationReply("ask_question"), /esse assunto/);
   assert.match(buildContextualContinuationReply("explain_general_topic"), /esse assunto/);
+  assert.match(buildContextualContinuationReply("legal_specific_case"), /esse assunto/);
+  assert.match(buildContextualContinuationReply("guardrail_legal_specific_case"), /esse assunto/);
 });
 
 test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {
@@ -1088,6 +1113,44 @@ test("shouldSendHandoffConfirmationPrompt enforces idempotency and operational s
     }),
     false
   );
+});
+
+test("buildAiHandoffCrmArtifacts uses safe context instead of technical reason", () => {
+  const artifacts = buildAiHandoffCrmArtifacts({
+    reason: "active_prompt_handoff_confirmation",
+    score: 3,
+    state: {
+      ...baseState,
+      answers: {
+        flowContext: {
+          servico: "servico_aposentadoria",
+          lead_temp: "morno",
+          prioridade: "media",
+        },
+        flowTags: ["topic:aposentadoria", "priority:media"],
+        aiMemory: {
+          summary: "Cliente demonstrou interesse em aposentadoria e pediu atendimento com a equipe.",
+          facts: { stage: "triage", goal: "explain_general_topic" },
+          lastTopics: ["aposentadoria", "2026", "ask_question"],
+        },
+        aiOrchestrator: {
+          stage: "triage",
+          goal: "explain_general_topic",
+          lastAction: "ask_question",
+          lastConfidence: 0.8,
+          handoffRecommended: true,
+          missingInformation: ["tipo de aposentadoria"],
+        },
+      },
+    },
+  });
+
+  assert.match(artifacts.summaryNote, /Tema principal: aposentadoria/);
+  assert.match(artifacts.summaryNote, /Temperatura: morno/);
+  assert.match(artifacts.summaryNote, /Pontos a confirmar: tipo de aposentadoria/);
+  assert.doesNotMatch(artifacts.summaryNote, /active_prompt_handoff_confirmation/);
+  assert.doesNotMatch(artifacts.summaryNote, /ask question/);
+  assert.match(artifacts.suggestedReplyNote, /atendimento com a equipe sobre aposentadoria/);
 });
 
 test("generateControlledAssistantReply accepts preclassified contextual educational intent", async () => {

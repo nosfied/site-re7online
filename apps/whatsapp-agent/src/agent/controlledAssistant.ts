@@ -221,6 +221,17 @@ export type AIMemoryUpdateResult = {
   compacted: boolean;
 };
 
+export type AIHandoffCrmArtifactInput = {
+  state: ConversationState;
+  reason?: string | null;
+  score?: number | null;
+};
+
+export type AIHandoffCrmArtifacts = {
+  summaryNote: string;
+  suggestedReplyNote: string;
+};
+
 export type AssistantFallbackIntent = "handoff_prompt" | "generic_guidance";
 
 export type AssistantFallbackDecision = {
@@ -314,7 +325,15 @@ const AI_ASSISTANT_VAGUE_MESSAGE_TERMS = [
   "valeu",
 ];
 
-const AI_ASSISTANT_GREETING_TERMS = ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"];
+const AI_ASSISTANT_GREETING_TERMS = [
+  "oi",
+  "ola",
+  "olá",
+  "opa",
+  "bom dia",
+  "boa tarde",
+  "boa noite",
+];
 
 const SAFE_CONTEXT_KEYS = [
   "area",
@@ -387,6 +406,30 @@ const NON_BUSINESS_TOPIC_TERMS = new Set([
   "negative",
   "clarification",
   "help",
+  "legal_specific_case",
+  "legal specific case",
+  "document_analysis",
+  "document analysis",
+  "benefit_amount",
+  "benefit amount",
+  "outcome_prediction",
+  "outcome prediction",
+  "personal_data",
+  "personal data",
+  "fraud_or_illicit",
+  "fraud or illicit",
+  "guardrail_legal_specific_case",
+  "guardrail legal specific case",
+  "guardrail_document_analysis",
+  "guardrail document analysis",
+  "guardrail_benefit_amount",
+  "guardrail benefit amount",
+  "guardrail_outcome_prediction",
+  "guardrail outcome prediction",
+  "guardrail_personal_data",
+  "guardrail personal data",
+  "guardrail_fraud_or_illicit",
+  "guardrail fraud or illicit",
 ].flatMap((term) => [term, normalizeText(term)]));
 
 type SimpleQuestionOptions = {
@@ -535,7 +578,8 @@ export function resolveTenantTopic(
 
 export function resolveTenantIntent(
   text: string | null | undefined,
-  catalog: TenantConfig["aiAssistantIntentCatalog"] | null | undefined
+  catalog: TenantConfig["aiAssistantIntentCatalog"] | null | undefined,
+  options: { preferredTopics?: unknown[] } = {}
 ): ResolvedTenantIntent | null {
   const raw = String(text ?? "").trim();
   if (!raw || !Array.isArray(catalog) || !catalog.length) return null;
@@ -547,7 +591,7 @@ export function resolveTenantIntent(
       item.title ?? "",
       item.key.replace(/[_:-]/g, " "),
     ].filter((term): term is string => Boolean(term && term.trim()));
-    const match = resolveTenantIntentCatalogMatch(raw, candidates);
+    const match = resolveTenantIntentCatalogMatch(raw, candidates, options.preferredTopics);
     if (!match) continue;
     const key = sanitizeCrmToken(item.key) ?? item.key.trim().toLowerCase();
     const canonicalTopic = normalizeContinuationTopic(item.title) ?? match.topic;
@@ -601,6 +645,8 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "quais",
   "saber",
   "sobre",
+  "pra",
+  "pro",
   "servico",
   "servicos",
   "atendimento",
@@ -613,9 +659,17 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "anos",
 ]);
 
-function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
+function resolveTenantIntentCatalogMatch(
+  raw: string,
+  candidates: string[],
+  preferredTopics: unknown[] = []
+) {
   const normalizedText = normalizeText(raw);
   const messageTokens = topicTokens(raw).filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
+  const preferredTokens = preferredTopics
+    .map((topic) => normalizeContinuationTopic(topic))
+    .filter((topic): topic is string => Boolean(topic))
+    .flatMap((topic) => topicTokens(topic));
   let best: { topic: string; score: number; specificity: number } | null = null;
   for (const candidate of candidates) {
     const normalizedTopic = normalizeText(candidate);
@@ -625,10 +679,30 @@ function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
     if (!tokens.length) continue;
     const contentTokens = tokens.filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
     if (!contentTokens.length) continue;
+    const preferredMatched = preferredTokens.length
+      ? contentTokens.filter((topicToken) =>
+          preferredTokens.some((preferredToken) => topicTokenMatches(preferredToken, topicToken))
+        ).length
+      : 0;
+    const genericOperationalRequest =
+      messageTokens.length <= 2 &&
+      containsAnyTerm(normalizedText, [
+        "o que precisa",
+        "que precisa",
+        "dar entrada",
+        "como funciona",
+        "documentos",
+        "documentacao",
+        "documentação",
+        "criterios",
+        "critérios",
+        "quais documentos",
+      ]);
     const hasContentMatch =
       contentTokens.some((topicToken) =>
         messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
-      );
+      ) ||
+      (preferredMatched > 0 && genericOperationalRequest);
     if (!hasContentMatch) continue;
     let score = normalizedText.includes(normalizedTopic) ? 1 : 0;
     if (!score) {
@@ -636,6 +710,11 @@ function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
         messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
       ).length;
       score = matched / tokens.length;
+    }
+    if (score < 0.66 && preferredMatched) {
+      if (preferredMatched && genericOperationalRequest) {
+        score = Math.max(score, 1.05);
+      }
     }
     if (score < 0.66) continue;
     const specificity = contentTokens.join("").length || tokens.join("").length;
@@ -1267,7 +1346,6 @@ export function updateAiMemory(input: AIMemoryUpdateInput): AIMemoryUpdateResult
 
   const nextTopics = [
     sanitizeMemoryTopic(input.topic),
-    sanitizeMemoryTopic(input.guardrailRisk ? `guardrail_${input.guardrailRisk}` : null),
     ...(previous.lastTopics ?? []),
   ].filter((topic): topic is string => Boolean(topic));
   const uniqueTopics = Array.from(new Set(nextTopics)).slice(0, AI_MEMORY_MAX_TOPICS);
@@ -1418,6 +1496,69 @@ export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnr
   };
 }
 
+export function buildAiHandoffCrmArtifacts(
+  input: AIHandoffCrmArtifactInput
+): AIHandoffCrmArtifacts {
+  const answers = input.state.answers ?? {};
+  const context = sanitizeFlowContext(answers.flowContext);
+  const memory = sanitizeAiMemory(answers.aiMemory);
+  const tags = Array.isArray(answers.flowTags) ? answers.flowTags : [];
+  const orchestrator = answers.aiOrchestrator;
+  const topics = uniqueDisplayValues([
+    ...(memory?.lastTopics ?? []),
+    context.servico,
+    context.intent,
+    context.area,
+    ...tags
+      .filter((tag) => /^topic:/i.test(tag) || /^intent:/i.test(tag))
+      .map((tag) => tag.split(":").slice(1).join(":")),
+  ]);
+  const mainTopic = topics[0] ?? null;
+  const area = formatCrmDisplayValue(context.area);
+  const service = formatCrmDisplayValue(context.servico ?? context.intent);
+  const leadTemp = formatCrmDisplayValue(context.lead_temp ?? memory?.facts?.lead_temp);
+  const priority = formatCrmDisplayValue(context.prioridade ?? context.priority);
+  const memorySummary = sanitizeShortString(memory?.summary, 300);
+  const missingInfo = uniqueDisplayValues(orchestrator?.missingInformation ?? [], 3);
+  const handoffReason =
+    input.reason === "active_prompt_handoff_confirmation" ||
+    input.reason === "pending_offer_handoff"
+      ? "cliente confirmou que deseja atendimento com a equipe"
+      : "encaminhamento recomendado pela IA controlada";
+  const summaryLines = [
+    "[Resumo automático]",
+    "Resumo do atendimento",
+    "---------------------",
+    "Origem: IA controlada",
+    `Encaminhamento: ${handoffReason}`,
+    mainTopic ? `Tema principal: ${mainTopic}` : null,
+    area ? `Área: ${area}` : null,
+    service ? `Serviço/interesse: ${service}` : null,
+    leadTemp ? `Temperatura: ${leadTemp}` : null,
+    priority ? `Prioridade: ${priority}` : null,
+    topics.length > 1 ? `Tópicos recentes: ${topics.join(", ")}` : null,
+    memorySummary ? `Contexto resumido: ${memorySummary}` : null,
+    missingInfo.length ? `Pontos a confirmar: ${missingInfo.join(", ")}` : null,
+    typeof input.score === "number" ? `Score de encaminhamento: ${input.score}` : null,
+    "Próximo passo: revisar o contexto e conduzir o atendimento humano sem pedir dados sensíveis no primeiro contato.",
+  ].filter((line): line is string => Boolean(line));
+
+  const topicText = mainTopic ? ` sobre ${mainTopic}` : "";
+  const firstQuestion = missingInfo[0]
+    ? `Para começar, posso confirmar ${missingInfo[0]} e entender o melhor próximo passo.`
+    : "Para começar, vou confirmar o objetivo do atendimento e orientar os próximos passos.";
+  const suggestedReply = [
+    "[Sugestão de resposta]",
+    `Olá, tudo bem? Vi que você pediu atendimento com a equipe${topicText}. Vou revisar o contexto que já foi informado e te orientar com segurança.`,
+    firstQuestion,
+  ].join("\n");
+
+  return {
+    summaryNote: summaryLines.join("\n"),
+    suggestedReplyNote: suggestedReply,
+  };
+}
+
 function buildBusinessContext(params: ControlledAssistantInput) {
   const context = sanitizeFlowContext(params.state.answers?.flowContext);
   const memory = sanitizeAiMemory(params.state.answers?.aiMemory);
@@ -1517,6 +1658,52 @@ function sanitizeCrmTag(value: unknown, maxLength = 80) {
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, maxLength) || null;
+}
+
+function formatCrmDisplayValue(value: unknown) {
+  const token = sanitizeCrmToken(value, 80);
+  if (!token) return null;
+  const normalized = token
+    .replace(/^(intent|topic|lead|priority|servico|service|area):/i, "")
+    .replace(/^(intent|topic|lead|priority|servico|service|area)_/i, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return null;
+  const blocked = new Set([
+    "active prompt handoff confirmation",
+    "pending offer handoff",
+    "handoff confirmation",
+    "ask question",
+    "answer",
+    "fallback menu",
+    "no reply",
+    "contextual continue",
+    "explain general topic",
+    "identify need",
+    "triage",
+    "qualification",
+    "clarification",
+    "waiting user",
+    "handoff recommended",
+  ]);
+  if (blocked.has(normalized)) return null;
+  if (/^\d{4}$/.test(normalized)) return null;
+  if (["homem", "mulher", "masculino", "feminino"].includes(normalized)) return null;
+  return normalized.slice(0, 80);
+}
+
+function uniqueDisplayValues(values: unknown[], maxItems = 4) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const label = formatCrmDisplayValue(value);
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    result.push(label);
+    if (result.length >= maxItems) break;
+  }
+  return result;
 }
 
 function hasOperationalContextValue(value: unknown) {
