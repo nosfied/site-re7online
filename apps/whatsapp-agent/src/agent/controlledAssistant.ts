@@ -661,6 +661,12 @@ export function classifyContextualFallback(
       "o que vocês fazem",
       "quais servicos",
       "quais serviços",
+      "quais os servicos",
+      "quais os serviços",
+      "servicos de voces",
+      "serviços de vocês",
+      "servicos voces",
+      "serviços vocês",
       "o que voces atendem",
       "o que vocês atendem",
     ])
@@ -914,6 +920,16 @@ export function classifyEducationalIntent(
     "o que preciso",
     "para comecar",
     "para começar",
+    "voces fazem",
+    "vocês fazem",
+    "voces atendem",
+    "vocês atendem",
+    "voces dao entrada",
+    "vocês dão entrada",
+    "dao entrada",
+    "dão entrada",
+    "trabalham com",
+    "atendem",
   ];
   const looksEducational = startsLikeQuestion || containsAnyTerm(normalized, educationalPatterns);
   if (!looksEducational) {

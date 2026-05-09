@@ -3560,6 +3560,54 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         continue;
       }
 
+      if (isUsefulTextForAiContinuation(message.text)) {
+        updatedConversation = {
+          ...updatedConversation,
+          handoff: {
+            ...updatedConversation.handoff,
+            status: "none",
+            releasedAt: message.timestamp,
+          },
+          mode: "BOT",
+          answers: {
+            ...(updatedConversation.answers ?? {}),
+            aiOrchestrator: {
+              ...(previousAiOrchestrator ?? {}),
+              handoffPrompt: {
+                ...aiHandoffPrompt,
+                awaitingConfirmation: false,
+                confirmationRetryCount: aiHandoffPrompt.confirmationRetryCount ?? 0,
+              },
+              pendingOffer: {
+                type: "none",
+                promptedAt: new Date().toISOString(),
+                messageId: message.messageId,
+                retryCount: pendingOffer?.retryCount ?? 0,
+              },
+              activePrompt: undefined,
+              handoffRecommended: false,
+              lastNextActionAt: new Date().toISOString(),
+            },
+          },
+        };
+        logger.info({
+          event: "ai.orchestrator.handoff_confirmation.cancelled_by_useful_text",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "ai.orchestrator.handoff_confirmation.cancelled_by_useful_text",
+          {
+            action: "ai.orchestrator.handoff_confirmation.cancelled_by_useful_text",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+      } else {
       const nextRetryCount = (aiHandoffPrompt.confirmationRetryCount ?? 0) + 1;
       const shouldClosePrompt = nextRetryCount >= 2;
       updatedConversation = {
@@ -3635,6 +3683,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       }
       continue;
+      }
     }
     const activePendingOffer = updatedConversation.answers?.aiOrchestrator?.pendingOffer;
     if (
@@ -6426,6 +6475,32 @@ function normalizeHandoffConfirmationText(text: string | null | undefined) {
     return "declined" as const;
   }
   return "invalid" as const;
+}
+
+function isUsefulTextForAiContinuation(text: string | null | undefined) {
+  const normalized = String(text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s?]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return false;
+  const shortAckOrNegation = [
+    "sim",
+    "sim quero",
+    "quero",
+    "pode",
+    "ok",
+    "claro",
+    "nao",
+    "nao quero",
+    "depois",
+    "agora nao",
+  ];
+  if (shortAckOrNegation.some((term) => normalized === term)) return false;
+  if (normalized.length < 12) return false;
+  return /[a-z]/.test(normalized);
 }
 
 function renderQuotaBlockedText(

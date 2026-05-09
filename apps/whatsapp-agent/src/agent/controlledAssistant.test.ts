@@ -107,6 +107,7 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
   assert.notEqual(classifyContextualFallback("sim").type, "greeting");
   assert.notEqual(classifyContextualFallback("ok").type, "greeting");
   assert.equal(classifyContextualFallback("não entendi bem").type, "clarification");
+  assert.equal(classifyContextualFallback("quais os serviços de vocês?").type, "help");
   assert.equal(
     classifyContextualFallback("vocês fazem divórcio?", {
       aiAssistantSecondaryTopics: ["divórcio", "família"],
@@ -130,6 +131,12 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
       allowedTopics: ["salário maternidade", "carência gravidez"],
     }).topic,
     "salario maternidade"
+  );
+  assert.equal(
+    classifyEducationalIntent("vocês dão entrada em aposentadoria?", {
+      allowedTopics: ["aposentadoria"],
+    }).topic,
+    "aposentadoria"
   );
 });
 
