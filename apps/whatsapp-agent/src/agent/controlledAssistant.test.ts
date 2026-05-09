@@ -287,6 +287,7 @@ test("contextual ack continues recent CRM or memory topic without handoff prompt
   assert.equal(isContextualAck("sim quero"), true);
   assert.equal(isContextualAck("me explique"), true);
   assert.equal(isContextualAck("qual documento?"), false);
+  assert.equal(isContextualAck("quero falar com humano"), false);
 
   const state: ConversationState = {
     ...baseState,

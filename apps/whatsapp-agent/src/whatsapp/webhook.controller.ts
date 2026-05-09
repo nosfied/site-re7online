@@ -5435,8 +5435,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "window_closed" });
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
-          const educationalIntent = classifyEducationalIntent(message.text, assistantQuestionOptions);
           const risk = classifyRisk(message.text, assistantTenantContext);
+          const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
+          const directEducationalIntent = classifyEducationalIntent(message.text, assistantQuestionOptions);
+          const contextualEducationalIntent =
+            !directEducationalIntent.allowed && continuationTopicForIntent
+              ? classifyEducationalIntent(
+                  `${message.text} ${continuationTopicForIntent}`,
+                  assistantQuestionOptions
+                )
+              : null;
+          const educationalIntent = contextualEducationalIntent?.allowed
+            ? {
+                ...contextualEducationalIntent,
+                topic: continuationTopicForIntent,
+                reason: "contextual_topic_and_allowed_intent",
+              }
+            : directEducationalIntent;
           if (!risk) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
@@ -5451,7 +5466,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
               })
             : null;
-          const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
           const hasFormalHandoffPromptForIntent =
             updatedConversation.answers?.aiOrchestrator?.activePrompt?.type ===
               "handoff_confirmation" ||
@@ -5462,13 +5476,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             fallbackDecision?.intent === "handoff_prompt" ||
             (contextualAckForIntent && !hasFormalHandoffPromptForIntent);
           const tenantIntent = !risk && !shouldSkipCatalogForTurn
-            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog) ??
-              (continuationTopicForIntent
-                ? resolveTenantIntent(
-                    `${message.text} ${continuationTopicForIntent}`,
-                    appliedTenantConfig.aiAssistantIntentCatalog
-                  )
-                : null)
+            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog)
             : null;
           const tenantIntentReply = tenantIntent
             ? buildTenantIntentCatalogReply(tenantIntent)
@@ -5647,6 +5655,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             const continuationTopic = resolveContextualContinuationTopic(updatedConversation);
             const canHandleContextualAck =
               contextualAck &&
+              fallbackDecision?.intent !== "handoff_prompt" &&
               !hasFormalHandoffPrompt;
             if (contextualAck) {
               await logAiAssistantEvent("ai.turn.contextual_ack_detected", {

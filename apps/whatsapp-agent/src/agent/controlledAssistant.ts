@@ -923,7 +923,7 @@ export function isContextualAck(text: string | null | undefined) {
     "me explique",
     "explica melhor",
   ];
-  return ackTerms.some((term) => normalized === term || normalized.includes(term));
+  return ackTerms.some((term) => normalized === term);
 }
 
 function normalizeContinuationTopic(value: unknown) {
