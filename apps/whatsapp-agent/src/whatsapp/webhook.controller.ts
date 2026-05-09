@@ -5473,6 +5473,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 tenantIntent,
                 tenantIntentReply
               );
+              const shouldCreateCatalogHandoffPrompt =
+                tenantIntent.handoff &&
+                appliedTenantConfig.aiAssistantFallbackToHandoff === true &&
+                updatedConversation.handoff.status === "none";
               replyText = tenantIntentReply;
               aiAssistantResponded = true;
               await applyAiMemoryUpdate({
@@ -5543,12 +5547,51 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastQuestion: catalogOutput.next_question,
                     lastNextActionAt: nowIso,
                     lastContinuationTopic: tenantIntent.topic || tenantIntent.key,
-                    activePrompt: updatedConversation.answers?.aiOrchestrator?.activePrompt,
-                    handoffPrompt: updatedConversation.answers?.aiOrchestrator?.handoffPrompt,
-                    pendingOffer: updatedConversation.answers?.aiOrchestrator?.pendingOffer,
+                    activePrompt: shouldCreateCatalogHandoffPrompt
+                      ? {
+                          type: "handoff_confirmation",
+                          expected: "yes_no",
+                          createdAt: nowIso,
+                          messageId: message.messageId,
+                          retryCount: 0,
+                        }
+                      : updatedConversation.answers?.aiOrchestrator?.activePrompt,
+                    handoffPrompt: shouldCreateCatalogHandoffPrompt
+                      ? {
+                          prompted: true,
+                          promptedAt: nowIso,
+                          messageId: message.messageId,
+                          reason: "intent_catalog",
+                          score: 3,
+                          awaitingConfirmation: true,
+                        }
+                      : updatedConversation.answers?.aiOrchestrator?.handoffPrompt,
+                    pendingOffer: shouldCreateCatalogHandoffPrompt
+                      ? {
+                          type: "handoff",
+                          promptedAt: nowIso,
+                          messageId: message.messageId,
+                          retryCount: 0,
+                        }
+                      : updatedConversation.answers?.aiOrchestrator?.pendingOffer,
                   },
                 },
               };
+              if (shouldCreateCatalogHandoffPrompt) {
+                await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
+                  source: "intent_catalog",
+                  reason: tenantIntent.key,
+                  score: 3,
+                  threshold: 3,
+                  promptType: "confirmation",
+                });
+                await logAiAssistantEvent("ai.orchestrator.handoff_prompt.awaiting_confirmation", {
+                  source: "intent_catalog",
+                  reason: tenantIntent.key,
+                  score: 3,
+                  messageId: message.messageId,
+                });
+              }
               await logAiAssistantEvent("ai.orchestrator.state_updated", {
                 source: "intent_catalog",
                 stage: catalogOutput.stage,
