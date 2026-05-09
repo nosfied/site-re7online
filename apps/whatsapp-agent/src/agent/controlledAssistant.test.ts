@@ -6,6 +6,7 @@ import {
   buildAssistantGreetingReply,
   buildAssistantFallbackGuidance,
   buildContextualFallbackReply,
+  buildContextualContinuationReply,
   buildSafeResponse,
   calculateHandoffScore,
   classifyAssistantFallback,
@@ -17,8 +18,10 @@ import {
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
+  isContextualAck,
   isSimpleQuestion,
   resolveOrchestratorAction,
+  resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
   updateAiMemory,
   validateOrchestratorOutput,
@@ -45,7 +48,7 @@ const baseState: ConversationState = {
 
 test("isSimpleQuestion accepts general educational questions", () => {
   assert.equal(isSimpleQuestion("O que é BPC?"), false);
-  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), true);
+  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), false);
   assert.equal(isSimpleQuestion("O que é BPC?", { allowedTopics: ["bpc"] }), true);
   assert.equal(isSimpleQuestion("Como funciona aposentadoria?", { allowedTopics: ["aposentadoria"] }), true);
 });
@@ -128,6 +131,33 @@ test("pending offer helpers interpret short contextual confirmations", () => {
   assert.equal(classifyPendingOfferResponse("pode sim"), "accepted");
   assert.equal(classifyPendingOfferResponse("não quero"), "declined");
   assert.equal(classifyPendingOfferResponse("qual documento?"), "invalid");
+});
+
+test("contextual ack continues recent CRM or memory topic without handoff prompt", () => {
+  assert.equal(isContextualAck("sim quero"), true);
+  assert.equal(isContextualAck("me explique"), true);
+  assert.equal(isContextualAck("qual documento?"), false);
+
+  const state: ConversationState = {
+    ...baseState,
+    answers: {
+      flowContext: {
+        servico: "aposentadoria",
+        intent: "aposentadoria",
+      },
+      aiMemory: {
+        lastTopics: ["out of scope", "aposentadoria"],
+        facts: { servico: "aposentadoria" },
+      },
+    },
+  };
+  assert.equal(resolveContextualContinuationTopic(state), "aposentadoria");
+  assert.match(
+    buildContextualContinuationReply("aposentadoria"),
+    /sobre aposentadoria/
+  );
+  assert.match(buildContextualContinuationReply("software"), /sobre software/);
+  assert.match(buildContextualContinuationReply("unknown"), /esse assunto/);
 });
 
 test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {

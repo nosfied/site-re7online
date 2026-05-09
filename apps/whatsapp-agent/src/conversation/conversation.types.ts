@@ -27,6 +27,7 @@ export type ConversationGoal =
 export type OrchestratorNextAction =
   | "answer"
   | "ask_question"
+  | "contextual_continue"
   | "handoff_recommend"
   | "handoff_force"
   | "fallback_menu"
@@ -41,6 +42,7 @@ export type AIOrchestratorState = {
   handoffRecommended?: boolean;
   lastMessageId?: string | null;
   lastQuestion?: string | null;
+  lastContinuationTopic?: string | null;
   lastNextActionAt?: string | null;
   handoffSignals?: {
     count?: number;

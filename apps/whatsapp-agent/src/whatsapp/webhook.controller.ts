@@ -36,6 +36,7 @@ import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
   buildAssistantLimitReachedReply,
+  buildContextualContinuationReply,
   buildContextualFallbackReply,
   buildSafeResponse,
   buildAssistantFallbackGuidance,
@@ -49,7 +50,9 @@ import {
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
+  isContextualAck,
   resolveOrchestratorAction,
+  resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
   updateAiMemory,
 } from "../agent/controlledAssistant.js";
@@ -5389,6 +5392,99 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
           }
           if (!educationalIntent.allowed && !risk) {
+            let handledContextualAck = false;
+            const hasFormalHandoffPrompt =
+              updatedConversation.answers?.aiOrchestrator?.activePrompt?.type ===
+                "handoff_confirmation" ||
+              updatedConversation.answers?.aiOrchestrator?.handoffPrompt?.awaitingConfirmation ===
+                true;
+            const contextualAck = isContextualAck(message.text);
+            const continuationTopic = resolveContextualContinuationTopic(updatedConversation);
+            const canHandleContextualAck =
+              contextualAck &&
+              !hasFormalHandoffPrompt;
+            if (contextualAck) {
+              await logAiAssistantEvent("ai.turn.contextual_ack_detected", {
+                hasTopic: Boolean(continuationTopic),
+                hasFormalHandoffPrompt,
+                mode: updatedConversation.mode ?? "BOT",
+                handoffStatus: updatedConversation.handoff.status,
+              });
+            }
+            if (canHandleContextualAck) {
+              const nowIso = new Date().toISOString();
+              replyText = continuationTopic
+                ? buildContextualContinuationReply(continuationTopic)
+                : "Certo. Me diga em poucas palavras o que você precisa.";
+              aiAssistantResponded = true;
+              handledContextualAck = true;
+              if (continuationTopic) {
+                await applyAiMemoryUpdate({
+                  topic: continuationTopic,
+                  stage: "clarification",
+                  goal: "identify_need",
+                  source: "contextual_continue",
+                });
+              }
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: nowIso,
+                    lastMessageId: message.messageId,
+                    lastFallbackType: assistantState.lastFallbackType,
+                    lastFallbackAt: assistantState.lastFallbackAt,
+                    fallbackCount: assistantState.fallbackCount,
+                  },
+                  aiOrchestrator: {
+                    ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+                    stage: "clarification",
+                    goal: "identify_need",
+                    missingInformation:
+                      updatedConversation.answers?.aiOrchestrator?.missingInformation ?? [],
+                    lastAction: "contextual_continue",
+                    lastConfidence:
+                      updatedConversation.answers?.aiOrchestrator?.lastConfidence ?? 1,
+                    handoffRecommended: false,
+                    lastMessageId: message.messageId,
+                    lastQuestion: null,
+                    lastContinuationTopic: continuationTopic ?? null,
+                    lastNextActionAt: nowIso,
+                    activePrompt: undefined,
+                    pendingOffer: updatedConversation.answers?.aiOrchestrator?.pendingOffer,
+                  },
+                },
+              };
+              if (continuationTopic) {
+                await logAiAssistantEvent("ai.turn.contextual_continue_sent", {
+                  topic: continuationTopic,
+                  source: "memory_or_crm",
+                });
+              } else {
+                await logAiAssistantEvent("ai.turn.contextual_continue_skipped", {
+                  reason: "missing_recent_context",
+                  fallback: "ask_short_need",
+                });
+              }
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                source: "contextual_ack",
+                stage: "clarification",
+                goal: "identify_need",
+                nextAction: "contextual_continue",
+                resolvedAction: "contextual_continue",
+                confidence: 1,
+                handoffRecommended: false,
+              });
+              await logAiAssistantEvent("ai.assistant.responded", {
+                source: "contextual_ack",
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
+            }
+            if (!handledContextualAck) {
             const fallbackDecision = classifyAssistantFallback(message.text, {
               handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
             });
@@ -5793,6 +5889,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 count: assistantState.count + 1,
                 maxReplies,
               });
+            }
             }
           } else if (risk) {
             await logAiAssistantEvent("ai.orchestrator.skipped", { reason: "guardrail_risk" });

@@ -621,6 +621,77 @@ export function classifyPendingOfferResponse(text: string | null | undefined) {
   return "invalid" as const;
 }
 
+export function isContextualAck(text: string | null | undefined) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  const ackTerms = [
+    "sim",
+    "sim quero",
+    "quero",
+    "pode",
+    "pode sim",
+    "ok",
+    "claro",
+    "quero sim",
+    "continuar",
+    "me explique",
+    "explica melhor",
+  ];
+  return ackTerms.some((term) => normalized === term || normalized.includes(term));
+}
+
+function normalizeContinuationTopic(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  if (!trimmed || containsPersonalData(trimmed) || classifyRisk(trimmed)) return null;
+  const normalized = normalizeText(trimmed);
+  if (!normalized || ["out of scope", "out_of_scope", "unknown", "desconhecido"].includes(normalized)) {
+    return null;
+  }
+  return sanitizeMemoryTopic(trimmed) ?? null;
+}
+
+function formatContinuationTopic(topic: string | null | undefined) {
+  const normalized = normalizeContinuationTopic(topic);
+  if (!normalized) return null;
+  const readable = normalized
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+  if (!readable || readable.length < 3 || containsPersonalData(readable) || classifyRisk(readable)) {
+    return null;
+  }
+  return readable;
+}
+
+export function resolveContextualContinuationTopic(state: ConversationState) {
+  const context = state.answers?.flowContext ?? {};
+  const memory = state.answers?.aiMemory;
+  const candidates = [
+    context.servico,
+    context.intent,
+    context.area,
+    memory?.facts?.servico,
+    memory?.facts?.intent,
+    memory?.facts?.area,
+    ...(memory?.lastTopics ?? []),
+  ];
+  for (const candidate of candidates) {
+    const topic = normalizeContinuationTopic(candidate);
+    if (topic) return topic;
+  }
+  return null;
+}
+
+export function buildContextualContinuationReply(topic: string | null | undefined) {
+  const readableTopic = formatContinuationTopic(topic);
+  if (readableTopic) {
+    return `Certo. Posso continuar te orientando sobre ${readableTopic}. Qual ponto você quer entender melhor?`;
+  }
+  return "Certo. Posso continuar te orientando sobre esse assunto. Qual ponto você quer entender melhor?";
+}
+
 export function buildAssistantLimitReachedReply(input: {
   context: AssistantTenantContext;
   canOfferHandoff?: boolean;
@@ -734,9 +805,6 @@ export function classifyEducationalIntent(
   const topicTerms = normalizeTermList(options.allowedTopics);
   const matchedTopics = topicTerms.filter((term) => normalized.includes(normalizeText(term)));
   const matchedTopic =
-    (normalized.includes("aposent")
-      ? matchedTopics.find((term) => normalizeText(term).includes("aposent")) ?? "aposentadoria"
-      : null) ??
     matchedTopics.find((term) => !["homem", "mulher", "masculino", "feminino"].includes(normalizeText(term))) ??
     matchedTopics[0];
   if (!matchedTopic) {
