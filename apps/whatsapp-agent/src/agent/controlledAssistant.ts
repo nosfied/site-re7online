@@ -4,6 +4,7 @@ import {
   ConversationStage,
   ConversationState,
   FlowContext,
+  AIMemoryState,
   OrchestratorNextAction,
 } from "../conversation/conversation.types.js";
 import { AgentBrain } from "./agent.types.js";
@@ -165,6 +166,26 @@ export type HandoffPromptInput = {
   context: AssistantTenantContext;
 };
 
+export type AIMemoryUpdateInput = {
+  state: ConversationState;
+  nowIso: string;
+  topic?: string | null;
+  stage?: ConversationStage | string | null;
+  goal?: ConversationGoal | string | null;
+  flowContext?: FlowContext | null;
+  leadTemp?: OrchestratorLeadTemp | null;
+  priority?: OrchestratorPriority | null;
+  wantsHuman?: boolean;
+  handoffRecommended?: boolean;
+  guardrailRisk?: GuardrailRisk | null;
+};
+
+export type AIMemoryUpdateResult = {
+  memory: AIMemoryState;
+  updated: boolean;
+  compacted: boolean;
+};
+
 export type AssistantFallbackIntent = "handoff_prompt" | "generic_guidance";
 
 export type AssistantFallbackDecision = {
@@ -273,11 +294,24 @@ const SAFE_CONTEXT_KEYS = [
   "origem_intencao",
 ] as const;
 
+const AI_MEMORY_FACT_KEYS = [
+  "area",
+  "servico",
+  "intent",
+  "prioridade",
+  "lead_temp",
+  "origem_intencao",
+  "stage",
+  "goal",
+] as const;
+
 const REQUIRED_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
 const GENERIC_SAFE_SUFFIX = "Se quiser, posso te orientar melhor conforme sua situação.";
 export const AI_ASSISTANT_MAX_INPUT_CHARS = 220;
 export const ORCHESTRATOR_MAX_REPLY_CHARS = 700;
 export const ORCHESTRATOR_MAX_LIST_ITEMS = 8;
+export const AI_MEMORY_MAX_SUMMARY_CHARS = 300;
+export const AI_MEMORY_MAX_TOPICS = 5;
 export const ORCHESTRATOR_MAX_QUESTION_CHARS = 180;
 export const ORCHESTRATOR_HANDOFF_THRESHOLD = 3;
 
@@ -709,8 +743,131 @@ function sanitizeFlowContext(context: FlowContext | undefined) {
   return safe;
 }
 
+function sanitizeMemoryTopic(topic: string | null | undefined) {
+  const trimmed = String(topic ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed || trimmed.length > 60 || containsPersonalData(trimmed) || classifyRisk(trimmed)) {
+    return null;
+  }
+  return normalizeText(trimmed).replace(/[^a-z0-9_ -]/g, "").trim().slice(0, 60) || null;
+}
+
+function sanitizeAiMemory(memory: AIMemoryState | null | undefined): AIMemoryState | null {
+  if (!memory || typeof memory !== "object" || Array.isArray(memory)) return null;
+  const summary =
+    typeof memory.summary === "string" &&
+    !containsPersonalData(memory.summary) &&
+    !classifyRisk(memory.summary)
+      ? memory.summary.replace(/\s+/g, " ").trim().slice(0, AI_MEMORY_MAX_SUMMARY_CHARS)
+      : undefined;
+  const facts: Record<string, string | number | boolean | null> = {};
+  const sourceFacts =
+    memory.facts && typeof memory.facts === "object" && !Array.isArray(memory.facts)
+      ? memory.facts
+      : {};
+  for (const key of AI_MEMORY_FACT_KEYS) {
+    const value = sourceFacts[key];
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      const stringValue = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : value;
+      if (typeof stringValue !== "string" || (!containsPersonalData(stringValue) && !classifyRisk(stringValue))) {
+        facts[key] = typeof stringValue === "string" ? stringValue.slice(0, 80) : stringValue;
+      }
+    }
+  }
+  const lastTopics = Array.isArray(memory.lastTopics)
+    ? memory.lastTopics
+        .map((topic) => sanitizeMemoryTopic(topic))
+        .filter((topic): topic is string => Boolean(topic))
+        .slice(0, AI_MEMORY_MAX_TOPICS)
+    : [];
+  const preferences =
+    memory.preferences && typeof memory.preferences === "object" && memory.preferences.wantsHuman === true
+      ? { wantsHuman: true }
+      : undefined;
+  const lastUpdatedAt = typeof memory.lastUpdatedAt === "string" ? memory.lastUpdatedAt : undefined;
+  const sanitized: AIMemoryState = {};
+  if (summary) sanitized.summary = summary;
+  if (Object.keys(facts).length) sanitized.facts = facts;
+  if (lastTopics.length) sanitized.lastTopics = lastTopics;
+  if (preferences) sanitized.preferences = preferences;
+  if (lastUpdatedAt) sanitized.lastUpdatedAt = lastUpdatedAt;
+  return Object.keys(sanitized).length ? sanitized : null;
+}
+
+function buildAiMemorySummary(memory: AIMemoryState) {
+  const topics = memory.lastTopics?.slice(0, 2).join(" e ");
+  const service = memory.facts?.servico ?? memory.facts?.intent ?? null;
+  const stage = memory.facts?.stage ?? null;
+  const parts = [
+    topics ? `Cliente trouxe tópico recente: ${topics}.` : null,
+    service ? `Contexto categórico: ${String(service)}.` : null,
+    stage ? `Estágio: ${String(stage)}.` : null,
+    memory.preferences?.wantsHuman ? "Cliente demonstrou preferência por atendimento humano." : null,
+  ].filter(Boolean);
+  return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, AI_MEMORY_MAX_SUMMARY_CHARS);
+}
+
+export function updateAiMemory(input: AIMemoryUpdateInput): AIMemoryUpdateResult {
+  const previous = sanitizeAiMemory(input.state.answers?.aiMemory) ?? {};
+  const facts: Record<string, string | number | boolean | null> = { ...(previous.facts ?? {}) };
+  const context = sanitizeFlowContext(input.flowContext ?? input.state.answers?.flowContext);
+  for (const key of AI_MEMORY_FACT_KEYS) {
+    const value = key === "stage" ? input.stage : key === "goal" ? input.goal : context[key];
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+    ) {
+      const stringValue = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : value;
+      if (typeof stringValue !== "string" || (!containsPersonalData(stringValue) && !classifyRisk(stringValue))) {
+        facts[key] = typeof stringValue === "string" ? stringValue.slice(0, 80) : stringValue;
+      }
+    }
+  }
+  if (input.leadTemp) facts.lead_temp = input.leadTemp;
+  if (input.priority) facts.prioridade = input.priority;
+
+  const nextTopics = [
+    sanitizeMemoryTopic(input.topic),
+    sanitizeMemoryTopic(input.guardrailRisk ? `guardrail_${input.guardrailRisk}` : null),
+    ...(previous.lastTopics ?? []),
+  ].filter((topic): topic is string => Boolean(topic));
+  const uniqueTopics = Array.from(new Set(nextTopics)).slice(0, AI_MEMORY_MAX_TOPICS);
+  const preferences = {
+    ...(previous.preferences ?? {}),
+    ...(input.wantsHuman || input.handoffRecommended ? { wantsHuman: true } : {}),
+  };
+  const nextMemory: AIMemoryState = {
+    facts,
+    lastTopics: uniqueTopics,
+    preferences: Object.keys(preferences).length ? preferences : undefined,
+    lastUpdatedAt: input.nowIso,
+  };
+  nextMemory.summary = buildAiMemorySummary(nextMemory);
+  const compacted =
+    (previous.summary?.length ?? 0) > AI_MEMORY_MAX_SUMMARY_CHARS ||
+    (previous.lastTopics?.length ?? 0) > AI_MEMORY_MAX_TOPICS ||
+    nextTopics.length > AI_MEMORY_MAX_TOPICS;
+  const previousJson = JSON.stringify(previous);
+  const nextJson = JSON.stringify(nextMemory);
+  return { memory: nextMemory, updated: previousJson !== nextJson, compacted };
+}
+
 function buildBusinessContext(params: ControlledAssistantInput) {
   const context = sanitizeFlowContext(params.state.answers?.flowContext);
+  const memory = sanitizeAiMemory(params.state.answers?.aiMemory);
+  const memoryForPrompt = memory
+    ? {
+        summary: memory.summary,
+        facts: memory.facts,
+        lastTopics: memory.lastTopics,
+      }
+    : null;
   return [
     `Tenant: ${params.tenant.name}`,
     `Idioma: ${params.tenant.defaultLanguage ?? "pt_BR"}`,
@@ -719,6 +876,7 @@ function buildBusinessContext(params: ControlledAssistantInput) {
       ? `Instrucao adicional aprovada: ${params.tenant.aiAssistantSystemPrompt}`
       : null,
     `Contexto categórico: ${JSON.stringify(context)}`,
+    memoryForPrompt ? `Memória operacional resumida: ${JSON.stringify(memoryForPrompt)}` : null,
     "Regras: responda apenas dúvidas gerais e educativas dentro do contexto aprovado do tenant. Não dê orientação profissional individualizada, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
     "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
     "Ações permitidas: answer, ask_question, fallback_menu e no_reply. handoff_recommend e handoff_force são apenas informativos e não ativam atendimento humano.",

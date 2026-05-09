@@ -76,6 +76,16 @@ export type FlowContextValue =
   | { [key: string]: FlowContextValue };
 export type FlowContext = Record<string, FlowContextValue>;
 
+export type AIMemoryState = {
+  summary?: string;
+  facts?: Record<string, string | number | boolean | null>;
+  lastTopics?: string[];
+  preferences?: {
+    wantsHuman?: boolean;
+  };
+  lastUpdatedAt?: string;
+};
+
 export type QuoteSiteAnswers = {
   companyCity?: string;
   siteType?: string;
@@ -97,6 +107,7 @@ export type QuoteSiteAnswers = {
     fallbackCount?: number;
   };
   aiOrchestrator?: AIOrchestratorState;
+  aiMemory?: AIMemoryState;
 };
 
 export type ConversationState = {

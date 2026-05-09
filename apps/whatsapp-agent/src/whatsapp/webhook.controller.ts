@@ -49,6 +49,7 @@ import {
   getAiAssistantState,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
+  updateAiMemory,
 } from "../agent/controlledAssistant.js";
 import {
   parseTemplateCommand,
@@ -5023,8 +5024,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const demoAwaitingSchedule = (updatedConversation.demoStatus ?? "none") === "requested";
     const aiBusinessContext = appliedTenantConfig?.aiBusinessContext?.trim() ?? "";
     const aiAssistantConfigured = isAiAssistantConfigured(appliedTenantConfig);
-    const logAiAssistantEvent = async (
-      event: string,
+      const logAiAssistantEvent = async (
+        event: string,
+        payload: Record<string, unknown> = {}
+      ) => {
+      const safePayload = {
+        action: event,
+        clientId: tenantClientId || null,
+        clientKey: tenantClientKey || null,
+        waId: maskNumber(normalizedFrom),
+        messageId: message.messageId,
+        ...payload,
+      };
+      logger.info({ event, requestId: meta?.requestId, ...safePayload });
+      await persistEventSafe(event, safePayload as Prisma.InputJsonValue, normalizedFrom, message.messageId);
+    };
+    const logAiMemoryEvent = async (
+      event: "ai.memory.updated" | "ai.memory.used" | "ai.memory.compacted",
       payload: Record<string, unknown> = {}
     ) => {
       const safePayload = {
@@ -5099,6 +5115,55 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         allowedTopics: appliedTenantConfig.aiAssistantAllowedTopics,
         secondaryTopics: appliedTenantConfig.aiAssistantSecondaryTopics,
       };
+      const applyAiMemoryUpdate = async (input: {
+        topic?: string | null;
+        stage?: string | null;
+        goal?: string | null;
+        leadTemp?: "quente" | "morno" | "frio" | null;
+        priority?: "alta" | "media" | "baixa" | null;
+        wantsHuman?: boolean;
+        handoffRecommended?: boolean;
+        guardrailRisk?: Parameters<typeof updateAiMemory>[0]["guardrailRisk"];
+        source: string;
+      }) => {
+        const result = updateAiMemory({
+          state: updatedConversation,
+          nowIso: new Date().toISOString(),
+          topic: input.topic,
+          stage: input.stage,
+          goal: input.goal,
+          flowContext: updatedConversation.answers?.flowContext,
+          leadTemp: input.leadTemp,
+          priority: input.priority,
+          wantsHuman: input.wantsHuman,
+          handoffRecommended: input.handoffRecommended,
+          guardrailRisk: input.guardrailRisk,
+        });
+        if (!result.updated) return result;
+        updatedConversation = {
+          ...updatedConversation,
+          answers: {
+            ...(updatedConversation.answers ?? {}),
+            aiMemory: result.memory,
+          },
+        };
+        await logAiMemoryEvent("ai.memory.updated", {
+          source: input.source,
+          topic: input.topic ?? null,
+          stage: input.stage ?? null,
+          topicCount: result.memory.lastTopics?.length ?? 0,
+          factKeys: Object.keys(result.memory.facts ?? {}),
+          hasSummary: Boolean(result.memory.summary),
+        });
+        if (result.compacted) {
+          await logAiMemoryEvent("ai.memory.compacted", {
+            source: input.source,
+            topicCount: result.memory.lastTopics?.length ?? 0,
+            summaryLength: result.memory.summary?.length ?? 0,
+          });
+        }
+        return result;
+      };
       const applyAssistantLimitFallback = async (source: string) => {
         const canOfferHandoff = appliedTenantConfig.aiAssistantFallbackToHandoff === true;
         replyText = buildAssistantLimitReachedReply({
@@ -5106,6 +5171,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           canOfferHandoff,
         });
         aiAssistantResponded = true;
+        await applyAiMemoryUpdate({
+          topic: "assistant_limit_reached",
+          stage: canOfferHandoff ? "handoff_recommended" : "clarification",
+          goal: canOfferHandoff ? "recommend_handoff" : "identify_need",
+          wantsHuman: canOfferHandoff,
+          handoffRecommended: canOfferHandoff,
+          source,
+        });
         const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
         const nowIso = new Date().toISOString();
         updatedConversation = {
@@ -5348,13 +5421,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   mode: updatedConversation.mode ?? "BOT",
                   handoffStatus: updatedConversation.handoff.status,
                 });
-                await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
+              await logAiAssistantEvent("ai.orchestrator.handoff_prompt.skipped", {
                   source: "deterministic_fallback",
                   reason: deniedReason,
                   score: scoreResult.score,
                   threshold: scoreResult.threshold,
                 });
               }
+              await applyAiMemoryUpdate({
+                topic: "handoff_request",
+                stage: "handoff_recommended",
+                goal: "recommend_handoff",
+                wantsHuman: allowed,
+                handoffRecommended: true,
+                source: "deterministic_fallback",
+              });
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -5457,6 +5538,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 type: contextualFallback.type,
                 configured: Boolean(assistantTenantContext.fallbackMessage?.trim()),
               });
+              if (contextualFallback.type !== "greeting") {
+                await applyAiMemoryUpdate({
+                  topic: contextualFallback.type,
+                  stage: "clarification",
+                  goal: "identify_need",
+                  wantsHuman:
+                    contextualFallback.type === "near_domain" ||
+                    contextualFallback.type === "out_of_scope",
+                  handoffRecommended:
+                    contextualFallback.type === "near_domain" ||
+                    contextualFallback.type === "out_of_scope",
+                  source: "contextual_fallback",
+                });
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -5520,6 +5615,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             });
             replyText = buildSafeResponse(risk, assistantTenantContext);
             aiAssistantResponded = true;
+            await applyAiMemoryUpdate({
+              topic: risk,
+              stage: "clarification",
+              goal: "collect_safe_context",
+              guardrailRisk: risk,
+              source: "guardrail",
+            });
             updatedConversation = {
               ...updatedConversation,
               answers: {
@@ -5554,6 +5656,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               count: assistantState.count,
               maxReplies,
             });
+            if (updatedConversation.answers?.aiMemory) {
+              await logAiMemoryEvent("ai.memory.used", {
+                source: "orchestrator",
+                topicCount: updatedConversation.answers.aiMemory.lastTopics?.length ?? 0,
+                factKeys: Object.keys(updatedConversation.answers.aiMemory.facts ?? {}),
+                hasSummary: Boolean(updatedConversation.answers.aiMemory.summary),
+              });
+            }
             const aiReply = await generateControlledAssistantReply({
               brain: agentBrain,
               text: message.text,
@@ -5740,6 +5850,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   });
                 }
               }
+              await applyAiMemoryUpdate({
+                topic: educationalIntent.topic ?? aiReply.output.goal ?? aiReply.output.stage,
+                stage: aiReply.output.stage,
+                goal: aiReply.output.goal,
+                leadTemp: aiReply.output.lead_temp,
+                priority: aiReply.output.priority,
+                wantsHuman: nextHandoffPrompt?.awaitingConfirmation === true,
+                handoffRecommended: aiReply.output.handoff_recommended,
+                source: "orchestrator",
+              });
               updatedConversation = {
                 ...updatedConversation,
                 answers: {

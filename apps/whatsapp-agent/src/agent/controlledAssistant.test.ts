@@ -18,6 +18,7 @@ import {
   isSimpleQuestion,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
+  updateAiMemory,
   validateOrchestratorOutput,
 } from "./controlledAssistant.js";
 import { AgentBrain } from "./agent.types.js";
@@ -160,6 +161,47 @@ test("buildAssistantLimitReachedReply does not depend on LLM output", () => {
   );
 });
 
+test("updateAiMemory stores only compact operational facts", () => {
+  const result = updateAiMemory({
+    state: baseState,
+    nowIso: "2026-05-08T10:00:00.000Z",
+    topic: "beneficio negado",
+    stage: "qualification",
+    goal: "discover_service",
+    flowContext: {
+      area: "previdenciario",
+      servico: "beneficio_negado",
+      lead_temp: "quente",
+      cpf: "12345678900",
+      email: "teste@example.com",
+    },
+    wantsHuman: true,
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.memory.facts?.area, "previdenciario");
+  assert.equal(result.memory.facts?.servico, "beneficio_negado");
+  assert.equal(result.memory.facts?.lead_temp, "quente");
+  assert.equal("cpf" in (result.memory.facts ?? {}), false);
+  assert.equal(JSON.stringify(result.memory).includes("12345678900"), false);
+  assert.deepEqual(result.memory.lastTopics, ["beneficio negado"]);
+  assert.equal(result.memory.preferences?.wantsHuman, true);
+  assert.ok((result.memory.summary ?? "").length <= 300);
+});
+
+test("updateAiMemory compacts recent topics", () => {
+  let state = baseState;
+  for (const topic of ["um", "dois", "tres", "quatro", "cinco", "seis"]) {
+    const result = updateAiMemory({
+      state,
+      nowIso: "2026-05-08T10:00:00.000Z",
+      topic,
+    });
+    state = { ...state, answers: { ...(state.answers ?? {}), aiMemory: result.memory } };
+  }
+  assert.equal(state.answers?.aiMemory?.lastTopics?.length, 5);
+  assert.equal(state.answers?.aiMemory?.lastTopics?.[0], "seis");
+});
+
 test("classifyRisk detects concrete or sensitive requests", () => {
   assert.equal(classifyRisk("tenho direito ao BPC?"), "legal_specific_case");
   assert.equal(classifyRisk("quanto vou receber?"), "benefit_amount");
@@ -217,7 +259,18 @@ test("generateControlledAssistantReply sanitizes context and appends required su
       aiBusinessContext: "Direito previdenciario.",
       aiAssistantAllowedTopics: ["bpc", "loas"],
     },
-    state: baseState,
+    state: {
+      ...baseState,
+      answers: {
+        ...(baseState.answers ?? {}),
+        aiMemory: {
+          summary: "Cliente perguntou sobre BPC.",
+          facts: { area: "previdenciario", servico: "bpc_loas" },
+          lastTopics: ["bpc"],
+          lastUpdatedAt: "2026-05-07T09:00:00.000Z",
+        },
+      },
+    },
     nowIso: "2026-05-07T10:00:00.000Z",
   });
 
@@ -227,6 +280,10 @@ test("generateControlledAssistantReply sanitizes context and appends required su
   assert.equal(result.ok ? result.output.next_action : null, "answer");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].businessContext?.includes("cpf"), false);
+  assert.equal(calls[0].businessContext?.includes("Memória operacional resumida"), true);
+  assert.equal(calls[0].businessContext?.includes("Cliente perguntou sobre BPC"), true);
+  assert.equal(calls[0].businessContext?.includes("wantsHuman"), false);
+  assert.equal(calls[0].businessContext?.includes("lastUpdatedAt"), false);
 });
 
 test("generateControlledAssistantReply accepts structured orchestrator output", async () => {

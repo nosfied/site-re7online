@@ -13107,6 +13107,14 @@ async function anonymizeConversationPrivacyData(
     payload: payload as Prisma.InputJsonValue,
   });
   logger.info({ event: "conversation.anonymized", ...payload });
+  logger.info({
+    event: "ai.memory.cleared",
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    conversationId: target.id,
+    runtimeStates: runtimeStates.count,
+    reason: "conversation_anonymized",
+  });
 
   return {
     anonymized: {
