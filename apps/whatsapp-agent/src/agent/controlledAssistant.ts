@@ -618,8 +618,8 @@ function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
     const tokens = topicTokens(candidate);
     if (!tokens.length) continue;
     const contentTokens = tokens.filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
+    if (!contentTokens.length) continue;
     const hasContentMatch =
-      contentTokens.length === 0 ||
       contentTokens.some((topicToken) =>
         messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
       );
