@@ -25,6 +25,7 @@ export type ControlledAssistantInput = {
   >;
   state: ConversationState;
   nowIso: string;
+  preclassifiedEducationalIntent?: EducationalIntentResult | null;
 };
 
 export type ControlledAssistantResult =
@@ -741,6 +742,7 @@ export function classifyRisk(
   if (
     containsAnyTerm(normalized, [
       "tenho direito",
+      "tenho direto",
       "meu caso",
       "meu processo",
       "meu recurso",
@@ -1796,10 +1798,13 @@ function buildLegacyOrchestratorOutput(reply: string): RawOrchestratorOutput {
 export async function generateControlledAssistantReply(
   input: ControlledAssistantInput
 ): Promise<ControlledAssistantResult> {
-  const educationalIntent = classifyEducationalIntent(input.text, {
-    allowedTopics: input.tenant.aiAssistantAllowedTopics,
-    blockedTerms: input.tenant.aiAssistantBlockedTerms,
-  });
+  const educationalIntent =
+    input.preclassifiedEducationalIntent?.allowed === true
+      ? input.preclassifiedEducationalIntent
+      : classifyEducationalIntent(input.text, {
+          allowedTopics: input.tenant.aiAssistantAllowedTopics,
+          blockedTerms: input.tenant.aiAssistantBlockedTerms,
+        });
   if (!educationalIntent.allowed) {
     return { ok: false, reason: educationalIntent.reason ?? "educational_intent_blocked" };
   }

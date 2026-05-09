@@ -5448,7 +5448,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           const educationalIntent = contextualEducationalIntent?.allowed
             ? {
                 ...contextualEducationalIntent,
-                topic: continuationTopicForIntent,
+                topic: continuationTopicForIntent ?? undefined,
                 reason: "contextual_topic_and_allowed_intent",
               }
             : directEducationalIntent;
@@ -6220,6 +6220,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               },
               state: updatedConversation,
               nowIso: new Date().toISOString(),
+              preclassifiedEducationalIntent: educationalIntent,
             });
             if (aiReply.ok) {
               const resolvedAction = resolveOrchestratorAction(

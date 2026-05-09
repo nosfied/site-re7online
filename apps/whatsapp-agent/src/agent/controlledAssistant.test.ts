@@ -413,6 +413,7 @@ test("updateAiMemory compacts recent topics", () => {
 
 test("classifyRisk detects concrete or sensitive requests", () => {
   assert.equal(classifyRisk("tenho direito ao BPC?"), "legal_specific_case");
+  assert.equal(classifyRisk("preciso saber se tenho direto a me aposentar"), "legal_specific_case");
   assert.equal(classifyRisk("quanto vou receber?"), "benefit_amount");
   assert.equal(classifyRisk("meu caso ganha?"), "outcome_prediction");
   assert.equal(classifyRisk("analise meu documento"), "document_analysis");
@@ -1087,6 +1088,47 @@ test("shouldSendHandoffConfirmationPrompt enforces idempotency and operational s
     }),
     false
   );
+});
+
+test("generateControlledAssistantReply accepts preclassified contextual educational intent", async () => {
+  let called = false;
+  const brain: AgentBrain = {
+    async generateReply() {
+      called = true;
+      return {
+        text: JSON.stringify({
+          reply: "De forma geral, carencia e um numero minimo de contribuicoes exigidas em alguns beneficios.",
+          stage: "triage",
+          goal: "explain_general_topic",
+          confidence: 0.8,
+          missing_information: [],
+          next_action: "answer",
+          handoff_recommended: false,
+        }),
+        source: "ai",
+      };
+    },
+  };
+  const result = await generateControlledAssistantReply({
+    brain,
+    text: "qual a carência",
+    tenant: {
+      name: "Justa",
+      defaultLanguage: "pt_BR",
+      aiBusinessContext: "Direito previdenciario.",
+      aiAssistantAllowedTopics: ["aposentadoria"],
+    },
+    state: baseState,
+    nowIso: "2026-05-09T10:00:00.000Z",
+    preclassifiedEducationalIntent: {
+      allowed: true,
+      educational: true,
+      topic: "aposentadoria",
+      reason: "contextual_topic_and_allowed_intent",
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(called, true);
 });
 
 test("generateControlledAssistantReply does not call brain for complex questions", async () => {
