@@ -406,6 +406,8 @@ const NON_BUSINESS_TOPIC_TERMS = new Set([
   "negative",
   "clarification",
   "help",
+  "handoff_request",
+  "handoff request",
   "legal_specific_case",
   "legal specific case",
   "document_analysis",
@@ -1510,21 +1512,29 @@ export function buildAiHandoffCrmArtifacts(
   const tags = Array.isArray(answers.flowTags) ? answers.flowTags : [];
   const orchestrator = answers.aiOrchestrator;
   const topics = uniqueDisplayValues([
-    ...(memory?.lastTopics ?? []),
     context.servico,
     context.intent,
     context.area,
+    memory?.facts?.servico,
+    memory?.facts?.intent,
+    memory?.facts?.area,
     ...tags
       .filter((tag) => /^topic:/i.test(tag) || /^intent:/i.test(tag))
       .map((tag) => tag.split(":").slice(1).join(":")),
+    ...(memory?.lastTopics ?? []),
   ]);
   const mainTopic = topics[0] ?? null;
   const area = formatCrmDisplayValue(context.area);
   const service = formatCrmDisplayValue(context.servico ?? context.intent);
   const leadTemp = formatCrmDisplayValue(context.lead_temp ?? memory?.facts?.lead_temp);
   const priority = formatCrmDisplayValue(context.prioridade ?? context.priority);
-  const memorySummary = sanitizeShortString(memory?.summary, 300);
-  const missingInfo = uniqueDisplayValues(orchestrator?.missingInformation ?? [], 3);
+  const memorySummary = sanitizeCrmSummaryForDisplay(memory?.summary);
+  const missingInfo = uniqueDisplayValues(
+    (orchestrator?.missingInformation ?? []).filter((item) =>
+      isMissingInformationRelevantToTopic(item, mainTopic)
+    ),
+    3
+  );
   const handoffReason =
     input.reason === "active_prompt_handoff_confirmation" ||
     input.reason === "pending_offer_handoff"
@@ -1679,6 +1689,7 @@ function formatCrmDisplayValue(value: unknown) {
     "active prompt handoff confirmation",
     "pending offer handoff",
     "handoff confirmation",
+    "handoff request",
     "ask question",
     "answer",
     "fallback menu",
@@ -1709,6 +1720,42 @@ function uniqueDisplayValues(values: unknown[], maxItems = 4) {
     if (result.length >= maxItems) break;
   }
   return result;
+}
+
+function sanitizeCrmSummaryForDisplay(value: unknown) {
+  const summary = sanitizeShortString(value, 300);
+  if (!summary) return null;
+  const normalized = normalizeText(summary);
+  const technicalFragments = [
+    "handoff request",
+    "handoff_request",
+    "active prompt",
+    "active_prompt",
+    "pending offer",
+    "pending_offer",
+    "handoff recommended",
+    "handoff_recommended",
+    "ask question",
+    "ask_question",
+    "explain general topic",
+    "explain_general_topic",
+  ];
+  if (technicalFragments.some((fragment) => normalized.includes(normalizeText(fragment)))) {
+    return null;
+  }
+  return summary;
+}
+
+function isMissingInformationRelevantToTopic(value: unknown, mainTopic: string | null) {
+  const label = formatCrmDisplayValue(value);
+  if (!label) return false;
+  if (!mainTopic) return true;
+  const labelTokens = topicTokens(label);
+  const topicTokenSet = new Set(topicTokens(mainTopic));
+  if (!labelTokens.length || !topicTokenSet.size) return true;
+  return labelTokens.some((token) =>
+    Array.from(topicTokenSet).some((topicToken) => topicTokenMatches(token, topicToken))
+  );
 }
 
 function hasOperationalContextValue(value: unknown) {

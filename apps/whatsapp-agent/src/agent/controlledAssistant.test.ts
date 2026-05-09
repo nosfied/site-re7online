@@ -1155,6 +1155,42 @@ test("buildAiHandoffCrmArtifacts uses safe context instead of technical reason",
   assert.match(artifacts.suggestedReplyNote, /atendimento com a equipe sobre aposentadoria/);
 });
 
+test("buildAiHandoffCrmArtifacts prefers current CRM context and drops stale technical memory", () => {
+  const artifacts = buildAiHandoffCrmArtifacts({
+    reason: "active_prompt_handoff_confirmation",
+    score: 3,
+    state: {
+      ...baseState,
+      answers: {
+        flowContext: {
+          servico: "maternidade",
+          lead_temp: "morno",
+          prioridade: "media",
+        },
+        flowTags: ["topic:maternidade"],
+        aiMemory: {
+          summary:
+            "Cliente trouxe tópico recente: handoff request e maternidade. Estágio: handoff_recommended.",
+          facts: { servico: "maternidade" },
+          lastTopics: ["handoff_request", "maternidade", "documentos para aposentadoria"],
+        },
+        aiOrchestrator: {
+          stage: "handoff_recommended",
+          goal: "recommend_handoff",
+          handoffRecommended: true,
+          missingInformation: ["tipo de aposentadoria"],
+        },
+      },
+    },
+  });
+
+  assert.match(artifacts.summaryNote, /Tema principal: maternidade/);
+  assert.doesNotMatch(artifacts.summaryNote, /handoff request/i);
+  assert.doesNotMatch(artifacts.summaryNote, /Pontos a confirmar: tipo de aposentadoria/);
+  assert.doesNotMatch(artifacts.suggestedReplyNote, /handoff request/i);
+  assert.doesNotMatch(artifacts.suggestedReplyNote, /tipo de aposentadoria/);
+});
+
 test("generateControlledAssistantReply accepts preclassified contextual educational intent", async () => {
   let called = false;
   const brain: AgentBrain = {
