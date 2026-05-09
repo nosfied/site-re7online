@@ -6512,6 +6512,61 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             } else {
               await logAiAssistantEvent("ai.orchestrator.rejected", { reason: aiReply.reason });
               await logAiAssistantEvent("ai.assistant.skipped", { reason: aiReply.reason });
+              const fallbackTopic =
+                educationalIntent.topic ?? resolveContextualContinuationTopic(updatedConversation);
+              replyText = fallbackTopic
+                ? buildContextualContinuationReply(fallbackTopic)
+                : buildAssistantFallbackGuidance(assistantTenantContext);
+              aiAssistantResponded = true;
+              const nowIso = new Date().toISOString();
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiAssistant: {
+                    count: assistantState.count + 1,
+                    lastRespondedAt: nowIso,
+                    lastMessageId: message.messageId,
+                    lastFallbackType: assistantState.lastFallbackType,
+                    lastFallbackAt: assistantState.lastFallbackAt,
+                    fallbackCount: assistantState.fallbackCount,
+                  },
+                  aiOrchestrator: {
+                    ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+                    stage: "clarification",
+                    goal: "identify_need",
+                    missingInformation:
+                      updatedConversation.answers?.aiOrchestrator?.missingInformation ?? [],
+                    lastAction: "fallback_menu",
+                    lastConfidence: 0,
+                    handoffRecommended: false,
+                    lastMessageId: message.messageId,
+                    lastQuestion: null,
+                    lastContinuationTopic: fallbackTopic ?? null,
+                    lastNextActionAt: nowIso,
+                  },
+                },
+              };
+              await logAiAssistantEvent("ai.assistant.fallback_used", {
+                reason: "orchestrator_rejected",
+                rejectionReason: aiReply.reason,
+                hasTopic: Boolean(fallbackTopic),
+              });
+              await logAiAssistantEvent("ai.orchestrator.state_updated", {
+                source: "orchestrator_rejected_fallback",
+                stage: "clarification",
+                goal: "identify_need",
+                nextAction: "fallback_menu",
+                resolvedAction: "generic_guidance",
+                confidence: 0,
+                handoffRecommended: false,
+              });
+              await logAiAssistantEvent("ai.assistant.responded", {
+                source: "orchestrator_rejected_fallback",
+                latency_ms: Date.now() - start,
+                count: assistantState.count + 1,
+                maxReplies,
+              });
             }
           }
         }

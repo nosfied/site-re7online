@@ -822,6 +822,11 @@ export function classifyRisk(
     containsAnyTerm(normalized, [
       "tenho direito",
       "tenho direto",
+      "tenho direit",
+      "se tenho direito",
+      "se tenho direto",
+      "se tenho direit",
+      "posso receber",
       "meu caso",
       "meu processo",
       "meu recurso",

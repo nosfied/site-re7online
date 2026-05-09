@@ -439,6 +439,8 @@ test("updateAiMemory compacts recent topics", () => {
 test("classifyRisk detects concrete or sensitive requests", () => {
   assert.equal(classifyRisk("tenho direito ao BPC?"), "legal_specific_case");
   assert.equal(classifyRisk("preciso saber se tenho direto a me aposentar"), "legal_specific_case");
+  assert.equal(classifyRisk("como saber se tenho direit?"), "legal_specific_case");
+  assert.equal(classifyRisk("quero saber se posso receber o loas"), "legal_specific_case");
   assert.equal(classifyRisk("quanto vou receber?"), "benefit_amount");
   assert.equal(classifyRisk("meu caso ganha?"), "outcome_prediction");
   assert.equal(classifyRisk("analise meu documento"), "document_analysis");
