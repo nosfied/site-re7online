@@ -648,6 +648,12 @@ function normalizeContinuationTopic(value: unknown) {
   if (!normalized || ["out of scope", "out_of_scope", "unknown", "desconhecido"].includes(normalized)) {
     return null;
   }
+  if (/^\d+$/.test(normalized) || /\b(19|20)\d{2}\b/.test(normalized)) return null;
+  if (["homem", "mulher", "masculino", "feminino", "idade", "anos", "ano"].includes(normalized)) {
+    return null;
+  }
+  const lettersOnly = normalized.replace(/[^\p{L}]/gu, "");
+  if (lettersOnly.length < 3) return null;
   return sanitizeMemoryTopic(trimmed) ?? null;
 }
 

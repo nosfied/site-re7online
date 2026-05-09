@@ -160,6 +160,21 @@ test("contextual ack continues recent CRM or memory topic without handoff prompt
   assert.match(buildContextualContinuationReply("unknown"), /esse assunto/);
 });
 
+test("contextual continuation ignores years and demographic fragments as topics", () => {
+  const state: ConversationState = {
+    ...baseState,
+    answers: {
+      aiMemory: {
+        lastTopics: ["2026", "homem", "aposentadoria"],
+        facts: {},
+      },
+    },
+  };
+  assert.equal(resolveContextualContinuationTopic(state), "aposentadoria");
+  assert.match(buildContextualContinuationReply("2026"), /esse assunto/);
+  assert.match(buildContextualContinuationReply("homem"), /esse assunto/);
+});
+
 test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {
   assert.equal(
     buildContextualFallbackReply({ result: classifyContextualFallback("boa noite") }),
