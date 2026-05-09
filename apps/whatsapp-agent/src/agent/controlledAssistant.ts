@@ -537,7 +537,7 @@ export function resolveTenantIntent(
 ): ResolvedTenantIntent | null {
   const raw = String(text ?? "").trim();
   if (!raw || !Array.isArray(catalog) || !catalog.length) return null;
-  let best: (ResolvedTenantIntent & { specificity: number }) | null = null;
+  let best: (ResolvedTenantIntent & { specificity: number; score: number }) | null = null;
   for (const item of catalog) {
     if (!item?.key) continue;
     const candidates = [
@@ -545,14 +545,11 @@ export function resolveTenantIntent(
       item.title ?? "",
       item.key.replace(/[_:-]/g, " "),
     ].filter((term): term is string => Boolean(term && term.trim()));
-    const topic = resolveTenantTopic(raw, candidates);
-    if (!topic) continue;
+    const match = resolveTenantIntentCatalogMatch(raw, candidates);
+    if (!match) continue;
     const key = sanitizeCrmToken(item.key) ?? item.key.trim().toLowerCase();
-    const canonicalTopic = normalizeContinuationTopic(item.title) ?? topic;
-    const specificity = Math.max(
-      ...candidates.map((candidate) => topicTokens(candidate).join("").length),
-      key.length
-    );
+    const canonicalTopic = normalizeContinuationTopic(item.title) ?? match.topic;
+    const specificity = Math.max(match.specificity, key.length);
     const resolved: ResolvedTenantIntent & { specificity: number } = {
       key,
       title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : null,
@@ -572,11 +569,77 @@ export function resolveTenantIntent(
         : [],
       specificity,
     };
-    if (!best || resolved.specificity > best.specificity) best = resolved;
+    if (
+      !best ||
+      match.score > best.score ||
+      (match.score === best.score && resolved.specificity > best.specificity)
+    ) {
+      best = { ...resolved, specificity, score: match.score };
+    }
   }
   if (!best) return null;
-  const { specificity: _specificity, ...resolved } = best;
+  const { specificity: _specificity, score: _score, ...resolved } = best as ResolvedTenantIntent & {
+    specificity: number;
+    score?: number;
+  };
   return resolved;
+}
+
+const INTENT_CATALOG_GENERIC_TOKENS = new Set([
+  "voces",
+  "fazem",
+  "dao",
+  "dão",
+  "entrada",
+  "preciso",
+  "quero",
+  "queria",
+  "gostaria",
+  "saber",
+  "sobre",
+  "servico",
+  "servicos",
+  "atendimento",
+  "me",
+  "minha",
+  "meu",
+]);
+
+function resolveTenantIntentCatalogMatch(raw: string, candidates: string[]) {
+  const normalizedText = normalizeText(raw);
+  const messageTokens = topicTokens(raw);
+  let best: { topic: string; score: number; specificity: number } | null = null;
+  for (const candidate of candidates) {
+    const normalizedTopic = normalizeText(candidate);
+    const safeTopic = normalizeContinuationTopic(candidate);
+    if (!normalizedTopic || !safeTopic) continue;
+    const tokens = topicTokens(candidate);
+    if (!tokens.length) continue;
+    const contentTokens = tokens.filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
+    const hasContentMatch =
+      contentTokens.length === 0 ||
+      contentTokens.some((topicToken) =>
+        messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
+      );
+    if (!hasContentMatch) continue;
+    let score = normalizedText.includes(normalizedTopic) ? 1 : 0;
+    if (!score) {
+      const matched = tokens.filter((topicToken) =>
+        messageTokens.some((messageToken) => topicTokenMatches(messageToken, topicToken))
+      ).length;
+      score = matched / tokens.length;
+    }
+    if (score < 0.66) continue;
+    const specificity = contentTokens.join("").length || tokens.join("").length;
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && specificity > best.specificity)
+    ) {
+      best = { topic: safeTopic, score, specificity };
+    }
+  }
+  return best;
 }
 
 export function buildTenantIntentCatalogReply(intent: ResolvedTenantIntent) {
