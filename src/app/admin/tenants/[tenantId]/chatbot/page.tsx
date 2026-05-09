@@ -49,6 +49,8 @@ type FlowDraft = {
   entryPoint: boolean;
 };
 
+type AiIntentCatalogDraft = NonNullable<AdminAutomationSettings["aiAssistantIntentCatalog"]>;
+
 function formatDefinitionText(definition: unknown) {
   return JSON.stringify(definition, null, 2);
 }
@@ -62,6 +64,18 @@ function parseDefinitionText(definitionText: string) {
     definition,
     formatted: formatDefinitionText(definition),
   };
+}
+
+function formatIntentCatalogText(catalog: AdminAutomationSettings["aiAssistantIntentCatalog"]) {
+  return JSON.stringify(catalog ?? [], null, 2);
+}
+
+function parseIntentCatalogText(catalogText: string) {
+  const parsed = JSON.parse(catalogText || "[]") as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error("O catálogo precisa ser uma lista JSON.");
+  }
+  return parsed as AiIntentCatalogDraft;
 }
 
 function getJsonSyntaxError(definitionText: string) {
@@ -332,6 +346,7 @@ export default function AdminTenantChatbotPage() {
   const [newEntryPoint, setNewEntryPoint] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, FlowDraft>>({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
+  const [intentCatalogText, setIntentCatalogText] = useState("[]");
 
   const tenantHref = `/admin/tenants/${encodeURIComponent(tenantId)}`;
   const backHref = clientKey ? `${tenantHref}?clientKey=${encodeURIComponent(clientKey)}` : tenantHref;
@@ -361,6 +376,7 @@ export default function AdminTenantChatbotPage() {
       ]);
       hydrateFlows(flowResponse.items);
       setSettings(settingsResponse.settings);
+      setIntentCatalogText(formatIntentCatalogText(settingsResponse.settings.aiAssistantIntentCatalog));
     },
     [connection, hydrateFlows]
   );
@@ -424,8 +440,10 @@ export default function AdminTenantChatbotPage() {
     aiAssistantSecondaryTopics: [],
     aiAssistantBlockedTerms: [],
     aiAssistantHandoffKeywords: [],
+    aiAssistantGreetingMessage: "",
     aiAssistantFallbackMessage: "",
     aiAssistantHandoffPrompt: "",
+    aiAssistantIntentCatalog: [],
     aiBusinessContext: "",
     aiConfigured: false,
     chatbotLocked: false,
@@ -449,6 +467,14 @@ export default function AdminTenantChatbotPage() {
       : "configurado"
     : "incompleto";
   const newJsonError = useMemo(() => getJsonSyntaxError(newDefinition), [newDefinition]);
+  const intentCatalogJsonError = useMemo(() => {
+    try {
+      parseIntentCatalogText(intentCatalogText);
+      return null;
+    } catch (error) {
+      return (error as Error).message || "JSON invalido.";
+    }
+  }, [intentCatalogText]);
   const draftJsonErrors = useMemo(
     () =>
       Object.fromEntries(
@@ -459,6 +485,13 @@ export default function AdminTenantChatbotPage() {
 
   const handleSaveSettings = async () => {
     if (!clientKey || !settings) return;
+    let parsedIntentCatalog: AiIntentCatalogDraft;
+    try {
+      parsedIntentCatalog = parseIntentCatalogText(intentCatalogText);
+    } catch (err) {
+      setError(`Catálogo de intenções inválido: ${(err as Error).message || "JSON invalido."}`);
+      return;
+    }
     if (automationDraft.aiAssistantEnabled && !aiConfigStatus.ready) {
       setError(
         `IA supervisionada ainda não está pronta: ${aiConfigStatus.missing
@@ -471,8 +504,12 @@ export default function AdminTenantChatbotPage() {
     setError(null);
     setSuccess(null);
     try {
-      const response = await updateAdminChatbotSettings(connection, clientKey, automationDraft);
+      const response = await updateAdminChatbotSettings(connection, clientKey, {
+        ...automationDraft,
+        aiAssistantIntentCatalog: parsedIntentCatalog,
+      });
       setSettings(response.settings);
+      setIntentCatalogText(formatIntentCatalogText(response.settings.aiAssistantIntentCatalog));
       setSuccess("Automacao atualizada com sucesso.");
     } catch (err) {
       setError(normalizeAdminChatbotError(err as { message?: string; errorCode?: string }, "Falha ao salvar automacao."));
@@ -580,24 +617,44 @@ export default function AdminTenantChatbotPage() {
   };
 
   return (
-    <div className="px-4 py-8 text-white md:px-8">
+    <div className="px-4 pb-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Chatbot e automacao</h1>
-            <p className="text-sm text-white/70">
-              {tenantName || tenantId} {clientKey ? `(${clientKey})` : ""}
-            </p>
-            <p className="mt-1 text-xs text-white/50">
-              Alteracoes feitas aqui usam os mesmos flows e configuracoes exibidos no /app do cliente.
-            </p>
+        <header className="sticky top-0 z-30 -mx-4 border-b border-white/10 bg-re7-navy/95 px-4 py-4 backdrop-blur md:-mx-8 md:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold">Chatbot e automacao</h1>
+                {settings ? (
+                  <FlowBadge
+                    label={`IA ${aiConfigLabel} · ${aiConfigStatus.score}%`}
+                    tone={aiConfigStatus.ready ? "success" : "warning"}
+                  />
+                ) : null}
+              </div>
+              <p className="text-sm text-white/70">
+                {tenantName || tenantId} {clientKey ? `(${clientKey})` : ""}
+              </p>
+              <p className="mt-1 text-xs text-white/50">
+                Configuracoes internas refletidas no /app do cliente. Revise IA, follow-up e flows antes de salvar.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={backHref}
+                className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              >
+                Voltar ao tenant
+              </Link>
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                disabled={savingSettings || !settings || !clientKey}
+                className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSettings ? "Salvando..." : "Salvar ajustes"}
+              </button>
+            </div>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
-          >
-            Voltar ao tenant
-          </Link>
         </header>
 
         {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
@@ -623,14 +680,10 @@ export default function AdminTenantChatbotPage() {
                 IA: {automationDraft.aiConfigured ? "contexto configurado" : "contexto ausente"}.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleSaveSettings}
-              disabled={savingSettings || !settings || !clientKey}
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {savingSettings ? "Salvando..." : "Salvar ajustes"}
-            </button>
+            <FlowBadge
+              label={settings ? "Rascunho local até salvar" : "Carregando"}
+              tone={settings ? "warning" : "default"}
+            />
           </div>
 
           {settings ? (
@@ -1001,6 +1054,64 @@ export default function AdminTenantChatbotPage() {
                     </span>
                   </label>
                 </div>
+                <div className="mt-3 rounded-md border border-white/10 bg-black/10 p-3">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">Catálogo de intenções da IA</h4>
+                      <p className="mt-1 text-xs text-white/55">
+                        Use para cadastrar respostas e classificações controladas por assunto. Cada item pode alimentar
+                        CRM, badge, prioridade e pergunta de continuidade.
+                      </p>
+                    </div>
+                    <FlowBadge
+                      label={`${automationDraft.aiAssistantIntentCatalog?.length ?? 0} intenção(ões)`}
+                      tone={intentCatalogJsonError ? "warning" : "default"}
+                    />
+                  </div>
+                  <textarea
+                    value={intentCatalogText}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      setIntentCatalogText(nextValue);
+                      try {
+                        const parsedCatalog = parseIntentCatalogText(nextValue);
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantIntentCatalog: parsedCatalog,
+                              }
+                            : current
+                        );
+                      } catch {
+                        // Keep the draft visible; save will show the validation error.
+                      }
+                    }}
+                    spellCheck={false}
+                    className="min-h-56 w-full rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 font-mono text-xs text-white outline-none focus:border-re7-sky"
+                    placeholder={`[
+  {
+    "key": "servico_principal",
+    "title": "Serviço principal",
+    "topics": ["termo do cliente", "sinônimo"],
+    "response": "Resposta aprovada para esse assunto.",
+    "nextQuestion": "Qual ponto você quer entender melhor?",
+    "leadTemp": "morno",
+    "priority": "media",
+    "tags": ["service:principal"]
+  }
+]`}
+                  />
+                  {intentCatalogJsonError ? (
+                    <p className="mt-2 rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                      Catálogo inválido: {intentCatalogJsonError}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-emerald-200/80">
+                      JSON válido. O catálogo será salvo junto com os demais ajustes.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-3 rounded-md border border-white/10 bg-re7-navy/50 p-3">
@@ -1011,6 +1122,27 @@ export default function AdminTenantChatbotPage() {
                   </p>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-white/60 md:col-span-2">
+                    Mensagem de boas-vindas da IA
+                    <textarea
+                      value={automationDraft.aiAssistantGreetingMessage ?? ""}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          current
+                            ? {
+                                ...current,
+                                aiAssistantGreetingMessage: event.target.value,
+                              }
+                            : current
+                        )
+                      }
+                      placeholder="Ex.: Olá! Seja bem-vindo(a). Me diga em poucas palavras como posso te ajudar."
+                      className="min-h-20 rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                    />
+                    <span className="text-[11px] text-white/45">
+                      Usada em saudações reais como oi, opa, bom dia, boa tarde e boa noite.
+                    </span>
+                  </label>
                   <label className="flex flex-col gap-1 text-xs text-white/60">
                     Sinais de encaminhamento humano
                     <textarea
