@@ -548,6 +548,7 @@ export function resolveTenantIntent(
     const topic = resolveTenantTopic(raw, candidates);
     if (!topic) continue;
     const key = sanitizeCrmToken(item.key) ?? item.key.trim().toLowerCase();
+    const canonicalTopic = normalizeContinuationTopic(item.title) ?? topic;
     const specificity = Math.max(
       ...candidates.map((candidate) => topicTokens(candidate).join("").length),
       key.length
@@ -555,7 +556,7 @@ export function resolveTenantIntent(
     const resolved: ResolvedTenantIntent & { specificity: number } = {
       key,
       title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : null,
-      topic,
+      topic: canonicalTopic,
       response: typeof item.response === "string" && item.response.trim() ? item.response.trim() : null,
       nextQuestion:
         typeof item.nextQuestion === "string" && item.nextQuestion.trim()

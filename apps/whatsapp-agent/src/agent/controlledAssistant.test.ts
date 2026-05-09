@@ -201,7 +201,7 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
   ];
   const retirement = resolveTenantIntent("vcs fazem aposentadoria?", catalog);
   assert.equal(retirement?.key, "servico_aposentadoria");
-  assert.equal(retirement?.topic, "voces fazem aposentadoria");
+  assert.equal(retirement?.topic, "aposentadoria");
   assert.equal(buildTenantIntentCatalogReply(retirement!), [
     "Sim, a equipe pode orientar pedidos de aposentadoria de forma geral.",
     "Voce quer entender requisitos gerais, documentos ou como funciona o atendimento?",
