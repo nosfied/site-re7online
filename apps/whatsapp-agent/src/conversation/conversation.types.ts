@@ -58,6 +58,13 @@ export type AIOrchestratorState = {
     awaitingConfirmation: boolean;
     confirmationRetryCount?: number;
   };
+  pendingOffer?: {
+    type: "continue_guidance" | "handoff" | "clarification" | "none";
+    promptedAt: string;
+    messageId: string;
+    text?: string;
+    retryCount?: number;
+  };
 };
 
 export type HandoffState = {

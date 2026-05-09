@@ -287,12 +287,6 @@ export const AI_ASSISTANT_GLOBAL_HANDOFF_TERMS = [
 ];
 
 const AI_ASSISTANT_VAGUE_MESSAGE_TERMS = [
-  "oi",
-  "ola",
-  "olá",
-  "bom dia",
-  "boa tarde",
-  "boa noite",
   "tudo bem",
   "ok",
   "sim",
@@ -302,6 +296,8 @@ const AI_ASSISTANT_VAGUE_MESSAGE_TERMS = [
   "obrigada",
   "valeu",
 ];
+
+const AI_ASSISTANT_GREETING_TERMS = ["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite"];
 
 const SAFE_CONTEXT_KEYS = [
   "area",
@@ -502,7 +498,10 @@ export function classifyAssistantFallback(
   if (containsAnyTerm(normalized, handoffTerms)) {
     return { intent: "handoff_prompt", reason: "handoff_signal" };
   }
-  if (AI_ASSISTANT_VAGUE_MESSAGE_TERMS.some((term) => normalized === normalizeText(term))) {
+  if (
+    AI_ASSISTANT_GREETING_TERMS.some((term) => normalized === normalizeText(term)) ||
+    AI_ASSISTANT_VAGUE_MESSAGE_TERMS.some((term) => normalized === normalizeText(term))
+  ) {
     return { intent: "generic_guidance", reason: "vague_message" };
   }
   return { intent: "generic_guidance", reason: "not_simple_question" };
@@ -518,12 +517,12 @@ export function classifyContextualFallback(
   const raw = String(text ?? "").trim();
   const normalized = normalizeText(raw);
   if (!normalized) return { type: "unknown", confidence: 0.4, reason: "empty" };
-  if (AI_ASSISTANT_VAGUE_MESSAGE_TERMS.some((term) => normalized === normalizeText(term))) {
-    const negativeTerms = ["nao", "não", "obrigado", "obrigada", "valeu"];
-    if (negativeTerms.some((term) => normalized === normalizeText(term))) {
-      return { type: "negative", confidence: 0.9, reason: "negative_short" };
-    }
+  if (AI_ASSISTANT_GREETING_TERMS.some((term) => normalized === normalizeText(term))) {
     return { type: "greeting", confidence: 0.9, reason: "greeting_exact" };
+  }
+  const negativeTerms = ["nao", "não", "obrigado", "obrigada", "valeu"];
+  if (negativeTerms.some((term) => normalized === normalizeText(term))) {
+    return { type: "negative", confidence: 0.9, reason: "negative_short" };
   }
   if (
     containsAnyTerm(normalized, [
@@ -591,6 +590,62 @@ export function buildContextualFallbackReply(input: {
     return input.fallbackMessage.trim().slice(0, 700);
   }
   return CONTEXTUAL_FALLBACK_REPLIES[input.result.type] || CONTEXTUAL_FALLBACK_REPLIES.unknown;
+}
+
+export function classifyPendingOfferResponse(text: string | null | undefined) {
+  const normalized = normalizeText(text);
+  if (!normalized) return "invalid" as const;
+  const negativeTerms = [
+    "nao",
+    "agora nao",
+    "depois",
+    "nao quero",
+    "continuar aqui",
+  ];
+  if (negativeTerms.some((term) => normalized === term || normalized.includes(term))) {
+    return "declined" as const;
+  }
+  const positiveTerms = [
+    "sim",
+    "quero",
+    "pode",
+    "ok",
+    "claro",
+    "sim quero",
+    "pode sim",
+    "pode encaminhar",
+  ];
+  if (positiveTerms.some((term) => normalized === term || normalized.includes(term))) {
+    return "accepted" as const;
+  }
+  return "invalid" as const;
+}
+
+export function inferPendingOfferTypeFromReply(text: string | null | undefined) {
+  const normalized = normalizeText(text);
+  if (!normalized) return null;
+  if (
+    normalized.includes("posso direcionar") ||
+    normalized.includes("posso encaminhar") ||
+    normalized.includes("encaminhar voce") ||
+    normalized.includes("encaminhar você")
+  ) {
+    return "handoff" as const;
+  }
+  if (
+    normalized.includes("se quiser posso te orientar melhor conforme sua situacao") ||
+    normalized.includes("se quiser posso te orientar melhor conforme sua situação")
+  ) {
+    return "continue_guidance" as const;
+  }
+  if (
+    normalized.includes("me diga em poucas palavras") ||
+    normalized.includes("voce pode me dizer em poucas palavras") ||
+    normalized.includes("você pode me dizer em poucas palavras")
+  ) {
+    return "clarification" as const;
+  }
+  return null;
 }
 
 export function buildAssistantLimitReachedReply(input: {
@@ -704,7 +759,13 @@ export function classifyEducationalIntent(
     return { allowed: false, educational: false, reason: "not_educational_shape" };
   }
   const topicTerms = normalizeTermList(options.allowedTopics);
-  const matchedTopic = topicTerms.find((term) => normalized.includes(normalizeText(term)));
+  const matchedTopics = topicTerms.filter((term) => normalized.includes(normalizeText(term)));
+  const matchedTopic =
+    (normalized.includes("aposent")
+      ? matchedTopics.find((term) => normalizeText(term).includes("aposent")) ?? "aposentadoria"
+      : null) ??
+    matchedTopics.find((term) => !["homem", "mulher", "masculino", "feminino"].includes(normalizeText(term))) ??
+    matchedTopics[0];
   if (!matchedTopic) {
     return { allowed: false, educational: true, reason: "topic_not_allowed" };
   }

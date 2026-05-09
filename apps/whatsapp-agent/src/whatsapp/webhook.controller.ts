@@ -43,11 +43,13 @@ import {
   classifyAssistantFallback,
   classifyContextualFallback,
   classifyEducationalIntent,
+  classifyPendingOfferResponse,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
+  inferPendingOfferTypeFromReply,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
   updateAiMemory,
@@ -69,6 +71,7 @@ import {
 } from "../services/outboundTemplateService.js";
 import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
 import {
+  AIOrchestratorState,
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
@@ -3235,7 +3238,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         message.messageId
       );
     }
-    const aiHandoffPrompt = updatedConversation.answers?.aiOrchestrator?.handoffPrompt;
+    const pendingOffer = updatedConversation.answers?.aiOrchestrator?.pendingOffer;
+    const aiHandoffPrompt =
+      updatedConversation.answers?.aiOrchestrator?.handoffPrompt ??
+      (pendingOffer?.type === "handoff"
+        ? {
+            prompted: true,
+            promptedAt: pendingOffer.promptedAt,
+            messageId: pendingOffer.messageId,
+            reason: "pending_offer_handoff",
+            score: 3,
+            awaitingConfirmation: true,
+            confirmationRetryCount: pendingOffer.retryCount ?? 0,
+          }
+        : undefined);
     if (
       aiHandoffPrompt?.awaitingConfirmation === true &&
       updatedConversation.mode !== "HUMAN" &&
@@ -3304,7 +3320,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       );
 
       if (normalizedConfirmation === "accepted") {
-        const clearedAnswers = {
+        const clearedAnswers: ConversationState["answers"] = {
           ...(updatedConversation.answers ?? {}),
           aiOrchestrator: {
             ...(previousAiOrchestrator ?? {}),
@@ -3312,6 +3328,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               ...aiHandoffPrompt,
               awaitingConfirmation: false,
               confirmationRetryCount: aiHandoffPrompt.confirmationRetryCount ?? 0,
+            },
+            pendingOffer: {
+              type: "none",
+              promptedAt: new Date().toISOString(),
+              messageId: message.messageId,
+              retryCount: pendingOffer?.retryCount ?? 0,
             },
             handoffRecommended: true,
             lastMessageId: message.messageId,
@@ -3474,6 +3496,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 awaitingConfirmation: false,
                 confirmationRetryCount: aiHandoffPrompt.confirmationRetryCount ?? 0,
               },
+              pendingOffer: {
+                type: "none",
+                promptedAt: new Date().toISOString(),
+                messageId: message.messageId,
+                retryCount: pendingOffer?.retryCount ?? 0,
+              },
               handoffRecommended: false,
               lastMessageId: message.messageId,
               lastNextActionAt: new Date().toISOString(),
@@ -3530,6 +3558,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               awaitingConfirmation: !shouldClosePrompt,
               confirmationRetryCount: nextRetryCount,
             },
+            pendingOffer: {
+              type: shouldClosePrompt ? "none" : "handoff",
+              promptedAt: pendingOffer?.promptedAt ?? aiHandoffPrompt.promptedAt,
+              messageId: pendingOffer?.messageId ?? aiHandoffPrompt.messageId,
+              retryCount: nextRetryCount,
+            },
             handoffRecommended: !shouldClosePrompt,
             lastMessageId: message.messageId,
             lastNextActionAt: new Date().toISOString(),
@@ -3574,6 +3608,269 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             updatedConversation,
             result.messageId
           );
+        }
+      }
+      continue;
+    }
+    const activePendingOffer = updatedConversation.answers?.aiOrchestrator?.pendingOffer;
+    if (
+      activePendingOffer &&
+      activePendingOffer.type !== "none" &&
+      activePendingOffer.type !== "handoff" &&
+      updatedConversation.mode !== "HUMAN" &&
+      updatedConversation.handoff.status === "none"
+    ) {
+      const decision = classifyPendingOfferResponse(message.text);
+      const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
+      const persistCurrentInboundForTurn = async (state: ConversationState) => {
+        await upsertConversationSafe(state);
+        await persistConversationSafe({
+          waId: state.waId,
+          windowIsOpen: state.window.isOpen,
+          windowExpiresAt: state.window.expiresAt,
+          lastInboundAt: state.lastInboundAt ?? null,
+          lastOutboundAt: state.lastOutboundAt ?? null,
+          departmentId: state.departmentId ?? null,
+        });
+        await storage.saveIncomingMessage(toStoredIncomingMessage(message, status, allowlistHit));
+        await persistInboundSafe({
+          waId: message.from,
+          messageId: message.messageId,
+          type: mapMessageType(message.type),
+          bodyText: message.text,
+          allowlistHit,
+          occurredAt: parseWebhookTimestampToDate(message.timestamp),
+          rawPayload: {
+            ...message.raw,
+            text: message.text,
+            timestamp: message.timestamp,
+          },
+        });
+        logger.info({
+          event: "webhook.message",
+          messageId: message.messageId,
+          from: maskNumber(message.from),
+          type: message.type,
+          status,
+          allowlistHit,
+          route: meta?.route,
+          method: meta?.method,
+          requestId: meta?.requestId,
+        });
+      };
+      const clearPendingOffer = {
+        type: "none" as const,
+        promptedAt: new Date().toISOString(),
+        messageId: message.messageId,
+        retryCount: activePendingOffer.retryCount ?? 0,
+      };
+      const setPendingOfferState = (
+        pendingOffer: AIOrchestratorState["pendingOffer"] = clearPendingOffer
+      ): ConversationState => ({
+        ...updatedConversation,
+        answers: {
+          ...(updatedConversation.answers ?? {}),
+          aiOrchestrator: {
+            ...(previousAiOrchestrator ?? {}),
+            pendingOffer,
+            lastMessageId: message.messageId,
+            lastNextActionAt: new Date().toISOString(),
+          },
+        },
+      });
+      logger.info({
+        event: "ai.turn.pending_offer.consumed",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        offerType: activePendingOffer.type,
+        decision,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.turn.pending_offer.consumed",
+        {
+          action: "ai.turn.pending_offer.consumed",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          offerType: activePendingOffer.type,
+          decision,
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+      if (activePendingOffer.type === "clarification") {
+        if (decision === "declined") {
+          updatedConversation = setPendingOfferState();
+          await persistCurrentInboundForTurn(updatedConversation);
+          logger.info({
+            event: "ai.turn.pending_offer.declined",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            waId: maskNumber(normalizedFrom),
+            offerType: activePendingOffer.type,
+            requestId: meta?.requestId,
+          });
+          await persistEventSafe(
+            "ai.turn.pending_offer.declined",
+            {
+              action: "ai.turn.pending_offer.declined",
+              clientId: tenantClientId || null,
+              clientKey: tenantClientKey || null,
+              offerType: activePendingOffer.type,
+            } as Prisma.InputJsonValue,
+            normalizedFrom,
+            message.messageId
+          );
+          if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+            const result = await sendOutboundText({
+              toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+              waId: normalizedFrom,
+              intent: updatedConversation.intent,
+              messageId: `ai.turn.pending_offer.declined.${message.messageId}`,
+              replyText: "Tudo bem. Se precisar de algo, é só me chamar.",
+              guard: inboundGuard,
+            });
+            if (result.ok) {
+              updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
+            }
+          }
+          continue;
+        }
+        if (decision === "accepted") {
+          updatedConversation = setPendingOfferState(activePendingOffer);
+          await persistCurrentInboundForTurn(updatedConversation);
+          if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+            const result = await sendOutboundText({
+              toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+              waId: normalizedFrom,
+              intent: updatedConversation.intent,
+              messageId: `ai.turn.pending_offer.${message.messageId}`,
+              replyText: "Certo. Me diga em poucas palavras o que você precisa.",
+              guard: inboundGuard,
+            });
+            if (result.ok) {
+              updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
+            }
+          }
+          continue;
+        }
+        updatedConversation = setPendingOfferState();
+        logger.info({
+          event: "ai.turn.pending_offer.consumed",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          offerType: activePendingOffer.type,
+          decision: "useful_text",
+          route: "continue_processing",
+          requestId: meta?.requestId,
+        });
+      } else if (activePendingOffer.type === "continue_guidance") {
+      if (decision === "accepted") {
+        updatedConversation = setPendingOfferState();
+        await persistCurrentInboundForTurn(updatedConversation);
+        const reply =
+          activePendingOffer.type === "continue_guidance"
+            ? "Certo. Para te orientar melhor, me diga qual ponto você quer entender: regra geral, prazo, valores, documentos ou atendimento com a equipe."
+            : "Certo. Me diga em poucas palavras o que você quer entender melhor.";
+        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+          const result = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `ai.turn.pending_offer.${message.messageId}`,
+            replyText: reply,
+            guard: inboundGuard,
+          });
+          if (result.ok) {
+            updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
+          }
+        }
+        continue;
+      }
+      }
+      if (decision === "declined") {
+        updatedConversation = setPendingOfferState();
+        await persistCurrentInboundForTurn(updatedConversation);
+        logger.info({
+          event: "ai.turn.pending_offer.declined",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(normalizedFrom),
+          offerType: activePendingOffer.type,
+          requestId: meta?.requestId,
+        });
+        await persistEventSafe(
+          "ai.turn.pending_offer.declined",
+          {
+            action: "ai.turn.pending_offer.declined",
+            clientId: tenantClientId || null,
+            clientKey: tenantClientKey || null,
+            offerType: activePendingOffer.type,
+          } as Prisma.InputJsonValue,
+          normalizedFrom,
+          message.messageId
+        );
+        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+          const result = await sendOutboundText({
+            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+            waId: normalizedFrom,
+            intent: updatedConversation.intent,
+            messageId: `ai.turn.pending_offer.declined.${message.messageId}`,
+            replyText: "Tudo bem. Se precisar de algo, é só me chamar.",
+            guard: inboundGuard,
+          });
+          if (result.ok) {
+            updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
+          }
+        }
+        continue;
+      }
+      const retryCount = (activePendingOffer.retryCount ?? 0) + 1;
+      const shouldClose = retryCount >= 2;
+      updatedConversation = setPendingOfferState({
+        ...activePendingOffer,
+        type: shouldClose ? "none" : activePendingOffer.type,
+        retryCount,
+      });
+      await persistCurrentInboundForTurn(updatedConversation);
+      logger.info({
+        event: "ai.turn.pending_offer.invalid",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(normalizedFrom),
+        offerType: activePendingOffer.type,
+        retryCount,
+        awaitingConfirmation: !shouldClose,
+        requestId: meta?.requestId,
+      });
+      await persistEventSafe(
+        "ai.turn.pending_offer.invalid",
+        {
+          action: "ai.turn.pending_offer.invalid",
+          clientId: tenantClientId || null,
+          clientKey: tenantClientKey || null,
+          offerType: activePendingOffer.type,
+          retryCount,
+          awaitingConfirmation: !shouldClose,
+        } as Prisma.InputJsonValue,
+        normalizedFrom,
+        message.messageId
+      );
+      if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
+        const result = await sendOutboundText({
+          toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
+          waId: normalizedFrom,
+          intent: updatedConversation.intent,
+          messageId: `ai.turn.pending_offer.invalid.${message.messageId}`,
+          replyText: shouldClose
+            ? "Tudo bem. Se precisar de algo, é só me chamar."
+            : "Só para confirmar: você quer continuar por aqui?",
+          guard: inboundGuard,
+        });
+        if (result.ok) {
+          updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
         }
       }
       continue;
@@ -5215,6 +5512,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     awaitingConfirmation: true,
                   }
                 : previousAiOrchestrator?.handoffPrompt,
+              pendingOffer: canOfferHandoff
+                ? {
+                    type: "handoff",
+                    promptedAt: nowIso,
+                    messageId: message.messageId,
+                    retryCount: 0,
+                  }
+                : inferPendingOfferTypeFromReply(replyText)
+                  ? {
+                      type: inferPendingOfferTypeFromReply(replyText)!,
+                      promptedAt: nowIso,
+                      messageId: message.messageId,
+                      retryCount: 0,
+                    }
+                  : previousAiOrchestrator?.pendingOffer,
             },
           },
         };
@@ -5332,6 +5644,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
               const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
               let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
+              let nextPendingOffer = previousAiOrchestrator?.pendingOffer;
               if (allowed) {
                 await logAiAssistantEvent("ai.orchestrator.handoff_threshold_reached", {
                   source: "deterministic_fallback",
@@ -5365,6 +5678,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     score: scoreResult.score,
                     awaitingConfirmation: true,
                   };
+                  nextPendingOffer = {
+                    type: "handoff",
+                    promptedAt: new Date().toISOString(),
+                    messageId: message.messageId,
+                    retryCount: 0,
+                  };
+                  await logAiAssistantEvent("ai.turn.pending_offer.created", {
+                    type: "handoff",
+                    source: "deterministic_fallback",
+                    reason: lastReason,
+                  });
                   await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
                     source: "deterministic_fallback",
                     reason: lastReason,
@@ -5465,6 +5789,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                       lowConfidenceCount: previousHandoffSignals.lowConfidenceCount ?? 0,
                     },
                     handoffPrompt: nextHandoffPrompt,
+                    pendingOffer: nextPendingOffer,
                   },
                 },
               };
@@ -5553,6 +5878,37 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   source: "contextual_fallback",
                 });
               }
+              const inferredPendingOffer = inferPendingOfferTypeFromReply(replyText);
+              const fallbackPendingOffer =
+                inferredPendingOffer &&
+                !(contextualFallback.type === "greeting" && updatedConversation.answers?.aiOrchestrator)
+                  ? {
+                      type: inferredPendingOffer,
+                      promptedAt: new Date().toISOString(),
+                      messageId: message.messageId,
+                      text: undefined,
+                      retryCount: 0,
+                    }
+                  : updatedConversation.answers?.aiOrchestrator?.pendingOffer;
+              const fallbackHandoffPrompt =
+                fallbackPendingOffer?.type === "handoff" &&
+                appliedTenantConfig.aiAssistantFallbackToHandoff === true
+                  ? {
+                      prompted: true,
+                      promptedAt: fallbackPendingOffer.promptedAt,
+                      messageId: message.messageId,
+                      reason: contextualFallback.reason,
+                      score: 3,
+                      awaitingConfirmation: true,
+                    }
+                  : updatedConversation.answers?.aiOrchestrator?.handoffPrompt;
+              if (inferredPendingOffer) {
+                await logAiAssistantEvent("ai.turn.pending_offer.created", {
+                  type: inferredPendingOffer,
+                  source: "contextual_fallback",
+                  reason: contextualFallback.reason,
+                });
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {
@@ -5573,10 +5929,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                       updatedConversation.answers?.aiOrchestrator?.missingInformation ?? [],
                     lastAction: "fallback_menu",
                     lastConfidence: 1,
-                    handoffRecommended: false,
+                    handoffRecommended: fallbackPendingOffer?.type === "handoff",
                     lastMessageId: message.messageId,
                     lastQuestion: null,
                     lastNextActionAt: new Date().toISOString(),
+                    handoffPrompt: fallbackHandoffPrompt,
+                    pendingOffer: fallbackPendingOffer,
                   },
                 },
               };
@@ -5727,6 +6085,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
               let nextHandoffSignals = previousHandoffSignals;
               let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
+              let nextPendingOffer = previousAiOrchestrator?.pendingOffer;
               if (aiReply.output.handoff_recommended) {
                 const scoreResult = calculateHandoffScore({
                   output: aiReply.output,
@@ -5810,6 +6169,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                       score: scoreResult.score,
                       awaitingConfirmation: true,
                     };
+                    nextPendingOffer = {
+                      type: "handoff",
+                      promptedAt: new Date().toISOString(),
+                      messageId: message.messageId,
+                      retryCount: 0,
+                    };
+                    await logAiAssistantEvent("ai.turn.pending_offer.created", {
+                      type: "handoff",
+                      source: "orchestrator",
+                      reason: lastReason,
+                    });
                     await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
                       reason: lastReason,
                       score: scoreResult.score,
@@ -5850,6 +6220,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     threshold: scoreResult.threshold,
                   });
                 }
+              }
+              const inferredResolvedOffer = inferPendingOfferTypeFromReply(replyText);
+              if (inferredResolvedOffer && nextPendingOffer?.type !== "handoff") {
+                nextPendingOffer = {
+                  type: inferredResolvedOffer,
+                  promptedAt: new Date().toISOString(),
+                  messageId: message.messageId,
+                  retryCount: 0,
+                };
+                await logAiAssistantEvent("ai.turn.pending_offer.created", {
+                  type: inferredResolvedOffer,
+                  source: "orchestrator_reply",
+                  reason: resolvedAction.action,
+                });
               }
               await applyAiMemoryUpdate({
                 topic: educationalIntent.topic ?? aiReply.output.goal ?? aiReply.output.stage,
@@ -5917,6 +6301,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastNextActionAt: new Date().toISOString(),
                     handoffSignals: nextHandoffSignals,
                     handoffPrompt: nextHandoffPrompt,
+                    pendingOffer: nextPendingOffer,
                   },
                 },
               };

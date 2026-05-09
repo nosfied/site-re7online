@@ -11,11 +11,13 @@ import {
   classifyAssistantFallback,
   classifyContextualFallback,
   classifyEducationalIntent,
+  classifyPendingOfferResponse,
   canEvaluateHandoffRecommendation,
   classifyRisk,
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
+  inferPendingOfferTypeFromReply,
   isSimpleQuestion,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
@@ -44,7 +46,7 @@ const baseState: ConversationState = {
 
 test("isSimpleQuestion accepts general educational questions", () => {
   assert.equal(isSimpleQuestion("O que é BPC?"), false);
-  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), false);
+  assert.equal(isSimpleQuestion("Como funciona aposentadoria?"), true);
   assert.equal(isSimpleQuestion("O que é BPC?", { allowedTopics: ["bpc"] }), true);
   assert.equal(isSimpleQuestion("Como funciona aposentadoria?", { allowedTopics: ["aposentadoria"] }), true);
 });
@@ -69,7 +71,7 @@ test("isSimpleQuestion supports tenant-specific topics and extra blocked terms",
 test("classifyEducationalIntent routes broader tenant educational questions", () => {
   assert.deepEqual(
     classifyEducationalIntent("sou homem, posso me aposentar com quantos anos em 2026?", {
-      allowedTopics: ["aposentar", "aposentadoria"],
+      allowedTopics: ["homem", "aposentar", "aposentadoria"],
     }),
     {
       allowed: true,
@@ -99,6 +101,8 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
     reason: "greeting_exact",
   });
   assert.equal(classifyContextualFallback("não quero").type, "negative");
+  assert.notEqual(classifyContextualFallback("sim").type, "greeting");
+  assert.notEqual(classifyContextualFallback("ok").type, "greeting");
   assert.equal(classifyContextualFallback("não entendi bem").type, "clarification");
   assert.equal(
     classifyContextualFallback("vocês fazem divórcio?", {
@@ -117,6 +121,25 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
       allowedTopics: ["carência gravidez", "gravidez"],
     }).allowed,
     true
+  );
+});
+
+test("pending offer helpers interpret short contextual confirmations", () => {
+  assert.equal(classifyPendingOfferResponse("sim, quero"), "accepted");
+  assert.equal(classifyPendingOfferResponse("pode sim"), "accepted");
+  assert.equal(classifyPendingOfferResponse("não quero"), "declined");
+  assert.equal(classifyPendingOfferResponse("qual documento?"), "invalid");
+  assert.equal(
+    inferPendingOfferTypeFromReply("Se quiser, posso te orientar melhor conforme sua situação."),
+    "continue_guidance"
+  );
+  assert.equal(
+    inferPendingOfferTypeFromReply("Esse tema pode fugir do atendimento automático configurado aqui. Posso direcionar você para uma pessoa da equipe?"),
+    "handoff"
+  );
+  assert.equal(
+    inferPendingOfferTypeFromReply("Olá! Me diga em poucas palavras como posso te ajudar."),
+    "clarification"
   );
 });
 
