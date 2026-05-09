@@ -45,6 +45,7 @@ import {
   classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
+  enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
   resolveOrchestratorAction,
@@ -5860,6 +5861,37 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 handoffRecommended: aiReply.output.handoff_recommended,
                 source: "orchestrator",
               });
+              const crmEnrichment = enrichCrmFromOrchestrator({
+                state: updatedConversation,
+                output: aiReply.output,
+                topic: educationalIntent.topic ?? null,
+                nowIso: new Date().toISOString(),
+              });
+              updatedConversation = crmEnrichment.state;
+              if (crmEnrichment.enriched) {
+                await logAiAssistantEvent("ai.crm.enriched", {
+                  source: "orchestrator",
+                  changedFields: crmEnrichment.changedFields,
+                  addedTags: crmEnrichment.addedTags,
+                  confidence: aiReply.output.confidence,
+                });
+                if (crmEnrichment.addedTags.length) {
+                  await logAiAssistantEvent("ai.crm.tag_added", {
+                    tags: crmEnrichment.addedTags,
+                  });
+                }
+                if (crmEnrichment.priorityUpdated) {
+                  await logAiAssistantEvent("ai.crm.priority_updated", {
+                    leadTemp: aiReply.output.lead_temp,
+                    priority: aiReply.output.priority,
+                  });
+                }
+              } else {
+                await logAiAssistantEvent("ai.crm.enrichment_skipped", {
+                  reason: crmEnrichment.skippedReason ?? "no_changes",
+                  confidence: aiReply.output.confidence,
+                });
+              }
               updatedConversation = {
                 ...updatedConversation,
                 answers: {

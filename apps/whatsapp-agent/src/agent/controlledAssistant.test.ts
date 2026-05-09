@@ -13,6 +13,7 @@ import {
   classifyEducationalIntent,
   canEvaluateHandoffRecommendation,
   classifyRisk,
+  enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
   isSimpleQuestion,
@@ -292,6 +293,7 @@ test("generateControlledAssistantReply accepts structured orchestrator output", 
       return {
         text: JSON.stringify({
           reply: "BPC/LOAS é um benefício assistencial explicado de forma geral.",
+          intent: "bpc_loas",
           stage: "qualification",
           goal: "discover_service",
           confidence: 0.82,
@@ -323,8 +325,148 @@ test("generateControlledAssistantReply accepts structured orchestrator output", 
 
   assert.equal(result.ok, true);
   assert.equal(result.ok ? result.output.stage : null, "qualification");
+  assert.equal(result.ok ? result.output.intent : null, "bpc_loas");
   assert.equal(result.ok ? result.output.next_action : null, "ask_question");
   assert.deepEqual(result.ok ? result.output.missing_information : [], ["tipo_de_beneficio"]);
+});
+
+test("enrichCrmFromOrchestrator fills safe CRM context and tags from AI", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    intent: "aposentadoria",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.82,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+    lead_temp: "morno",
+    priority: "media",
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const result = enrichCrmFromOrchestrator({
+    state: { ...baseState, answers: {} },
+    output: output.output,
+    topic: "aposentadoria",
+    nowIso: "2026-05-09T00:00:00.000Z",
+  });
+  assert.equal(result.enriched, true);
+  assert.equal(result.state.answers?.flowContext?.intent, "aposentadoria");
+  assert.equal(result.state.answers?.flowContext?.servico, "aposentadoria");
+  assert.equal(result.state.answers?.flowContext?.lead_temp, "morno");
+  assert.equal(result.state.answers?.flowContext?.prioridade, "media");
+  assert.equal(result.state.answers?.flowContext?.origem_intencao, "ai_orchestrator");
+  assert.equal(result.state.answers?.flowTags?.includes("intent:aposentadoria"), true);
+  assert.equal(result.state.answers?.flowTags?.includes("topic:aposentadoria"), true);
+  assert.equal(result.state.answers?.flowTags?.includes("lead:morno"), true);
+  assert.equal(result.priorityUpdated, true);
+});
+
+test("enrichCrmFromOrchestrator respects confidence and stronger context", () => {
+  const lowOutput = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    intent: "aposentadoria",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.5,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+  });
+  assert.equal(lowOutput.ok, true);
+  if (!lowOutput.ok) return;
+  assert.equal(
+    enrichCrmFromOrchestrator({
+      state: baseState,
+      output: lowOutput.output,
+      topic: "aposentadoria",
+      nowIso: "2026-05-09T00:00:00.000Z",
+    }).skippedReason,
+    "low_confidence"
+  );
+
+  const highOutput = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    intent: "aposentadoria",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.9,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+    lead_temp: "frio",
+  });
+  assert.equal(highOutput.ok, true);
+  if (!highOutput.ok) return;
+  const stateWithClassifierContext: ConversationState = {
+    ...baseState,
+    answers: {
+      ...(baseState.answers ?? {}),
+      flowContext: {
+        intent: "beneficio_negado",
+        lead_temp: "quente",
+        origem_intencao: "mensagem_livre",
+      },
+      flowTags: ["intent:beneficio_negado"],
+    },
+  };
+  const enriched = enrichCrmFromOrchestrator({
+    state: stateWithClassifierContext,
+    output: highOutput.output,
+    topic: "aposentadoria",
+    nowIso: "2026-05-09T00:00:00.000Z",
+  });
+  assert.equal(enriched.state.answers?.flowContext?.intent, "beneficio_negado");
+  assert.equal(enriched.state.answers?.flowContext?.lead_temp, "quente");
+  assert.equal(enriched.state.answers?.flowTags?.includes("topic:aposentadoria"), true);
+});
+
+test("enrichCrmFromOrchestrator does not claim origin for existing strong context without origin", () => {
+  const output = validateOrchestratorOutput({
+    reply: "Resposta geral segura.",
+    intent: "aposentadoria",
+    stage: "triage",
+    goal: "explain_general_topic",
+    confidence: 0.9,
+    missing_information: [],
+    next_action: "answer",
+    handoff_recommended: false,
+    lead_temp: "frio",
+    priority: "baixa",
+  });
+  assert.equal(output.ok, true);
+  if (!output.ok) return;
+  const strongState: ConversationState = {
+    ...baseState,
+    answers: {
+      flowContext: {
+        intent: "beneficio_negado",
+        lead_temp: "quente",
+      },
+      flowTags: ["intent:beneficio_negado", "lead:quente"],
+    },
+  };
+  const first = enrichCrmFromOrchestrator({
+    state: strongState,
+    output: output.output,
+    topic: "aposentadoria",
+    nowIso: "2026-05-09T00:00:00.000Z",
+  });
+  assert.equal(first.state.answers?.flowContext?.origem_intencao, undefined);
+  assert.equal(first.state.answers?.flowContext?.intent, "beneficio_negado");
+  assert.equal(first.state.answers?.flowContext?.lead_temp, "quente");
+  assert.equal(first.state.answers?.flowTags?.includes("topic:aposentadoria"), true);
+
+  const second = enrichCrmFromOrchestrator({
+    state: first.state,
+    output: output.output,
+    topic: "aposentadoria",
+    nowIso: "2026-05-09T00:01:00.000Z",
+  });
+  assert.equal(second.state.answers?.flowContext?.origem_intencao, undefined);
+  assert.equal(second.state.answers?.flowContext?.intent, "beneficio_negado");
+  assert.equal(second.state.answers?.flowContext?.lead_temp, "quente");
 });
 
 test("generateControlledAssistantReply rejects truncated JSON instead of sending code", async () => {

@@ -76,6 +76,7 @@ export type OrchestratorPriority = "alta" | "media" | "baixa";
 
 export type RawOrchestratorOutput = {
   reply?: unknown;
+  intent?: unknown;
   stage?: unknown;
   goal?: unknown;
   confidence?: unknown;
@@ -89,6 +90,7 @@ export type RawOrchestratorOutput = {
 
 export type ValidatedOrchestratorOutput = {
   reply: string;
+  intent: string | null;
   stage: ConversationStage;
   goal: ConversationGoal | string | null;
   confidence: number;
@@ -98,6 +100,22 @@ export type ValidatedOrchestratorOutput = {
   handoff_recommended: boolean;
   lead_temp: OrchestratorLeadTemp | null;
   priority: OrchestratorPriority | null;
+};
+
+export type AICrmEnrichmentInput = {
+  state: ConversationState;
+  output: ValidatedOrchestratorOutput;
+  topic?: string | null;
+  nowIso: string;
+};
+
+export type AICrmEnrichmentResult = {
+  state: ConversationState;
+  enriched: boolean;
+  skippedReason?: string;
+  changedFields: string[];
+  addedTags: string[];
+  priorityUpdated: boolean;
 };
 
 export type ResolvedOrchestratorAction =
@@ -858,6 +876,110 @@ export function updateAiMemory(input: AIMemoryUpdateInput): AIMemoryUpdateResult
   return { memory: nextMemory, updated: previousJson !== nextJson, compacted };
 }
 
+function canSetAiCrmField(context: FlowContext, key: string) {
+  const currentOrigin = typeof context.origem_intencao === "string" ? context.origem_intencao : null;
+  if (!hasOperationalContextValue(context[key])) return true;
+  return currentOrigin === "ai_orchestrator";
+}
+
+function hasStrongOperationalContext(context: FlowContext, tags: string[]) {
+  const strongKeys = ["intent", "servico", "area", "situacao", "lead_temp", "prioridade"];
+  return (
+    strongKeys.some((key) => hasOperationalContextValue(context[key])) ||
+    tags.some(
+      (tag) =>
+        typeof tag === "string" &&
+        (/^(intent|lead|priority|flow|topic):/.test(tag) || tag === "mensagem_livre")
+    )
+  );
+}
+
+function addUniqueTag(tags: string[], tag: string) {
+  if (!tag || tags.includes(tag)) return false;
+  tags.push(tag);
+  return true;
+}
+
+export function enrichCrmFromOrchestrator(input: AICrmEnrichmentInput): AICrmEnrichmentResult {
+  if (input.output.confidence < 0.65) {
+    return {
+      state: input.state,
+      enriched: false,
+      skippedReason: "low_confidence",
+      changedFields: [],
+      addedTags: [],
+      priorityUpdated: false,
+    };
+  }
+  const answers = input.state.answers ?? {};
+  const currentContext = answers.flowContext ?? {};
+  const nextContext: FlowContext = { ...currentContext };
+  const currentTags = Array.isArray(answers.flowTags) ? answers.flowTags : [];
+  const nextTags = [...currentTags];
+  const changedFields: string[] = [];
+  const addedTags: string[] = [];
+  const currentOrigin =
+    typeof currentContext.origem_intencao === "string" ? currentContext.origem_intencao : null;
+  const canClaimAiOrigin =
+    currentOrigin === "ai_orchestrator" ||
+    (!currentOrigin && !hasStrongOperationalContext(currentContext, currentTags));
+  const setField = (key: string, value: string | number | boolean | null | undefined) => {
+    if (!hasOperationalContextValue(value) || !canSetAiCrmField(currentContext, key)) return;
+    nextContext[key] = value as string | number | boolean | null;
+    changedFields.push(key);
+  };
+  const memoryFacts = answers.aiMemory?.facts ?? {};
+  const topic = sanitizeCrmToken(input.topic);
+  const intent = input.output.intent ?? topic ?? sanitizeCrmToken(memoryFacts.intent);
+  const service = intent ?? sanitizeCrmToken(memoryFacts.servico);
+  if (canClaimAiOrigin) {
+    setField("origem_intencao", "ai_orchestrator");
+  }
+  setField("intent", intent ?? undefined);
+  setField("servico", service ?? undefined);
+  setField("area", sanitizeCrmToken(memoryFacts.area) ?? undefined);
+  setField("situacao", input.output.stage);
+  setField("fase", input.output.stage);
+  setField("lead_temp", input.output.lead_temp ?? undefined);
+  setField("prioridade", input.output.priority ?? undefined);
+
+  const tagCandidates = [
+    intent ? `intent:${intent}` : null,
+    topic ? `topic:${topic}` : null,
+    input.output.lead_temp ? `lead:${input.output.lead_temp}` : null,
+    input.output.priority ? `priority:${input.output.priority}` : null,
+  ].filter((tag): tag is string => Boolean(tag));
+  for (const tag of tagCandidates) {
+    if (addUniqueTag(nextTags, tag)) addedTags.push(tag);
+  }
+
+  if (!changedFields.length && !addedTags.length) {
+    return {
+      state: input.state,
+      enriched: false,
+      skippedReason: "no_changes",
+      changedFields,
+      addedTags,
+      priorityUpdated: false,
+    };
+  }
+
+  return {
+    state: {
+      ...input.state,
+      answers: {
+        ...answers,
+        flowContext: nextContext,
+        flowTags: nextTags,
+      },
+    },
+    enriched: true,
+    changedFields,
+    addedTags,
+    priorityUpdated: changedFields.includes("lead_temp") || changedFields.includes("prioridade"),
+  };
+}
+
 function buildBusinessContext(params: ControlledAssistantInput) {
   const context = sanitizeFlowContext(params.state.answers?.flowContext);
   const memory = sanitizeAiMemory(params.state.answers?.aiMemory);
@@ -878,7 +1000,7 @@ function buildBusinessContext(params: ControlledAssistantInput) {
     `Contexto categórico: ${JSON.stringify(context)}`,
     memoryForPrompt ? `Memória operacional resumida: ${JSON.stringify(memoryForPrompt)}` : null,
     "Regras: responda apenas dúvidas gerais e educativas dentro do contexto aprovado do tenant. Não dê orientação profissional individualizada, não analise caso concreto, não prometa resultado, não solicite dados sensíveis e encaminhe dúvidas específicas para atendimento humano.",
-    "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
+    "Formato obrigatório: retorne apenas JSON válido, sem markdown, no schema {\"reply\":\"...\",\"intent\":null,\"stage\":\"triage\",\"goal\":\"explain_general_topic\",\"confidence\":0.8,\"missing_information\":[],\"next_action\":\"answer\",\"next_question\":null,\"handoff_recommended\":false,\"lead_temp\":null,\"priority\":null}.",
     "Ações permitidas: answer, ask_question, fallback_menu e no_reply. handoff_recommend e handoff_force são apenas informativos e não ativam atendimento humano.",
     `Finalize exatamente com: ${REQUIRED_SUFFIX}`,
   ]
@@ -938,6 +1060,20 @@ function sanitizeShortString(value: unknown, maxLength: number) {
   const trimmed = value.replace(/\s+/g, " ").trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLength);
+}
+
+function sanitizeCrmToken(value: unknown, maxLength = 80) {
+  const raw = sanitizeShortString(value, maxLength);
+  if (!raw || containsPersonalData(raw) || classifyRisk(raw)) return null;
+  return normalizeText(raw).replace(/[^a-z0-9_ -]/g, "").trim().replace(/\s+/g, "_").slice(0, maxLength) || null;
+}
+
+function hasOperationalContextValue(value: unknown) {
+  return (
+    (typeof value === "string" && value.trim().length > 0) ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 function normalizeStringList(value: unknown) {
@@ -1119,6 +1255,7 @@ export function validateOrchestratorOutput(
     ok: true,
     output: {
       reply,
+      intent: sanitizeCrmToken(raw.intent, 80),
       stage,
       goal,
       confidence,
@@ -1194,6 +1331,7 @@ export function resolveOrchestratorAction(
 function buildLegacyOrchestratorOutput(reply: string): RawOrchestratorOutput {
   return {
     reply,
+    intent: null,
     stage: "triage",
     goal: "explain_general_topic",
     confidence: 0.7,
