@@ -1240,6 +1240,42 @@ test("buildAiHandoffCrmArtifacts prefers current CRM context and drops stale tec
   assert.doesNotMatch(artifacts.suggestedReplyNote, /tipo de aposentadoria/);
 });
 
+test("buildAiHandoffCrmArtifacts humanizes secondary civil catalog tokens", () => {
+  const artifacts = buildAiHandoffCrmArtifacts({
+    reason: "active_prompt_handoff_confirmation",
+    score: 3,
+    state: {
+      ...baseState,
+      answers: {
+        flowContext: {
+          intent: "area_civil_secundaria",
+          servico: "civil_secundaria",
+          lead_temp: "morno",
+          prioridade: "media",
+        },
+        flowTags: ["topic:areas_civis_secundarias", "service:area_civil_secundaria"],
+        aiMemory: {
+          summary: "Cliente perguntou sobre divorcio e confirmou atendimento com a equipe.",
+          facts: { servico: "civil_secundaria" },
+          lastTopics: ["civil secundaria", "areas civis secundarias"],
+        },
+        aiOrchestrator: {
+          stage: "handoff_recommended",
+          goal: "recommend_handoff",
+          handoffRecommended: true,
+          missingInformation: [],
+        },
+      },
+    },
+  });
+
+  assert.match(artifacts.summaryNote, /Tema principal: tema cível/);
+  assert.match(artifacts.summaryNote, /Serviço\/interesse: tema cível/);
+  assert.match(artifacts.suggestedReplyNote, /equipe sobre tema cível/);
+  assert.doesNotMatch(artifacts.summaryNote, /civil secundaria/i);
+  assert.doesNotMatch(artifacts.suggestedReplyNote, /civil secundaria/i);
+});
+
 test("generateControlledAssistantReply accepts preclassified contextual educational intent", async () => {
   let called = false;
   const brain: AgentBrain = {

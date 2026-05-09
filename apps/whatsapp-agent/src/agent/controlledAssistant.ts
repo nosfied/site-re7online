@@ -1689,13 +1689,14 @@ function sanitizeCrmTag(value: unknown, maxLength = 80) {
 function formatCrmDisplayValue(value: unknown) {
   const token = sanitizeCrmToken(value, 80);
   if (!token) return null;
-  const normalized = token
+  let normalized = token
     .replace(/^(intent|topic|lead|priority|servico|service|area):/i, "")
     .replace(/^(intent|topic|lead|priority|servico|service|area)_/i, "")
     .replace(/_/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!normalized) return null;
+  normalized = formatKnownCrmDisplayAlias(normalized);
   const blocked = new Set([
     "active prompt handoff confirmation",
     "pending offer handoff",
@@ -1718,6 +1719,25 @@ function formatCrmDisplayValue(value: unknown) {
   if (/^\d{4}$/.test(normalized)) return null;
   if (["homem", "mulher", "masculino", "feminino"].includes(normalized)) return null;
   return normalized.slice(0, 80);
+}
+
+function formatKnownCrmDisplayAlias(value: string) {
+  const normalized = normalizeText(value);
+  if (
+    normalized === "area civil secundaria" ||
+    normalized === "areas civis secundarias" ||
+    normalized === "civil secundaria" ||
+    normalized === "civil secundario" ||
+    normalized === "area civel secundaria" ||
+    normalized === "areas civeis secundarias"
+  ) {
+    return "tema cível";
+  }
+  const cleaned = value
+    .replace(/\b(secundaria|secundarias|secundario|secundarios|secondary)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || value;
 }
 
 function uniqueDisplayValues(values: unknown[], maxItems = 4) {
