@@ -390,6 +390,8 @@ function normalizeText(value: string | null | undefined) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/\bvcs\b/g, "voces")
+    .replace(/\bvc\b/g, "voce")
     .replace(/[^\p{L}\p{N}\s?]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -926,6 +928,13 @@ export function classifyEducationalIntent(
     "vocês atendem",
     "voces dao entrada",
     "vocês dão entrada",
+    "voces fazem",
+    "vocês fazem",
+    "preciso me",
+    "quero me",
+    "me aposentar",
+    "dar entrada",
+    "entrada na",
     "dao entrada",
     "dão entrada",
     "trabalham com",

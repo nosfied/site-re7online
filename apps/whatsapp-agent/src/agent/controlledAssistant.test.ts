@@ -138,6 +138,24 @@ test("classifyContextualFallback handles light intents and tenant secondary topi
     }).topic,
     "aposentadoria"
   );
+  assert.equal(
+    classifyEducationalIntent("vcs fazem aposentadoria?", {
+      allowedTopics: ["aposentadoria"],
+    }).topic,
+    "aposentadoria"
+  );
+  assert.equal(
+    classifyEducationalIntent("preciso me aposentar", {
+      allowedTopics: ["aposentadoria"],
+    }).topic,
+    "aposentadoria"
+  );
+  assert.equal(
+    classifyEducationalIntent("dar entrada na minha aposentadoria", {
+      allowedTopics: ["dar entrada na aposentadoria", "aposentadoria"],
+    }).topic,
+    "dar entrada na aposentadoria"
+  );
 });
 
 test("resolveTenantTopic matches only tenant configured topics with typo tolerance", () => {

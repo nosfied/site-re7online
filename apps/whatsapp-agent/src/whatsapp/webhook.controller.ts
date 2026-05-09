@@ -5848,7 +5848,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 !shortConfirmationWithoutPrompt &&
                 appliedTenantConfig.aiAssistantFallbackToHandoff === true &&
                 (contextualFallback.type === "near_domain" ||
-                  contextualFallback.type === "out_of_scope");
+                  contextualFallback.type === "out_of_scope" ||
+                  fallbackRepeated);
               const fallbackPromptCreatedAt = new Date().toISOString();
               const fallbackPendingOffer =
                 shouldCreateFallbackHandoffPrompt
