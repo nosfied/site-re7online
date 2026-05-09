@@ -5446,8 +5446,22 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               reason: educationalIntent.reason ?? null,
             });
           }
+          const fallbackDecision = !risk
+            ? classifyAssistantFallback(message.text, {
+                handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
+              })
+            : null;
           const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
-          const tenantIntent = !risk
+          const hasFormalHandoffPromptForIntent =
+            updatedConversation.answers?.aiOrchestrator?.activePrompt?.type ===
+              "handoff_confirmation" ||
+            updatedConversation.answers?.aiOrchestrator?.handoffPrompt?.awaitingConfirmation ===
+              true;
+          const contextualAckForIntent = isContextualAck(message.text);
+          const shouldSkipCatalogForTurn =
+            fallbackDecision?.intent === "handoff_prompt" ||
+            (contextualAckForIntent && !hasFormalHandoffPromptForIntent);
+          const tenantIntent = !risk && !shouldSkipCatalogForTurn
             ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog) ??
               (continuationTopicForIntent
                 ? resolveTenantIntent(
@@ -5716,9 +5730,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               });
             }
             if (!handledContextualAck) {
-            const fallbackDecision = classifyAssistantFallback(message.text, {
-              handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
-            });
             await logAiAssistantEvent("ai.assistant.educational_blocked", {
               reason: educationalIntent.reason ?? "not_allowed",
               concreteRisk: educationalIntent.concreteRisk === true,
