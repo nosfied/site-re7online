@@ -358,6 +358,20 @@ const ORCHESTRATOR_GOAL_ALLOWLIST: readonly ConversationGoal[] = [
   "recommend_handoff",
 ];
 
+const NON_BUSINESS_TOPIC_TERMS = new Set([
+  ...CONVERSATION_STAGE_ALLOWLIST,
+  ...ORCHESTRATOR_NEXT_ACTION_ALLOWLIST,
+  ...ORCHESTRATOR_GOAL_ALLOWLIST,
+  "out_of_scope",
+  "out of scope",
+  "unknown",
+  "desconhecido",
+  "greeting",
+  "negative",
+  "clarification",
+  "help",
+].flatMap((term) => [term, normalizeText(term)]));
+
 type SimpleQuestionOptions = {
   allowedTopics?: string[] | null;
   blockedTerms?: string[] | null;
@@ -645,9 +659,8 @@ function normalizeContinuationTopic(value: unknown) {
   const trimmed = value.replace(/\s+/g, " ").trim();
   if (!trimmed || containsPersonalData(trimmed) || classifyRisk(trimmed)) return null;
   const normalized = normalizeText(trimmed);
-  if (!normalized || ["out of scope", "out_of_scope", "unknown", "desconhecido"].includes(normalized)) {
-    return null;
-  }
+  if (!normalized || NON_BUSINESS_TOPIC_TERMS.has(normalized)) return null;
+  if (NON_BUSINESS_TOPIC_TERMS.has(normalized.replace(/[_-]+/g, " "))) return null;
   if (/^\d+$/.test(normalized) || /\b(19|20)\d{2}\b/.test(normalized)) return null;
   if (["homem", "mulher", "masculino", "feminino", "idade", "anos", "ano"].includes(normalized)) {
     return null;

@@ -165,7 +165,7 @@ test("contextual continuation ignores years and demographic fragments as topics"
     ...baseState,
     answers: {
       aiMemory: {
-        lastTopics: ["2026", "homem", "aposentadoria"],
+        lastTopics: ["2026", "homem", "ask_question", "explain_general_topic", "aposentadoria"],
         facts: {},
       },
     },
@@ -173,6 +173,8 @@ test("contextual continuation ignores years and demographic fragments as topics"
   assert.equal(resolveContextualContinuationTopic(state), "aposentadoria");
   assert.match(buildContextualContinuationReply("2026"), /esse assunto/);
   assert.match(buildContextualContinuationReply("homem"), /esse assunto/);
+  assert.match(buildContextualContinuationReply("ask_question"), /esse assunto/);
+  assert.match(buildContextualContinuationReply("explain_general_topic"), /esse assunto/);
 });
 
 test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {
