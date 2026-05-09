@@ -621,33 +621,6 @@ export function classifyPendingOfferResponse(text: string | null | undefined) {
   return "invalid" as const;
 }
 
-export function inferPendingOfferTypeFromReply(text: string | null | undefined) {
-  const normalized = normalizeText(text);
-  if (!normalized) return null;
-  if (
-    normalized.includes("posso direcionar") ||
-    normalized.includes("posso encaminhar") ||
-    normalized.includes("encaminhar voce") ||
-    normalized.includes("encaminhar você")
-  ) {
-    return "handoff" as const;
-  }
-  if (
-    normalized.includes("se quiser posso te orientar melhor conforme sua situacao") ||
-    normalized.includes("se quiser posso te orientar melhor conforme sua situação")
-  ) {
-    return "continue_guidance" as const;
-  }
-  if (
-    normalized.includes("me diga em poucas palavras") ||
-    normalized.includes("voce pode me dizer em poucas palavras") ||
-    normalized.includes("você pode me dizer em poucas palavras")
-  ) {
-    return "clarification" as const;
-  }
-  return null;
-}
-
 export function buildAssistantLimitReachedReply(input: {
   context: AssistantTenantContext;
   canOfferHandoff?: boolean;

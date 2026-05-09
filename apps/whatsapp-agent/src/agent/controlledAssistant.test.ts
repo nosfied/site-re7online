@@ -17,7 +17,6 @@ import {
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
-  inferPendingOfferTypeFromReply,
   isSimpleQuestion,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
@@ -129,18 +128,6 @@ test("pending offer helpers interpret short contextual confirmations", () => {
   assert.equal(classifyPendingOfferResponse("pode sim"), "accepted");
   assert.equal(classifyPendingOfferResponse("não quero"), "declined");
   assert.equal(classifyPendingOfferResponse("qual documento?"), "invalid");
-  assert.equal(
-    inferPendingOfferTypeFromReply("Se quiser, posso te orientar melhor conforme sua situação."),
-    "continue_guidance"
-  );
-  assert.equal(
-    inferPendingOfferTypeFromReply("Esse tema pode fugir do atendimento automático configurado aqui. Posso direcionar você para uma pessoa da equipe?"),
-    "handoff"
-  );
-  assert.equal(
-    inferPendingOfferTypeFromReply("Olá! Me diga em poucas palavras como posso te ajudar."),
-    "clarification"
-  );
 });
 
 test("buildContextualFallbackReply uses short universal replies and anti-repeat", () => {

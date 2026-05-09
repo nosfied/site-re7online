@@ -58,6 +58,13 @@ export type AIOrchestratorState = {
     awaitingConfirmation: boolean;
     confirmationRetryCount?: number;
   };
+  activePrompt?: {
+    type: "handoff_confirmation";
+    expected: "yes_no";
+    createdAt: string;
+    messageId: string;
+    retryCount?: number;
+  };
   pendingOffer?: {
     type: "continue_guidance" | "handoff" | "clarification" | "none";
     promptedAt: string;

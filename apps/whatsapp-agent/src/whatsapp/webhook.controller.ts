@@ -49,7 +49,6 @@ import {
   enrichCrmFromOrchestrator,
   generateControlledAssistantReply,
   getAiAssistantState,
-  inferPendingOfferTypeFromReply,
   resolveOrchestratorAction,
   shouldSendHandoffConfirmationPrompt,
   updateAiMemory,
@@ -71,7 +70,6 @@ import {
 } from "../services/outboundTemplateService.js";
 import { resolveTenantOutboundCredentials } from "./tenantCredentials.js";
 import {
-  AIOrchestratorState,
   ConversationIntent,
   ConversationState,
 } from "../conversation/conversation.types.js";
@@ -3239,7 +3237,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       );
     }
     const pendingOffer = updatedConversation.answers?.aiOrchestrator?.pendingOffer;
+    const activePrompt = updatedConversation.answers?.aiOrchestrator?.activePrompt;
     const aiHandoffPrompt =
+      (activePrompt?.type === "handoff_confirmation"
+        ? {
+            prompted: true,
+            promptedAt: activePrompt.createdAt,
+            messageId: activePrompt.messageId,
+            reason: "active_prompt_handoff_confirmation",
+            score: 3,
+            awaitingConfirmation: true,
+            confirmationRetryCount: activePrompt.retryCount ?? 0,
+          }
+        : undefined) ??
       updatedConversation.answers?.aiOrchestrator?.handoffPrompt ??
       (pendingOffer?.type === "handoff"
         ? {
@@ -3335,6 +3345,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               messageId: message.messageId,
               retryCount: pendingOffer?.retryCount ?? 0,
             },
+            activePrompt: undefined,
             handoffRecommended: true,
             lastMessageId: message.messageId,
             lastNextActionAt: new Date().toISOString(),
@@ -3502,6 +3513,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 messageId: message.messageId,
                 retryCount: pendingOffer?.retryCount ?? 0,
               },
+              activePrompt: undefined,
               handoffRecommended: false,
               lastMessageId: message.messageId,
               lastNextActionAt: new Date().toISOString(),
@@ -3564,6 +3576,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               messageId: pendingOffer?.messageId ?? aiHandoffPrompt.messageId,
               retryCount: nextRetryCount,
             },
+            activePrompt: shouldClosePrompt
+              ? undefined
+              : {
+                  type: "handoff_confirmation",
+                  expected: "yes_no",
+                  createdAt: activePrompt?.createdAt ?? aiHandoffPrompt.promptedAt,
+                  messageId: activePrompt?.messageId ?? aiHandoffPrompt.messageId,
+                  retryCount: nextRetryCount,
+                },
             handoffRecommended: !shouldClosePrompt,
             lastMessageId: message.messageId,
             lastNextActionAt: new Date().toISOString(),
@@ -3616,75 +3637,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (
       activePendingOffer &&
       activePendingOffer.type !== "none" &&
-      activePendingOffer.type !== "handoff" &&
-      updatedConversation.mode !== "HUMAN" &&
-      updatedConversation.handoff.status === "none"
+      activePendingOffer.type !== "handoff"
     ) {
-      const decision = classifyPendingOfferResponse(message.text);
-      const previousAiOrchestrator = updatedConversation.answers?.aiOrchestrator;
-      const persistCurrentInboundForTurn = async (state: ConversationState) => {
-        await upsertConversationSafe(state);
-        await persistConversationSafe({
-          waId: state.waId,
-          windowIsOpen: state.window.isOpen,
-          windowExpiresAt: state.window.expiresAt,
-          lastInboundAt: state.lastInboundAt ?? null,
-          lastOutboundAt: state.lastOutboundAt ?? null,
-          departmentId: state.departmentId ?? null,
-        });
-        await storage.saveIncomingMessage(toStoredIncomingMessage(message, status, allowlistHit));
-        await persistInboundSafe({
-          waId: message.from,
-          messageId: message.messageId,
-          type: mapMessageType(message.type),
-          bodyText: message.text,
-          allowlistHit,
-          occurredAt: parseWebhookTimestampToDate(message.timestamp),
-          rawPayload: {
-            ...message.raw,
-            text: message.text,
-            timestamp: message.timestamp,
-          },
-        });
-        logger.info({
-          event: "webhook.message",
-          messageId: message.messageId,
-          from: maskNumber(message.from),
-          type: message.type,
-          status,
-          allowlistHit,
-          route: meta?.route,
-          method: meta?.method,
-          requestId: meta?.requestId,
-        });
-      };
-      const clearPendingOffer = {
-        type: "none" as const,
-        promptedAt: new Date().toISOString(),
-        messageId: message.messageId,
-        retryCount: activePendingOffer.retryCount ?? 0,
-      };
-      const setPendingOfferState = (
-        pendingOffer: AIOrchestratorState["pendingOffer"] = clearPendingOffer
-      ): ConversationState => ({
+      updatedConversation = {
         ...updatedConversation,
         answers: {
           ...(updatedConversation.answers ?? {}),
           aiOrchestrator: {
-            ...(previousAiOrchestrator ?? {}),
-            pendingOffer,
-            lastMessageId: message.messageId,
-            lastNextActionAt: new Date().toISOString(),
+            ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+            pendingOffer: {
+              type: "none",
+              promptedAt: new Date().toISOString(),
+              messageId: message.messageId,
+              retryCount: activePendingOffer.retryCount ?? 0,
+            },
           },
         },
-      });
+      };
       logger.info({
         event: "ai.turn.pending_offer.consumed",
         clientId: tenantClientId,
         clientKey: tenantClientKey,
         waId: maskNumber(normalizedFrom),
         offerType: activePendingOffer.type,
-        decision,
+        decision: "legacy_cleared",
+        route: "continue_processing",
         requestId: meta?.requestId,
       });
       await persistEventSafe(
@@ -3694,186 +3671,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           clientId: tenantClientId || null,
           clientKey: tenantClientKey || null,
           offerType: activePendingOffer.type,
-          decision,
+          decision: "legacy_cleared",
         } as Prisma.InputJsonValue,
         normalizedFrom,
         message.messageId
       );
-      if (activePendingOffer.type === "clarification") {
-        if (decision === "declined") {
-          updatedConversation = setPendingOfferState();
-          await persistCurrentInboundForTurn(updatedConversation);
-          logger.info({
-            event: "ai.turn.pending_offer.declined",
-            clientId: tenantClientId,
-            clientKey: tenantClientKey,
-            waId: maskNumber(normalizedFrom),
-            offerType: activePendingOffer.type,
-            requestId: meta?.requestId,
-          });
-          await persistEventSafe(
-            "ai.turn.pending_offer.declined",
-            {
-              action: "ai.turn.pending_offer.declined",
-              clientId: tenantClientId || null,
-              clientKey: tenantClientKey || null,
-              offerType: activePendingOffer.type,
-            } as Prisma.InputJsonValue,
-            normalizedFrom,
-            message.messageId
-          );
-          if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-            const result = await sendOutboundText({
-              toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
-              waId: normalizedFrom,
-              intent: updatedConversation.intent,
-              messageId: `ai.turn.pending_offer.declined.${message.messageId}`,
-              replyText: "Tudo bem. Se precisar de algo, é só me chamar.",
-              guard: inboundGuard,
-            });
-            if (result.ok) {
-              updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
-            }
-          }
-          continue;
-        }
-        if (decision === "accepted") {
-          updatedConversation = setPendingOfferState(activePendingOffer);
-          await persistCurrentInboundForTurn(updatedConversation);
-          if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-            const result = await sendOutboundText({
-              toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
-              waId: normalizedFrom,
-              intent: updatedConversation.intent,
-              messageId: `ai.turn.pending_offer.${message.messageId}`,
-              replyText: "Certo. Me diga em poucas palavras o que você precisa.",
-              guard: inboundGuard,
-            });
-            if (result.ok) {
-              updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
-            }
-          }
-          continue;
-        }
-        updatedConversation = setPendingOfferState();
-        logger.info({
-          event: "ai.turn.pending_offer.consumed",
-          clientId: tenantClientId,
-          clientKey: tenantClientKey,
-          waId: maskNumber(normalizedFrom),
-          offerType: activePendingOffer.type,
-          decision: "useful_text",
-          route: "continue_processing",
-          requestId: meta?.requestId,
-        });
-      } else if (activePendingOffer.type === "continue_guidance") {
-      if (decision === "accepted") {
-        updatedConversation = setPendingOfferState();
-        await persistCurrentInboundForTurn(updatedConversation);
-        const reply =
-          activePendingOffer.type === "continue_guidance"
-            ? "Certo. Para te orientar melhor, me diga qual ponto você quer entender: regra geral, prazo, valores, documentos ou atendimento com a equipe."
-            : "Certo. Me diga em poucas palavras o que você quer entender melhor.";
-        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-          const result = await sendOutboundText({
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
-            waId: normalizedFrom,
-            intent: updatedConversation.intent,
-            messageId: `ai.turn.pending_offer.${message.messageId}`,
-            replyText: reply,
-            guard: inboundGuard,
-          });
-          if (result.ok) {
-            updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
-          }
-        }
-        continue;
-      }
-      }
-      if (decision === "declined") {
-        updatedConversation = setPendingOfferState();
-        await persistCurrentInboundForTurn(updatedConversation);
-        logger.info({
-          event: "ai.turn.pending_offer.declined",
-          clientId: tenantClientId,
-          clientKey: tenantClientKey,
-          waId: maskNumber(normalizedFrom),
-          offerType: activePendingOffer.type,
-          requestId: meta?.requestId,
-        });
-        await persistEventSafe(
-          "ai.turn.pending_offer.declined",
-          {
-            action: "ai.turn.pending_offer.declined",
-            clientId: tenantClientId || null,
-            clientKey: tenantClientKey || null,
-            offerType: activePendingOffer.type,
-          } as Prisma.InputJsonValue,
-          normalizedFrom,
-          message.messageId
-        );
-        if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-          const result = await sendOutboundText({
-            toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
-            waId: normalizedFrom,
-            intent: updatedConversation.intent,
-            messageId: `ai.turn.pending_offer.declined.${message.messageId}`,
-            replyText: "Tudo bem. Se precisar de algo, é só me chamar.",
-            guard: inboundGuard,
-          });
-          if (result.ok) {
-            updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
-          }
-        }
-        continue;
-      }
-      const retryCount = (activePendingOffer.retryCount ?? 0) + 1;
-      const shouldClose = retryCount >= 2;
-      updatedConversation = setPendingOfferState({
-        ...activePendingOffer,
-        type: shouldClose ? "none" : activePendingOffer.type,
-        retryCount,
-      });
-      await persistCurrentInboundForTurn(updatedConversation);
-      logger.info({
-        event: "ai.turn.pending_offer.invalid",
-        clientId: tenantClientId,
-        clientKey: tenantClientKey,
-        waId: maskNumber(normalizedFrom),
-        offerType: activePendingOffer.type,
-        retryCount,
-        awaitingConfirmation: !shouldClose,
-        requestId: meta?.requestId,
-      });
-      await persistEventSafe(
-        "ai.turn.pending_offer.invalid",
-        {
-          action: "ai.turn.pending_offer.invalid",
-          clientId: tenantClientId || null,
-          clientKey: tenantClientKey || null,
-          offerType: activePendingOffer.type,
-          retryCount,
-          awaitingConfirmation: !shouldClose,
-        } as Prisma.InputJsonValue,
-        normalizedFrom,
-        message.messageId
-      );
-      if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
-        const result = await sendOutboundText({
-          toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || normalizedFrom : message.from,
-          waId: normalizedFrom,
-          intent: updatedConversation.intent,
-          messageId: `ai.turn.pending_offer.invalid.${message.messageId}`,
-          replyText: shouldClose
-            ? "Tudo bem. Se precisar de algo, é só me chamar."
-            : "Só para confirmar: você quer continuar por aqui?",
-          guard: inboundGuard,
-        });
-        if (result.ok) {
-          updatedConversation = await persistOutboundConversation(updatedConversation, result.messageId);
-        }
-      }
-      continue;
     }
     const wasPending = currentConversation.handoff.status === "pending";
     const hasConfigurableChatbotFlow = Boolean(
@@ -5519,14 +5321,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     messageId: message.messageId,
                     retryCount: 0,
                   }
-                : inferPendingOfferTypeFromReply(replyText)
-                  ? {
-                      type: inferPendingOfferTypeFromReply(replyText)!,
-                      promptedAt: nowIso,
-                      messageId: message.messageId,
-                      retryCount: 0,
-                    }
-                  : previousAiOrchestrator?.pendingOffer,
+                : previousAiOrchestrator?.pendingOffer,
+              activePrompt: canOfferHandoff
+                ? {
+                    type: "handoff_confirmation",
+                    expected: "yes_no",
+                    createdAt: nowIso,
+                    messageId: message.messageId,
+                    retryCount: 0,
+                  }
+                : previousAiOrchestrator?.activePrompt,
             },
           },
         };
@@ -5645,6 +5449,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               const previousHandoffSignals = previousAiOrchestrator?.handoffSignals ?? {};
               let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
               let nextPendingOffer = previousAiOrchestrator?.pendingOffer;
+              let nextActivePrompt = previousAiOrchestrator?.activePrompt;
               if (allowed) {
                 await logAiAssistantEvent("ai.orchestrator.handoff_threshold_reached", {
                   source: "deterministic_fallback",
@@ -5666,13 +5471,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   messageId: message.messageId,
                 });
                 if (shouldPrompt) {
+                  const promptCreatedAt = new Date().toISOString();
                   replyText = buildHandoffConfirmationPrompt({
                     context: assistantTenantContext,
                   });
                   aiAssistantResponded = true;
                   nextHandoffPrompt = {
                     prompted: true,
-                    promptedAt: new Date().toISOString(),
+                    promptedAt: promptCreatedAt,
                     messageId: message.messageId,
                     reason: lastReason,
                     score: scoreResult.score,
@@ -5680,7 +5486,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   };
                   nextPendingOffer = {
                     type: "handoff",
-                    promptedAt: new Date().toISOString(),
+                    promptedAt: promptCreatedAt,
+                    messageId: message.messageId,
+                    retryCount: 0,
+                  };
+                  nextActivePrompt = {
+                    type: "handoff_confirmation",
+                    expected: "yes_no",
+                    createdAt: promptCreatedAt,
                     messageId: message.messageId,
                     retryCount: 0,
                   };
@@ -5790,6 +5603,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     },
                     handoffPrompt: nextHandoffPrompt,
                     pendingOffer: nextPendingOffer,
+                    activePrompt: nextActivePrompt,
                   },
                 },
               };
@@ -5821,11 +5635,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 assistantState.lastFallbackType === contextualFallback.type &&
                 Number.isFinite(lastFallbackAtMs) &&
                 Date.now() - lastFallbackAtMs < 15 * 60 * 1000;
-              replyText = buildContextualFallbackReply({
-                result: contextualFallback,
-                fallbackMessage: assistantTenantContext.fallbackMessage,
-                repeated: fallbackRepeated,
-              });
+              const shortConfirmationWithoutPrompt =
+                fallbackDecision?.reason === "vague_message" &&
+                classifyPendingOfferResponse(message.text) === "accepted";
+              replyText = shortConfirmationWithoutPrompt
+                ? "Certo. Me diga em poucas palavras o que você precisa."
+                : buildContextualFallbackReply({
+                    result: contextualFallback,
+                    fallbackMessage: assistantTenantContext.fallbackMessage,
+                    repeated: fallbackRepeated,
+                  });
               aiAssistantResponded = true;
               if (
                 contextualFallback.type === "help" &&
@@ -5870,41 +5689,55 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   stage: "clarification",
                   goal: "identify_need",
                   wantsHuman:
-                    contextualFallback.type === "near_domain" ||
-                    contextualFallback.type === "out_of_scope",
+                    !shortConfirmationWithoutPrompt &&
+                    (contextualFallback.type === "near_domain" ||
+                      contextualFallback.type === "out_of_scope"),
                   handoffRecommended:
-                    contextualFallback.type === "near_domain" ||
-                    contextualFallback.type === "out_of_scope",
+                    !shortConfirmationWithoutPrompt &&
+                    (contextualFallback.type === "near_domain" ||
+                      contextualFallback.type === "out_of_scope"),
                   source: "contextual_fallback",
                 });
               }
-              const inferredPendingOffer = inferPendingOfferTypeFromReply(replyText);
+              const shouldCreateFallbackHandoffPrompt =
+                !shortConfirmationWithoutPrompt &&
+                appliedTenantConfig.aiAssistantFallbackToHandoff === true &&
+                (contextualFallback.type === "near_domain" ||
+                  contextualFallback.type === "out_of_scope");
+              const fallbackPromptCreatedAt = new Date().toISOString();
               const fallbackPendingOffer =
-                inferredPendingOffer &&
-                !(contextualFallback.type === "greeting" && updatedConversation.answers?.aiOrchestrator)
+                shouldCreateFallbackHandoffPrompt
                   ? {
-                      type: inferredPendingOffer,
-                      promptedAt: new Date().toISOString(),
+                      type: "handoff" as const,
+                      promptedAt: fallbackPromptCreatedAt,
                       messageId: message.messageId,
                       text: undefined,
                       retryCount: 0,
                     }
                   : updatedConversation.answers?.aiOrchestrator?.pendingOffer;
               const fallbackHandoffPrompt =
-                fallbackPendingOffer?.type === "handoff" &&
-                appliedTenantConfig.aiAssistantFallbackToHandoff === true
+                shouldCreateFallbackHandoffPrompt
                   ? {
                       prompted: true,
-                      promptedAt: fallbackPendingOffer.promptedAt,
+                      promptedAt: fallbackPromptCreatedAt,
                       messageId: message.messageId,
                       reason: contextualFallback.reason,
                       score: 3,
                       awaitingConfirmation: true,
                     }
                   : updatedConversation.answers?.aiOrchestrator?.handoffPrompt;
-              if (inferredPendingOffer) {
+              const fallbackActivePrompt = shouldCreateFallbackHandoffPrompt
+                ? {
+                    type: "handoff_confirmation" as const,
+                    expected: "yes_no" as const,
+                    createdAt: fallbackPromptCreatedAt,
+                    messageId: message.messageId,
+                    retryCount: 0,
+                  }
+                : updatedConversation.answers?.aiOrchestrator?.activePrompt;
+              if (shouldCreateFallbackHandoffPrompt) {
                 await logAiAssistantEvent("ai.turn.pending_offer.created", {
-                  type: inferredPendingOffer,
+                  type: "handoff",
                   source: "contextual_fallback",
                   reason: contextualFallback.reason,
                 });
@@ -5935,6 +5768,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     lastNextActionAt: new Date().toISOString(),
                     handoffPrompt: fallbackHandoffPrompt,
                     pendingOffer: fallbackPendingOffer,
+                    activePrompt: fallbackActivePrompt,
                   },
                 },
               };
@@ -6086,6 +5920,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               let nextHandoffSignals = previousHandoffSignals;
               let nextHandoffPrompt = previousAiOrchestrator?.handoffPrompt;
               let nextPendingOffer = previousAiOrchestrator?.pendingOffer;
+              let nextActivePrompt = previousAiOrchestrator?.activePrompt;
               if (aiReply.output.handoff_recommended) {
                 const scoreResult = calculateHandoffScore({
                   output: aiReply.output,
@@ -6156,6 +5991,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     handoffStatus: updatedConversation.handoff.status,
                   });
                   if (shouldPrompt) {
+                    const promptCreatedAt = new Date().toISOString();
                     const promptText = buildHandoffConfirmationPrompt({
                       context: assistantTenantContext,
                     });
@@ -6163,7 +5999,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     aiAssistantResponded = true;
                     nextHandoffPrompt = {
                       prompted: true,
-                      promptedAt: new Date().toISOString(),
+                      promptedAt: promptCreatedAt,
                       messageId: message.messageId,
                       reason: lastReason,
                       score: scoreResult.score,
@@ -6171,7 +6007,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     };
                     nextPendingOffer = {
                       type: "handoff",
-                      promptedAt: new Date().toISOString(),
+                      promptedAt: promptCreatedAt,
+                      messageId: message.messageId,
+                      retryCount: 0,
+                    };
+                    nextActivePrompt = {
+                      type: "handoff_confirmation",
+                      expected: "yes_no",
+                      createdAt: promptCreatedAt,
                       messageId: message.messageId,
                       retryCount: 0,
                     };
@@ -6220,20 +6063,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     threshold: scoreResult.threshold,
                   });
                 }
-              }
-              const inferredResolvedOffer = inferPendingOfferTypeFromReply(replyText);
-              if (inferredResolvedOffer && nextPendingOffer?.type !== "handoff") {
-                nextPendingOffer = {
-                  type: inferredResolvedOffer,
-                  promptedAt: new Date().toISOString(),
-                  messageId: message.messageId,
-                  retryCount: 0,
-                };
-                await logAiAssistantEvent("ai.turn.pending_offer.created", {
-                  type: inferredResolvedOffer,
-                  source: "orchestrator_reply",
-                  reason: resolvedAction.action,
-                });
               }
               await applyAiMemoryUpdate({
                 topic: educationalIntent.topic ?? aiReply.output.goal ?? aiReply.output.stage,
@@ -6302,6 +6131,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     handoffSignals: nextHandoffSignals,
                     handoffPrompt: nextHandoffPrompt,
                     pendingOffer: nextPendingOffer,
+                    activePrompt: nextActivePrompt,
                   },
                 },
               };
