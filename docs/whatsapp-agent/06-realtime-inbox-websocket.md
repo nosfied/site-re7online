@@ -34,7 +34,7 @@ Endpoint WebSocket:
 
 - interno: `/app/realtime`
 - via proxy de producao: `/agent-api/app/realtime`
-- URL publica esperada: `wss://admin.re7online.com/agent-api/app/realtime`
+- URL publica esperada: `wss://converta.re7online.com/agent-api/app/realtime`
 
 Autenticacao:
 

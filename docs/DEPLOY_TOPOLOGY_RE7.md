@@ -13,8 +13,8 @@ Documento operacional para evitar erro de deploy entre Vercel, VPS e dominios pu
   - valor: `76.76.21.21`
   - modo: `Proxied`
 
-### Portal admin e backend operacional
-- `admin.re7online.com`
+### Portal Converta e backend operacional
+- `converta.re7online.com`
 - `api.re7online.com`
 - publicados na `VPS`
 - servidos por:
@@ -27,7 +27,7 @@ Documento operacional para evitar erro de deploy entre Vercel, VPS e dominios pu
 
 - mudanca em `re7online.com/...`:
   - deploy na `Vercel`
-- mudanca em `admin.re7online.com`:
+- mudanca em `converta.re7online.com`:
   - deploy na `VPS`
 - mudanca em `api.re7online.com`:
   - deploy na `VPS`
@@ -67,7 +67,7 @@ Causa:
 O botao `Acessar sistema` em `/sistemas` foi ajustado para abrir:
 
 ```text
-https://admin.re7online.com/app/login
+https://converta.re7online.com/app/login
 ```
 
 Assim:
@@ -79,11 +79,11 @@ Assim:
 Se alguma tela hospedada na Vercel precisar falar com o backend do portal/app, configurar em Production:
 
 ```text
-NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL=https://admin.re7online.com/agent-api
+NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL=https://converta.re7online.com/agent-api
 ```
 
 Observacao:
-- isso nao substitui a necessidade de manter o fluxo principal do portal no dominio `admin.re7online.com`
+- isso nao substitui a necessidade de manter o fluxo principal do portal no dominio `converta.re7online.com`
 - serve para evitar fallback incorreto para `/agent-api` no dominio publico
 
 ## Fluxos de deploy
@@ -100,7 +100,7 @@ Passos:
 2. promover a versao na `Vercel`
 3. validar a URL publica
 
-### 2. Portal/admin (`admin.re7online.com`)
+### 2. Portal Converta / console interno (`converta.re7online.com`)
 Usar quando mudar:
 - `src/app/app/**`
 - `src/app/admin/**`
@@ -185,23 +185,94 @@ Validar Nginx da VPS:
 sudo nginx -T | grep -n "server_name\\|location\\|proxy_pass" -A 4 -B 2
 ```
 
+## Migracao de dominio do Converta
+
+Dominio anterior:
+
+```text
+admin.re7online.com
+```
+
+Dominio oficial:
+
+```text
+converta.re7online.com
+```
+
+### DNS
+
+No Cloudflare, criar/apontar:
+
+```text
+tipo: A
+nome: converta
+valor: 64.225.18.191
+modo: Proxied ou DNS only, conforme politica atual
+```
+
+Enquanto a migracao nao estiver concluida, manter `admin.re7online.com` apontando para a VPS para rollback e redirecionamento.
+
+Se o DNS de `converta.re7online.com` ainda nao estiver propagado, usar `admin.re7online.com` apenas como host SSH operacional para acessar a mesma VPS.
+
+### Nginx / TLS na VPS
+
+Requer acesso root/sudo na VPS:
+
+```bash
+sudo cp /etc/nginx/sites-available/admin.re7online.com /etc/nginx/sites-available/converta.re7online.com
+sudo sed -i 's/admin\.re7online\.com/converta.re7online.com/g' /etc/nginx/sites-available/converta.re7online.com
+sudo ln -s /etc/nginx/sites-available/converta.re7online.com /etc/nginx/sites-enabled/converta.re7online.com
+sudo certbot --nginx -d converta.re7online.com
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Depois de validar o novo dominio, converter `admin.re7online.com` em redirect 301 para `converta.re7online.com`:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name admin.re7online.com;
+
+    ssl_certificate /etc/letsencrypt/live/admin.re7online.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/admin.re7online.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    return 301 https://converta.re7online.com$request_uri;
+}
+```
+
+### Validacao
+
+```bash
+curl -I -sS https://converta.re7online.com/app/login
+curl -I -sS https://converta.re7online.com/agent-api/health
+curl -I -sS https://admin.re7online.com/app/login
+```
+
+Resultado esperado:
+- `converta.re7online.com/app/login` responde pelo frontend do Converta;
+- `converta.re7online.com/agent-api/health` responde pelo WhatsApp Agent;
+- `admin.re7online.com/app/login` redireciona para o dominio novo, depois da fase de compatibilidade.
+
 ## Mapa curto
 
 - `re7online.com` -> `Vercel`
-- `admin.re7online.com` -> `VPS`
+- `converta.re7online.com` -> `VPS`
 - `api.re7online.com` -> `VPS`
 - `/sistemas` -> `Vercel`
-- `/app/login` operacional -> `admin.re7online.com/app/login`
-- backend `/agent-api` operacional -> `https://admin.re7online.com/agent-api`
+- `/app/login` operacional -> `converta.re7online.com/app/login`
+- backend `/agent-api` operacional -> `https://converta.re7online.com/agent-api`
 
 ## Decisao operacional atual
 
 Para evitar ambiguidade:
 - o site publico apresenta o card do sistema
-- o acesso ao sistema direciona para o dominio admin
+- o acesso ao sistema direciona para o dominio oficial do Converta
 
 Link oficial atual do card:
 
 ```text
-https://admin.re7online.com/app/login
+https://converta.re7online.com/app/login
 ```

@@ -47,7 +47,7 @@ Exemplo de log:
 
 ## Cron recomendado na VPS
 
-Estado atual da VPS `admin.re7online.com`:
+Estado atual da VPS `converta.re7online.com`:
 
 - rotina instalada no `crontab` do usuario `deploy`;
 - horario: diariamente as `03:00`;
@@ -117,7 +117,7 @@ Validacao executada:
 cd /opt/re7online/site-re7online/apps/whatsapp-agent
 npm run media:cleanup
 curl -sS http://127.0.0.1:3001/health
-curl -I -sS https://admin.re7online.com/app/inbox
+curl -I -sS https://converta.re7online.com/app/inbox
 pm2 status re7-whatsapp-agent re7-admin-front
 ```
 

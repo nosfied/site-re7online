@@ -32,7 +32,7 @@ function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
 
 function AccessButton() {
   const href =
-    process.env.NODE_ENV === "development" ? "/app/login" : "https://admin.re7online.com/app/login";
+    process.env.NODE_ENV === "development" ? "/app/login" : "https://converta.re7online.com/app/login";
 
   return (
     <a

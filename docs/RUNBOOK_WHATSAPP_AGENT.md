@@ -260,7 +260,7 @@ Cron recomendado:
 0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log 2>&1
 ```
 
-Na VPS `admin.re7online.com`, essa entrada ja foi instalada no crontab do usuario
+Na VPS `converta.re7online.com`, essa entrada ja foi instalada no crontab do usuario
 `deploy` em 2026-04-28, no commit `dbfcbd5`.
 
 Verificacao:
@@ -296,7 +296,7 @@ cd /opt/re7online/site-re7online/apps/whatsapp-agent
 npm run retention:run -- --client-key justa-advocacia
 ```
 
-Cron global instalado na VPS `admin.re7online.com`, no usuario `deploy`, em
+Cron global instalado na VPS `converta.re7online.com`, no usuario `deploy`, em
 2026-05-02. Ele roda para todos os tenants existentes no momento da execucao:
 
 ```cron

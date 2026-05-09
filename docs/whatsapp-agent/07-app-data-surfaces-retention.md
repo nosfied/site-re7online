@@ -17,7 +17,7 @@ As telas do `/app` nao dependem todas da mesma base operacional.
 
 ## Estado observado no tenant `justa-advocacia`
 
-Auditoria em producao na VPS `admin.re7online.com`, repo
+Auditoria em producao na VPS `converta.re7online.com`, repo
 `/opt/re7online/site-re7online`, em 2026-04-30:
 
 | Item | Situacao observada |
@@ -99,7 +99,7 @@ Recomendacao de operacao:
 
 Automacao atual na VPS:
 
-- host: `admin.re7online.com`;
+- host: `converta.re7online.com`;
 - usuario do crontab: `deploy`;
 - escopo: global, para todos os tenants existentes no banco no momento da
   execucao;
