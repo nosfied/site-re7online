@@ -205,6 +205,19 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
       response: "Esse assunto precisa de triagem da equipe.",
       handoff: true,
     },
+    {
+      key: "honorarios",
+      title: "Honorarios",
+      topics: ["preco", "preço", "quanto custa", "valor do servico"],
+      response: "Valores dependem do atendimento.",
+      handoff: true,
+    },
+    {
+      key: "servicos",
+      title: "Servicos",
+      topics: ["quais servicos", "servicos de voces"],
+      response: "Atendemos os servicos configurados.",
+    },
   ];
   const retirement = resolveTenantIntent("vcs fazem aposentadoria?", catalog);
   assert.equal(retirement?.key, "servico_aposentadoria");
@@ -215,6 +228,7 @@ test("resolveTenantIntent maps tenant service phrases without global domain hard
   ].join("\n\n"));
   assert.equal(resolveTenantIntent("quero saber sobre seguro residencial", catalog)?.key, "servico_seguro");
   assert.equal(resolveTenantIntent("vocês fazem divórcio?", catalog)?.key, "area_civil");
+  assert.equal(resolveTenantIntent("qual preço do serviço?", catalog)?.key, "honorarios");
   assert.equal(resolveTenantIntent("vcs fazem aposentadoria?", [catalog[1]]), null);
 });
 

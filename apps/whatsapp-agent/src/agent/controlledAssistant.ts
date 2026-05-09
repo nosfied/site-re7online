@@ -595,6 +595,8 @@ const INTENT_CATALOG_GENERIC_TOKENS = new Set([
   "quero",
   "queria",
   "gostaria",
+  "qual",
+  "quais",
   "saber",
   "sobre",
   "servico",
