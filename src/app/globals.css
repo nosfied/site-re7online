@@ -2,16 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: dark;
+  --app-bg: #06132a;
+  --app-bg-soft: #0b1830;
+  --app-surface: rgba(255, 255, 255, 0.05);
+  --app-surface-strong: #0d1b36;
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-border-strong: rgba(255, 255, 255, 0.2);
+  --app-text: #ffffff;
+  --app-text-muted: rgba(255, 255, 255, 0.7);
+  --app-text-soft: rgba(255, 255, 255, 0.52);
+  --app-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
+  --app-modal-backdrop: rgba(2, 8, 23, 0.78);
+  --app-scrollbar-thumb: rgba(96, 165, 250, 0.45);
+  --app-scrollbar-track: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg: #f5f7fb;
+  --app-bg-soft: #eef3f9;
+  --app-surface: rgba(255, 255, 255, 0.88);
+  --app-surface-strong: #ffffff;
+  --app-border: rgba(6, 19, 42, 0.12);
+  --app-border-strong: rgba(6, 19, 42, 0.2);
+  --app-text: #10203b;
+  --app-text-muted: rgba(16, 32, 59, 0.72);
+  --app-text-soft: rgba(16, 32, 59, 0.54);
+  --app-shadow: 0 10px 32px rgba(6, 19, 42, 0.11);
+  --app-modal-backdrop: rgba(6, 19, 42, 0.35);
+  --app-scrollbar-thumb: rgba(12, 89, 132, 0.35);
+  --app-scrollbar-track: rgba(6, 19, 42, 0.08);
+}
+
 /* ===== Base global ===== */
 html {
   scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: rgba(96, 165, 250, 0.45) rgba(255, 255, 255, 0.06);
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+  background: var(--app-bg);
 }
 
 @layer base {
   body {
-    @apply bg-re7-navy text-white font-sans antialiased;
+    @apply font-sans antialiased;
+    background: var(--app-bg);
+    color: var(--app-text);
     margin: 0;
   }
 
@@ -59,6 +96,79 @@ html {
 }
 
 @layer components {
+  .theme-bg {
+    background: var(--app-bg);
+    color: var(--app-text);
+  }
+
+  .theme-bg-soft {
+    background: var(--app-bg-soft);
+    color: var(--app-text);
+  }
+
+  .theme-surface {
+    background: var(--app-surface);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .theme-surface-strong {
+    background: var(--app-surface-strong);
+    border-color: var(--app-border);
+    color: var(--app-text);
+  }
+
+  .theme-border {
+    border-color: var(--app-border);
+  }
+
+  .theme-text {
+    color: var(--app-text);
+  }
+
+  .theme-muted {
+    color: var(--app-text-muted);
+  }
+
+  .theme-soft {
+    color: var(--app-text-soft);
+  }
+
+  .theme-shadow {
+    box-shadow: var(--app-shadow);
+  }
+
+  .theme-modal-backdrop {
+    background: var(--app-modal-backdrop);
+  }
+
+  .theme-select {
+    background: var(--app-surface-strong);
+    border: 1px solid var(--app-border-strong);
+    color: var(--app-text);
+  }
+
+  .theme-select:focus {
+    border-color: rgba(127, 196, 229, 0.75);
+    box-shadow: 0 0 0 3px rgba(127, 196, 229, 0.18);
+  }
+
+  .theme-nav-link {
+    border-color: var(--app-border-strong);
+    color: var(--app-text-muted);
+  }
+
+  .theme-nav-link:hover {
+    background: rgba(127, 196, 229, 0.12);
+    color: var(--app-text);
+  }
+
+  .theme-nav-link-active {
+    border-color: rgba(127, 196, 229, 0.55);
+    background: rgba(127, 196, 229, 0.18);
+    color: var(--app-text);
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image:

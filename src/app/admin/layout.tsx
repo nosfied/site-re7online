@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AdminConfigPanel from "@/components/admin/AdminConfigPanel";
 import { AdminConsoleProvider, useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import ThemeSelector from "@/components/ThemeSelector";
 import { AdminConnection } from "@/lib/whatsappAdminApi";
 
 function AdminConsoleGate() {
@@ -19,9 +20,9 @@ function AdminConsoleGate() {
 
   if (!ready) {
     return (
-      <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
-        <div className="mx-auto max-w-xl rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-sm text-white/70">Carregando console interno...</p>
+      <main className="theme-bg min-h-screen px-4 py-8 md:px-8">
+        <div className="theme-surface mx-auto max-w-xl rounded-2xl border p-6">
+          <p className="theme-muted text-sm">Carregando console interno...</p>
         </div>
       </main>
     );
@@ -59,15 +60,15 @@ function AdminConsoleGate() {
   };
 
   return (
-    <main className="min-h-screen bg-re7-navy px-4 py-8 text-white md:px-8">
+    <main className="theme-bg min-h-screen px-4 py-8 md:px-8">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <section className="theme-surface rounded-2xl border p-6">
           <div className="mb-5 flex flex-col gap-2">
             <span className="w-fit rounded-full border border-amber-400/30 bg-amber-900/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
               Console interno
             </span>
             <h1 className="text-2xl font-bold">Acesso restrito ao administrador</h1>
-            <p className="text-sm text-white/70">
+            <p className="theme-muted text-sm">
               Conecte-se com Base URL e X-Admin-Token para acessar o console interno.
             </p>
           </div>
@@ -113,29 +114,30 @@ function AdminConsoleShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <main className="min-h-screen bg-re7-navy text-white">
-      <div className="border-b border-white/10 bg-white/5">
+    <main className="theme-bg min-h-screen">
+      <div className="theme-surface border-b">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-amber-400/30 bg-amber-900/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
                 Console interno
               </span>
-              <span className="text-xs text-white/50">{connection.baseUrl}</span>
+              <span className="theme-soft text-xs">{connection.baseUrl}</span>
             </div>
-            <p className="text-sm text-white/70">Area administrativa restrita.</p>
+            <p className="theme-muted text-sm">Area administrativa restrita.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeSelector />
             <Link
               href="/admin/tenants"
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              className="theme-nav-link rounded-md border px-3 py-2 text-sm"
             >
               Tenants
             </Link>
             <Link
               href="/admin/templates"
-              className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              className="theme-nav-link rounded-md border px-3 py-2 text-sm"
             >
               Templates
             </Link>

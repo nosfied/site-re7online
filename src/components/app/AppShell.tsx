@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import ThemeSelector from "@/components/ThemeSelector";
 import { AppSession, clearAppSession, fetchAppTenantSummary } from "@/lib/appClientApi";
 import { getAppFeatures, getAppProfile, type AppFeatureKey, type AppProfile } from "@/lib/appFeatures";
 
@@ -27,9 +28,7 @@ type NavItem = {
 
 function getLinkClasses(active: boolean) {
   return `inline-flex h-8 min-w-0 items-center justify-center rounded-md border px-2.5 text-xs leading-none transition lg:h-9 lg:px-3 lg:text-sm ${
-    active
-      ? "border-re7-sky/50 bg-re7-sky/20 text-white"
-      : "border-white/20 text-white/80 hover:bg-white/10"
+    active ? "theme-nav-link-active" : "theme-nav-link"
   }`;
 }
 
@@ -167,31 +166,33 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     );
   };
 
-  const navGroupClasses =
-    "grid min-w-0 max-w-full gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5";
+  const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5";
   const navLinksClasses = "flex min-w-0 flex-wrap items-center justify-center gap-1";
   const userActions = (
     <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
       <div className="min-w-0 text-right">
         {tenantSummary ? (
           <>
-            <p className="truncate text-xs leading-tight text-white/80">{tenantSummary.name}</p>
+            <p className="theme-muted truncate text-xs leading-tight">{tenantSummary.name}</p>
             {tenantSummary.phoneDisplay ? (
-              <p className="truncate text-xs leading-tight text-white/55">{tenantSummary.phoneDisplay}</p>
+              <p className="theme-soft truncate text-xs leading-tight">{tenantSummary.phoneDisplay}</p>
             ) : null}
           </>
         ) : null}
-        <p className="truncate text-xs leading-tight text-white/65 lg:text-sm">
+        <p className="theme-muted truncate text-xs leading-tight lg:text-sm">
           {session.user.name || session.user.email}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={handleLogout}
-        className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
-      >
-        Sair
-      </button>
+      <div className="flex items-center gap-1.5 lg:flex-col lg:items-end">
+        <ThemeSelector />
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
+        >
+          Sair
+        </button>
+      </div>
     </div>
   );
   const logoButton = (
@@ -214,11 +215,11 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   const brandModal = showBrandModal ? (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm"
+      className="theme-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 backdrop-blur-sm"
       onClick={() => setShowBrandModal(false)}
     >
       <div
-        className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-[#0d1b36] p-4 shadow-[0_24px_90px_rgba(0,0,0,0.42)] sm:p-6"
+        className="theme-surface-strong relative w-full max-w-3xl rounded-2xl border p-4 shadow-[0_24px_90px_rgba(0,0,0,0.22)] sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -244,7 +245,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="h-screen w-screen overflow-hidden bg-re7-navy text-white [@media(max-height:760px)]:h-[100dvh]">
+      <main className="theme-bg h-screen w-screen overflow-hidden [@media(max-height:760px)]:h-[100dvh]">
         <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
           <aside className="flex h-full min-h-0 flex-col items-center border-r border-white/10 bg-[#081327] py-3 [@media(max-height:760px)]:py-2">
             <button
@@ -282,6 +283,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 );
               })}
             </nav>
+            <ThemeSelector className="mt-2 flex-col gap-1 [&_select]:h-8 [&_select]:w-14 [&_select]:px-1 [&_select]:text-[10px]" />
             <button
               type="button"
               onClick={handleLogout}
@@ -300,9 +302,9 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-re7-navy px-3 py-3 text-white sm:px-4 lg:px-5">
+    <main className="theme-bg min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
-        <header className="fixed left-3 right-3 top-2 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border border-white/10 bg-[#0d1b36]/95 px-3 py-1.5 shadow-[0_10px_32px_rgba(0,0,0,0.16)] backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:w-[calc(100%-2.5rem)]">
+        <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-2 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:w-[calc(100%-2.5rem)]">
           <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[120px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[128px_minmax(0,1fr)_160px]">
             <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
@@ -313,14 +315,14 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
             <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto] lg:items-center lg:justify-center lg:gap-2 xl:gap-3">
               <div className={navGroupClasses}>
-                <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
+                <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
                 </p>
                 <div className={navLinksClasses}>{operationItems.map(renderTextLink)}</div>
               </div>
               {administrationItems.length > 0 ? (
                 <div className={navGroupClasses}>
-                  <p className="text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em] text-white/45">
+                  <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                     Administracao
                   </p>
                   <div className={navLinksClasses}>{administrationItems.map(renderTextLink)}</div>
@@ -331,9 +333,9 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
-        <section className="fixed left-3 right-3 top-[170px] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.12)] backdrop-blur sm:left-4 sm:right-4 sm:top-[184px] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[138px] lg:w-[calc(100%-2.5rem)]">
+        <section className="theme-surface theme-shadow fixed left-3 right-3 top-[170px] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[184px] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[138px] lg:w-[calc(100%-2.5rem)]">
           <h1 className="text-lg font-bold">{title}</h1>
-          {subtitle ? <p className="mt-0.5 text-sm text-white/70">{subtitle}</p> : null}
+          {subtitle ? <p className="theme-muted mt-0.5 text-sm">{subtitle}</p> : null}
         </section>
 
         <div aria-hidden="true" className="h-[230px] sm:h-[244px] lg:h-[196px]" />

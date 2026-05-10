@@ -11,14 +11,37 @@ export const metadata: Metadata = {
   },
 };
 
+const themeBootstrapScript = `
+(function () {
+  try {
+    var key = "converta-theme";
+    var stored = window.localStorage.getItem(key);
+    var preference = stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
+    var resolved = preference;
+    if (preference === "system") {
+      resolved = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    }
+    document.documentElement.dataset.themePreference = preference;
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.style.colorScheme = resolved;
+  } catch (error) {
+    document.documentElement.dataset.themePreference = "dark";
+    document.documentElement.dataset.theme = "dark";
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
-      <body>{children}</body>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
+        {children}
+      </body>
     </html>
   );
 }
