@@ -1926,6 +1926,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     score?: number | null;
   }) => {
     if (!tenantClientId || !tenantClientKey) return;
+    const prisma = getPrisma();
+    const eventRequestId = `handoff.lead_notification.${tenantClientId}.${params.state.waId}.${params.messageId}.${params.source}`;
     if (appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
       logger.info({
         event: "handoff.lead_notification.skipped",
@@ -1951,14 +1953,16 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
       return;
     }
-    const prisma = getPrisma();
-    const eventRequestId = `handoff.lead_notification.${tenantClientId}.${params.state.waId}.${params.messageId}.${params.source}`;
     const existing = await prisma.event.findFirst({
       where: {
         clientId: tenantClientId,
         requestId: eventRequestId,
         eventName: {
-          in: ["handoff.lead_notification.sent", "handoff.lead_notification.failed"],
+          in: [
+            "handoff.lead_notification.sent",
+            "handoff.lead_notification.failed",
+            "handoff.lead_notification.pending",
+          ],
         },
       },
       select: { id: true },
@@ -1978,66 +1982,239 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const sentCount = await prisma.event.count({
       where: {
         clientId: tenantClientId,
-        eventName: "handoff.lead_notification.sent",
+        eventName: {
+          in: ["handoff.lead_notification.sent", "handoff.lead_notification.pending_sent"],
+        },
       },
     });
-    const recipientIndex = sentCount % recipients.length;
-    const recipient = recipients[recipientIndex];
+    const startIndex = recipients.length ? sentCount % recipients.length : 0;
     const tenantDisplayName =
       appliedTenantConfig?.name?.trim() ||
       (tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online");
-    const summary = buildHandoffLeadNotificationSummary(params.state, params.source);
-    const textBody = [
-      "Novo lead no Converta",
-      `Tenant: ${tenantDisplayName}`,
-      `Lead: ${params.state.waId}`,
-      `Link: https://wa.me/${params.state.waId}`,
-      summary || "Resumo: atendimento encaminhado para humano.",
-      "",
-      "Acesse o inbox para assumir ou acompanhar o atendimento.",
-    ].join("\n");
-    const credentials = await resolveCurrentTenantCredentials();
-    const result = await sendTextMessage(recipient.waId, textBody, credentials ?? undefined);
-    const eventName = result.ok
-      ? "handoff.lead_notification.sent"
-      : "handoff.lead_notification.failed";
-    await prisma.event.create({
-      data: {
-        clientId: tenantClientId,
-        waId: params.state.waId,
-        waIdCanonical: canonicalizeBrazilWaId(params.state.waId),
-        messageId: params.messageId,
-        requestId: eventRequestId,
-        eventName,
-        payloadJson: {
-          action: eventName,
+    const buildTextBody = (input: {
+      leadWaId: string;
+      summary?: string | null;
+      pending?: boolean;
+    }) =>
+      [
+        input.pending ? "Lead pendente no Converta" : "Novo lead no Converta",
+        `Tenant: ${tenantDisplayName}`,
+        `Lead: ${input.leadWaId}`,
+        `Link: https://wa.me/${input.leadWaId}`,
+        input.summary || "Resumo: atendimento encaminhado para humano.",
+        "",
+        "Acesse o inbox para assumir ou acompanhar o atendimento.",
+      ].join("\n");
+    const findOpenRecipient = async () => {
+      for (let offset = 0; offset < recipients.length; offset += 1) {
+        const recipientIndex = (startIndex + offset) % recipients.length;
+        const recipient = recipients[recipientIndex];
+        const recipientState = await storage.getConversation(recipient.waId, tenantClientKey);
+        if (recipientState && isWindowOpen(recipientState, Date.now())) {
+          return { recipient, recipientIndex };
+        }
+        logger.info({
+          event: "handoff.lead_notification.recipient_skipped",
           clientId: tenantClientId,
           clientKey: tenantClientKey,
-          source: params.source,
-          reason: params.reason ?? null,
-          score: params.score ?? null,
-          recipientId: recipient.id,
-          recipientLabel: recipient.label ?? null,
           recipientWaId: maskNumber(recipient.waId),
           recipientIndex,
-          recipientCount: recipients.length,
-          status: result.status ?? null,
-          metaMessageId: result.messageId ?? null,
-          errorBody: result.ok ? null : result.errorBody ?? null,
-        } as Prisma.InputJsonValue,
+          reason: recipientState ? "window_closed" : "recipient_state_missing",
+          source: params.source,
+          requestId: meta?.requestId,
+        });
+      }
+      return null;
+    };
+    const openRecipient = await findOpenRecipient();
+    const summary = buildHandoffLeadNotificationSummary(params.state, params.source);
+    if (!openRecipient) {
+      await prisma.event.create({
+        data: {
+          clientId: tenantClientId,
+          waId: params.state.waId,
+          waIdCanonical: canonicalizeBrazilWaId(params.state.waId),
+          messageId: params.messageId,
+          requestId: eventRequestId,
+          eventName: "handoff.lead_notification.pending",
+          payloadJson: {
+            action: "handoff.lead_notification.pending",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            source: params.source,
+            reason: params.reason ?? null,
+            score: params.score ?? null,
+            leadWaId: params.state.waId,
+            originalMessageId: params.messageId,
+            summary,
+            recipientCount: recipients.length,
+            pendingReason: "no_active_recipient_window_open",
+          } as Prisma.InputJsonValue,
+        },
+      });
+      logger.info({
+        event: "handoff.lead_notification.pending",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.state.waId),
+        reason: "no_active_recipient_window_open",
+        recipientCount: recipients.length,
+        source: params.source,
+        requestId: meta?.requestId,
+      });
+      return;
+    }
+
+    const sendNotification = async (input: {
+      requestId: string;
+      eventName: "handoff.lead_notification.sent" | "handoff.lead_notification.pending_sent";
+      leadWaId: string;
+      messageId: string | null;
+      source: string;
+      reason?: string | null;
+      score?: number | null;
+      summary?: string | null;
+      pending?: boolean;
+    }) => {
+      const textBody = buildTextBody({
+        leadWaId: input.leadWaId,
+        summary: input.summary,
+        pending: input.pending,
+      });
+      const credentials = await resolveCurrentTenantCredentials();
+      const result = await sendTextMessage(openRecipient.recipient.waId, textBody, credentials ?? undefined);
+      const eventName = result.ok ? input.eventName : "handoff.lead_notification.failed";
+      await prisma.event.create({
+        data: {
+          clientId: tenantClientId,
+          waId: input.leadWaId,
+          waIdCanonical: canonicalizeBrazilWaId(input.leadWaId),
+          messageId: input.messageId,
+          requestId: input.requestId,
+          eventName,
+          payloadJson: {
+            action: eventName,
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            source: input.source,
+            reason: input.reason ?? null,
+            score: input.score ?? null,
+            recipientId: openRecipient.recipient.id,
+            recipientLabel: openRecipient.recipient.label ?? null,
+            recipientWaId: maskNumber(openRecipient.recipient.waId),
+            recipientIndex: openRecipient.recipientIndex,
+            recipientCount: recipients.length,
+            pending: input.pending === true,
+            status: result.status ?? null,
+            metaMessageId: result.messageId ?? null,
+            errorBody: result.ok ? null : result.errorBody ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      logger.info({
+        event: eventName,
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(input.leadWaId),
+        recipientWaId: maskNumber(openRecipient.recipient.waId),
+        recipientIndex: openRecipient.recipientIndex,
+        recipientCount: recipients.length,
+        status: result.status,
+        source: input.source,
+        pending: input.pending === true,
+        requestId: meta?.requestId,
+      });
+    };
+
+    const pendingEvents = await prisma.event.findMany({
+      where: {
+        clientId: tenantClientId,
+        eventName: "handoff.lead_notification.pending",
       },
+      orderBy: { createdAt: "asc" },
+      take: 10,
     });
-    logger.info({
-      event: eventName,
-      clientId: tenantClientId,
-      clientKey: tenantClientKey,
-      waId: maskNumber(params.state.waId),
-      recipientWaId: maskNumber(recipient.waId),
-      recipientIndex,
-      recipientCount: recipients.length,
-      status: result.status,
+    for (const pendingEvent of pendingEvents) {
+      if (pendingEvent.requestId === eventRequestId) continue;
+      if (!pendingEvent.requestId) continue;
+      const resolvedPending = await prisma.event.findFirst({
+        where: {
+          clientId: tenantClientId,
+          requestId: pendingEvent.requestId,
+          eventName: {
+            in: [
+              "handoff.lead_notification.pending_sent",
+              "handoff.lead_notification.pending_skipped",
+              "handoff.lead_notification.failed",
+            ],
+          },
+        },
+        select: { id: true },
+      });
+      if (resolvedPending) continue;
+      const payload =
+        pendingEvent.payloadJson &&
+        typeof pendingEvent.payloadJson === "object" &&
+        !Array.isArray(pendingEvent.payloadJson)
+          ? (pendingEvent.payloadJson as Record<string, unknown>)
+          : {};
+      const leadWaId =
+        typeof payload.leadWaId === "string" && payload.leadWaId.trim()
+          ? payload.leadWaId
+          : pendingEvent.waId ?? "";
+      if (!leadWaId) continue;
+      const currentLeadState = await storage.getConversation(leadWaId, tenantClientKey);
+      if (currentLeadState?.assignedUserId) {
+        await prisma.event.create({
+          data: {
+            clientId: tenantClientId,
+            waId: leadWaId,
+            waIdCanonical: canonicalizeBrazilWaId(leadWaId),
+            messageId: pendingEvent.messageId,
+            requestId: pendingEvent.requestId,
+            eventName: "handoff.lead_notification.pending_skipped",
+            payloadJson: {
+              action: "handoff.lead_notification.pending_skipped",
+              clientId: tenantClientId,
+              clientKey: tenantClientKey,
+              reason: "lead_already_assigned",
+              assignedUserId: currentLeadState.assignedUserId,
+            } as Prisma.InputJsonValue,
+          },
+        });
+        logger.info({
+          event: "handoff.lead_notification.pending_skipped",
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          waId: maskNumber(leadWaId),
+          reason: "lead_already_assigned",
+          requestId: meta?.requestId,
+        });
+        continue;
+      }
+      await sendNotification({
+        requestId: pendingEvent.requestId,
+        eventName: "handoff.lead_notification.pending_sent",
+        leadWaId,
+        messageId: pendingEvent.messageId,
+        source: typeof payload.source === "string" ? payload.source : "pending",
+        reason: typeof payload.reason === "string" ? payload.reason : null,
+        score: typeof payload.score === "number" ? payload.score : null,
+        summary: typeof payload.summary === "string" ? payload.summary : null,
+        pending: true,
+      });
+    }
+
+    await sendNotification({
+      requestId: eventRequestId,
+      eventName: "handoff.lead_notification.sent",
+      leadWaId: params.state.waId,
+      messageId: params.messageId,
       source: params.source,
-      requestId: meta?.requestId,
+      reason: params.reason,
+      score: params.score,
+      summary,
+      pending: false,
     });
   };
 
