@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import ThemeSelector from "@/components/ThemeSelector";
 import {
   AppSession,
   clearAppSession,
@@ -71,8 +72,11 @@ export default function AppLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen overflow-x-hidden bg-re7-navy px-3 py-6 text-white sm:items-center sm:justify-center sm:px-4 sm:py-8">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/20 sm:p-6">
+    <main className="theme-bg flex min-h-screen overflow-x-hidden px-3 py-6 sm:items-center sm:justify-center sm:px-4 sm:py-8">
+      <div className="theme-surface mx-auto w-full max-w-md rounded-2xl border p-4 shadow-2xl shadow-black/10 sm:p-6">
+        <div className="mb-4 flex justify-end">
+          <ThemeSelector />
+        </div>
         <div className="mb-6 flex justify-center">
           <Image
             src="/images/converta-logo-light.png"
@@ -80,29 +84,37 @@ export default function AppLoginPage() {
             width={240}
             height={88}
             priority
-            className="h-auto w-full max-w-[220px] object-contain"
+            className="theme-logo-light h-auto w-full max-w-[220px] object-contain"
+          />
+          <Image
+            src="/images/converta-logo-dark.png"
+            alt="Converta"
+            width={240}
+            height={88}
+            priority
+            className="theme-logo-dark h-auto w-full max-w-[220px] object-contain"
           />
         </div>
 
-        {checkingSession ? <p className="text-sm text-white/70">Verificando acesso...</p> : null}
+        {checkingSession ? <p className="theme-muted text-sm">Verificando acesso...</p> : null}
 
         {!checkingSession ? (
           <form className="grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Email</span>
+              <span className="theme-muted">Email</span>
               <input
                 type="email"
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="email"
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Senha</span>
+              <span className="theme-muted">Senha</span>
               <input
                 type="password"
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
@@ -128,13 +140,13 @@ export default function AppLoginPage() {
           </form>
         ) : null}
 
-        <div className="mt-6 text-center text-xs text-white/50">
+        <div className="theme-soft mt-6 text-center text-xs">
           <button
             type="button"
             onClick={() =>
               setInfoMessage("Recuperacao de senha ainda nao esta disponivel no portal. Solicite o reset ao administrador.")
             }
-            className="hover:text-white"
+            className="hover:text-re7-sky"
           >
             Recuperar senha
           </button>

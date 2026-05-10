@@ -169,6 +169,18 @@ html {
     color: var(--app-text);
   }
 
+  .theme-logo-dark {
+    display: none;
+  }
+
+  :root[data-theme="light"] .theme-logo-light {
+    display: none;
+  }
+
+  :root[data-theme="light"] .theme-logo-dark {
+    display: block;
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image:
