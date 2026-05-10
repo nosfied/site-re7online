@@ -241,6 +241,99 @@ html {
     background-color: rgba(127, 196, 229, 0.12) !important;
   }
 
+  :root[data-theme="light"] .theme-workspace .bg-red-900\/30,
+  :root[data-theme="light"] .theme-inbox .bg-red-900\/30 {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #991b1b !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .bg-emerald-900\/30,
+  :root[data-theme="light"] .theme-workspace .bg-emerald-900\/20,
+  :root[data-theme="light"] .theme-inbox .bg-emerald-900\/30,
+  :root[data-theme="light"] .theme-inbox .bg-emerald-900\/20 {
+    background-color: #059669 !important;
+    color: #ffffff !important;
+    border-color: #047857 !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .bg-amber-900\/30,
+  :root[data-theme="light"] .theme-workspace .bg-amber-900\/20,
+  :root[data-theme="light"] .theme-inbox .bg-amber-900\/30,
+  :root[data-theme="light"] .theme-inbox .bg-amber-900\/20 {
+    background-color: #d97706 !important;
+    color: #111827 !important;
+    border-color: #b45309 !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox aside[class*="bg-[#0c1930]"],
+  :root[data-theme="light"] .theme-inbox div[class*="bg-[#10213d]"],
+  :root[data-theme="light"] .theme-inbox div[class*="bg-[#101f3a]"] {
+    background-color: var(--app-surface-strong) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox button[class*="bg-[#17365f]"] {
+    background-color: rgba(127, 196, 229, 0.22) !important;
+    box-shadow: inset 0 0 0 1px rgba(12, 89, 132, 0.16) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .border-white\/10,
+  :root[data-theme="light"] .theme-inbox .border-white\/15,
+  :root[data-theme="light"] .theme-inbox .border-white\/20 {
+    border-color: var(--app-border) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .bg-white\/5,
+  :root[data-theme="light"] .theme-inbox .bg-white\/8,
+  :root[data-theme="light"] .theme-inbox .bg-white\/10,
+  :root[data-theme="light"] .theme-inbox .bg-white\/12 {
+    background-color: rgba(6, 19, 42, 0.045) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .bg-re7-navy\/80 {
+    background-color: var(--app-surface-strong) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .text-white\/35,
+  :root[data-theme="light"] .theme-inbox .text-white\/45,
+  :root[data-theme="light"] .theme-inbox .text-white\/50,
+  :root[data-theme="light"] .theme-inbox .text-white\/55,
+  :root[data-theme="light"] .theme-inbox .text-white\/60,
+  :root[data-theme="light"] .theme-inbox .text-white\/65,
+  :root[data-theme="light"] .theme-inbox .text-white\/68,
+  :root[data-theme="light"] .theme-inbox .text-white\/70 {
+    color: var(--app-text-soft) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .text-white\/75,
+  :root[data-theme="light"] .theme-inbox .text-white\/78,
+  :root[data-theme="light"] .theme-inbox .text-white\/80,
+  :root[data-theme="light"] .theme-inbox .text-white\/85,
+  :root[data-theme="light"] .theme-inbox .text-white\/88,
+  :root[data-theme="light"] .theme-inbox .text-white\/90 {
+    color: var(--app-text-muted) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox p[class~="text-white"],
+  :root[data-theme="light"] .theme-inbox h2[class~="text-white"],
+  :root[data-theme="light"] .theme-inbox input[class~="text-white"],
+  :root[data-theme="light"] .theme-inbox select[class~="text-white"],
+  :root[data-theme="light"] .theme-inbox textarea[class~="text-white"],
+  :root[data-theme="light"] .theme-inbox article p[class~="text-white"] {
+    color: var(--app-text) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox input::placeholder,
+  :root[data-theme="light"] .theme-inbox textarea::placeholder {
+    color: var(--app-text-soft) !important;
+  }
+
+  :root[data-theme="light"] .theme-inbox .hover\:bg-white\/5:hover,
+  :root[data-theme="light"] .theme-inbox .hover\:bg-white\/10:hover,
+  :root[data-theme="light"] .theme-inbox .hover\:bg-white\/12:hover {
+    background-color: rgba(127, 196, 229, 0.12) !important;
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image:

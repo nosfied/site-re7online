@@ -148,10 +148,10 @@ function getLeadTemperatureLabel(item: Pick<InboxConversationItem, "flowContext"
 
 function getLeadTemperatureClass(item: Pick<InboxConversationItem, "flowContext"> | null) {
   const temperature = getLeadTemperature(item);
-  if (temperature === "quente") return "border-red-300 bg-red-100 text-red-800";
-  if (temperature === "morno") return "border-amber-300 bg-amber-100 text-amber-800";
-  if (temperature === "frio") return "border-slate-300 bg-slate-100 text-slate-700";
-  return "border-slate-300 bg-slate-100 text-slate-600";
+  if (temperature === "quente") return "border-red-700 bg-red-600 text-white";
+  if (temperature === "morno") return "border-amber-600 bg-amber-500 text-slate-950";
+  if (temperature === "frio") return "border-slate-500 bg-slate-500 text-white";
+  return "border-slate-500 bg-slate-500 text-white";
 }
 
 function extractSuggestedReply(notes: LeadNoteItem[]) {
@@ -1080,15 +1080,15 @@ function getConversationModeLabel(
 function getConversationStatusClass(status: ConversationOperationalStatus | null) {
   switch (status) {
     case "WAITING":
-      return "bg-amber-500/20 text-amber-100";
+      return "bg-amber-500 text-slate-950";
     case "IN_PROGRESS":
-      return "bg-sky-500/20 text-sky-100";
+      return "bg-sky-600 text-white";
     case "WAITING_USER":
-      return "bg-violet-500/20 text-violet-100";
+      return "bg-violet-600 text-white";
     case "CLOSED":
-      return "bg-white/10 text-white/75";
+      return "bg-slate-500 text-white";
     default:
-      return "bg-white/10 text-white/65";
+      return "bg-slate-500 text-white";
   }
 }
 

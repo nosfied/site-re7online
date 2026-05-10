@@ -186,7 +186,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <button
         type="button"
         onClick={handleLogout}
-        className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
+        className="h-8 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 lg:h-9 lg:text-sm"
       >
         Sair
       </button>
@@ -213,7 +213,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         width={160}
         height={200}
         priority
-        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[177px]"
+        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[112px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[126px] lg:h-[158px]"
       />
     </button>
   );
@@ -249,7 +249,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             width={900}
             height={340}
             priority
-            className="theme-logo-dark h-auto w-full max-w-[760px] object-contain"
+            className="theme-logo-dark h-auto w-full max-w-[680px] object-contain"
           />
         </div>
       </div>
@@ -258,13 +258,13 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="theme-bg h-screen w-screen overflow-hidden [@media(max-height:760px)]:h-[100dvh]">
+      <main className="theme-bg theme-inbox h-screen w-screen overflow-hidden [@media(max-height:760px)]:h-[100dvh]">
         <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
           <aside className="flex h-full min-h-0 flex-col items-center border-r border-white/10 bg-[#081327] py-3 [@media(max-height:760px)]:py-2">
             <button
               type="button"
-              onClick={() => setShowBrandModal(true)}
-              title="Ampliar logo da Converta"
+              onClick={() => router.push("/app/inbox")}
+              title="Abrir inbox"
               className="flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa] [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl">
@@ -301,7 +301,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               type="button"
               onClick={handleLogout}
               title="Sair"
-              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-red-400/25 bg-red-900/20 text-xs font-semibold text-red-100 transition hover:bg-red-900/30 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
+              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-re7-orange text-xs font-semibold text-white shadow-sm transition hover:brightness-110 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
             >
               <span className="text-xl leading-none [@media(max-height:760px)]:text-lg">🚪</span>
             </button>

@@ -51,8 +51,8 @@ export function FeedbackToast({
 
   const style =
     variant === "error"
-      ? "border-red-400/30 bg-red-900/90 text-red-100"
-      : "border-emerald-400/30 bg-emerald-900/90 text-emerald-100";
+      ? "border-red-800 bg-red-600 text-white"
+      : "border-emerald-800 bg-emerald-600 text-white";
 
   return (
     <div
