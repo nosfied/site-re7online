@@ -1280,8 +1280,18 @@ export default function AppInboxPage() {
     pendingUnreadAnchorMessageIdRef.current = null;
     setSelectedConversationKey(null);
     setSelectedConversationWaId(null);
+    setActiveConversationIdentity(null);
     setMessages([]);
     setMessagesConversationKey(null);
+    setLeadNotes([]);
+    setLeadError(null);
+    setMessageDraft("");
+    setSelectedMediaFile(null);
+    setShowEmojiPicker(false);
+    setAudioRecordingState("idle");
+    if (mediaInputRef.current) {
+      mediaInputRef.current.value = "";
+    }
     setLoadingMessages(false);
     setShowContactTimeline(false);
     setContactTimelineItems([]);
@@ -3215,12 +3225,7 @@ export default function AppInboxPage() {
       setConversations((prev) =>
         releasedKey ? prev.filter((item) => getConversationIdentity(item) !== releasedKey) : prev
       );
-      setSelectedConversationKey(null);
-      setSelectedConversationWaId(null);
-      setMessages([]);
-      setMessagesConversationKey(null);
-      setLeadNotes([]);
-      setActiveConversationIdentity(null);
+      clearSelectedConversation();
       setSuccess("Conversa liberada para automacao.");
       void refreshConversationList(session).catch((err) => {
         if ((err as { status?: number }).status === 401) handleUnauthorized();
@@ -3252,12 +3257,7 @@ export default function AppInboxPage() {
         setConversations((prev) =>
           prev.filter((item) => getConversationIdentity(item) !== responseIdentity)
         );
-        setSelectedConversationKey(null);
-        setSelectedConversationWaId(null);
-        setMessages([]);
-        setMessagesConversationKey(null);
-        setLeadNotes([]);
-        setActiveConversationIdentity(null);
+        clearSelectedConversation();
         setSuccess("Conversa liberada para Atendimento Geral.");
         void refreshConversationList(session).catch((err) => {
           if ((err as { status?: number }).status === 401) handleUnauthorized();
@@ -3327,12 +3327,7 @@ export default function AppInboxPage() {
 
       if (!stillInUserScope) {
         detailRequestSeqRef.current += 1;
-        setSelectedConversationKey(null);
-        setSelectedConversationWaId(null);
-        setMessages([]);
-        setMessagesConversationKey(null);
-        setLeadNotes([]);
-        setActiveConversationIdentity(null);
+        clearSelectedConversation();
         setSuccess("Conversa transferida para outro setor.");
         void refreshConversationList(session).catch((err) => {
           if ((err as { status?: number }).status === 401) handleUnauthorized();
@@ -3890,16 +3885,7 @@ export default function AppInboxPage() {
                     getConversationIdentity(selectedConversation),
                     selectedConversation.waId
                   );
-                  setSelectedConversationKey(null);
-                  setSelectedConversationWaId(null);
-                  setActiveConversationIdentity(null);
-                  setMessages([]);
-                  setMessagesConversationKey(null);
-                  pendingUnreadScrollTargetRef.current = null;
-                  pendingReadAfterHydrationRef.current = null;
-                  pendingUnreadAnchorConversationIdentityRef.current = null;
-                  pendingUnreadLastReadAtRef.current = null;
-                  pendingUnreadAnchorMessageIdRef.current = null;
+                  clearSelectedConversation();
                   setUnreadSeparatorIndex(null);
                   setUnreadAnchorMessageIdentity(null);
                 }}
