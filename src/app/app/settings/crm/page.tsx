@@ -1,0 +1,468 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import AppShell from "@/components/app/AppShell";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
+import {
+  AppApiError,
+  AppCrmCampaignRecipient,
+  AppSession,
+  clearAppSession,
+  CrmBusinessStatusConfig,
+  fetchAppCrmCampaignRecipients,
+  fetchAppCrmSettings,
+  loadAppSession,
+  saveAppSession,
+  updateAppCrmSettings,
+} from "@/lib/appClientApi";
+
+const EMPTY_STATUS: CrmBusinessStatusConfig = {
+  id: "",
+  label: "",
+  isActive: true,
+  campaignEligible: false,
+  description: "",
+};
+
+function canManageCrm(role: string) {
+  const normalized = role.trim().toUpperCase();
+  return normalized === "SUPERVISOR" || normalized === "ADMIN";
+}
+
+function normalizeStatusId(input: string) {
+  return input
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+function normalizeAppErrorMessage(error: AppApiError, fallback: string) {
+  if (error.status === 403) return "Seu perfil nao tem permissao para alterar definicoes do CRM.";
+  if (error.status === 401) return "Sessao expirada. Faca login novamente.";
+  return error.message || fallback;
+}
+
+function formatCount(count: number | undefined) {
+  return new Intl.NumberFormat("pt-BR").format(count ?? 0);
+}
+
+export default function AppCrmSettingsPage() {
+  const router = useRouter();
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [statuses, setStatuses] = useState<CrmBusinessStatusConfig[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [form, setForm] = useState<CrmBusinessStatusConfig>(EMPTY_STATUS);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [recipients, setRecipients] = useState<AppCrmCampaignRecipient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
+    setError(null);
+    setSuccess(null);
+  });
+
+  const handleUnauthorized = useCallback(() => {
+    clearAppSession();
+    router.replace("/app/login");
+  }, [router]);
+
+  const loadSettings = useCallback(async (activeSession: AppSession) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetchAppCrmSettings(activeSession);
+      setStatuses(response.settings.crmBusinessStatuses);
+      setCounts(response.leadCountsByStatus ?? {});
+      const campaignDefaults = response.settings.crmBusinessStatuses
+        .filter((item) => item.isActive && item.campaignEligible)
+        .map((item) => item.id);
+      setSelectedStatuses(campaignDefaults);
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar definicoes do CRM."));
+    } finally {
+      setLoading(false);
+    }
+  }, [handleUnauthorized]);
+
+  useEffect(() => {
+    const stored = loadAppSession();
+    if (!stored) {
+      router.replace("/app/login");
+      return;
+    }
+    if (!canManageCrm(stored.user.role)) {
+      router.replace("/app/inbox");
+      return;
+    }
+    saveAppSession(stored);
+    setSession(stored);
+    void loadSettings(stored);
+  }, [loadSettings, router]);
+
+  const recipientNumbers = useMemo(
+    () => recipients.map((item) => item.phone).join("\n"),
+    [recipients]
+  );
+
+  const selectedCount = useMemo(
+    () => selectedStatuses.reduce((total, status) => total + (counts[status] ?? 0), 0),
+    [counts, selectedStatuses]
+  );
+
+  const activeCampaignStatuses = useMemo(
+    () => statuses.filter((item) => item.isActive && item.campaignEligible),
+    [statuses]
+  );
+
+  const resetForm = () => {
+    setForm(EMPTY_STATUS);
+  };
+
+  const handleAddStatus = () => {
+    const label = form.label.trim();
+    const id = normalizeStatusId(form.id || label);
+    if (!label || !id) {
+      setError("Informe nome e chave da situacao.");
+      return;
+    }
+    if (statuses.some((item) => item.id === id)) {
+      setError("Ja existe uma situacao com essa chave.");
+      return;
+    }
+    setStatuses((current) => [
+      ...current,
+      {
+        id,
+        label,
+        isActive: form.isActive,
+        campaignEligible: form.campaignEligible,
+        ...(form.description?.trim() ? { description: form.description.trim() } : {}),
+      },
+    ]);
+    resetForm();
+    setSuccess("Situacao adicionada. Salve os ajustes para persistir.");
+  };
+
+  const patchStatus = (id: string, patch: Partial<CrmBusinessStatusConfig>) => {
+    setStatuses((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    );
+  };
+
+  const handleSave = async () => {
+    if (!session) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = statuses.map((item) => ({
+        id: normalizeStatusId(item.id || item.label),
+        label: item.label.trim(),
+        isActive: item.isActive,
+        campaignEligible: item.campaignEligible,
+        ...(item.description?.trim() ? { description: item.description.trim() } : {}),
+      })).filter((item) => item.id && item.label);
+      const response = await updateAppCrmSettings(session, { crmBusinessStatuses: payload });
+      setStatuses(response.settings.crmBusinessStatuses);
+      setSuccess("Definicoes do CRM salvas.");
+      await loadSettings(session);
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeAppErrorMessage(typed, "Nao foi possivel salvar definicoes do CRM."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePrepareRecipients = async () => {
+    if (!session) return;
+    if (selectedStatuses.length === 0) {
+      setError("Selecione ao menos uma situacao habilitada para campanhas.");
+      return;
+    }
+    setPreparing(true);
+    setError(null);
+    try {
+      const response = await fetchAppCrmCampaignRecipients(session, selectedStatuses, 2000);
+      setRecipients(response.items);
+      setSuccess(`${formatCount(response.count)} numero(s) preparado(s) para campanha.`);
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeAppErrorMessage(typed, "Nao foi possivel preparar os numeros."));
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const handleCopyRecipients = async () => {
+    if (!recipientNumbers) return;
+    await navigator.clipboard.writeText(recipientNumbers);
+    setSuccess("Numeros copiados.");
+  };
+
+  if (!session) {
+    return (
+      <main className="theme-bg min-h-screen px-4 py-8 md:px-8">
+        <div className="theme-surface mx-auto max-w-7xl rounded-xl border p-4">
+          <p className="theme-muted text-sm">Carregando...</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <AppShell
+      session={session}
+      title="CRM"
+      subtitle="Defina situacoes do negocio e prepare leads para novas campanhas."
+    >
+      <FeedbackToast message={success} variant="success" {...toastHandlers} />
+      <FeedbackToast message={error} variant="error" {...toastHandlers} />
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="theme-surface rounded-2xl border p-4 sm:p-6">
+          <div className="mb-5 flex flex-col gap-2">
+            <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
+              Situacao do negocio
+            </span>
+            <p className="theme-muted text-sm">
+              Use estas situacoes para organizar leads no CRM e selecionar bases para campanhas.
+            </p>
+          </div>
+
+          <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+            <label className="flex flex-col gap-2 text-sm text-white/75">
+              <span>Nome da situacao</span>
+              <input
+                value={form.label}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    label: event.target.value,
+                    id: current.id || normalizeStatusId(event.target.value),
+                  }))
+                }
+                placeholder="Ex: Reativar futuramente"
+                className="theme-select w-full rounded-md px-3 py-2 text-sm outline-none"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-white/75">
+              <span>Chave</span>
+              <input
+                value={form.id}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, id: normalizeStatusId(event.target.value) }))
+                }
+                placeholder="REATIVAR"
+                className="theme-select w-full rounded-md px-3 py-2 text-sm font-mono outline-none"
+              />
+            </label>
+            <label className="md:col-span-2 flex flex-col gap-2 text-sm text-white/75">
+              <span>Descricao operacional</span>
+              <input
+                value={form.description ?? ""}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, description: event.target.value }))
+                }
+                placeholder="Quando usar esta situacao no CRM."
+                className="theme-select w-full rounded-md px-3 py-2 text-sm outline-none"
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-white/75">
+              <input
+                type="checkbox"
+                checked={form.isActive}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, isActive: event.target.checked }))
+                }
+              />
+              Ativa
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-white/75">
+              <input
+                type="checkbox"
+                checked={form.campaignEligible}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, campaignEligible: event.target.checked }))
+                }
+              />
+              Pode entrar em campanha
+            </label>
+            <button
+              type="button"
+              onClick={handleAddStatus}
+              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110"
+            >
+              Adicionar situacao
+            </button>
+          </div>
+        </section>
+
+        <section className="theme-surface rounded-2xl border p-4 sm:p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Preparar campanha</h2>
+            <p className="theme-muted mt-1 text-sm">
+              Filtre leads por situacao e gere uma lista de numeros, um por linha.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {activeCampaignStatuses.length === 0 ? (
+              <p className="theme-muted rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                Nenhuma situacao ativa esta marcada para campanhas.
+              </p>
+            ) : (
+              activeCampaignStatuses.map((status) => (
+                <label
+                  key={status.id}
+                  className="theme-list-row theme-list-row-even flex items-center justify-between gap-3 rounded-xl border p-3 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{status.label}</span>
+                    <span className="theme-soft text-xs">{formatCount(counts[status.id])} lead(s)</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={selectedStatuses.includes(status.id)}
+                    onChange={(event) =>
+                      setSelectedStatuses((current) =>
+                        event.target.checked
+                          ? [...new Set([...current, status.id])]
+                          : current.filter((item) => item !== status.id)
+                      )
+                    }
+                  />
+                </label>
+              ))
+            )}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="theme-muted text-sm">{formatCount(selectedCount)} lead(s) no filtro.</p>
+            <button
+              type="button"
+              onClick={handlePrepareRecipients}
+              disabled={preparing || selectedStatuses.length === 0}
+              className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-white hover:bg-re7-sky/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {preparing ? "Preparando..." : "Preparar numeros"}
+            </button>
+          </div>
+          {recipients.length > 0 ? (
+            <div className="mt-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold">{formatCount(recipients.length)} numero(s)</p>
+                <button
+                  type="button"
+                  onClick={handleCopyRecipients}
+                  className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold"
+                >
+                  Copiar lista
+                </button>
+              </div>
+              <textarea
+                readOnly
+                value={recipientNumbers}
+                className="theme-select min-h-48 w-full rounded-xl px-3 py-2 font-mono text-xs outline-none"
+              />
+            </div>
+          ) : null}
+        </section>
+      </div>
+
+      <section className="theme-surface mt-4 rounded-2xl border p-4 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Situacoes cadastradas</h2>
+            <p className="theme-muted mt-1 text-sm">
+              Edite rotulos, habilite uso no CRM e marque o que pode virar base de campanha.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Salvando..." : "Salvar ajustes"}
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="theme-muted text-sm">Carregando situacoes...</p>
+        ) : statuses.length === 0 ? (
+          <p className="theme-muted text-sm">Nenhuma situacao cadastrada.</p>
+        ) : (
+          <div className="space-y-3">
+            {statuses.map((status, index) => (
+              <article
+                key={status.id}
+                className={`theme-list-row ${
+                  index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
+                } rounded-xl border p-4`}
+              >
+                <div className="grid gap-3 lg:grid-cols-[170px_minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center">
+                  <div>
+                    <p className="font-mono text-xs text-white/60">{status.id}</p>
+                    <p className="theme-soft mt-1 text-xs">{formatCount(counts[status.id])} lead(s)</p>
+                  </div>
+                  <input
+                    value={status.label}
+                    onChange={(event) => patchStatus(status.id, { label: event.target.value })}
+                    className="theme-select w-full rounded-md px-3 py-2 text-sm outline-none"
+                  />
+                  <input
+                    value={status.description ?? ""}
+                    onChange={(event) => patchStatus(status.id, { description: event.target.value })}
+                    placeholder="Descricao"
+                    className="theme-select w-full rounded-md px-3 py-2 text-sm outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-3 text-sm">
+                    <label className="inline-flex items-center gap-2 text-white/75">
+                      <input
+                        type="checkbox"
+                        checked={status.isActive}
+                        onChange={(event) => patchStatus(status.id, { isActive: event.target.checked })}
+                      />
+                      Ativa
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-white/75">
+                      <input
+                        type="checkbox"
+                        checked={status.campaignEligible}
+                        onChange={(event) =>
+                          patchStatus(status.id, { campaignEligible: event.target.checked })
+                        }
+                      />
+                      Campanha
+                    </label>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </AppShell>
+  );
+}

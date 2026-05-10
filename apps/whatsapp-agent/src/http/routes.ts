@@ -16,6 +16,7 @@ import {
   getAiAssistantConfigurationStatus,
   getTenants,
   isAiAssistantConfigured,
+  normalizeCrmBusinessStatuses,
   saveTenants,
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
@@ -2971,6 +2972,220 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       403,
       httpError("managed_by_internal_admin", "Automacoes sao gerenciadas no console interno.")
     );
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/crm/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view CRM settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const counts = await prisma.lead.groupBy({
+        by: ["status"],
+        where: { tenantId: client.id },
+        _count: { _all: true },
+      });
+      const leadCountsByStatus = Object.fromEntries(
+        counts.map((item) => [item.status, item._count._all])
+      );
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: {
+          crmBusinessStatuses: statuses,
+        },
+        leadCountsByStatus,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/crm/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update CRM settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const data = body as Record<string, unknown>;
+      if (!Object.prototype.hasOwnProperty.call(data, "crmBusinessStatuses")) {
+        json(res, 400, httpError("bad_request", "crmBusinessStatuses is required"));
+        return;
+      }
+      if (!Array.isArray(data.crmBusinessStatuses)) {
+        json(res, 400, httpError("bad_request", "crmBusinessStatuses must be an array"));
+        return;
+      }
+      const statuses = normalizeCrmBusinessStatuses(data.crmBusinessStatuses);
+      const saved = await saveTenantPatch(client.clientKey, {
+        crmBusinessStatuses: statuses,
+      });
+      logger.info({
+        event: "app.crm.settings.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        statusCount: statuses.length,
+        fieldsChanged: saved.fieldsChanged,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        fieldsChanged: saved.fieldsChanged,
+        settings: {
+          crmBusinessStatuses: normalizeCrmBusinessStatuses(saved.tenant.crmBusinessStatuses),
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.settings.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/crm/campaign-recipients") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can export CRM recipients."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const configuredStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const allowedStatuses = new Set(
+        configuredStatuses
+          .filter((item) => item.isActive && item.campaignEligible)
+          .map((item) => item.id)
+      );
+      const requestedStatuses = String(query.statuses ?? "")
+        .split(",")
+        .map((item) => item.trim().toUpperCase())
+        .filter((item) => allowedStatuses.has(item));
+      if (requestedStatuses.length === 0) {
+        json(res, 400, httpError("bad_request", "Select at least one campaign eligible status."));
+        return;
+      }
+      const limit = Math.min(
+        5000,
+        Math.max(1, Number.isFinite(Number(query.limit)) ? Math.floor(Number(query.limit)) : 1000)
+      );
+      const leads = await prisma.lead.findMany({
+        where: {
+          tenantId: client.id,
+          status: { in: requestedStatuses },
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          waId: true,
+          waIdCanonical: true,
+          status: true,
+          updatedAt: true,
+        },
+      });
+      const seen = new Set<string>();
+      const items = leads
+        .map((lead) => {
+          const phone = String(lead.phone ?? lead.waIdCanonical ?? lead.waId ?? "").replace(/\D/g, "");
+          if (!phone || seen.has(phone)) return null;
+          seen.add(phone);
+          return {
+            leadId: lead.id,
+            name: lead.name,
+            phone,
+            status: lead.status,
+            updatedAt: lead.updatedAt.toISOString(),
+          };
+        })
+        .filter(Boolean);
+      logger.info({
+        event: "app.crm.campaign_recipients.prepared",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        statuses: requestedStatuses,
+        count: items.length,
+      });
+      json(res, 200, {
+        ok: true,
+        statuses: requestedStatuses,
+        count: items.length,
+        items,
+        numbers: items.map((item) => item?.phone).filter(Boolean),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.campaign_recipients.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
@@ -10945,6 +11160,7 @@ function diffTenantFields(
   compareField("aiAssistantFallbackMessage");
   compareField("aiAssistantHandoffPrompt");
   compareField("aiAssistantIntentCatalog");
+  compareField("crmBusinessStatuses");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");

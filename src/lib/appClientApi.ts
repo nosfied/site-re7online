@@ -213,6 +213,31 @@ export type AiAssistantIntentCatalogItem = {
   tags?: string[];
 };
 
+export type CrmBusinessStatusConfig = {
+  id: string;
+  label: string;
+  isActive: boolean;
+  campaignEligible: boolean;
+  description?: string;
+};
+
+export type AppCrmSettingsResponse = {
+  ok: true;
+  tenantId: string;
+  settings: {
+    crmBusinessStatuses: CrmBusinessStatusConfig[];
+  };
+  leadCountsByStatus: Record<string, number>;
+};
+
+export type AppCrmCampaignRecipient = {
+  leadId: string;
+  name: string | null;
+  phone: string;
+  status: string;
+  updatedAt: string;
+};
+
 export type AppTenantSummary = {
   id: string;
   name: string;
@@ -1160,6 +1185,44 @@ export async function executeAppRetention(
   return requestAppJson(session, "/app/privacy/retention/execute", {
     method: "POST",
   });
+}
+
+export async function fetchAppCrmSettings(session: AppSession): Promise<AppCrmSettingsResponse> {
+  return requestAppJson(session, "/app/crm/settings");
+}
+
+export async function updateAppCrmSettings(
+  session: AppSession,
+  payload: { crmBusinessStatuses: CrmBusinessStatusConfig[] }
+): Promise<{
+  ok: true;
+  tenantId: string;
+  fieldsChanged: string[];
+  settings: {
+    crmBusinessStatuses: CrmBusinessStatusConfig[];
+  };
+}> {
+  return requestAppJson(session, "/app/crm/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppCrmCampaignRecipients(
+  session: AppSession,
+  statuses: string[],
+  limit = 1000
+): Promise<{
+  ok: true;
+  statuses: string[];
+  count: number;
+  items: AppCrmCampaignRecipient[];
+  numbers: string[];
+}> {
+  const params = new URLSearchParams();
+  params.set("statuses", statuses.join(","));
+  params.set("limit", String(limit));
+  return requestAppJson(session, `/app/crm/campaign-recipients?${params.toString()}`);
 }
 
 export async function deleteAppConversationData(

@@ -75,6 +75,7 @@ export type TenantConfig = {
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  crmBusinessStatuses?: CrmBusinessStatusConfig[];
   aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
@@ -97,6 +98,14 @@ export type AiAssistantIntentCatalogItem = {
   priority?: "alta" | "media" | "baixa";
   handoff?: boolean;
   tags?: string[];
+};
+
+export type CrmBusinessStatusConfig = {
+  id: string;
+  label: string;
+  isActive: boolean;
+  campaignEligible: boolean;
+  description?: string;
 };
 
 export type TenantConfigMap = Record<string, TenantConfig>;
@@ -263,6 +272,7 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     nextTenant.aiAssistantIntentCatalog = normalizeAiAssistantIntentCatalog(
       tenant.aiAssistantIntentCatalog
     );
+    nextTenant.crmBusinessStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
     }
@@ -274,6 +284,101 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     normalized[key] = nextTenant;
   }
   return normalized;
+}
+
+export const DEFAULT_CRM_BUSINESS_STATUSES: CrmBusinessStatusConfig[] = [
+  {
+    id: "NEW",
+    label: "Novo",
+    isActive: true,
+    campaignEligible: false,
+    description: "Lead recem-criado ou ainda sem qualificacao.",
+  },
+  {
+    id: "QUALIFIED",
+    label: "Qualificado",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead com interesse ou perfil identificado.",
+  },
+  {
+    id: "OPEN",
+    label: "Em aberto",
+    isActive: true,
+    campaignEligible: true,
+    description: "Negocio em andamento, ainda sem fechamento.",
+  },
+  {
+    id: "FOLLOW_UP",
+    label: "Follow-up",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead aguardando nova tentativa ou acompanhamento.",
+  },
+  {
+    id: "WON",
+    label: "Fechado",
+    isActive: true,
+    campaignEligible: false,
+    description: "Negocio fechado com sucesso.",
+  },
+  {
+    id: "LOST",
+    label: "Nao fechado",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead que nao fechou e pode ser trabalhado futuramente.",
+  },
+  {
+    id: "NO_RESPONSE",
+    label: "Sem resposta",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead sem retorno recente.",
+  },
+  {
+    id: "NURTURE",
+    label: "Nutrir",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead para relacionamento e campanhas futuras.",
+  },
+];
+
+function normalizeCrmStatusId(input: unknown) {
+  if (typeof input !== "string") return "";
+  return input
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+export function normalizeCrmBusinessStatuses(input: unknown): CrmBusinessStatusConfig[] {
+  if (!Array.isArray(input)) return [...DEFAULT_CRM_BUSINESS_STATUSES];
+  const seen = new Set<string>();
+  const items: CrmBusinessStatusConfig[] = [];
+  for (const rawItem of input.slice(0, 40)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+    const item = rawItem as Record<string, unknown>;
+    const label = typeof item.label === "string" ? item.label.trim().slice(0, 80) : "";
+    const id = normalizeCrmStatusId(item.id) || normalizeCrmStatusId(label);
+    if (!id || !/^[A-Z0-9_]{2,40}$/.test(id) || seen.has(id) || !label) continue;
+    seen.add(id);
+    const description =
+      typeof item.description === "string" ? item.description.trim().slice(0, 180) : "";
+    items.push({
+      id,
+      label,
+      isActive: item.isActive !== false,
+      campaignEligible: item.campaignEligible === true,
+      ...(description ? { description } : {}),
+    });
+  }
+  return items.length ? items : [...DEFAULT_CRM_BUSINESS_STATUSES];
 }
 
 function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
