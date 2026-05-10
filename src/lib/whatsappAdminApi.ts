@@ -158,6 +158,8 @@ export type AdminAutomationSettings = {
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
   aiAssistantPresetApplied?: string;
+  handoffLeadNotificationEnabled?: boolean;
+  handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
   aiAssistantGlobalSafety?: {
     questionStarters: string[];
     topicTerms: string[];
@@ -185,6 +187,13 @@ export type AdminAutomationSettings = {
   aiLocked?: boolean;
   aiAssistantLocked?: boolean;
   intentClassifierLocked?: boolean;
+};
+
+export type HandoffLeadNotificationRecipient = {
+  id: string;
+  waId: string;
+  label?: string;
+  isActive: boolean;
 };
 
 export type AiAssistantIntentCatalogItem = {

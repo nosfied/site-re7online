@@ -15,6 +15,7 @@ import {
   fetchAppChatbotSettings,
   loadAppSession,
   saveAppSession,
+  updateAppChatbotSettings,
   updateAppChatbotFlow,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
@@ -323,6 +324,19 @@ function TogglePill({
   );
 }
 
+type HandoffNotificationRecipient = NonNullable<
+  AppAutomationSettings["handoffLeadNotificationRecipients"]
+>[number];
+
+function createHandoffNotificationRecipient(): HandoffNotificationRecipient {
+  return {
+    id: `recipient_${Date.now()}`,
+    label: "",
+    waId: "",
+    isActive: true,
+  };
+}
+
 export default function AppChatbotPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -330,6 +344,7 @@ export default function AppChatbotPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
@@ -350,6 +365,72 @@ export default function AppChatbotPage() {
     >
   >({});
   const [draftSearches, setDraftSearches] = useState<Record<string, string>>({});
+
+  const updateHandoffNotificationRecipient = (
+    index: number,
+    patch: Partial<HandoffNotificationRecipient>
+  ) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const recipients = [...(current.handoffLeadNotificationRecipients ?? [])];
+      recipients[index] = {
+        ...recipients[index],
+        ...patch,
+      };
+      return {
+        ...current,
+        handoffLeadNotificationRecipients: recipients,
+      };
+    });
+  };
+
+  const removeHandoffNotificationRecipient = (index: number) => {
+    setSettings((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        handoffLeadNotificationRecipients: (current.handoffLeadNotificationRecipients ?? []).filter(
+          (_, itemIndex) => itemIndex !== index
+        ),
+      };
+    });
+  };
+
+  const handleSaveHandoffNotificationSettings = async () => {
+    if (!session || !settings) return;
+    const recipients = (settings.handoffLeadNotificationRecipients ?? []).map((recipient) => ({
+      ...recipient,
+      waId: recipient.waId.replace(/\D/g, ""),
+      label: recipient.label?.trim() || undefined,
+    }));
+    if (
+      settings.handoffLeadNotificationEnabled &&
+      recipients.filter((recipient) => recipient.isActive && /^\d{8,20}$/.test(recipient.waId)).length === 0
+    ) {
+      setError("Informe pelo menos um numero ativo para receber notificacoes de novos leads.");
+      return;
+    }
+    setSavingNotificationSettings(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await updateAppChatbotSettings(session, {
+        handoffLeadNotificationEnabled: settings.handoffLeadNotificationEnabled === true,
+        handoffLeadNotificationRecipients: recipients,
+      });
+      setSettings(response.settings);
+      setSuccess("Notificacoes internas de novo lead atualizadas.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(normalizeChatbotError(typed, "Falha ao salvar notificacoes de novo lead."));
+    } finally {
+      setSavingNotificationSettings(false);
+    }
+  };
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -575,6 +656,8 @@ export default function AppChatbotPage() {
     aiAssistantHandoffKeywords: [],
     aiAssistantFallbackMessage: "",
     aiAssistantHandoffPrompt: "",
+    handoffLeadNotificationEnabled: false,
+    handoffLeadNotificationRecipients: [],
     aiConfigured: false,
     chatbotLocked: false,
     flowEditingLocked: false,
@@ -606,7 +689,7 @@ export default function AppChatbotPage() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
             <p className="mt-1 text-sm text-white/65">
-              Acompanhe os recursos liberados no console interno para este cliente.
+              Acompanhe os recursos liberados no console interno e configure notificacoes internas de novos leads.
             </p>
             <p className="mt-1 text-xs text-white/50">
               Configuracao de IA: {aiConfigStatus.ready ? "pronta" : "pendente"} · {aiConfigStatus.score}%.
@@ -619,7 +702,7 @@ export default function AppChatbotPage() {
             ) : null}
           </div>
           <span className="rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-            Somente leitura
+            Controle limitado
           </span>
         </div>
 
@@ -696,6 +779,102 @@ export default function AppChatbotPage() {
                   className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                 />
               </label>
+            </div>
+            <div className="md:col-span-2 rounded-xl border border-white/10 bg-re7-navy/40 p-3 text-sm sm:p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="block font-medium text-white">Notificacao interna de novo lead</span>
+                  <span className="mt-1 block text-white/60">
+                    Envia um aviso privado para a equipe quando o bot encaminhar um lead ao atendimento humano.
+                    A mensagem nao aparece para o cliente nem entra na timeline.
+                  </span>
+                </div>
+                <TogglePill
+                  checked={automationDraft.handoffLeadNotificationEnabled === true}
+                  disabled={readOnly || savingNotificationSettings}
+                  onToggle={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            handoffLeadNotificationEnabled: !current.handoffLeadNotificationEnabled,
+                          }
+                        : current
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-3 space-y-2">
+                {(automationDraft.handoffLeadNotificationRecipients ?? []).map((recipient, index) => (
+                  <div key={recipient.id || index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                    <input
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                      value={recipient.label ?? ""}
+                      disabled={readOnly || savingNotificationSettings}
+                      onChange={(event) => updateHandoffNotificationRecipient(index, { label: event.target.value })}
+                      placeholder="Nome interno"
+                    />
+                    <input
+                      className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
+                      value={recipient.waId}
+                      disabled={readOnly || savingNotificationSettings}
+                      onChange={(event) =>
+                        updateHandoffNotificationRecipient(index, {
+                          waId: event.target.value.replace(/\D/g, ""),
+                        })
+                      }
+                      placeholder="558499999999"
+                    />
+                    <TogglePill
+                      checked={recipient.isActive !== false}
+                      disabled={readOnly || savingNotificationSettings}
+                      onToggle={() =>
+                        updateHandoffNotificationRecipient(index, {
+                          isActive: recipient.isActive === false,
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      disabled={readOnly || savingNotificationSettings}
+                      onClick={() => removeHandoffNotificationRecipient(index)}
+                      className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/10 disabled:opacity-50"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={readOnly || savingNotificationSettings}
+                    onClick={() =>
+                      setSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              handoffLeadNotificationRecipients: [
+                                ...(current.handoffLeadNotificationRecipients ?? []),
+                                createHandoffNotificationRecipient(),
+                              ],
+                            }
+                          : current
+                      )
+                    }
+                    className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:opacity-50"
+                  >
+                    Adicionar numero
+                  </button>
+                  <button
+                    type="button"
+                    disabled={readOnly || savingNotificationSettings}
+                    onClick={handleSaveHandoffNotificationSettings}
+                    className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-500 disabled:opacity-50"
+                  >
+                    {savingNotificationSettings ? "Salvando..." : "Salvar notificacoes"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : (

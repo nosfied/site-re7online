@@ -50,6 +50,18 @@ type FlowDraft = {
 };
 
 type AiIntentCatalogDraft = NonNullable<AdminAutomationSettings["aiAssistantIntentCatalog"]>;
+type HandoffNotificationRecipient = NonNullable<
+  AdminAutomationSettings["handoffLeadNotificationRecipients"]
+>[number];
+
+function createHandoffNotificationRecipient(): HandoffNotificationRecipient {
+  return {
+    id: `recipient_${Date.now()}`,
+    label: "",
+    waId: "",
+    isActive: true,
+  };
+}
 
 function formatDefinitionText(definition: unknown) {
   return JSON.stringify(definition, null, 2);
@@ -351,6 +363,36 @@ export default function AdminTenantChatbotPage() {
   const tenantHref = `/admin/tenants/${encodeURIComponent(tenantId)}`;
   const backHref = clientKey ? `${tenantHref}?clientKey=${encodeURIComponent(clientKey)}` : tenantHref;
 
+  const updateHandoffNotificationRecipient = (
+    index: number,
+    patch: Partial<HandoffNotificationRecipient>
+  ) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const recipients = [...(current.handoffLeadNotificationRecipients ?? [])];
+      recipients[index] = {
+        ...recipients[index],
+        ...patch,
+      };
+      return {
+        ...current,
+        handoffLeadNotificationRecipients: recipients,
+      };
+    });
+  };
+
+  const removeHandoffNotificationRecipient = (index: number) => {
+    setSettings((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        handoffLeadNotificationRecipients: (current.handoffLeadNotificationRecipients ?? []).filter(
+          (_, itemIndex) => itemIndex !== index
+        ),
+      };
+    });
+  };
+
   const hydrateFlows = useCallback((items: AdminChatbotFlowItem[]) => {
     setFlows(items);
     setDrafts(
@@ -457,6 +499,8 @@ export default function AdminTenantChatbotPage() {
     followUpUseTemplate: false,
     followUpTemplateName: "",
     followUpTemplateLang: "pt_BR",
+    handoffLeadNotificationEnabled: false,
+    handoffLeadNotificationRecipients: [],
   };
   const aiConfigStatus = getDraftAiStatus(automationDraft);
   const aiBaseReady = !automationDraft.disableAiFallback && aiConfigStatus.ready;
@@ -500,6 +544,22 @@ export default function AdminTenantChatbotPage() {
       );
       return;
     }
+    const normalizedHandoffNotificationRecipients = (
+      automationDraft.handoffLeadNotificationRecipients ?? []
+    ).map((recipient) => ({
+      ...recipient,
+      waId: recipient.waId.replace(/\D/g, ""),
+      label: recipient.label?.trim() || undefined,
+    }));
+    if (
+      automationDraft.handoffLeadNotificationEnabled &&
+      normalizedHandoffNotificationRecipients.filter(
+        (recipient) => recipient.isActive && /^\d{8,20}$/.test(recipient.waId)
+      ).length === 0
+    ) {
+      setError("Informe pelo menos um numero ativo para receber notificacoes internas de novos leads.");
+      return;
+    }
     setSavingSettings(true);
     setError(null);
     setSuccess(null);
@@ -507,6 +567,7 @@ export default function AdminTenantChatbotPage() {
       const response = await updateAdminChatbotSettings(connection, clientKey, {
         ...automationDraft,
         aiAssistantIntentCatalog: parsedIntentCatalog,
+        handoffLeadNotificationRecipients: normalizedHandoffNotificationRecipients,
       });
       setSettings(response.settings);
       setIntentCatalogText(formatIntentCatalogText(response.settings.aiAssistantIntentCatalog));
@@ -1205,6 +1266,89 @@ export default function AdminTenantChatbotPage() {
             </div>
           </div>
         ) : null}
+
+          {settings ? (
+            <div className="mt-4 rounded-lg border border-white/10 bg-re7-navy/40 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Notificacao interna de novo lead</h3>
+                  <p className="mt-1 text-xs text-white/60">
+                    Dispara um aviso privado para numeros da equipe quando o bot encaminhar um lead ao humano.
+                    Com mais de um numero ativo, o envio usa revezamento automatico.
+                  </p>
+                </div>
+                <TogglePill
+                  checked={automationDraft.handoffLeadNotificationEnabled === true}
+                  onToggle={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            handoffLeadNotificationEnabled: !current.handoffLeadNotificationEnabled,
+                          }
+                        : current
+                    )
+                  }
+                />
+              </div>
+              <div className="mt-3 space-y-2">
+                {(automationDraft.handoffLeadNotificationRecipients ?? []).map((recipient, index) => (
+                  <div key={recipient.id || index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
+                    <input
+                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      value={recipient.label ?? ""}
+                      onChange={(event) => updateHandoffNotificationRecipient(index, { label: event.target.value })}
+                      placeholder="Nome interno"
+                    />
+                    <input
+                      className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      value={recipient.waId}
+                      onChange={(event) =>
+                        updateHandoffNotificationRecipient(index, {
+                          waId: event.target.value.replace(/\D/g, ""),
+                        })
+                      }
+                      placeholder="558499999999"
+                    />
+                    <TogglePill
+                      checked={recipient.isActive !== false}
+                      onToggle={() =>
+                        updateHandoffNotificationRecipient(index, {
+                          isActive: recipient.isActive === false,
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeHandoffNotificationRecipient(index)}
+                      className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/10"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            handoffLeadNotificationRecipients: [
+                              ...(current.handoffLeadNotificationRecipients ?? []),
+                              createHandoffNotificationRecipient(),
+                            ],
+                          }
+                        : current
+                    )
+                  }
+                  className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                >
+                  Adicionar numero
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {settings ? (
             <div className="mt-4 rounded-lg border border-white/10 bg-re7-navy/40 p-3">

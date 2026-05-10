@@ -62,6 +62,8 @@ export type TenantConfig = {
   followUpUseTemplate?: boolean;
   followUpTemplateName?: string;
   followUpTemplateLang?: string;
+  handoffLeadNotificationEnabled?: boolean;
+  handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
   aiAssistantEnabled?: boolean;
   aiAssistantMaxReplies?: number;
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
@@ -106,6 +108,13 @@ export type CrmBusinessStatusConfig = {
   isActive: boolean;
   campaignEligible: boolean;
   description?: string;
+};
+
+export type HandoffLeadNotificationRecipient = {
+  id: string;
+  waId: string;
+  label?: string;
+  isActive: boolean;
 };
 
 export type TenantConfigMap = Record<string, TenantConfig>;
@@ -248,6 +257,12 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     if (nextTenant.followUpUseTemplate === undefined) {
       nextTenant.followUpUseTemplate = false;
     }
+    if (nextTenant.handoffLeadNotificationEnabled === undefined) {
+      nextTenant.handoffLeadNotificationEnabled = false;
+    }
+    nextTenant.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
+      tenant.handoffLeadNotificationRecipients
+    );
     if (nextTenant.aiAssistantEnabled === undefined) {
       nextTenant.aiAssistantEnabled = false;
     }
@@ -379,6 +394,39 @@ export function normalizeCrmBusinessStatuses(input: unknown): CrmBusinessStatusC
     });
   }
   return items.length ? items : [...DEFAULT_CRM_BUSINESS_STATUSES];
+}
+
+export function normalizeHandoffLeadNotificationRecipients(
+  input: unknown
+): HandoffLeadNotificationRecipient[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const recipients: HandoffLeadNotificationRecipient[] = [];
+  for (const raw of input.slice(0, 20)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw as Record<string, unknown>;
+    const waId =
+      typeof item.waId === "string"
+        ? item.waId.replace(/\D/g, "")
+        : typeof item.phone === "string"
+        ? item.phone.replace(/\D/g, "")
+        : "";
+    if (!/^\d{8,20}$/.test(waId) || seen.has(waId)) continue;
+    seen.add(waId);
+    const rawId = typeof item.id === "string" ? item.id.trim() : "";
+    const id = rawId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || `wa_${waId}`;
+    const label =
+      typeof item.label === "string" && item.label.trim()
+        ? item.label.trim().slice(0, 80)
+        : undefined;
+    recipients.push({
+      id,
+      waId,
+      label,
+      isActive: item.isActive !== false,
+    });
+  }
+  return recipients;
 }
 
 function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
@@ -600,6 +648,31 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       (typeof tenant.followUpTemplateLang !== "string" || !tenant.followUpTemplateLang.trim())
     ) {
       throw new Error(`invalid_tenant_follow_up_template_lang:${key}`);
+    }
+    if (
+      tenant.handoffLeadNotificationEnabled !== undefined &&
+      typeof tenant.handoffLeadNotificationEnabled !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_handoff_lead_notification_enabled:${key}`);
+    }
+    if (
+      tenant.handoffLeadNotificationRecipients !== undefined &&
+      (!Array.isArray(tenant.handoffLeadNotificationRecipients) ||
+        tenant.handoffLeadNotificationRecipients.some(
+          (recipient) =>
+            !recipient ||
+            typeof recipient !== "object" ||
+            Array.isArray(recipient) ||
+            typeof (recipient as HandoffLeadNotificationRecipient).id !== "string" ||
+            !(recipient as HandoffLeadNotificationRecipient).id.trim() ||
+            typeof (recipient as HandoffLeadNotificationRecipient).waId !== "string" ||
+            !/^\d{8,20}$/.test((recipient as HandoffLeadNotificationRecipient).waId) ||
+            ((recipient as HandoffLeadNotificationRecipient).label !== undefined &&
+              typeof (recipient as HandoffLeadNotificationRecipient).label !== "string") ||
+            typeof (recipient as HandoffLeadNotificationRecipient).isActive !== "boolean"
+        ))
+    ) {
+      throw new Error(`invalid_tenant_handoff_lead_notification_recipients:${key}`);
     }
     if (tenant.aiAssistantEnabled !== undefined && typeof tenant.aiAssistantEnabled !== "boolean") {
       throw new Error(`invalid_tenant_ai_assistant_enabled:${key}`);

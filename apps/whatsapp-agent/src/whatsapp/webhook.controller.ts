@@ -68,6 +68,7 @@ import {
   getDefaultTenant,
   getTenantByClientKeyOrPhoneNumberId,
   isAiAssistantConfigured,
+  normalizeHandoffLeadNotificationRecipients,
 } from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
@@ -1869,6 +1870,177 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
   };
 
+  const getHandoffLeadNotificationRecipients = () =>
+    normalizeHandoffLeadNotificationRecipients(
+      appliedTenantConfig?.handoffLeadNotificationRecipients
+    ).filter((recipient) => recipient.isActive && recipient.waId);
+
+  const buildHandoffLeadNotificationSummary = (state: ConversationState, source: string) => {
+    const answers = state.answers ?? {};
+    const flowContext =
+      answers.flowContext && typeof answers.flowContext === "object" && !Array.isArray(answers.flowContext)
+        ? (answers.flowContext as Record<string, unknown>)
+        : {};
+    const aiMemory =
+      answers.aiMemory && typeof answers.aiMemory === "object" && !Array.isArray(answers.aiMemory)
+        ? (answers.aiMemory as Record<string, unknown>)
+        : {};
+    const aiOrchestrator =
+      answers.aiOrchestrator &&
+      typeof answers.aiOrchestrator === "object" &&
+      !Array.isArray(answers.aiOrchestrator)
+        ? (answers.aiOrchestrator as Record<string, unknown>)
+        : {};
+    const pickText = (...values: unknown[]) =>
+      values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+    const formatValue = (value?: string) =>
+      value
+        ? value
+            .replace(/[_-]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 120)
+        : null;
+    const area = formatValue(pickText(flowContext.area, aiMemory.facts && (aiMemory.facts as Record<string, unknown>).area));
+    const servico = formatValue(
+      pickText(flowContext.servico, flowContext.intent, aiOrchestrator.goal)
+    );
+    const prioridade = formatValue(pickText(flowContext.prioridade, flowContext.lead_temp));
+    const summary = formatValue(pickText(aiMemory.summary));
+    return [
+      `Origem: ${source === "ai_orchestrator" ? "IA controlada" : "Fluxo automatico"}`,
+      area ? `Area: ${area}` : null,
+      servico ? `Interesse: ${servico}` : null,
+      prioridade ? `Prioridade: ${prioridade}` : null,
+      summary ? `Resumo: ${summary}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const notifyHandoffLeadArrival = async (params: {
+    state: ConversationState;
+    source: "ai_orchestrator" | "flow";
+    messageId: string;
+    reason?: string | null;
+    score?: number | null;
+  }) => {
+    if (!tenantClientId || !tenantClientKey) return;
+    if (appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
+      logger.info({
+        event: "handoff.lead_notification.skipped",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.state.waId),
+        reason: "disabled",
+        source: params.source,
+        requestId: meta?.requestId,
+      });
+      return;
+    }
+    const recipients = getHandoffLeadNotificationRecipients();
+    if (!recipients.length) {
+      logger.info({
+        event: "handoff.lead_notification.skipped",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.state.waId),
+        reason: "no_active_recipients",
+        source: params.source,
+        requestId: meta?.requestId,
+      });
+      return;
+    }
+    const prisma = getPrisma();
+    const eventRequestId = `handoff.lead_notification.${tenantClientId}.${params.state.waId}.${params.messageId}.${params.source}`;
+    const existing = await prisma.event.findFirst({
+      where: {
+        clientId: tenantClientId,
+        requestId: eventRequestId,
+        eventName: {
+          in: ["handoff.lead_notification.sent", "handoff.lead_notification.failed"],
+        },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      logger.info({
+        event: "handoff.lead_notification.skipped",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.state.waId),
+        reason: "already_attempted",
+        source: params.source,
+        requestId: meta?.requestId,
+      });
+      return;
+    }
+    const sentCount = await prisma.event.count({
+      where: {
+        clientId: tenantClientId,
+        eventName: "handoff.lead_notification.sent",
+      },
+    });
+    const recipientIndex = sentCount % recipients.length;
+    const recipient = recipients[recipientIndex];
+    const tenantDisplayName =
+      appliedTenantConfig?.name?.trim() ||
+      (tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online");
+    const summary = buildHandoffLeadNotificationSummary(params.state, params.source);
+    const textBody = [
+      "Novo lead no Converta",
+      `Tenant: ${tenantDisplayName}`,
+      `Lead: ${params.state.waId}`,
+      `Link: https://wa.me/${params.state.waId}`,
+      summary || "Resumo: atendimento encaminhado para humano.",
+      "",
+      "Acesse o inbox para assumir ou acompanhar o atendimento.",
+    ].join("\n");
+    const credentials = await resolveCurrentTenantCredentials();
+    const result = await sendTextMessage(recipient.waId, textBody, credentials ?? undefined);
+    const eventName = result.ok
+      ? "handoff.lead_notification.sent"
+      : "handoff.lead_notification.failed";
+    await prisma.event.create({
+      data: {
+        clientId: tenantClientId,
+        waId: params.state.waId,
+        waIdCanonical: canonicalizeBrazilWaId(params.state.waId),
+        messageId: params.messageId,
+        requestId: eventRequestId,
+        eventName,
+        payloadJson: {
+          action: eventName,
+          clientId: tenantClientId,
+          clientKey: tenantClientKey,
+          source: params.source,
+          reason: params.reason ?? null,
+          score: params.score ?? null,
+          recipientId: recipient.id,
+          recipientLabel: recipient.label ?? null,
+          recipientWaId: maskNumber(recipient.waId),
+          recipientIndex,
+          recipientCount: recipients.length,
+          status: result.status ?? null,
+          metaMessageId: result.messageId ?? null,
+          errorBody: result.ok ? null : result.errorBody ?? null,
+        } as Prisma.InputJsonValue,
+      },
+    });
+    logger.info({
+      event: eventName,
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+      waId: maskNumber(params.state.waId),
+      recipientWaId: maskNumber(recipient.waId),
+      recipientIndex,
+      recipientCount: recipients.length,
+      status: result.status,
+      source: params.source,
+      requestId: meta?.requestId,
+    });
+  };
+
   const serializeWebhookStatuses = (input: unknown) => {
     if (!Array.isArray(input)) return [];
     return input.map((item) => {
@@ -3400,6 +3572,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             promptScore: aiHandoffPrompt.score,
             state: updatedConversation,
           });
+          await notifyHandoffLeadArrival({
+            state: updatedConversation,
+            source: "ai_orchestrator",
+            messageId: message.messageId,
+            reason: aiHandoffPrompt.reason,
+            score: aiHandoffPrompt.score,
+          });
           publishRealtimeEvent({
             type: "conversation.handoff.updated",
             clientId: tenantClientId,
@@ -3464,7 +3643,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           normalizedFrom,
           message.messageId
         );
-        if (tenantHandoffAttendantWaid) {
+        if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
           await notifyAttendantHumanRequested({
             attendantWaId: tenantHandoffAttendantWaid,
             leadWaId: normalizedFrom,
@@ -4795,7 +4974,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           updatedAt: parseWebhookTimestampToDate(message.timestamp).toISOString(),
         });
       }
-      if (tenantHandoffAttendantWaid) {
+      await notifyHandoffLeadArrival({
+        state: updatedConversation,
+        source: "flow",
+        messageId: message.messageId,
+        reason: chatbotFlowResult.pendingHandoff.nodeId,
+      });
+      if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
         await notifyAttendantHumanRequested({
           attendantWaId: tenantHandoffAttendantWaid,
           leadWaId: normalizedFrom,

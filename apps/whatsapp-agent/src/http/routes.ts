@@ -17,6 +17,7 @@ import {
   getTenants,
   isAiAssistantConfigured,
   normalizeCrmBusinessStatuses,
+  normalizeHandoffLeadNotificationRecipients,
   saveTenants,
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
@@ -2932,6 +2933,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+          handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
+          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+            tenant.handoffLeadNotificationRecipients
+          ),
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -2958,20 +2963,136 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (req.method === "PUT" && pathname === "/app/chatbot/settings") {
+    const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
-    logger.warn({
-      event: "app.chatbot.settings.update.denied",
-      requestId,
-      clientId: clientAuth.clientId,
-      userId: clientAuth.userId,
-      reason: "managed_by_internal_admin",
-    });
-    json(
-      res,
-      403,
-      httpError("managed_by_internal_admin", "Automacoes sao gerenciadas no console interno.")
-    );
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update chatbot settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const data = body as Record<string, unknown>;
+      const allowedKeys = new Set([
+        "handoffLeadNotificationEnabled",
+        "handoffLeadNotificationRecipients",
+      ]);
+      const unsupportedKeys = Object.keys(data).filter((key) => !allowedKeys.has(key));
+      if (unsupportedKeys.length > 0) {
+        logger.warn({
+          event: "app.chatbot.settings.update.denied",
+          requestId,
+          clientId: clientAuth.clientId,
+          userId: clientAuth.userId,
+          reason: "managed_by_internal_admin",
+          unsupportedKeys,
+        });
+        json(
+          res,
+          403,
+          httpError("managed_by_internal_admin", "Automacoes principais sao gerenciadas no console interno.")
+        );
+        return;
+      }
+      const patch: Record<string, unknown> = {};
+      if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
+        if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
+          json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
+          return;
+        }
+        patch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
+        if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
+          json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
+          return;
+        }
+        patch.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
+          data.handoffLeadNotificationRecipients
+        );
+      }
+      if (Object.keys(patch).length === 0) {
+        json(res, 400, httpError("bad_request", "Provide notification settings to update"));
+        return;
+      }
+      const saved = await saveTenantPatch(client.clientKey, patch);
+      logger.info({
+        event: "app.chatbot.handoff_notification_settings.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        fieldsChanged: saved.fieldsChanged,
+        recipientCount: normalizeHandoffLeadNotificationRecipients(
+          saved.tenant.handoffLeadNotificationRecipients
+        ).length,
+      });
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(saved.tenant);
+      const aiConfigured = aiConfigurationStatus.ready;
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        fieldsChanged: saved.fieldsChanged,
+        settings: {
+          disableAutoReply: saved.tenant.disableAutoReply ?? false,
+          disableChatbot: Boolean(saved.tenant.disableChatbot),
+          disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+          disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
+          aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
+          aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
+          aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
+          aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+          handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
+          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+            saved.tenant.handoffLeadNotificationRecipients
+          ),
+          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+          aiAssistantConfigurationStatus: aiConfigurationStatus,
+          aiConfigured,
+          chatbotLocked: Boolean(saved.tenant.disableChatbot),
+          flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
+          aiLocked: Boolean(saved.tenant.disableAiFallback),
+          aiAssistantLocked:
+            !env.AI_ASSISTANT_ENABLED ||
+            !env.WHATSAPP_AI_ENABLED ||
+            saved.tenant.disableAiFallback === true ||
+            !aiConfigured,
+          intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.settings.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
@@ -6446,6 +6567,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+            handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
+            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+              tenant.handoffLeadNotificationRecipients
+            ),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
@@ -6680,6 +6805,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiBusinessContext = data.aiBusinessContext.trim() || undefined;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
+          if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
+            return;
+          }
+          aiAssistantPatch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
+          if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
+            json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
+            return;
+          }
+          aiAssistantPatch.handoffLeadNotificationRecipients =
+            normalizeHandoffLeadNotificationRecipients(data.handoffLeadNotificationRecipients);
+        }
         if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
           if (typeof data.disableAiFallback !== "boolean") {
             json(res, 400, httpError("bad_request", "disableAiFallback must be boolean"));
@@ -6821,6 +6961,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+            handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
+            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+              saved.tenant.handoffLeadNotificationRecipients
+            ),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
@@ -11147,6 +11291,8 @@ function diffTenantFields(
   compareField("followUpUseTemplate");
   compareField("followUpTemplateName");
   compareField("followUpTemplateLang");
+  compareField("handoffLeadNotificationEnabled");
+  compareField("handoffLeadNotificationRecipients");
   compareField("aiAssistantEnabled");
   compareField("aiAssistantMaxReplies");
   compareField("aiAssistantProfile");
