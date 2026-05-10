@@ -2067,7 +2067,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const sendNotification = async (input: {
       requestId: string;
-      eventName: "handoff.lead_notification.sent" | "handoff.lead_notification.pending_sent";
+      eventName:
+        | "handoff.lead_notification.sent"
+        | "handoff.lead_notification.pending_sent"
+        | "handoff.lead_notification.pending_digest_sent";
       leadWaId: string;
       messageId: string | null;
       source: string;
@@ -2126,14 +2129,53 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       });
     };
 
+    const markPendingSkipped = async (input: {
+      pendingEvent: { requestId: string | null; messageId: string | null };
+      leadWaId: string;
+      reason: string;
+      assignedUserId?: string | null;
+    }) => {
+      if (!input.pendingEvent.requestId) return;
+      await prisma.event.create({
+        data: {
+          clientId: tenantClientId,
+          waId: input.leadWaId,
+          waIdCanonical: canonicalizeBrazilWaId(input.leadWaId),
+          messageId: input.pendingEvent.messageId,
+          requestId: input.pendingEvent.requestId,
+          eventName: "handoff.lead_notification.pending_skipped",
+          payloadJson: {
+            action: "handoff.lead_notification.pending_skipped",
+            clientId: tenantClientId,
+            clientKey: tenantClientKey,
+            reason: input.reason,
+            assignedUserId: input.assignedUserId ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      logger.info({
+        event: "handoff.lead_notification.pending_skipped",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(input.leadWaId),
+        reason: input.reason,
+        requestId: meta?.requestId,
+      });
+    };
+
     const pendingEvents = await prisma.event.findMany({
       where: {
         clientId: tenantClientId,
         eventName: "handoff.lead_notification.pending",
       },
       orderBy: { createdAt: "asc" },
-      take: 10,
+      take: 50,
     });
+    const pendingCandidates: Array<{
+      event: (typeof pendingEvents)[number];
+      leadWaId: string;
+      payload: Record<string, unknown>;
+    }> = [];
     for (const pendingEvent of pendingEvents) {
       if (pendingEvent.requestId === eventRequestId) continue;
       if (!pendingEvent.requestId) continue;
@@ -2165,44 +2207,62 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       if (!leadWaId) continue;
       const currentLeadState = await storage.getConversation(leadWaId, tenantClientKey);
       if (currentLeadState?.assignedUserId) {
-        await prisma.event.create({
-          data: {
-            clientId: tenantClientId,
-            waId: leadWaId,
-            waIdCanonical: canonicalizeBrazilWaId(leadWaId),
-            messageId: pendingEvent.messageId,
-            requestId: pendingEvent.requestId,
-            eventName: "handoff.lead_notification.pending_skipped",
-            payloadJson: {
-              action: "handoff.lead_notification.pending_skipped",
-              clientId: tenantClientId,
-              clientKey: tenantClientKey,
-              reason: "lead_already_assigned",
-              assignedUserId: currentLeadState.assignedUserId,
-            } as Prisma.InputJsonValue,
-          },
-        });
-        logger.info({
-          event: "handoff.lead_notification.pending_skipped",
-          clientId: tenantClientId,
-          clientKey: tenantClientKey,
-          waId: maskNumber(leadWaId),
+        await markPendingSkipped({
+          pendingEvent,
+          leadWaId,
           reason: "lead_already_assigned",
-          requestId: meta?.requestId,
+          assignedUserId: currentLeadState.assignedUserId,
         });
         continue;
       }
+      pendingCandidates.push({ event: pendingEvent, leadWaId, payload });
+    }
+
+    if (pendingCandidates.length > 5) {
+      const digestRequestId = `handoff.lead_notification.pending_digest.${tenantClientId}.${Date.now()}.${params.messageId}`;
+      const digestSummary = [
+        `Resumo: ${pendingCandidates.length} leads ficaram pendentes de notificacao porque os numeros ativos estavam sem janela aberta.`,
+        "Eles ainda nao foram assumidos diretamente na plataforma.",
+        "Acesse o inbox do Converta para revisar e distribuir os atendimentos.",
+      ].join("\n");
       await sendNotification({
-        requestId: pendingEvent.requestId,
-        eventName: "handoff.lead_notification.pending_sent",
-        leadWaId,
-        messageId: pendingEvent.messageId,
-        source: typeof payload.source === "string" ? payload.source : "pending",
-        reason: typeof payload.reason === "string" ? payload.reason : null,
-        score: typeof payload.score === "number" ? payload.score : null,
-        summary: typeof payload.summary === "string" ? payload.summary : null,
+        requestId: digestRequestId,
+        eventName: "handoff.lead_notification.pending_digest_sent",
+        leadWaId: params.state.waId,
+        messageId: params.messageId,
+        source: "pending_digest",
+        summary: digestSummary,
         pending: true,
       });
+      for (const pending of pendingCandidates) {
+        await markPendingSkipped({
+          pendingEvent: pending.event,
+          leadWaId: pending.leadWaId,
+          reason: "covered_by_pending_digest",
+        });
+      }
+      logger.info({
+        event: "handoff.lead_notification.pending_digest_queued",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        pendingCount: pendingCandidates.length,
+        recipientWaId: maskNumber(openRecipient.recipient.waId),
+        requestId: meta?.requestId,
+      });
+    } else {
+      for (const pending of pendingCandidates) {
+        await sendNotification({
+          requestId: pending.event.requestId!,
+          eventName: "handoff.lead_notification.pending_sent",
+          leadWaId: pending.leadWaId,
+          messageId: pending.event.messageId,
+          source: typeof pending.payload.source === "string" ? pending.payload.source : "pending",
+          reason: typeof pending.payload.reason === "string" ? pending.payload.reason : null,
+          score: typeof pending.payload.score === "number" ? pending.payload.score : null,
+          summary: typeof pending.payload.summary === "string" ? pending.payload.summary : null,
+          pending: true,
+        });
+      }
     }
 
     await sendNotification({
