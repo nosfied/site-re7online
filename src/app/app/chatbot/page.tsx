@@ -54,6 +54,11 @@ function canManageChatbot(role: string) {
   return role.trim().toUpperCase() === "ADMIN";
 }
 
+function canManageNotificationSettings(role: string) {
+  const normalized = role.trim().toUpperCase();
+  return normalized === "SUPERVISOR" || normalized === "ADMIN";
+}
+
 function normalizeChatbotError(error: AppApiError, fallback: string) {
   if (error.errorCode === "invalid_chatbot_definition") {
     return error.message || "JSON invalido para o flow.";
@@ -348,6 +353,7 @@ export default function AppChatbotPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppAutomationSettings | null>(null);
+  const [notificationSettingsDirty, setNotificationSettingsDirty] = useState(false);
   const [newName, setNewName] = useState("Fluxo principal");
   const [newDefinition, setNewDefinition] = useState(DEFAULT_DEFINITION_TEXT);
   const [newSearch, setNewSearch] = useState("");
@@ -370,6 +376,7 @@ export default function AppChatbotPage() {
     index: number,
     patch: Partial<HandoffNotificationRecipient>
   ) => {
+    setNotificationSettingsDirty(true);
     setSettings((current) => {
       if (!current) return current;
       const recipients = [...(current.handoffLeadNotificationRecipients ?? [])];
@@ -385,6 +392,7 @@ export default function AppChatbotPage() {
   };
 
   const removeHandoffNotificationRecipient = (index: number) => {
+    setNotificationSettingsDirty(true);
     setSettings((current) => {
       if (!current) return current;
       return {
@@ -419,6 +427,7 @@ export default function AppChatbotPage() {
         handoffLeadNotificationRecipients: recipients,
       });
       setSettings(response.settings);
+      setNotificationSettingsDirty(false);
       setSuccess("Notificacoes internas de novo lead atualizadas.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -640,6 +649,7 @@ export default function AppChatbotPage() {
   }
 
   const readOnly = !canManageChatbot(session.user.role);
+  const notificationReadOnly = !canManageNotificationSettings(session.user.role);
 
   const automationDraft = settings ?? {
     disableAutoReply: false,
@@ -791,8 +801,9 @@ export default function AppChatbotPage() {
                 </div>
                 <TogglePill
                   checked={automationDraft.handoffLeadNotificationEnabled === true}
-                  disabled={readOnly || savingNotificationSettings}
+                  disabled={notificationReadOnly || savingNotificationSettings}
                   onToggle={() =>
+                    (setNotificationSettingsDirty(true),
                     setSettings((current) =>
                       current
                         ? {
@@ -800,24 +811,29 @@ export default function AppChatbotPage() {
                             handoffLeadNotificationEnabled: !current.handoffLeadNotificationEnabled,
                           }
                         : current
-                    )
+                    ))
                   }
                 />
               </div>
+              {notificationSettingsDirty ? (
+                <p className="mt-3 rounded-md border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  Alteracoes pendentes. Clique em Salvar notificacoes para aplicar.
+                </p>
+              ) : null}
               <div className="mt-3 space-y-2">
                 {(automationDraft.handoffLeadNotificationRecipients ?? []).map((recipient, index) => (
                   <div key={recipient.id || index} className="grid gap-2 rounded-lg border border-white/10 bg-black/10 p-2 md:grid-cols-[1fr_1fr_auto_auto]">
                     <input
                       className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                       value={recipient.label ?? ""}
-                      disabled={readOnly || savingNotificationSettings}
+                      disabled={notificationReadOnly || savingNotificationSettings}
                       onChange={(event) => updateHandoffNotificationRecipient(index, { label: event.target.value })}
                       placeholder="Nome interno"
                     />
                     <input
                       className="rounded-md border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:opacity-50"
                       value={recipient.waId}
-                      disabled={readOnly || savingNotificationSettings}
+                      disabled={notificationReadOnly || savingNotificationSettings}
                       onChange={(event) =>
                         updateHandoffNotificationRecipient(index, {
                           waId: event.target.value.replace(/\D/g, ""),
@@ -827,7 +843,7 @@ export default function AppChatbotPage() {
                     />
                     <TogglePill
                       checked={recipient.isActive !== false}
-                      disabled={readOnly || savingNotificationSettings}
+                      disabled={notificationReadOnly || savingNotificationSettings}
                       onToggle={() =>
                         updateHandoffNotificationRecipient(index, {
                           isActive: recipient.isActive === false,
@@ -836,7 +852,7 @@ export default function AppChatbotPage() {
                     />
                     <button
                       type="button"
-                      disabled={readOnly || savingNotificationSettings}
+                      disabled={notificationReadOnly || savingNotificationSettings}
                       onClick={() => removeHandoffNotificationRecipient(index)}
                       className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/75 transition hover:bg-white/10 disabled:opacity-50"
                     >
@@ -847,19 +863,21 @@ export default function AppChatbotPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={readOnly || savingNotificationSettings}
+                    disabled={notificationReadOnly || savingNotificationSettings}
                     onClick={() =>
+                      (setNotificationSettingsDirty(true),
                       setSettings((current) =>
                         current
                           ? {
                               ...current,
+                              handoffLeadNotificationEnabled: true,
                               handoffLeadNotificationRecipients: [
                                 ...(current.handoffLeadNotificationRecipients ?? []),
                                 createHandoffNotificationRecipient(),
                               ],
                             }
                           : current
-                      )
+                      ))
                     }
                     className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:opacity-50"
                   >
@@ -867,7 +885,7 @@ export default function AppChatbotPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={readOnly || savingNotificationSettings}
+                    disabled={notificationReadOnly || savingNotificationSettings}
                     onClick={handleSaveHandoffNotificationSettings}
                     className="rounded-md bg-re7-orange px-4 py-2 text-xs font-semibold text-white transition hover:bg-orange-500 disabled:opacity-50"
                   >
