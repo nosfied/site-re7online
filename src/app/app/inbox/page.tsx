@@ -3683,7 +3683,7 @@ export default function AppInboxPage() {
             {!loadingConversations && filteredConversations.length === 0 ? (
               <p className="px-4 py-4 text-sm text-white/70">Nenhuma conversa encontrada.</p>
             ) : null}
-            {filteredConversations.map((item) => {
+            {filteredConversations.map((item, index) => {
               const conversationIdentity = getConversationIdentity(item);
               const conversationIdentityCandidates = getConversationIdentityCandidates(item);
               const isActive = conversationIdentity === selectedConversationKey;
@@ -3734,7 +3734,11 @@ export default function AppInboxPage() {
                   className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
-                      : "border-l-4 border-l-transparent border-b-white/10 hover:bg-white/5"
+                      : `border-l-4 border-l-transparent border-b-white/10 ${
+                          index % 2 === 0
+                            ? "bg-[#0b1830]/72 hover:bg-white/7"
+                            : "bg-[#10213d]/72 hover:bg-white/8"
+                        }`
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
