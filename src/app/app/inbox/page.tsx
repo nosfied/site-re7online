@@ -3736,8 +3736,8 @@ export default function AppInboxPage() {
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
                           index % 2 === 0
-                            ? "bg-[#0b1830]/72 hover:bg-white/7"
-                            : "bg-[#10213d]/72 hover:bg-white/8"
+                            ? "theme-conversation-row-even"
+                            : "theme-conversation-row-odd"
                         }`
                   }`}
                 >

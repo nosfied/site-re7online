@@ -502,6 +502,19 @@ html {
     color: #e2e8f0;
   }
 
+  .theme-inbox .theme-conversation-row-even {
+    background-color: #07142b;
+  }
+
+  .theme-inbox .theme-conversation-row-odd {
+    background-color: #10213d;
+  }
+
+  .theme-inbox .theme-conversation-row-even:hover,
+  .theme-inbox .theme-conversation-row-odd:hover {
+    background-color: #17365f;
+  }
+
   .theme-inbox .theme-suggestion-button {
     border-color: rgba(52, 211, 153, 0.3);
     background-color: rgba(16, 185, 129, 0.15);
@@ -544,6 +557,19 @@ html {
   :root[data-theme="light"] .theme-inbox .theme-conversation-status-user {
     background-color: #7c3aed;
     color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-row-even {
+    background-color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-row-odd {
+    background-color: #f3f7fb;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-row-even:hover,
+  :root[data-theme="light"] .theme-inbox .theme-conversation-row-odd:hover {
+    background-color: rgba(127, 196, 229, 0.16);
   }
 
   :root[data-theme="light"] .theme-inbox .theme-suggestion-button {
