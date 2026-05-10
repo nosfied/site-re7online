@@ -464,6 +464,98 @@ html {
     background-color: rgba(127, 196, 229, 0.12) !important;
   }
 
+  .theme-inbox .theme-lead-temp-hot {
+    border-color: rgba(248, 113, 113, 0.3);
+    background-color: rgba(127, 29, 29, 0.42);
+    color: #fecaca;
+  }
+
+  .theme-inbox .theme-lead-temp-warm {
+    border-color: rgba(251, 191, 36, 0.3);
+    background-color: rgba(146, 64, 14, 0.42);
+    color: #fde68a;
+  }
+
+  .theme-inbox .theme-lead-temp-cold {
+    border-color: rgba(148, 163, 184, 0.28);
+    background-color: rgba(51, 65, 85, 0.58);
+    color: #e2e8f0;
+  }
+
+  .theme-inbox .theme-conversation-status-waiting {
+    background-color: rgba(146, 64, 14, 0.42);
+    color: #fde68a;
+  }
+
+  .theme-inbox .theme-conversation-status-progress {
+    background-color: rgba(12, 74, 110, 0.52);
+    color: #bae6fd;
+  }
+
+  .theme-inbox .theme-conversation-status-user {
+    background-color: rgba(91, 33, 182, 0.45);
+    color: #ddd6fe;
+  }
+
+  .theme-inbox .theme-conversation-status-closed {
+    background-color: rgba(51, 65, 85, 0.58);
+    color: #e2e8f0;
+  }
+
+  .theme-inbox .theme-suggestion-button {
+    border-color: rgba(52, 211, 153, 0.3);
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #a7f3d0;
+  }
+
+  .theme-inbox .theme-suggestion-button:hover {
+    background-color: rgba(16, 185, 129, 0.22);
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-lead-temp-hot {
+    border-color: #991b1b;
+    background-color: #dc2626;
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-lead-temp-warm {
+    border-color: #b45309;
+    background-color: #f59e0b;
+    color: #111827;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-lead-temp-cold,
+  :root[data-theme="light"] .theme-inbox .theme-conversation-status-closed {
+    border-color: #475569;
+    background-color: #64748b;
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-status-waiting {
+    background-color: #f59e0b;
+    color: #111827;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-status-progress {
+    background-color: #0284c7;
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-status-user {
+    background-color: #7c3aed;
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-suggestion-button {
+    border-color: #047857;
+    background-color: #059669;
+    color: #ffffff;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-suggestion-button:hover {
+    background-color: #047857;
+  }
+
   :root[data-theme="light"] .theme-admin .bg-re7-navy,
   :root[data-theme="light"] .theme-admin .bg-re7-navy\/40,
   :root[data-theme="light"] .theme-admin .bg-re7-navy\/45,

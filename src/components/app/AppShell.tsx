@@ -309,7 +309,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               type="button"
               onClick={handleLogout}
               title="Sair"
-              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-re7-orange text-xs font-semibold text-white shadow-sm transition hover:brightness-110 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
+              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-re7-orange/35 bg-re7-orange/15 text-xs font-semibold text-orange-100 shadow-sm transition hover:bg-re7-orange/25 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
             >
               <span className="text-xl leading-none [@media(max-height:760px)]:text-lg">🚪</span>
             </button>

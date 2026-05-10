@@ -148,10 +148,10 @@ function getLeadTemperatureLabel(item: Pick<InboxConversationItem, "flowContext"
 
 function getLeadTemperatureClass(item: Pick<InboxConversationItem, "flowContext"> | null) {
   const temperature = getLeadTemperature(item);
-  if (temperature === "quente") return "border-red-700 bg-red-600 text-white";
-  if (temperature === "morno") return "border-amber-600 bg-amber-500 text-slate-950";
-  if (temperature === "frio") return "border-slate-500 bg-slate-500 text-white";
-  return "border-slate-500 bg-slate-500 text-white";
+  if (temperature === "quente") return "theme-lead-temp-hot";
+  if (temperature === "morno") return "theme-lead-temp-warm";
+  if (temperature === "frio") return "theme-lead-temp-cold";
+  return "theme-lead-temp-cold";
 }
 
 function extractSuggestedReply(notes: LeadNoteItem[]) {
@@ -1080,15 +1080,15 @@ function getConversationModeLabel(
 function getConversationStatusClass(status: ConversationOperationalStatus | null) {
   switch (status) {
     case "WAITING":
-      return "bg-amber-500 text-slate-950";
+      return "theme-conversation-status-waiting";
     case "IN_PROGRESS":
-      return "bg-sky-600 text-white";
+      return "theme-conversation-status-progress";
     case "WAITING_USER":
-      return "bg-violet-600 text-white";
+      return "theme-conversation-status-user";
     case "CLOSED":
-      return "bg-slate-500 text-white";
+      return "theme-conversation-status-closed";
     default:
-      return "bg-slate-500 text-white";
+      return "theme-conversation-status-closed";
   }
 }
 
@@ -4260,7 +4260,7 @@ export default function AppInboxPage() {
                         type="button"
                         onClick={handleUseSuggestedReply}
                         disabled={!canReply}
-                        className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="theme-suggestion-button rounded-xl border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Usar sugestão de resposta
                       </button>

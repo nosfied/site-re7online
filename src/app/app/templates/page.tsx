@@ -52,15 +52,15 @@ type CatalogItem = {
 function getStatusClasses(status: string) {
   switch (status.toLowerCase()) {
     case "submitting":
-      return "bg-amber-500/20 text-amber-200";
+      return "bg-amber-500 text-slate-950";
     case "approved":
-      return "bg-emerald-500/20 text-emerald-200";
+      return "bg-emerald-600 text-white";
     case "failed":
     case "rejected":
-      return "bg-red-500/20 text-red-200";
+      return "bg-red-600 text-white";
     case "pending":
     default:
-      return "bg-amber-500/20 text-amber-200";
+      return "bg-amber-500 text-slate-950";
   }
 }
 
