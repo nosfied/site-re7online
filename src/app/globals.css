@@ -181,6 +181,66 @@ html {
     display: block;
   }
 
+  :root[data-theme="light"] .theme-workspace .bg-white\/5,
+  :root[data-theme="light"] .theme-workspace .bg-white\/10,
+  :root[data-theme="light"] .theme-workspace .bg-white\/\[0\.075\] {
+    background-color: var(--app-surface) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy,
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy\/30,
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy\/40,
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy\/45,
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy\/70,
+  :root[data-theme="light"] .theme-workspace .bg-re7-navy\/80 {
+    background-color: var(--app-surface-strong) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .border-white\/10,
+  :root[data-theme="light"] .theme-workspace .border-white\/15,
+  :root[data-theme="light"] .theme-workspace .border-white\/20 {
+    border-color: var(--app-border) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .text-white\/45,
+  :root[data-theme="light"] .theme-workspace .text-white\/50,
+  :root[data-theme="light"] .theme-workspace .text-white\/55,
+  :root[data-theme="light"] .theme-workspace .text-white\/60,
+  :root[data-theme="light"] .theme-workspace .text-white\/65,
+  :root[data-theme="light"] .theme-workspace .text-white\/70 {
+    color: var(--app-text-soft) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .text-white\/75,
+  :root[data-theme="light"] .theme-workspace .text-white\/80,
+  :root[data-theme="light"] .theme-workspace .text-white\/85,
+  :root[data-theme="light"] .theme-workspace .text-white\/90,
+  :root[data-theme="light"] .theme-workspace .text-white\/95 {
+    color: var(--app-text-muted) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace input,
+  :root[data-theme="light"] .theme-workspace select,
+  :root[data-theme="light"] .theme-workspace textarea {
+    caret-color: var(--app-text);
+  }
+
+  :root[data-theme="light"] .theme-workspace input[class~="text-white"],
+  :root[data-theme="light"] .theme-workspace select[class~="text-white"],
+  :root[data-theme="light"] .theme-workspace textarea[class~="text-white"] {
+    color: var(--app-text) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace input::placeholder,
+  :root[data-theme="light"] .theme-workspace textarea::placeholder {
+    color: var(--app-text-soft);
+  }
+
+  :root[data-theme="light"] .theme-workspace .hover\:bg-white\/5:hover,
+  :root[data-theme="light"] .theme-workspace .hover\:bg-white\/10:hover {
+    background-color: rgba(127, 196, 229, 0.12) !important;
+  }
+
   .wa-chat-canvas {
     background-color: #e8dece;
     background-image:

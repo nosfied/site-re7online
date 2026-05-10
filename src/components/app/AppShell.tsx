@@ -183,16 +183,13 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           {session.user.name || session.user.email}
         </p>
       </div>
-      <div className="flex items-center gap-1.5 lg:flex-col lg:items-end">
-        <ThemeSelector />
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
-        >
-          Sair
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="h-8 rounded-md border border-red-400/30 bg-red-900/20 px-2.5 text-xs leading-none text-red-100 hover:bg-red-900/30 lg:h-9 lg:text-sm"
+      >
+        Sair
+      </button>
     </div>
   );
   const logoButton = (
@@ -318,7 +315,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   }
 
   return (
-    <main className="theme-bg min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
+    <main className="theme-bg theme-workspace min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
         <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-2 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:w-[calc(100%-2.5rem)]">
           <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[120px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[128px_minmax(0,1fr)_160px]">
@@ -329,7 +326,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto] lg:items-center lg:justify-center lg:gap-2 xl:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto_auto] lg:items-center lg:justify-center lg:gap-2 xl:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
@@ -344,6 +341,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                   <div className={navLinksClasses}>{administrationItems.map(renderTextLink)}</div>
                 </div>
               ) : null}
+              <ThemeSelector variant="switch" className="justify-self-start" />
             </div>
 
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
