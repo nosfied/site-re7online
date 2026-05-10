@@ -342,14 +342,14 @@ export default function AppRealtimeBridge() {
     <button
       type="button"
       onClick={activateAlerts}
-      className="fixed left-1/2 top-4 z-[70] flex w-[min(92vw,320px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-300/35 bg-[#1b1830]/95 px-4 py-3 text-left text-xs text-amber-50 shadow-[0_18px_52px_rgba(0,0,0,0.34)] backdrop-blur transition hover:bg-[#2a2340]"
+      className="fixed left-1/2 top-4 z-[70] flex w-[min(92vw,320px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-700 bg-amber-500 px-4 py-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur transition hover:bg-amber-400"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-300/20 text-base">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/65 text-base">
         🔔
       </span>
       <span className="min-w-0">
         <span className="block font-semibold">Ativar alertas</span>
-        <span className="block text-amber-50/75">Necessario apos atualizar a pagina.</span>
+        <span className="block text-slate-900/75">Necessario apos atualizar a pagina.</span>
       </span>
     </button>
   );

@@ -213,7 +213,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         width={160}
         height={200}
         priority
-        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[112px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[126px] lg:h-[158px]"
+        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[72px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[82px] lg:h-[102px]"
       />
     </button>
   );
@@ -249,7 +249,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             width={900}
             height={340}
             priority
-            className="theme-logo-dark h-auto w-full max-w-[680px] object-contain"
+            className="theme-logo-dark h-auto w-full max-w-[520px] object-contain"
           />
         </div>
       </div>

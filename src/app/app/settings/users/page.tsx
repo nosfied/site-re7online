@@ -468,7 +468,9 @@ export default function AppSettingsUsersPage() {
               return (
                 <article
                   key={item.id}
-                  className={`rounded-xl border p-4 ${
+                  className={`theme-list-row ${
+                    index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
+                  } rounded-xl border p-4 ${
                     index % 2 === 0
                       ? "border-white/10 bg-re7-navy/45"
                       : "border-white/15 bg-white/[0.075]"

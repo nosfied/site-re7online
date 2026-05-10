@@ -97,17 +97,17 @@ function buildTemplatePreview(content: string, values: string[]) {
 function getStatusClasses(status: string) {
   switch (status) {
     case "sending":
-      return "bg-amber-500/20 text-amber-200";
+      return "bg-amber-500 text-slate-950";
     case "completed":
-      return "bg-emerald-500/20 text-emerald-200";
+      return "bg-emerald-600 text-white";
     case "blocked":
-      return "bg-orange-500/20 text-orange-200";
+      return "bg-orange-600 text-white";
     case "cancelled":
-      return "bg-slate-500/20 text-slate-200";
+      return "bg-slate-500 text-white";
     case "failed":
-      return "bg-red-500/20 text-red-200";
+      return "bg-red-600 text-white";
     default:
-      return "bg-white/10 text-white/80";
+      return "bg-slate-500 text-white";
   }
 }
 
@@ -149,14 +149,14 @@ function getProgressPct(campaign: CampaignItem) {
 function getMetaStatusClasses(status: string) {
   switch (status) {
     case "read":
-      return "bg-emerald-500/20 text-emerald-200";
+      return "bg-emerald-600 text-white";
     case "delivered":
-      return "bg-sky-500/20 text-sky-200";
+      return "bg-sky-600 text-white";
     case "failed":
-      return "bg-red-500/20 text-red-200";
+      return "bg-red-600 text-white";
     case "sent":
     default:
-      return "bg-slate-500/20 text-slate-200";
+      return "bg-slate-500 text-white";
   }
 }
 

@@ -20,7 +20,7 @@ function AdminConsoleGate() {
 
   if (!ready) {
     return (
-      <main className="theme-bg min-h-screen px-4 py-8 md:px-8">
+      <main className="theme-bg theme-admin min-h-screen px-4 py-8 md:px-8">
         <div className="theme-surface mx-auto max-w-xl rounded-2xl border p-6">
           <p className="theme-muted text-sm">Carregando console interno...</p>
         </div>
@@ -60,7 +60,7 @@ function AdminConsoleGate() {
   };
 
   return (
-    <main className="theme-bg min-h-screen px-4 py-8 md:px-8">
+    <main className="theme-bg theme-admin min-h-screen px-4 py-8 md:px-8">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
         <section className="theme-surface rounded-2xl border p-6">
           <div className="mb-5 flex flex-col gap-2">
@@ -114,7 +114,7 @@ function AdminConsoleShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <main className="theme-bg min-h-screen">
+    <main className="theme-bg theme-admin min-h-screen">
       <div className="theme-surface border-b">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
           <div className="flex flex-col gap-1">

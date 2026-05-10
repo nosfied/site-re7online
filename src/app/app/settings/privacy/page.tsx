@@ -249,15 +249,15 @@ export default function AppPrivacySettingsPage() {
       <FeedbackToast message={success} variant="success" {...toastHandlers} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 p-4">
+        <section className="theme-surface rounded-xl border">
+          <div className="theme-border border-b p-4">
             <h2 className="text-lg font-semibold">Dados de conversa</h2>
-            <p className="mt-1 text-sm text-white/65">
+            <p className="theme-muted mt-1 text-sm">
               Informe o waId ou ID interno da conversa para remover da operacao ou anonimizar dados.
             </p>
           </div>
           <div className="space-y-4 p-4">
-            <label className="block text-sm font-medium text-white/75" htmlFor="conversation-id">
+            <label className="theme-muted block text-sm font-medium" htmlFor="conversation-id">
               waId ou ID da conversa
             </label>
             <input
@@ -265,63 +265,63 @@ export default function AppPrivacySettingsPage() {
               value={conversationId}
               onChange={(event) => setConversationId(event.target.value)}
               placeholder="Ex: 5584999999999"
-              className="w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
+              className="theme-select w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-re7-sky/40"
             />
-            <div className="rounded-xl border border-white/10 bg-[#071225]/70 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+            <div className="theme-surface-strong rounded-xl border p-3">
+              <p className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">
                 Acoes reversiveis
               </p>
-              <p className="mt-1 text-sm text-white/65">
+              <p className="theme-muted mt-1 text-sm">
                 Exclusao remove a conversa apenas da operacao.
               </p>
               <button
                 type="button"
                 onClick={openDeleteModal}
                 disabled={loading || deleting || anonymizing}
-                className="mt-3 rounded-lg border border-white/15 bg-white/8 px-4 py-2 text-sm font-semibold text-white/85 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+                className="theme-nav-link mt-3 rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {deleting ? "Excluindo..." : "Excluir da operacao"}
               </button>
             </div>
-            <div className="rounded-xl border border-red-400/30 bg-red-950/25 p-3">
+            <div className="theme-soft-danger-panel rounded-xl border p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-red-100/75">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]">
                   Acoes irreversiveis
                 </p>
-                <span className="rounded-full border border-red-300/30 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-100">
+                <span className="theme-soft-danger-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
                   Irreversivel
                 </span>
               </div>
-              <p className="mt-1 text-sm text-red-50/70">
+              <p className="mt-1 text-sm opacity-80">
                 Anonimizacao remove permanentemente os dados pessoais.
               </p>
               <button
                 type="button"
                 onClick={openAnonymizeModal}
                 disabled={loading || anonymizing || deleting}
-                className="mt-3 rounded-lg border border-red-300/35 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-50 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {anonymizing ? "Anonimizando..." : "Anonimizar dados"}
               </button>
             </div>
-            <p className="text-xs leading-relaxed text-white/50">
+            <p className="theme-soft text-xs leading-relaxed">
               Anonimizacao remove permanentemente os dados pessoais. Exclusao remove a conversa
               apenas da operacao.
             </p>
-            <p className="text-xs leading-relaxed text-white/50">
+            <p className="theme-soft text-xs leading-relaxed">
               Apos anonimizacao, a conversa sai da operacao e nao sera restaurada. Se o contato
               voltar, um novo atendimento sera iniciado.
             </p>
           </div>
         </section>
 
-        <section className="rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 p-4">
+        <section className="theme-surface rounded-xl border">
+          <div className="theme-border border-b p-4">
             <h2 className="text-lg font-semibold">Retencao</h2>
-            <p className="mt-1 text-sm text-white/65">Padrao do tenant: 90 dias.</p>
+            <p className="theme-muted mt-1 text-sm">Padrao do tenant: 90 dias.</p>
           </div>
           <form className="space-y-4 p-4" onSubmit={handleSaveRetention}>
-            <label className="block text-sm font-medium text-white/75" htmlFor="retention-days">
+            <label className="theme-muted block text-sm font-medium" htmlFor="retention-days">
               Dias de retencao
             </label>
             <input
@@ -331,9 +331,9 @@ export default function AppPrivacySettingsPage() {
               max={3650}
               value={retentionDays}
               onChange={(event) => setRetentionDays(event.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/40"
+              className="theme-select w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-re7-sky/40"
             />
-            <p className="rounded-xl border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-50/80">
+            <p className="theme-soft-warning-panel rounded-xl border px-3 py-2 text-xs leading-relaxed">
               Valores baixos (ex: 1-7 dias) podem remover conversas ativas da operacao.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -351,7 +351,7 @@ export default function AppPrivacySettingsPage() {
                   setRetentionModalOpen(true);
                 }}
                 disabled={loading || executingRetention}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="theme-nav-link rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {executingRetention ? "Executando..." : "Executar agora"}
               </button>
@@ -360,13 +360,13 @@ export default function AppPrivacySettingsPage() {
         </section>
       </div>
       {deleteModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
-            <h2 className="text-lg font-semibold text-white">Excluir conversa da operacao</h2>
-            <p className="mt-3 text-sm leading-relaxed text-white/70">
+        <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
+          <div className="theme-surface-strong w-full max-w-md rounded-2xl border p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
+            <h2 className="text-lg font-semibold">Excluir conversa da operacao</h2>
+            <p className="theme-muted mt-3 text-sm leading-relaxed">
               Essa acao remove a conversa da operacao, mas mantem dados tecnicos para auditoria.
             </p>
-            <p className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75">
+            <p className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               {conversationId.trim()}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -374,7 +374,7 @@ export default function AppPrivacySettingsPage() {
                 type="button"
                 onClick={() => setDeleteModalOpen(false)}
                 disabled={deleting}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="theme-nav-link rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -391,21 +391,21 @@ export default function AppPrivacySettingsPage() {
         </div>
       ) : null}
       {retentionModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-amber-300/20 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+        <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
+          <div className="theme-surface-strong w-full max-w-lg rounded-2xl border border-amber-600 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-white">Executar retencao</h2>
-              <span className="rounded-full border border-amber-300/30 bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+              <h2 className="text-lg font-semibold">Executar retencao</h2>
+              <span className="theme-soft-warning-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
                 Acao em massa
               </span>
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-white/70">
+            <p className="theme-muted mt-3 text-sm leading-relaxed">
               Essa acao pode remover multiplas conversas da operacao.
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-amber-50/75">
+            <p className="theme-soft-warning-panel mt-2 rounded-xl border px-3 py-2 text-sm leading-relaxed">
               Valores baixos (ex: 1-7 dias) podem remover conversas ativas.
             </p>
-            <label className="mt-4 block text-sm font-medium text-white/75" htmlFor="retention-confirmation">
+            <label className="theme-muted mt-4 block text-sm font-medium" htmlFor="retention-confirmation">
               Digite EXECUTAR RETENÇÃO para confirmar
             </label>
             <input
@@ -413,14 +413,14 @@ export default function AppPrivacySettingsPage() {
               value={retentionConfirmation}
               onChange={(event) => setRetentionConfirmation(event.target.value)}
               autoFocus
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-amber-300/50"
+              className="theme-select mt-2 w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-300/50"
             />
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setRetentionModalOpen(false)}
                 disabled={executingRetention}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="theme-nav-link rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -428,7 +428,7 @@ export default function AppPrivacySettingsPage() {
                 type="button"
                 onClick={handleExecuteRetention}
                 disabled={executingRetention || retentionConfirmation !== "EXECUTAR RETENÇÃO"}
-                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {executingRetention ? "Executando..." : "Confirmar retencao"}
               </button>
@@ -437,22 +437,22 @@ export default function AppPrivacySettingsPage() {
         </div>
       ) : null}
       {anonymizeModalOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#020817]/78 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-red-300/20 bg-[#0d1b36] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.42)]">
+        <div className="theme-modal-backdrop fixed inset-0 z-[80] flex items-center justify-center px-4 backdrop-blur-sm">
+          <div className="theme-surface-strong w-full max-w-lg rounded-2xl border border-red-700 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.22)]">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-white">Anonimizar dados</h2>
-              <span className="rounded-full border border-red-300/30 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-100">
+              <h2 className="text-lg font-semibold">Anonimizar dados</h2>
+              <span className="theme-soft-danger-badge rounded-full border px-2 py-0.5 text-[11px] font-semibold">
                 Irreversivel
               </span>
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-white/70">
+            <p className="theme-muted mt-3 text-sm leading-relaxed">
               Essa acao remove permanentemente os dados pessoais desta conversa. Apos confirmar,
               nao sera possivel recuperar nome, telefone ou informacoes sensiveis.
             </p>
-            <p className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/75">
+            <p className="theme-surface mt-3 rounded-xl border px-3 py-2 text-sm">
               {conversationId.trim()}
             </p>
-            <label className="mt-4 block text-sm font-medium text-white/75" htmlFor="anonymize-confirmation">
+            <label className="theme-muted mt-4 block text-sm font-medium" htmlFor="anonymize-confirmation">
               Digite ANONIMIZAR para confirmar
             </label>
             <input
@@ -460,14 +460,14 @@ export default function AppPrivacySettingsPage() {
               value={anonymizeConfirmation}
               onChange={(event) => setAnonymizeConfirmation(event.target.value)}
               autoFocus
-              className="mt-2 w-full rounded-xl border border-white/10 bg-[#071225] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-red-300/50"
+              className="theme-select mt-2 w-full rounded-xl px-3 py-2 text-sm outline-none focus:border-red-300/50"
             />
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setAnonymizeModalOpen(false)}
                 disabled={anonymizing}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="theme-nav-link rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancelar
               </button>

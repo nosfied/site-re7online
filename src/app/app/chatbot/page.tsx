@@ -287,10 +287,10 @@ function FlowBadge({
 }) {
   const toneClass =
     tone === "success"
-      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      ? "border-emerald-700 bg-emerald-600 text-white"
       : tone === "warning"
-        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
-        : "border-white/15 bg-white/5 text-white/80";
+        ? "border-amber-700 bg-amber-500 text-slate-950"
+        : "border-slate-600 bg-slate-500 text-white";
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
       {label}
@@ -314,8 +314,8 @@ function TogglePill({
       disabled={disabled}
       className={`inline-flex min-w-16 items-center justify-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${
         checked
-          ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
-          : "border-white/15 bg-white/5 text-white/70"
+          ? "border-emerald-700 bg-emerald-600 text-white"
+          : "border-slate-600 bg-slate-500 text-white"
       } disabled:cursor-not-allowed disabled:opacity-60`}
     >
       {checked ? "On" : "Off"}
