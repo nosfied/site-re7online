@@ -1875,6 +1875,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       appliedTenantConfig?.handoffLeadNotificationRecipients
     ).filter((recipient) => recipient.isActive && recipient.waId);
 
+  const cleanHandoffNotificationText = (value?: string | null) => {
+    if (!value) return null;
+    const cleaned = value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => {
+        if (!line) return true;
+        if (/^\[?(resumo automatico|resumo automático|sugest[aã]o de resposta)\]?$/i.test(line)) {
+          return false;
+        }
+        if (/^-{3,}$/.test(line)) return false;
+        if (/^origem:\s*(ia controlada|fluxo automatico|fluxo automático)$/i.test(line)) {
+          return false;
+        }
+        if (/^est[aá]gio:\s*(clarification|triage|qualification|waiting_user|handoff_recommended)$/i.test(line)) {
+          return false;
+        }
+        return true;
+      })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return cleaned || null;
+  };
+
   const buildHandoffLeadNotificationSummary = (state: ConversationState, source: string) => {
     const answers = state.answers ?? {};
     const flowContext =
@@ -1906,7 +1931,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       pickText(flowContext.servico, flowContext.intent, aiOrchestrator.goal)
     );
     const prioridade = formatValue(pickText(flowContext.prioridade, flowContext.lead_temp));
-    const summary = formatValue(pickText(aiMemory.summary));
+    const summary = source === "ai_orchestrator" ? formatValue(pickText(aiMemory.summary)) : null;
     return [
       `Origem: ${source === "ai_orchestrator" ? "IA controlada" : "Fluxo automatico"}`,
       area ? `Area: ${area}` : null,
@@ -1924,6 +1949,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     messageId: string;
     reason?: string | null;
     score?: number | null;
+    crmSummary?: string | null;
+    crmSuggestedReply?: string | null;
   }) => {
     if (!tenantClientId || !tenantClientKey) return;
     const prisma = getPrisma();
@@ -1994,17 +2021,28 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const buildTextBody = (input: {
       leadWaId: string;
       summary?: string | null;
+      suggestedReply?: string | null;
       pending?: boolean;
-    }) =>
-      [
+    }) => {
+      const summaryBlock = cleanHandoffNotificationText(input.summary);
+      const suggestedReplyBlock = cleanHandoffNotificationText(input.suggestedReply);
+      return [
         input.pending ? "Lead pendente no Converta" : "Novo lead no Converta",
         `Tenant: ${tenantDisplayName}`,
         `Lead: ${input.leadWaId}`,
         `Link: https://wa.me/${input.leadWaId}`,
-        input.summary || "Resumo: atendimento encaminhado para humano.",
+        "",
+        "Resumo do CRM",
+        summaryBlock || "Atendimento encaminhado para humano. Revise o inbox para ver o historico completo.",
+        suggestedReplyBlock ? "" : null,
+        suggestedReplyBlock ? "Sugestao de resposta" : null,
+        suggestedReplyBlock,
         "",
         "Acesse o inbox para assumir ou acompanhar o atendimento.",
-      ].join("\n");
+      ]
+        .filter((line): line is string => line !== null && line !== undefined)
+        .join("\n");
+    };
     const findOpenRecipient = async () => {
       for (let offset = 0; offset < recipients.length; offset += 1) {
         const recipientIndex = (startIndex + offset) % recipients.length;
@@ -2027,7 +2065,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return null;
     };
     const openRecipient = await findOpenRecipient();
-    const summary = buildHandoffLeadNotificationSummary(params.state, params.source);
+    const summary =
+      cleanHandoffNotificationText(params.crmSummary) ??
+      buildHandoffLeadNotificationSummary(params.state, params.source);
+    const suggestedReply = cleanHandoffNotificationText(params.crmSuggestedReply);
     if (!openRecipient) {
       await prisma.event.create({
         data: {
@@ -2047,6 +2088,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             leadWaId: params.state.waId,
             originalMessageId: params.messageId,
             summary,
+            suggestedReply,
             recipientCount: recipients.length,
             pendingReason: "no_active_recipient_window_open",
           } as Prisma.InputJsonValue,
@@ -2077,11 +2119,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       reason?: string | null;
       score?: number | null;
       summary?: string | null;
+      suggestedReply?: string | null;
       pending?: boolean;
     }) => {
       const textBody = buildTextBody({
         leadWaId: input.leadWaId,
         summary: input.summary,
+        suggestedReply: input.suggestedReply,
         pending: input.pending,
       });
       const credentials = await resolveCurrentTenantCredentials();
@@ -2108,6 +2152,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             recipientIndex: openRecipient.recipientIndex,
             recipientCount: recipients.length,
             pending: input.pending === true,
+            hasSummary: Boolean(input.summary),
+            hasSuggestedReply: Boolean(input.suggestedReply),
             status: result.status ?? null,
             metaMessageId: result.messageId ?? null,
             errorBody: result.ok ? null : result.errorBody ?? null,
@@ -2260,6 +2306,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           reason: typeof pending.payload.reason === "string" ? pending.payload.reason : null,
           score: typeof pending.payload.score === "number" ? pending.payload.score : null,
           summary: typeof pending.payload.summary === "string" ? pending.payload.summary : null,
+          suggestedReply:
+            typeof pending.payload.suggestedReply === "string" ? pending.payload.suggestedReply : null,
           pending: true,
         });
       }
@@ -2274,6 +2322,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       reason: params.reason,
       score: params.score,
       summary,
+      suggestedReply,
       pending: false,
     });
   };
@@ -3799,6 +3848,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           departmentId: updatedConversation.departmentId ?? null,
         });
         if (tenantClientId) {
+          const aiCrmArtifacts = buildAiHandoffCrmArtifacts({
+            state: updatedConversation,
+            reason: aiHandoffPrompt.reason,
+            score: aiHandoffPrompt.score,
+          });
           await persistAiHandoffLeadNotes({
             clientId: tenantClientId,
             clientKey: tenantClientKey,
@@ -3815,6 +3869,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             messageId: message.messageId,
             reason: aiHandoffPrompt.reason,
             score: aiHandoffPrompt.score,
+            crmSummary: aiCrmArtifacts.summaryNote,
+            crmSuggestedReply: aiCrmArtifacts.suggestedReplyNote,
           });
           publishRealtimeEvent({
             type: "conversation.handoff.updated",
@@ -5216,6 +5272,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         source: "flow",
         messageId: message.messageId,
         reason: chatbotFlowResult.pendingHandoff.nodeId,
+        crmSummary: handoffSummary,
+        crmSuggestedReply: suggestedReply,
       });
       if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
         await notifyAttendantHumanRequested({
