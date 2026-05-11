@@ -752,6 +752,19 @@ export function buildTenantIntentCatalogReply(intent: ResolvedTenantIntent) {
   return text.slice(0, ORCHESTRATOR_MAX_REPLY_CHARS).trim();
 }
 
+export function buildTenantIntentDetailCaptureReply(
+  intent: ResolvedTenantIntent,
+  handoffPrompt?: string | null
+) {
+  const prompt = handoffPrompt?.trim();
+  const fallbackPrompt = "Posso direcionar você para uma pessoa da equipe continuar o atendimento?";
+  const topic = normalizeContinuationTopic(intent.topic || intent.title || intent.key);
+  const prefix = topic
+    ? `Perfeito, registrei esse detalhe sobre ${topic}.`
+    : "Perfeito, registrei esse detalhe.";
+  return `${prefix}\n\n${prompt || fallbackPrompt}`.slice(0, ORCHESTRATOR_MAX_REPLY_CHARS).trim();
+}
+
 export function buildTenantIntentOrchestratorOutput(
   intent: ResolvedTenantIntent,
   reply: string

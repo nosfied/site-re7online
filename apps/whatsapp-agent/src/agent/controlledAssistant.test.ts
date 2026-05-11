@@ -10,6 +10,7 @@ import {
   buildContextualContinuationReply,
   buildSafeResponse,
   buildTenantIntentCatalogReply,
+  buildTenantIntentDetailCaptureReply,
   buildTenantIntentOrchestratorOutput,
   calculateHandoffScore,
   classifyAssistantFallback,
@@ -346,6 +347,32 @@ test("intent catalog output enriches CRM with configured classification", () => 
   assert.equal(result.state.answers?.flowContext?.intent, "servico_aposentadoria");
   assert.equal(result.state.answers?.flowContext?.lead_temp, "quente");
   assert.ok(result.state.answers?.flowTags?.includes("service:aposentadoria"));
+});
+
+test("tenant intent detail capture uses generic multitenant handoff copy", () => {
+  const intent = resolveTenantIntent("blusa branca", [
+    {
+      key: "produto_interesse",
+      title: "Produto de interesse",
+      topics: ["blusa", "vestido"],
+      response: "Posso direcionar para a equipe verificar as opções disponíveis.",
+      nextQuestion: "Qual produto você está procurando primeiro?",
+      leadTemp: "morno",
+      priority: "media",
+      tags: ["service:produto_interesse"],
+    },
+  ]);
+  assert.ok(intent);
+  assert.equal(
+    buildTenantIntentDetailCaptureReply(
+      intent!,
+      "Esse atendimento pode ser acompanhado por uma pessoa da equipe. Posso encaminhar?"
+    ),
+    [
+      "Perfeito, registrei esse detalhe sobre produto de interesse.",
+      "Esse atendimento pode ser acompanhado por uma pessoa da equipe. Posso encaminhar?",
+    ].join("\n\n")
+  );
 });
 
 test("pending offer helpers interpret short contextual confirmations", () => {

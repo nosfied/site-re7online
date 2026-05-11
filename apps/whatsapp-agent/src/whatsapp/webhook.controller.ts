@@ -42,6 +42,7 @@ import {
   buildSafeResponse,
   buildAssistantFallbackGuidance,
   buildTenantIntentCatalogReply,
+  buildTenantIntentDetailCaptureReply,
   buildTenantIntentOrchestratorOutput,
   calculateHandoffScore,
   classifyAssistantFallback,
@@ -5962,8 +5963,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 ],
               })
             : null;
+          const currentFlowContext = updatedConversation.answers?.flowContext ?? {};
+          const previousTenantIntentKey =
+            typeof currentFlowContext.intent === "string" ? currentFlowContext.intent : null;
+          const isRepeatedTenantIntent =
+            Boolean(tenantIntent?.key && previousTenantIntentKey === tenantIntent.key);
           const tenantIntentReply = tenantIntent
-            ? buildTenantIntentCatalogReply(tenantIntent)
+            ? isRepeatedTenantIntent
+              ? buildTenantIntentDetailCaptureReply(
+                  tenantIntent,
+                  appliedTenantConfig.aiAssistantHandoffPrompt
+                )
+              : buildTenantIntentCatalogReply(tenantIntent)
             : null;
           if (tenantIntent) {
             await logAiAssistantEvent("ai.intent_catalog.matched", {
@@ -5971,6 +5982,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               topic: tenantIntent.topic,
               hasResponse: Boolean(tenantIntentReply),
               handoff: tenantIntent.handoff,
+              repeated: isRepeatedTenantIntent,
             });
           }
           if (tenantIntent && tenantIntentReply && !risk) {
@@ -5988,9 +6000,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 tenantIntentReply
               );
               const shouldCreateCatalogHandoffPrompt =
-                tenantIntent.handoff &&
+                (tenantIntent.handoff || isRepeatedTenantIntent) &&
                 appliedTenantConfig.aiAssistantFallbackToHandoff === true &&
                 updatedConversation.handoff.status === "none";
+              const effectiveCatalogNextAction = shouldCreateCatalogHandoffPrompt
+                ? "handoff_recommend"
+                : catalogOutput.next_action;
+              const effectiveCatalogHandoffRecommended =
+                catalogOutput.handoff_recommended || shouldCreateCatalogHandoffPrompt;
               replyText = tenantIntentReply;
               aiAssistantResponded = true;
               await applyAiMemoryUpdate({
@@ -5999,7 +6016,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 goal: catalogOutput.goal,
                 leadTemp: tenantIntent.leadTemp,
                 priority: tenantIntent.priority,
-                handoffRecommended: tenantIntent.handoff,
+                handoffRecommended: effectiveCatalogHandoffRecommended,
                 source: "intent_catalog",
               });
               const crmEnrichment = enrichCrmFromOrchestrator({
@@ -6041,6 +6058,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 ...updatedConversation,
                 answers: {
                   ...(updatedConversation.answers ?? {}),
+                  flowContext: {
+                    ...(updatedConversation.answers?.flowContext ?? {}),
+                    ...(isRepeatedTenantIntent
+                      ? {
+                          detalhe_interesse: message.text.slice(0, 120),
+                          ultima_intencao_confirmada: tenantIntent.key,
+                        }
+                      : {}),
+                  },
                   aiAssistant: {
                     count: assistantState.count + 1,
                     lastRespondedAt: nowIso,
@@ -6054,9 +6080,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     stage: catalogOutput.stage,
                     goal: catalogOutput.goal,
                     missingInformation: catalogOutput.missing_information,
-                    lastAction: catalogOutput.next_action,
+                    lastAction: effectiveCatalogNextAction,
                     lastConfidence: catalogOutput.confidence,
-                    handoffRecommended: catalogOutput.handoff_recommended,
+                    handoffRecommended: effectiveCatalogHandoffRecommended,
                     lastMessageId: message.messageId,
                     lastQuestion: catalogOutput.next_question,
                     lastNextActionAt: nowIso,
@@ -6110,10 +6136,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 source: "intent_catalog",
                 stage: catalogOutput.stage,
                 goal: catalogOutput.goal,
-                nextAction: catalogOutput.next_action,
+                nextAction: effectiveCatalogNextAction,
                 resolvedAction: "answer",
                 confidence: catalogOutput.confidence,
-                handoffRecommended: catalogOutput.handoff_recommended,
+                handoffRecommended: effectiveCatalogHandoffRecommended,
               });
               await logAiAssistantEvent("ai.intent_catalog.responded", {
                 key: tenantIntent.key,
