@@ -13,11 +13,11 @@ type Options = {
   days: number;
   clientKey?: string;
   includeNoise: boolean;
+  noiseOnly: boolean;
   compactOnly: boolean;
+  confirmOperational: boolean;
   json: boolean;
 };
-
-type CategoryCounts = Record<EventRetentionCategory, number>;
 
 type RetentionReport = {
   generatedAt: string;
@@ -27,7 +27,9 @@ type RetentionReport = {
     days: number;
     noiseDays: number;
     includeNoise: boolean;
+    noiseOnly: boolean;
     compactOnly: boolean;
+    confirmOperational: boolean;
   };
   scanned: number;
   critical: number;
@@ -51,7 +53,9 @@ function parseArgs(argv: string[]): Options {
     dryRun: false,
     days: DEFAULT_OPERATIONAL_RETENTION_DAYS,
     includeNoise: false,
+    noiseOnly: false,
     compactOnly: false,
+    confirmOperational: false,
     json: false,
   };
 
@@ -83,12 +87,22 @@ function parseArgs(argv: string[]): Options {
       case "--include-noise":
         options.includeNoise = true;
         break;
+      case "--noise-only":
+        options.noiseOnly = true;
+        break;
       case "--compact-only":
         options.compactOnly = true;
+        break;
+      case "--confirm-operational":
+        options.confirmOperational = true;
         break;
       default:
         throw new Error(`flag não reconhecida: ${current}`);
     }
+  }
+
+  if (options.noiseOnly && !options.includeNoise) {
+    throw new Error("--noise-only exige --include-noise");
   }
 
   return options;
@@ -115,14 +129,6 @@ function subtractDays(days: number) {
 
 function logEvent(event: string, payload: Record<string, unknown>) {
   console.error(JSON.stringify({ timestamp: new Date().toISOString(), event, ...payload }));
-}
-
-function createEmptyCounts(): CategoryCounts {
-  return {
-    CRITICAL: 0,
-    OPERATIONAL: 0,
-    NOISE: 0,
-  };
 }
 
 async function resolveClientId(prisma: PrismaClient, clientKey?: string) {
@@ -238,7 +244,9 @@ async function executeEventsRetention(prisma: PrismaClient, options: Options): P
         days: options.days,
         noiseDays,
         includeNoise: options.includeNoise,
+        noiseOnly: options.noiseOnly,
         compactOnly: options.compactOnly,
+        confirmOperational: options.confirmOperational,
       },
       scanned: 0,
       critical: 0,
@@ -260,17 +268,22 @@ async function executeEventsRetention(prisma: PrismaClient, options: Options): P
     NOISE: noiseCutoff,
   });
 
-  const counts = createEmptyCounts();
-  for (const item of eventNameCounts) {
-    counts[item.category] += item.count;
-  }
+  const filteredEventNameCounts = options.noiseOnly
+    ? eventNameCounts.filter((item) => item.category === "NOISE")
+    : eventNameCounts;
 
-  const operationalEventNames = eventNameCounts
+  const operationalEventNames = filteredEventNameCounts
     .filter((item) => item.category === "OPERATIONAL")
     .map((item) => item.eventName);
-  const noiseEventNames = eventNameCounts
+  const noiseEventNames = filteredEventNameCounts
     .filter((item) => item.category === "NOISE")
     .map((item) => item.eventName);
+
+  if (!options.dryRun && operationalEventNames.length > 0 && !options.confirmOperational) {
+    throw new Error(
+      "execução real com eventos OPERATIONAL exige --confirm-operational; use --noise-only para limpar somente ruído"
+    );
+  }
 
   const compactResult = await compactOperationalEvents({
     prisma,
@@ -333,16 +346,24 @@ async function executeEventsRetention(prisma: PrismaClient, options: Options): P
       days: options.days,
       noiseDays,
       includeNoise: options.includeNoise,
+      noiseOnly: options.noiseOnly,
       compactOnly: options.compactOnly,
+      confirmOperational: options.confirmOperational,
     },
-    scanned: counts.CRITICAL + counts.OPERATIONAL + counts.NOISE,
-    critical: counts.CRITICAL,
-    operational: counts.OPERATIONAL,
-    noise: counts.NOISE,
+    scanned: filteredEventNameCounts.reduce((sum, item) => sum + item.count, 0),
+    critical: filteredEventNameCounts
+      .filter((item) => item.category === "CRITICAL")
+      .reduce((sum, item) => sum + item.count, 0),
+    operational: filteredEventNameCounts
+      .filter((item) => item.category === "OPERATIONAL")
+      .reduce((sum, item) => sum + item.count, 0),
+    noise: filteredEventNameCounts
+      .filter((item) => item.category === "NOISE")
+      .reduce((sum, item) => sum + item.count, 0),
     compacted: compactResult.compacted,
     deleted,
     skipped: compactResult.skipped,
-    affectedEventNames: eventNameCounts,
+    affectedEventNames: filteredEventNameCounts,
   };
 }
 
@@ -350,6 +371,7 @@ function printHuman(report: RetentionReport) {
   console.log(`Events Retention - ${report.generatedAt}`);
   console.log(`Dry-run: ${report.dryRun ? "yes" : "no"}`);
   console.log(`Client: ${report.filters.clientKey ?? "all"}`);
+  console.log(`Mode: ${report.filters.noiseOnly ? "noise-only" : "operational+noise"}`);
   console.log(`Operational cutoff: ${report.filters.days}d`);
   console.log(`Noise cutoff: ${report.filters.noiseDays}d (${report.filters.includeNoise ? "included" : "not included"})`);
   console.log("");
@@ -376,7 +398,9 @@ async function main() {
     clientKey: options.clientKey ?? null,
     days: options.days,
     includeNoise: options.includeNoise,
+    noiseOnly: options.noiseOnly,
     compactOnly: options.compactOnly,
+    confirmOperational: options.confirmOperational,
   });
   try {
     const report = await executeEventsRetention(prisma, options);
