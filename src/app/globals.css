@@ -250,6 +250,10 @@ html {
     border-color: var(--app-border) !important;
   }
 
+  :root[data-theme="light"] .theme-workspace .text-white {
+    color: var(--app-text) !important;
+  }
+
   :root[data-theme="light"] .theme-workspace .text-white\/45,
   :root[data-theme="light"] .theme-workspace .text-white\/50,
   :root[data-theme="light"] .theme-workspace .text-white\/55,
@@ -287,6 +291,10 @@ html {
   :root[data-theme="light"] .theme-workspace .hover\:bg-white\/5:hover,
   :root[data-theme="light"] .theme-workspace .hover\:bg-white\/10:hover {
     background-color: rgba(127, 196, 229, 0.12) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .hover\:text-white:hover {
+    color: var(--app-text) !important;
   }
 
   :root[data-theme="light"] .theme-workspace .bg-red-900\/30,
