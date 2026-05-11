@@ -4,6 +4,11 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+import {
+  EventRetentionCategory,
+  EVENT_RETENTION_CATEGORIES,
+  classifyEventRetentionPolicy,
+} from "../src/events/eventRetentionPolicy.js";
 
 type Options = {
   json: boolean;
@@ -74,6 +79,9 @@ type Report = {
     last7d: number;
     last30d: number;
     topEventNames: Array<{ eventName: string; count: number }>;
+    classes: Record<EventRetentionCategory, { count: number; percent: number }>;
+    noisePercent: number;
+    criticalPercent: number;
   };
 };
 
@@ -339,10 +347,17 @@ async function getEventGrowth(prisma: PrismaClient, options: Options) {
       last7d: 0,
       last30d: 0,
       topEventNames: [],
+      classes: {
+        CRITICAL: { count: 0, percent: 0 },
+        OPERATIONAL: { count: 0, percent: 0 },
+        NOISE: { count: 0, percent: 0 },
+      },
+      noisePercent: 0,
+      criticalPercent: 0,
     };
   }
   const clientFilter = client ? `AND "clientId" = ${sqlString(client.id)}` : "";
-  const [last24h, last7d, last30d, topEventNames] = await Promise.all([
+  const [last24h, last7d, last30d, topEventNames, allEventNames] = await Promise.all([
     prisma.$queryRawUnsafe<Array<{ count: string }>>(
       `SELECT COUNT(*)::text AS count FROM "Event" WHERE "createdAt" >= NOW() - INTERVAL '24 hours' ${clientFilter}`
     ),
@@ -360,12 +375,43 @@ async function getEventGrowth(prisma: PrismaClient, options: Options) {
        ORDER BY COUNT(*) DESC
        LIMIT 15`
     ),
+    prisma.$queryRawUnsafe<Array<{ eventName: string; count: string }>>(
+      `SELECT "eventName", COUNT(*)::text AS count
+       FROM "Event"
+       WHERE "createdAt" >= NOW() - INTERVAL '30 days' ${clientFilter}
+       GROUP BY "eventName"`
+    ),
   ]);
+  const classCounts = EVENT_RETENTION_CATEGORIES.reduce(
+    (acc, category) => {
+      acc[category] = 0;
+      return acc;
+    },
+    {} as Record<EventRetentionCategory, number>
+  );
+  for (const row of allEventNames) {
+    classCounts[classifyEventRetentionPolicy(row.eventName)] += toNumber(row.count);
+  }
+  const totalClassified = Object.values(classCounts).reduce((sum, count) => sum + count, 0);
+  const classes = EVENT_RETENTION_CATEGORIES.reduce(
+    (acc, category) => {
+      const count = classCounts[category];
+      acc[category] = {
+        count,
+        percent: totalClassified > 0 ? Number(((count / totalClassified) * 100).toFixed(2)) : 0,
+      };
+      return acc;
+    },
+    {} as Record<EventRetentionCategory, { count: number; percent: number }>
+  );
   return {
     last24h: toNumber(last24h[0]?.count),
     last7d: toNumber(last7d[0]?.count),
     last30d: toNumber(last30d[0]?.count),
     topEventNames: topEventNames.map((row) => ({ eventName: row.eventName, count: toNumber(row.count) })),
+    classes,
+    noisePercent: classes.NOISE.percent,
+    criticalPercent: classes.CRITICAL.percent,
   };
 }
 
@@ -475,6 +521,11 @@ function printHuman(report: Report) {
     console.log("- top event names:");
     for (const item of report.eventGrowth.topEventNames) {
       console.log(`  - ${item.eventName}: ${item.count}`);
+    }
+    console.log("- event classes:");
+    for (const category of EVENT_RETENTION_CATEGORIES) {
+      const item = report.eventGrowth.classes[category];
+      console.log(`  - ${category}: ${item.count} (${item.percent}%)`);
     }
   }
 }

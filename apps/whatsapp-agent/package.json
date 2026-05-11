@@ -23,6 +23,7 @@
     "departments:normalize-operational": "node scripts/normalize-operational-department.mjs",
     "retention:run": "tsx scripts/run-retention.ts",
     "storage:report": "tsx scripts/storage-report.ts",
+    "events:retention": "tsx scripts/events-retention.ts",
     "followup:run": "node --import tsx scripts/run-followups.mjs",
     "demo:seed": "node scripts/seed-demo.mjs",
     "state:backfill": "node scripts/backfill-runtime-state.mjs",
