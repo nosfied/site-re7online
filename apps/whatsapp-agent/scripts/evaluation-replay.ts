@@ -1,5 +1,9 @@
 import { defaultEvaluationDataset } from "../src/evaluation/evaluationDataset.js";
 import { replayEvaluationDataset } from "../src/evaluation/evaluationReplay.js";
+import {
+  loadGeneratedEvaluationDataset,
+  mergeEvaluationDatasets,
+} from "../src/evaluation/candidateReview.js";
 
 function hasFlag(name: string) {
   return process.argv.includes(name);
@@ -11,21 +15,26 @@ function logEvent(event: string, payload: Record<string, unknown> = {}) {
 
 const json = hasFlag("--json");
 const preferLiveTenants = hasFlag("--live-tenants");
+const generatedDataset = await loadGeneratedEvaluationDataset(
+  new URL("../src/evaluation/evaluationDataset.generated.json", import.meta.url).pathname
+);
+const dataset = mergeEvaluationDatasets(defaultEvaluationDataset, generatedDataset);
 
 logEvent("evaluation.replay.started", {
-  datasetId: defaultEvaluationDataset.id,
-  caseCount: defaultEvaluationDataset.cases.length,
+  datasetId: dataset.id,
+  caseCount: dataset.cases.length,
   preferLiveTenants,
+  generatedCaseCount: generatedDataset?.cases.length ?? 0,
 });
 
 try {
-  for (const testCase of defaultEvaluationDataset.cases) {
+  for (const testCase of dataset.cases) {
     logEvent("evaluation.replay.case_started", {
       caseId: testCase.id,
       tenantKey: testCase.tenantKey,
     });
   }
-  const result = await replayEvaluationDataset(defaultEvaluationDataset, { preferLiveTenants });
+  const result = await replayEvaluationDataset(dataset, { preferLiveTenants });
   for (const testCase of result.cases) {
     logEvent(`evaluation.replay.case_${testCase.score === "PASS" ? "passed" : "failed"}`, {
       caseId: testCase.id,
