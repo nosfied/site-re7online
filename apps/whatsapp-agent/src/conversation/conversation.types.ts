@@ -118,6 +118,13 @@ export type AIQualificationState = {
   completedSlots?: string[];
   missingSlots?: string[];
   lastQuestion?: string | null;
+  pendingSemanticConfirmation?: {
+    slotKey: string;
+    proposedValue: string;
+    confidence: number;
+    createdAt: string;
+    confirmationQuestion?: string | null;
+  };
   readyForHandoff?: boolean;
   outcome?: string | null;
   updatedAt?: string;

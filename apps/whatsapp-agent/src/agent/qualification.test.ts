@@ -15,6 +15,7 @@ test("normalizeQualificationSchema accepts valid schema", () => {
   const schema = normalizeQualificationSchema({
     enabled: true,
     semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
     schemaVersion: "1",
     slots: [
       {
@@ -48,9 +49,16 @@ test("normalizeQualificationSchema accepts valid schema", () => {
       negativeReply: "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?",
       ambiguousEnumReply: "Certo. Escolha uma das opções disponíveis.",
     },
+    semanticConfirmation: {
+      enabled: true,
+      minimumConfidence: 0.6,
+      autoAcceptConfidence: 0.85,
+      expirationMinutes: 15,
+    },
   });
   assert.equal(schema?.enabled, true);
   assert.equal(schema?.semanticResolverEnabled, true);
+  assert.equal(schema?.semanticConfirmationEnabled, true);
   assert.equal(schema?.schemaVersion, "1");
   assert.equal(schema?.slots?.[0]?.key, "tipo_atendimento");
   assert.deepEqual(schema?.slots?.[0]?.allowedValues, ["Atacado", "Varejo"]);
@@ -66,6 +74,12 @@ test("normalizeQualificationSchema accepts valid schema", () => {
     enabled: true,
     negativeReply: "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?",
     ambiguousEnumReply: "Certo. Escolha uma das opções disponíveis.",
+  });
+  assert.deepEqual(schema?.semanticConfirmation, {
+    enabled: true,
+    minimumConfidence: 0.6,
+    autoAcceptConfidence: 0.85,
+    expirationMinutes: 15,
   });
   assert.equal(isQualificationEnabled(schema), true);
 });
@@ -934,4 +948,186 @@ test("handleQualificationTurn lets semantic enum intent win over optional text f
     result.logs.some((entry) => entry.event === "ai.semantic.resolve.accepted"),
     true
   );
+});
+
+test("handleQualificationTurn creates pending semantic confirmation for intermediate confidence", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
+    slots: [
+      {
+        key: "produto",
+        question: "Produto?",
+        required: true,
+      },
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+        askAfter: ["produto"],
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "blusa",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "acho que queria ver os modelos",
+  });
+
+  assert.equal(result.handled, true);
+  assert.equal(result.state?.slots?.duvida, undefined);
+  assert.equal(result.state?.pendingSemanticConfirmation?.slotKey, "duvida");
+  assert.equal(result.state?.pendingSemanticConfirmation?.proposedValue, "catalogo");
+  assert.equal(
+    result.logs.some((entry) => entry.event === "ai.semantic.confirmation.created"),
+    true
+  );
+  assert.match(result.replyText ?? "", /confirmar/i);
+});
+
+test("handleQualificationTurn accepts pending semantic confirmation and captures slot", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
+    slots: [
+      {
+        key: "produto",
+        question: "Produto?",
+        required: true,
+      },
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+        askAfter: ["produto"],
+      },
+    ],
+    handoffWhen: ["catalogo"],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "blusa",
+  });
+  const pending = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "acho que queria ver os modelos",
+  });
+  const accepted = handleQualificationTurn({
+    schema,
+    state: pending.state,
+    text: "sim",
+  });
+
+  assert.equal(accepted.state?.slots?.duvida, "catalogo");
+  assert.equal(accepted.state?.pendingSemanticConfirmation, undefined);
+  assert.equal(accepted.state?.readyForHandoff, true);
+  assert.equal(accepted.handled, false);
+  assert.equal(
+    accepted.logs.some((entry) => entry.event === "ai.semantic.confirmation.accepted"),
+    true
+  );
+});
+
+test("handleQualificationTurn rejects pending semantic confirmation and asks slot again", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
+    slots: [
+      {
+        key: "produto",
+        question: "Produto?",
+        required: true,
+      },
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+        askAfter: ["produto"],
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "blusa",
+  });
+  const pending = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "acho que queria ver os modelos",
+  });
+  const rejected = handleQualificationTurn({
+    schema,
+    state: pending.state,
+    text: "não",
+  });
+
+  assert.equal(rejected.state?.slots?.duvida, undefined);
+  assert.equal(rejected.state?.pendingSemanticConfirmation, undefined);
+  assert.equal(rejected.handled, true);
+  assert.equal(rejected.replyText, "Catálogo ou valores?");
+  assert.equal(
+    rejected.logs.some((entry) => entry.event === "ai.semantic.confirmation.rejected"),
+    true
+  );
+});
+
+test("handleQualificationTurn does not create semantic confirmation when disabled", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [
+      {
+        key: "produto",
+        question: "Produto?",
+        required: true,
+      },
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+        askAfter: ["produto"],
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "blusa",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "acho que queria ver os modelos",
+  });
+
+  assert.equal(result.state?.pendingSemanticConfirmation, undefined);
+  assert.equal(result.state?.slots?.duvida, undefined);
+  assert.equal(result.replyText, "Entendi que você quer confirmar catalogo. É isso mesmo?");
 });

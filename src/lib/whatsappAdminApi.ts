@@ -235,9 +235,18 @@ export type AiQualificationCommercialContinuation = {
   ambiguousEnumReply?: string;
 };
 
+export type AiQualificationSemanticConfirmation = {
+  enabled?: boolean;
+  minimumConfidence?: number;
+  autoAcceptConfidence?: number;
+  expirationMinutes?: number;
+};
+
 export type AiQualificationSchema = {
   enabled?: boolean;
   semanticResolverEnabled?: boolean;
+  semanticConfirmationEnabled?: boolean;
+  semanticConfirmation?: AiQualificationSemanticConfirmation;
   schemaVersion?: string;
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];

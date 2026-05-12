@@ -36,9 +36,18 @@ export type AiQualificationCommercialContinuation = {
   ambiguousEnumReply?: string;
 };
 
+export type AiQualificationSemanticConfirmation = {
+  enabled?: boolean;
+  minimumConfidence?: number;
+  autoAcceptConfidence?: number;
+  expirationMinutes?: number;
+};
+
 export type AiQualificationSchema = {
   enabled?: boolean;
   semanticResolverEnabled?: boolean;
+  semanticConfirmationEnabled?: boolean;
+  semanticConfirmation?: AiQualificationSemanticConfirmation;
   schemaVersion?: string;
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];
@@ -75,6 +84,7 @@ const NEGATIVE_TERMS = new Set([
   "encerrar",
 ]);
 const DEFAULT_AMBIGUOUS_ENUM_REPLY = "Certo. Escolha uma das opções para eu continuar.";
+const DEFAULT_SEMANTIC_CONFIRMATION_EXPIRATION_MINUTES = 30;
 const OPERATIONAL_STOP_TERMS = [
   "parar",
   "encerrar",
@@ -221,6 +231,27 @@ function normalizeCommercialContinuation(
   return Object.keys(continuation).length ? continuation : undefined;
 }
 
+function normalizeSemanticConfirmation(
+  input: unknown
+): AiQualificationSemanticConfirmation | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const raw = input as Record<string, unknown>;
+  if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") return undefined;
+  const confirmation: AiQualificationSemanticConfirmation = {
+    ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {}),
+  };
+  if (typeof raw.minimumConfidence === "number" && Number.isFinite(raw.minimumConfidence)) {
+    confirmation.minimumConfidence = Math.min(0.99, Math.max(0.01, raw.minimumConfidence));
+  }
+  if (typeof raw.autoAcceptConfidence === "number" && Number.isFinite(raw.autoAcceptConfidence)) {
+    confirmation.autoAcceptConfidence = Math.min(0.99, Math.max(0.01, raw.autoAcceptConfidence));
+  }
+  if (typeof raw.expirationMinutes === "number" && Number.isFinite(raw.expirationMinutes)) {
+    confirmation.expirationMinutes = Math.min(1440, Math.max(1, Math.floor(raw.expirationMinutes)));
+  }
+  return Object.keys(confirmation).length ? confirmation : undefined;
+}
+
 function normalizeRequiredWhen(input: unknown): Record<string, string | boolean | number> | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const entries = Object.entries(input as Record<string, unknown>).slice(0, 10);
@@ -269,6 +300,8 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
   if (raw.outcomes !== undefined && !Array.isArray(raw.outcomes)) return undefined;
   const commercialContinuation = normalizeCommercialContinuation(raw.commercialContinuation);
   if (raw.commercialContinuation !== undefined && !commercialContinuation) return undefined;
+  const semanticConfirmation = normalizeSemanticConfirmation(raw.semanticConfirmation);
+  if (raw.semanticConfirmation !== undefined && !semanticConfirmation) return undefined;
   const slots: AiQualificationSlot[] = [];
   if (Array.isArray(raw.slots)) {
     const seen = new Set<string>();
@@ -316,6 +349,9 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
     ...(typeof raw.semanticResolverEnabled === "boolean"
       ? { semanticResolverEnabled: raw.semanticResolverEnabled }
       : {}),
+    ...(typeof raw.semanticConfirmationEnabled === "boolean"
+      ? { semanticConfirmationEnabled: raw.semanticConfirmationEnabled }
+      : {}),
     ...(typeof raw.schemaVersion === "string" && raw.schemaVersion.trim()
       ? { schemaVersion: normalizeDisplayString(raw.schemaVersion, 40) }
       : {}),
@@ -325,6 +361,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
       ? { outcomes: normalizeTokenList(raw.outcomes, 40, 80) }
       : {}),
     ...(commercialContinuation ? { commercialContinuation } : {}),
+    ...(semanticConfirmation ? { semanticConfirmation } : {}),
   };
   return Object.keys(schema).length ? schema : undefined;
 }
@@ -455,6 +492,32 @@ function isPositiveOnlyText(text: string) {
   return POSITIVE_TERMS.has(token) && !isExplicitNegativeText(text);
 }
 
+function isSemanticConfirmationPositiveText(text: string) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized || isExplicitNegativeText(text)) return false;
+  return [
+    "sim",
+    "isso",
+    "exatamente",
+    "correto",
+    "pode ser",
+    "quero isso",
+    "e isso",
+    "é isso",
+  ].some((term) => normalized === normalizeOperationalText(term));
+}
+
+function isSemanticConfirmationNegativeText(text: string) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  return (
+    isExplicitNegativeText(text) ||
+    ["nao e isso", "não é isso", "outra coisa", "nada disso"].some(
+      (term) => normalized === normalizeOperationalText(term)
+    )
+  );
+}
+
 function isShortUsefulText(text: string) {
   const token = normalizeToken(text, 80);
   if (!token || GREETING_ONLY.has(token) || POSITIVE_TERMS.has(token) || NEGATIVE_TERMS.has(token)) {
@@ -462,6 +525,37 @@ function isShortUsefulText(text: string) {
   }
   if (text.length > 160 || containsSensitiveText(text)) return false;
   return text.trim().length >= 2;
+}
+
+function getSemanticConfirmationSettings(schema?: AiQualificationSchema | null) {
+  const config = schema?.semanticConfirmation;
+  const enabled = schema?.semanticConfirmationEnabled === true || config?.enabled === true;
+  const minimumConfidence =
+    typeof config?.minimumConfidence === "number"
+      ? config.minimumConfidence
+      : SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE;
+  const autoAcceptConfidence =
+    typeof config?.autoAcceptConfidence === "number"
+      ? config.autoAcceptConfidence
+      : SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE;
+  const expirationMinutes =
+    typeof config?.expirationMinutes === "number"
+      ? config.expirationMinutes
+      : DEFAULT_SEMANTIC_CONFIRMATION_EXPIRATION_MINUTES;
+  return { enabled, minimumConfidence, autoAcceptConfidence, expirationMinutes };
+}
+
+function isPendingSemanticConfirmationExpired(
+  state: AIQualificationState,
+  nowIso: string,
+  expirationMinutes: number
+) {
+  const createdAt = state.pendingSemanticConfirmation?.createdAt;
+  if (!createdAt) return false;
+  const createdTime = Date.parse(createdAt);
+  const nowTime = Date.parse(nowIso);
+  if (!Number.isFinite(createdTime) || !Number.isFinite(nowTime)) return true;
+  return nowTime - createdTime > expirationMinutes * 60_000;
 }
 
 function deterministicSlotCapture(slot: AiQualificationSlot, text: string, handoffKeywords: string[] = []) {
@@ -510,7 +604,11 @@ export type QualificationTurnLog =
   | { event: "ai.semantic.resolve.low_confidence"; payload: Record<string, unknown> }
   | { event: "ai.semantic.resolve.clarification"; payload: Record<string, unknown> }
   | { event: "ai.semantic.resolve.accepted"; payload: Record<string, unknown> }
-  | { event: "ai.semantic.resolve.rejected"; payload: Record<string, unknown> };
+  | { event: "ai.semantic.resolve.rejected"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.confirmation.created"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.confirmation.accepted"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.confirmation.rejected"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.confirmation.expired"; payload: Record<string, unknown> };
 
 export type QualificationTurnResult = {
   enabled: boolean;
@@ -588,8 +686,7 @@ function buildSemanticConfirmationReply(
 ) {
   if (resolution.safeReply?.trim()) return resolution.safeReply.trim();
   if (resolution.intent === "answer_slot" && resolution.normalizedValue) {
-    const label = slot?.label?.trim() || humanizeSlotKey(slot?.key ?? "informação");
-    return `Só para confirmar: ${label}: ${resolution.normalizedValue}?`;
+    return `Entendi que você quer confirmar ${resolution.normalizedValue}. É isso mesmo?`;
   }
   return slot?.question || "Pode me confirmar em poucas palavras para eu continuar?";
 }
@@ -638,6 +735,194 @@ export function handleQualificationTurn(params: {
   const slotByKey = new Map((schema?.slots ?? []).map((slot) => [slot.key, slot]));
   let currentSlot = state.currentSlot ? slotByKey.get(state.currentSlot) ?? null : null;
   if (!currentSlot) currentSlot = getNextQualificationSlot(schema, state);
+
+  const semanticConfirmationSettings = getSemanticConfirmationSettings(schema);
+  if (state.pendingSemanticConfirmation && semanticConfirmationSettings.enabled) {
+    const pending = state.pendingSemanticConfirmation;
+    const targetSlot = slotByKey.get(pending.slotKey) ?? null;
+    if (
+      !targetSlot ||
+      isPendingSemanticConfirmationExpired(
+        state,
+        nowIso,
+        semanticConfirmationSettings.expirationMinutes
+      )
+    ) {
+      state = {
+        ...state,
+        pendingSemanticConfirmation: undefined,
+        updatedAt: nowIso,
+      };
+      logs.push({
+        event: "ai.semantic.confirmation.expired",
+        payload: { slot: pending.slotKey, reason: targetSlot ? "expired" : "invalid_slot" },
+      });
+      currentSlot = state.currentSlot ? slotByKey.get(state.currentSlot) ?? null : null;
+      if (!currentSlot) currentSlot = getNextQualificationSlot(schema, state);
+    } else {
+      const resolution = resolveSemanticQualification({
+        text: params.text,
+        currentSlot: targetSlot,
+        schema,
+        state,
+        handoffKeywords: params.handoffKeywords,
+      });
+      if (resolution.intent === "handoff_request") {
+        state = {
+          ...state,
+          stage: "handoff_ready",
+          readyForHandoff: true,
+          pendingSemanticConfirmation: undefined,
+          updatedAt: nowIso,
+        };
+        logs.push({
+          event: "ai.semantic.confirmation.rejected",
+          payload: { slot: pending.slotKey, reason: "handoff_request" },
+        });
+        logs.push({
+          event: "ai.semantic.resolve.accepted",
+          payload: { intent: resolution.intent, confidence: resolution.confidence ?? null },
+        });
+        return { enabled: true, handled: false, state, logs };
+      }
+      if (isSemanticConfirmationNegativeText(params.text) || resolution.intent === "negative") {
+        state = {
+          ...state,
+          stage: "collecting",
+          currentSlot: targetSlot.key,
+          missingSlots: [targetSlot.key],
+          lastQuestion: targetSlot.question,
+          pendingSemanticConfirmation: undefined,
+          updatedAt: nowIso,
+        };
+        logs.push({
+          event: "ai.semantic.confirmation.rejected",
+          payload: { slot: targetSlot.key, confidence: pending.confidence },
+        });
+        return {
+          enabled: true,
+          handled: true,
+          state,
+          replyText: targetSlot.question,
+          logs,
+        };
+      }
+      if (isSemanticConfirmationPositiveText(params.text) || resolution.intent === "affirmative") {
+        const alreadyCompleted = new Set(state.completedSlots ?? []).has(targetSlot.key);
+        const validation = alreadyCompleted
+          ? { ok: false as const, reason: "slot_already_completed" }
+          : validateQualificationSlotValue(targetSlot, pending.proposedValue);
+        if (!validation.ok) {
+          state = {
+            ...state,
+            stage: "collecting",
+            currentSlot: targetSlot.key,
+            missingSlots: [targetSlot.key],
+            lastQuestion: targetSlot.question,
+            pendingSemanticConfirmation: undefined,
+            updatedAt: nowIso,
+          };
+          logs.push({
+            event: "ai.semantic.confirmation.rejected",
+            payload: { slot: targetSlot.key, reason: validation.reason },
+          });
+          return {
+            enabled: true,
+            handled: true,
+            state,
+            replyText: targetSlot.question,
+            logs,
+          };
+        }
+        const completedSlots = new Set(state.completedSlots ?? []);
+        completedSlots.add(targetSlot.key);
+        state = {
+          ...state,
+          stage: "collecting",
+          slots: {
+            ...(state.slots ?? {}),
+            [targetSlot.key]: validation.value,
+          },
+          completedSlots: [...completedSlots],
+          pendingSemanticConfirmation: undefined,
+          updatedAt: nowIso,
+        };
+        state = {
+          ...state,
+          readyForHandoff:
+            Boolean(schema?.handoffWhen?.includes(targetSlot.key)) ||
+            Boolean(schema?.handoffWhen?.includes(normalizeToken(validation.value, 80))) ||
+            shouldMarkReadyForHandoff(schema!, state),
+        };
+        logs.push({
+          event: "ai.semantic.confirmation.accepted",
+          payload: { slot: targetSlot.key, confidence: pending.confidence },
+        });
+        logs.push({
+          event: "ai.qualification.slot_captured",
+          payload: { slot: targetSlot.key, type: targetSlot.type ?? "text", source: "semantic_confirmation" },
+        });
+        const nextSlot = getNextQualificationSlot(schema, state);
+        const missingSlots = missingRequiredSlots(schema!, state);
+        if (nextSlot) {
+          state = {
+            ...state,
+            stage: "collecting",
+            currentSlot: nextSlot.key,
+            missingSlots,
+            lastQuestion: nextSlot.question,
+            updatedAt: nowIso,
+          };
+          logs.push({
+            event: "ai.qualification.ask_next",
+            payload: {
+              slot: nextSlot.key,
+              reason: nextSlot.askAfter?.length ? "next_followup_slot" : "next_required_slot",
+            },
+          });
+          return { enabled: true, handled: true, state, replyText: nextSlot.question, logs };
+        }
+        state = {
+          ...state,
+          stage: state.readyForHandoff ? "handoff_ready" : "completed",
+          currentSlot: null,
+          missingSlots,
+          lastQuestion: null,
+          updatedAt: nowIso,
+        };
+        logs.push({
+          event: "ai.qualification.completed",
+          payload: { readyForHandoff: state.readyForHandoff === true },
+        });
+        return { enabled: true, handled: false, state, logs };
+      }
+
+      return {
+        enabled: true,
+        handled: true,
+        state: {
+          ...state,
+          stage: "collecting",
+          currentSlot: targetSlot.key,
+          missingSlots: [targetSlot.key],
+          lastQuestion: pending.confirmationQuestion ?? targetSlot.question,
+          updatedAt: nowIso,
+        },
+        replyText:
+          pending.confirmationQuestion ||
+          buildSemanticConfirmationReply(
+            {
+              intent: "answer_slot",
+              slotKey: targetSlot.key,
+              normalizedValue: pending.proposedValue,
+              confidence: pending.confidence,
+            },
+            targetSlot
+          ),
+        logs,
+      };
+    }
+  }
 
   if (!currentSlot) {
     const missingSlots = missingRequiredSlots(schema!, state);
@@ -689,6 +974,7 @@ export function handleQualificationTurn(params: {
         [currentSlot.key]: capture.value,
       },
       completedSlots: [...completedSlots],
+      pendingSemanticConfirmation: undefined,
       updatedAt: nowIso,
     };
     state = {
@@ -727,7 +1013,7 @@ export function handleQualificationTurn(params: {
       },
     });
 
-    if (confidence < SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+    if (confidence < semanticConfirmationSettings.minimumConfidence) {
       logs.push({
         event: "ai.semantic.resolve.low_confidence",
         payload: { intent: resolution.intent, confidence },
@@ -813,7 +1099,7 @@ export function handleQualificationTurn(params: {
       const validation = canUseTargetSlot
         ? validateQualificationSlotValue(targetSlot!, targetSlot?.type === "boolean" ? targetValue === "true" : targetValue)
         : { ok: false as const, reason: "invalid_slot" };
-      if (canUseTargetSlot && validation.ok && confidence >= SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE) {
+      if (canUseTargetSlot && validation.ok && confidence >= semanticConfirmationSettings.autoAcceptConfidence) {
         const completedSlots = new Set(state.completedSlots ?? []);
         if (targetSlot!.key !== currentSlot.key && currentSlot.askAfter?.length) {
           completedSlots.add(currentSlot.key);
@@ -827,6 +1113,7 @@ export function handleQualificationTurn(params: {
             [targetSlot!.key]: validation.value,
           },
           completedSlots: [...completedSlots],
+          pendingSemanticConfirmation: undefined,
           updatedAt: nowIso,
         };
         state = {
@@ -843,14 +1130,47 @@ export function handleQualificationTurn(params: {
             intent: resolution.intent,
             slot: targetSlot!.key,
             confidence,
-            threshold: SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE,
+            threshold: semanticConfirmationSettings.autoAcceptConfidence,
           },
         });
         logs.push({
           event: "ai.qualification.slot_captured",
           payload: { slot: targetSlot!.key, type: targetSlot!.type ?? "text", source: "semantic" },
         });
-      } else if (canUseTargetSlot && validation.ok && confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+      } else if (canUseTargetSlot && validation.ok && confidence >= semanticConfirmationSettings.minimumConfidence) {
+        const confirmationQuestion = buildSemanticConfirmationReply(resolution, targetSlot);
+        if (semanticConfirmationSettings.enabled) {
+          state = {
+            ...state,
+            stage: "collecting",
+            currentSlot: targetSlot!.key,
+            missingSlots: [targetSlot!.key],
+            lastQuestion: confirmationQuestion,
+            pendingSemanticConfirmation: {
+              slotKey: targetSlot!.key,
+              proposedValue: String(validation.value),
+              confidence,
+              createdAt: nowIso,
+              confirmationQuestion,
+            },
+            updatedAt: nowIso,
+          };
+          logs.push({
+            event: "ai.semantic.confirmation.created",
+            payload: {
+              slot: targetSlot!.key,
+              confidence,
+              threshold: semanticConfirmationSettings.autoAcceptConfidence,
+            },
+          });
+          return {
+            enabled: true,
+            handled: true,
+            state,
+            replyText: confirmationQuestion,
+            logs,
+          };
+        }
         state = {
           ...state,
           stage: "collecting",
@@ -865,14 +1185,14 @@ export function handleQualificationTurn(params: {
             intent: resolution.intent,
             slot: targetSlot!.key,
             confidence,
-            threshold: SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE,
+            threshold: semanticConfirmationSettings.autoAcceptConfidence,
           },
         });
         return {
           enabled: true,
           handled: true,
           state,
-          replyText: buildSemanticConfirmationReply(resolution, targetSlot),
+          replyText: confirmationQuestion,
           logs,
         };
       } else {
@@ -886,7 +1206,7 @@ export function handleQualificationTurn(params: {
           },
         });
       }
-    } else if (resolution.shouldAskClarification && confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+    } else if (resolution.shouldAskClarification && confidence >= semanticConfirmationSettings.minimumConfidence) {
       logs.push({
         event: "ai.semantic.resolve.clarification",
         payload: {
@@ -910,7 +1230,7 @@ export function handleQualificationTurn(params: {
         replyText: resolution.safeReply?.trim() || currentSlot.question,
         logs,
       };
-    } else if (confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+    } else if (confidence >= semanticConfirmationSettings.minimumConfidence) {
       logs.push({
         event: "ai.semantic.resolve.rejected",
         payload: { intent: resolution.intent, confidence, reason: "not_actionable" },

@@ -104,6 +104,13 @@ function confidenceForMatch(text: string, term: string, base: number) {
   return 0;
 }
 
+function adjustConfidenceForUncertainty(text: string, confidence: number) {
+  if (!confidence) return confidence;
+  const uncertaintySignals = ["acho", "talvez", "queria", "pode ser", "nao sei", "não sei"];
+  if (!containsAny(text, uncertaintySignals)) return confidence;
+  return Math.min(confidence, 0.72);
+}
+
 function findEnumMatch(slot: AiQualificationSlot, text: string) {
   let best: { value: string; confidence: number; source: "allowed" | "hint" | "semantic" } | null = null;
   for (const allowedValue of slot.allowedValues ?? []) {
@@ -187,7 +194,7 @@ export function resolveSemanticQualification(
           slotKey: slot.key,
           normalizedValue: match.value,
           matchedAllowedValue: slot.allowedValues?.includes(match.value) ? match.value : null,
-          confidence: match.confidence,
+          confidence: adjustConfidenceForUncertainty(normalized, match.confidence),
         };
       }
     }
