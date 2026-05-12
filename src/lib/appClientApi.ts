@@ -1,4 +1,5 @@
 import type {
+  AiQualificationSchema,
   AdminDepartmentItem,
   AdminUserItem,
   CampaignItem,
@@ -179,6 +180,7 @@ export type AppAutomationSettings = {
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
   handoffLeadNotificationEnabled?: boolean;
   handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
   aiAssistantGlobalSafety?: {

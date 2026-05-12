@@ -6,6 +6,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { ConversationOperationalStatus, MessageType, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
+import { normalizeQualificationSchema } from "../agent/qualification.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { env, normalizeWaId } from "../config/env.js";
@@ -2940,6 +2941,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+          aiQualification: tenant.aiQualification,
           handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             tenant.handoffLeadNotificationRecipients
@@ -3074,6 +3076,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
           aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+          aiQualification: saved.tenant.aiQualification,
           handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             saved.tenant.handoffLeadNotificationRecipients
@@ -6574,6 +6577,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+            aiQualification: tenant.aiQualification,
             handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
             handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
               tenant.handoffLeadNotificationRecipients
@@ -6805,6 +6809,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           }
           aiAssistantPatch.aiAssistantIntentCatalog = catalog;
         }
+        if (Object.prototype.hasOwnProperty.call(data, "aiQualification")) {
+          if (data.aiQualification === null || data.aiQualification === undefined) {
+            aiAssistantPatch.aiQualification = undefined;
+          } else {
+            const qualification = normalizeQualificationSchema(data.aiQualification);
+            if (!qualification) {
+              json(res, 400, httpError("bad_request", "aiQualification must be a valid qualification schema"));
+              return;
+            }
+            aiAssistantPatch.aiQualification = qualification;
+          }
+        }
         if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
           if (typeof data.aiBusinessContext !== "string") {
             json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
@@ -6968,6 +6984,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+            aiQualification: saved.tenant.aiQualification,
             handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
             handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
               saved.tenant.handoffLeadNotificationRecipients
@@ -11313,6 +11330,7 @@ function diffTenantFields(
   compareField("aiAssistantFallbackMessage");
   compareField("aiAssistantHandoffPrompt");
   compareField("aiAssistantIntentCatalog");
+  compareField("aiQualification");
   compareField("crmBusinessStatuses");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");

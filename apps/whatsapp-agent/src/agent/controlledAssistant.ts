@@ -232,6 +232,8 @@ export type AIHandoffCrmArtifacts = {
   suggestedReplyNote: string;
 };
 
+type QualificationStateForSummary = NonNullable<ConversationState["answers"]>["aiQualification"];
+
 export type AssistantFallbackIntent = "handoff_prompt" | "generic_guidance";
 
 export type AssistantFallbackDecision = {
@@ -1553,6 +1555,8 @@ export function buildAiHandoffCrmArtifacts(
   const leadTemp = formatCrmDisplayValue(context.lead_temp ?? memory?.facts?.lead_temp);
   const priority = formatCrmDisplayValue(context.prioridade ?? context.priority);
   const memorySummary = sanitizeCrmSummaryForDisplay(memory?.summary);
+  const qualificationLines = buildHandoffQualificationLines(answers.aiQualification);
+  const qualificationNextStep = buildHandoffQualificationNextStep(answers.aiQualification);
   const missingInfo = uniqueDisplayValues(
     (orchestrator?.missingInformation ?? []).filter((item) =>
       isMissingInformationRelevantToTopic(item, mainTopic)
@@ -1573,13 +1577,16 @@ export function buildAiHandoffCrmArtifacts(
     mainTopic ? `Tema principal: ${mainTopic}` : null,
     area ? `Área: ${area}` : null,
     service ? `Serviço/interesse: ${service}` : null,
+    qualificationLines.length ? "Qualificação capturada:" : null,
+    ...qualificationLines.map((line) => `- ${line}`),
     leadTemp ? `Temperatura: ${leadTemp}` : null,
     priority ? `Prioridade: ${priority}` : null,
     topics.length > 1 ? `Tópicos recentes: ${topics.join(", ")}` : null,
     memorySummary ? `Contexto resumido: ${memorySummary}` : null,
     missingInfo.length ? `Pontos a confirmar: ${missingInfo.join(", ")}` : null,
     typeof input.score === "number" ? `Score de encaminhamento: ${input.score}` : null,
-    "Próximo passo: revisar o contexto e conduzir o atendimento humano sem pedir dados sensíveis no primeiro contato.",
+    qualificationNextStep ??
+      "Próximo passo: revisar o contexto e conduzir o atendimento humano sem pedir dados sensíveis no primeiro contato.",
   ].filter((line): line is string => Boolean(line));
 
   const topicText = mainTopic ? ` sobre ${mainTopic}` : "";
@@ -1764,6 +1771,43 @@ function uniqueDisplayValues(values: unknown[], maxItems = 4) {
     if (result.length >= maxItems) break;
   }
   return result;
+}
+
+function humanizeQualificationKey(key: string) {
+  return key
+    .replace(/[_:-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildHandoffQualificationLines(qualification: QualificationStateForSummary) {
+  const slots = qualification?.slots;
+  if (!slots || typeof slots !== "object") return [];
+  const completedSlots = new Set(qualification.completedSlots ?? []);
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(slots)) {
+    if (!completedSlots.has(key)) continue;
+    const display = formatCrmDisplayValue(value);
+    if (!display) continue;
+    lines.push(`${humanizeQualificationKey(key)}: ${display}`);
+    if (lines.length >= 5) break;
+  }
+  return lines;
+}
+
+function buildHandoffQualificationNextStep(qualification: QualificationStateForSummary) {
+  if (!qualification) return null;
+  if (qualification.readyForHandoff) {
+    return "Próximo passo: confirmar disponibilidade, valores ou encaminhamento com o cliente.";
+  }
+  if (qualification.missingSlots?.length) {
+    return "Próximo passo: coletar dados pendentes antes de avançar no atendimento.";
+  }
+  if (qualification.stage === "completed") {
+    return "Próximo passo: revisar a qualificação e seguir o atendimento.";
+  }
+  return null;
 }
 
 function sanitizeCrmSummaryForDisplay(value: unknown) {

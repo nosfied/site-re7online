@@ -102,6 +102,27 @@ export type AIMemoryState = {
   lastUpdatedAt?: string;
 };
 
+export type AIQualificationStage =
+  | "idle"
+  | "collecting"
+  | "completed"
+  | "handoff_ready"
+  | "cancelled";
+
+export type AIQualificationState = {
+  enabledSnapshot?: boolean;
+  schemaVersion?: string;
+  stage?: AIQualificationStage;
+  currentSlot?: string | null;
+  slots?: Record<string, string | number | boolean | null>;
+  completedSlots?: string[];
+  missingSlots?: string[];
+  lastQuestion?: string | null;
+  readyForHandoff?: boolean;
+  outcome?: string | null;
+  updatedAt?: string;
+};
+
 export type QuoteSiteAnswers = {
   companyCity?: string;
   siteType?: string;
@@ -124,6 +145,7 @@ export type QuoteSiteAnswers = {
   };
   aiOrchestrator?: AIOrchestratorState;
   aiMemory?: AIMemoryState;
+  aiQualification?: AIQualificationState;
 };
 
 export type ConversationState = {

@@ -157,6 +157,7 @@ export type AdminAutomationSettings = {
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
   aiAssistantPresetApplied?: string;
   handoffLeadNotificationEnabled?: boolean;
   handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
@@ -206,6 +207,25 @@ export type AiAssistantIntentCatalogItem = {
   priority?: "alta" | "media" | "baixa";
   handoff?: boolean;
   tags?: string[];
+};
+
+export type AiQualificationSlot = {
+  key: string;
+  label?: string;
+  type?: "text" | "enum" | "boolean";
+  required?: boolean;
+  requiredWhen?: Record<string, string | boolean | number>;
+  allowedValues?: string[];
+  question: string;
+  captureHints?: string[];
+};
+
+export type AiQualificationSchema = {
+  enabled?: boolean;
+  schemaVersion?: string;
+  slots?: AiQualificationSlot[];
+  handoffWhen?: string[];
+  outcomes?: string[];
 };
 
 export type ConversationReportByAgentItem = {

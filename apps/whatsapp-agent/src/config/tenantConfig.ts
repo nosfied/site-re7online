@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { env } from "./env.js";
 import { logger } from "../logger/logger.js";
+import {
+  normalizeQualificationSchema,
+  type AiQualificationSchema,
+} from "../agent/qualification.js";
 
 export type TenantConfig = {
   id: string;
@@ -77,6 +81,7 @@ export type TenantConfig = {
   aiAssistantFallbackMessage?: string;
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
   crmBusinessStatuses?: CrmBusinessStatusConfig[];
   aiBusinessContext?: string;
   planName?: string;
@@ -287,6 +292,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     nextTenant.aiAssistantIntentCatalog = normalizeAiAssistantIntentCatalog(
       tenant.aiAssistantIntentCatalog
     );
+    if (tenant.aiQualification !== undefined) {
+      nextTenant.aiQualification = normalizeQualificationSchema(tenant.aiQualification);
+    }
     nextTenant.crmBusinessStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
     if (nextTenant.maxActiveAppUsers === undefined) {
       nextTenant.maxActiveAppUsers = 5;
@@ -773,6 +781,12 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         ))
     ) {
       throw new Error(`invalid_tenant_ai_assistant_intent_catalog:${key}`);
+    }
+    if (
+      tenant.aiQualification !== undefined &&
+      normalizeQualificationSchema(tenant.aiQualification) === undefined
+    ) {
+      throw new Error(`invalid_tenant_ai_qualification:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

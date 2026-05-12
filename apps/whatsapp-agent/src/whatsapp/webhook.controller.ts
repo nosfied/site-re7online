@@ -62,6 +62,10 @@ import {
   updateAiMemory,
 } from "../agent/controlledAssistant.js";
 import {
+  buildQualificationCrmArtifacts,
+  handleQualificationTurn,
+} from "../agent/qualification.js";
+import {
   parseTemplateCommand,
   resolveTemplateKey,
 } from "./templateCommand.js";
@@ -5924,6 +5928,104 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
           const risk = classifyRisk(message.text, assistantTenantContext);
+          let qualificationHandled = false;
+          if (!risk && appliedTenantConfig.aiQualification?.enabled === true) {
+            const qualificationResult = handleQualificationTurn({
+              schema: appliedTenantConfig.aiQualification,
+              state: updatedConversation.answers?.aiQualification,
+              text: message.text,
+              nowIso: new Date().toISOString(),
+            });
+            for (const entry of qualificationResult.logs) {
+              await logAiAssistantEvent(entry.event, entry.payload);
+            }
+            if (qualificationResult.state) {
+              updatedConversation = {
+                ...updatedConversation,
+                answers: {
+                  ...(updatedConversation.answers ?? {}),
+                  aiQualification: qualificationResult.state,
+                },
+              };
+              const qualificationCrm = buildQualificationCrmArtifacts({
+                state: qualificationResult.state,
+                schema: appliedTenantConfig.aiQualification,
+                answers: updatedConversation.answers,
+                nowIso: new Date().toISOString(),
+              });
+              if (qualificationCrm.flowContextPatch || qualificationCrm.flowTagsToAdd?.length) {
+                const currentTags = Array.isArray(updatedConversation.answers?.flowTags)
+                  ? updatedConversation.answers.flowTags
+                  : [];
+                const nextTags = [...currentTags];
+                for (const tag of qualificationCrm.flowTagsToAdd ?? []) {
+                  if (!nextTags.includes(tag)) nextTags.push(tag);
+                }
+                updatedConversation = {
+                  ...updatedConversation,
+                  answers: {
+                    ...(updatedConversation.answers ?? {}),
+                    flowContext: {
+                      ...(updatedConversation.answers?.flowContext ?? {}),
+                      ...(qualificationCrm.flowContextPatch ?? {}),
+                    },
+                    flowTags: nextTags,
+                  },
+                };
+                await logAiAssistantEvent("ai.qualification.crm_enriched", {
+                  changedFields: Object.keys(qualificationCrm.flowContextPatch ?? {}),
+                  tagCount: qualificationCrm.flowTagsToAdd?.length ?? 0,
+                  summaryLineCount: qualificationCrm.summaryLines?.length ?? 0,
+                  hasNextStep: Boolean(qualificationCrm.nextStep),
+                });
+                if (qualificationCrm.conflicts?.length) {
+                  await logAiAssistantEvent("ai.qualification.crm_conflict", {
+                    fields: qualificationCrm.conflicts,
+                  });
+                }
+              } else {
+                await logAiAssistantEvent("ai.qualification.crm_skipped", {
+                  reason: qualificationCrm.skippedReason ?? "no_safe_slots",
+                });
+              }
+            }
+            if (qualificationResult.replyText) {
+              if (assistantState.count >= maxReplies) {
+                await logAiAssistantEvent("ai.assistant.limit_reached", {
+                  count: assistantState.count,
+                  maxReplies,
+                  source: "qualification",
+                });
+                await applyAssistantLimitFallback("qualification");
+                qualificationHandled = true;
+              } else {
+                const nowIso = new Date().toISOString();
+                replyText = qualificationResult.replyText;
+                aiAssistantResponded = true;
+                qualificationHandled = true;
+                updatedConversation = {
+                  ...updatedConversation,
+                  answers: {
+                    ...(updatedConversation.answers ?? {}),
+                    aiAssistant: {
+                      count: assistantState.count + 1,
+                      lastRespondedAt: nowIso,
+                      lastMessageId: message.messageId,
+                      lastFallbackType: assistantState.lastFallbackType,
+                      lastFallbackAt: assistantState.lastFallbackAt,
+                      fallbackCount: assistantState.fallbackCount,
+                    },
+                  },
+                };
+                await logAiAssistantEvent("ai.assistant.responded", {
+                  source: "qualification",
+                  latency_ms: Date.now() - start,
+                  count: assistantState.count + 1,
+                  maxReplies,
+                });
+              }
+            }
+          }
           const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
           const directEducationalIntent = classifyEducationalIntent(message.text, assistantQuestionOptions);
           const contextualEducationalIntent =
@@ -5943,13 +6045,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           if (!risk) {
             await logAiAssistantEvent("ai.guardrail.skipped", { reason: "no_risk" });
           }
-          if (educationalIntent.allowed) {
+          if (!qualificationHandled && educationalIntent.allowed) {
             await logAiAssistantEvent("ai.assistant.educational_routed", {
               topic: educationalIntent.topic ?? null,
               reason: educationalIntent.reason ?? null,
             });
           }
-          const fallbackDecision = !risk
+          const fallbackDecision = !risk && !qualificationHandled
             ? classifyAssistantFallback(message.text, {
                 handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
               })
@@ -5963,7 +6065,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           const shouldSkipCatalogForTurn =
             fallbackDecision?.intent === "handoff_prompt" ||
             (contextualAckForIntent && !hasFormalHandoffPromptForIntent);
-          const tenantIntent = !risk && !shouldSkipCatalogForTurn
+          const tenantIntent = !risk && !qualificationHandled && !shouldSkipCatalogForTurn
             ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
                 preferredTopics: [
                   resolveContextualContinuationTopic(updatedConversation),
@@ -5995,7 +6097,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               repeated: isRepeatedTenantIntent,
             });
           }
-          if (tenantIntent && tenantIntentReply && !risk) {
+          if (qualificationHandled) {
+            // Qualification already responded for this turn.
+          } else if (tenantIntent && tenantIntentReply && !risk) {
             if (assistantState.count >= maxReplies) {
               await logAiAssistantEvent("ai.assistant.limit_reached", {
                 count: assistantState.count,
