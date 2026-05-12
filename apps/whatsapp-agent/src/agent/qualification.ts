@@ -901,7 +901,7 @@ export function buildHumanizedQualificationSummary(params: {
   const narrative = narrativeSentences.join(" ").replace(/\s+/g, " ").trim();
   const operatorSummary = narrative || entries.map((entry) => `${entry.label}: ${entry.value}`).join("; ");
   const suggestionContext = narrative
-    ? `Cliente já informou que ${lowerFirst(narrative).replace(/\.$/, "")}.`
+    ? `Cliente já informou: ${narrative}`
     : `Cliente já informou: ${entries.map((entry) => `${lowerFirst(entry.label)}: ${entry.value}`).join("; ")}.`;
 
   return {
