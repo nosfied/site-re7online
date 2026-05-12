@@ -218,6 +218,7 @@ export type AiQualificationSlot = {
   allowedValues?: string[];
   question: string;
   captureHints?: string[];
+  semanticAliases?: Record<string, string[]>;
   askAfter?: string[];
   crmMapping?: {
     flowContextKey?: string;
@@ -236,6 +237,7 @@ export type AiQualificationCommercialContinuation = {
 
 export type AiQualificationSchema = {
   enabled?: boolean;
+  semanticResolverEnabled?: boolean;
   schemaVersion?: string;
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];

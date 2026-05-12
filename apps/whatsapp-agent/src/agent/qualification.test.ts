@@ -9,10 +9,12 @@ import {
   normalizeQualificationSchema,
   validateQualificationSlotValue,
 } from "./qualification.js";
+import { resolveSemanticQualification } from "./semanticQualificationResolver.js";
 
 test("normalizeQualificationSchema accepts valid schema", () => {
   const schema = normalizeQualificationSchema({
     enabled: true,
+    semanticResolverEnabled: true,
     schemaVersion: "1",
     slots: [
       {
@@ -23,6 +25,9 @@ test("normalizeQualificationSchema accepts valid schema", () => {
         allowedValues: ["Atacado", "Varejo"],
         question: "Você procura atendimento para atacado ou varejo?",
         captureHints: ["atacado", "varejo"],
+        semanticAliases: {
+          Atacado: ["revenda"],
+        },
         crmMapping: {
           leadField: "service",
           leadTemp: "quente",
@@ -45,9 +50,11 @@ test("normalizeQualificationSchema accepts valid schema", () => {
     },
   });
   assert.equal(schema?.enabled, true);
+  assert.equal(schema?.semanticResolverEnabled, true);
   assert.equal(schema?.schemaVersion, "1");
   assert.equal(schema?.slots?.[0]?.key, "tipo_atendimento");
   assert.deepEqual(schema?.slots?.[0]?.allowedValues, ["Atacado", "Varejo"]);
+  assert.deepEqual(schema?.slots?.[0]?.semanticAliases, { Atacado: ["revenda"] });
   assert.deepEqual(schema?.slots?.[0]?.crmMapping, {
     leadField: "service",
     leadTemp: "quente",
@@ -729,4 +736,151 @@ test("buildHumanizedQualificationSummary uses configured labels without tenant h
   assert.match(result.operatorSummary ?? "", /Acme Ltda/i);
   assert.match(result.operatorSummary ?? "", /implantacao/i);
   assert.doesNotMatch(result.operatorSummary ?? "", /varejo|atacado|blusa|vestido/i);
+});
+
+test("resolveSemanticQualification maps semantic commercial phrases only to configured enum values", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [
+      {
+        key: "duvida_principal",
+        type: "enum",
+        allowedValues: ["catalogo", "valores", "disponibilidade"],
+        semanticAliases: {
+          catalogo: ["modelos", "opções", "novidades"],
+          valores: ["quanto fica", "quanto custa"],
+          disponibilidade: ["tem peça nova", "tem disponível"],
+        },
+        question: "O que deseja confirmar?",
+      },
+    ],
+  })!;
+  const currentSlot = schema.slots![0]!;
+
+  assert.deepEqual(
+    {
+      intent: resolveSemanticQualification({
+        text: "quero ver os modelos novos",
+        schema,
+        currentSlot,
+      }).intent,
+      value: resolveSemanticQualification({
+        text: "quero ver os modelos novos",
+        schema,
+        currentSlot,
+      }).normalizedValue,
+    },
+    { intent: "answer_slot", value: "catalogo" }
+  );
+  assert.equal(
+    resolveSemanticQualification({ text: "tem peça nova?", schema, currentSlot }).normalizedValue,
+    "disponibilidade"
+  );
+  assert.equal(
+    resolveSemanticQualification({ text: "quanto fica?", schema, currentSlot }).normalizedValue,
+    "valores"
+  );
+});
+
+test("resolveSemanticQualification treats positive ack in enum as ambiguous", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+      },
+    ],
+  })!;
+  const result = resolveSemanticQualification({
+    text: "sim",
+    schema,
+    currentSlot: schema.slots![0],
+  });
+  assert.equal(result.intent, "ambiguous");
+  assert.equal(result.shouldAskClarification, true);
+});
+
+test("resolveSemanticQualification prioritizes negative and handoff requests", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [{ key: "detalhe", question: "Qual detalhe?" }],
+  })!;
+  assert.equal(
+    resolveSemanticQualification({
+      text: "não quero atendimento",
+      schema,
+      currentSlot: schema.slots![0],
+    }).intent,
+    "negative"
+  );
+  assert.equal(
+    resolveSemanticQualification({
+      text: "quero falar com vendedora",
+      schema,
+      currentSlot: schema.slots![0],
+      handoffKeywords: ["vendedora"],
+    }).intent,
+    "handoff_request"
+  );
+});
+
+test("handleQualificationTurn uses semantic resolver only when enabled", () => {
+  const baseSchema = {
+    enabled: true,
+    slots: [
+      {
+        key: "duvida",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["catalogo", "valores"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+        },
+        question: "Catálogo ou valores?",
+      },
+    ],
+  };
+  const disabled = handleQualificationTurn({
+    schema: baseSchema,
+    state: getInitialQualificationState(baseSchema),
+    text: "quero ver os modelos",
+  });
+  assert.equal(disabled.state?.slots?.duvida, undefined);
+
+  const enabledSchema = { ...baseSchema, semanticResolverEnabled: true };
+  const enabled = handleQualificationTurn({
+    schema: enabledSchema,
+    state: getInitialQualificationState(enabledSchema),
+    text: "quero ver os modelos",
+  });
+  assert.equal(enabled.state?.slots?.duvida, "catalogo");
+  assert.equal(
+    enabled.logs.some((entry) => entry.event === "ai.semantic.resolve.accepted"),
+    true
+  );
+});
+
+test("resolveSemanticQualification accepts useful text for current text slot", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [{ key: "produto", question: "Produto?" }],
+  })!;
+  const result = resolveSemanticQualification({
+    text: "blusa social preta tamanho g",
+    schema,
+    currentSlot: schema.slots![0],
+  });
+  assert.equal(result.intent, "answer_slot");
+  assert.equal(result.slotKey, "produto");
+  assert.equal(result.normalizedValue, "blusa social preta tamanho g");
 });

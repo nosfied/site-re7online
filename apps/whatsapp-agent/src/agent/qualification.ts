@@ -3,6 +3,12 @@ import type {
   FlowContext,
   QuoteSiteAnswers,
 } from "../conversation/conversation.types.js";
+import {
+  resolveSemanticQualification,
+  SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE,
+  SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE,
+  type SemanticQualificationResolution,
+} from "./semanticQualificationResolver.js";
 
 export type AiQualificationSlot = {
   key: string;
@@ -13,6 +19,7 @@ export type AiQualificationSlot = {
   allowedValues?: string[];
   question: string;
   captureHints?: string[];
+  semanticAliases?: Record<string, string[]>;
   askAfter?: string[];
   crmMapping?: {
     flowContextKey?: string;
@@ -31,6 +38,7 @@ export type AiQualificationCommercialContinuation = {
 
 export type AiQualificationSchema = {
   enabled?: boolean;
+  semanticResolverEnabled?: boolean;
   schemaVersion?: string;
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];
@@ -233,6 +241,24 @@ function normalizeRequiredWhen(input: unknown): Record<string, string | boolean 
   return Object.keys(normalized).length ? normalized : undefined;
 }
 
+function normalizeSemanticAliases(input: unknown, allowedValues: string[]) {
+  if (!input || typeof input !== "object" || Array.isArray(input) || !allowedValues.length) {
+    return undefined;
+  }
+  const allowedByToken = new Map(allowedValues.map((value) => [normalizeToken(value, 80), value]));
+  const normalized: Record<string, string[]> = {};
+  for (const [rawKey, rawList] of Object.entries(input as Record<string, unknown>).slice(0, 40)) {
+    const allowedValue = allowedByToken.get(normalizeToken(rawKey, 80));
+    if (!allowedValue) continue;
+    const aliases = normalizeStringList(rawList, 30, 120).filter((alias) => {
+      const token = normalizeToken(alias, 80);
+      return token && !SENSITIVE_KEYS.has(token);
+    });
+    if (aliases.length) normalized[allowedValue] = aliases;
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
 export function normalizeQualificationSchema(input: unknown): AiQualificationSchema | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const raw = input as Record<string, unknown>;
@@ -259,6 +285,8 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
           : "text";
       const allowedValues =
         type === "enum" ? normalizeStringList(slot.allowedValues, 40, 120) : [];
+      const semanticAliases =
+        type === "enum" ? normalizeSemanticAliases(slot.semanticAliases, allowedValues) : undefined;
       const requiredWhen = normalizeRequiredWhen(slot.requiredWhen);
       const askAfter = normalizeTokenList(slot.askAfter, 20, 60).filter(
         (item) => !SENSITIVE_KEYS.has(item)
@@ -277,6 +305,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
         ...(Array.isArray(slot.captureHints)
           ? { captureHints: normalizeStringList(slot.captureHints, 20, 120) }
           : {}),
+        ...(semanticAliases ? { semanticAliases } : {}),
         ...(askAfter.length ? { askAfter } : {}),
         ...(crmMapping ? { crmMapping } : {}),
       });
@@ -284,6 +313,9 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
   }
   const schema: AiQualificationSchema = {
     ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {}),
+    ...(typeof raw.semanticResolverEnabled === "boolean"
+      ? { semanticResolverEnabled: raw.semanticResolverEnabled }
+      : {}),
     ...(typeof raw.schemaVersion === "string" && raw.schemaVersion.trim()
       ? { schemaVersion: normalizeDisplayString(raw.schemaVersion, 40) }
       : {}),
@@ -472,7 +504,13 @@ export type QualificationTurnLog =
   | { event: "ai.qualification.slot_captured"; payload: Record<string, unknown> }
   | { event: "ai.qualification.ask_next"; payload: Record<string, unknown> }
   | { event: "ai.qualification.completed"; payload: Record<string, unknown> }
-  | { event: "ai.qualification.skipped"; payload: Record<string, unknown> };
+  | { event: "ai.qualification.skipped"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.started"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.result"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.low_confidence"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.clarification"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.accepted"; payload: Record<string, unknown> }
+  | { event: "ai.semantic.resolve.rejected"; payload: Record<string, unknown> };
 
 export type QualificationTurnResult = {
   enabled: boolean;
@@ -544,6 +582,18 @@ function shouldMarkReadyForHandoff(schema: AiQualificationSchema, state: AIQuali
   return Boolean(schema.handoffWhen?.some((item) => qualificationExpressionMatches(item, state)));
 }
 
+function buildSemanticConfirmationReply(
+  resolution: SemanticQualificationResolution,
+  slot?: AiQualificationSlot | null
+) {
+  if (resolution.safeReply?.trim()) return resolution.safeReply.trim();
+  if (resolution.intent === "answer_slot" && resolution.normalizedValue) {
+    const label = slot?.label?.trim() || humanizeSlotKey(slot?.key ?? "informação");
+    return `Só para confirmar: ${label}: ${resolution.normalizedValue}?`;
+  }
+  return slot?.question || "Pode me confirmar em poucas palavras para eu continuar?";
+}
+
 export function handleQualificationTurn(params: {
   schema?: AiQualificationSchema | null;
   state?: AIQualificationState | null;
@@ -607,6 +657,7 @@ export function handleQualificationTurn(params: {
 
   const continuation = schema?.commercialContinuation;
   const capture = deterministicSlotCapture(currentSlot, params.text, params.handoffKeywords);
+  let semanticCaptured = false;
   if (capture.captured) {
     const completedSlots = new Set(state.completedSlots ?? []);
     completedSlots.add(currentSlot.key);
@@ -631,6 +682,247 @@ export function handleQualificationTurn(params: {
       event: "ai.qualification.slot_captured",
       payload: { slot: currentSlot.key, type: currentSlot.type ?? "text" },
     });
+  } else if (schema?.semanticResolverEnabled === true) {
+    logs.push({
+      event: "ai.semantic.resolve.started",
+      payload: { currentSlot: currentSlot.key, slotType: currentSlot.type ?? "text" },
+    });
+    const resolution = resolveSemanticQualification({
+      text: params.text,
+      currentSlot,
+      schema,
+      state,
+      handoffKeywords: params.handoffKeywords,
+    });
+    const confidence = typeof resolution.confidence === "number" ? resolution.confidence : 0;
+    logs.push({
+      event: "ai.semantic.resolve.result",
+      payload: {
+        intent: resolution.intent,
+        slot: resolution.slotKey ?? null,
+        confidence,
+        shouldAskClarification: resolution.shouldAskClarification === true,
+      },
+    });
+
+    if (confidence < SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+      logs.push({
+        event: "ai.semantic.resolve.low_confidence",
+        payload: { intent: resolution.intent, confidence },
+      });
+    } else if (resolution.intent === "handoff_request") {
+      state = {
+        ...state,
+        stage: "handoff_ready",
+        readyForHandoff: true,
+        updatedAt: nowIso,
+      };
+      logs.push({
+        event: "ai.semantic.resolve.accepted",
+        payload: { intent: resolution.intent, confidence },
+      });
+      return { enabled: true, handled: false, state, logs };
+    } else if (
+      resolution.intent === "negative" &&
+      currentSlot.askAfter?.length &&
+      continuation?.enabled === true
+    ) {
+      const completedSlots = new Set(state.completedSlots ?? []);
+      completedSlots.add(currentSlot.key);
+      state = {
+        ...state,
+        stage: "collecting",
+        currentSlot: null,
+        completedSlots: [...completedSlots],
+        missingSlots: missingRequiredSlots(schema!, state),
+        lastQuestion: null,
+        updatedAt: nowIso,
+      };
+      const nextSlot = getNextQualificationSlot(schema, state);
+      state = {
+        ...state,
+        currentSlot: nextSlot?.key ?? null,
+        lastQuestion: nextSlot?.question ?? null,
+      };
+      logs.push({
+        event: "ai.semantic.resolve.accepted",
+        payload: { intent: resolution.intent, slot: currentSlot.key, confidence },
+      });
+      return {
+        enabled: true,
+        handled: true,
+        state,
+        replyText: continuation.negativeReply?.trim() || "Tudo bem. Posso continuar te ajudando por aqui.",
+        logs,
+      };
+    } else if (resolution.intent === "ambiguous" && currentSlot.type === "enum") {
+      state = {
+        ...state,
+        stage: "collecting",
+        currentSlot: currentSlot.key,
+        missingSlots: [currentSlot.key],
+        lastQuestion: currentSlot.question,
+        updatedAt: nowIso,
+      };
+      logs.push({
+        event: "ai.semantic.resolve.clarification",
+        payload: { intent: resolution.intent, slot: currentSlot.key, confidence },
+      });
+      return {
+        enabled: true,
+        handled: true,
+        state,
+        replyText:
+          continuation?.ambiguousEnumReply?.trim() ||
+          resolution.safeReply?.trim() ||
+          currentSlot.question ||
+          DEFAULT_AMBIGUOUS_ENUM_REPLY,
+        logs,
+      };
+    } else if (resolution.intent === "answer_slot" && resolution.slotKey) {
+      const targetSlot = slotByKey.get(resolution.slotKey) ?? null;
+      const targetValue = resolution.normalizedValue;
+      const currentSlotIsRequired = Boolean(currentSlot.required || currentSlot.requiredWhen);
+      const canUseTargetSlot =
+        targetSlot &&
+        targetValue !== undefined &&
+        targetValue !== null &&
+        (targetSlot.key === currentSlot.key || !currentSlotIsRequired);
+      const validation = canUseTargetSlot
+        ? validateQualificationSlotValue(targetSlot!, targetSlot?.type === "boolean" ? targetValue === "true" : targetValue)
+        : { ok: false as const, reason: "invalid_slot" };
+      if (canUseTargetSlot && validation.ok && confidence >= SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE) {
+        const completedSlots = new Set(state.completedSlots ?? []);
+        if (targetSlot!.key !== currentSlot.key && currentSlot.askAfter?.length) {
+          completedSlots.add(currentSlot.key);
+        }
+        completedSlots.add(targetSlot!.key);
+        state = {
+          ...state,
+          stage: "collecting",
+          slots: {
+            ...(state.slots ?? {}),
+            [targetSlot!.key]: validation.value,
+          },
+          completedSlots: [...completedSlots],
+          updatedAt: nowIso,
+        };
+        state = {
+          ...state,
+          readyForHandoff:
+            Boolean(schema?.handoffWhen?.includes(targetSlot!.key)) ||
+            Boolean(schema?.handoffWhen?.includes(normalizeToken(validation.value, 80))) ||
+            shouldMarkReadyForHandoff(schema!, state),
+        };
+        semanticCaptured = true;
+        logs.push({
+          event: "ai.semantic.resolve.accepted",
+          payload: {
+            intent: resolution.intent,
+            slot: targetSlot!.key,
+            confidence,
+            threshold: SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE,
+          },
+        });
+        logs.push({
+          event: "ai.qualification.slot_captured",
+          payload: { slot: targetSlot!.key, type: targetSlot!.type ?? "text", source: "semantic" },
+        });
+      } else if (canUseTargetSlot && validation.ok && confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+        state = {
+          ...state,
+          stage: "collecting",
+          currentSlot: targetSlot!.key,
+          missingSlots: [targetSlot!.key],
+          lastQuestion: targetSlot!.question,
+          updatedAt: nowIso,
+        };
+        logs.push({
+          event: "ai.semantic.resolve.clarification",
+          payload: {
+            intent: resolution.intent,
+            slot: targetSlot!.key,
+            confidence,
+            threshold: SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE,
+          },
+        });
+        return {
+          enabled: true,
+          handled: true,
+          state,
+          replyText: buildSemanticConfirmationReply(resolution, targetSlot),
+          logs,
+        };
+      } else {
+        logs.push({
+          event: "ai.semantic.resolve.rejected",
+          payload: {
+            intent: resolution.intent,
+            slot: resolution.slotKey,
+            confidence,
+            reason: validation.reason ?? "invalid_slot",
+          },
+        });
+      }
+    } else if (resolution.shouldAskClarification && confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+      logs.push({
+        event: "ai.semantic.resolve.clarification",
+        payload: {
+          intent: resolution.intent,
+          slot: currentSlot.key,
+          confidence,
+          reason: resolution.clarificationReason ?? null,
+        },
+      });
+      return {
+        enabled: true,
+        handled: true,
+        state: {
+          ...state,
+          stage: "collecting",
+          currentSlot: currentSlot.key,
+          missingSlots: [currentSlot.key],
+          lastQuestion: currentSlot.question,
+          updatedAt: nowIso,
+        },
+        replyText: resolution.safeReply?.trim() || currentSlot.question,
+        logs,
+      };
+    } else if (confidence >= SEMANTIC_QUALIFICATION_CONFIRM_CONFIDENCE) {
+      logs.push({
+        event: "ai.semantic.resolve.rejected",
+        payload: { intent: resolution.intent, confidence, reason: "not_actionable" },
+      });
+    }
+    if (!semanticCaptured) {
+      if (!state.lastQuestion || state.lastQuestion !== currentSlot.question) {
+        state = {
+          ...state,
+          stage: "collecting",
+          currentSlot: currentSlot.key,
+          missingSlots: [currentSlot.key],
+          lastQuestion: currentSlot.question,
+          updatedAt: nowIso,
+        };
+        logs.push({
+          event: "ai.qualification.ask_next",
+          payload: { slot: currentSlot.key, reason: capture.reason ?? "ask_current" },
+        });
+        return { enabled: true, handled: true, state, replyText: currentSlot.question, logs };
+      }
+      state = {
+        ...state,
+        stage: "collecting",
+        currentSlot: currentSlot.key,
+        missingSlots: [currentSlot.key],
+        updatedAt: nowIso,
+      };
+      logs.push({
+        event: "ai.qualification.skipped",
+        payload: { reason: capture.reason ?? "not_captured", slot: currentSlot.key },
+      });
+      return { enabled: true, handled: false, state, logs };
+    }
   } else if (
     currentSlot.type === "enum" &&
     isPositiveOnlyText(params.text) &&
