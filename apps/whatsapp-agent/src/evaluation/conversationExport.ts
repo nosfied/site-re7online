@@ -205,12 +205,18 @@ export function buildConversationEvaluationCandidate(params: {
       inbound: anonymizer.anonymizeText(message.bodyText),
       ...(index === items.length - 1 && expected ? { expected } : {}),
     }));
-  const summary = [
+  const rawSummary = [
     answers.aiMemory?.summary,
     ...source.leadNotes.slice(-3).map((note) => note.body),
   ]
-    .map((item) => anonymizer.anonymizeText(item))
+    .map((item) => normalizeText(item))
     .filter(Boolean);
+  const summary =
+    params.anonymize === false
+      ? rawSummary.map((item) => anonymizer.anonymizeText(item)).filter(Boolean)
+      : rawSummary.length
+        ? ["[resumo anonimizado]"]
+        : [];
 
   return {
     id: `candidate-${params.tenantKey}-${anonymizer.sourceRef(source.runtime.waIdCanonical ?? source.runtime.waId)}`,
