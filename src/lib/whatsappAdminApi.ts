@@ -218,6 +218,13 @@ export type AiQualificationSlot = {
   allowedValues?: string[];
   question: string;
   captureHints?: string[];
+  askAfter?: string[];
+  crmMapping?: {
+    flowContextKey?: string;
+    leadTemp?: "frio" | "morno" | "quente";
+    priority?: "baixa" | "media" | "alta";
+    whenValue?: string[];
+  };
 };
 
 export type AiQualificationSchema = {

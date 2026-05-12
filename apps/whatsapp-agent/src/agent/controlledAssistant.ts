@@ -1557,6 +1557,9 @@ export function buildAiHandoffCrmArtifacts(
   const memorySummary = sanitizeCrmSummaryForDisplay(memory?.summary);
   const qualificationLines = buildHandoffQualificationLines(answers.aiQualification);
   const qualificationNextStep = buildHandoffQualificationNextStep(answers.aiQualification);
+  const qualificationSummaryText = qualificationLines.length
+    ? qualificationLines.join("; ")
+    : null;
   const missingInfo = uniqueDisplayValues(
     (orchestrator?.missingInformation ?? []).filter((item) =>
       isMissingInformationRelevantToTopic(item, mainTopic)
@@ -1593,9 +1596,12 @@ export function buildAiHandoffCrmArtifacts(
   const firstQuestion = missingInfo[0]
     ? `Para começar, posso confirmar ${missingInfo[0]} e entender o melhor próximo passo.`
     : "Para começar, vou confirmar o objetivo do atendimento e orientar os próximos passos.";
+  const intro = qualificationSummaryText
+    ? `Olá, tudo bem? Vi que você pediu atendimento com a equipe. Já identifiquei: ${qualificationSummaryText}. Vou revisar essas informações e te orientar com segurança.`
+    : `Olá, tudo bem? Vi que você pediu atendimento com a equipe${topicText}. Vou revisar o contexto que já foi informado e te orientar com segurança.`;
   const suggestedReply = [
     "[Sugestão de resposta]",
-    `Olá, tudo bem? Vi que você pediu atendimento com a equipe${topicText}. Vou revisar o contexto que já foi informado e te orientar com segurança.`,
+    intro,
     firstQuestion,
   ].join("\n");
 

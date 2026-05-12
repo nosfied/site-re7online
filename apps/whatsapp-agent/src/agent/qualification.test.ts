@@ -22,6 +22,16 @@ test("normalizeQualificationSchema accepts valid schema", () => {
         allowedValues: ["Atacado", "Varejo"],
         question: "Você procura atendimento para atacado ou varejo?",
         captureHints: ["atacado", "varejo"],
+        crmMapping: {
+          leadTemp: "quente",
+          priority: "alta",
+          whenValue: ["atacado"],
+        },
+      },
+      {
+        key: "detalhe",
+        question: "Qual detalhe?",
+        askAfter: ["tipo atendimento"],
       },
     ],
     handoffWhen: ["catalogo_solicitado"],
@@ -31,6 +41,12 @@ test("normalizeQualificationSchema accepts valid schema", () => {
   assert.equal(schema?.schemaVersion, "1");
   assert.equal(schema?.slots?.[0]?.key, "tipo_atendimento");
   assert.deepEqual(schema?.slots?.[0]?.allowedValues, ["Atacado", "Varejo"]);
+  assert.deepEqual(schema?.slots?.[0]?.crmMapping, {
+    leadTemp: "quente",
+    priority: "alta",
+    whenValue: ["atacado"],
+  });
+  assert.deepEqual(schema?.slots?.[1]?.askAfter, ["tipo_atendimento"]);
   assert.equal(isQualificationEnabled(schema), true);
 });
 
@@ -259,6 +275,76 @@ test("handleQualificationTurn completes required slots without automatic handoff
   assert.equal(result.state?.readyForHandoff, true);
 });
 
+test("handleQualificationTurn asks and captures optional follow-up slots declared with askAfter", () => {
+  const schema = {
+    enabled: true,
+    slots: [
+      {
+        key: "tipo_atendimento",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["atacado", "varejo"],
+        question: "Atacado ou varejo?",
+      },
+      {
+        key: "produto_interesse",
+        required: true,
+        question: "Qual produto?",
+      },
+      {
+        key: "detalhe_produto",
+        question: "Qual detalhe?",
+        askAfter: ["produto_interesse"],
+      },
+    ],
+  };
+  const afterType = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema, "2026-05-12T10:00:00.000Z"),
+    text: "varejo",
+  });
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: afterType.state,
+    text: "blusa branca",
+  });
+  assert.equal(afterProduct.handled, true);
+  assert.equal(afterProduct.replyText, "Qual detalhe?");
+  assert.equal(afterProduct.state?.currentSlot, "detalhe_produto");
+
+  const afterDetail = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "varias cores e tamanhos",
+  });
+  assert.equal(afterDetail.state?.slots?.detalhe_produto, "varias cores e tamanhos");
+  assert.equal(afterDetail.state?.stage, "completed");
+});
+
+test("handleQualificationTurn marks handoff_ready from generic handoff expressions without activating handoff", () => {
+  const schema = {
+    enabled: true,
+    handoffWhen: ["all:produto_interesse+detalhe_produto"],
+    slots: [
+      { key: "produto_interesse", required: true, question: "Qual produto?" },
+      { key: "detalhe_produto", askAfter: ["produto_interesse"], question: "Qual detalhe?" },
+    ],
+  };
+  const product = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "vestido",
+  });
+  const detail = handleQualificationTurn({
+    schema,
+    state: product.state,
+    text: "varias cores",
+  });
+  assert.equal(detail.handled, false);
+  assert.equal(detail.state?.stage, "handoff_ready");
+  assert.equal(detail.state?.readyForHandoff, true);
+});
+
 test("buildQualificationCrmArtifacts creates human summary lines from captured slots", () => {
   const state = {
     enabledSnapshot: true,
@@ -305,6 +391,62 @@ test("buildQualificationCrmArtifacts creates human summary lines from captured s
   ]);
 });
 
+test("buildQualificationCrmArtifacts applies crmMapping rank escalation safely", () => {
+  const artifacts = buildQualificationCrmArtifacts({
+    state: {
+      stage: "completed",
+      slots: { tipo_atendimento: "atacado" },
+      completedSlots: ["tipo_atendimento"],
+      missingSlots: [],
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "tipo_atendimento",
+          label: "Tipo de atendimento",
+          question: "Tipo?",
+          crmMapping: {
+            leadTemp: "quente",
+            priority: "alta",
+            whenValue: ["atacado"],
+          },
+        },
+      ],
+    },
+    answers: { flowContext: { lead_temp: "morno", prioridade: "media" } },
+  });
+  assert.equal(artifacts.flowContextPatch?.lead_temp, "quente");
+  assert.equal(artifacts.flowContextPatch?.prioridade, "alta");
+});
+
+test("buildQualificationCrmArtifacts does not apply crmMapping when value condition does not match", () => {
+  const artifacts = buildQualificationCrmArtifacts({
+    state: {
+      stage: "completed",
+      slots: { tipo_atendimento: "varejo" },
+      completedSlots: ["tipo_atendimento"],
+      missingSlots: [],
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "tipo_atendimento",
+          question: "Tipo?",
+          crmMapping: {
+            leadTemp: "quente",
+            priority: "alta",
+            whenValue: ["atacado"],
+          },
+        },
+      ],
+    },
+  });
+  assert.equal(artifacts.flowContextPatch?.lead_temp, undefined);
+  assert.equal(artifacts.flowContextPatch?.prioridade, undefined);
+});
+
 test("buildQualificationCrmArtifacts preserves existing flowContext values and records conflicts", () => {
   const artifacts = buildQualificationCrmArtifacts({
     state: {
@@ -349,8 +491,14 @@ test("buildQualificationCrmArtifacts adds metadata with missing and handoff read
     missingSlots: ["produto"],
     outcome: "lead_atacado",
     readyForHandoff: true,
+    summaryLines: ["Tipo: atacado"],
+    nextStep:
+      "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial.",
   });
-  assert.equal(artifacts.nextStep, "Confirmar disponibilidade, valores ou encaminhamento com o cliente.");
+  assert.equal(
+    artifacts.nextStep,
+    "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial."
+  );
 });
 
 test("buildQualificationCrmArtifacts does not put sensitive values in tags or context", () => {

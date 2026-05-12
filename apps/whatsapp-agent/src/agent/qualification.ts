@@ -13,6 +13,13 @@ export type AiQualificationSlot = {
   allowedValues?: string[];
   question: string;
   captureHints?: string[];
+  askAfter?: string[];
+  crmMapping?: {
+    flowContextKey?: string;
+    leadTemp?: "frio" | "morno" | "quente";
+    priority?: "baixa" | "media" | "alta";
+    whenValue?: string[];
+  };
 };
 
 export type AiQualificationSchema = {
@@ -102,6 +109,49 @@ function normalizeTokenList(input: unknown, maxItems: number, maxLength: number)
   ];
 }
 
+function normalizeHandoffWhenList(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return [
+    ...new Set(
+      input
+        .map((item) => {
+          const value = normalizeDisplayString(item, 120)
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/\s+/g, "");
+          if (!value) return "";
+          if (/^(all|when):[a-z0-9_:+\-=\s]+$/.test(value)) return value;
+          return normalizeToken(value, 80);
+        })
+        .filter(Boolean)
+        .slice(0, 40)
+    ),
+  ];
+}
+
+function normalizeCrmMapping(input: unknown): AiQualificationSlot["crmMapping"] | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const raw = input as Record<string, unknown>;
+  const flowContextKey = normalizeToken(raw.flowContextKey, 60);
+  const leadTemp =
+    raw.leadTemp === "frio" || raw.leadTemp === "morno" || raw.leadTemp === "quente"
+      ? raw.leadTemp
+      : undefined;
+  const priority =
+    raw.priority === "baixa" || raw.priority === "media" || raw.priority === "alta"
+      ? raw.priority
+      : undefined;
+  const whenValue = normalizeStringList(raw.whenValue, 20, 120);
+  const mapping: NonNullable<AiQualificationSlot["crmMapping"]> = {
+    ...(flowContextKey && !SENSITIVE_KEYS.has(flowContextKey) ? { flowContextKey } : {}),
+    ...(leadTemp ? { leadTemp } : {}),
+    ...(priority ? { priority } : {}),
+    ...(whenValue.length ? { whenValue } : {}),
+  };
+  return Object.keys(mapping).length ? mapping : undefined;
+}
+
 function normalizeRequiredWhen(input: unknown): Record<string, string | boolean | number> | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const entries = Object.entries(input as Record<string, unknown>).slice(0, 10);
@@ -147,6 +197,10 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
       const allowedValues =
         type === "enum" ? normalizeStringList(slot.allowedValues, 40, 120) : [];
       const requiredWhen = normalizeRequiredWhen(slot.requiredWhen);
+      const askAfter = normalizeTokenList(slot.askAfter, 20, 60).filter(
+        (item) => !SENSITIVE_KEYS.has(item)
+      );
+      const crmMapping = normalizeCrmMapping(slot.crmMapping);
       slots.push({
         key,
         ...(typeof slot.label === "string" && slot.label.trim()
@@ -160,6 +214,8 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
         ...(Array.isArray(slot.captureHints)
           ? { captureHints: normalizeStringList(slot.captureHints, 20, 120) }
           : {}),
+        ...(askAfter.length ? { askAfter } : {}),
+        ...(crmMapping ? { crmMapping } : {}),
       });
     }
   }
@@ -169,9 +225,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
       ? { schemaVersion: normalizeDisplayString(raw.schemaVersion, 40) }
       : {}),
     ...(slots.length ? { slots } : {}),
-    ...(Array.isArray(raw.handoffWhen)
-      ? { handoffWhen: normalizeTokenList(raw.handoffWhen, 40, 80) }
-      : {}),
+    ...(Array.isArray(raw.handoffWhen) ? { handoffWhen: normalizeHandoffWhenList(raw.handoffWhen) } : {}),
     ...(Array.isArray(raw.outcomes)
       ? { outcomes: normalizeTokenList(raw.outcomes, 40, 80) }
       : {}),
@@ -197,13 +251,17 @@ export function getNextQualificationSlot(
   const normalized = normalizeQualificationSchema(schema);
   if (!normalized?.slots?.length) return null;
   const completed = new Set(state?.completedSlots ?? []);
-  for (const slot of normalized.slots) {
-    if (completed.has(slot.key)) continue;
-    if (!slot.required && !slot.requiredWhen) continue;
-    if (!slotApplies(slot, state)) continue;
-    return slot;
-  }
-  return null;
+  const findSlot = (predicate: (slot: AiQualificationSlot) => boolean) => {
+    for (const slot of normalized.slots ?? []) {
+      if (completed.has(slot.key)) continue;
+      if (!slotApplies(slot, state)) continue;
+      if (predicate(slot)) return slot;
+    }
+    return null;
+  };
+  const requiredSlot = findSlot((slot) => Boolean(slot.required || slot.requiredWhen));
+  if (requiredSlot) return requiredSlot;
+  return findSlot((slot) => Boolean(slot.askAfter?.some((key) => completed.has(key))));
 }
 
 export function getInitialQualificationState(
@@ -327,6 +385,38 @@ function missingRequiredSlots(schema: AiQualificationSchema, state: AIQualificat
     .map((slot) => slot.key);
 }
 
+function qualificationExpressionMatches(expression: string, state: AIQualificationState) {
+  const completed = new Set(state.completedSlots ?? []);
+  const normalizedExpression = normalizeDisplayString(expression, 160)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (!normalizedExpression) return false;
+  if (normalizedExpression.startsWith("all:")) {
+    return normalizedExpression
+      .slice("all:".length)
+      .split("+")
+      .filter(Boolean)
+      .every((key) => completed.has(normalizeToken(key, 60)));
+  }
+  if (normalizedExpression.startsWith("when:")) {
+    const [condition, ...requiredSlots] = normalizedExpression.slice("when:".length).split("+");
+    const [rawKey, expected] = condition.split("=");
+    const key = normalizeToken(rawKey, 60);
+    if (!key || !expected || normalizeComparable(state.slots?.[key]) !== normalizeComparable(expected)) {
+      return false;
+    }
+    return requiredSlots.filter(Boolean).every((slotKey) => completed.has(normalizeToken(slotKey, 60)));
+  }
+  return completed.has(normalizeToken(normalizedExpression, 60));
+}
+
+function shouldMarkReadyForHandoff(schema: AiQualificationSchema, state: AIQualificationState) {
+  if (state.readyForHandoff === true) return true;
+  return Boolean(schema.handoffWhen?.some((item) => qualificationExpressionMatches(item, state)));
+}
+
 export function handleQualificationTurn(params: {
   schema?: AiQualificationSchema | null;
   state?: AIQualificationState | null;
@@ -391,10 +481,6 @@ export function handleQualificationTurn(params: {
   if (capture.captured) {
     const completedSlots = new Set(state.completedSlots ?? []);
     completedSlots.add(currentSlot.key);
-    const readyForHandoff =
-      state.readyForHandoff === true ||
-      Boolean(schema?.handoffWhen?.includes(currentSlot.key)) ||
-      Boolean(schema?.handoffWhen?.includes(normalizeToken(capture.value, 80)));
     state = {
       ...state,
       stage: "collecting",
@@ -403,8 +489,14 @@ export function handleQualificationTurn(params: {
         [currentSlot.key]: capture.value,
       },
       completedSlots: [...completedSlots],
-      readyForHandoff,
       updatedAt: nowIso,
+    };
+    state = {
+      ...state,
+      readyForHandoff:
+        Boolean(schema?.handoffWhen?.includes(currentSlot.key)) ||
+        Boolean(schema?.handoffWhen?.includes(normalizeToken(capture.value, 80))) ||
+        shouldMarkReadyForHandoff(schema!, state),
     };
     logs.push({
       event: "ai.qualification.slot_captured",
@@ -452,7 +544,10 @@ export function handleQualificationTurn(params: {
     };
     logs.push({
       event: "ai.qualification.ask_next",
-      payload: { slot: nextSlot.key, reason: "next_required_slot" },
+      payload: {
+        slot: nextSlot.key,
+        reason: nextSlot.askAfter?.length ? "next_followup_slot" : "next_required_slot",
+      },
     });
     return { enabled: true, handled: true, state, replyText: nextSlot.question, logs };
   }
@@ -498,15 +593,48 @@ function isSafeCrmSlotValue(value: unknown): value is string | number | boolean 
   return Boolean(text) && !containsSensitiveText(text);
 }
 
+const LEAD_TEMP_RANK: Record<"frio" | "morno" | "quente", number> = {
+  frio: 1,
+  morno: 2,
+  quente: 3,
+};
+
+const PRIORITY_RANK: Record<"baixa" | "media" | "alta", number> = {
+  baixa: 1,
+  media: 2,
+  alta: 3,
+};
+
+function crmMappingApplies(slot: AiQualificationSlot, value: unknown) {
+  const whenValue = slot.crmMapping?.whenValue;
+  if (!whenValue?.length) return true;
+  const normalizedValue = normalizeComparable(value);
+  return whenValue.some((item) => {
+    const normalizedItem = normalizeComparable(item);
+    return normalizedValue === normalizedItem || hasTokenMatch(` ${normalizedValue} `, normalizedItem);
+  });
+}
+
+function shouldApplyRankedCrmValue<T extends string>(
+  currentValue: unknown,
+  nextValue: T,
+  rank: Record<T, number>
+) {
+  if (!hasFlowContextValue(currentValue)) return true;
+  const currentToken = normalizeToken(currentValue, 40) as T;
+  if (!Object.prototype.hasOwnProperty.call(rank, currentToken)) return false;
+  return rank[nextValue] > rank[currentToken];
+}
+
 function buildQualificationNextStep(state: AIQualificationState) {
   if (state.readyForHandoff) {
-    return "Confirmar disponibilidade, valores ou encaminhamento com o cliente.";
+    return "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial.";
   }
   if (state.missingSlots?.length) {
-    return "Coletar dados pendentes antes do atendimento humano.";
+    return "Completar a qualificação pendente antes de avançar no atendimento.";
   }
   if (state.stage === "completed") {
-    return "Cliente qualificado; revisar interesse e seguir atendimento.";
+    return "Cliente qualificado; revisar interesse e seguir atendimento comercial.";
   }
   return null;
 }
@@ -543,13 +671,33 @@ export function buildQualificationCrmArtifacts(params: {
     const label = slot.label ? normalizeDisplayString(slot.label, 80) : humanizeSlotKey(normalizedKey);
     summaryLines.push(`${label}: ${displayValue}`);
     tags.add(`qualification:slot:${normalizedKey}`);
-    if (hasFlowContextValue(currentContext[normalizedKey])) {
-      conflicts.push(normalizedKey);
-      continue;
+    const contextKey = slot.crmMapping?.flowContextKey ?? normalizedKey;
+    if (hasFlowContextValue(currentContext[contextKey])) {
+      conflicts.push(contextKey);
+    } else {
+      patch[contextKey] = rawValue;
     }
-    patch[normalizedKey] = rawValue;
+    if (slot.crmMapping && crmMappingApplies(slot, rawValue)) {
+      if (
+        slot.crmMapping.leadTemp &&
+        shouldApplyRankedCrmValue(currentContext.lead_temp ?? patch.lead_temp, slot.crmMapping.leadTemp, LEAD_TEMP_RANK)
+      ) {
+        patch.lead_temp = slot.crmMapping.leadTemp;
+      }
+      if (
+        slot.crmMapping.priority &&
+        shouldApplyRankedCrmValue(
+          currentContext.prioridade ?? currentContext.priority ?? patch.prioridade,
+          slot.crmMapping.priority,
+          PRIORITY_RANK
+        )
+      ) {
+        patch.prioridade = slot.crmMapping.priority;
+      }
+    }
   }
 
+  const nextStep = buildQualificationNextStep(state);
   patch.qualification = {
     source: "aiQualification",
     schemaVersion: state.schemaVersion ?? schema.schemaVersion ?? null,
@@ -558,12 +706,13 @@ export function buildQualificationCrmArtifacts(params: {
     missingSlots: state.missingSlots ?? [],
     outcome: state.outcome ?? null,
     readyForHandoff: state.readyForHandoff === true,
+    summaryLines,
+    nextStep: nextStep ?? null,
   };
   if (state.stage === "completed") tags.add("qualification:completed");
   if (state.stage === "handoff_ready" || state.readyForHandoff) {
     tags.add("qualification:handoff_ready");
   }
-  const nextStep = buildQualificationNextStep(state);
   return {
     flowContextPatch: patch,
     flowTagsToAdd: [...tags],
