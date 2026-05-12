@@ -357,6 +357,106 @@ export async function exportConversationCandidates(params: {
       })
     );
   }
+  if (options.waId && !candidates.length) {
+    let conversations = await prisma.conversation.findMany({
+      where: {
+        clientId: client.id,
+        OR: [{ waId: options.waId }, { waIdCanonical: waIdDigits }],
+        ...updatedAt,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: Math.max(1, Math.min(options.limit, 100)),
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        updatedAt: true,
+      },
+    });
+    if (!conversations.length && waIdDigits.length >= 4) {
+      const last4 = waIdDigits.slice(-4);
+      conversations = await prisma.conversation.findMany({
+        where: {
+          clientId: client.id,
+          OR: [{ waId: { contains: last4 } }, { waIdCanonical: { contains: last4 } }],
+          ...updatedAt,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: Math.max(1, Math.min(options.limit, 100)),
+        select: {
+          waId: true,
+          waIdCanonical: true,
+          updatedAt: true,
+        },
+      });
+    }
+    for (const conversation of conversations) {
+      const waIds = [conversation.waId, conversation.waIdCanonical].filter(Boolean) as string[];
+      const [inbound, lead] = await Promise.all([
+        prisma.inboundMessage.findMany({
+          where: {
+            clientId: client.id,
+            OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
+            ...(options.fromDate || options.toDate
+              ? {
+                  createdAt: {
+                    ...(options.fromDate ? { gte: options.fromDate } : {}),
+                    ...(options.toDate ? { lte: options.toDate } : {}),
+                  },
+                }
+              : {}),
+          },
+          orderBy: { createdAt: "asc" },
+          take: 200,
+          select: { bodyText: true, createdAt: true },
+        }),
+        prisma.lead.findFirst({
+          where: {
+            tenantId: client.id,
+            OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            city: true,
+            service: true,
+            email: true,
+            company: true,
+            status: true,
+          },
+        }),
+      ]);
+      const leadNotes = lead
+        ? await prisma.leadNote.findMany({
+            where: { tenantId: client.id, leadId: lead.id },
+            orderBy: { createdAt: "asc" },
+            take: 20,
+            select: { body: true, createdAt: true },
+          })
+        : [];
+      if (!inbound.length) continue;
+      candidates.push(
+        buildConversationEvaluationCandidate({
+          source: {
+            client,
+            runtime: {
+              waId: conversation.waId,
+              waIdCanonical: conversation.waIdCanonical,
+              answers: {},
+              handoffStatus: "NONE",
+              mode: null,
+              status: null,
+            },
+            inbound,
+            lead,
+            leadNotes,
+          },
+          tenantKey: client.clientKey,
+          anonymize: options.anonymize,
+        })
+      );
+    }
+  }
   if (options.waId && candidates.length <= 1) {
     if (!candidates[0]) throw new Error("conversation not found or has no inbound messages");
     return candidates[0];
