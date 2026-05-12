@@ -23,6 +23,7 @@ test("normalizeQualificationSchema accepts valid schema", () => {
         question: "Você procura atendimento para atacado ou varejo?",
         captureHints: ["atacado", "varejo"],
         crmMapping: {
+          leadField: "service",
           leadTemp: "quente",
           priority: "alta",
           whenValue: ["atacado"],
@@ -36,17 +37,28 @@ test("normalizeQualificationSchema accepts valid schema", () => {
     ],
     handoffWhen: ["catalogo_solicitado"],
     outcomes: ["lead_atacado_qualificado"],
+    commercialContinuation: {
+      enabled: true,
+      negativeReply: "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?",
+      ambiguousEnumReply: "Certo. Escolha uma das opções disponíveis.",
+    },
   });
   assert.equal(schema?.enabled, true);
   assert.equal(schema?.schemaVersion, "1");
   assert.equal(schema?.slots?.[0]?.key, "tipo_atendimento");
   assert.deepEqual(schema?.slots?.[0]?.allowedValues, ["Atacado", "Varejo"]);
   assert.deepEqual(schema?.slots?.[0]?.crmMapping, {
+    leadField: "service",
     leadTemp: "quente",
     priority: "alta",
     whenValue: ["atacado"],
   });
   assert.deepEqual(schema?.slots?.[1]?.askAfter, ["tipo_atendimento"]);
+  assert.deepEqual(schema?.commercialContinuation, {
+    enabled: true,
+    negativeReply: "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?",
+    ambiguousEnumReply: "Certo. Escolha uma das opções disponíveis.",
+  });
   assert.equal(isQualificationEnabled(schema), true);
 });
 
@@ -321,6 +333,99 @@ test("handleQualificationTurn asks and captures optional follow-up slots declare
   assert.equal(afterDetail.state?.stage, "completed");
 });
 
+test("handleQualificationTurn does not capture explicit human request as text slot", () => {
+  const schema = {
+    enabled: true,
+    slots: [{ key: "detalhe_produto", askAfter: ["produto"], question: "Qual detalhe?" }],
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: {
+      ...getInitialQualificationState({
+        enabled: true,
+        slots: [
+          { key: "produto", required: true, question: "Qual produto?" },
+          { key: "detalhe_produto", askAfter: ["produto"], question: "Qual detalhe?" },
+        ],
+      }),
+      slots: { produto: "blusa" },
+      completedSlots: ["produto"],
+      currentSlot: "detalhe_produto",
+      lastQuestion: "Qual detalhe?",
+    },
+    text: "quero falar com atendente",
+    handoffKeywords: ["falar com atendente", "atendente"],
+  });
+  assert.equal(result.handled, false);
+  assert.equal(result.state?.slots?.detalhe_produto, undefined);
+});
+
+test("handleQualificationTurn uses configured negative continuation for optional slot", () => {
+  const schema = {
+    enabled: true,
+    commercialContinuation: {
+      enabled: true,
+      negativeReply: "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?",
+    },
+    slots: [
+      { key: "produto", required: true, question: "Qual produto?" },
+      { key: "detalhe", askAfter: ["produto"], question: "Qual detalhe?" },
+      {
+        key: "duvida",
+        type: "enum" as const,
+        allowedValues: ["catalogo", "valores"],
+        askAfter: ["detalhe", "produto"],
+        question: "Catalogo ou valores?",
+      },
+    ],
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: {
+      ...getInitialQualificationState(schema),
+      slots: { produto: "blusa" },
+      completedSlots: ["produto"],
+      currentSlot: "detalhe",
+      lastQuestion: "Qual detalhe?",
+    },
+    text: "não",
+  });
+  assert.equal(result.handled, true);
+  assert.equal(
+    result.replyText,
+    "Sem problema. Posso ajudar com outra opção ou encaminhar para a equipe?"
+  );
+  assert.equal(result.state?.slots?.detalhe, undefined);
+  assert.equal(result.state?.currentSlot, "duvida");
+});
+
+test("handleQualificationTurn repeats configured enum options for ambiguous positive ack", () => {
+  const schema = {
+    enabled: true,
+    commercialContinuation: {
+      enabled: true,
+      ambiguousEnumReply: "Certo. Escolha catalogo ou valores.",
+    },
+    slots: [
+      {
+        key: "duvida",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["catalogo", "valores"],
+        question: "Catalogo ou valores?",
+      },
+    ],
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "sim",
+  });
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Certo. Escolha catalogo ou valores.");
+  assert.equal(result.state?.slots?.duvida, undefined);
+});
+
 test("handleQualificationTurn marks handoff_ready from generic handoff expressions without activating handoff", () => {
   const schema = {
     enabled: true,
@@ -407,6 +512,7 @@ test("buildQualificationCrmArtifacts applies crmMapping rank escalation safely",
           label: "Tipo de atendimento",
           question: "Tipo?",
           crmMapping: {
+            leadField: "service",
             leadTemp: "quente",
             priority: "alta",
             whenValue: ["atacado"],
@@ -418,6 +524,7 @@ test("buildQualificationCrmArtifacts applies crmMapping rank escalation safely",
   });
   assert.equal(artifacts.flowContextPatch?.lead_temp, "quente");
   assert.equal(artifacts.flowContextPatch?.prioridade, "alta");
+  assert.deepEqual(artifacts.leadPatch, { service: "atacado" });
 });
 
 test("buildQualificationCrmArtifacts does not apply crmMapping when value condition does not match", () => {
@@ -492,12 +599,11 @@ test("buildQualificationCrmArtifacts adds metadata with missing and handoff read
     outcome: "lead_atacado",
     readyForHandoff: true,
     summaryLines: ["Tipo: atacado"],
-    nextStep:
-      "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial.",
+    nextStep: "Revisar a qualificação capturada e confirmar o próximo passo com o cliente.",
   });
   assert.equal(
     artifacts.nextStep,
-    "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial."
+    "Revisar a qualificação capturada e confirmar o próximo passo com o cliente."
   );
 });
 

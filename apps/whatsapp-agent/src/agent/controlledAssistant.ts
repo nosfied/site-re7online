@@ -1725,9 +1725,13 @@ function formatCrmDisplayValue(value: unknown) {
   normalized = formatKnownCrmDisplayAlias(normalized);
   const blocked = new Set([
     "active prompt handoff confirmation",
+    "assistant limit reached",
     "pending offer handoff",
     "handoff confirmation",
     "handoff request",
+    "inicio atendimento",
+    "inicio de atendimento",
+    "atendimento inicial",
     "ask question",
     "answer",
     "fallback menu",

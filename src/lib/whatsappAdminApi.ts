@@ -221,10 +221,17 @@ export type AiQualificationSlot = {
   askAfter?: string[];
   crmMapping?: {
     flowContextKey?: string;
+    leadField?: "company" | "service";
     leadTemp?: "frio" | "morno" | "quente";
     priority?: "baixa" | "media" | "alta";
     whenValue?: string[];
   };
+};
+
+export type AiQualificationCommercialContinuation = {
+  enabled?: boolean;
+  negativeReply?: string;
+  ambiguousEnumReply?: string;
 };
 
 export type AiQualificationSchema = {
@@ -233,6 +240,7 @@ export type AiQualificationSchema = {
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];
   outcomes?: string[];
+  commercialContinuation?: AiQualificationCommercialContinuation;
 };
 
 export type ConversationReportByAgentItem = {

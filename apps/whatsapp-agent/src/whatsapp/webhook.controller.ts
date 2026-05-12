@@ -5934,6 +5934,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               schema: appliedTenantConfig.aiQualification,
               state: updatedConversation.answers?.aiQualification,
               text: message.text,
+              handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
               nowIso: new Date().toISOString(),
             });
             for (const entry of qualificationResult.logs) {
@@ -5981,6 +5982,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 if (qualificationCrm.conflicts?.length) {
                   await logAiAssistantEvent("ai.qualification.crm_conflict", {
                     fields: qualificationCrm.conflicts,
+                  });
+                }
+                if (qualificationCrm.leadPatch) {
+                  await upsertLeadFromCapture({
+                    tenantId: tenantClientId,
+                    waId: message.from,
+                    company: qualificationCrm.leadPatch.company,
+                    service: qualificationCrm.leadPatch.service,
+                  });
+                  await logAiAssistantEvent("ai.qualification.lead_enriched", {
+                    fields: Object.keys(qualificationCrm.leadPatch),
                   });
                 }
               } else {
@@ -7348,15 +7360,18 @@ function normalizeHandoffConfirmationText(text: string | null | undefined) {
   ];
   const negativeTerms = [
     "nao",
+    "nao quero",
+    "nao quero que direcione",
+    "nao precisa",
     "agora nao",
     "depois",
     "continuar aqui",
   ];
-  if (positiveTerms.some((term) => normalized === term || normalized.includes(term))) {
-    return "accepted" as const;
-  }
   if (negativeTerms.some((term) => normalized === term || normalized.includes(term))) {
     return "declined" as const;
+  }
+  if (positiveTerms.some((term) => normalized === term || normalized.includes(term))) {
+    return "accepted" as const;
   }
   return "invalid" as const;
 }

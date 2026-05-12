@@ -1267,6 +1267,41 @@ test("buildAiHandoffCrmArtifacts prefers current CRM context and drops stale tec
   assert.doesNotMatch(artifacts.suggestedReplyNote, /tipo de aposentadoria/);
 });
 
+test("buildAiHandoffCrmArtifacts drops weak technical topics when qualification is better", () => {
+  const artifacts = buildAiHandoffCrmArtifacts({
+    reason: "active_prompt_handoff_confirmation",
+    score: 3,
+    state: {
+      ...baseState,
+      answers: {
+        flowContext: {
+          servico: "assistant_limit_reached",
+          intent: "inicio_atendimento",
+          lead_temp: "quente",
+          prioridade: "alta",
+        },
+        flowTags: ["topic:assistant_limit_reached", "intent:inicio_atendimento"],
+        aiQualification: {
+          stage: "handoff_ready",
+          slots: {
+            tipo_atendimento: "atacado",
+            produto_interesse: "cinto",
+          },
+          completedSlots: ["tipo_atendimento", "produto_interesse"],
+          missingSlots: [],
+          readyForHandoff: true,
+        },
+      },
+    },
+  });
+
+  assert.doesNotMatch(artifacts.summaryNote, /assistant limit reached/i);
+  assert.doesNotMatch(artifacts.summaryNote, /inicio atendimento/i);
+  assert.match(artifacts.summaryNote, /Tipo Atendimento: atacado/);
+  assert.match(artifacts.summaryNote, /Produto Interesse: cinto/);
+  assert.doesNotMatch(artifacts.suggestedReplyNote, /assistant limit reached/i);
+});
+
 test("buildAiHandoffCrmArtifacts humanizes secondary civil catalog tokens", () => {
   const artifacts = buildAiHandoffCrmArtifacts({
     reason: "active_prompt_handoff_confirmation",

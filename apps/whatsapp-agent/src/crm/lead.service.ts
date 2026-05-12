@@ -35,6 +35,7 @@ export async function upsertLeadFromCapture(params: {
   name?: string;
   city?: string;
   service?: string;
+  company?: string;
 }) {
   const prisma = getPrisma();
 
@@ -54,6 +55,7 @@ export async function upsertLeadFromCapture(params: {
         waIdCanonical: existing.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
         city: params.city ?? existing.city,
         service: params.service ?? existing.service,
+        company: params.company ?? existing.company,
         status: "QUALIFIED",
       },
     });
@@ -68,6 +70,7 @@ export async function upsertLeadFromCapture(params: {
       phone: params.waId,
       city: params.city,
       service: params.service,
+      company: params.company,
     },
   });
 }

@@ -16,10 +16,17 @@ export type AiQualificationSlot = {
   askAfter?: string[];
   crmMapping?: {
     flowContextKey?: string;
+    leadField?: "company" | "service";
     leadTemp?: "frio" | "morno" | "quente";
     priority?: "baixa" | "media" | "alta";
     whenValue?: string[];
   };
+};
+
+export type AiQualificationCommercialContinuation = {
+  enabled?: boolean;
+  negativeReply?: string;
+  ambiguousEnumReply?: string;
 };
 
 export type AiQualificationSchema = {
@@ -28,6 +35,7 @@ export type AiQualificationSchema = {
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];
   outcomes?: string[];
+  commercialContinuation?: AiQualificationCommercialContinuation;
 };
 
 const SENSITIVE_KEYS = new Set([
@@ -45,7 +53,41 @@ const SENSITIVE_KEYS = new Set([
 
 const GREETING_ONLY = new Set(["oi", "ola", "olá", "bom_dia", "boa_tarde", "boa_noite", "opa"]);
 const POSITIVE_TERMS = new Set(["sim", "quero", "pode", "ok", "claro", "pode_sim", "sim_quero"]);
-const NEGATIVE_TERMS = new Set(["nao", "não", "nao_quero", "não_quero", "agora_nao", "depois"]);
+const NEGATIVE_TERMS = new Set([
+  "nao",
+  "não",
+  "nao_quero",
+  "não_quero",
+  "agora_nao",
+  "agora_não",
+  "nao_precisa",
+  "não_precisa",
+  "depois",
+  "parar",
+  "encerrar",
+]);
+const DEFAULT_AMBIGUOUS_ENUM_REPLY = "Certo. Escolha uma das opções para eu continuar.";
+const OPERATIONAL_STOP_TERMS = [
+  "parar",
+  "encerrar",
+  "cancelar",
+  "sair",
+  "nao precisa",
+  "não precisa",
+  "nao quero",
+  "não quero",
+  "agora nao",
+  "agora não",
+];
+const ABUSIVE_TERMS = [
+  "va cagar",
+  "vá cagar",
+  "vai cagar",
+  "merda",
+  "porra",
+  "foda se",
+  "foda-se",
+];
 const SENSITIVE_TEXT_PATTERNS = [
   /\bcpf\b/i,
   /\brg\b/i,
@@ -134,6 +176,8 @@ function normalizeCrmMapping(input: unknown): AiQualificationSlot["crmMapping"] 
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
   const raw = input as Record<string, unknown>;
   const flowContextKey = normalizeToken(raw.flowContextKey, 60);
+  const leadField =
+    raw.leadField === "company" || raw.leadField === "service" ? raw.leadField : undefined;
   const leadTemp =
     raw.leadTemp === "frio" || raw.leadTemp === "morno" || raw.leadTemp === "quente"
       ? raw.leadTemp
@@ -145,11 +189,28 @@ function normalizeCrmMapping(input: unknown): AiQualificationSlot["crmMapping"] 
   const whenValue = normalizeStringList(raw.whenValue, 20, 120);
   const mapping: NonNullable<AiQualificationSlot["crmMapping"]> = {
     ...(flowContextKey && !SENSITIVE_KEYS.has(flowContextKey) ? { flowContextKey } : {}),
+    ...(leadField ? { leadField } : {}),
     ...(leadTemp ? { leadTemp } : {}),
     ...(priority ? { priority } : {}),
     ...(whenValue.length ? { whenValue } : {}),
   };
   return Object.keys(mapping).length ? mapping : undefined;
+}
+
+function normalizeCommercialContinuation(
+  input: unknown
+): AiQualificationCommercialContinuation | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const raw = input as Record<string, unknown>;
+  if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") return undefined;
+  const negativeReply = normalizeDisplayString(raw.negativeReply, 300);
+  const ambiguousEnumReply = normalizeDisplayString(raw.ambiguousEnumReply, 300);
+  const continuation: AiQualificationCommercialContinuation = {
+    ...(typeof raw.enabled === "boolean" ? { enabled: raw.enabled } : {}),
+    ...(negativeReply ? { negativeReply } : {}),
+    ...(ambiguousEnumReply ? { ambiguousEnumReply } : {}),
+  };
+  return Object.keys(continuation).length ? continuation : undefined;
 }
 
 function normalizeRequiredWhen(input: unknown): Record<string, string | boolean | number> | undefined {
@@ -180,6 +241,8 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
   if (raw.slots !== undefined && !Array.isArray(raw.slots)) return undefined;
   if (raw.handoffWhen !== undefined && !Array.isArray(raw.handoffWhen)) return undefined;
   if (raw.outcomes !== undefined && !Array.isArray(raw.outcomes)) return undefined;
+  const commercialContinuation = normalizeCommercialContinuation(raw.commercialContinuation);
+  if (raw.commercialContinuation !== undefined && !commercialContinuation) return undefined;
   const slots: AiQualificationSlot[] = [];
   if (Array.isArray(raw.slots)) {
     const seen = new Set<string>();
@@ -229,6 +292,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
     ...(Array.isArray(raw.outcomes)
       ? { outcomes: normalizeTokenList(raw.outcomes, 40, 80) }
       : {}),
+    ...(commercialContinuation ? { commercialContinuation } : {}),
   };
   return Object.keys(schema).length ? schema : undefined;
 }
@@ -311,6 +375,54 @@ function containsSensitiveText(text: string) {
   return SENSITIVE_TEXT_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function normalizeOperationalText(text: string | null | undefined) {
+  return normalizeDisplayString(text, 240)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function containsOperationalTerm(text: string, terms: string[] = []) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  return terms.some((term) => {
+    const normalizedTerm = normalizeOperationalText(term);
+    return Boolean(
+      normalizedTerm &&
+        (normalized === normalizedTerm ||
+          normalized.includes(` ${normalizedTerm} `) ||
+          normalized.startsWith(`${normalizedTerm} `) ||
+          normalized.endsWith(` ${normalizedTerm}`))
+    );
+  });
+}
+
+function isExplicitNegativeText(text: string) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  return (
+    [...NEGATIVE_TERMS].some((term) => normalized === normalizeOperationalText(term)) ||
+    containsOperationalTerm(normalized, OPERATIONAL_STOP_TERMS)
+  );
+}
+
+function isOperationalText(text: string, handoffKeywords: string[] = []) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  if (isExplicitNegativeText(normalized)) return true;
+  if (containsOperationalTerm(normalized, handoffKeywords)) return true;
+  if (containsOperationalTerm(normalized, ABUSIVE_TERMS)) return true;
+  return containsSensitiveText(text);
+}
+
+function isPositiveOnlyText(text: string) {
+  const token = normalizeToken(text, 80);
+  return POSITIVE_TERMS.has(token) && !isExplicitNegativeText(text);
+}
+
 function isShortUsefulText(text: string) {
   const token = normalizeToken(text, 80);
   if (!token || GREETING_ONLY.has(token) || POSITIVE_TERMS.has(token) || NEGATIVE_TERMS.has(token)) {
@@ -320,15 +432,19 @@ function isShortUsefulText(text: string) {
   return text.trim().length >= 2;
 }
 
-function deterministicSlotCapture(slot: AiQualificationSlot, text: string) {
+function deterministicSlotCapture(slot: AiQualificationSlot, text: string, handoffKeywords: string[] = []) {
   const normalizedText = normalizeComparable(text);
   if (!normalizedText || containsSensitiveText(text)) {
     return { captured: false as const, reason: "invalid_or_sensitive" };
   }
+  if (slot.type !== "boolean" && isOperationalText(text, handoffKeywords)) {
+    return { captured: false as const, reason: "operational_intent" };
+  }
   if (slot.type === "boolean") {
     const token = normalizeToken(text, 80);
-    if (POSITIVE_TERMS.has(token)) return { captured: true as const, value: true };
     if (NEGATIVE_TERMS.has(token)) return { captured: true as const, value: false };
+    if (isExplicitNegativeText(text)) return { captured: true as const, value: false };
+    if (POSITIVE_TERMS.has(token)) return { captured: true as const, value: true };
     return { captured: false as const, reason: "invalid_boolean" };
   }
   if (slot.type === "enum") {
@@ -371,6 +487,10 @@ export type QualificationCrmArtifacts = {
   flowTagsToAdd?: string[];
   summaryLines?: string[];
   nextStep?: string | null;
+  leadPatch?: {
+    company?: string;
+    service?: string;
+  };
   conflicts?: string[];
   skippedReason?: string | null;
 };
@@ -421,6 +541,7 @@ export function handleQualificationTurn(params: {
   schema?: AiQualificationSchema | null;
   state?: AIQualificationState | null;
   text: string;
+  handoffKeywords?: string[];
   nowIso?: string;
 }): QualificationTurnResult {
   const schema = normalizeQualificationSchema(params.schema);
@@ -477,7 +598,8 @@ export function handleQualificationTurn(params: {
     return { enabled: true, handled: false, state, logs };
   }
 
-  const capture = deterministicSlotCapture(currentSlot, params.text);
+  const continuation = schema?.commercialContinuation;
+  const capture = deterministicSlotCapture(currentSlot, params.text, params.handoffKeywords);
   if (capture.captured) {
     const completedSlots = new Set(state.completedSlots ?? []);
     completedSlots.add(currentSlot.key);
@@ -502,6 +624,58 @@ export function handleQualificationTurn(params: {
       event: "ai.qualification.slot_captured",
       payload: { slot: currentSlot.key, type: currentSlot.type ?? "text" },
     });
+  } else if (
+    currentSlot.type === "enum" &&
+    isPositiveOnlyText(params.text) &&
+    continuation?.enabled === true
+  ) {
+    state = {
+      ...state,
+      stage: "collecting",
+      currentSlot: currentSlot.key,
+      missingSlots: [currentSlot.key],
+      lastQuestion: currentSlot.question,
+      updatedAt: nowIso,
+    };
+    const replyText = continuation.ambiguousEnumReply?.trim() || currentSlot.question || DEFAULT_AMBIGUOUS_ENUM_REPLY;
+    logs.push({
+      event: "ai.qualification.ask_next",
+      payload: { slot: currentSlot.key, reason: "ambiguous_enum_ack" },
+    });
+    return { enabled: true, handled: true, state, replyText, logs };
+  } else if (
+    currentSlot.askAfter?.length &&
+    isExplicitNegativeText(params.text) &&
+    continuation?.enabled === true
+  ) {
+    const completedSlots = new Set(state.completedSlots ?? []);
+    completedSlots.add(currentSlot.key);
+    state = {
+      ...state,
+      stage: "collecting",
+      currentSlot: null,
+      completedSlots: [...completedSlots],
+      missingSlots: missingRequiredSlots(schema!, state),
+      lastQuestion: null,
+      updatedAt: nowIso,
+    };
+    const nextSlot = getNextQualificationSlot(schema, state);
+    state = {
+      ...state,
+      currentSlot: nextSlot?.key ?? null,
+      lastQuestion: nextSlot?.question ?? null,
+    };
+    logs.push({
+      event: "ai.qualification.skipped",
+      payload: { reason: "negative_followup_declined", slot: currentSlot.key },
+    });
+    return {
+      enabled: true,
+      handled: true,
+      state,
+      replyText: continuation.negativeReply?.trim() || "Tudo bem. Posso continuar te ajudando por aqui.",
+      logs,
+    };
   } else if (!state.lastQuestion || state.lastQuestion !== currentSlot.question) {
     state = {
       ...state,
@@ -628,7 +802,7 @@ function shouldApplyRankedCrmValue<T extends string>(
 
 function buildQualificationNextStep(state: AIQualificationState) {
   if (state.readyForHandoff) {
-    return "Revisar a qualificação capturada e confirmar disponibilidade, valores, catálogo ou próximo passo comercial.";
+    return "Revisar a qualificação capturada e confirmar o próximo passo com o cliente.";
   }
   if (state.missingSlots?.length) {
     return "Completar a qualificação pendente antes de avançar no atendimento.";
@@ -653,6 +827,7 @@ export function buildQualificationCrmArtifacts(params: {
   const nowIso = params.nowIso ?? new Date().toISOString();
   const currentContext = params.answers?.flowContext ?? {};
   const patch: FlowContext = {};
+  const leadPatch: NonNullable<QualificationCrmArtifacts["leadPatch"]> = {};
   const summaryLines: string[] = [];
   const tags = new Set<string>();
   const conflicts: string[] = [];
@@ -678,6 +853,12 @@ export function buildQualificationCrmArtifacts(params: {
       patch[contextKey] = rawValue;
     }
     if (slot.crmMapping && crmMappingApplies(slot, rawValue)) {
+      if (slot.crmMapping.leadField === "company" && typeof rawValue === "string") {
+        leadPatch.company = normalizeDisplayString(rawValue, 160);
+      }
+      if (slot.crmMapping.leadField === "service" && typeof rawValue === "string") {
+        leadPatch.service = normalizeDisplayString(rawValue, 160);
+      }
       if (
         slot.crmMapping.leadTemp &&
         shouldApplyRankedCrmValue(currentContext.lead_temp ?? patch.lead_temp, slot.crmMapping.leadTemp, LEAD_TEMP_RANK)
@@ -718,6 +899,7 @@ export function buildQualificationCrmArtifacts(params: {
     flowTagsToAdd: [...tags],
     summaryLines,
     nextStep,
+    leadPatch: Object.keys(leadPatch).length ? leadPatch : undefined,
     conflicts,
   };
 }
