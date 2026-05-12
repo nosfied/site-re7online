@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildConversationEvaluationCandidate,
   createConversationAnonymizer,
+  exportConversationCandidates,
 } from "./conversationExport.js";
 
 test("createConversationAnonymizer removes phone, email and cpf", () => {
@@ -93,4 +94,56 @@ test("buildConversationEvaluationCandidate exports tenant without qualification 
   assert.equal(candidate.observedFinalState.qualificationSlots, undefined);
   assert.equal(candidate.turns[0]?.expected?.qualificationSlots, undefined);
   assert.equal(candidate.requiresHumanReview, true);
+});
+
+test("exportConversationCandidates falls back to masked waId suffix lookup", async () => {
+  let runtimeLookupCount = 0;
+  const prisma = {
+    client: {
+      findUnique: async () => ({ id: "client-1", clientKey: "tenant-a" }),
+    },
+    conversationRuntimeState: {
+      findMany: async (query: { where: { OR?: Array<Record<string, unknown>> } }) => {
+        runtimeLookupCount += 1;
+        if (runtimeLookupCount === 1) return [];
+        assert.deepEqual(query.where.OR, [
+          { waId: { contains: "9614" } },
+          { waIdCanonical: { contains: "9614" } },
+        ]);
+        return [
+          {
+            waId: "5584******9614:fdec4c60",
+            waIdCanonical: null,
+            answers: {},
+            handoffStatus: "NONE",
+            mode: "BOT",
+            status: null,
+          },
+        ];
+      },
+    },
+    inboundMessage: {
+      findMany: async () => [{ bodyText: "oi", createdAt: new Date("2026-01-01T00:00:00Z") }],
+    },
+    lead: {
+      findFirst: async () => null,
+    },
+    leadNote: {
+      findMany: async () => [],
+    },
+  };
+
+  const candidate = await exportConversationCandidates({
+    prisma: prisma as never,
+    options: {
+      tenantKey: "tenant-a",
+      waId: "558499049614",
+      limit: 1,
+      anonymize: true,
+    },
+  });
+
+  assert.equal(runtimeLookupCount, 2);
+  assert.equal("turns" in candidate, true);
+  assert.equal(JSON.stringify(candidate).includes("558499049614"), false);
 });

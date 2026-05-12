@@ -253,22 +253,23 @@ export async function exportConversationCandidates(params: {
   });
   if (!client) throw new Error(`tenant not found: ${options.tenantKey}`);
   const waIdDigits = normalizeDigits(options.waId);
+  const updatedAt =
+    options.fromDate || options.toDate
+      ? {
+          updatedAt: {
+            ...(options.fromDate ? { gte: options.fromDate } : {}),
+            ...(options.toDate ? { lte: options.toDate } : {}),
+          },
+        }
+      : {};
   const runtimeWhere = {
     clientId: client.id,
     ...(waIdDigits
       ? { OR: [{ waId: options.waId }, { waIdCanonical: waIdDigits }] }
-      : {
-          ...(options.fromDate || options.toDate
-            ? {
-                updatedAt: {
-                  ...(options.fromDate ? { gte: options.fromDate } : {}),
-                  ...(options.toDate ? { lte: options.toDate } : {}),
-                },
-              }
-            : {}),
-        }),
+      : {}),
+    ...updatedAt,
   };
-  const runtimes = await prisma.conversationRuntimeState.findMany({
+  let runtimes = await prisma.conversationRuntimeState.findMany({
     where: runtimeWhere,
     orderBy: { updatedAt: "desc" },
     take: Math.max(1, Math.min(options.limit, 100)),
@@ -281,6 +282,26 @@ export async function exportConversationCandidates(params: {
       status: true,
     },
   });
+  if (options.waId && !runtimes.length && waIdDigits.length >= 4) {
+    const last4 = waIdDigits.slice(-4);
+    runtimes = await prisma.conversationRuntimeState.findMany({
+      where: {
+        clientId: client.id,
+        OR: [{ waId: { contains: last4 } }, { waIdCanonical: { contains: last4 } }],
+        ...updatedAt,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: Math.max(1, Math.min(options.limit, 100)),
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        answers: true,
+        handoffStatus: true,
+        mode: true,
+        status: true,
+      },
+    });
+  }
   const candidates: ConversationExportCandidate[] = [];
   for (const runtime of runtimes) {
     const waIds = [runtime.waId, runtime.waIdCanonical].filter(Boolean) as string[];
