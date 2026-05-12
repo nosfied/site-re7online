@@ -6041,6 +6041,117 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                   maxReplies,
                 });
               }
+            } else if (qualificationResult.state?.readyForHandoff === true) {
+              await logAiAssistantEvent("ai.qualification.handoff_ready", {
+                stage: qualificationResult.state.stage ?? null,
+                completedSlotCount: qualificationResult.state.completedSlots?.length ?? 0,
+                missingSlotCount: qualificationResult.state.missingSlots?.length ?? 0,
+              });
+              const shouldPrompt = shouldSendHandoffConfirmationPrompt({
+                allowed: true,
+                state: updatedConversation,
+                messageId: message.messageId,
+              });
+              if (shouldPrompt) {
+                if (assistantState.count >= maxReplies) {
+                  await logAiAssistantEvent("ai.assistant.limit_reached", {
+                    count: assistantState.count,
+                    maxReplies,
+                    source: "qualification_handoff_ready",
+                  });
+                  await applyAssistantLimitFallback("qualification_handoff_ready");
+                  qualificationHandled = true;
+                } else {
+                  const nowIso = new Date().toISOString();
+                  replyText = buildHandoffConfirmationPrompt({
+                    context: assistantTenantContext,
+                  });
+                  aiAssistantResponded = true;
+                  qualificationHandled = true;
+                  updatedConversation = {
+                    ...updatedConversation,
+                    answers: {
+                      ...(updatedConversation.answers ?? {}),
+                      aiAssistant: {
+                        count: assistantState.count + 1,
+                        lastRespondedAt: nowIso,
+                        lastMessageId: message.messageId,
+                        lastFallbackType: assistantState.lastFallbackType,
+                        lastFallbackAt: assistantState.lastFallbackAt,
+                        fallbackCount: assistantState.fallbackCount,
+                      },
+                      aiOrchestrator: {
+                        ...(updatedConversation.answers?.aiOrchestrator ?? {}),
+                        stage: "handoff_recommended",
+                        goal: "recommend_handoff",
+                        lastAction: "handoff_recommend",
+                        lastConfidence: 1,
+                        handoffRecommended: true,
+                        lastMessageId: message.messageId,
+                        lastQuestion: null,
+                        lastNextActionAt: nowIso,
+                        handoffPrompt: {
+                          prompted: true,
+                          promptedAt: nowIso,
+                          messageId: message.messageId,
+                          reason: "qualification_handoff_ready",
+                          score: 3,
+                          awaitingConfirmation: true,
+                        },
+                        pendingOffer: {
+                          type: "handoff",
+                          promptedAt: nowIso,
+                          messageId: message.messageId,
+                          retryCount: 0,
+                        },
+                        activePrompt: {
+                          type: "handoff_confirmation",
+                          expected: "yes_no",
+                          createdAt: nowIso,
+                          messageId: message.messageId,
+                          retryCount: 0,
+                        },
+                      },
+                    },
+                  };
+                  await logAiAssistantEvent("ai.qualification.handoff_prompt.sent", {
+                    reason: "qualification_handoff_ready",
+                    promptType: "confirmation",
+                  });
+                  await logAiAssistantEvent("ai.turn.pending_offer.created", {
+                    type: "handoff",
+                    source: "qualification",
+                    reason: "qualification_handoff_ready",
+                  });
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.sent", {
+                    source: "qualification",
+                    reason: "qualification_handoff_ready",
+                    score: 3,
+                    threshold: 3,
+                    promptType: "confirmation",
+                  });
+                  await logAiAssistantEvent("ai.orchestrator.handoff_prompt.awaiting_confirmation", {
+                    source: "qualification",
+                    reason: "qualification_handoff_ready",
+                    score: 3,
+                    messageId: message.messageId,
+                  });
+                  await logAiAssistantEvent("ai.qualification.turn_consumed", {
+                    reason: "handoff_ready_prompt_sent",
+                  });
+                  await logAiAssistantEvent("ai.assistant.responded", {
+                    source: "qualification_handoff_ready",
+                    latency_ms: Date.now() - start,
+                    count: assistantState.count + 1,
+                    maxReplies,
+                  });
+                }
+              } else {
+                qualificationHandled = true;
+                await logAiAssistantEvent("ai.qualification.turn_consumed", {
+                  reason: "handoff_ready_prompt_already_pending",
+                });
+              }
             }
           }
           const continuationTopicForIntent = resolveContextualContinuationTopic(updatedConversation);
