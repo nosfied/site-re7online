@@ -2223,6 +2223,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       leadWaId: string;
       payload: Record<string, unknown>;
     }> = [];
+    const pendingByLeadWaId = new Map<string, (typeof pendingCandidates)[number]>();
     for (const pendingEvent of pendingEvents) {
       if (pendingEvent.requestId === eventRequestId) continue;
       if (!pendingEvent.requestId) continue;
@@ -2262,8 +2263,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         continue;
       }
-      pendingCandidates.push({ event: pendingEvent, leadWaId, payload });
+      const previousPendingForLead = pendingByLeadWaId.get(leadWaId);
+      if (previousPendingForLead) {
+        await markPendingSkipped({
+          pendingEvent: previousPendingForLead.event,
+          leadWaId,
+          reason: "superseded_by_newer_pending_for_same_lead",
+        });
+      }
+      pendingByLeadWaId.set(leadWaId, { event: pendingEvent, leadWaId, payload });
     }
+    pendingCandidates.push(...pendingByLeadWaId.values());
 
     if (pendingCandidates.length > 5) {
       const digestRequestId = `handoff.lead_notification.pending_digest.${tenantClientId}.${Date.now()}.${params.messageId}`;
