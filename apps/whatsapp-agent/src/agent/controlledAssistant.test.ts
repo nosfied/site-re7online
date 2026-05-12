@@ -1271,6 +1271,24 @@ test("buildAiHandoffCrmArtifacts drops weak technical topics when qualification 
   const artifacts = buildAiHandoffCrmArtifacts({
     reason: "active_prompt_handoff_confirmation",
     score: 3,
+    qualificationSchema: {
+      enabled: true,
+      slots: [
+        {
+          key: "tipo_atendimento",
+          label: "Tipo de atendimento",
+          type: "enum",
+          question: "Tipo?",
+          allowedValues: ["atacado", "varejo"],
+        },
+        {
+          key: "produto_interesse",
+          label: "Produto de interesse",
+          question: "Produto?",
+          crmMapping: { leadField: "service" },
+        },
+      ],
+    },
     state: {
       ...baseState,
       answers: {
@@ -1297,9 +1315,12 @@ test("buildAiHandoffCrmArtifacts drops weak technical topics when qualification 
 
   assert.doesNotMatch(artifacts.summaryNote, /assistant limit reached/i);
   assert.doesNotMatch(artifacts.summaryNote, /inicio atendimento/i);
-  assert.match(artifacts.summaryNote, /Tipo Atendimento: atacado/);
-  assert.match(artifacts.summaryNote, /Produto Interesse: cinto/);
+  assert.match(artifacts.summaryNote, /Resumo operacional: Cliente procura atendimento do tipo atacado para cinto/i);
+  assert.match(artifacts.summaryNote, /Tipo de atendimento: atacado/);
+  assert.match(artifacts.summaryNote, /Produto de interesse: cinto/);
   assert.doesNotMatch(artifacts.suggestedReplyNote, /assistant limit reached/i);
+  assert.doesNotMatch(artifacts.suggestedReplyNote, /Tipo Atendimento/i);
+  assert.match(artifacts.suggestedReplyNote, /procura atendimento do tipo atacado para cinto/i);
 });
 
 test("buildAiHandoffCrmArtifacts humanizes secondary civil catalog tokens", () => {

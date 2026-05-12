@@ -64,6 +64,7 @@ import {
 import {
   buildQualificationCrmArtifacts,
   handleQualificationTurn,
+  type AiQualificationSchema,
 } from "../agent/qualification.js";
 import {
   parseTemplateCommand,
@@ -1753,6 +1754,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     promptReason: string;
     promptScore: number;
     state: ConversationState;
+    qualificationSchema?: AiQualificationSchema | null;
   }) => {
     const prisma = getPrisma();
     const summaryRequestId = [
@@ -1834,6 +1836,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         state: params.state,
         reason: params.promptReason,
         score: params.promptScore,
+        qualificationSchema: params.qualificationSchema,
       });
       await createEventAndNote({
         requestId: summaryRequestId,
@@ -3867,6 +3870,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             state: updatedConversation,
             reason: aiHandoffPrompt.reason,
             score: aiHandoffPrompt.score,
+            qualificationSchema: appliedTenantConfig?.aiQualification,
           });
           await persistAiHandoffLeadNotes({
             clientId: tenantClientId,
@@ -3877,6 +3881,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             promptReason: aiHandoffPrompt.reason,
             promptScore: aiHandoffPrompt.score,
             state: updatedConversation,
+            qualificationSchema: appliedTenantConfig?.aiQualification,
           });
           await notifyHandoffLeadArrival({
             state: updatedConversation,

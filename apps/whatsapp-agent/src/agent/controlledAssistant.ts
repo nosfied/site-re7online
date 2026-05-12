@@ -8,6 +8,10 @@ import {
   OrchestratorNextAction,
 } from "../conversation/conversation.types.js";
 import { AgentBrain } from "./agent.types.js";
+import {
+  buildHumanizedQualificationSummary,
+  type AiQualificationSchema,
+} from "./qualification.js";
 
 export type ControlledAssistantInput = {
   brain: AgentBrain;
@@ -225,6 +229,7 @@ export type AIHandoffCrmArtifactInput = {
   state: ConversationState;
   reason?: string | null;
   score?: number | null;
+  qualificationSchema?: AiQualificationSchema | null;
 };
 
 export type AIHandoffCrmArtifacts = {
@@ -1555,11 +1560,18 @@ export function buildAiHandoffCrmArtifacts(
   const leadTemp = formatCrmDisplayValue(context.lead_temp ?? memory?.facts?.lead_temp);
   const priority = formatCrmDisplayValue(context.prioridade ?? context.priority);
   const memorySummary = sanitizeCrmSummaryForDisplay(memory?.summary);
-  const qualificationLines = buildHandoffQualificationLines(answers.aiQualification);
+  const qualificationLines = buildHandoffQualificationLines(
+    answers.aiQualification,
+    input.qualificationSchema
+  );
   const qualificationNextStep = buildHandoffQualificationNextStep(answers.aiQualification);
-  const qualificationSummaryText = qualificationLines.length
-    ? qualificationLines.join("; ")
-    : null;
+  const humanizedQualification = buildHumanizedQualificationSummary({
+    state: answers.aiQualification,
+    schema: input.qualificationSchema,
+    flowContext: context,
+    tags,
+    nextStep: qualificationNextStep,
+  });
   const missingInfo = uniqueDisplayValues(
     (orchestrator?.missingInformation ?? []).filter((item) =>
       isMissingInformationRelevantToTopic(item, mainTopic)
@@ -1580,7 +1592,11 @@ export function buildAiHandoffCrmArtifacts(
     mainTopic ? `Tema principal: ${mainTopic}` : null,
     area ? `Área: ${area}` : null,
     service ? `Serviço/interesse: ${service}` : null,
-    qualificationLines.length ? "Qualificação capturada:" : null,
+    humanizedQualification.headline ? `Qualificação: ${humanizedQualification.headline}` : null,
+    humanizedQualification.operatorSummary
+      ? `Resumo operacional: ${humanizedQualification.operatorSummary}`
+      : null,
+    qualificationLines.length ? "Dados capturados:" : null,
     ...qualificationLines.map((line) => `- ${line}`),
     leadTemp ? `Temperatura: ${leadTemp}` : null,
     priority ? `Prioridade: ${priority}` : null,
@@ -1596,8 +1612,8 @@ export function buildAiHandoffCrmArtifacts(
   const firstQuestion = missingInfo[0]
     ? `Para começar, posso confirmar ${missingInfo[0]} e entender o melhor próximo passo.`
     : "Para começar, vou confirmar o objetivo do atendimento e orientar os próximos passos.";
-  const intro = qualificationSummaryText
-    ? `Olá, tudo bem? Vi que você pediu atendimento com a equipe. Já identifiquei: ${qualificationSummaryText}. Vou revisar essas informações e te orientar com segurança.`
+  const intro = humanizedQualification.suggestionContext
+    ? `Olá, tudo bem? Vi que você pediu atendimento com a equipe. ${humanizedQualification.suggestionContext} Vou revisar essas informações e te orientar com segurança.`
     : `Olá, tudo bem? Vi que você pediu atendimento com a equipe${topicText}. Vou revisar o contexto que já foi informado e te orientar com segurança.`;
   const suggestedReply = [
     "[Sugestão de resposta]",
@@ -1791,16 +1807,21 @@ function humanizeQualificationKey(key: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function buildHandoffQualificationLines(qualification: QualificationStateForSummary) {
+function buildHandoffQualificationLines(
+  qualification: QualificationStateForSummary,
+  schema?: AiQualificationSchema | null
+) {
   const slots = qualification?.slots;
   if (!slots || typeof slots !== "object") return [];
   const completedSlots = new Set(qualification.completedSlots ?? []);
+  const schemaSlots = new Map((schema?.slots ?? []).map((slot) => [slot.key, slot]));
   const lines: string[] = [];
   for (const [key, value] of Object.entries(slots)) {
     if (!completedSlots.has(key)) continue;
     const display = formatCrmDisplayValue(value);
     if (!display) continue;
-    lines.push(`${humanizeQualificationKey(key)}: ${display}`);
+    const label = schemaSlots.get(key)?.label?.trim() || humanizeQualificationKey(key);
+    lines.push(`${label}: ${display}`);
     if (lines.length >= 5) break;
   }
   return lines;

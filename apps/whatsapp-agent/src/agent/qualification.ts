@@ -495,6 +495,13 @@ export type QualificationCrmArtifacts = {
   skippedReason?: string | null;
 };
 
+export type HumanizedQualificationSummary = {
+  headline?: string | null;
+  narrative?: string | null;
+  operatorSummary?: string | null;
+  suggestionContext?: string | null;
+};
+
 function missingRequiredSlots(schema: AiQualificationSchema, state: AIQualificationState) {
   return (schema.slots ?? [])
     .filter((slot) => {
@@ -757,6 +764,152 @@ function formatSlotValueForSummary(value: string | number | boolean | null | und
   if (value === undefined || value === null) return "";
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   return normalizeDisplayString(String(value), 160);
+}
+
+function normalizeHumanText(value: unknown) {
+  const text = normalizeDisplayString(value, 180);
+  if (!text || containsSensitiveText(text)) return "";
+  return text;
+}
+
+function lowerFirst(value: string) {
+  return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+}
+
+function joinNatural(parts: string[]) {
+  const unique = [...new Set(parts.map((part) => part.trim()).filter(Boolean))];
+  if (unique.length <= 1) return unique[0] ?? "";
+  if (unique.length === 2) return `${unique[0]} e ${unique[1]}`;
+  return `${unique.slice(0, -1).join(", ")} e ${unique[unique.length - 1]}`;
+}
+
+function inferSlotRole(slot: AiQualificationSlot, index: number) {
+  const normalizedKey = normalizeToken(slot.key, 80);
+  const normalizedLabel = normalizeToken(slot.label, 80);
+  const combined = `${normalizedKey} ${normalizedLabel}`;
+  if (slot.crmMapping?.leadField === "company") return "company";
+  if (slot.crmMapping?.leadField === "service") return "service";
+  if (slot.type === "enum" && /(tipo|type|categoria|category|perfil|profile)/.test(combined)) {
+    return "type";
+  }
+  if (/(detalhe|detail|preferencia|preference|observacao|observacao)/.test(combined)) {
+    return "detail";
+  }
+  if (/(duvida|d[uú]vida|intencao|intencao|objetivo|confirmar|confirmacao|assunto)/.test(combined)) {
+    return "intent";
+  }
+  return `other:${index}`;
+}
+
+function buildHumanizedSlotEntries(state: AIQualificationState, schema?: AiQualificationSchema | null) {
+  const normalizedSchema = normalizeQualificationSchema(schema);
+  const slotByKey = new Map((normalizedSchema?.slots ?? []).map((slot) => [slot.key, slot]));
+  const completed = new Set(state.completedSlots ?? []);
+  const entries: Array<{
+    key: string;
+    label: string;
+    value: string;
+    role: string;
+    order: number;
+  }> = [];
+  let order = 0;
+  for (const [key, rawValue] of Object.entries(state.slots ?? {})) {
+    const normalizedKey = normalizeToken(key, 80);
+    const value = normalizeHumanText(rawValue);
+    if (!normalizedKey || !value || !completed.has(normalizedKey)) continue;
+    const slot = slotByKey.get(normalizedKey);
+    const label = slot?.label ? normalizeDisplayString(slot.label, 80) : humanizeSlotKey(normalizedKey);
+    entries.push({
+      key: normalizedKey,
+      label,
+      value,
+      role: slot ? inferSlotRole(slot, order) : `other:${order}`,
+      order,
+    });
+    order += 1;
+  }
+  return entries;
+}
+
+export function buildHumanizedQualificationSummary(params: {
+  state?: AIQualificationState | null;
+  schema?: AiQualificationSchema | null;
+  flowContext?: FlowContext | null;
+  tags?: string[] | null;
+  nextStep?: string | null;
+}): HumanizedQualificationSummary {
+  const state = params.state;
+  if (!state?.slots || !Object.keys(state.slots).length) return {};
+  const entries = buildHumanizedSlotEntries(state, params.schema);
+  if (!entries.length) return {};
+
+  const company = entries.find((entry) => entry.role === "company");
+  const service = entries.find((entry) => entry.role === "service");
+  const type = entries.find((entry) => entry.role === "type");
+  const details = entries.filter((entry) => entry.role === "detail");
+  const intents = entries.filter((entry) => entry.role === "intent");
+  const others = entries.filter(
+    (entry) =>
+      entry !== company &&
+      entry !== service &&
+      entry !== type &&
+      !details.includes(entry) &&
+      !intents.includes(entry)
+  );
+
+  const headline = state.readyForHandoff
+    ? "Cliente solicitou atendimento da equipe"
+    : type?.value
+      ? `Lead ${lowerFirst(type.value)} qualificado`
+      : "Lead qualificado";
+
+  const firstSentenceParts: string[] = [];
+  if (company?.value) firstSentenceParts.push(`Cliente informou ${lowerFirst(company.label)}: ${company.value}`);
+  if (type?.value && service?.value) {
+    firstSentenceParts.push(
+      `${company?.value ? "procura" : "Cliente procura"} atendimento do tipo ${lowerFirst(type.value)} para ${service.value}`
+    );
+  } else if (service?.value) {
+    firstSentenceParts.push(`${company?.value ? "procura" : "Cliente procura"} atendimento para ${service.value}`);
+  } else if (type?.value) {
+    firstSentenceParts.push(`${company?.value ? "procura" : "Cliente procura"} atendimento do tipo ${lowerFirst(type.value)}`);
+  }
+
+  const narrativeSentences: string[] = [];
+  const firstSentence = joinNatural(firstSentenceParts);
+  if (firstSentence) {
+    narrativeSentences.push(`${firstSentence.charAt(0).toUpperCase()}${firstSentence.slice(1)}.`);
+  }
+
+  if (details.length) {
+    narrativeSentences.push(`Detalhes informados: ${joinNatural(details.map((entry) => entry.value))}.`);
+  }
+  if (intents.length) {
+    narrativeSentences.push(`Demonstrou interesse em ${joinNatural(intents.map((entry) => entry.value))}.`);
+  }
+  if (others.length && narrativeSentences.length < 3) {
+    narrativeSentences.push(
+      `Também informou ${joinNatural(
+        others.slice(0, 2).map((entry) => `${lowerFirst(entry.label)}: ${entry.value}`)
+      )}.`
+    );
+  }
+  if (state.readyForHandoff) {
+    narrativeSentences.push("Solicitou atendimento da equipe.");
+  }
+
+  const narrative = narrativeSentences.join(" ").replace(/\s+/g, " ").trim();
+  const operatorSummary = narrative || entries.map((entry) => `${entry.label}: ${entry.value}`).join("; ");
+  const suggestionContext = narrative
+    ? `Cliente já informou que ${lowerFirst(narrative).replace(/\.$/, "")}.`
+    : `Cliente já informou: ${entries.map((entry) => `${lowerFirst(entry.label)}: ${entry.value}`).join("; ")}.`;
+
+  return {
+    headline,
+    narrative: narrative || null,
+    operatorSummary: operatorSummary || null,
+    suggestionContext: suggestionContext || null,
+  };
 }
 
 function isSafeCrmSlotValue(value: unknown): value is string | number | boolean | null {

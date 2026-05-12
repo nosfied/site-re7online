@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildHumanizedQualificationSummary,
   buildQualificationCrmArtifacts,
   getInitialQualificationState,
   handleQualificationTurn,
@@ -631,4 +632,101 @@ test("buildQualificationCrmArtifacts skips when there is no aiQualification stat
   });
   assert.equal(artifacts.skippedReason, "missing_qualification_slots");
   assert.equal(artifacts.flowContextPatch, undefined);
+});
+
+test("buildHumanizedQualificationSummary creates natural operator narrative", () => {
+  const result = buildHumanizedQualificationSummary({
+    state: {
+      stage: "handoff_ready",
+      slots: {
+        tipo_atendimento: "varejo",
+        produto_interesse: "blusa",
+        duvida_principal: "catalogo",
+      },
+      completedSlots: ["tipo_atendimento", "produto_interesse", "duvida_principal"],
+      missingSlots: [],
+      readyForHandoff: true,
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "tipo_atendimento",
+          label: "Tipo de atendimento",
+          type: "enum",
+          allowedValues: ["atacado", "varejo"],
+          question: "Tipo?",
+        },
+        {
+          key: "produto_interesse",
+          label: "Produto de interesse",
+          question: "Produto?",
+          crmMapping: { leadField: "service" },
+        },
+        {
+          key: "duvida_principal",
+          label: "Dúvida principal",
+          type: "enum",
+          allowedValues: ["catalogo"],
+          question: "Dúvida?",
+        },
+      ],
+    },
+  });
+
+  assert.match(result.operatorSummary ?? "", /procura atendimento do tipo varejo para blusa/i);
+  assert.match(result.operatorSummary ?? "", /Demonstrou interesse em catalogo/i);
+  assert.match(result.operatorSummary ?? "", /Solicitou atendimento da equipe/i);
+  assert.doesNotMatch(result.suggestionContext ?? "", /Tipo Atendimento/i);
+  assert.doesNotMatch(result.suggestionContext ?? "", /produto_interesse/i);
+});
+
+test("buildHumanizedQualificationSummary uses configured labels without tenant hardcode", () => {
+  const result = buildHumanizedQualificationSummary({
+    state: {
+      stage: "handoff_ready",
+      slots: {
+        perfil: "corporativo",
+        empresa: "Acme Ltda",
+        servico: "implantacao",
+        observacao: "urgente",
+      },
+      completedSlots: ["perfil", "empresa", "servico", "observacao"],
+      missingSlots: [],
+      readyForHandoff: true,
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "perfil",
+          label: "Perfil de atendimento",
+          type: "enum",
+          allowedValues: ["corporativo"],
+          question: "Perfil?",
+        },
+        {
+          key: "empresa",
+          label: "Empresa",
+          question: "Empresa?",
+          crmMapping: { leadField: "company" },
+        },
+        {
+          key: "servico",
+          label: "Serviço",
+          question: "Serviço?",
+          crmMapping: { leadField: "service" },
+        },
+        {
+          key: "observacao",
+          label: "Observação",
+          question: "Observação?",
+        },
+      ],
+    },
+  });
+
+  assert.match(result.operatorSummary ?? "", /Acme Ltda/i);
+  assert.match(result.operatorSummary ?? "", /implantacao/i);
+  assert.doesNotMatch(result.operatorSummary ?? "", /varejo|atacado|blusa|vestido/i);
 });
