@@ -656,7 +656,27 @@ export function handleQualificationTurn(params: {
   }
 
   const continuation = schema?.commercialContinuation;
-  const capture = deterministicSlotCapture(currentSlot, params.text, params.handoffKeywords);
+  const preferredSemanticResolution =
+    schema?.semanticResolverEnabled === true &&
+    currentSlot.type !== "enum" &&
+    currentSlot.type !== "boolean" &&
+    currentSlot.askAfter?.length
+      ? resolveSemanticQualification({
+          text: params.text,
+          currentSlot,
+          schema,
+          state,
+          handoffKeywords: params.handoffKeywords,
+        })
+      : null;
+  const shouldPreferSemanticTarget =
+    preferredSemanticResolution?.intent === "answer_slot" &&
+    preferredSemanticResolution.slotKey &&
+    preferredSemanticResolution.slotKey !== currentSlot.key &&
+    (preferredSemanticResolution.confidence ?? 0) >= SEMANTIC_QUALIFICATION_ACCEPT_CONFIDENCE;
+  const capture = shouldPreferSemanticTarget
+    ? ({ captured: false as const, reason: "semantic_preferred" })
+    : deterministicSlotCapture(currentSlot, params.text, params.handoffKeywords);
   let semanticCaptured = false;
   if (capture.captured) {
     const completedSlots = new Set(state.completedSlots ?? []);
@@ -687,13 +707,15 @@ export function handleQualificationTurn(params: {
       event: "ai.semantic.resolve.started",
       payload: { currentSlot: currentSlot.key, slotType: currentSlot.type ?? "text" },
     });
-    const resolution = resolveSemanticQualification({
-      text: params.text,
-      currentSlot,
-      schema,
-      state,
-      handoffKeywords: params.handoffKeywords,
-    });
+    const resolution =
+      preferredSemanticResolution ??
+      resolveSemanticQualification({
+        text: params.text,
+        currentSlot,
+        schema,
+        state,
+        handoffKeywords: params.handoffKeywords,
+      });
     const confidence = typeof resolution.confidence === "number" ? resolution.confidence : 0;
     logs.push({
       event: "ai.semantic.resolve.result",

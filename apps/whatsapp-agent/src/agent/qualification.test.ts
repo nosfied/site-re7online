@@ -884,3 +884,54 @@ test("resolveSemanticQualification accepts useful text for current text slot", (
   assert.equal(result.slotKey, "produto");
   assert.equal(result.normalizedValue, "blusa social preta tamanho g");
 });
+
+test("handleQualificationTurn lets semantic enum intent win over optional text follow-up", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    commercialContinuation: {
+      enabled: true,
+    },
+    slots: [
+      {
+        key: "produto",
+        question: "Produto?",
+        required: true,
+      },
+      {
+        key: "detalhe",
+        question: "Detalhe?",
+        askAfter: ["produto"],
+      },
+      {
+        key: "duvida",
+        type: "enum",
+        allowedValues: ["catalogo", "valores", "disponibilidade"],
+        semanticAliases: {
+          catalogo: ["modelos"],
+          valores: ["quanto fica"],
+          disponibilidade: ["tem peça nova"],
+        },
+        question: "Catálogo, valores ou disponibilidade?",
+        askAfter: ["produto"],
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "blusa",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "quero ver os modelos",
+  });
+
+  assert.equal(result.state?.slots?.detalhe, undefined);
+  assert.equal(result.state?.slots?.duvida, "catalogo");
+  assert.equal(
+    result.logs.some((entry) => entry.event === "ai.semantic.resolve.accepted"),
+    true
+  );
+});
