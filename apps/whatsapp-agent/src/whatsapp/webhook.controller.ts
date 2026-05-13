@@ -1776,7 +1776,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const createEventAndNote = async (input: {
       requestId: string;
       eventName: "flow.handoff.summary.created" | "flow.handoff.suggested_reply.created";
-      noteBody: string;
+      noteBody?: string;
       payload: Record<string, unknown>;
     }) => {
       const existing = await prisma.event.findUnique({
@@ -1814,13 +1814,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           payloadJson: input.payload as Prisma.InputJsonValue,
         },
       });
-      await prisma.leadNote.create({
-        data: {
-          tenantId: params.clientId,
-          leadId: lead.id,
-          body: input.noteBody,
-        },
-      });
+      if (input.noteBody) {
+        await prisma.leadNote.create({
+          data: {
+            tenantId: params.clientId,
+            leadId: lead.id,
+            body: input.noteBody,
+          },
+        });
+      }
       logger.info({
         event: input.eventName,
         clientId: params.clientId,
@@ -1855,7 +1857,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await createEventAndNote({
         requestId: suggestedReplyRequestId,
         eventName: "flow.handoff.suggested_reply.created",
-        noteBody: crmArtifacts.suggestedReplyNote,
         payload: {
           action: "ai_handoff_suggested_reply_created",
           clientId: params.clientId,
@@ -1958,7 +1959,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     reason?: string | null;
     score?: number | null;
     crmSummary?: string | null;
-    crmSuggestedReply?: string | null;
   }) => {
     if (!tenantClientId || !tenantClientKey) return;
     const prisma = getPrisma();
@@ -2029,11 +2029,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const buildTextBody = (input: {
       leadWaId: string;
       summary?: string | null;
-      suggestedReply?: string | null;
       pending?: boolean;
     }) => {
       const summaryBlock = cleanHandoffNotificationText(input.summary);
-      const suggestedReplyBlock = cleanHandoffNotificationText(input.suggestedReply);
       return [
         input.pending ? "Lead pendente no Converta" : "Novo lead no Converta",
         `Tenant: ${tenantDisplayName}`,
@@ -2042,9 +2040,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         "",
         "Resumo do CRM",
         summaryBlock || "Atendimento encaminhado para humano. Revise o inbox para ver o historico completo.",
-        suggestedReplyBlock ? "" : null,
-        suggestedReplyBlock ? "Sugestao de resposta" : null,
-        suggestedReplyBlock,
         "",
         "Acesse o inbox para assumir ou acompanhar o atendimento.",
       ]
@@ -2076,7 +2071,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const summary =
       cleanHandoffNotificationText(params.crmSummary) ??
       buildHandoffLeadNotificationSummary(params.state, params.source);
-    const suggestedReply = cleanHandoffNotificationText(params.crmSuggestedReply);
     if (!openRecipient) {
       await prisma.event.create({
         data: {
@@ -2096,7 +2090,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             leadWaId: params.state.waId,
             originalMessageId: params.messageId,
             summary,
-            suggestedReply,
             recipientCount: recipients.length,
             pendingReason: "no_active_recipient_window_open",
           } as Prisma.InputJsonValue,
@@ -2127,13 +2120,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       reason?: string | null;
       score?: number | null;
       summary?: string | null;
-      suggestedReply?: string | null;
       pending?: boolean;
     }) => {
       const textBody = buildTextBody({
         leadWaId: input.leadWaId,
         summary: input.summary,
-        suggestedReply: input.suggestedReply,
         pending: input.pending,
       });
       const credentials = await resolveCurrentTenantCredentials();
@@ -2161,7 +2152,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             recipientCount: recipients.length,
             pending: input.pending === true,
             hasSummary: Boolean(input.summary),
-            hasSuggestedReply: Boolean(input.suggestedReply),
             status: result.status ?? null,
             metaMessageId: result.messageId ?? null,
             errorBody: result.ok ? null : result.errorBody ?? null,
@@ -2324,8 +2314,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           reason: typeof pending.payload.reason === "string" ? pending.payload.reason : null,
           score: typeof pending.payload.score === "number" ? pending.payload.score : null,
           summary: typeof pending.payload.summary === "string" ? pending.payload.summary : null,
-          suggestedReply:
-            typeof pending.payload.suggestedReply === "string" ? pending.payload.suggestedReply : null,
           pending: true,
         });
       }
@@ -2340,7 +2328,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       reason: params.reason,
       score: params.score,
       summary,
-      suggestedReply,
       pending: false,
     });
   };
@@ -3890,7 +3877,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             reason: aiHandoffPrompt.reason,
             score: aiHandoffPrompt.score,
             crmSummary: aiCrmArtifacts.summaryNote,
-            crmSuggestedReply: aiCrmArtifacts.suggestedReplyNote,
           });
           publishRealtimeEvent({
             type: "conversation.handoff.updated",
@@ -5188,27 +5174,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               waId: maskNumber(normalizedFrom),
               requestId: meta?.requestId,
             });
-            const lead = await ensureLeadForConversation({
-              tenantId: tenantClientId,
-              waId: updatedConversation.waId,
-            });
-            await prisma.leadNote.create({
-              data: {
-                tenantId: tenantClientId,
-                leadId: lead.id,
-                body: `[Sugestão de resposta]\n${suggestedReply}`,
-              },
-            });
-            logger.info({
-              event: "flow.handoff.suggested_reply.attached",
-              clientId: tenantClientId,
-              clientKey: tenantClientKey,
-              flowId: chatbotFlowResult.flowId,
-              eventId: event.id,
-              leadId: lead.id,
-              waId: maskNumber(normalizedFrom),
-              requestId: meta?.requestId,
-            });
           }
         } catch (error) {
           if (
@@ -5293,7 +5258,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         messageId: message.messageId,
         reason: chatbotFlowResult.pendingHandoff.nodeId,
         crmSummary: handoffSummary,
-        crmSuggestedReply: suggestedReply,
       });
       if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
         await notifyAttendantHumanRequested({

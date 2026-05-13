@@ -543,7 +543,7 @@ function mergeReadStatePreservingLocal(current: InboxReadState, incoming: InboxR
 const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", "👏", "🔥", "✅"];
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
-  { value: "WAITING", label: "Aguardando" },
+  { value: "WAITING", label: "Na fila" },
   { value: "IN_PROGRESS", label: "Em atendimento" },
   { value: "WAITING_USER", label: "Aguardando cliente" },
   { value: "CLOSED", label: "Finalizadas" },
@@ -1057,7 +1057,7 @@ function getConversationOperationalStatus(item: Pick<InboxConversationItem, "sta
 function getConversationStatusLabel(status: ConversationOperationalStatus | null) {
   switch (status) {
     case "WAITING":
-      return "Aguardando";
+      return "Na fila";
     case "IN_PROGRESS":
       return "Em atendimento";
     case "WAITING_USER":
