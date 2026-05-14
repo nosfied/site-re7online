@@ -433,6 +433,12 @@ export default function TenantEditPage() {
                 Chatbot e automacao
               </Link>
               <Link
+                href={`/admin/tenants/${encodeURIComponent(tenantId)}/channels`}
+                className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
+              >
+                Canais conectados
+              </Link>
+              <Link
                 href={`/admin/tenants/${encodeURIComponent(tenantId)}/users${clientSnapshot?.clientKey ? `?clientKey=${encodeURIComponent(clientSnapshot.clientKey)}` : ""}`}
                 className="rounded-lg border border-white/10 bg-re7-navy/40 px-4 py-3 text-sm hover:border-re7-sky/40 hover:bg-white/5"
               >

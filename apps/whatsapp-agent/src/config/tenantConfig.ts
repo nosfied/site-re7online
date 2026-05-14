@@ -6,6 +6,8 @@ import {
   normalizeQualificationSchema,
   type AiQualificationSchema,
 } from "../agent/qualification.js";
+import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
+import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
 
 export type TenantConfig = {
   id: string;
@@ -82,6 +84,7 @@ export type TenantConfig = {
   aiAssistantHandoffPrompt?: string;
   aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
   aiQualification?: AiQualificationSchema;
+  channelAccounts?: TenantChannelAccount[];
   crmBusinessStatuses?: CrmBusinessStatusConfig[];
   aiBusinessContext?: string;
   planName?: string;
@@ -294,6 +297,13 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     );
     if (tenant.aiQualification !== undefined) {
       nextTenant.aiQualification = normalizeQualificationSchema(tenant.aiQualification);
+    }
+    if (tenant.channelAccounts !== undefined) {
+      const tenantKey = typeof tenant.id === "string" && tenant.id.trim() ? tenant.id : key;
+      nextTenant.channelAccounts = normalizeTenantChannelAccountsForTenant(
+        tenant.channelAccounts,
+        tenantKey
+      );
     }
     nextTenant.crmBusinessStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
     if (nextTenant.maxActiveAppUsers === undefined) {
@@ -787,6 +797,29 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       normalizeQualificationSchema(tenant.aiQualification) === undefined
     ) {
       throw new Error(`invalid_tenant_ai_qualification:${key}`);
+    }
+    if (
+      tenant.channelAccounts !== undefined &&
+      (!Array.isArray(tenant.channelAccounts) ||
+        tenant.channelAccounts.some(
+          (account) =>
+            !account ||
+            typeof account !== "object" ||
+            Array.isArray(account) ||
+            typeof (account as TenantChannelAccount).id !== "string" ||
+            !(account as TenantChannelAccount).id.trim() ||
+            typeof (account as TenantChannelAccount).tenantKey !== "string" ||
+            !(account as TenantChannelAccount).tenantKey.trim() ||
+            typeof (account as TenantChannelAccount).channelAccountId !== "string" ||
+            !(account as TenantChannelAccount).channelAccountId.trim() ||
+            ((account as TenantChannelAccount).channel !== "whatsapp" &&
+              (account as TenantChannelAccount).channel !== "instagram" &&
+              (account as TenantChannelAccount).channel !== "messenger") ||
+            (account as TenantChannelAccount).provider !== "meta" ||
+            typeof (account as TenantChannelAccount).enabled !== "boolean"
+        ))
+    ) {
+      throw new Error(`invalid_tenant_channel_accounts:${key}`);
     }
     if (
       tenant.aiBusinessContext !== undefined &&

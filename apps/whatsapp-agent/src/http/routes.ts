@@ -102,6 +102,12 @@ import {
   getOrCreateRetentionConfig,
   normalizeRetentionDays,
 } from "../privacy/privacyRetentionService.js";
+import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
+import {
+  handlePassiveMetaWebhookChallenge,
+  handlePassiveMetaWebhookPost,
+  verifyPassiveMetaWebhookSignature,
+} from "./metaWebhookPassive.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
@@ -1343,6 +1349,67 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 500, { error: "server_error" });
     }
     return;
+  }
+
+  if (pathname === "/meta/webhook") {
+    if (req.method === "GET") {
+      handlePassiveMetaWebhookChallenge(query, res, requestId);
+      return;
+    }
+
+    if (req.method === "POST") {
+      readRawBody(req, (rawBody) => {
+        const signature = verifyPassiveMetaWebhookSignature(
+          rawBody,
+          req.headers["x-hub-signature-256"],
+          requestId
+        );
+        if (!signature.ok) {
+          json(res, signature.statusCode, {
+            error: signature.statusCode === 503 ? "configuration_error" : "forbidden",
+            message: "Meta webhook signature rejected.",
+          });
+          return;
+        }
+
+        let payload: unknown = null;
+        try {
+          payload = JSON.parse(rawBody.toString("utf8"));
+        } catch (error) {
+          logger.warn({
+            event: "meta.webhook.error",
+            route: "/meta/webhook",
+            requestId,
+            reason: "invalid_json",
+            message: (error as Error).message,
+          });
+          json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
+          return;
+        }
+
+        json(res, 200, { ok: true });
+        setImmediate(() => {
+          handlePassiveMetaWebhookPost(payload, requestId).catch((error) => {
+            logger.error({
+              event: "meta.webhook.error",
+              route: "/meta/webhook",
+              requestId,
+              reason: (error as Error).message,
+            });
+          });
+        });
+      }).catch((error: Error) => {
+        logger.error({
+          event: "meta.webhook.error",
+          route: "/meta/webhook",
+          requestId,
+          reason: "read_error",
+          message: error.message,
+        });
+        json(res, 400, { error: "invalid_body", message: "Invalid request body." });
+      });
+      return;
+    }
   }
 
   if (
@@ -8635,6 +8702,80 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/channel-accounts")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      if (req.method === "GET") {
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          channelAccounts: tenant.channelAccounts ?? [],
+        });
+        return;
+      }
+
+      if (req.method === "PUT") {
+        const body = await readJsonBody(req, res);
+        if (body === null) return;
+        const rawAccounts = Array.isArray(body)
+          ? body
+          : body && typeof body === "object" && !Array.isArray(body)
+            ? (body as Record<string, unknown>).channelAccounts
+            : undefined;
+        if (!Array.isArray(rawAccounts)) {
+          json(res, 400, httpError("bad_request", "channelAccounts must be an array"));
+          return;
+        }
+
+        try {
+          const channelAccounts = normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId) ?? [];
+          const saved = await saveTenantPatch(tenantId, { channelAccounts });
+          logger.info({
+            event: "admin.tenant.channel_accounts.updated",
+            tenantId,
+            authSource: authToken.source,
+            accountCount: saved.tenant.channelAccounts?.length ?? 0,
+            fieldsChanged: saved.fieldsChanged,
+            backupPath: saved.backupPath,
+            requestId,
+          });
+          json(res, 200, {
+            ok: true,
+            tenantId,
+            backupPath: saved.backupPath,
+            fieldsChanged: saved.fieldsChanged,
+            channelAccounts: saved.tenant.channelAccounts ?? [],
+          });
+        } catch (error) {
+          logger.warn({
+            event: "admin.tenant.channel_accounts.update.rejected",
+            tenantId,
+            authSource: authToken.source,
+            message: (error as Error).message,
+            requestId,
+          });
+          json(res, 400, httpError("invalid_channel_accounts", (error as Error).message));
+        }
+        return;
+      }
+    }
+
+    if (
       req.method === "GET" &&
       pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 4
@@ -11331,6 +11472,7 @@ function diffTenantFields(
   compareField("aiAssistantHandoffPrompt");
   compareField("aiAssistantIntentCatalog");
   compareField("aiQualification");
+  compareField("channelAccounts");
   compareField("crmBusinessStatuses");
   compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");

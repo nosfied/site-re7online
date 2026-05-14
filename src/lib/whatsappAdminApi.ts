@@ -411,6 +411,28 @@ export type TenantOnboardingManualBindPayload = {
   raw?: unknown;
 };
 
+export type Channel = "whatsapp" | "instagram" | "messenger";
+
+export type Provider = "meta";
+
+export type TenantChannelAccount = {
+  id: string;
+  tenantKey: string;
+  channel: Channel;
+  provider: Provider;
+  displayName?: string;
+  channelAccountId: string;
+  externalBusinessId?: string;
+  enabled: boolean;
+  automationEnabled?: boolean;
+  aiEnabled?: boolean;
+  handoffEnabled?: boolean;
+  status?: "connected" | "disabled" | "pending" | "error";
+  tokenStatus?: "not_required" | "configured" | "expired" | "missing";
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -479,6 +501,7 @@ export type TenantConfigResponse = {
     quotaWarnAtPct?: number;
     quotaBlockedReplyText?: string;
     quotaExcludeWaIds?: string[];
+    channelAccounts?: TenantChannelAccount[];
   };
 };
 
@@ -833,6 +856,41 @@ export async function updateTenantById(
     method: "PUT",
     body: JSON.stringify(body),
   });
+}
+
+export async function getTenantChannelAccounts(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  channelAccounts: TenantChannelAccount[];
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts`
+  );
+}
+
+export async function updateTenantChannelAccounts(
+  connection: AdminConnection,
+  tenantId: string,
+  accounts: unknown[]
+): Promise<{
+  ok: true;
+  tenantId: string;
+  backupPath: string;
+  fieldsChanged: string[];
+  channelAccounts: TenantChannelAccount[];
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts`,
+    {
+      method: "PUT",
+      body: JSON.stringify(accounts),
+    }
+  );
 }
 
 export async function bootstrapTenantById(
