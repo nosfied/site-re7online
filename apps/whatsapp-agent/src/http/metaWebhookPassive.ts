@@ -8,6 +8,7 @@ import {
   normalizeChannelInboundEvent,
 } from "../channels/channelNormalizationFacade.js";
 import { recordObservedChannelEvent } from "../channels/observedChannelEvents.js";
+import { simulateChannelRuntimeDryRun } from "../channels/channelRuntimeDryRun.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
@@ -229,6 +230,30 @@ function logTenantResolution(params: {
   });
 }
 
+function logRuntimeDryRun(params: {
+  requestId: string;
+  normalized: ReturnType<typeof normalizeChannelInboundEvent>;
+  tenantKey: string;
+  externalUserHash: string | null;
+  phase: "started" | "completed" | "skipped" | "failed";
+  details?: Record<string, unknown>;
+}) {
+  logger.info({
+    event: `channel.runtime_dry_run.${params.phase}`,
+    route: "/meta/webhook",
+    requestId: params.requestId,
+    tenantKey: params.tenantKey,
+    channel: params.normalized.channel,
+    provider: params.normalized.provider,
+    channelAccountId: params.normalized.channelAccountId,
+    externalMessageId: params.normalized.externalMessageId ?? null,
+    externalUserHash: params.externalUserHash,
+    passive: true,
+    dryRun: true,
+    ...(params.details ?? {}),
+  });
+}
+
 export function handlePassiveMetaWebhookChallenge(
   query: MetaWebhookQuery,
   res: ServerResponse,
@@ -408,6 +433,68 @@ export async function processPassiveMetaWebhookPayload(
         externalMessageId: normalized.externalMessageId ?? null,
         passive: true,
       });
+
+      const tenant = tenants[tenantKey];
+      if (!tenant) {
+        logRuntimeDryRun({
+          requestId: options.requestId,
+          normalized,
+          tenantKey,
+          externalUserHash: hashExternalUserId(normalized.externalUserId),
+          phase: "skipped",
+          details: { reason: "tenant_config_missing" },
+        });
+        continue;
+      }
+
+      try {
+        logRuntimeDryRun({
+          requestId: options.requestId,
+          normalized,
+          tenantKey,
+          externalUserHash: hashExternalUserId(normalized.externalUserId),
+          phase: "started",
+        });
+        const dryRun = simulateChannelRuntimeDryRun({
+          event: normalized,
+          tenant,
+          externalUserHash: hashExternalUserId(normalized.externalUserId),
+        });
+        logRuntimeDryRun({
+          requestId: options.requestId,
+          normalized,
+          tenantKey,
+          externalUserHash: hashExternalUserId(normalized.externalUserId),
+          phase: "completed",
+          details: {
+            qualificationRan: dryRun.qualification.ran,
+            qualificationStage: dryRun.qualification.stage ?? null,
+            capturedSlotCount: dryRun.qualification.capturedSlotKeys.length,
+            completedSlotCount: dryRun.qualification.completedSlots.length,
+            missingSlotCount: dryRun.qualification.missingSlots.length,
+            readyForHandoff: dryRun.qualification.readyForHandoff,
+            crmEnriched: dryRun.crm.enriched,
+            flowContextKeys: dryRun.crm.flowContextKeys,
+            flowTagCount: dryRun.crm.flowTagCount,
+            summaryLineCount: dryRun.crm.summaryLineCount,
+            wouldPromptHandoff: dryRun.handoff.wouldPrompt,
+            wouldActivateHandoff: dryRun.handoff.wouldActivate,
+            wouldContinueToOrchestrator: dryRun.orchestrator.wouldContinue,
+            orchestratorExecuted: dryRun.orchestrator.executed,
+            wouldPersist: dryRun.persistence.wouldPersist,
+            wouldSendOutbound: dryRun.outbound.wouldSend,
+          },
+        });
+      } catch (error) {
+        logRuntimeDryRun({
+          requestId: options.requestId,
+          normalized,
+          tenantKey,
+          externalUserHash: hashExternalUserId(normalized.externalUserId),
+          phase: "failed",
+          details: { reason: (error as Error).message },
+        });
+      }
     } catch (error) {
       unsupportedCount += 1;
       logger.warn({

@@ -442,6 +442,9 @@ test("passive processor logs no raw text or PSID", async () => {
   assert.equal(joined.includes("externalUserHash"), true);
   assert.equal(joined.includes("channel.webhook.passive_received"), true);
   assert.equal(joined.includes("channel.tenant_resolution.matched_enabled"), true);
+  assert.equal(joined.includes("channel.runtime_dry_run.completed"), true);
+  assert.equal(joined.includes('"wouldPersist":false'), true);
+  assert.equal(joined.includes('"wouldSendOutbound":false'), true);
 });
 
 test("passive processor does not throw when Messenger adapter is missing", async () => {
