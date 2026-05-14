@@ -7,6 +7,7 @@ import {
   createDefaultChannelAdapterRegistry,
   normalizeChannelInboundEvent,
 } from "../channels/channelNormalizationFacade.js";
+import { recordObservedChannelEvent } from "../channels/observedChannelEvents.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
@@ -267,6 +268,13 @@ export async function processPassiveMetaWebhookPayload(
 ): Promise<PassiveMetaWebhookProcessResult> {
   const parsed = asRecord(payload);
   if (!parsed) {
+    recordObservedChannelEvent({
+      provider: "meta",
+      channel: "messenger",
+      channelAccountId: "unknown",
+      resolution: "payload_invalid",
+      eventType: "unknown",
+    });
     logger.warn({
       event: "meta.webhook.unsupported",
       route: "/meta/webhook",
@@ -284,6 +292,13 @@ export async function processPassiveMetaWebhookPayload(
   });
 
   if (parsed.object !== "page") {
+    recordObservedChannelEvent({
+      provider: "meta",
+      channel: parsed.object === "instagram" ? "instagram" : "messenger",
+      channelAccountId: "unknown",
+      resolution: "unsupported_object",
+      eventType: "unsupported",
+    });
     logger.info({
       event: "meta.webhook.unsupported",
       route: "/meta/webhook",
@@ -296,6 +311,13 @@ export async function processPassiveMetaWebhookPayload(
 
   const events = getMessengerEvents(parsed);
   if (events.length === 0) {
+    recordObservedChannelEvent({
+      provider: "meta",
+      channel: "messenger",
+      channelAccountId: "unknown",
+      resolution: "no_messaging_events",
+      eventType: "unsupported",
+    });
     logger.info({
       event: "meta.webhook.unsupported",
       route: "/meta/webhook",
@@ -335,6 +357,16 @@ export async function processPassiveMetaWebhookPayload(
       externalMessageId,
       tenantKey: resolution.tenantKey,
       resolution: resolution.resolution,
+    });
+    recordObservedChannelEvent({
+      provider: "meta",
+      channel: "messenger",
+      channelAccountId: item.pageId || "unknown",
+      tenantKey: resolution.tenantKey,
+      resolution: resolution.resolution,
+      externalMessageId: externalMessageId ?? undefined,
+      externalUserHash: externalUserHash ?? undefined,
+      eventType: "message",
     });
 
     if (resolution.resolution !== "matched_enabled") {

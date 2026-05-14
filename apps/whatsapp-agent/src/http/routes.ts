@@ -104,6 +104,11 @@ import {
 } from "../privacy/privacyRetentionService.js";
 import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
 import {
+  clearObservedChannelEvents,
+  getObservedChannelEventStats,
+  listObservedChannelEvents,
+} from "../channels/observedChannelEvents.js";
+import {
   handlePassiveMetaWebhookChallenge,
   handlePassiveMetaWebhookPost,
   verifyPassiveMetaWebhookSignature,
@@ -8447,6 +8452,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         items: Object.values(tenants),
       });
       return;
+    }
+
+    if (pathname === "/admin/channel-events/observed") {
+      if (requireSuperadmin()) return;
+
+      if (req.method === "GET") {
+        const limit = Number(query.limit ?? 100);
+        const events = listObservedChannelEvents({
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+          tenantKey: query.tenantKey,
+          resolution: query.resolution,
+          limit: Number.isFinite(limit) ? limit : 100,
+        });
+        json(res, 200, {
+          ok: true,
+          count: events.length,
+          stats: getObservedChannelEventStats(),
+          events,
+        });
+        return;
+      }
+
+      if (req.method === "DELETE") {
+        const cleared = clearObservedChannelEvents();
+        logger.info({
+          event: "admin.channel_events.observed.cleared",
+          count: cleared,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          cleared,
+          stats: getObservedChannelEventStats(),
+        });
+        return;
+      }
     }
 
     if (req.method === "GET" && pathname === "/admin/tenants/summary") {

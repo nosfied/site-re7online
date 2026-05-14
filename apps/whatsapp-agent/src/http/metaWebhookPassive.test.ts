@@ -7,9 +7,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
+import { clearObservedChannelEvents } from "../channels/observedChannelEvents.js";
 
 process.env.WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "meta-webhook-test-token";
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "meta-webhook-test-secret";
+process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "meta-webhook-admin-test-token";
 
 const originalCwd = process.cwd();
 const originalMetaAppSecret = process.env.META_APP_SECRET;
@@ -99,6 +101,16 @@ async function post(route: string, body: unknown, signature?: string) {
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
+async function adminRequest(method: string, route: string, token = process.env.ADMIN_TOKEN) {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      ...(token ? { "x-admin-token": token } : {}),
+    },
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
 async function flushPassiveWebhookProcessing() {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
@@ -160,6 +172,84 @@ test("POST meta webhook Messenger payload returns 200", async () => {
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
   await flushPassiveWebhookProcessing();
+});
+
+test("observed channel events admin endpoint requires superadmin and returns redacted events", async () => {
+  await flushPassiveWebhookProcessing();
+  clearObservedChannelEvents();
+  await processPassiveMetaWebhookPayload(messengerPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "messenger-page-1",
+            tenantKey: "tenant-a",
+            channel: "messenger",
+            provider: "meta",
+            channelAccountId: "page-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  const unauthorized = await adminRequest("GET", "/admin/channel-events/observed", "");
+  const response = await adminRequest("GET", "/admin/channel-events/observed");
+
+  assert.equal(unauthorized.status, 401);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.count, 1);
+  const rawResponse = JSON.stringify(response.body);
+  assert.equal(rawResponse.includes("olá"), false);
+  assert.equal(rawResponse.includes("psid-1"), false);
+  assert.equal(rawResponse.includes("raw"), false);
+  assert.equal(rawResponse.includes("token"), false);
+  assert.equal(rawResponse.includes("externalUserHash"), true);
+});
+
+test("observed channel events admin DELETE clears buffer", async () => {
+  await flushPassiveWebhookProcessing();
+  clearObservedChannelEvents();
+  await processPassiveMetaWebhookPayload(messengerPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "messenger-page-1",
+            tenantKey: "tenant-a",
+            channel: "messenger",
+            provider: "meta",
+            channelAccountId: "page-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  const deleted = await adminRequest("DELETE", "/admin/channel-events/observed");
+  const listed = await adminRequest("GET", "/admin/channel-events/observed");
+
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.cleared, 1);
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.count, 0);
 });
 
 test("POST meta webhook accepts valid signature when secret is configured", async () => {
