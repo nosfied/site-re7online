@@ -46,6 +46,35 @@ Use este formulario como checklist oficial de coleta de dados antes da configura
 - Regras comerciais que o bot deve respeitar (ex.: nao enviar proposta sem briefing, nao confirmar agendamento sem atendente)
 - Criterios de go-live aprovados pelo cliente
 
+## Automacao + IA
+
+Antes de ativar IA conversacional, preencher o playbook completo:
+
+- [Playbook de Parametrizacao: Automacao + IA por Tenant](./automation-ai-tenant-playbook.md)
+
+Coletar e aprovar:
+
+- modelo de uso desejado: fluxo estruturado, IA controlada, hibrido, humano assistido ou CRM/campanhas;
+- estado desejado de Fluxo configuravel;
+- estado desejado de Classificacao de intencao;
+- estado desejado de Base de IA;
+- estado desejado de IA controlada;
+- maximo de respostas da IA por conversa;
+- contexto de negocio da IA;
+- instrucao adicional aprovada;
+- temas permitidos;
+- temas secundarios;
+- termos bloqueados;
+- palavras-chave de handoff;
+- mensagem de boas-vindas;
+- mensagem fallback;
+- prompt de handoff;
+- catalogo de intencoes;
+- criterios de CRM;
+- situacoes do negocio;
+- follow-up;
+- notificacao interna de novo lead.
+
 ## Confirmacao final
 
 - Todos os dados acima foram conferidos com o cliente
