@@ -10,6 +10,10 @@ import {
 import { getOrCreateDryRunSession, updateDryRunSession } from "../channels/channelDryRunSessions.js";
 import { recordObservedChannelEvent } from "../channels/observedChannelEvents.js";
 import { simulateChannelRuntimeDryRun } from "../channels/channelRuntimeDryRun.js";
+import {
+  buildChannelRuntimeShadowPlan,
+  buildChannelRuntimeShadowPlanLog,
+} from "../channels/channelRuntimeShadowPlan.js";
 import { resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
@@ -429,6 +433,18 @@ export async function processPassiveMetaWebhookPayload(
       continue;
     }
     const runtimeGate = resolveChannelRuntimeGate(resolution.account);
+    const tenantKey = resolution.tenantKey ?? "unknown";
+    const tenant = tenants[tenantKey];
+    const shadowPlan = buildChannelRuntimeShadowPlan({
+      tenantKey,
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: item.pageId,
+      externalUserHash,
+      resolution: resolution.resolution,
+      gate: runtimeGate,
+      qualificationEnabled: tenant?.aiQualification?.enabled === true,
+    });
     logRuntimeGate({
       requestId: options.requestId,
       tenantKey: resolution.tenantKey,
@@ -439,9 +455,13 @@ export async function processPassiveMetaWebhookPayload(
       aiAllowed: runtimeGate.aiAllowed,
       handoffAllowed: runtimeGate.handoffAllowed,
     });
+    logger.info({
+      ...buildChannelRuntimeShadowPlanLog(shadowPlan),
+      route: "/meta/webhook",
+      requestId: options.requestId,
+    });
 
     try {
-      const tenantKey = resolution.tenantKey ?? "unknown";
       const normalized = normalizeChannelInboundEvent({
         tenantKey,
         channel: "messenger",
@@ -475,7 +495,6 @@ export async function processPassiveMetaWebhookPayload(
         passive: true,
       });
 
-      const tenant = tenants[tenantKey];
       if (!tenant) {
         logRuntimeDryRun({
           requestId: options.requestId,
@@ -514,7 +533,7 @@ export async function processPassiveMetaWebhookPayload(
             flowTags: session.flowTags,
           },
         });
-        const updatedSession = updateDryRunSession(runtimeIdentity, dryRun);
+        const updatedSession = updateDryRunSession(runtimeIdentity, dryRun, { shadowPlan });
         logRuntimeDryRun({
           requestId: options.requestId,
           normalized,

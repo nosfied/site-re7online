@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { AIQualificationState, FlowContext } from "../conversation/conversation.types.js";
 import type { Channel, Provider } from "./channel.types.js";
 import type { ChannelRuntimeDryRunResult } from "./channelRuntimeDryRun.js";
+import type { ChannelRuntimeShadowPlan } from "./channelRuntimeShadowPlan.js";
 
 const MAX_DRY_RUN_SESSIONS = 500;
 const DEFAULT_DRY_RUN_SESSION_TTL_MS = 30 * 60 * 1000;
@@ -35,6 +36,7 @@ export type DryRunSessionState = {
     wouldPersist: false;
     wouldSendOutbound: false;
   };
+  lastShadowPlan?: ChannelRuntimeShadowPlan;
 };
 
 function normalizeText(value: unknown, maxLength = 160) {
@@ -117,7 +119,7 @@ export function getOrCreateDryRunSession(
 export function updateDryRunSession(
   identityInput: DryRunSessionIdentity,
   result: ChannelRuntimeDryRunResult,
-  options: { nowIso?: string; ttlMs?: number } = {}
+  options: { nowIso?: string; ttlMs?: number; shadowPlan?: ChannelRuntimeShadowPlan } = {}
 ) {
   const nowIso = options.nowIso ?? new Date().toISOString();
   const session = getOrCreateDryRunSession(identityInput, { nowIso, ttlMs: options.ttlMs });
@@ -136,6 +138,7 @@ export function updateDryRunSession(
       wouldPersist: false,
       wouldSendOutbound: false,
     },
+    lastShadowPlan: options.shadowPlan ?? session.lastShadowPlan,
   };
   sessions.set(sessionKey(normalizeIdentity(identityInput)), next);
   enforceLimit();

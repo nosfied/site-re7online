@@ -406,10 +406,14 @@ test("passive webhook dry-run session reuses state across multiple Messenger tur
   assert.equal(session.lastDryRunResult?.readyForHandoff, true);
   assert.equal(session.lastDryRunResult?.wouldPersist, false);
   assert.equal(session.lastDryRunResult?.wouldSendOutbound, false);
+  assert.equal(session.lastShadowPlan?.summary.wouldPersist, false);
+  assert.equal(session.lastShadowPlan?.summary.wouldSendOutbound, false);
+  assert.equal(session.lastShadowPlan?.gate.reason, "automation_disabled");
   const rawSession = JSON.stringify(session);
   assert.equal(rawSession.includes("psid-1"), false);
   assert.equal(rawSession.includes("quero ver os modelos"), false);
   assert.equal(rawSession.includes("raw"), false);
+  assert.equal(rawSession.includes("conversationKey"), false);
 });
 
 test("POST meta webhook accepts valid signature when secret is configured", async () => {
@@ -598,6 +602,7 @@ test("passive processor logs blocked runtime gate for matched account without ru
 
   const joined = lines.join("\n");
   assert.equal(joined.includes("channel.runtime_gate.blocked"), true);
+  assert.equal(joined.includes("channel.runtime_shadow_plan.created"), true);
   assert.equal(joined.includes('"reason":"automation_disabled"'), true);
   assert.equal(joined.includes('"wouldEnterRuntime":false'), true);
   assert.equal(joined.includes('"wouldSendOutbound":false'), true);
@@ -645,14 +650,16 @@ test("passive processor logs allowed runtime gate without executing real runtime
 
   const joined = lines.join("\n");
   assert.equal(joined.includes("channel.runtime_gate.allowed"), true);
+  assert.equal(joined.includes("channel.runtime_shadow_plan.created"), true);
   assert.equal(joined.includes('"reason":"runtime_allowed"'), true);
   assert.equal(joined.includes('"outboundAllowed":true'), true);
   assert.equal(joined.includes('"aiAllowed":true'), true);
   assert.equal(joined.includes('"handoffAllowed":true'), true);
   assert.equal(joined.includes('"wouldEnterRuntime":true'), true);
-  assert.equal(joined.includes('"wouldSendOutbound":false'), true);
+  assert.equal(joined.includes('"wouldSendOutbound":true'), true);
   assert.equal(joined.includes("channel.runtime_dry_run.completed"), true);
   assert.equal(joined.includes('"wouldPersist":false'), true);
+  assert.equal(joined.includes('"dryRun":true'), true);
   assert.equal(joined.includes('"orchestratorExecuted":false'), true);
   assert.equal(joined.includes("olá"), false);
   assert.equal(joined.includes("psid-1"), false);
@@ -700,6 +707,7 @@ test("passive processor logs no raw text or PSID", async () => {
   assert.equal(joined.includes("channel.webhook.passive_received"), true);
   assert.equal(joined.includes("channel.tenant_resolution.matched_enabled"), true);
   assert.equal(joined.includes("channel.runtime_gate.blocked"), true);
+  assert.equal(joined.includes("channel.runtime_shadow_plan.created"), true);
   assert.equal(joined.includes("channel.runtime_dry_run.completed"), true);
   assert.equal(joined.includes('"wouldPersist":false'), true);
   assert.equal(joined.includes('"wouldSendOutbound":false'), true);

@@ -9,6 +9,7 @@ import {
   updateDryRunSession,
 } from "./channelDryRunSessions.js";
 import type { ChannelRuntimeDryRunResult } from "./channelRuntimeDryRun.js";
+import { buildChannelRuntimeShadowPlan } from "./channelRuntimeShadowPlan.js";
 
 const identity = {
   tenantKey: "tenant-a",
@@ -103,8 +104,25 @@ test("getOrCreateDryRunSession creates and reuses session by redacted identity",
 });
 
 test("updateDryRunSession stores qualification state and result without outbound or persistence", () => {
+  const shadowPlan = buildChannelRuntimeShadowPlan({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    externalUserHash: "hash-user-1",
+    resolution: "matched_enabled",
+    gate: {
+      allowed: true,
+      reason: "runtime_allowed",
+      outboundAllowed: false,
+      aiAllowed: true,
+      handoffAllowed: true,
+    },
+    qualificationEnabled: true,
+  });
   const updated = updateDryRunSession(identity, dryRunResult(), {
     nowIso: "2026-01-01T12:02:00.000Z",
+    shadowPlan,
   });
 
   assert.equal(updated.turnCount, 1);
@@ -113,6 +131,9 @@ test("updateDryRunSession stores qualification state and result without outbound
   assert.deepEqual(updated.lastDryRunResult?.capturedSlots, ["tipo_atendimento"]);
   assert.equal(updated.lastDryRunResult?.wouldPersist, false);
   assert.equal(updated.lastDryRunResult?.wouldSendOutbound, false);
+  assert.equal(updated.lastShadowPlan?.summary.wouldPersist, true);
+  assert.equal(updated.lastShadowPlan?.summary.wouldSendOutbound, false);
+  assert.equal(JSON.stringify(updated.lastShadowPlan).includes("externalUserId"), false);
 });
 
 test("listDryRunSessions filters by tenant/channel and stats summarize sessions", () => {
