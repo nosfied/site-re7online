@@ -13,6 +13,12 @@ type DryRunAnswers = {
   aiOrchestrator?: Record<string, unknown>;
 };
 
+export type ChannelRuntimeDryRunInitialState = {
+  aiQualification?: AIQualificationState;
+  flowContext?: FlowContext;
+  flowTags?: string[];
+};
+
 export type ChannelRuntimeDryRunResult = {
   ok: true;
   dryRun: true;
@@ -56,6 +62,11 @@ export type ChannelRuntimeDryRunResult = {
   };
   outbound: {
     wouldSend: false;
+  };
+  state: {
+    aiQualification?: AIQualificationState;
+    flowContext?: FlowContext;
+    flowTags: string[];
   };
 };
 
@@ -110,13 +121,16 @@ export function simulateChannelRuntimeDryRun(params: {
   event: NormalizedInboundEvent;
   tenant: TenantConfig;
   externalUserHash?: string | null;
+  initialState?: ChannelRuntimeDryRunInitialState;
   nowIso?: string;
 }): ChannelRuntimeDryRunResult {
   const nowIso = params.nowIso ?? new Date().toISOString();
   const answers: DryRunAnswers = {
-    flowContext: {},
+    aiQualification: params.initialState?.aiQualification,
+    flowContext: params.initialState?.flowContext ?? {},
     aiOrchestrator: {},
   };
+  const flowTags = [...(params.initialState?.flowTags ?? [])];
   let logs: QualificationTurnLog[] = [];
   let crmArtifacts:
     | ReturnType<typeof buildQualificationCrmArtifacts>
@@ -130,7 +144,7 @@ export function simulateChannelRuntimeDryRun(params: {
   if (params.tenant.aiQualification?.enabled) {
     const qualification = handleQualificationTurn({
       schema: params.tenant.aiQualification,
-      state: undefined,
+      state: params.initialState?.aiQualification,
       text: params.event.text ?? "",
       handoffKeywords: params.tenant.aiAssistantHandoffKeywords,
       nowIso,
@@ -149,6 +163,9 @@ export function simulateChannelRuntimeDryRun(params: {
           ...(answers.flowContext ?? {}),
           ...crmArtifacts.flowContextPatch,
         };
+      }
+      for (const tag of crmArtifacts.flowTagsToAdd ?? []) {
+        if (!flowTags.includes(tag)) flowTags.push(tag);
       }
     }
   }
@@ -195,6 +212,11 @@ export function simulateChannelRuntimeDryRun(params: {
     },
     outbound: {
       wouldSend: false,
+    },
+    state: {
+      aiQualification: answers.aiQualification,
+      flowContext: answers.flowContext,
+      flowTags,
     },
   };
 }

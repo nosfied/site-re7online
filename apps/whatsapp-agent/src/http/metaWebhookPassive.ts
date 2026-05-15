@@ -7,6 +7,7 @@ import {
   createDefaultChannelAdapterRegistry,
   normalizeChannelInboundEvent,
 } from "../channels/channelNormalizationFacade.js";
+import { getOrCreateDryRunSession, updateDryRunSession } from "../channels/channelDryRunSessions.js";
 import { recordObservedChannelEvent } from "../channels/observedChannelEvents.js";
 import { simulateChannelRuntimeDryRun } from "../channels/channelRuntimeDryRun.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
@@ -455,11 +456,25 @@ export async function processPassiveMetaWebhookPayload(
           externalUserHash: hashExternalUserId(normalized.externalUserId),
           phase: "started",
         });
+        const runtimeIdentity = {
+          tenantKey,
+          channel: normalized.channel,
+          provider: normalized.provider,
+          channelAccountId: normalized.channelAccountId,
+          externalUserHash: hashExternalUserId(normalized.externalUserId) ?? "",
+        };
+        const session = getOrCreateDryRunSession(runtimeIdentity);
         const dryRun = simulateChannelRuntimeDryRun({
           event: normalized,
           tenant,
           externalUserHash: hashExternalUserId(normalized.externalUserId),
+          initialState: {
+            aiQualification: session.aiQualification,
+            flowContext: session.flowContext,
+            flowTags: session.flowTags,
+          },
         });
+        const updatedSession = updateDryRunSession(runtimeIdentity, dryRun);
         logRuntimeDryRun({
           requestId: options.requestId,
           normalized,
@@ -467,6 +482,8 @@ export async function processPassiveMetaWebhookPayload(
           externalUserHash: hashExternalUserId(normalized.externalUserId),
           phase: "completed",
           details: {
+            dryRunSessionId: updatedSession.id,
+            dryRunTurnCount: updatedSession.turnCount,
             qualificationRan: dryRun.qualification.ran,
             qualificationStage: dryRun.qualification.stage ?? null,
             capturedSlotCount: dryRun.qualification.capturedSlotKeys.length,

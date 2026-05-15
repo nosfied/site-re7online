@@ -7,7 +7,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
+import { clearDryRunSessions, listDryRunSessions } from "../channels/channelDryRunSessions.js";
 import { clearObservedChannelEvents } from "../channels/observedChannelEvents.js";
+import type { TenantConfig } from "../config/tenantConfig.js";
 
 process.env.WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "meta-webhook-test-token";
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "meta-webhook-test-secret";
@@ -43,6 +45,85 @@ const messengerPayload = {
     },
   ],
 };
+
+function messengerPayloadWithText(text: string, mid: string) {
+  return {
+    object: "page",
+    entry: [
+      {
+        id: "page-1",
+        messaging: [
+          {
+            sender: { id: "psid-1" },
+            recipient: { id: "page-1" },
+            timestamp: 1778760000000,
+            message: {
+              mid,
+              text,
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function tenantWithQualification(): TenantConfig {
+  return {
+    id: "tenant-a",
+    name: "Tenant A",
+    metaPhoneNumberId: "phone-tenant-a",
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    aiAssistantHandoffKeywords: ["atendente", "humano"],
+    aiQualification: {
+      enabled: true,
+      semanticResolverEnabled: true,
+      schemaVersion: "1",
+      slots: [
+        {
+          key: "tipo_atendimento",
+          label: "Tipo de atendimento",
+          type: "enum",
+          required: true,
+          allowedValues: ["atacado", "varejo"],
+          captureHints: ["atacado", "varejo"],
+          question: "Você procura atendimento para atacado ou varejo?",
+        },
+        {
+          key: "produto_interesse",
+          label: "Produto de interesse",
+          type: "text",
+          required: true,
+          question: "Qual produto?",
+        },
+        {
+          key: "duvida_principal",
+          label: "Dúvida principal",
+          type: "enum",
+          required: false,
+          allowedValues: ["catalogo", "valores", "disponibilidade"],
+          semanticAliases: { catalogo: ["modelos"] },
+          captureHints: ["catalogo", "preco"],
+          askAfter: ["produto_interesse"],
+          question: "Você quer catálogo, valores ou disponibilidade?",
+        },
+      ],
+      handoffWhen: ["duvida_principal"],
+    },
+    channelAccounts: [
+      {
+        id: "messenger-page-1",
+        tenantKey: "tenant-a",
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: "page-1",
+        enabled: true,
+      },
+    ],
+  };
+}
 
 async function writeTenants() {
   await fs.mkdir(path.dirname(tenantsPath), { recursive: true });
@@ -137,6 +218,10 @@ test.before(async () => {
   const address = server.address();
   assert.equal(typeof address, "object");
   baseUrl = `http://127.0.0.1:${(address as AddressInfo).port}`;
+});
+
+test.beforeEach(() => {
+  clearDryRunSessions();
 });
 
 test.after(async () => {
@@ -250,6 +335,81 @@ test("observed channel events admin DELETE clears buffer", async () => {
   assert.equal(deleted.body.cleared, 1);
   assert.equal(listed.status, 200);
   assert.equal(listed.body.count, 0);
+});
+
+test("dry-run sessions admin endpoint requires superadmin and returns redacted sessions", async () => {
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("varejo", "mid-dry-1"), {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": tenantWithQualification(),
+    },
+  });
+
+  const unauthorized = await adminRequest("GET", "/admin/channel-events/dry-run-sessions", "");
+  const response = await adminRequest("GET", "/admin/channel-events/dry-run-sessions");
+
+  assert.equal(unauthorized.status, 401);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.count, 1);
+  const rawResponse = JSON.stringify(response.body);
+  assert.equal(rawResponse.includes("psid-1"), false);
+  assert.equal(rawResponse.includes("raw"), false);
+  assert.equal(rawResponse.includes("token"), false);
+  assert.equal(rawResponse.includes("externalUserHash"), true);
+  assert.equal(rawResponse.includes("tipo_atendimento"), true);
+});
+
+test("dry-run sessions admin DELETE clears sessions", async () => {
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("varejo", "mid-dry-1"), {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": tenantWithQualification(),
+    },
+  });
+
+  const deleted = await adminRequest("DELETE", "/admin/channel-events/dry-run-sessions");
+  const listed = await adminRequest("GET", "/admin/channel-events/dry-run-sessions");
+
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.cleared, 1);
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.count, 0);
+});
+
+test("passive webhook dry-run session reuses state across multiple Messenger turns", async () => {
+  const tenants = {
+    "tenant-a": tenantWithQualification(),
+  };
+
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("varejo", "mid-turn-1"), {
+    requestId: "test-request-1",
+    tenants,
+  });
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("blusa", "mid-turn-2"), {
+    requestId: "test-request-2",
+    tenants,
+  });
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("quero ver os modelos", "mid-turn-3"), {
+    requestId: "test-request-3",
+    tenants,
+  });
+
+  const sessions = listDryRunSessions();
+  assert.equal(sessions.length, 1);
+  const [session] = sessions;
+  assert.equal(session.turnCount, 3);
+  assert.equal(session.aiQualification?.slots?.tipo_atendimento, "varejo");
+  assert.equal(session.aiQualification?.slots?.produto_interesse, "blusa");
+  assert.equal(session.aiQualification?.slots?.duvida_principal, "catalogo");
+  assert.equal(session.aiQualification?.readyForHandoff, true);
+  assert.equal(session.lastDryRunResult?.readyForHandoff, true);
+  assert.equal(session.lastDryRunResult?.wouldPersist, false);
+  assert.equal(session.lastDryRunResult?.wouldSendOutbound, false);
+  const rawSession = JSON.stringify(session);
+  assert.equal(rawSession.includes("psid-1"), false);
+  assert.equal(rawSession.includes("quero ver os modelos"), false);
+  assert.equal(rawSession.includes("raw"), false);
 });
 
 test("POST meta webhook accepts valid signature when secret is configured", async () => {

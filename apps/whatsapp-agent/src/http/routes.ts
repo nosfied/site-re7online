@@ -104,6 +104,11 @@ import {
 } from "../privacy/privacyRetentionService.js";
 import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
 import {
+  clearDryRunSessions,
+  getDryRunSessionStats,
+  listDryRunSessions,
+} from "../channels/channelDryRunSessions.js";
+import {
   clearObservedChannelEvents,
   getObservedChannelEventStats,
   listObservedChannelEvents,
@@ -8489,6 +8494,45 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           cleared,
           stats: getObservedChannelEventStats(),
+        });
+        return;
+      }
+    }
+
+    if (pathname === "/admin/channel-events/dry-run-sessions") {
+      if (requireSuperadmin()) return;
+
+      if (req.method === "GET") {
+        const limit = Number(query.limit ?? 100);
+        const sessions = listDryRunSessions({
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+          tenantKey: query.tenantKey,
+          limit: Number.isFinite(limit) ? limit : 100,
+        });
+        json(res, 200, {
+          ok: true,
+          count: sessions.length,
+          stats: getDryRunSessionStats(),
+          sessions,
+        });
+        return;
+      }
+
+      if (req.method === "DELETE") {
+        const cleared = clearDryRunSessions();
+        logger.info({
+          event: "admin.channel_events.dry_run_sessions.cleared",
+          count: cleared,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          cleared,
+          stats: getDryRunSessionStats(),
         });
         return;
       }
