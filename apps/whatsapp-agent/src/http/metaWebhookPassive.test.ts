@@ -561,6 +561,103 @@ test("passive processor observes disabled account without normalizing", async ()
   assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
 });
 
+test("passive processor logs blocked runtime gate for matched account without runtime flags", async () => {
+  const originalInfo = console.info;
+  const lines: string[] = [];
+  console.info = (...args: unknown[]) => {
+    lines.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    await processPassiveMetaWebhookPayload(messengerPayload, {
+      requestId: "test-request",
+      tenants: {
+        "tenant-a": {
+          id: "tenant-a",
+          name: "Tenant A",
+          metaPhoneNumberId: "phone-tenant-a",
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          channelAccounts: [
+            {
+              id: "messenger-page-1",
+              tenantKey: "tenant-a",
+              channel: "messenger",
+              provider: "meta",
+              channelAccountId: "page-1",
+              enabled: true,
+              status: "connected",
+            },
+          ],
+        },
+      },
+    });
+  } finally {
+    console.info = originalInfo;
+  }
+
+  const joined = lines.join("\n");
+  assert.equal(joined.includes("channel.runtime_gate.blocked"), true);
+  assert.equal(joined.includes('"reason":"automation_disabled"'), true);
+  assert.equal(joined.includes('"wouldEnterRuntime":false'), true);
+  assert.equal(joined.includes('"wouldSendOutbound":false'), true);
+});
+
+test("passive processor logs allowed runtime gate without executing real runtime", async () => {
+  const originalInfo = console.info;
+  const lines: string[] = [];
+  console.info = (...args: unknown[]) => {
+    lines.push(args.map((arg) => String(arg)).join(" "));
+  };
+  try {
+    await processPassiveMetaWebhookPayload(messengerPayload, {
+      requestId: "test-request",
+      tenants: {
+        "tenant-a": {
+          id: "tenant-a",
+          name: "Tenant A",
+          metaPhoneNumberId: "phone-tenant-a",
+          allowlist: [],
+          handoffAttendantWaid: "",
+          defaultLanguage: "pt_BR",
+          channelAccounts: [
+            {
+              id: "messenger-page-1",
+              tenantKey: "tenant-a",
+              channel: "messenger",
+              provider: "meta",
+              channelAccountId: "page-1",
+              enabled: true,
+              automationEnabled: true,
+              runtimeEnabled: true,
+              outboundEnabled: true,
+              aiEnabled: true,
+              handoffEnabled: true,
+              status: "connected",
+            },
+          ],
+        },
+      },
+    });
+  } finally {
+    console.info = originalInfo;
+  }
+
+  const joined = lines.join("\n");
+  assert.equal(joined.includes("channel.runtime_gate.allowed"), true);
+  assert.equal(joined.includes('"reason":"runtime_allowed"'), true);
+  assert.equal(joined.includes('"outboundAllowed":true'), true);
+  assert.equal(joined.includes('"aiAllowed":true'), true);
+  assert.equal(joined.includes('"handoffAllowed":true'), true);
+  assert.equal(joined.includes('"wouldEnterRuntime":true'), true);
+  assert.equal(joined.includes('"wouldSendOutbound":false'), true);
+  assert.equal(joined.includes("channel.runtime_dry_run.completed"), true);
+  assert.equal(joined.includes('"wouldPersist":false'), true);
+  assert.equal(joined.includes('"orchestratorExecuted":false'), true);
+  assert.equal(joined.includes("olá"), false);
+  assert.equal(joined.includes("psid-1"), false);
+});
+
 test("passive processor logs no raw text or PSID", async () => {
   const originalInfo = console.info;
   const lines: string[] = [];
@@ -602,6 +699,7 @@ test("passive processor logs no raw text or PSID", async () => {
   assert.equal(joined.includes("externalUserHash"), true);
   assert.equal(joined.includes("channel.webhook.passive_received"), true);
   assert.equal(joined.includes("channel.tenant_resolution.matched_enabled"), true);
+  assert.equal(joined.includes("channel.runtime_gate.blocked"), true);
   assert.equal(joined.includes("channel.runtime_dry_run.completed"), true);
   assert.equal(joined.includes('"wouldPersist":false'), true);
   assert.equal(joined.includes('"wouldSendOutbound":false'), true);

@@ -10,6 +10,7 @@ import {
 import { getOrCreateDryRunSession, updateDryRunSession } from "../channels/channelDryRunSessions.js";
 import { recordObservedChannelEvent } from "../channels/observedChannelEvents.js";
 import { simulateChannelRuntimeDryRun } from "../channels/channelRuntimeDryRun.js";
+import { resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
@@ -255,6 +256,34 @@ function logRuntimeDryRun(params: {
   });
 }
 
+function logRuntimeGate(params: {
+  requestId: string;
+  tenantKey?: string;
+  channelAccountId: string;
+  reason: string;
+  allowed: boolean;
+  outboundAllowed: boolean;
+  aiAllowed: boolean;
+  handoffAllowed: boolean;
+}) {
+  logger.info({
+    event: params.allowed ? "channel.runtime_gate.allowed" : "channel.runtime_gate.blocked",
+    route: "/meta/webhook",
+    requestId: params.requestId,
+    tenantKey: params.tenantKey ?? null,
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: params.channelAccountId || null,
+    reason: params.reason,
+    outboundAllowed: params.outboundAllowed,
+    aiAllowed: params.aiAllowed,
+    handoffAllowed: params.handoffAllowed,
+    passive: true,
+    wouldEnterRuntime: params.allowed,
+    wouldSendOutbound: false,
+  });
+}
+
 export function handlePassiveMetaWebhookChallenge(
   query: MetaWebhookQuery,
   res: ServerResponse,
@@ -399,6 +428,17 @@ export async function processPassiveMetaWebhookPayload(
       unsupportedCount += 1;
       continue;
     }
+    const runtimeGate = resolveChannelRuntimeGate(resolution.account);
+    logRuntimeGate({
+      requestId: options.requestId,
+      tenantKey: resolution.tenantKey,
+      channelAccountId: item.pageId,
+      reason: runtimeGate.reason,
+      allowed: runtimeGate.allowed,
+      outboundAllowed: runtimeGate.outboundAllowed,
+      aiAllowed: runtimeGate.aiAllowed,
+      handoffAllowed: runtimeGate.handoffAllowed,
+    });
 
     try {
       const tenantKey = resolution.tenantKey ?? "unknown";

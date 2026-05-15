@@ -6,8 +6,13 @@ import {
   isChannelAutomationEnabled,
   isChannelHandoffEnabled,
   listEnabledTenantChannels,
+  canRunChannelRuntime,
+  canSendChannelOutbound,
+  canUseChannelAi,
+  canUseChannelHandoff,
   normalizeTenantChannelAccountsForTenant,
   normalizeTenantChannelAccount,
+  resolveChannelRuntimeGate,
   validateTenantChannelAccount,
 } from "./tenantChannelAccount.js";
 
@@ -22,6 +27,8 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
     externalBusinessId: " business_123 ",
     enabled: true,
     automationEnabled: true,
+    runtimeEnabled: true,
+    outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
     status: "connected",
@@ -40,6 +47,8 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
   assert.equal(account?.externalBusinessId, "business_123");
   assert.equal(account?.enabled, true);
   assert.equal(account?.automationEnabled, true);
+  assert.equal(account?.runtimeEnabled, true);
+  assert.equal(account?.outboundEnabled, true);
   assert.equal(account?.aiEnabled, true);
   assert.equal(account?.handoffEnabled, true);
   assert.equal("token" in (account ?? {}), false);
@@ -87,11 +96,15 @@ test("normalizeTenantChannelAccount defaults disabled flags safely", () => {
 
   assert.equal(account.enabled, false);
   assert.equal(account.automationEnabled, false);
+  assert.equal(account.runtimeEnabled, false);
+  assert.equal(account.outboundEnabled, false);
   assert.equal(account.aiEnabled, false);
   assert.equal(account.handoffEnabled, false);
   assert.equal(account.status, "disabled");
   assert.equal(account.tokenStatus, "missing");
   assert.equal(isChannelAutomationEnabled(account), false);
+  assert.equal(canRunChannelRuntime(account), false);
+  assert.equal(canSendChannelOutbound(account), false);
   assert.equal(isChannelAiEnabled(account), false);
   assert.equal(isChannelHandoffEnabled(account), false);
 });
@@ -104,6 +117,8 @@ test("enabled account gates automation, AI and handoff independently", () => {
     channelAccountId: "phone-1",
     enabled: false,
     automationEnabled: true,
+    runtimeEnabled: true,
+    outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
   });
@@ -114,6 +129,8 @@ test("enabled account gates automation, AI and handoff independently", () => {
     channelAccountId: "phone-1",
     enabled: true,
     automationEnabled: true,
+    runtimeEnabled: true,
+    outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
   });
@@ -122,8 +139,86 @@ test("enabled account gates automation, AI and handoff independently", () => {
   assert.equal(isChannelAiEnabled(disabled), false);
   assert.equal(isChannelHandoffEnabled(disabled), false);
   assert.equal(isChannelAutomationEnabled(enabled), true);
+  assert.equal(canRunChannelRuntime(enabled), true);
+  assert.equal(canSendChannelOutbound(enabled), true);
+  assert.equal(canUseChannelAi(enabled), true);
+  assert.equal(canUseChannelHandoff(enabled), true);
   assert.equal(isChannelAiEnabled(enabled), true);
   assert.equal(isChannelHandoffEnabled(enabled), true);
+});
+
+test("resolveChannelRuntimeGate blocks safely by default and reports flag permissions", () => {
+  assert.deepEqual(resolveChannelRuntimeGate(null), {
+    allowed: false,
+    reason: "account_missing",
+    outboundAllowed: false,
+    aiAllowed: false,
+    handoffAllowed: false,
+  });
+
+  const disabled = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    enabled: false,
+    automationEnabled: true,
+    runtimeEnabled: true,
+    outboundEnabled: true,
+    aiEnabled: true,
+    handoffEnabled: true,
+  });
+  assert.equal(resolveChannelRuntimeGate(disabled).reason, "channel_disabled");
+  assert.equal(resolveChannelRuntimeGate(disabled).allowed, false);
+  assert.equal(resolveChannelRuntimeGate(disabled).outboundAllowed, false);
+
+  const automationDisabled = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    enabled: true,
+    automationEnabled: false,
+    runtimeEnabled: true,
+  });
+  assert.equal(resolveChannelRuntimeGate(automationDisabled).reason, "automation_disabled");
+
+  const runtimeDisabled = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    enabled: true,
+    automationEnabled: true,
+    runtimeEnabled: false,
+  });
+  assert.equal(resolveChannelRuntimeGate(runtimeDisabled).reason, "runtime_disabled");
+});
+
+test("resolveChannelRuntimeGate allows runtime only with explicit runtime flag", () => {
+  const account = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    enabled: true,
+    automationEnabled: true,
+    runtimeEnabled: true,
+    outboundEnabled: false,
+    aiEnabled: true,
+    handoffEnabled: false,
+  });
+  const gate = resolveChannelRuntimeGate(account);
+
+  assert.deepEqual(gate, {
+    allowed: true,
+    reason: "runtime_allowed",
+    outboundAllowed: false,
+    aiAllowed: true,
+    handoffAllowed: false,
+  });
+  assert.equal(canRunChannelRuntime(account), true);
+  assert.equal(canSendChannelOutbound(account), false);
 });
 
 test("findTenantChannelAccount scopes by tenant, channel, provider and account", () => {

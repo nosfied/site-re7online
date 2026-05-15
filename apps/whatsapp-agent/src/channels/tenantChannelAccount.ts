@@ -95,6 +95,8 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
     externalBusinessId: sanitizeIdentifier(input.externalBusinessId),
     enabled,
     automationEnabled: normalizeBoolean(input.automationEnabled, false),
+    runtimeEnabled: normalizeBoolean(input.runtimeEnabled, false),
+    outboundEnabled: normalizeBoolean(input.outboundEnabled, false),
     aiEnabled: normalizeBoolean(input.aiEnabled, false),
     handoffEnabled: normalizeBoolean(input.handoffEnabled, false),
     status,
@@ -139,12 +141,92 @@ export function isChannelAutomationEnabled(account?: TenantChannelAccount | null
   return Boolean(account?.enabled && account.automationEnabled);
 }
 
+export function canRunChannelRuntime(account?: TenantChannelAccount | null) {
+  return Boolean(account?.enabled && account.automationEnabled && account.runtimeEnabled);
+}
+
+export function canSendChannelOutbound(account?: TenantChannelAccount | null) {
+  return Boolean(account?.enabled && account.outboundEnabled);
+}
+
 export function isChannelAiEnabled(account?: TenantChannelAccount | null) {
+  return Boolean(account?.enabled && account.aiEnabled);
+}
+
+export function canUseChannelAi(account?: TenantChannelAccount | null) {
   return Boolean(account?.enabled && account.aiEnabled);
 }
 
 export function isChannelHandoffEnabled(account?: TenantChannelAccount | null) {
   return Boolean(account?.enabled && account.handoffEnabled);
+}
+
+export function canUseChannelHandoff(account?: TenantChannelAccount | null) {
+  return Boolean(account?.enabled && account.handoffEnabled);
+}
+
+export type ChannelRuntimeGateDecision = {
+  allowed: boolean;
+  reason:
+    | "account_missing"
+    | "channel_disabled"
+    | "automation_disabled"
+    | "runtime_disabled"
+    | "runtime_allowed";
+  outboundAllowed: boolean;
+  aiAllowed: boolean;
+  handoffAllowed: boolean;
+};
+
+export function resolveChannelRuntimeGate(
+  account?: TenantChannelAccount | null
+): ChannelRuntimeGateDecision {
+  const outboundAllowed = canSendChannelOutbound(account);
+  const aiAllowed = canUseChannelAi(account);
+  const handoffAllowed = canUseChannelHandoff(account);
+  if (!account) {
+    return {
+      allowed: false,
+      reason: "account_missing",
+      outboundAllowed,
+      aiAllowed,
+      handoffAllowed,
+    };
+  }
+  if (!account.enabled) {
+    return {
+      allowed: false,
+      reason: "channel_disabled",
+      outboundAllowed,
+      aiAllowed,
+      handoffAllowed,
+    };
+  }
+  if (account.automationEnabled !== true) {
+    return {
+      allowed: false,
+      reason: "automation_disabled",
+      outboundAllowed,
+      aiAllowed,
+      handoffAllowed,
+    };
+  }
+  if (account.runtimeEnabled !== true) {
+    return {
+      allowed: false,
+      reason: "runtime_disabled",
+      outboundAllowed,
+      aiAllowed,
+      handoffAllowed,
+    };
+  }
+  return {
+    allowed: true,
+    reason: "runtime_allowed",
+    outboundAllowed,
+    aiAllowed,
+    handoffAllowed,
+  };
 }
 
 export function findTenantChannelAccount(

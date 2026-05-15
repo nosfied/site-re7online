@@ -124,6 +124,8 @@ test("PUT creates passive channel account, coerces tenantKey, redacts tokens and
       externalBusinessId: "business-1",
       enabled: true,
       automationEnabled: true,
+      runtimeEnabled: true,
+      outboundEnabled: true,
       aiEnabled: true,
       handoffEnabled: true,
       status: "connected",
@@ -141,6 +143,8 @@ test("PUT creates passive channel account, coerces tenantKey, redacts tokens and
   assert.equal(response.body.channelAccounts.length, 1);
   assert.equal(response.body.channelAccounts[0]?.tenantKey, "tenant-a");
   assert.equal(response.body.channelAccounts[0]?.channelAccountId, "ig-account-1");
+  assert.equal(response.body.channelAccounts[0]?.runtimeEnabled, true);
+  assert.equal(response.body.channelAccounts[0]?.outboundEnabled, true);
   assert.equal("token" in (response.body.channelAccounts[0] ?? {}), false);
   assert.equal("accessToken" in (response.body.channelAccounts[0] ?? {}), false);
   assert.equal("pageAccessToken" in (response.body.channelAccounts[0] ?? {}), false);

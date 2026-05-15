@@ -14,6 +14,8 @@ export type TenantChannelAccount = {
   externalBusinessId?: string;
   enabled: boolean;
   automationEnabled?: boolean;
+  runtimeEnabled?: boolean;
+  outboundEnabled?: boolean;
   aiEnabled?: boolean;
   handoffEnabled?: boolean;
   status?: TenantChannelAccountStatus;

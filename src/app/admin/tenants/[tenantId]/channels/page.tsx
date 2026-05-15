@@ -21,6 +21,8 @@ type ChannelAccountDraft = {
   externalBusinessId: string;
   enabled: boolean;
   automationEnabled: boolean;
+  runtimeEnabled: boolean;
+  outboundEnabled: boolean;
   aiEnabled: boolean;
   handoffEnabled: boolean;
   status: NonNullable<TenantChannelAccount["status"]>;
@@ -51,6 +53,8 @@ function createDraft(): ChannelAccountDraft {
     externalBusinessId: "",
     enabled: false,
     automationEnabled: false,
+    runtimeEnabled: false,
+    outboundEnabled: false,
     aiEnabled: false,
     handoffEnabled: false,
     status: "pending",
@@ -68,6 +72,8 @@ function toDraft(account: TenantChannelAccount): ChannelAccountDraft {
     externalBusinessId: account.externalBusinessId ?? "",
     enabled: account.enabled,
     automationEnabled: account.automationEnabled === true,
+    runtimeEnabled: account.runtimeEnabled === true,
+    outboundEnabled: account.outboundEnabled === true,
     aiEnabled: account.aiEnabled === true,
     handoffEnabled: account.handoffEnabled === true,
     status: account.status ?? (account.enabled ? "connected" : "disabled"),
@@ -86,6 +92,8 @@ function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
     externalBusinessId: draft.externalBusinessId.trim() || undefined,
     enabled: draft.enabled,
     automationEnabled: draft.automationEnabled,
+    runtimeEnabled: draft.runtimeEnabled,
+    outboundEnabled: draft.outboundEnabled,
     aiEnabled: draft.aiEnabled,
     handoffEnabled: draft.handoffEnabled,
     status: draft.status,
@@ -221,8 +229,8 @@ export default function TenantChannelsPage() {
         </header>
 
         <section className="rounded-xl border border-amber-400/30 bg-amber-900/20 p-4 text-sm text-amber-100">
-          <strong>Configuração passiva.</strong> Esta tela prepara contas de canal para uso futuro.
-          Ela nao ativa envio, recebimento, automacao, IA ou handoff em Instagram/Messenger nesta etapa.
+          <strong>Ativação controlada.</strong> Esta tela prepara contas de canal para uso futuro.
+          Runtime real exige Ativo, Automação e Runtime ligados. Envio real só é liberado com Outbound.
           Nenhum token e exibido ou salvo por esta interface.
         </section>
 
@@ -369,10 +377,12 @@ export default function TenantChannelsPage() {
                 </label>
               </div>
 
-              <div className="mt-4 grid gap-2 md:grid-cols-4">
+              <div className="mt-4 grid gap-2 md:grid-cols-3">
                 {[
                   ["enabled", "Ativo"],
                   ["automationEnabled", "Automação"],
+                  ["runtimeEnabled", "Runtime"],
+                  ["outboundEnabled", "Outbound"],
                   ["aiEnabled", "IA"],
                   ["handoffEnabled", "Handoff"],
                 ].map(([field, label]) => (
@@ -389,7 +399,12 @@ export default function TenantChannelsPage() {
                           index,
                           field as keyof Pick<
                             ChannelAccountDraft,
-                            "enabled" | "automationEnabled" | "aiEnabled" | "handoffEnabled"
+                            | "enabled"
+                            | "automationEnabled"
+                            | "runtimeEnabled"
+                            | "outboundEnabled"
+                            | "aiEnabled"
+                            | "handoffEnabled"
                           >,
                           event.target.checked
                         )
