@@ -222,6 +222,7 @@ test.before(async () => {
 
 test.beforeEach(() => {
   clearDryRunSessions();
+  clearObservedChannelEvents();
 });
 
 test.after(async () => {
@@ -375,6 +376,51 @@ test("dry-run sessions admin DELETE clears sessions", async () => {
   assert.equal(deleted.body.cleared, 1);
   assert.equal(listed.status, 200);
   assert.equal(listed.body.count, 0);
+});
+
+test("channel runtime readiness endpoint requires superadmin and returns redacted report", async () => {
+  await processPassiveMetaWebhookPayload(messengerPayloadWithText("varejo", "mid-readiness-1"), {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": tenantWithQualification(),
+    },
+  });
+
+  const unauthorized = await adminRequest("GET", "/admin/channel-runtime-readiness", "");
+  const response = await adminRequest("GET", "/admin/channel-runtime-readiness?tenant=tenant-a&channel=messenger");
+
+  assert.equal(unauthorized.status, 401);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.count, 1);
+  const reports = response.body.reports as Array<Record<string, unknown>>;
+  const report = reports[0] as Record<string, unknown>;
+  assert.equal(report.tenantKey, "tenant-a");
+  assert.equal(report.channel, "messenger");
+  assert.equal(report.channelAccountId, "page-1");
+  assert.equal((report.observed as Record<string, unknown>).totalEvents, 1);
+  assert.equal(typeof (report.observed as Record<string, unknown>).lastEventAt, "string");
+  assert.equal((report.observed as Record<string, unknown>).lastResolution, "matched_enabled");
+  assert.equal((report.dryRun as Record<string, unknown>).sessions, 1);
+  assert.equal(((report.gate as Record<string, unknown>).allowed as boolean), false);
+  assert.equal(
+    ((report.readiness as Record<string, unknown>).blockers as string[]).includes("runtime_disabled"),
+    true
+  );
+  const rawResponse = JSON.stringify(response.body);
+  assert.equal(rawResponse.includes("varejo"), false);
+  assert.equal(rawResponse.includes("psid-1"), false);
+  assert.equal(rawResponse.includes("raw"), false);
+  assert.equal(rawResponse.includes("externalUserHash"), false);
+});
+
+test("channel runtime readiness endpoint supports empty tenant filter", async () => {
+  const response = await adminRequest("GET", "/admin/channel-runtime-readiness?tenant=missing-tenant");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.count, 0);
+  assert.deepEqual(response.body.reports, []);
 });
 
 test("passive webhook dry-run session reuses state across multiple Messenger turns", async () => {

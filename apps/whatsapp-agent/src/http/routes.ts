@@ -113,6 +113,7 @@ import {
   getObservedChannelEventStats,
   listObservedChannelEvents,
 } from "../channels/observedChannelEvents.js";
+import { buildChannelRuntimeReadinessReports } from "../channels/channelRuntimeReadiness.js";
 import {
   handlePassiveMetaWebhookChallenge,
   handlePassiveMetaWebhookPost,
@@ -8536,6 +8537,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
+    }
+
+    if (req.method === "GET" && pathname === "/admin/channel-runtime-readiness") {
+      if (requireSuperadmin()) return;
+      const tenants = await getTenants();
+      const reports = buildChannelRuntimeReadinessReports({
+        tenants,
+        observedEvents: listObservedChannelEvents({ limit: 500 }),
+        dryRunSessions: listDryRunSessions({ limit: 500 }),
+        filter: {
+          tenantKey: typeof query.tenant === "string" ? query.tenant : undefined,
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        count: reports.length,
+        reports,
+      });
+      return;
     }
 
     if (req.method === "GET" && pathname === "/admin/tenants/summary") {
