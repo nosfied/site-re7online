@@ -192,6 +192,23 @@ async function adminRequest(method: string, route: string, token = process.env.A
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
+async function adminJsonRequest(
+  method: string,
+  route: string,
+  body: unknown,
+  token = process.env.ADMIN_TOKEN
+) {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { "x-admin-token": token } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
 async function flushPassiveWebhookProcessing() {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
@@ -421,6 +438,86 @@ test("channel runtime readiness endpoint supports empty tenant filter", async ()
   assert.equal(response.body.ok, true);
   assert.equal(response.body.count, 0);
   assert.deepEqual(response.body.reports, []);
+});
+
+test("channel runtime preflight endpoint requires superadmin and returns dry-run result", async () => {
+  const previousSecret = process.env.META_APP_SECRET;
+  process.env.META_APP_SECRET = "configured-secret";
+  try {
+    const payload = {
+      tenantKey: "tenant-a",
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: "page-1",
+      mode: "dry_run",
+    };
+    const unauthorized = await adminJsonRequest("POST", "/admin/channel-runtime-preflight", payload, "");
+    const response = await adminJsonRequest("POST", "/admin/channel-runtime-preflight", payload);
+
+    assert.equal(unauthorized.status, 401);
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, false);
+    const preflight = response.body.preflight as Record<string, unknown>;
+    assert.equal(preflight.tenantKey, "tenant-a");
+    assert.equal(preflight.channel, "messenger");
+    assert.equal(preflight.channelAccountId, "page-1");
+    assert.equal((preflight.summary as Record<string, unknown>).canPersist, false);
+    assert.equal((preflight.summary as Record<string, unknown>).canSendOutbound, false);
+    assert.equal((preflight.blockers as string[]).includes("runtime_disabled"), true);
+    const rawResponse = JSON.stringify(response.body);
+    assert.equal(rawResponse.includes("psid-1"), false);
+    assert.equal(rawResponse.includes("raw"), false);
+    assert.equal(rawResponse.includes("externalUserHash"), false);
+    assert.equal(rawResponse.includes("configured-secret"), false);
+  } finally {
+    restoreEnv("META_APP_SECRET", previousSecret);
+  }
+});
+
+test("channel runtime preflight endpoint reports runtime candidate blocked by unsupported persistence and outbound", async () => {
+  const previousSecret = process.env.META_APP_SECRET;
+  process.env.META_APP_SECRET = "configured-secret";
+  try {
+    const updated = await adminJsonRequest("PUT", "/admin/tenants/tenant-a/channel-accounts", {
+      channelAccounts: [
+        {
+          id: "messenger-page-1",
+          tenantKey: "tenant-a",
+          channel: "messenger",
+          provider: "meta",
+          channelAccountId: "page-1",
+          enabled: true,
+          automationEnabled: true,
+          runtimeEnabled: true,
+          outboundEnabled: false,
+          aiEnabled: true,
+          handoffEnabled: true,
+          status: "connected",
+          tokenStatus: "configured",
+        },
+      ],
+    });
+    assert.equal(updated.status, 200);
+
+    const response = await adminJsonRequest("POST", "/admin/channel-runtime-preflight", {
+      tenantKey: "tenant-a",
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: "page-1",
+      mode: "runtime_candidate",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, false);
+    const preflight = response.body.preflight as Record<string, unknown>;
+    assert.equal((preflight.summary as Record<string, unknown>).canDryRun, true);
+    assert.equal((preflight.summary as Record<string, unknown>).canAttemptRuntime, false);
+    assert.equal((preflight.blockers as string[]).includes("persistence_not_implemented"), true);
+    assert.equal((preflight.blockers as string[]).includes("outbound_not_implemented"), true);
+  } finally {
+    restoreEnv("META_APP_SECRET", previousSecret);
+    await writeTenants();
+  }
 });
 
 test("passive webhook dry-run session reuses state across multiple Messenger turns", async () => {

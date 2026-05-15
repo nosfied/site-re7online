@@ -114,6 +114,7 @@ import {
   listObservedChannelEvents,
 } from "../channels/observedChannelEvents.js";
 import { buildChannelRuntimeReadinessReports } from "../channels/channelRuntimeReadiness.js";
+import { buildChannelRuntimePreflight } from "../channels/channelRuntimePreflight.js";
 import {
   handlePassiveMetaWebhookChallenge,
   handlePassiveMetaWebhookPost,
@@ -8559,6 +8560,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ok: true,
         count: reports.length,
         reports,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/channel-runtime-preflight") {
+      if (requireSuperadmin()) return;
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+
+      const tenantKey = typeof body.tenantKey === "string" ? body.tenantKey.trim() : "";
+      const channel = body.channel;
+      const provider = body.provider;
+      const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
+      const mode = body.mode;
+      if (
+        !tenantKey ||
+        (channel !== "whatsapp" && channel !== "instagram" && channel !== "messenger") ||
+        provider !== "meta" ||
+        !channelAccountId
+      ) {
+        json(res, 400, httpError("bad_request", "tenantKey, channel, provider and channelAccountId are required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantKey];
+      const account = tenant?.channelAccounts?.find(
+        (item) =>
+          item.tenantKey === tenantKey &&
+          item.channel === channel &&
+          item.provider === provider &&
+          item.channelAccountId === channelAccountId
+      );
+      const readinessReports = buildChannelRuntimeReadinessReports({
+        tenants,
+        observedEvents: listObservedChannelEvents({ limit: 500 }),
+        dryRunSessions: listDryRunSessions({ limit: 500 }),
+        filter: {
+          tenantKey,
+          channel,
+          provider,
+        },
+      });
+      const readiness = readinessReports.find(
+        (report) => report.tenantKey === tenantKey && report.channelAccountId === channelAccountId
+      );
+      const preflight = buildChannelRuntimePreflight({
+        tenantKey,
+        channel,
+        provider,
+        channelAccountId,
+        account,
+        mode: mode === "observe_only" || mode === "runtime_candidate" ? mode : "dry_run",
+        signatureConfigured: Boolean(process.env.META_APP_SECRET),
+        readinessBlockers: readiness?.readiness.blockers,
+      });
+
+      json(res, 200, {
+        ok: preflight.ok,
+        preflight,
       });
       return;
     }
