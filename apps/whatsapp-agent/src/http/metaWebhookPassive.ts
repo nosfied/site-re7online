@@ -200,6 +200,10 @@ function isMessengerEchoEvent(event: MetaMessagingEvent) {
   return event.message?.is_echo === true;
 }
 
+function hasMessengerText(event: MetaMessagingEvent) {
+  return typeof event.message?.text === "string" && event.message.text.trim().length > 0;
+}
+
 function logPassiveReceived(params: {
   requestId: string;
   channelAccountId: string;
@@ -456,6 +460,23 @@ export async function processPassiveMetaWebhookPayload(
         externalUserHash,
         externalMessageId,
         reason: "messenger_echo",
+      });
+      continue;
+    }
+    if (!hasMessengerText(item.event)) {
+      unsupportedCount += 1;
+      logger.info({
+        event: "meta.webhook.unsupported",
+        route: "/meta/webhook",
+        requestId: options.requestId,
+        object: "page",
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: item.pageId || null,
+        tenantKey: resolution.tenantKey ?? null,
+        externalUserHash,
+        externalMessageId,
+        reason: "messenger_non_text_event",
       });
       continue;
     }
