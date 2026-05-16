@@ -13596,13 +13596,17 @@ async function resolveConversationTarget(
     source: string;
   }
 ) {
+  const exactRawWaId = params.rawWaId.trim();
+  const syntheticRawWaId = /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(exactRawWaId)
+    ? exactRawWaId.toLowerCase()
+    : null;
   const lookup = buildWaIdLookup(params.rawWaId);
   const matches = await prisma.conversation.findMany({
     where: {
       clientId: params.clientId,
       deletedAt: null,
       anonymizedAt: null,
-      ...buildScopedWaIdWhere(lookup.raw),
+      ...(syntheticRawWaId ? { waId: syntheticRawWaId } : buildScopedWaIdWhere(lookup.raw)),
     },
     select: {
       waId: true,
