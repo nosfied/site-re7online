@@ -679,6 +679,40 @@ test("passive processor normalizes Messenger and resolves tenant from channelAcc
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
+test("passive processor skips Messenger echo events without normalizing", async () => {
+  const echoPayload = messengerPayloadWithText("echo", "mid-echo");
+  echoPayload.entry[0]!.messaging[0]!.message = {
+    ...echoPayload.entry[0]!.messaging[0]!.message,
+    is_echo: true,
+  } as never;
+
+  const result = await processPassiveMetaWebhookPayload(echoPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "messenger-page-1",
+            tenantKey: "tenant-a",
+            channel: "messenger",
+            provider: "meta",
+            channelAccountId: "page-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
+});
+
 test("passive processor observes disabled account without normalizing", async () => {
   const result = await processPassiveMetaWebhookPayload(messengerPayload, {
     requestId: "test-request",

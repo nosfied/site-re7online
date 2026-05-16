@@ -31,6 +31,7 @@ type MetaMessagingEvent = {
   message?: {
     mid?: unknown;
     text?: unknown;
+    is_echo?: unknown;
   };
 };
 
@@ -193,6 +194,10 @@ function getEventExternalUserHash(event: MetaMessagingEvent) {
 function getEventMessageId(event: MetaMessagingEvent) {
   const mid = event.message?.mid;
   return typeof mid === "string" || typeof mid === "number" ? String(mid).trim() || null : null;
+}
+
+function isMessengerEchoEvent(event: MetaMessagingEvent) {
+  return event.message?.is_echo === true;
 }
 
 function logPassiveReceived(params: {
@@ -435,6 +440,23 @@ export async function processPassiveMetaWebhookPayload(
 
     if (resolution.resolution !== "matched_enabled") {
       unsupportedCount += 1;
+      continue;
+    }
+    if (isMessengerEchoEvent(item.event)) {
+      unsupportedCount += 1;
+      logger.info({
+        event: "meta.webhook.unsupported",
+        route: "/meta/webhook",
+        requestId: options.requestId,
+        object: "page",
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: item.pageId || null,
+        tenantKey: resolution.tenantKey ?? null,
+        externalUserHash,
+        externalMessageId,
+        reason: "messenger_echo",
+      });
       continue;
     }
     const runtimeGate = resolveChannelRuntimeGate(resolution.account);
