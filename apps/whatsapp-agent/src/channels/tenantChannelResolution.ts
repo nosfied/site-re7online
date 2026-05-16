@@ -32,6 +32,7 @@ function redactAccount(account: TenantChannelAccount): TenantChannelAccount {
     enabled: account.enabled,
     automationEnabled: account.automationEnabled,
     runtimeEnabled: account.runtimeEnabled,
+    inboundPersistenceEnabled: account.inboundPersistenceEnabled,
     outboundEnabled: account.outboundEnabled,
     aiEnabled: account.aiEnabled,
     handoffEnabled: account.handoffEnabled,
