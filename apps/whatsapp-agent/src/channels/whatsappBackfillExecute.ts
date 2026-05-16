@@ -60,6 +60,7 @@ export type WhatsAppBackfillExecuteReport = {
     skippedAlreadyFilled: number;
     conflicts: number;
     missing: number;
+    skippedOrphanOutbound: number;
   };
   samples: Array<{
     model: BackfillModelName;
@@ -262,6 +263,9 @@ export function buildWhatsAppBackfillExecuteReport(input: {
     skippedAlreadyFilled: Object.values(skippedAlreadyFilled).reduce((total, value) => total + value, 0),
     conflicts: Object.values(conflicts).reduce((total, value) => total + value, 0),
     missing: Object.values(missing).reduce((total, value) => total + value, 0),
+    skippedOrphanOutbound: input.plans.filter(
+      (plan) => plan.model === "outboundMessages" && plan.action === "missing"
+    ).length,
   };
 
   const sampleLimit = Math.max(0, Math.min(100, Math.trunc(input.sampleLimit ?? 20)));

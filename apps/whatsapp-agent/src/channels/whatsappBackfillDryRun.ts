@@ -108,6 +108,8 @@ export type WhatsAppBackfillDryRunReport = {
   counts: Record<BackfillModelName, number>;
   resolvable: Record<BackfillModelName, number>;
   missingChannelAccountId: Record<BackfillModelName, number>;
+  blockingConflicts: WhatsAppBackfillRisk[];
+  nonBlockingWarnings: WhatsAppBackfillRisk[];
   conflicts: WhatsAppBackfillRisk[];
   riskByTenant?: WhatsAppBackfillRiskByTenant[];
   samples: WhatsAppBackfillSample[];
@@ -385,6 +387,7 @@ export function buildWhatsAppBackfillDryRunReport(
   const resolvable = emptyCounts();
   const missingChannelAccountId = emptyCounts();
   const risks: WhatsAppBackfillRisk[] = [];
+  const nonBlockingWarnings: WhatsAppBackfillRisk[] = [];
   const samples: WhatsAppBackfillSample[] = [];
   const hashOwners = new Map<string, { waIdHash: string; records: string[] }>();
 
@@ -440,7 +443,7 @@ export function buildWhatsAppBackfillDryRunReport(
           identityKey(record.clientId, simulation.channelAccountId, simulation.externalUserHash)
         )
       ) {
-        risks.push({
+        const orphanRisk: WhatsAppBackfillRisk = {
           type: "message_without_conversation",
           model,
           recordId: record.id,
@@ -449,7 +452,12 @@ export function buildWhatsAppBackfillDryRunReport(
           waIdHash: simulation.legacyWaIdHash,
           externalUserHash: simulation.externalUserHash,
           channelAccountId: simulation.channelAccountId,
-        });
+        };
+        if (model === "outboundMessages") {
+          nonBlockingWarnings.push(orphanRisk);
+        } else {
+          risks.push(orphanRisk);
+        }
       }
 
       if (includeSamples && samples.length < limit) {
@@ -479,8 +487,12 @@ export function buildWhatsAppBackfillDryRunReport(
     counts,
     resolvable,
     missingChannelAccountId,
+    blockingConflicts: risks,
+    nonBlockingWarnings,
     conflicts: risks,
-    ...(includeRiskReport ? { riskByTenant: buildWhatsAppBackfillRiskByTenant(input.clients, risks) } : {}),
+    ...(includeRiskReport
+      ? { riskByTenant: buildWhatsAppBackfillRiskByTenant(input.clients, [...risks, ...nonBlockingWarnings]) }
+      : {}),
     samples,
     risks: {
       missingWaId: risks.filter((risk) => risk.type === "missing_waid").length,
@@ -488,7 +500,9 @@ export function buildWhatsAppBackfillDryRunReport(
       multipleChannelAccounts: risks.filter((risk) => risk.type === "multiple_channel_accounts").length,
       missingChannelAccountId: risks.filter((risk) => risk.type === "missing_channel_account_id").length,
       externalUserHashCollisions: risks.filter((risk) => risk.type === "external_user_hash_collision").length,
-      messageWithoutConversation: risks.filter((risk) => risk.type === "message_without_conversation").length,
+      messageWithoutConversation: [...risks, ...nonBlockingWarnings].filter(
+        (risk) => risk.type === "message_without_conversation"
+      ).length,
     },
   };
 }

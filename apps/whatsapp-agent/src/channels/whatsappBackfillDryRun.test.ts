@@ -191,6 +191,37 @@ test("report detects messages without matching conversation identity", () => {
   assert.equal(report.conflicts[0]?.type, "message_without_conversation");
 });
 
+test("outbound message without conversation is non-blocking when identity is resolvable", () => {
+  const report = buildWhatsAppBackfillDryRunReport({
+    clients,
+    conversationIdentityKeys: new Set(),
+    includeRiskReport: true,
+    records: {
+      conversations: [],
+      runtimeStates: [],
+      inboundMessages: [],
+      outboundMessages: [
+        {
+          model: "outboundMessages",
+          id: "out-orphan",
+          clientId: "tenant-1",
+          waId: "558400000018",
+          phoneNumberId: "phone-1",
+        },
+      ],
+      leads: [],
+      contacts: [],
+    },
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.conflicts.length, 0);
+  assert.equal(report.blockingConflicts.length, 0);
+  assert.equal(report.nonBlockingWarnings[0]?.type, "message_without_conversation");
+  assert.equal(report.risks.messageWithoutConversation, 1);
+  assert.equal(JSON.stringify(report).includes("558400000018"), false);
+});
+
 test("report does not expose raw waId in JSON", () => {
   const rawWaId = "558499999999";
   const report = buildWhatsAppBackfillDryRunReport({
