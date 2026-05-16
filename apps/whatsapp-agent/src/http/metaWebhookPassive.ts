@@ -18,6 +18,7 @@ import {
   buildChannelPersistencePlan,
   summarizeChannelPersistencePlan,
 } from "../channels/channelPersistencePlan.js";
+import { persistMessengerInboundEvent } from "../channels/messengerInboundPersistence.js";
 import { resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
@@ -525,6 +526,13 @@ export async function processPassiveMetaWebhookPayload(
         });
         continue;
       }
+
+      await persistMessengerInboundEvent({
+        event: normalized,
+        tenantKey,
+        account: resolution.account,
+        requestId: options.requestId,
+      });
 
       try {
         logRuntimeDryRun({

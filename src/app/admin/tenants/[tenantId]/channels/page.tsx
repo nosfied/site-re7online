@@ -22,6 +22,7 @@ type ChannelAccountDraft = {
   enabled: boolean;
   automationEnabled: boolean;
   runtimeEnabled: boolean;
+  inboundPersistenceEnabled: boolean;
   outboundEnabled: boolean;
   aiEnabled: boolean;
   handoffEnabled: boolean;
@@ -54,6 +55,7 @@ function createDraft(): ChannelAccountDraft {
     enabled: false,
     automationEnabled: false,
     runtimeEnabled: false,
+    inboundPersistenceEnabled: false,
     outboundEnabled: false,
     aiEnabled: false,
     handoffEnabled: false,
@@ -73,6 +75,7 @@ function toDraft(account: TenantChannelAccount): ChannelAccountDraft {
     enabled: account.enabled,
     automationEnabled: account.automationEnabled === true,
     runtimeEnabled: account.runtimeEnabled === true,
+    inboundPersistenceEnabled: account.inboundPersistenceEnabled === true,
     outboundEnabled: account.outboundEnabled === true,
     aiEnabled: account.aiEnabled === true,
     handoffEnabled: account.handoffEnabled === true,
@@ -93,6 +96,7 @@ function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
     enabled: draft.enabled,
     automationEnabled: draft.automationEnabled,
     runtimeEnabled: draft.runtimeEnabled,
+    inboundPersistenceEnabled: draft.inboundPersistenceEnabled,
     outboundEnabled: draft.outboundEnabled,
     aiEnabled: draft.aiEnabled,
     handoffEnabled: draft.handoffEnabled,
@@ -382,6 +386,7 @@ export default function TenantChannelsPage() {
                   ["enabled", "Ativo"],
                   ["automationEnabled", "Automação"],
                   ["runtimeEnabled", "Runtime"],
+                  ["inboundPersistenceEnabled", "Inbound"],
                   ["outboundEnabled", "Outbound"],
                   ["aiEnabled", "IA"],
                   ["handoffEnabled", "Handoff"],
@@ -402,6 +407,7 @@ export default function TenantChannelsPage() {
                             | "enabled"
                             | "automationEnabled"
                             | "runtimeEnabled"
+                            | "inboundPersistenceEnabled"
                             | "outboundEnabled"
                             | "aiEnabled"
                             | "handoffEnabled"

@@ -99,6 +99,10 @@ function maskConversationKey(clientKey: string, waId: string) {
   return `${clientKey}:${maskWaId(waId) ?? "***"}`;
 }
 
+function isSyntheticChannelWaId(value: string) {
+  return /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(value.trim());
+}
+
 function getMostRecentJsonTimestamp(state: ConversationState | null) {
   if (!state) return null;
   const timestamps = [
@@ -584,10 +588,12 @@ export function createDualWriteStorage(
     if (!clientId) return null;
     const safeClientKey = clientKey || env.CLIENT_KEY || env.CLIENT_ID || "default";
     const lookup = buildWaIdLookup(waId);
+    const exactRaw = waId.trim();
+    const variants = Array.from(new Set([lookup.raw, lookup.canonical, exactRaw].filter(Boolean)));
     const rows = await prisma.conversationRuntimeState.findMany({
       where: {
         clientId,
-        OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
+        OR: [{ waIdCanonical: { in: variants } }, { waId: { in: variants } }],
       },
       select: {
         id: true,
@@ -964,6 +970,9 @@ export function createDualWriteStorage(
           });
         } else {
           logShadowReadMismatch(jsonResult.value, waId, clientKey, shadowResult.value);
+          if (!jsonResult.value && isSyntheticChannelWaId(waId)) {
+            return shadowResult.value?.state ?? null;
+          }
         }
         return jsonResult.value;
       }

@@ -8,6 +8,7 @@ import {
   listEnabledTenantChannels,
   canRunChannelRuntime,
   canSendChannelOutbound,
+  canPersistChannelInbound,
   canUseChannelAi,
   canUseChannelHandoff,
   normalizeTenantChannelAccountsForTenant,
@@ -28,6 +29,7 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
     enabled: true,
     automationEnabled: true,
     runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
     outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
@@ -48,6 +50,7 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
   assert.equal(account?.enabled, true);
   assert.equal(account?.automationEnabled, true);
   assert.equal(account?.runtimeEnabled, true);
+  assert.equal(account?.inboundPersistenceEnabled, true);
   assert.equal(account?.outboundEnabled, true);
   assert.equal(account?.aiEnabled, true);
   assert.equal(account?.handoffEnabled, true);
@@ -97,6 +100,7 @@ test("normalizeTenantChannelAccount defaults disabled flags safely", () => {
   assert.equal(account.enabled, false);
   assert.equal(account.automationEnabled, false);
   assert.equal(account.runtimeEnabled, false);
+  assert.equal(account.inboundPersistenceEnabled, false);
   assert.equal(account.outboundEnabled, false);
   assert.equal(account.aiEnabled, false);
   assert.equal(account.handoffEnabled, false);
@@ -104,6 +108,7 @@ test("normalizeTenantChannelAccount defaults disabled flags safely", () => {
   assert.equal(account.tokenStatus, "missing");
   assert.equal(isChannelAutomationEnabled(account), false);
   assert.equal(canRunChannelRuntime(account), false);
+  assert.equal(canPersistChannelInbound(account), false);
   assert.equal(canSendChannelOutbound(account), false);
   assert.equal(isChannelAiEnabled(account), false);
   assert.equal(isChannelHandoffEnabled(account), false);
@@ -118,6 +123,7 @@ test("enabled account gates automation, AI and handoff independently", () => {
     enabled: false,
     automationEnabled: true,
     runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
     outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
@@ -130,6 +136,7 @@ test("enabled account gates automation, AI and handoff independently", () => {
     enabled: true,
     automationEnabled: true,
     runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
     outboundEnabled: true,
     aiEnabled: true,
     handoffEnabled: true,
@@ -140,6 +147,7 @@ test("enabled account gates automation, AI and handoff independently", () => {
   assert.equal(isChannelHandoffEnabled(disabled), false);
   assert.equal(isChannelAutomationEnabled(enabled), true);
   assert.equal(canRunChannelRuntime(enabled), true);
+  assert.equal(canPersistChannelInbound(enabled), true);
   assert.equal(canSendChannelOutbound(enabled), true);
   assert.equal(canUseChannelAi(enabled), true);
   assert.equal(canUseChannelHandoff(enabled), true);

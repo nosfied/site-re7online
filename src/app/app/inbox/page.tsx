@@ -2669,6 +2669,8 @@ export default function AppInboxPage() {
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
     [selectedConversation, session]
   );
+  const selectedConversationSupportsOutbound = getConversationChannel(selectedConversation) === "whatsapp";
+  const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const isHydratingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
@@ -2733,7 +2735,7 @@ export default function AppInboxPage() {
   }, [selectedConversationKey]);
 
   useEffect(() => {
-    if (!selectedConversationWaId || !canReply || sendingMessage || conversationAction) {
+    if (!selectedConversationWaId || !composerEnabled || sendingMessage || conversationAction) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
@@ -2742,7 +2744,7 @@ export default function AppInboxPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [
     focusComposer,
-    canReply,
+    composerEnabled,
     selectedConversationKey,
     selectedConversationWaId,
     sendingMessage,
@@ -3040,6 +3042,11 @@ export default function AppInboxPage() {
 
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
+    if (!selectedConversationSupportsOutbound) {
+      setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+      setErrorDetails(null);
+      return;
+    }
     if (!canReply) {
       setError("Assuma a conversa para responder manualmente.");
       setErrorDetails(null);
@@ -3064,6 +3071,11 @@ export default function AppInboxPage() {
   const sendMediaFile = useCallback(
     async (file: File, caption?: string) => {
       if (!session || !selectedConversationWaId || !selectedConversation) return;
+      if (!selectedConversationSupportsOutbound) {
+        setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+        setErrorDetails(null);
+        return;
+      }
       if (!canReply) {
         setError("Assuma a conversa para responder manualmente.");
         setErrorDetails(null);
@@ -3162,6 +3174,7 @@ export default function AppInboxPage() {
       focusComposer,
       handleUnauthorized,
       selectedConversation,
+      selectedConversationSupportsOutbound,
       selectedConversationWaId,
       session,
     ]
@@ -3182,6 +3195,11 @@ export default function AppInboxPage() {
 
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
+    if (!selectedConversationSupportsOutbound) {
+      setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+      setErrorDetails(null);
+      return;
+    }
     if (!canReply) {
       setError("Assuma a conversa para responder manualmente.");
       setErrorDetails(null);
@@ -4239,6 +4257,11 @@ export default function AppInboxPage() {
                 <span>Gravando áudio... clique no botão vermelho para enviar.</span>
               </div>
             ) : null}
+            {selectedConversation && !selectedConversationSupportsOutbound ? (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
+                Envio por Facebook/Messenger ainda não está habilitado neste canal.
+              </div>
+            ) : null}
             <div className="relative flex items-center gap-2">
               {showEmojiPicker ? (
                 <div className="absolute bottom-full left-12 z-20 mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-[#d4c7b5] bg-white/95 p-2 shadow-[0_12px_28px_rgba(15,23,42,0.18)]">
@@ -4266,11 +4289,11 @@ export default function AppInboxPage() {
                   const nextFile = event.target.files?.[0] ?? null;
                   setSelectedMediaFile(nextFile);
                 }}
-                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
+                disabled={!selectedConversationWaId || !composerEnabled || isHydratingSelectedTimeline}
               />
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
+                disabled={!selectedConversationWaId || !composerEnabled || isHydratingSelectedTimeline}
                 onClick={() => mediaInputRef.current?.click()}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl"
               >
@@ -4278,7 +4301,7 @@ export default function AppInboxPage() {
               </button>
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !canReply || isHydratingSelectedTimeline}
+                disabled={!selectedConversationWaId || !composerEnabled || isHydratingSelectedTimeline}
                 onClick={() => setShowEmojiPicker((current) => !current)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl"
               >
@@ -4288,7 +4311,7 @@ export default function AppInboxPage() {
                 type="button"
                 disabled={
                   !selectedConversationWaId ||
-                  !canReply ||
+                  !composerEnabled ||
                   isHydratingSelectedTimeline ||
                   sendingMessage ||
                   Boolean(selectedMediaFile) ||
@@ -4316,13 +4339,15 @@ export default function AppInboxPage() {
                   onChange={(event) => setMessageDraft(event.target.value)}
                   onKeyDown={handleComposerKeyDown}
                   placeholder={
-                    canReply
+                    selectedConversation && !selectedConversationSupportsOutbound
+                      ? "Envio por Facebook/Messenger ainda não está habilitado neste canal."
+                      : canReply
                       ? isHydratingSelectedTimeline
                         ? "Carregando mensagens..."
                         : "Digite uma mensagem"
                       : "Assuma a conversa para responder"
                   }
-                  disabled={!selectedConversationWaId || !canReply}
+                  disabled={!selectedConversationWaId || !composerEnabled}
                 />
               </label>
               <button
@@ -4330,7 +4355,7 @@ export default function AppInboxPage() {
                 disabled={
                   !selectedConversationWaId ||
                   (!messageDraft.trim() && !selectedMediaFile) ||
-                  !canReply ||
+                  !composerEnabled ||
                   isHydratingSelectedTimeline ||
                   sendingMessage
                 }

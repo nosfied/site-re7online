@@ -120,6 +120,7 @@ import {
   handlePassiveMetaWebhookPost,
   verifyPassiveMetaWebhookSignature,
 } from "./metaWebhookPassive.js";
+import { MESSENGER_OUTBOUND_DISABLED_MESSAGE } from "../channels/messengerInboundPersistence.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
@@ -131,6 +132,14 @@ const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
 };
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
+
+function normalizeConversationRouteId(input: string) {
+  const raw = input.trim();
+  if (/^(messenger|instagram):[a-f0-9]{16,64}$/i.test(raw)) {
+    return raw.toLowerCase();
+  }
+  return normalizeWaId(raw);
+}
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -1435,7 +1444,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1527,7 +1536,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1628,7 +1637,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1685,7 +1694,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       const messageId = decodeURIComponent(pathname.split("/")[5] ?? "").trim();
       if (!waId || !messageId) {
         json(res, 400, { error: "bad_request" });
@@ -1889,7 +1898,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1919,6 +1928,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send",
       });
+      if (isConversationOutboundBlocked(resolvedConversation.winner)) {
+        json(res, 409, {
+          error: "channel_outbound_not_enabled",
+          message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+        });
+        return;
+      }
       const currentConversation = await runtimeStorage.getConversation(
         resolvedConversation.resolvedWaId,
         client.clientKey
@@ -2038,7 +2054,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -2091,6 +2107,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send_media",
       });
+      if (isConversationOutboundBlocked(resolvedConversation.winner)) {
+        json(res, 409, {
+          error: "channel_outbound_not_enabled",
+          message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+        });
+        return;
+      }
       const currentConversation = await runtimeStorage.getConversation(
         resolvedConversation.resolvedWaId,
         client.clientKey
@@ -3677,7 +3700,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -3883,7 +3906,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -4041,7 +4064,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -4214,7 +4237,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -4410,7 +4433,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -4608,7 +4631,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -7260,7 +7283,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.startsWith("/admin/conversations/") &&
       pathname.split("/").length === 4
     ) {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -7331,7 +7354,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/reset")
     ) {
       const parts = pathname.split("/");
-      const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(parts[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -7391,7 +7414,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
-      const waId = normalizeWaId(String(body.waId ?? "").trim());
+      const waId = normalizeConversationRouteId(String(body.waId ?? "").trim());
       const clientKey = String(body.clientKey ?? "default").trim() || "default";
       if (!waId) {
         json(res, 400, { ok: false, error: "bad_request" });
@@ -7455,7 +7478,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       /^\/admin\/conversations\/[^/]+\/assign$/.test(pathname)
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, {
             error: {
@@ -7577,7 +7600,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       /^\/admin\/conversations\/[^/]+\/transfer$/.test(pathname)
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -7694,7 +7717,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       /^\/admin\/conversations\/[^/]+\/transfer-department$/.test(pathname)
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -7829,7 +7852,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       /^\/admin\/conversations\/[^/]+\/status$/.test(pathname)
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -7930,7 +7953,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       (pathname.endsWith("/claim") || pathname.endsWith("/assign"))
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -8048,7 +8071,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/release")
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -8129,7 +8152,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/send")
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -8216,7 +8239,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.split("/").length === 4
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -13552,8 +13575,10 @@ async function buildConversationActionPayload(
 
 function buildScopedWaIdWhere(rawWaId: string) {
   const lookup = buildWaIdLookup(rawWaId);
+  const exactRaw = rawWaId.trim();
+  const variants = Array.from(new Set([...lookup.variants, exactRaw].filter(Boolean)));
   return {
-    OR: [{ waIdCanonical: { in: lookup.variants } }, { waId: { in: lookup.variants } }],
+    OR: [{ waIdCanonical: { in: variants } }, { waId: { in: variants } }],
   };
 }
 
@@ -14123,6 +14148,11 @@ function serializeInboxChannelFields(source?: {
     provider,
     channelAccountId: source?.channelAccountId ?? null,
   };
+}
+
+function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
+  const channel = serializeInboxChannelFields(source ?? undefined).channel;
+  return channel === "messenger" || channel === "instagram";
 }
 
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
@@ -14712,6 +14742,7 @@ async function buildConversationDetailPayload(
     new Set(
       [
         ...buildWaIdLookup(params.waId).variants,
+        params.waId,
         resolved.resolvedWaId,
         resolved.resolvedWaIdCanonical,
         ...resolved.matchedWaIds,
@@ -14888,6 +14919,7 @@ async function buildContactTimelinePayload(
     new Set(
       [
         ...buildWaIdLookup(params.waId).variants,
+        params.waId,
         resolved.resolvedWaId,
         resolved.resolvedWaIdCanonical,
         ...resolved.matchedWaIds,

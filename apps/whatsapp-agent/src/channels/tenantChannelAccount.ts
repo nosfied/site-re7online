@@ -96,6 +96,7 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
     enabled,
     automationEnabled: normalizeBoolean(input.automationEnabled, false),
     runtimeEnabled: normalizeBoolean(input.runtimeEnabled, false),
+    inboundPersistenceEnabled: normalizeBoolean(input.inboundPersistenceEnabled, false),
     outboundEnabled: normalizeBoolean(input.outboundEnabled, false),
     aiEnabled: normalizeBoolean(input.aiEnabled, false),
     handoffEnabled: normalizeBoolean(input.handoffEnabled, false),
@@ -147,6 +148,15 @@ export function canRunChannelRuntime(account?: TenantChannelAccount | null) {
 
 export function canSendChannelOutbound(account?: TenantChannelAccount | null) {
   return Boolean(account?.enabled && account.outboundEnabled);
+}
+
+export function canPersistChannelInbound(account?: TenantChannelAccount | null) {
+  return Boolean(
+    account?.enabled &&
+      account.runtimeEnabled === true &&
+      account.inboundPersistenceEnabled === true &&
+      account.status === "connected"
+  );
 }
 
 export function isChannelAiEnabled(account?: TenantChannelAccount | null) {

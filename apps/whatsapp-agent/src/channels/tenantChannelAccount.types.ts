@@ -15,6 +15,7 @@ export type TenantChannelAccount = {
   enabled: boolean;
   automationEnabled?: boolean;
   runtimeEnabled?: boolean;
+  inboundPersistenceEnabled?: boolean;
   outboundEnabled?: boolean;
   aiEnabled?: boolean;
   handoffEnabled?: boolean;
