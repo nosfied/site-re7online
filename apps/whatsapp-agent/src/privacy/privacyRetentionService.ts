@@ -18,6 +18,12 @@ export type PrivacyConversationTarget = {
   id: string;
   waId: string;
   waIdCanonical: string | null;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+  externalUserHash?: string | null;
+  externalUserRef?: string | null;
+  legacyWaId?: string | null;
   deletedAt?: Date | null;
   anonymizedAt?: Date | null;
 };
@@ -50,6 +56,8 @@ function isUuidLike(value: string) {
 
 function maskPersonalWaId(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
+  const synthetic = raw.match(/^(messenger|instagram):/i);
+  if (synthetic) return `${synthetic[1].toLowerCase()}:******`;
   const digits = raw.replace(/\D/g, "");
   if (digits.length >= 8) {
     return `${digits.slice(0, 4)}******${digits.slice(-4)}`;
@@ -59,8 +67,15 @@ function maskPersonalWaId(value: string | null | undefined) {
 }
 
 function buildAnonymizedWaId(target: PrivacyConversationTarget) {
+  if (/^(messenger|instagram):[a-f0-9]{16,64}$/i.test(target.waId)) {
+    return `anon:${target.id.slice(0, 12)}`;
+  }
   const masked = maskPersonalWaId(target.waId);
   return masked.includes("*") ? `${masked}:${target.id.slice(0, 8)}` : `anon:${target.id.slice(0, 12)}`;
+}
+
+function buildAnonymizedExternalUserHash(target: PrivacyConversationTarget) {
+  return `anon:${target.id.slice(0, 12)}`;
 }
 
 function buildPrivacyAuditPayload(params: {
@@ -119,22 +134,41 @@ export async function findPrivacyConversationTarget(
   rawConversationId: string
 ): Promise<PrivacyConversationTarget | null> {
   if (!rawConversationId) return null;
-  const normalizedWaId = normalizeWaId(rawConversationId);
-  const idLookup = isUuidLike(rawConversationId) ? [{ id: rawConversationId }] : [];
+  const exactRaw = rawConversationId.trim();
+  const syntheticRaw = /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(exactRaw) ? exactRaw.toLowerCase() : null;
+  const normalizedWaId = syntheticRaw ? "" : normalizeWaId(exactRaw);
+  const idLookup = isUuidLike(exactRaw) ? [{ id: exactRaw }] : [];
+  const exactLookup = exactRaw
+    ? [
+        { waId: syntheticRaw ?? exactRaw },
+        { waIdCanonical: syntheticRaw ?? exactRaw },
+      ]
+    : [];
   const waIdLookup = normalizedWaId
     ? [
         { waId: normalizedWaId },
         { waIdCanonical: canonicalizeBrazilWaId(normalizedWaId) },
       ]
     : [];
-  if (idLookup.length === 0 && waIdLookup.length === 0) return null;
   return prisma.conversation.findFirst({
     where: {
       clientId,
-      OR: [...idLookup, ...waIdLookup],
+      OR: [...idLookup, ...exactLookup, ...waIdLookup],
     },
     orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
-    select: { id: true, waId: true, waIdCanonical: true, deletedAt: true, anonymizedAt: true },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      externalUserRef: true,
+      legacyWaId: true,
+      deletedAt: true,
+      anonymizedAt: true,
+    },
   });
 }
 
@@ -282,6 +316,7 @@ async function anonymizeConversationPrivacyData(
 ) {
   const target = params.conversation;
   const anonymizedWaId = buildAnonymizedWaId(target);
+  const anonymizedExternalUserHash = buildAnonymizedExternalUserHash(target);
   const anonymizedName = "Usuario Anonimizado";
   const scopedWaWhere = buildConversationPrivacyWhere(target);
   const waIds = Array.from(new Set([target.waId, target.waIdCanonical].filter(Boolean))) as string[];
@@ -291,10 +326,12 @@ async function anonymizeConversationPrivacyData(
     return {
       anonymized: {
         conversation: 1,
+        messages: 0,
         runtimeStates: 0,
         inboundMessages: 0,
         outboundMessages: 0,
         contacts: 0,
+        contactChannelIdentities: 0,
         leads: 0,
         leadNotes: 0,
         events: 0,
@@ -304,17 +341,49 @@ async function anonymizeConversationPrivacyData(
     };
   }
 
-  const [conversation, runtimeStates, inbound, outbound, contacts, leads, leadNotes, events] = await prisma.$transaction([
+  const matchingLeads = await prisma.lead.findMany({
+    where: { tenantId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
+    select: { id: true },
+  });
+  const leadIds = matchingLeads.map((item) => item.id);
+
+  const [
+    conversation,
+    messages,
+    runtimeStates,
+    inbound,
+    outbound,
+    contacts,
+    contactChannelIdentities,
+    leads,
+    leadNotes,
+    events,
+  ] = await prisma.$transaction([
     prisma.conversation.updateMany({
       where: { clientId: params.clientId, id: target.id },
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
+        externalUserHash: null,
+        externalUserRef: null,
+        legacyWaId: null,
         anonymizedAt: now,
         deletedAt: now,
         closedAt: now,
         historyVisibleAfter: now,
         departmentId: null,
+      },
+    }),
+    prisma.message.updateMany({
+      where: {
+        conversation: { clientId: params.clientId },
+        OR: [{ conversationId: target.id }, { waId: { in: waIds } }],
+      },
+      data: {
+        waId: anonymizedWaId,
+        bodyText: "[mensagem anonimizada]",
+        intent: null,
+        metaMessageId: null,
       },
     }),
     prisma.conversationRuntimeState.updateMany({
@@ -323,6 +392,9 @@ async function anonymizeConversationPrivacyData(
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
         conversationKey: `${params.clientKey}:${anonymizedWaId}`,
+        externalUserHash: null,
+        externalUserRef: null,
+        legacyWaId: null,
         answers: {},
         status: "CLOSED",
         closedAt: now,
@@ -341,6 +413,10 @@ async function anonymizeConversationPrivacyData(
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
+        externalUserHash: null,
+        externalUserRef: null,
+        externalMessageId: null,
+        legacyWaId: null,
         bodyText: "[mensagem anonimizada]",
         rawPayload: Prisma.JsonNull,
       },
@@ -350,6 +426,10 @@ async function anonymizeConversationPrivacyData(
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
+        externalUserHash: null,
+        externalUserRef: null,
+        externalMessageId: null,
+        legacyWaId: null,
         bodyText: "[mensagem anonimizada]",
         errorBody: null,
         rawPayload: Prisma.JsonNull,
@@ -357,13 +437,48 @@ async function anonymizeConversationPrivacyData(
     }),
     prisma.contact.updateMany({
       where: { clientId: params.clientId, waId: { in: waIds } },
-      data: { waId: anonymizedWaId, name: anonymizedName },
+      data: {
+        waId: anonymizedWaId,
+        name: anonymizedName,
+        externalUserHash: null,
+        externalUserRef: null,
+        legacyWaId: null,
+      },
+    }),
+    prisma.contactChannelIdentity.updateMany({
+      where: {
+        clientId: params.clientId,
+        OR: [
+          ...(target.externalUserHash
+            ? [
+                {
+                  channel: target.channel ?? undefined,
+                  provider: target.provider ?? undefined,
+                  channelAccountId: target.channelAccountId ?? undefined,
+                  externalUserHash: target.externalUserHash,
+                },
+              ]
+            : []),
+          { legacyWaId: { in: waIds } },
+        ],
+      },
+      data: {
+        externalUserHash: anonymizedExternalUserHash,
+        externalUserRef: null,
+        legacyWaId: null,
+        displayName: anonymizedName,
+        contactId: null,
+      },
     }),
     prisma.lead.updateMany({
       where: { tenantId: params.clientId, OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }] },
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
+        externalUserHash: null,
+        externalUserRef: null,
+        legacyWaId: null,
+        contactChannelIdentityId: null,
         name: anonymizedName,
         phone: anonymizedWaId,
         city: null,
@@ -375,9 +490,7 @@ async function anonymizeConversationPrivacyData(
     prisma.leadNote.updateMany({
       where: {
         tenantId: params.clientId,
-        lead: {
-          OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: waIds } }],
-        },
+        leadId: { in: leadIds },
       },
       data: { body: "[nota anonimizada]" },
     }),
@@ -390,6 +503,7 @@ async function anonymizeConversationPrivacyData(
       data: {
         waId: anonymizedWaId,
         waIdCanonical: anonymizedWaId,
+        payloadJson: { anonymized: true, reason: "conversation_anonymized" },
       },
     }),
   ]);
@@ -427,10 +541,12 @@ async function anonymizeConversationPrivacyData(
   return {
     anonymized: {
       conversation: conversation.count,
+      messages: messages.count,
       runtimeStates: runtimeStates.count,
       inboundMessages: inbound.count,
       outboundMessages: outbound.count,
       contacts: contacts.count,
+      contactChannelIdentities: contactChannelIdentities.count,
       leads: leads.count,
       leadNotes: leadNotes.count,
       events: events.count,
