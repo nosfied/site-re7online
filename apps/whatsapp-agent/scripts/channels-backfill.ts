@@ -391,30 +391,44 @@ function selectExisting(record: {
 
 async function applyPlans(prisma: PrismaClient, plans: WhatsAppBackfillUpdatePlan[]) {
   const updates = plans.filter((plan) => plan.action === "update" && plan.updateData);
-  const delegates: Record<BackfillModelName, { update(args: unknown): Promise<unknown> }> = {
-    conversations: prisma.conversation,
-    runtimeStates: prisma.conversationRuntimeState,
-    inboundMessages: prisma.inboundMessage,
-    outboundMessages: prisma.outboundMessage,
-    leads: prisma.lead,
-    contacts: prisma.contact,
+  const tableByModel: Record<BackfillModelName, string> = {
+    conversations: "Conversation",
+    runtimeStates: "ConversationRuntimeState",
+    inboundMessages: "InboundMessage",
+    outboundMessages: "OutboundMessage",
+    leads: "Lead",
+    contacts: "Contact",
   };
+  const uuidIdModels = new Set<BackfillModelName>([
+    "conversations",
+    "inboundMessages",
+    "outboundMessages",
+    "contacts",
+  ]);
+  const allowedFields = new Set([
+    "channel",
+    "provider",
+    "channelAccountId",
+    "externalUserHash",
+    "externalUserRef",
+    "legacyWaId",
+  ]);
 
   await prisma.$transaction(async (tx) => {
-    const txDelegates: Record<BackfillModelName, { update(args: unknown): Promise<unknown> }> = {
-      conversations: tx.conversation,
-      runtimeStates: tx.conversationRuntimeState,
-      inboundMessages: tx.inboundMessage,
-      outboundMessages: tx.outboundMessage,
-      leads: tx.lead,
-      contacts: tx.contact,
-    };
-    void delegates;
     for (const plan of updates) {
-      await txDelegates[plan.model].update({
-        where: { id: plan.recordId },
-        data: plan.updateData,
-      });
+      const entries = Object.entries(plan.updateData ?? {}).filter(([field]) => allowedFields.has(field));
+      if (entries.length === 0) continue;
+      const setClause = entries.map(([field], index) => `"${field}" = $${index + 1}`).join(", ");
+      const values = entries.map(([, value]) => value);
+      const idParamIndex = values.length + 1;
+      const idPredicate = uuidIdModels.has(plan.model)
+        ? `"id" = $${idParamIndex}::uuid`
+        : `"id" = $${idParamIndex}`;
+      await tx.$executeRawUnsafe(
+        `UPDATE "${tableByModel[plan.model]}" SET ${setClause} WHERE ${idPredicate}`,
+        ...values,
+        plan.recordId
+      );
     }
   });
 }

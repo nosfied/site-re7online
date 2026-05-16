@@ -26,6 +26,7 @@
     "events:retention": "tsx scripts/events-retention.ts",
     "channels:backfill": "node --import tsx scripts/channels-backfill.ts",
     "channels:backfill:dry-run": "node --import tsx scripts/channels-backfill-dry-run.ts",
+    "smoke:webhook:staging": "node --import tsx scripts/staging-webhook-smoke.ts",
     "multichannel:backfill:dry-run": "node --import tsx scripts/channels-backfill-dry-run.ts",
     "evaluation:replay": "node --import tsx scripts/evaluation-replay.ts",
     "evaluation:export-conversation": "node --import tsx scripts/evaluation-export-conversation.ts",
@@ -37,7 +38,9 @@
     "state:validate": "node scripts/validate-runtime-state.mjs",
     "test:last-outbound": "tsx scripts/test-last-outbound-at.ts",
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
-    "pm2:reload": "pm2 reload ecosystem.config.cjs --env production"
+    "pm2:reload": "pm2 reload ecosystem.config.cjs --env production",
+    "channels:shadow:compare": "node --import tsx scripts/channels-shadow-compare.ts",
+    "channels:shadow:rollout-check": "node --import tsx scripts/channels-shadow-rollout-check.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.1",
