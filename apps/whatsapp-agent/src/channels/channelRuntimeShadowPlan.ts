@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { Channel, Provider } from "./channel.types.js";
+import type { ChannelPersistencePlanSummary } from "./channelPersistence.types.js";
 import type { ChannelRuntimeGateDecision } from "./tenantChannelAccount.js";
 
 export type ChannelRuntimeShadowPlanStepKey =
@@ -42,6 +43,7 @@ export type ChannelRuntimeShadowPlan = {
     wouldEvaluateHandoff: boolean;
     wouldSendOutbound: boolean;
   };
+  persistencePlanSummary?: ChannelPersistencePlanSummary;
   passive: true;
 };
 
@@ -54,6 +56,7 @@ type BuildChannelRuntimeShadowPlanInput = {
   resolution: string;
   gate: ChannelRuntimeGateDecision;
   qualificationEnabled?: boolean;
+  persistencePlanSummary?: ChannelPersistencePlanSummary;
   nowIso?: string;
 };
 
@@ -162,6 +165,7 @@ export function buildChannelRuntimeShadowPlan(
       wouldEvaluateHandoff,
       wouldSendOutbound,
     },
+    ...(input.persistencePlanSummary ? { persistencePlanSummary: input.persistencePlanSummary } : {}),
     passive: true,
   };
 }
@@ -182,6 +186,10 @@ export function buildChannelRuntimeShadowPlanLog(plan: ChannelRuntimeShadowPlan)
     wouldRunAi: plan.summary.wouldRunAi,
     wouldEvaluateHandoff: plan.summary.wouldEvaluateHandoff,
     wouldSendOutbound: plan.summary.wouldSendOutbound,
+    persistenceStrategy: plan.persistencePlanSummary?.strategy ?? null,
+    persistenceSafeToPersistNow: plan.persistencePlanSummary?.safeToPersistNow ?? null,
+    persistenceBlockers: plan.persistencePlanSummary?.blockers ?? [],
+    persistenceRequiredSchemaChangeCount: plan.persistencePlanSummary?.requiredSchemaChangeCount ?? null,
     passive: true,
   };
 }

@@ -77,6 +77,7 @@ model Client {
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
   chatbotFlows  ChatbotFlow[]
+  channelIdentities ContactChannelIdentity[]
 }
 
 model User {
@@ -109,16 +110,24 @@ model WaPhoneNumber {
 }
 
 model Contact {
-  id        String   @id @default(uuid())
-  clientId  String
-  waId      String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  clientId           String
+  waId               String
+  name               String?
+  channel            String?
+  provider           String?
+  channelAccountId   String?
+  externalUserHash   String?
+  externalUserRef    String?
+  legacyWaId         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id])
+  channelIdentities ContactChannelIdentity[]
 
   @@unique([clientId, waId])
+  @@index([clientId, channel, provider, channelAccountId])
 }
 
 model Conversation {
@@ -128,6 +137,12 @@ model Conversation {
   waId             String
   waIdCanonical    String?
   phoneNumberId    String?
+  channel          String?
+  provider         String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  legacyWaId       String?
   windowIsOpen     Boolean  @default(true)
   windowExpiresAt  DateTime?
   firstAssignedAt  DateTime?
@@ -150,6 +165,10 @@ model Conversation {
   @@unique([clientId, waId])
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, channel, updatedAt])
+  @@index([clientId, channel, closedAt])
+  @@index([clientId, channel, deletedAt])
   @@index([clientId, closedAt])
   @@index([clientId, deletedAt])
   @@index([clientId, departmentId])
@@ -186,6 +205,13 @@ model InboundMessage {
   waId          String
   waIdCanonical String?
   messageId     String
+  channel       String?
+  provider      String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  externalMessageId String?
+  legacyWaId    String?
   type          MessageType
   bodyText      String?
   allowlistHit  Boolean
@@ -197,6 +223,8 @@ model InboundMessage {
 
   @@index([requestId])
   @@index([clientId, waIdCanonical, createdAt])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash, createdAt])
+  @@index([clientId, channel, externalMessageId])
   @@unique([clientId, messageId])
 }
 
@@ -207,6 +235,13 @@ model OutboundMessage {
   waId          String
   waIdCanonical String?
   messageId     String?
+  channel       String?
+  provider      String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  externalMessageId String?
+  legacyWaId    String?
   type          MessageType
   status        MessageStatus
   bodyText      String?
@@ -223,6 +258,9 @@ model OutboundMessage {
   @@index([requestId])
   @@index([messageId])
   @@index([clientId, waIdCanonical, createdAt])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash, createdAt])
+  @@index([clientId, channel, externalMessageId])
+  @@index([clientId, channel, status, createdAt])
   @@unique([clientId, messageId])
 }
 
@@ -262,6 +300,12 @@ model ConversationRuntimeState {
   waId                String
   waIdCanonical       String?
   conversationKey     String?
+  channel             String?
+  provider            String?
+  channelAccountId    String?
+  externalUserHash    String?
+  externalUserRef     String?
+  legacyWaId          String?
   firstSeenAt         DateTime?
   windowIsOpen        Boolean       @default(true)
   windowExpiresAt     DateTime?
@@ -311,9 +355,39 @@ model ConversationRuntimeState {
   @@unique([clientId, waId])
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, channel, status])
+  @@index([clientId, channel, assignedUserId, status])
+  @@index([clientId, channel, queueId, status])
   @@index([clientId, status])
   @@index([clientId, assignedUserId, status])
   @@index([clientId, queueId, status])
+}
+
+model ContactChannelIdentity {
+  id               String   @id @default(cuid())
+  clientId         String   @db.Uuid
+  contactId        String?  @db.Uuid
+  channel          String
+  provider         String
+  channelAccountId String
+  externalUserHash String
+  externalUserRef  String?
+  legacyWaId       String?
+  displayName      String?
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leads   Lead[]
+
+  @@unique([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, contactId])
+  @@index([clientId, channel, provider, channelAccountId])
+  @@index([clientId, lastSeenAt])
 }
 
 model Department {
@@ -466,6 +540,13 @@ model Lead {
 
   waId      String
   waIdCanonical String?
+  channel   String?
+  provider  String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  legacyWaId String?
+  contactChannelIdentityId String?
 
   name      String?
   phone     String?
@@ -479,10 +560,14 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   notes     LeadNote[]
+  contactChannelIdentity ContactChannelIdentity? @relation(fields: [contactChannelIdentityId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, waId])
   @@index([tenantId, createdAt])
   @@index([tenantId, waIdCanonical])
+  @@index([tenantId, channel, provider, channelAccountId, externalUserHash])
+  @@index([tenantId, channel, createdAt])
+  @@index([tenantId, contactChannelIdentityId])
 }
 
 model LeadNote {

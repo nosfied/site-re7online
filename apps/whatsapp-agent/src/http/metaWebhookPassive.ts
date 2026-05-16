@@ -14,6 +14,10 @@ import {
   buildChannelRuntimeShadowPlan,
   buildChannelRuntimeShadowPlanLog,
 } from "../channels/channelRuntimeShadowPlan.js";
+import {
+  buildChannelPersistencePlan,
+  summarizeChannelPersistencePlan,
+} from "../channels/channelPersistencePlan.js";
 import { resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
@@ -435,6 +439,20 @@ export async function processPassiveMetaWebhookPayload(
     const runtimeGate = resolveChannelRuntimeGate(resolution.account);
     const tenantKey = resolution.tenantKey ?? "unknown";
     const tenant = tenants[tenantKey];
+    const persistencePlan = buildChannelPersistencePlan(
+      {
+        tenantKey,
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: item.pageId,
+        externalUserId: normalizeId(item.event.sender?.id),
+        ...(externalMessageId ? { externalMessageId } : {}),
+        ...(typeof item.event.timestamp === "number"
+          ? { timestamp: new Date(item.event.timestamp).toISOString() }
+          : {}),
+      },
+      tenant
+    );
     const shadowPlan = buildChannelRuntimeShadowPlan({
       tenantKey,
       channel: "messenger",
@@ -444,6 +462,7 @@ export async function processPassiveMetaWebhookPayload(
       resolution: resolution.resolution,
       gate: runtimeGate,
       qualificationEnabled: tenant?.aiQualification?.enabled === true,
+      persistencePlanSummary: summarizeChannelPersistencePlan(persistencePlan),
     });
     logRuntimeGate({
       requestId: options.requestId,
