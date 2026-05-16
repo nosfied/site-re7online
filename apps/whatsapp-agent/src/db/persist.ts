@@ -8,6 +8,10 @@ import { logger } from "../logger/logger.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import {
+  isWhatsAppMultichannelShadowWriteEnabled,
+  safeApplyWhatsAppMultichannelShadow,
+} from "../channels/whatsappMultichannelShadowWrite.js";
 
 function maskWaIdForLog(value: string) {
   const raw = String(value ?? "").trim();
@@ -48,7 +52,7 @@ export async function persistInboundMessage(params: {
       select: { id: true },
     });
     if (existing) return false;
-    await prisma.inboundMessage.create({
+    const created = await prisma.inboundMessage.create({
       data: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
@@ -61,7 +65,18 @@ export async function persistInboundMessage(params: {
         requestId: params.requestId,
         rawPayload: params.rawPayload,
       },
+      select: { id: true },
     });
+    if (isWhatsAppMultichannelShadowWriteEnabled()) {
+      await safeApplyWhatsAppMultichannelShadow({
+        prisma,
+        model: "InboundMessage",
+        recordId: created.id,
+        clientId: params.clientId,
+        waId: params.waId,
+        phoneNumberId: params.phoneNumberId,
+      });
+    }
     return true;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -112,7 +127,7 @@ export async function persistConversationWindow(params: {
         requestedDepartmentId
       );
   const shouldRewriteDepartment = existingDepartmentId !== resolvedDepartmentId;
-  await prisma.conversation.upsert({
+  const conversation = await prisma.conversation.upsert({
     where: {
       clientId_waId: {
         clientId: params.clientId,
@@ -150,7 +165,18 @@ export async function persistConversationWindow(params: {
       lastOutboundAt: params.lastOutboundAt ?? undefined,
       departmentId: resolvedDepartmentId ?? undefined,
     },
+    select: { id: true },
   });
+  if (isWhatsAppMultichannelShadowWriteEnabled()) {
+    await safeApplyWhatsAppMultichannelShadow({
+      prisma,
+      model: "Conversation",
+      recordId: conversation.id,
+      clientId: params.clientId,
+      waId: params.waId,
+      phoneNumberId: params.phoneNumberId,
+    });
+  }
   if (isInboundAfterSoftDelete && existing && params.lastInboundAt) {
     const client = await prisma.client.findUnique({
       where: { id: params.clientId },
@@ -319,7 +345,7 @@ export async function persistOutboundMessage(params: {
         select: { id: true },
       });
       if (existing) {
-        await prisma.outboundMessage.update({
+        const updated = await prisma.outboundMessage.update({
           where: {
             clientId_messageId: {
               clientId: params.clientId,
@@ -327,13 +353,44 @@ export async function persistOutboundMessage(params: {
             },
           },
           data,
+          select: { id: true },
         });
+        if (isWhatsAppMultichannelShadowWriteEnabled()) {
+          await safeApplyWhatsAppMultichannelShadow({
+            prisma,
+            model: "OutboundMessage",
+            recordId: updated.id,
+            clientId: params.clientId,
+            waId: params.waId,
+            phoneNumberId: params.phoneNumberId,
+          });
+        }
         return false;
       }
-      await prisma.outboundMessage.create({ data });
+      const created = await prisma.outboundMessage.create({ data, select: { id: true } });
+      if (isWhatsAppMultichannelShadowWriteEnabled()) {
+        await safeApplyWhatsAppMultichannelShadow({
+          prisma,
+          model: "OutboundMessage",
+          recordId: created.id,
+          clientId: params.clientId,
+          waId: params.waId,
+          phoneNumberId: params.phoneNumberId,
+        });
+      }
       return true;
     } else {
-      await prisma.outboundMessage.create({ data });
+      const created = await prisma.outboundMessage.create({ data, select: { id: true } });
+      if (isWhatsAppMultichannelShadowWriteEnabled()) {
+        await safeApplyWhatsAppMultichannelShadow({
+          prisma,
+          model: "OutboundMessage",
+          recordId: created.id,
+          clientId: params.clientId,
+          waId: params.waId,
+          phoneNumberId: params.phoneNumberId,
+        });
+      }
       return true;
     }
   } catch (error) {

@@ -113,6 +113,10 @@ import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 import { buildInboxMessageMedia } from "../http/inboxMedia.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import {
+  isWhatsAppMultichannelShadowWriteEnabled,
+  safeApplyWhatsAppMultichannelShadow,
+} from "../channels/whatsappMultichannelShadowWrite.js";
 
 const agentBrain = createAgentBrain();
 const adminTemplateDedup = new Map<string, number>();
@@ -1478,6 +1482,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           : nextStateCandidate.status,
     };
     await storage.upsertConversation(nextState);
+    if (tenantClientId && isWhatsAppMultichannelShadowWriteEnabled()) {
+      await safeApplyWhatsAppMultichannelShadow({
+        prisma: getPrisma(),
+        model: "ConversationRuntimeState",
+        clientId: tenantClientId,
+        waId: nextState.waId,
+        phoneNumberId: phoneNumberId ?? undefined,
+      });
+    }
     if (departmentChanged && resolvedDepartmentId) {
       logger.info({
         event: "conversation.department.assigned_default",
@@ -1772,6 +1785,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const lead = await ensureLeadForConversation({
       tenantId: params.clientId,
       waId: params.waId,
+      phoneNumberId: phoneNumberId ?? undefined,
     });
     const createEventAndNote = async (input: {
       requestId: string;
@@ -2971,6 +2985,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await ensureLeadForConversation({
         tenantId: tenantClientId,
         waId: normalizedFrom,
+        phoneNumberId: phoneNumberId ?? undefined,
       });
     }
 
@@ -5068,6 +5083,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           const lead = await ensureLeadForConversation({
             tenantId: tenantClientId,
             waId: updatedConversation.waId,
+            phoneNumberId: phoneNumberId ?? undefined,
           });
           await prisma.leadNote.create({
             data: {
@@ -5479,6 +5495,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             name: parsedLead?.name,
             city: parsedLead?.city,
             service: parsedLead?.serviceType,
+            phoneNumberId: phoneNumberId ?? undefined,
           });
         }
         await persistEventSafe(
@@ -5959,6 +5976,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     waId: message.from,
                     company: qualificationCrm.leadPatch.company,
                     service: qualificationCrm.leadPatch.service,
+                    phoneNumberId: phoneNumberId ?? undefined,
                   });
                   await logAiAssistantEvent("ai.qualification.lead_enriched", {
                     fields: Object.keys(qualificationCrm.leadPatch),
