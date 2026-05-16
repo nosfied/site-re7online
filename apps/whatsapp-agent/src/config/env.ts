@@ -54,6 +54,7 @@ export type Env = {
   CONV_STATE_READ_SOURCE_SET: boolean;
   MULTICHANNEL_SHADOW_WRITE: boolean;
   MULTICHANNEL_SHADOW_STRICT: boolean;
+  MULTICHANNEL_DUAL_READ: boolean;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -209,6 +210,8 @@ export function getEnv(): Env {
     (process.env.MULTICHANNEL_SHADOW_WRITE ?? "false") === "true";
   const MULTICHANNEL_SHADOW_STRICT =
     (process.env.MULTICHANNEL_SHADOW_STRICT ?? "false") === "true";
+  const MULTICHANNEL_DUAL_READ =
+    (process.env.MULTICHANNEL_DUAL_READ ?? "false") === "true";
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -300,6 +303,7 @@ export function getEnv(): Env {
     CONV_STATE_READ_SOURCE_SET,
     MULTICHANNEL_SHADOW_WRITE,
     MULTICHANNEL_SHADOW_STRICT,
+    MULTICHANNEL_DUAL_READ,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,

@@ -89,6 +89,7 @@ import {
 } from "../conversation/conversation.types.js";
 import { resolveTenant, TenantResolutionError } from "../tenancy/tenantResolver.js";
 import { ensureLeadForConversation, upsertLeadFromCapture } from "../crm/lead.service.js";
+import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 import {
   clearChatbotRuntime,
   executeChatbotFlow,
@@ -1211,7 +1212,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   };
   const loadDirectConversationForInbound = async (waId: string) => {
     if (!tenantClientId) return null;
-    return prisma.conversation.findUnique({
+    const conversation = await prisma.conversation.findUnique({
       where: {
         clientId_waId: {
           clientId: tenantClientId,
@@ -1220,10 +1221,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       },
       select: {
         id: true,
+        clientId: true,
+        channelAccountId: true,
+        externalUserHash: true,
+        legacyWaId: true,
         deletedAt: true,
         anonymizedAt: true,
       },
     });
+    await runWhatsAppDualReadShadow({
+      prisma,
+      model: "Conversation",
+      ownerId: tenantClientId,
+      waId,
+      phoneNumberId,
+      legacyRecord: conversation
+        ? {
+            id: conversation.id,
+            ownerId: conversation.clientId,
+            channelAccountId: conversation.channelAccountId,
+            externalUserHash: conversation.externalUserHash,
+            legacyWaId: conversation.legacyWaId,
+          }
+        : null,
+    });
+    return conversation;
   };
   const resetConversationForBotReentry = (
     state: ConversationState,

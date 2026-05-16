@@ -4,6 +4,7 @@ import {
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
 } from "../channels/whatsappMultichannelShadowWrite.js";
+import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 
 export async function ensureLeadForConversation(params: {
   tenantId: string;
@@ -17,6 +18,22 @@ export async function ensureLeadForConversation(params: {
       tenantId: params.tenantId,
       waId: params.waId,
     },
+  });
+  await runWhatsAppDualReadShadow({
+    prisma,
+    model: "Lead",
+    ownerId: params.tenantId,
+    waId: params.waId,
+    phoneNumberId: params.phoneNumberId,
+    legacyRecord: existing
+      ? {
+          id: existing.id,
+          ownerId: existing.tenantId,
+          channelAccountId: existing.channelAccountId,
+          externalUserHash: existing.externalUserHash,
+          legacyWaId: existing.legacyWaId,
+        }
+      : null,
   });
 
   if (existing) {
@@ -71,6 +88,22 @@ export async function upsertLeadFromCapture(params: {
       tenantId: params.tenantId,
       waId: params.waId,
     },
+  });
+  await runWhatsAppDualReadShadow({
+    prisma,
+    model: "Lead",
+    ownerId: params.tenantId,
+    waId: params.waId,
+    phoneNumberId: params.phoneNumberId,
+    legacyRecord: existing
+      ? {
+          id: existing.id,
+          ownerId: existing.tenantId,
+          channelAccountId: existing.channelAccountId,
+          externalUserHash: existing.externalUserHash,
+          legacyWaId: existing.legacyWaId,
+        }
+      : null,
   });
 
   if (existing) {
