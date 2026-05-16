@@ -16,6 +16,18 @@ const clients: WhatsAppBackfillClient[] = [
   { id: "tenant-2", clientKey: "tenant-two", phoneNumberIds: ["phone-a", "phone-b"] },
   { id: "tenant-3", clientKey: "tenant-three", phoneNumberIds: [], tenantConfigMetaPhoneNumberId: "phone-config" },
   { id: "tenant-4", clientKey: "missing-phone", phoneNumberIds: [] },
+  {
+    id: "tenant-5",
+    clientKey: "canonical-phone",
+    phoneNumberIds: ["phone-a", "phone-b"],
+    tenantConfigMetaPhoneNumberId: "phone-b",
+  },
+  {
+    id: "tenant-6",
+    clientKey: "invalid-canonical-phone",
+    phoneNumberIds: ["phone-a", "phone-b"],
+    tenantConfigMetaPhoneNumberId: "phone-missing",
+  },
 ];
 
 test("hashWhatsAppExternalUser is stable and masking hides raw waId", () => {
@@ -89,6 +101,60 @@ test("multiple possible channel accounts are detected", () => {
   );
 
   assert.equal(result.risks[0]?.type, "multiple_channel_accounts");
+});
+
+test("tenant config metaPhoneNumberId resolves multiple phone numbers when it matches a registered phone", () => {
+  const result = simulateWhatsAppBackfillRecord(
+    {
+      model: "leads",
+      id: "lead-canonical",
+      clientId: "tenant-5",
+      waId: "558400000015",
+    },
+    clients[4]
+  );
+  const grouped = buildWhatsAppBackfillRiskByTenant(clients, result.risks);
+  const tenant = grouped.find((item) => item.tenantKey === "canonical-phone");
+
+  assert.equal(result.simulation.channelAccountId, "phone-b");
+  assert.deepEqual(result.risks, []);
+  assert.equal(tenant?.channelAccountResolution, "tenant_config_meta_phone_number_id_preferred");
+});
+
+test("tenant config metaPhoneNumberId outside registered phones remains a conflict", () => {
+  const result = simulateWhatsAppBackfillRecord(
+    {
+      model: "runtimeStates",
+      id: "runtime-invalid-canonical",
+      clientId: "tenant-6",
+      waId: "558400000016",
+    },
+    clients[5]
+  );
+  const grouped = buildWhatsAppBackfillRiskByTenant(clients, result.risks);
+  const tenant = grouped.find((item) => item.tenantKey === "invalid-canonical-phone");
+
+  assert.equal(result.simulation.channelAccountId, null);
+  assert.equal(result.risks[0]?.type, "tenant_config_meta_phone_number_id_not_in_wa_phone_numbers");
+  assert.equal(tenant?.channelAccountResolution, "multiple_wa_phone_numbers");
+  assert.ok(tenant?.warnings.includes("tenant_config_meta_phone_number_id_not_in_wa_phone_numbers"));
+  assert.equal(JSON.stringify(grouped).includes("phone-missing"), false);
+});
+
+test("record direct phoneNumberId wins over tenant canonical phone", () => {
+  const result = simulateWhatsAppBackfillRecord(
+    {
+      model: "conversations",
+      id: "conv-direct-canonical",
+      clientId: "tenant-5",
+      waId: "558400000017",
+      phoneNumberId: "phone-direct",
+    },
+    clients[4]
+  );
+
+  assert.equal(result.simulation.channelAccountId, "phone-direct");
+  assert.deepEqual(result.risks, []);
 });
 
 test("report detects messages without matching conversation identity", () => {
@@ -216,6 +282,17 @@ test("risk report detects tenant with multiple phone numbers", () => {
   assert.ok(tenantTwo?.warnings.includes("multiple_wa_phone_numbers"));
   assert.equal(JSON.stringify(grouped).includes("phone-a"), false);
   assert.equal(JSON.stringify(grouped).includes("phone-b"), false);
+});
+
+test("risk report marks matching tenant config phone as preferred canonical resolution", () => {
+  const grouped = buildWhatsAppBackfillRiskByTenant(clients, []);
+  const tenant = grouped.find((item) => item.tenantKey === "canonical-phone");
+
+  assert.ok(tenant);
+  assert.equal(tenant.channelAccountResolution, "tenant_config_meta_phone_number_id_preferred");
+  assert.equal(tenant.recommendation, "no_action_required");
+  assert.ok(tenant.warnings.includes("multiple_wa_phone_numbers"));
+  assert.equal(JSON.stringify(tenant).includes("phone-b"), false);
 });
 
 test("risk report flags tenant config metaPhoneNumberId fallback without WaPhoneNumber", () => {

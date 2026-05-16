@@ -37,6 +37,7 @@ export type WhatsAppBackfillRisk = {
     | "missing_waid"
     | "missing_channel_account_id"
     | "multiple_channel_accounts"
+    | "tenant_config_meta_phone_number_id_not_in_wa_phone_numbers"
     | "unknown_client"
     | "external_user_hash_collision"
     | "message_without_conversation";
@@ -67,11 +68,13 @@ export type WhatsAppBackfillRiskByTenant = {
   channelAccountResolution:
     | "wa_phone_number"
     | "tenant_config_meta_phone_number_id"
+    | "tenant_config_meta_phone_number_id_preferred"
     | "missing"
     | "multiple_wa_phone_numbers";
   warnings: Array<
     | "tenant_without_wa_phone_number"
     | "tenant_config_meta_phone_number_id_without_wa_phone_number"
+    | "tenant_config_meta_phone_number_id_not_in_wa_phone_numbers"
     | "multiple_wa_phone_numbers"
     | "tenant_without_resolvable_channel_account"
     | "orphan_records"
@@ -170,7 +173,14 @@ function identityKey(clientId: string, channelAccountId: string | null, waIdHash
 function resolveChannelAccountId(
   record: WhatsAppBackfillRecord,
   client?: WhatsAppBackfillClient
-): { value: string | null; risk?: "unknown_client" | "missing_channel_account_id" | "multiple_channel_accounts" } {
+): {
+  value: string | null;
+  risk?:
+    | "unknown_client"
+    | "missing_channel_account_id"
+    | "multiple_channel_accounts"
+    | "tenant_config_meta_phone_number_id_not_in_wa_phone_numbers";
+} {
   const direct = normalizeText(record.phoneNumberId);
   if (direct) return { value: direct };
   if (!client) return { value: null, risk: "unknown_client" };
@@ -178,7 +188,15 @@ function resolveChannelAccountId(
   if (uniquePhoneIds.length === 1) return { value: uniquePhoneIds[0] ?? null };
   const tenantConfigPhone = normalizeText(client.tenantConfigMetaPhoneNumberId);
   if (tenantConfigPhone && uniquePhoneIds.length === 0) return { value: tenantConfigPhone };
-  if (uniquePhoneIds.length > 1) return { value: null, risk: "multiple_channel_accounts" };
+  if (uniquePhoneIds.length > 1) {
+    if (tenantConfigPhone && uniquePhoneIds.includes(tenantConfigPhone)) {
+      return { value: tenantConfigPhone };
+    }
+    if (tenantConfigPhone) {
+      return { value: null, risk: "tenant_config_meta_phone_number_id_not_in_wa_phone_numbers" };
+    }
+    return { value: null, risk: "multiple_channel_accounts" };
+  }
   return { value: null, risk: "missing_channel_account_id" };
 }
 
@@ -216,9 +234,14 @@ function chooseTenantRecommendation(
 function getTenantChannelAccountResolution(client: WhatsAppBackfillClient | undefined): WhatsAppBackfillRiskByTenant["channelAccountResolution"] {
   if (!client) return "missing";
   const uniquePhoneIds = [...new Set(client.phoneNumberIds.map(normalizeText).filter(Boolean))];
-  if (uniquePhoneIds.length > 1) return "multiple_wa_phone_numbers";
+  const tenantConfigPhone = normalizeText(client.tenantConfigMetaPhoneNumberId);
+  if (uniquePhoneIds.length > 1) {
+    return tenantConfigPhone && uniquePhoneIds.includes(tenantConfigPhone)
+      ? "tenant_config_meta_phone_number_id_preferred"
+      : "multiple_wa_phone_numbers";
+  }
   if (uniquePhoneIds.length === 1) return "wa_phone_number";
-  if (normalizeText(client.tenantConfigMetaPhoneNumberId)) return "tenant_config_meta_phone_number_id";
+  if (tenantConfigPhone) return "tenant_config_meta_phone_number_id";
   return "missing";
 }
 
@@ -234,7 +257,16 @@ function buildTenantWarnings(
   if (uniquePhoneIds.length === 0 && hasConfigPhone) {
     warnings.add("tenant_config_meta_phone_number_id_without_wa_phone_number");
   }
-  if (uniquePhoneIds.length > 1) warnings.add("multiple_wa_phone_numbers");
+  if (uniquePhoneIds.length > 1) {
+    const configPhone = normalizeText(client?.tenantConfigMetaPhoneNumberId);
+    if (configPhone && uniquePhoneIds.includes(configPhone)) {
+      warnings.add("multiple_wa_phone_numbers");
+    } else if (configPhone) {
+      warnings.add("tenant_config_meta_phone_number_id_not_in_wa_phone_numbers");
+    } else {
+      warnings.add("multiple_wa_phone_numbers");
+    }
+  }
   if (uniquePhoneIds.length === 0 && !hasConfigPhone) warnings.add("tenant_without_resolvable_channel_account");
   if (risks.some((risk) => risk.type === "unknown_client" || risk.type === "message_without_conversation")) {
     warnings.add("orphan_records");
