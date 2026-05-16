@@ -247,6 +247,40 @@ test("dual write reads Postgres state when read source is postgres", async () =>
   assert.equal(calls.get, 0);
 });
 
+test("dual write reads synthetic Messenger state with multichannel conversation key", async () => {
+  const syntheticWaId = "messenger:8483671231fdbf90dd354fe2f43c85ae";
+  installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          waId: syntheticWaId,
+          waIdCanonical: syntheticWaId,
+          conversationKey:
+            "tendencia-modas:messenger:page_smoke_001:8483671231fdbf90dd354fe2f43c85ae",
+          channelAccountId: "page_smoke_001",
+          externalUserHash: "8483671231fdbf90dd354fe2f43c85ae",
+          legacyWaId: null,
+          mode: "HUMAN",
+          status: ConversationOperationalStatus.WAITING,
+        }),
+      ];
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "postgres",
+    jsonWriteEnabled: false,
+  });
+
+  const state = await storage.getConversation(syntheticWaId, "tendencia-modas");
+
+  assert.equal(state?.waId, syntheticWaId);
+  assert.equal(state?.conversationKey, "tendencia-modas:messenger:page_smoke_001:8483671231fdbf90dd354fe2f43c85ae");
+  assert.equal(state?.mode, "HUMAN");
+  assert.equal(state?.status, "WAITING");
+  assert.equal(calls.get, 0);
+});
+
 test("dual write does not read JSON when Postgres read fails", async () => {
   installPrismaMock({
     async findMany() {

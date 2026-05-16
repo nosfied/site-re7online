@@ -103,6 +103,27 @@ function isSyntheticChannelWaId(value: string) {
   return /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(value.trim());
 }
 
+function isValidConversationKeyForState(state: ConversationState, clientKey: string, waId: string) {
+  const conversationKey = state.conversationKey ?? "";
+  const expectedLegacyKey = makeConversationKey(clientKey, state.waId || waId);
+  if (conversationKey === expectedLegacyKey) {
+    return true;
+  }
+
+  const stateWaId = String(state.waId || waId).trim().toLowerCase();
+  if (!isSyntheticChannelWaId(stateWaId)) {
+    return false;
+  }
+
+  const [channel, externalUserHash] = stateWaId.split(":");
+  const keyPrefix = `${clientKey}:${channel}:`;
+  return (
+    Boolean(channel && externalUserHash) &&
+    conversationKey.startsWith(keyPrefix) &&
+    conversationKey.endsWith(`:${externalUserHash}`)
+  );
+}
+
 function getMostRecentJsonTimestamp(state: ConversationState | null) {
   if (!state) return null;
   const timestamps = [
@@ -388,7 +409,7 @@ export function createDualWriteStorage(
     if (!state.handoff || !["none", "pending", "active"].includes(state.handoff.status)) {
       return { ok: false, reason: "invalid_handoff" };
     }
-    if (state.conversationKey !== makeConversationKey(clientKey, state.waId || waId)) {
+    if (!isValidConversationKeyForState(state, clientKey, waId)) {
       return { ok: false, reason: "invalid_conversation_key" };
     }
     return { ok: true, state };
