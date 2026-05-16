@@ -2041,6 +2041,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           mode: "HUMAN" as const,
           status: ConversationOperationalStatus.IN_PROGRESS,
           closedAt: null,
+          lastOutboundAt: result.createdAt,
+          lastOutboundMessageId: result.messageId,
         },
       });
       const payload = await buildConversationActionPayload(prisma, {
