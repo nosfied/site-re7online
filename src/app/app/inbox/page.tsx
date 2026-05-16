@@ -638,8 +638,22 @@ function getRecordingFileExtension(mimeType: string) {
 }
 
 function getConversationActivityAt(item: InboxConversationItem) {
-  // Activity priority stays explicit: last visible message, then conversation update timestamp.
-  return item.lastMessage?.createdAt ?? item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
+  const candidates = [
+    item.lastMessage?.createdAt,
+    item.lastInboundAt,
+    item.lastOutboundAt,
+    item.updatedAt,
+  ].filter((value): value is string => Boolean(value));
+  let latest: string | null = null;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const value of candidates) {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp) && timestamp > latestTimestamp) {
+      latest = value;
+      latestTimestamp = timestamp;
+    }
+  }
+  return latest ?? item.updatedAt;
 }
 
 function getConversationActivityTimestamp(item: InboxConversationItem) {
@@ -650,16 +664,17 @@ function getConversationActivityTimestamp(item: InboxConversationItem) {
 
 function sortConversationsByRecent(items: InboxConversationItem[], prioritizeLeads = false) {
   return [...items].sort((a, b) => {
-    if (prioritizeLeads) {
-      const priorityDiff = getLeadTemperatureScore(b) - getLeadTemperatureScore(a);
-      if (priorityDiff !== 0) return priorityDiff;
-    }
     const aTs = getConversationActivityTimestamp(a);
     const bTs = getConversationActivityTimestamp(b);
     if (aTs === null && bTs === null) return 0;
     if (aTs === null) return 1;
     if (bTs === null) return -1;
-    return prioritizeLeads ? aTs - bTs : bTs - aTs;
+    if (aTs !== bTs) return bTs - aTs;
+    if (prioritizeLeads) {
+      const priorityDiff = getLeadTemperatureScore(b) - getLeadTemperatureScore(a);
+      if (priorityDiff !== 0) return priorityDiff;
+    }
+    return 0;
   });
 }
 
@@ -1840,6 +1855,8 @@ export default function AppInboxPage() {
               createdAt: message.createdAt,
             },
             lastInboundAt: message.direction === "INBOUND" ? message.createdAt : item.lastInboundAt,
+            lastOutboundAt: message.direction === "OUTBOUND" ? message.createdAt : item.lastOutboundAt,
+            updatedAt: message.createdAt,
           };
         });
       if (!matchedConversation) {
@@ -3012,6 +3029,7 @@ export default function AppInboxPage() {
                         templateName: null,
                         createdAt: response.message.createdAt,
                       },
+                      lastOutboundAt: response.message.createdAt,
                       updatedAt: response.message.createdAt,
                     }
                   : item
@@ -3146,6 +3164,7 @@ export default function AppInboxPage() {
                       templateName: null,
                       createdAt: response.message.createdAt,
                     },
+                    lastOutboundAt: response.message.createdAt,
                     updatedAt: response.message.createdAt,
                   }
                 : item

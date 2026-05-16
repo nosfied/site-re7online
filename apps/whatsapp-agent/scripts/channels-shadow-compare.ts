@@ -163,8 +163,15 @@ async function loadRecords(
   clientMap: Map<string, string>,
   tenant?: string
 ) {
-  const scopedWhere = tenant ? { clientId: { in: clientIds } } : {};
-  const leadWhere = tenant ? { tenantId: { in: clientIds } } : {};
+  const whatsappChannelWhere = { OR: [{ channel: null }, { channel: "whatsapp" }] };
+  const scopedWhere = {
+    ...(tenant ? { clientId: { in: clientIds } } : {}),
+    ...whatsappChannelWhere,
+  };
+  const leadWhere = {
+    ...(tenant ? { tenantId: { in: clientIds } } : {}),
+    ...whatsappChannelWhere,
+  };
   const records = emptyRecords();
   const selectMultichannel = {
     channel: true,

@@ -80,6 +80,11 @@ function hasNoValue(value: unknown) {
   return value == null || value === "";
 }
 
+function isWhatsAppCompareRecord(record: WhatsAppBackfillExecutableRecord) {
+  const channel = normalizeText(record.channel).toLowerCase();
+  return channel === "" || channel === "whatsapp";
+}
+
 function compareRecord(
   record: WhatsAppBackfillExecutableRecord,
   client?: WhatsAppBackfillClient
@@ -153,6 +158,7 @@ export function buildWhatsAppShadowCompareReport(input: {
 
   for (const model of MODEL_NAMES) {
     for (const record of input.records[model] ?? []) {
+      if (!isWhatsAppCompareRecord(record)) continue;
       const comparison = compareRecord(record, clientsById.get(record.clientId));
       const summary = byModel[model];
       summary.checked += 1;

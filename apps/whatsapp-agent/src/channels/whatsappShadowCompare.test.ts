@@ -100,6 +100,33 @@ test("externalUserRef must remain empty", () => {
   assert.deepEqual(report.samples[0]?.mismatchedFields, ["externalUserRef"]);
 });
 
+test("non-whatsapp records are ignored by whatsapp shadow compare", () => {
+  const records = emptyRecords();
+  records.inboundMessages.push(record());
+  records.inboundMessages.push(
+    record({
+      id: "messenger-record",
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: "page-1",
+      externalUserHash: "messenger-hash",
+      externalUserRef: "encrypted-ref",
+      legacyWaId: null,
+    })
+  );
+  const report = buildWhatsAppShadowCompareReport({
+    clients: [client],
+    records,
+    includeSamples: true,
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.counts.checked, 1);
+  assert.equal(report.counts.matched, 1);
+  assert.equal(report.counts.mismatched, 0);
+  assert.equal(report.byModel.inboundMessages.checked, 1);
+});
+
 test("report samples do not expose raw waId", () => {
   const records = emptyRecords();
   records.inboundMessages.push(record({ legacyWaId: null }));

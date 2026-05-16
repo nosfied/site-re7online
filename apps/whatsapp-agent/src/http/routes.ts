@@ -14770,11 +14770,7 @@ async function buildConversationListPayload(
       updatedAt: conversation.updatedAt,
     };
   });
-  const filteredItems = (
-    params.profile === "business"
-      ? sortConversationItemsByPriorityAndWait
-      : sortConversationItemsByRecent
-  )(
+  const filteredItems = sortConversationItemsByRecent(
     allItems.filter(
       (item) =>
         conversationListItemIsInHumanFlow(item) &&
