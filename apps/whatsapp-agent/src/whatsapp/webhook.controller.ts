@@ -1235,6 +1235,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       ownerId: tenantClientId,
       waId,
       phoneNumberId,
+      phase: "before_persist",
       legacyRecord: conversation
         ? {
             id: conversation.id,

@@ -2,6 +2,7 @@ import { logger as defaultLogger } from "../logger/logger.js";
 import { buildWhatsAppMultichannelIdentity } from "./whatsappMultichannelShadowWrite.js";
 
 export type WhatsAppDualReadModel = "Conversation" | "ConversationRuntimeState" | "Lead";
+export type WhatsAppDualReadPhase = "before_persist" | "after_persist";
 
 export type WhatsAppDualReadRecord = {
   id: string;
@@ -18,6 +19,13 @@ export type WhatsAppDualReadResult = {
   legacyId?: string | null;
   multichannelId?: string | null;
   mismatchReason?: string | null;
+};
+
+export type WhatsAppDualReadSkippedResult = {
+  skipped: true;
+  reason: string;
+  legacyFound?: boolean;
+  multichannelFound?: boolean;
 };
 
 export type WhatsAppDualReadLogger = {
@@ -177,14 +185,16 @@ export async function runWhatsAppDualReadShadow(params: {
   waId: string;
   phoneNumberId?: string | null;
   legacyRecord?: WhatsAppDualReadRecord | null;
+  phase?: WhatsAppDualReadPhase;
   logger?: WhatsAppDualReadLogger;
   env?: NodeJS.ProcessEnv;
-}): Promise<WhatsAppDualReadResult | { skipped: true; reason: string }> {
+}): Promise<WhatsAppDualReadResult | WhatsAppDualReadSkippedResult> {
   if (!isDualReadEnabled(params.env ?? process.env)) {
     return { skipped: true, reason: "disabled" };
   }
 
   const logger = params.logger ?? defaultLogger;
+  const phase = params.phase ?? "after_persist";
   const identity = buildWhatsAppMultichannelIdentity({
     waId: params.waId,
     phoneNumberId: params.phoneNumberId,
@@ -227,6 +237,53 @@ export async function runWhatsAppDualReadShadow(params: {
       expectedExternalUserHash: identity.externalUserHash,
     });
 
+    if (phase === "before_persist" && result.mismatchReason === "both_missing") {
+      logger.info({
+        ...redactedLogContext(),
+        event: "multichannel.dual_read.skipped",
+        model: params.model,
+        ownerId: params.ownerId,
+        phase,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: identity.channelAccountId,
+        externalUserHash: hashPrefix(identity.externalUserHash),
+        reason: "first_seen_both_missing",
+        legacyFound: result.legacyFound,
+        multichannelFound: result.multichannelFound,
+      });
+      return {
+        skipped: true,
+        reason: "first_seen_both_missing",
+        legacyFound: result.legacyFound,
+        multichannelFound: result.multichannelFound,
+      };
+    }
+
+    if (phase === "before_persist" && result.mismatchReason === "multichannel_missing") {
+      logger.info({
+        ...redactedLogContext(),
+        event: "multichannel.dual_read.skipped",
+        model: params.model,
+        ownerId: params.ownerId,
+        phase,
+        channel: "whatsapp",
+        provider: "meta",
+        channelAccountId: identity.channelAccountId,
+        externalUserHash: hashPrefix(identity.externalUserHash),
+        reason: "deferred_until_after_initial_persist",
+        legacyFound: result.legacyFound,
+        multichannelFound: result.multichannelFound,
+        legacyId: result.legacyId ?? null,
+      });
+      return {
+        skipped: true,
+        reason: "deferred_until_after_initial_persist",
+        legacyFound: result.legacyFound,
+        multichannelFound: result.multichannelFound,
+      };
+    }
+
     const payload = {
       ...redactedLogContext(),
       event: result.sameRecord
@@ -236,6 +293,7 @@ export async function runWhatsAppDualReadShadow(params: {
       ownerId: params.ownerId,
       channel: "whatsapp",
       provider: "meta",
+      phase,
       channelAccountId: identity.channelAccountId,
       externalUserHash: hashPrefix(identity.externalUserHash),
       legacyFound: result.legacyFound,

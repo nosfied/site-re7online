@@ -655,6 +655,7 @@ export function createDualWriteStorage(
       ownerId: clientId,
       waId: lookup.raw,
       phoneNumberId: db?.channelAccountId ?? env.WHATSAPP_PHONE_NUMBER_ID,
+      phase: "before_persist",
       legacyRecord: db
         ? {
             id: db.id,

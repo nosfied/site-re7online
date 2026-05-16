@@ -25,6 +25,7 @@ export async function ensureLeadForConversation(params: {
     ownerId: params.tenantId,
     waId: params.waId,
     phoneNumberId: params.phoneNumberId,
+    phase: "before_persist",
     legacyRecord: existing
       ? {
           id: existing.id,
@@ -95,6 +96,7 @@ export async function upsertLeadFromCapture(params: {
     ownerId: params.tenantId,
     waId: params.waId,
     phoneNumberId: params.phoneNumberId,
+    phase: "before_persist",
     legacyRecord: existing
       ? {
           id: existing.id,

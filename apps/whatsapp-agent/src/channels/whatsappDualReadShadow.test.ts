@@ -109,6 +109,69 @@ test("mismatch is reported", () => {
   assert.equal(result.mismatchReason, "id_mismatch");
 });
 
+test("both missing before persist is skipped instead of mismatch", async () => {
+  const { logger, records } = makeLogger();
+  const result = await runWhatsAppDualReadShadow({
+    prisma: makePrisma(null),
+    model: "Conversation",
+    ownerId: "client-1",
+    waId: "558499999999",
+    phoneNumberId: "phone-1",
+    legacyRecord: null,
+    phase: "before_persist",
+    logger,
+    env: { MULTICHANNEL_DUAL_READ: "true" } as NodeJS.ProcessEnv,
+  });
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "first_seen_both_missing",
+    legacyFound: false,
+    multichannelFound: false,
+  });
+  assert.equal(records[0]?.event, "multichannel.dual_read.skipped");
+  assert.equal(records[0]?.reason, "first_seen_both_missing");
+});
+
+test("multichannel missing before persist is deferred instead of mismatch", async () => {
+  const { logger, records } = makeLogger();
+  const result = await runWhatsAppDualReadShadow({
+    prisma: makePrisma(null),
+    model: "ConversationRuntimeState",
+    ownerId: "client-1",
+    waId: "558499999999",
+    phoneNumberId: "phone-1",
+    legacyRecord: { id: "runtime-1", ownerId: "client-1" },
+    phase: "before_persist",
+    logger,
+    env: { MULTICHANNEL_DUAL_READ: "true" } as NodeJS.ProcessEnv,
+  });
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "deferred_until_after_initial_persist",
+    legacyFound: true,
+    multichannelFound: false,
+  });
+  assert.equal(records[0]?.event, "multichannel.dual_read.skipped");
+  assert.equal(records[0]?.reason, "deferred_until_after_initial_persist");
+});
+
+test("multichannel missing after persist is a mismatch", async () => {
+  const { logger, records } = makeLogger();
+  const result = await runWhatsAppDualReadShadow({
+    prisma: makePrisma(null),
+    model: "ConversationRuntimeState",
+    ownerId: "client-1",
+    waId: "558499999999",
+    phoneNumberId: "phone-1",
+    legacyRecord: { id: "runtime-1", ownerId: "client-1" },
+    phase: "after_persist",
+    logger,
+    env: { MULTICHANNEL_DUAL_READ: "true" } as NodeJS.ProcessEnv,
+  });
+  assert.equal("mismatchReason" in result && result.mismatchReason, "multichannel_missing");
+  assert.equal(records[0]?.event, "multichannel.dual_read.mismatch");
+});
+
 test("fail-open logs skipped on query error", async () => {
   const { logger, records } = makeLogger();
   const prisma = makePrisma(null);
