@@ -5,6 +5,7 @@ import { logger } from "../logger/logger.js";
 import type { NormalizedInboundEvent } from "./channel.types.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { canPersistChannelInbound } from "./tenantChannelAccount.js";
+import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -170,7 +171,7 @@ export async function persistMessengerInboundEvent(params: {
     provider: "meta",
     channelAccountId: event.channelAccountId,
     externalUserHash,
-    externalUserRef: null,
+    externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
 

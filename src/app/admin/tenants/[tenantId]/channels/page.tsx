@@ -28,6 +28,7 @@ type ChannelAccountDraft = {
   handoffEnabled: boolean;
   status: NonNullable<TenantChannelAccount["status"]>;
   tokenStatus: NonNullable<TenantChannelAccount["tokenStatus"]>;
+  pageAccessToken: string;
 };
 
 const CHANNEL_OPTIONS: Channel[] = ["whatsapp", "instagram", "messenger"];
@@ -61,6 +62,7 @@ function createDraft(): ChannelAccountDraft {
     handoffEnabled: false,
     status: "pending",
     tokenStatus: "missing",
+    pageAccessToken: "",
   };
 }
 
@@ -81,6 +83,7 @@ function toDraft(account: TenantChannelAccount): ChannelAccountDraft {
     handoffEnabled: account.handoffEnabled === true,
     status: account.status ?? (account.enabled ? "connected" : "disabled"),
     tokenStatus: account.tokenStatus ?? "missing",
+    pageAccessToken: "",
   };
 }
 
@@ -101,7 +104,8 @@ function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
     aiEnabled: draft.aiEnabled,
     handoffEnabled: draft.handoffEnabled,
     status: draft.status,
-    tokenStatus: draft.tokenStatus,
+    tokenStatus: draft.pageAccessToken.trim() ? "configured" : draft.tokenStatus,
+    pageAccessToken: draft.pageAccessToken.trim() || undefined,
   }));
 }
 
@@ -233,9 +237,9 @@ export default function TenantChannelsPage() {
         </header>
 
         <section className="rounded-xl border border-amber-400/30 bg-amber-900/20 p-4 text-sm text-amber-100">
-          <strong>Ativação controlada.</strong> Esta tela prepara contas de canal para uso futuro.
-          Runtime real exige Ativo, Automação e Runtime ligados. Envio real só é liberado com Outbound.
-          Nenhum token e exibido ou salvo por esta interface.
+          <strong>Ativação controlada.</strong> Runtime real exige Ativo e Runtime ligados.
+          Envio manual por Messenger exige Outbound e token configurado. Tokens nunca sao exibidos
+          de volta no console.
         </section>
 
         {error ? (
@@ -378,6 +382,25 @@ export default function TenantChannelsPage() {
                       </option>
                     ))}
                   </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                  <span className="text-white/70">Page access token</span>
+                  <input
+                    type="password"
+                    value={draft.pageAccessToken}
+                    onChange={(event) => updateDraft(index, "pageAccessToken", event.target.value)}
+                    className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
+                    placeholder={
+                      draft.tokenStatus === "configured"
+                        ? "Token configurado. Preencha apenas para substituir."
+                        : "Cole o PAGE_ACCESS_TOKEN da pagina"
+                    }
+                    autoComplete="off"
+                  />
+                  <span className="text-xs text-white/50">
+                    O valor e salvo somente no backend e nao retorna pela API.
+                  </span>
                 </label>
               </div>
 

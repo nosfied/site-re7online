@@ -41,6 +41,10 @@ function sanitizeText(value: unknown, maxLength = 120) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : undefined;
 }
 
+function sanitizeSecret(value: unknown, maxLength = 4096) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : undefined;
+}
+
 function normalizeBoolean(value: unknown, fallback = false) {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -72,6 +76,7 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
   }
 
   const enabled = normalizeBoolean(input.enabled, false);
+  const pageAccessToken = sanitizeSecret(input.pageAccessToken);
   const status = normalizeStatus(
     input.status,
     ACCOUNT_STATUSES,
@@ -101,28 +106,76 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
     aiEnabled: normalizeBoolean(input.aiEnabled, false),
     handoffEnabled: normalizeBoolean(input.handoffEnabled, false),
     status,
-    tokenStatus: normalizeStatus(input.tokenStatus, TOKEN_STATUSES, "missing"),
+    tokenStatus: pageAccessToken
+      ? "configured"
+      : normalizeStatus(input.tokenStatus, TOKEN_STATUSES, "missing"),
+    pageAccessToken,
     createdAt: sanitizeText(input.createdAt, 40),
     updatedAt: sanitizeText(input.updatedAt, 40),
   } satisfies TenantChannelAccount;
 }
 
-export function normalizeTenantChannelAccountsForTenant(input: unknown, tenantKey: string) {
+function hasIncomingPageAccessToken(input: TenantChannelAccountInput) {
+  return typeof input.pageAccessToken === "string" && input.pageAccessToken.trim().length > 0;
+}
+
+function buildAccountKey(account: {
+  tenantKey: string;
+  provider: Provider;
+  channel: Channel;
+  channelAccountId: string;
+}) {
+  return `${account.tenantKey}:${account.provider}:${account.channel}:${account.channelAccountId}`;
+}
+
+export function redactTenantChannelAccount(account: TenantChannelAccount): TenantChannelAccount {
+  const { pageAccessToken: _pageAccessToken, ...redacted } = account;
+  return redacted;
+}
+
+export function redactTenantChannelAccounts(accounts?: TenantChannelAccount[]) {
+  return (accounts ?? []).map(redactTenantChannelAccount);
+}
+
+export function normalizeTenantChannelAccountsForTenant(
+  input: unknown,
+  tenantKey: string,
+  existingAccounts?: TenantChannelAccount[]
+) {
   if (!Array.isArray(input)) return undefined;
   const normalizedTenantKey = sanitizeIdentifier(tenantKey);
   if (!normalizedTenantKey) return [];
+
+  const existingByKey = new Map<string, TenantChannelAccount>();
+  for (const existing of existingAccounts ?? []) {
+    existingByKey.set(buildAccountKey(existing), existing);
+  }
 
   const seen = new Set<string>();
   const accounts: TenantChannelAccount[] = [];
   for (const raw of input.slice(0, 20)) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
     const item = raw as TenantChannelAccountInput;
+    const normalizedKeyInput = {
+      tenantKey: normalizedTenantKey,
+      provider: item.provider as Provider,
+      channel: item.channel as Channel,
+      channelAccountId: sanitizeIdentifier(item.channelAccountId),
+    };
+    const existing = existingByKey.get(buildAccountKey(normalizedKeyInput));
     const normalized = normalizeTenantChannelAccount({
       ...item,
       tenantKey: normalizedTenantKey,
+      pageAccessToken: hasIncomingPageAccessToken(item)
+        ? item.pageAccessToken
+        : existing?.pageAccessToken,
+      tokenStatus:
+        hasIncomingPageAccessToken(item) || existing?.pageAccessToken
+          ? "configured"
+          : item.tokenStatus,
     });
     if (!normalized) continue;
-    const key = `${normalized.tenantKey}:${normalized.provider}:${normalized.channel}:${normalized.channelAccountId}`;
+    const key = buildAccountKey(normalized);
     if (seen.has(key)) continue;
     seen.add(key);
     accounts.push(normalized);
@@ -148,6 +201,19 @@ export function canRunChannelRuntime(account?: TenantChannelAccount | null) {
 
 export function canSendChannelOutbound(account?: TenantChannelAccount | null) {
   return Boolean(account?.enabled && account.outboundEnabled);
+}
+
+export function canSendMessengerOutbound(account?: TenantChannelAccount | null) {
+  return Boolean(
+    account?.channel === "messenger" &&
+      account.enabled &&
+      account.runtimeEnabled === true &&
+      account.inboundPersistenceEnabled === true &&
+      account.outboundEnabled === true &&
+      account.status === "connected" &&
+      account.tokenStatus === "configured" &&
+      account.pageAccessToken
+  );
 }
 
 export function canPersistChannelInbound(account?: TenantChannelAccount | null) {

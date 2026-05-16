@@ -1011,6 +1011,7 @@ function applyConversationOperationalPayload(
     channel?: string | null;
     provider?: string | null;
     channelAccountId?: string | null;
+    channelOutboundEnabled?: boolean;
     mode: "BOT" | "HUMAN";
     handoffStatus?: "none" | "pending" | "active" | null;
     assignedUserId: string | null;
@@ -1040,6 +1041,7 @@ function applyConversationOperationalPayload(
     channel: payload.channel ?? item.channel,
     provider: payload.provider ?? item.provider,
     channelAccountId: payload.channelAccountId ?? item.channelAccountId,
+    channelOutboundEnabled: payload.channelOutboundEnabled ?? item.channelOutboundEnabled,
     mode: payload.mode,
     handoffStatus: payload.handoffStatus ?? item.handoffStatus ?? "none",
     assignedUserId: nextAssignedUserId,
@@ -2669,7 +2671,11 @@ export default function AppInboxPage() {
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
     [selectedConversation, session]
   );
-  const selectedConversationSupportsOutbound = getConversationChannel(selectedConversation) === "whatsapp";
+  const selectedConversationChannel = getConversationChannel(selectedConversation);
+  const selectedConversationSupportsOutbound =
+    selectedConversationChannel === "whatsapp" ||
+    (selectedConversationChannel === "messenger" &&
+      selectedConversation?.channelOutboundEnabled === true);
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const isHydratingSelectedTimeline =
     Boolean(selectedConversationWaId) &&

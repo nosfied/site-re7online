@@ -9,10 +9,12 @@ import {
   canRunChannelRuntime,
   canSendChannelOutbound,
   canPersistChannelInbound,
+  canSendMessengerOutbound,
   canUseChannelAi,
   canUseChannelHandoff,
   normalizeTenantChannelAccountsForTenant,
   normalizeTenantChannelAccount,
+  redactTenantChannelAccount,
   resolveChannelRuntimeGate,
   validateTenantChannelAccount,
 } from "./tenantChannelAccount.js";
@@ -54,11 +56,13 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
   assert.equal(account?.outboundEnabled, true);
   assert.equal(account?.aiEnabled, true);
   assert.equal(account?.handoffEnabled, true);
+  assert.equal(account?.pageAccessToken, "secret");
+  assert.equal(account?.tokenStatus, "configured");
   assert.equal("token" in (account ?? {}), false);
   assert.equal("accessToken" in (account ?? {}), false);
-  assert.equal("pageAccessToken" in (account ?? {}), false);
   assert.equal("longLivedToken" in (account ?? {}), false);
   assert.equal("businessToken" in (account ?? {}), false);
+  assert.equal("pageAccessToken" in redactTenantChannelAccount(account!), false);
 });
 
 test("normalizeTenantChannelAccount rejects missing tenantKey or channelAccountId", () => {
@@ -227,6 +231,61 @@ test("resolveChannelRuntimeGate allows runtime only with explicit runtime flag",
   });
   assert.equal(canRunChannelRuntime(account), true);
   assert.equal(canSendChannelOutbound(account), false);
+});
+
+test("canSendMessengerOutbound requires runtime, inbound, outbound and configured token", () => {
+  const blocked = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    enabled: true,
+    runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
+    outboundEnabled: true,
+    status: "connected",
+    tokenStatus: "missing",
+  });
+  const allowed = validateTenantChannelAccount({
+    ...blocked,
+    tokenStatus: "configured",
+    pageAccessToken: "page-token",
+  });
+
+  assert.equal(canSendMessengerOutbound(blocked), false);
+  assert.equal(canSendMessengerOutbound(allowed), true);
+});
+
+test("normalizeTenantChannelAccountsForTenant preserves existing page token when omitted", () => {
+  const existing = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: "page-1",
+    pageAccessToken: "existing-token",
+    tokenStatus: "configured",
+  });
+  const [updated] =
+    normalizeTenantChannelAccountsForTenant(
+      [
+        {
+          tenantKey: "tenant-a",
+          channel: "messenger",
+          provider: "meta",
+          channelAccountId: "page-1",
+          enabled: true,
+          runtimeEnabled: true,
+          inboundPersistenceEnabled: true,
+          outboundEnabled: true,
+          status: "connected",
+        },
+      ],
+      "tenant-a",
+      [existing]
+    ) ?? [];
+
+  assert.equal(updated?.pageAccessToken, "existing-token");
+  assert.equal(updated?.tokenStatus, "configured");
 });
 
 test("findTenantChannelAccount scopes by tenant, channel, provider and account", () => {

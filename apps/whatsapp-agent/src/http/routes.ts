@@ -4,7 +4,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { ConversationOperationalStatus, MessageType, Prisma } from "@prisma/client";
+import { ConversationOperationalStatus, MessageStatus, MessageType, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
 import { normalizeQualificationSchema } from "../agent/qualification.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
@@ -102,7 +102,11 @@ import {
   getOrCreateRetentionConfig,
   normalizeRetentionDays,
 } from "../privacy/privacyRetentionService.js";
-import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
+import {
+  canSendMessengerOutbound,
+  normalizeTenantChannelAccountsForTenant,
+  redactTenantChannelAccounts,
+} from "../channels/tenantChannelAccount.js";
 import {
   clearDryRunSessions,
   getDryRunSessionStats,
@@ -121,6 +125,14 @@ import {
   verifyPassiveMetaWebhookSignature,
 } from "./metaWebhookPassive.js";
 import { MESSENGER_OUTBOUND_DISABLED_MESSAGE } from "../channels/messengerInboundPersistence.js";
+import {
+  decryptMessengerExternalUserRef,
+  logMessengerOutbound,
+  persistMessengerOutboundMessage,
+  resolveMessengerOutboundGate,
+  sendMessengerTextMessage,
+} from "../channels/messengerOutbound.js";
+import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
@@ -1928,6 +1940,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send",
       });
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
       if (isConversationOutboundBlocked(resolvedConversation.winner)) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
@@ -1991,19 +2004,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const result = await adminSendMessage({
-        waId: resolvedConversation.resolvedWaId,
-        text,
-        clientKey: client.clientKey,
-        clientId: client.id,
-        requestId,
-      });
+      const result =
+        resolvedChannel === "messenger"
+          ? await adminSendMessengerMessage({
+              waId: resolvedConversation.resolvedWaId,
+              text,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+              source: resolvedConversation.winner ?? undefined,
+            })
+          : await adminSendMessage({
+              waId: resolvedConversation.resolvedWaId,
+              text,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+            });
       if (!result.ok) {
-        if (result.error === "window_closed" && result.errorPayload) {
+        if (result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
           json(res, result.statusCode, { error: result.errorPayload });
           return;
         }
-        json(res, result.statusCode, { error: result.error });
+        json(res, result.statusCode, {
+          error: result.error,
+          message: "message" in result ? result.message : undefined,
+        });
         return;
       }
       const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
@@ -2026,6 +2052,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...payload,
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
+        channelOutboundEnabled: getConversationChannelOutboundEnabled(
+          (await getTenants())[client.clientKey],
+          resolvedConversation.winner ?? undefined
+        ),
         message: {
           messageId: result.messageId,
           status: result.status,
@@ -2107,7 +2138,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send_media",
       });
-      if (isConversationOutboundBlocked(resolvedConversation.winner)) {
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      if (isConversationOutboundBlocked(resolvedConversation.winner) || resolvedChannel === "messenger") {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
           message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
@@ -8477,11 +8509,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (req.method === "GET" && pathname === "/admin/tenants") {
       if (requireSuperadmin()) return;
       const tenants = await getTenants();
+      const redactedTenants = Object.fromEntries(
+        Object.entries(tenants).map(([key, tenant]) => [
+          key,
+          {
+            ...tenant,
+            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          },
+        ])
+      );
       json(res, 200, {
         ok: true,
-        count: Object.keys(tenants).length,
-        tenants,
-        items: Object.values(tenants),
+        count: Object.keys(redactedTenants).length,
+        tenants: redactedTenants,
+        items: Object.values(redactedTenants),
       });
       return;
     }
@@ -8924,7 +8965,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, {
           ok: true,
           tenantId,
-          channelAccounts: tenant.channelAccounts ?? [],
+          channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
         });
         return;
       }
@@ -8943,7 +8984,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
 
         try {
-          const channelAccounts = normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId) ?? [];
+          const channelAccounts =
+            normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, tenant.channelAccounts) ?? [];
           const saved = await saveTenantPatch(tenantId, { channelAccounts });
           logger.info({
             event: "admin.tenant.channel_accounts.updated",
@@ -8959,7 +9001,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenantId,
             backupPath: saved.backupPath,
             fieldsChanged: saved.fieldsChanged,
-            channelAccounts: saved.tenant.channelAccounts ?? [],
+            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
           });
         } catch (error) {
           logger.warn({
@@ -9005,6 +9047,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const phone = client?.phoneNumbers[0] ?? null;
       const tenantWithDisplayPhone = {
         ...tenant,
+        channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
         displayPhoneNumber:
           tenant.displayPhoneNumber?.trim() ||
           extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
@@ -9044,8 +9087,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           count: Object.keys(saved.tenants).length,
           backupPath: saved.backupPath,
-          tenants: saved.tenants,
-          items: Object.values(saved.tenants),
+          tenants: Object.fromEntries(
+            Object.entries(saved.tenants).map(([key, tenant]) => [
+              key,
+              {
+                ...tenant,
+                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+              },
+            ])
+          ),
+          items: Object.values(saved.tenants).map((tenant) => ({
+            ...tenant,
+            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          })),
         });
       } catch (error) {
         logger.warn({
@@ -9505,7 +9559,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenantId,
           backupPath: saved.backupPath,
           fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
-          tenant: saved.tenant,
+          tenant: {
+            ...saved.tenant,
+            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+          },
         });
       } catch (error) {
         logger.warn({
@@ -13559,11 +13616,27 @@ async function buildConversationActionPayload(
             select: { name: true },
           })
         )?.name ?? null;
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+  const channelSource = conversation?.waId
+    ? await prisma.conversation.findFirst({
+        where: {
+          clientId: params.clientId,
+          OR: [
+            { waId: conversation.waId },
+            ...(conversation.waIdCanonical ? [{ waIdCanonical: conversation.waIdCanonical }] : []),
+          ],
+        },
+        select: { channel: true, provider: true, channelAccountId: true },
+      })
+    : null;
 
   return {
     ok: true,
     waId: conversation?.waId ?? null,
     waIdCanonical: conversation?.waIdCanonical ?? null,
+    ...serializeInboxChannelFields(channelSource ?? undefined),
+    channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, channelSource),
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName,
@@ -14156,7 +14229,31 @@ function serializeInboxChannelFields(source?: {
 
 function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
-  return channel === "messenger" || channel === "instagram";
+  return channel === "instagram";
+}
+
+function findTenantChannelAccountForConversation(
+  tenant: { channelAccounts?: TenantChannelAccount[] } | undefined,
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null
+) {
+  const channelFields = serializeInboxChannelFields(source ?? undefined);
+  const accounts = tenant?.channelAccounts ?? [];
+  return accounts.find(
+    (account) =>
+      account.channel === channelFields.channel &&
+      account.provider === channelFields.provider &&
+      account.channelAccountId === channelFields.channelAccountId
+  );
+}
+
+function getConversationChannelOutboundEnabled(
+  tenant: { channelAccounts?: TenantChannelAccount[] } | undefined,
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null
+) {
+  const channelFields = serializeInboxChannelFields(source ?? undefined);
+  if (channelFields.channel === "whatsapp") return true;
+  if (channelFields.channel !== "messenger") return false;
+  return canSendMessengerOutbound(findTenantChannelAccountForConversation(tenant, source));
 }
 
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
@@ -14563,6 +14660,8 @@ async function buildConversationListPayload(
         lastReadAtByConversationKey: {},
         manuallyUnreadByConversationKey: {},
       };
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
 
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
@@ -14656,6 +14755,7 @@ async function buildConversationListPayload(
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
       ...serializeInboxChannelFields(conversation),
+      channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, conversation),
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -14885,6 +14985,10 @@ async function buildConversationDetailPayload(
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
+    channelOutboundEnabled: getConversationChannelOutboundEnabled(
+      (await getTenants())[params.clientKey],
+      resolved.winner ?? undefined
+    ),
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName: assignedUser?.name ?? null,
@@ -15693,6 +15797,227 @@ async function adminSendMessage(params: {
     messageId,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
+  };
+}
+
+async function adminSendMessengerMessage(params: {
+  waId: string;
+  text: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  source: {
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
+  };
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+    }
+  | { ok: false; statusCode: number; error: string; message?: string }
+> {
+  const channel = serializeInboxChannelFields(params.source).channel;
+  if (channel !== "messenger") {
+    return { ok: false, statusCode: 409, error: "channel_outbound_not_enabled" };
+  }
+
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+  const account = findTenantChannelAccountForConversation(tenant, params.source);
+  if (account && account.tenantKey !== params.clientKey) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "tenant_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  const gate = resolveMessengerOutboundGate(account);
+  if (!gate.allowed) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: gate.reason,
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  if (!account) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+
+  const prisma = getPrisma();
+  const runtimeState = await prisma.conversationRuntimeState.findFirst({
+    where: {
+      clientId: params.clientId,
+      waId: params.waId,
+      channel: "messenger",
+      channelAccountId: account?.channelAccountId,
+    },
+    select: {
+      id: true,
+      waIdCanonical: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      externalUserRef: true,
+      assignedAt: true,
+      assignedUserId: true,
+    },
+  });
+  if (runtimeState && runtimeState.channelAccountId !== account.channelAccountId) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "channel_account_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  const recipientPsid = decryptMessengerExternalUserRef(runtimeState?.externalUserRef);
+  if (!runtimeState?.externalUserHash || !recipientPsid) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "recipient_unavailable",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "messenger_recipient_unavailable",
+      message: "Nao ha referencia segura do contato Messenger para envio. Aguarde uma nova mensagem do cliente.",
+    };
+  }
+
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
+  }
+
+  const sendResult = await sendMessengerTextMessage({
+    pageAccessToken: gate.token,
+    recipientPsid,
+    text: params.text,
+  });
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const messageId = `admin.messenger.send.${params.requestId}`;
+  const createdAt = new Date();
+  const metaMessageId = sendResult.ok ? sendResult.messageId : null;
+  await persistMessengerOutboundMessage({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical: runtimeState.waIdCanonical ?? params.waId,
+    channelAccountId: account.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    externalUserRef: runtimeState.externalUserRef,
+    messageId,
+    status,
+    text: params.text,
+    requestId: params.requestId,
+    metaMessageId,
+    errorBody: sendResult.ok ? null : sendResult.errorBody,
+  });
+
+  await Promise.all([
+    prisma.conversation.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "messenger",
+        channelAccountId: account.channelAccountId,
+      },
+      data: { lastOutboundAt: createdAt },
+    }),
+    prisma.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "messenger",
+        channelAccountId: account.channelAccountId,
+      },
+      data: {
+        lastOutboundAt: createdAt,
+        lastOutboundMessageId: messageId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+      },
+    }),
+  ]);
+
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  if (conversation) {
+    await runtimeStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt.toISOString(),
+      lastOutboundMessageId: messageId,
+      status:
+        conversation.assignedUserId && conversation.status === ConversationOperationalStatus.WAITING
+          ? ConversationOperationalStatus.IN_PROGRESS
+          : conversation.status,
+    });
+  }
+  await recordConversationAgentOutboundMetrics({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    occurredAt: createdAt,
+    wasInserted: sendResult.ok,
+    assignedAt: runtimeState.assignedAt?.toISOString() ?? null,
+    assignedUserId: runtimeState.assignedUserId ?? null,
+    requestId: params.requestId,
+  });
+
+  logMessengerOutbound({
+    event: sendResult.ok ? "messenger.outbound.sent" : "messenger.outbound.failed",
+    tenantKey: params.clientKey,
+    channelAccountId: runtimeState.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    requestId: params.requestId,
+    status: sendResult.status,
+  });
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId,
+    createdAt: createdAt.toISOString(),
   };
 }
 

@@ -21,6 +21,7 @@ export type TenantChannelAccount = {
   handoffEnabled?: boolean;
   status?: TenantChannelAccountStatus;
   tokenStatus?: TenantChannelTokenStatus;
+  pageAccessToken?: string;
   createdAt?: string;
   updatedAt?: string;
 };

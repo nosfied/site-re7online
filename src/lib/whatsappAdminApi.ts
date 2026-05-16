@@ -50,6 +50,7 @@ export type InboxConversationItem = {
   channel?: InboxChannel | string | null;
   provider?: string | null;
   channelAccountId?: string | null;
+  channelOutboundEnabled?: boolean;
   lastMessage: {
     direction: "INBOUND" | "OUTBOUND";
     type: string;
@@ -437,6 +438,7 @@ export type TenantChannelAccount = {
   handoffEnabled?: boolean;
   status?: "connected" | "disabled" | "pending" | "error";
   tokenStatus?: "not_required" | "configured" | "expired" | "missing";
+  pageAccessToken?: string;
   createdAt?: string;
   updatedAt?: string;
 };
