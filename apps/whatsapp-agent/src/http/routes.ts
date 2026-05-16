@@ -627,6 +627,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         cursor,
         filters: {
           status: statusFilter,
+          channel: normalizeConversationChannelFilter(query.channel),
           departmentId: departmentAccess.requiresDepartmentScope
             ? departmentAccess.departmentId
             : departmentIdFilter,
@@ -7429,6 +7430,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           cursor: null,
           filters: {
             status: null,
+            channel: normalizeConversationChannelFilter(query.channel),
             departmentId: null,
             assignedUserId: null,
             unassigned: false,
@@ -13580,6 +13582,9 @@ async function resolveConversationTarget(
     select: {
       waId: true,
       waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
       id: true,
       departmentId: true,
       createdAt: true,
@@ -13961,6 +13966,7 @@ async function buildAppDashboardOverview(
 
 type ConversationListFilters = {
   status: ConversationOperationalStatus | null;
+  channel: "whatsapp" | "messenger" | "instagram" | null;
   departmentId: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
@@ -14098,6 +14104,27 @@ function normalizeConversationStatusFilter(value: unknown): ConversationOperatio
     : null;
 }
 
+function normalizeConversationChannelFilter(value: unknown): ConversationListFilters["channel"] {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram"
+    ? normalized
+    : null;
+}
+
+function serializeInboxChannelFields(source?: {
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+}) {
+  const channel = source?.channel?.trim().toLowerCase() || "whatsapp";
+  const provider = source?.provider?.trim().toLowerCase() || (channel === "whatsapp" ? "meta" : null);
+  return {
+    channel,
+    provider,
+    channelAccountId: source?.channelAccountId ?? null,
+  };
+}
+
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
   return item.waIdCanonical || item.waId;
 }
@@ -14129,11 +14156,13 @@ function conversationMatchesListFilters(item: {
   leadName: string | null;
   leadPhone: string | null;
   waId: string;
+  channel?: string | null;
   status: ConversationOperationalStatus | null;
   departmentId: string | null;
   assignedUserId: string | null;
 }, filters: ConversationListFilters) {
   if (filters.status && item.status !== filters.status) return false;
+  if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
   if (filters.unassigned && item.assignedUserId) return false;
@@ -14225,6 +14254,7 @@ function buildConversationFilterCounts(
     leadName: string | null;
     leadPhone: string | null;
     waId: string;
+    channel?: string | null;
     status: ConversationOperationalStatus | null;
     departmentId: string | null;
     assignedUserId: string | null;
@@ -14319,6 +14349,9 @@ async function buildConversationListPayload(
     select: {
       waId: true,
       waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
       departmentId: true,
       updatedAt: true,
       lastInboundAt: true,
@@ -14349,6 +14382,9 @@ async function buildConversationListPayload(
     {
       waId: string;
       waIdCanonical: string;
+      channel: string | null;
+      provider: string | null;
+      channelAccountId: string | null;
       departmentId: string | null;
       updatedAt: Date;
       lastInboundAt: Date | null;
@@ -14363,6 +14399,9 @@ async function buildConversationListPayload(
       groupedConversations.set(key, {
         waId: conversation.waId,
         waIdCanonical: key,
+        channel: conversation.channel,
+        provider: conversation.provider,
+        channelAccountId: conversation.channelAccountId,
         departmentId: conversation.departmentId,
         updatedAt: conversation.updatedAt,
         lastInboundAt: conversation.lastInboundAt,
@@ -14582,6 +14621,7 @@ async function buildConversationListPayload(
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
+      ...serializeInboxChannelFields(conversation),
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -14809,6 +14849,7 @@ async function buildConversationDetailPayload(
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
+    ...serializeInboxChannelFields(resolved.winner ?? undefined),
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName: assignedUser?.name ?? null,

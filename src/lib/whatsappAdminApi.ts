@@ -42,9 +42,14 @@ export type InboxMessageItem = {
   createdAt: string;
 };
 
+export type InboxChannel = "whatsapp" | "messenger" | "instagram";
+
 export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
+  channel?: InboxChannel | string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   lastMessage: {
     direction: "INBOUND" | "OUTBOUND";
     type: string;
@@ -939,7 +944,7 @@ export async function bootstrapTenantById(
 export async function fetchConversations(
   connection: AdminConnection,
   clientKey: string,
-  options?: { limit?: number }
+  options?: { limit?: number; channel?: string | null }
 ): Promise<{
   ok: true;
   count: number;
@@ -949,6 +954,9 @@ export async function fetchConversations(
   params.set("clientKey", clientKey);
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
     params.set("limit", String(options.limit));
+  }
+  if (options?.channel?.trim()) {
+    params.set("channel", options.channel.trim());
   }
   return requestJson(connection, `/admin/conversations?${params.toString()}`);
 }
@@ -961,6 +969,9 @@ export async function fetchConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   mode: "BOT" | "HUMAN";
   assignedUserId: string | null;
   assignedTo: string | null;

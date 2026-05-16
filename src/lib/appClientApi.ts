@@ -47,6 +47,9 @@ type AppConversationOperationalPayload = {
   ok: true;
   waId: string;
   waIdCanonical?: string | null;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   mode: "BOT" | "HUMAN";
   handoffStatus?: "none" | "pending" | "active" | null;
   assignedUserId: string | null;
@@ -722,6 +725,7 @@ export async function fetchAppConversations(
     assignedUserId?: string | null;
     unassigned?: boolean;
     search?: string | null;
+    channel?: string | null;
   }
 ): Promise<{
   ok: true;
@@ -753,6 +757,9 @@ export async function fetchAppConversations(
   }
   if (options?.search?.trim()) {
     params.set("search", options.search.trim());
+  }
+  if (options?.channel?.trim()) {
+    params.set("channel", options.channel.trim());
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/conversations${suffix}`);

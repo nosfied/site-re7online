@@ -48,6 +48,7 @@ import {
 import {
   ConversationOperationalStatus,
   formatDateTime,
+  InboxChannel,
   InboxConversationItem,
   InboxMessageItem,
   LeadNoteItem,
@@ -558,6 +559,14 @@ const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
 );
 const CONVERSATION_FILTER_BY_VALUE = new Map(CONVERSATION_FILTERS.map((item) => [item.value, item]));
 type DepartmentFilter = "ALL" | string;
+type ConversationChannelFilter = "ALL" | InboxChannel;
+
+const CONVERSATION_CHANNEL_FILTERS: Array<{ value: ConversationChannelFilter; label: string }> = [
+  { value: "ALL", label: "Todos" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "instagram", label: "Instagram" },
+  { value: "messenger", label: "Facebook/Messenger" },
+];
 
 type DepartmentOption = {
   id: string;
@@ -999,6 +1008,9 @@ function applyConversationOperationalPayload(
   payload: {
     waId?: string | null;
     waIdCanonical?: string | null;
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
     mode: "BOT" | "HUMAN";
     handoffStatus?: "none" | "pending" | "active" | null;
     assignedUserId: string | null;
@@ -1025,6 +1037,9 @@ function applyConversationOperationalPayload(
     ...item,
     waId: payload.waId ?? item.waId,
     waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
+    channel: payload.channel ?? item.channel,
+    provider: payload.provider ?? item.provider,
+    channelAccountId: payload.channelAccountId ?? item.channelAccountId,
     mode: payload.mode,
     handoffStatus: payload.handoffStatus ?? item.handoffStatus ?? "none",
     assignedUserId: nextAssignedUserId,
@@ -1089,6 +1104,45 @@ function getConversationStatusClass(status: ConversationOperationalStatus | null
       return "theme-conversation-status-closed";
     default:
       return "theme-conversation-status-closed";
+  }
+}
+
+function getConversationChannel(item: Pick<InboxConversationItem, "channel"> | null): InboxChannel {
+  const channel = String(item?.channel ?? "").trim().toLowerCase();
+  if (channel === "messenger" || channel === "instagram") return channel;
+  return "whatsapp";
+}
+
+function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"> | null) {
+  switch (getConversationChannel(item)) {
+    case "messenger":
+      return "Facebook/Messenger";
+    case "instagram":
+      return "Instagram";
+    default:
+      return "WhatsApp";
+  }
+}
+
+function getConversationChannelIcon(item: Pick<InboxConversationItem, "channel"> | null) {
+  switch (getConversationChannel(item)) {
+    case "messenger":
+      return "M";
+    case "instagram":
+      return "IG";
+    default:
+      return "W";
+  }
+}
+
+function getConversationChannelClass(item: Pick<InboxConversationItem, "channel"> | null) {
+  switch (getConversationChannel(item)) {
+    case "messenger":
+      return "border-sky-300/40 bg-sky-500/15 text-sky-50";
+    case "instagram":
+      return "border-pink-300/40 bg-pink-500/15 text-pink-50";
+    default:
+      return "border-emerald-300/40 bg-emerald-500/15 text-emerald-50";
   }
 }
 
@@ -1197,6 +1251,8 @@ export default function AppInboxPage() {
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
+  const [conversationChannelFilter, setConversationChannelFilter] =
+    useState<ConversationChannelFilter>("ALL");
   const [conversationSearch, setConversationSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
   const [conversationFilterCounts, setConversationFilterCounts] = useState<Record<ConversationFilter, number>>({
@@ -1864,8 +1920,16 @@ export default function AppInboxPage() {
       assignedUserId: conversationFilter === "MINE" ? session?.user.id ?? null : null,
       unassigned: conversationFilter === "UNASSIGNED",
       search: search || null,
+      channel: conversationChannelFilter === "ALL" ? null : conversationChannelFilter,
     };
-  }, [conversationFilter, conversationSearch, departmentFilter, isAdminUser, session?.user.id]);
+  }, [
+    conversationChannelFilter,
+    conversationFilter,
+    conversationSearch,
+    departmentFilter,
+    isAdminUser,
+    session?.user.id,
+  ]);
 
   const conversationQueryKey = useMemo(
     () => JSON.stringify(buildConversationFetchOptions(null)),
@@ -2555,6 +2619,9 @@ export default function AppInboxPage() {
           return false;
         }
       }
+      if (conversationChannelFilter !== "ALL" && getConversationChannel(item) !== conversationChannelFilter) {
+        return false;
+      }
       const status = getConversationOperationalStatus(item);
       switch (conversationFilter) {
         case "WAITING":
@@ -2570,7 +2637,15 @@ export default function AppInboxPage() {
           return true;
       }
     });
-  }, [conversationFilter, conversationSearch, conversations, departmentFilter, isAdminUser, session?.user.id]);
+  }, [
+    conversationChannelFilter,
+    conversationFilter,
+    conversationSearch,
+    conversations,
+    departmentFilter,
+    isAdminUser,
+    session?.user.id,
+  ]);
   useEffect(() => {
     if (!isBusinessTenant) return;
     const signature = filteredConversations
@@ -3600,6 +3675,22 @@ export default function AppInboxPage() {
                 placeholder="Buscar conversa"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
               />
+              <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+                {CONVERSATION_CHANNEL_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setConversationChannelFilter(filter.value)}
+                    className={`min-h-7 rounded-lg px-2 text-[11px] transition ${
+                      conversationChannelFilter === filter.value
+                        ? "bg-re7-sky/30 text-white"
+                        : "text-white/60 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
               <div className="relative flex flex-wrap gap-1.5">
                 {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
                   const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
@@ -3692,6 +3783,7 @@ export default function AppInboxPage() {
               const label = getConversationLabel(item);
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
+              const channelLabel = getConversationChannelLabel(item);
               return (
                 <button
                   key={conversationIdentity}
@@ -3747,6 +3839,12 @@ export default function AppInboxPage() {
                         <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
                           {label}
                         </p>
+                        <span
+                          className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold ${getConversationChannelClass(item)}`}
+                          title={channelLabel}
+                        >
+                          {getConversationChannelIcon(item)}
+                        </span>
                         {isBusinessTenant && leadTemperatureLabel ? (
                           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
                             {leadTemperatureLabel}
@@ -3800,6 +3898,14 @@ export default function AppInboxPage() {
                     ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
                     : "Conversa"}
                 </h2>
+                {selectedConversation ? (
+                  <span
+                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${getConversationChannelClass(selectedConversation)}`}
+                    title={getConversationChannelLabel(selectedConversation)}
+                  >
+                    {getConversationChannelIcon(selectedConversation)}
+                  </span>
+                ) : null}
                 {isBusinessTenant && selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getLeadTemperatureClass(selectedConversation)}`}>
                     {getLeadTemperatureLabel(selectedConversation)}
@@ -3808,6 +3914,8 @@ export default function AppInboxPage() {
               </div>
               {selectedConversation ? (
                 <p className="mt-0.5 truncate text-sm text-slate-600">
+                  {getConversationChannelLabel(selectedConversation)}
+                  {" • "}
                   {getConversationModeLabel(selectedConversation)}
                   {" • "}
                   {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
