@@ -109,6 +109,13 @@ test("safeApply writes by id when flag is on", async () => {
   assert.equal(calls[0]?.values[5], "558499999999");
   assert.equal(records[records.length - 1]?.event, "multichannel.shadow_write.applied");
   assert.equal(JSON.stringify(records).includes("558499999999"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(records[records.length - 1] ?? {}, "waId"), true);
+  assert.equal(records[records.length - 1]?.waId, undefined);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(records[records.length - 1] ?? {}, "conversationKey"),
+    true
+  );
+  assert.equal(records[records.length - 1]?.conversationKey, undefined);
 });
 
 test("safeApply is fail-open on missing schema when strict is false", async () => {

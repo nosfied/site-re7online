@@ -72,6 +72,13 @@ function maskHash(value: string | null | undefined) {
   return normalized ? `hash:${normalized.slice(0, 8)}` : null;
 }
 
+function redactedShadowLogContext() {
+  return {
+    waId: undefined,
+    conversationKey: undefined,
+  };
+}
+
 function isSchemaMissingError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return (
@@ -197,6 +204,7 @@ export async function safeApplyWhatsAppMultichannelShadow(params: {
   const logger = params.logger ?? defaultLogger;
   if (!isWhatsAppMultichannelShadowWriteEnabled(env)) {
     logger.info({
+      ...redactedShadowLogContext(),
       event: "multichannel.shadow_write.skipped_disabled",
       model: params.model,
       recordId: params.recordId ?? null,
@@ -213,6 +221,7 @@ export async function safeApplyWhatsAppMultichannelShadow(params: {
       ? "missing_waid"
       : "missing_channel_account_id";
     logger.warn({
+      ...redactedShadowLogContext(),
       event: "multichannel.shadow_write.failed",
       model: params.model,
       recordId: params.recordId ?? null,
@@ -250,6 +259,7 @@ export async function safeApplyWhatsAppMultichannelShadow(params: {
       throw new Error("missing_record_target");
     }
     logger.info({
+      ...redactedShadowLogContext(),
       event: "multichannel.shadow_write.applied",
       model: params.model,
       recordId: params.recordId ?? null,
@@ -264,6 +274,7 @@ export async function safeApplyWhatsAppMultichannelShadow(params: {
     const message = error instanceof Error ? error.message : String(error);
     if (isSchemaMissingError(error)) {
       logger.warn({
+        ...redactedShadowLogContext(),
         event: "multichannel.shadow_write.skipped_schema_missing",
         model: params.model,
         recordId: params.recordId ?? null,
@@ -285,6 +296,7 @@ export async function safeApplyWhatsAppMultichannelShadow(params: {
       };
     }
     logger.warn({
+      ...redactedShadowLogContext(),
       event: "multichannel.shadow_write.failed",
       model: params.model,
       recordId: params.recordId ?? null,
