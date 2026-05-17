@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildMessengerSyntheticWaId,
+  fetchMessengerUserProfile,
   persistMessengerInboundEvent,
   resolveMessengerInboundPersistenceGate,
 } from "./messengerInboundPersistence.js";
@@ -91,6 +92,7 @@ const enabledAccount = validateTenantChannelAccount({
   inboundPersistenceEnabled: true,
   outboundEnabled: false,
   status: "connected",
+  pageAccessToken: "page-token",
 });
 
 test("resolveMessengerInboundPersistenceGate blocks unless inbound persistence is explicit", () => {
@@ -120,6 +122,38 @@ test("buildMessengerSyntheticWaId uses hash only", () => {
   assert.equal(synthetic.includes("psid_user"), false);
 });
 
+test("fetchMessengerUserProfile resolves display name without exposing token", async () => {
+  let requestedUrl = "";
+  let authorizationHeader = "";
+  const result = await fetchMessengerUserProfile({
+    pageAccessToken: "page-token",
+    externalUserId: "psid_user_001",
+    fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(url);
+      authorizationHeader = String(init?.headers instanceof Headers
+        ? init.headers.get("authorization")
+        : (init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
+      return new Response(JSON.stringify({ first_name: "Maria", last_name: "Silva" }), { status: 200 });
+    }) as typeof fetch,
+  });
+
+  assert.equal(result.displayName, "Maria Silva");
+  assert.equal(requestedUrl.includes("psid_user_001"), true);
+  assert.equal(requestedUrl.includes("fields=first_name%2Clast_name%2Cname"), true);
+  assert.equal(requestedUrl.includes("page-token"), false);
+  assert.equal(authorizationHeader, "Bearer page-token");
+});
+
+test("fetchMessengerUserProfile fails open when profile is unavailable", async () => {
+  const result = await fetchMessengerUserProfile({
+    pageAccessToken: "page-token",
+    externalUserId: "psid_user_001",
+    fetchImpl: (async () => new Response("denied", { status: 403 })) as typeof fetch,
+  });
+
+  assert.equal(result.displayName, null);
+});
+
 test("persistMessengerInboundEvent persists Messenger inbound once and dedupes by mid", async () => {
   const prisma = createFakePrisma();
   const event = {
@@ -139,6 +173,8 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
     tenantKey: "tenant-a",
     account: enabledAccount,
     requestId: "req-1",
+    fetchImpl: (async () =>
+      new Response(JSON.stringify({ first_name: "Maria", last_name: "Silva" }), { status: 200 })) as typeof fetch,
   });
   const second = await persistMessengerInboundEvent({
     prisma: prisma as any,
@@ -156,10 +192,14 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
   const conversation = Array.from(prisma.state.conversations.values())[0];
   const runtime = Array.from(prisma.state.runtimeStates.values())[0];
   const inbound = Array.from(prisma.state.inboundMessages.values())[0];
+  const contact = Array.from(prisma.state.contacts.values())[0];
+  const lead = Array.from(prisma.state.leads.values())[0];
   assert.equal(conversation.channel, "messenger");
   assert.equal(runtime.mode, "HUMAN");
   assert.equal(runtime.status, "WAITING");
   assert.equal(inbound.externalMessageId, "mid-1");
+  assert.equal(contact.name, "Maria Silva");
+  assert.equal(lead.name, "Maria Silva");
   assert.equal(JSON.stringify({ conversation, runtime, inbound }).includes("psid_user_001"), false);
 });
 

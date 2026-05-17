@@ -1141,25 +1141,66 @@ function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"
   }
 }
 
-function getConversationChannelIcon(item: Pick<InboxConversationItem, "channel"> | null) {
+function getConversationChannelBadgeClass(item: Pick<InboxConversationItem, "channel"> | null) {
   switch (getConversationChannel(item)) {
     case "messenger":
-      return "M";
+      return "border-[#1877F2]/25 bg-white";
     case "instagram":
-      return "IG";
+      return "border-pink-300/40 bg-white";
     default:
-      return "W";
+      return "border-[#25D366]/25 bg-white";
   }
 }
 
-function getConversationChannelClass(item: Pick<InboxConversationItem, "channel"> | null) {
+function ConversationChannelLogo({
+  item,
+  className = "h-4 w-4",
+}: {
+  item: Pick<InboxConversationItem, "channel"> | null;
+  className?: string;
+}) {
   switch (getConversationChannel(item)) {
     case "messenger":
-      return "border-sky-300/40 bg-sky-500/15 text-sky-50";
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#1877F2" />
+          <path
+            fill="#fff"
+            d="M17.5 25v-8h2.7l.4-3.1h-3.1v-2c0-.9.2-1.5 1.5-1.5h1.7V7.6c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.5-4 4.1v2.3h-2.7V17h2.7v8h3.2z"
+          />
+        </svg>
+      );
     case "instagram":
-      return "border-pink-300/40 bg-pink-500/15 text-pink-50";
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <defs>
+            <linearGradient id="instagram-logo-gradient" x1="4" x2="28" y1="28" y2="4">
+              <stop offset="0" stopColor="#FEDA75" />
+              <stop offset="0.35" stopColor="#FA7E1E" />
+              <stop offset="0.65" stopColor="#D62976" />
+              <stop offset="1" stopColor="#4F5BD5" />
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="9" fill="url(#instagram-logo-gradient)" />
+          <rect x="8.5" y="8.5" width="15" height="15" rx="4.5" fill="none" stroke="#fff" strokeWidth="2.2" />
+          <circle cx="16" cy="16" r="3.8" fill="none" stroke="#fff" strokeWidth="2.2" />
+          <circle cx="21.2" cy="10.8" r="1.2" fill="#fff" />
+        </svg>
+      );
     default:
-      return "border-emerald-300/40 bg-emerald-500/15 text-emerald-50";
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#25D366" />
+          <path
+            fill="#fff"
+            d="M23.2 18.9c-.4-.2-2.2-1.1-2.5-1.2-.3-.1-.6-.2-.8.2-.2.4-.9 1.2-1.1 1.4-.2.2-.4.3-.8.1-.4-.2-1.5-.5-2.8-1.7-1-1-1.7-2.1-1.9-2.5-.2-.4 0-.6.2-.8.2-.2.4-.4.6-.7.2-.2.2-.4.4-.6.1-.2.1-.5 0-.7-.1-.2-.8-1.9-1.1-2.6-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.7.1-1 .5-.3.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.8c.2.2 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.3 2.3.2.7-.1 2.2-.9 2.5-1.8.3-.9.3-1.6.2-1.8-.2-.3-.5-.4-.8-.6z"
+          />
+          <path
+            fill="#fff"
+            d="M16 5.7A10.2 10.2 0 0 0 7.2 21l-1.1 4 4.1-1.1A10.2 10.2 0 1 0 16 5.7zm0 18.5c-1.8 0-3.5-.5-5-1.6l-.4-.2-2.4.6.7-2.3-.3-.4a8.2 8.2 0 1 1 7.4 3.9z"
+          />
+        </svg>
+      );
   }
 }
 
@@ -3883,10 +3924,11 @@ export default function AppInboxPage() {
                           {label}
                         </p>
                         <span
-                          className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-semibold ${getConversationChannelClass(item)}`}
+                          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border p-0.5 ${getConversationChannelBadgeClass(item)}`}
                           title={channelLabel}
+                          aria-label={channelLabel}
                         >
-                          {getConversationChannelIcon(item)}
+                          <ConversationChannelLogo item={item} className="h-full w-full" />
                         </span>
                         {isBusinessTenant && leadTemperatureLabel ? (
                           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
@@ -3943,10 +3985,11 @@ export default function AppInboxPage() {
                 </h2>
                 {selectedConversation ? (
                   <span
-                    className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-semibold ${getConversationChannelClass(selectedConversation)}`}
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 ${getConversationChannelBadgeClass(selectedConversation)}`}
                     title={getConversationChannelLabel(selectedConversation)}
+                    aria-label={getConversationChannelLabel(selectedConversation)}
                   >
-                    {getConversationChannelIcon(selectedConversation)}
+                    <ConversationChannelLogo item={selectedConversation} className="h-full w-full" />
                   </span>
                 ) : null}
                 {isBusinessTenant && selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (

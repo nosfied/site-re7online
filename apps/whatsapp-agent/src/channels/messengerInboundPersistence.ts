@@ -9,6 +9,7 @@ import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
+const GRAPH_API_VERSION = "v23.0";
 
 export type MessengerInboundPersistenceReason =
   | "not_messenger"
@@ -33,6 +34,10 @@ export type MessengerInboundPersistenceResult = {
 };
 
 type PrismaLike = ReturnType<typeof getPrisma>;
+
+export type MessengerUserProfile = {
+  displayName: string | null;
+};
 
 function hashExternalUserId(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 32);
@@ -113,12 +118,53 @@ function logPersistence(params: {
   });
 }
 
+function normalizeMessengerProfileName(profile: unknown) {
+  if (!profile || typeof profile !== "object") return null;
+  const data = profile as { first_name?: unknown; last_name?: unknown; name?: unknown };
+  const fromParts = [data.first_name, data.last_name]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+  if (fromParts) return fromParts;
+  return typeof data.name === "string"
+    ? data.name.trim().replace(/\s+/g, " ").slice(0, 120) || null
+    : null;
+}
+
+export async function fetchMessengerUserProfile(params: {
+  pageAccessToken?: string | null;
+  externalUserId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<MessengerUserProfile> {
+  const token = params.pageAccessToken?.trim();
+  const externalUserId = params.externalUserId.trim();
+  if (!token || !externalUserId) return { displayName: null };
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/${encodeURIComponent(externalUserId)}`);
+  url.searchParams.set("fields", "first_name,last_name,name");
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) return { displayName: null };
+    const profile = await response.json().catch(() => null);
+    return { displayName: normalizeMessengerProfileName(profile) };
+  } catch {
+    return { displayName: null };
+  }
+}
+
 export async function persistMessengerInboundEvent(params: {
   prisma?: PrismaLike;
   event: NormalizedInboundEvent;
   tenantKey: string;
   account?: TenantChannelAccount | null;
   requestId: string;
+  fetchImpl?: typeof fetch;
 }): Promise<MessengerInboundPersistenceResult> {
   const { event, tenantKey, requestId } = params;
   if (event.channel !== "messenger" || event.provider !== "meta") {
@@ -174,6 +220,12 @@ export async function persistMessengerInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
+  const profile = await fetchMessengerUserProfile({
+    pageAccessToken: params.account?.pageAccessToken,
+    externalUserId: event.externalUserId,
+    fetchImpl: params.fetchImpl,
+  });
+  const displayName = profile.displayName;
 
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
@@ -269,11 +321,12 @@ export async function persistMessengerInboundEvent(params: {
       create: {
         clientId: client.id,
         waId: syntheticWaId,
-        name: null,
+        name: displayName,
         ...channelFields,
       },
       update: {
         ...channelFields,
+        ...(displayName ? { name: displayName } : {}),
       },
       select: { id: true },
     }),
@@ -283,7 +336,7 @@ export async function persistMessengerInboundEvent(params: {
         tenantId: client.id,
         waId: syntheticWaId,
         waIdCanonical: syntheticWaId,
-        name: "Contato Facebook/Messenger",
+        name: displayName ?? "Contato Facebook/Messenger",
         phone: null,
         status: "NEW",
         ...channelFields,
@@ -291,6 +344,7 @@ export async function persistMessengerInboundEvent(params: {
       update: {
         waIdCanonical: syntheticWaId,
         ...channelFields,
+        ...(displayName ? { name: displayName } : {}),
       },
       select: { id: true },
     }),
