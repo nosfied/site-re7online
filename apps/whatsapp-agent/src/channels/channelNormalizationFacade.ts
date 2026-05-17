@@ -1,6 +1,7 @@
 import type { Channel, NormalizedInboundEvent, Provider } from "./channel.types.js";
 import { assertValidNormalizedInboundEvent, buildConversationKey } from "./channelIdentity.js";
 import { ChannelAdapterRegistry } from "./channelAdapterRegistry.js";
+import { createInstagramPassiveAdapter } from "./instagramAdapter.passive.js";
 import { createMessengerPassiveAdapter } from "./messengerAdapter.passive.js";
 import { createWhatsAppPassiveAdapter } from "./whatsappAdapter.passive.js";
 
@@ -19,6 +20,7 @@ export type NormalizedChannelInboundEvent = NormalizedInboundEvent & {
 export function createDefaultChannelAdapterRegistry() {
   const registry = new ChannelAdapterRegistry();
   registry.register(createWhatsAppPassiveAdapter());
+  registry.register(createInstagramPassiveAdapter());
   registry.register(createMessengerPassiveAdapter());
   return registry;
 }

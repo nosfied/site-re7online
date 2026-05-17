@@ -1,0 +1,330 @@
+import crypto from "node:crypto";
+import { ConversationOperationalStatus, HandoffStatus, MessageType } from "@prisma/client";
+import { getPrisma } from "../db.js";
+import { logger } from "../logger/logger.js";
+import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import type { NormalizedInboundEvent } from "./channel.types.js";
+import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
+import { canPersistChannelInbound } from "./tenantChannelAccount.js";
+import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
+
+export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
+  "Envio por Instagram ainda não está habilitado neste canal.";
+
+export type InstagramInboundPersistenceReason =
+  | "not_instagram"
+  | "account_missing"
+  | "channel_disabled"
+  | "status_not_connected"
+  | "runtime_disabled"
+  | "inbound_persistence_disabled"
+  | "tenant_missing"
+  | "client_missing"
+  | "duplicate_message"
+  | "persisted";
+
+export type InstagramInboundPersistenceResult = {
+  persisted: boolean;
+  duplicate?: boolean;
+  reason: InstagramInboundPersistenceReason;
+  syntheticWaId?: string;
+  conversationId?: string;
+  runtimeStateId?: string;
+  inboundMessageId?: string;
+};
+
+type PrismaLike = ReturnType<typeof getPrisma>;
+
+function hashExternalUserId(value: string) {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 32);
+}
+
+function normalizeDate(value?: string | null) {
+  if (!value) return new Date();
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp) : new Date();
+}
+
+function sanitizeMessageIdPart(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 160);
+}
+
+export function buildInstagramSyntheticWaId(externalUserHash: string) {
+  const normalized = externalUserHash.trim().toLowerCase().replace(/[^a-f0-9]/g, "").slice(0, 32);
+  if (!normalized) {
+    throw new Error("external_user_hash_required");
+  }
+  return `instagram:${normalized}`;
+}
+
+export function buildInstagramInboundMessageId(params: {
+  channelAccountId: string;
+  externalUserHash: string;
+  externalMessageId?: string | null;
+  timestamp?: string | null;
+}) {
+  const mid = params.externalMessageId?.trim();
+  if (mid) {
+    return `instagram:${sanitizeMessageIdPart(params.channelAccountId)}:${sanitizeMessageIdPart(mid)}`;
+  }
+  const fallback = crypto
+    .createHash("sha256")
+    .update(`${params.channelAccountId}:${params.externalUserHash}:${params.timestamp ?? ""}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `instagram:${sanitizeMessageIdPart(params.channelAccountId)}:${fallback}`;
+}
+
+export function resolveInstagramInboundPersistenceGate(
+  account?: TenantChannelAccount | null
+): { allowed: boolean; reason: InstagramInboundPersistenceReason } {
+  if (!account) return { allowed: false, reason: "account_missing" };
+  if (!account.enabled) return { allowed: false, reason: "channel_disabled" };
+  if (account.status !== "connected") return { allowed: false, reason: "status_not_connected" };
+  if (account.runtimeEnabled !== true) return { allowed: false, reason: "runtime_disabled" };
+  if (account.inboundPersistenceEnabled !== true) {
+    return { allowed: false, reason: "inbound_persistence_disabled" };
+  }
+  return { allowed: canPersistChannelInbound(account), reason: "persisted" };
+}
+
+function logPersistence(params: {
+  event: "instagram.inbound_persistence.blocked" | "instagram.inbound_persistence.persisted";
+  requestId: string;
+  tenantKey: string | null;
+  channelAccountId: string | null;
+  externalMessageId?: string | null;
+  externalUserHash?: string | null;
+  reason?: string;
+  duplicate?: boolean;
+}) {
+  logger.info({
+    event: params.event,
+    requestId: params.requestId,
+    tenantKey: params.tenantKey,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: params.channelAccountId,
+    externalMessageId: params.externalMessageId ?? null,
+    externalUserHash: params.externalUserHash ? params.externalUserHash.slice(0, 16) : null,
+    reason: params.reason,
+    duplicate: params.duplicate,
+    passive: false,
+    outboundEnabled: false,
+  });
+}
+
+export async function persistInstagramInboundEvent(params: {
+  prisma?: PrismaLike;
+  event: NormalizedInboundEvent;
+  tenantKey: string;
+  account?: TenantChannelAccount | null;
+  requestId: string;
+}): Promise<InstagramInboundPersistenceResult> {
+  const { event, tenantKey, requestId } = params;
+  if (event.channel !== "instagram" || event.provider !== "meta") {
+    return { persisted: false, reason: "not_instagram" };
+  }
+
+  const externalUserHash = hashExternalUserId(event.externalUserId);
+  const gate = resolveInstagramInboundPersistenceGate(params.account);
+  if (!gate.allowed) {
+    logPersistence({
+      event: "instagram.inbound_persistence.blocked",
+      requestId,
+      tenantKey,
+      channelAccountId: event.channelAccountId,
+      externalMessageId: event.externalMessageId,
+      externalUserHash,
+      reason: gate.reason,
+    });
+    return { persisted: false, reason: gate.reason };
+  }
+
+  const prisma = params.prisma ?? getPrisma();
+  const client = await prisma.client.findUnique({
+    where: { clientKey: tenantKey },
+    select: { id: true, clientKey: true, status: true },
+  });
+  if (!client) {
+    logPersistence({
+      event: "instagram.inbound_persistence.blocked",
+      requestId,
+      tenantKey,
+      channelAccountId: event.channelAccountId,
+      externalMessageId: event.externalMessageId,
+      externalUserHash,
+      reason: "client_missing",
+    });
+    return { persisted: false, reason: "client_missing" };
+  }
+
+  const syntheticWaId = buildInstagramSyntheticWaId(externalUserHash);
+  const messageId = buildInstagramInboundMessageId({
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    externalMessageId: event.externalMessageId,
+    timestamp: event.timestamp,
+  });
+  const createdAt = normalizeDate(event.timestamp);
+  const channelFields = {
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
+    legacyWaId: null,
+  };
+
+  const duplicate = await prisma.inboundMessage.findUnique({
+    where: { clientId_messageId: { clientId: client.id, messageId } },
+    select: { id: true },
+  });
+  if (duplicate) {
+    logPersistence({
+      event: "instagram.inbound_persistence.blocked",
+      requestId,
+      tenantKey,
+      channelAccountId: event.channelAccountId,
+      externalMessageId: event.externalMessageId,
+      externalUserHash,
+      reason: "duplicate_message",
+      duplicate: true,
+    });
+    return {
+      persisted: false,
+      duplicate: true,
+      reason: "duplicate_message",
+      syntheticWaId,
+      inboundMessageId: duplicate.id,
+    };
+  }
+
+  const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, client.id);
+  const operationalRoute = {
+    departmentId: defaults.department.id,
+    queueId: defaults.queue.id,
+  };
+
+  const [conversation, runtimeState, inbound] = await Promise.all([
+    prisma.conversation.upsert({
+      where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
+      create: {
+        clientId: client.id,
+        waId: syntheticWaId,
+        waIdCanonical: syntheticWaId,
+        phoneNumberId: null,
+        ...channelFields,
+        departmentId: operationalRoute.departmentId,
+        windowIsOpen: true,
+        lastInboundAt: createdAt,
+      },
+      update: {
+        waIdCanonical: syntheticWaId,
+        ...channelFields,
+        departmentId: operationalRoute.departmentId,
+        lastInboundAt: createdAt,
+        deletedAt: null,
+        anonymizedAt: null,
+      },
+      select: { id: true },
+    }),
+    prisma.conversationRuntimeState.upsert({
+      where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
+      create: {
+        clientId: client.id,
+        waId: syntheticWaId,
+        waIdCanonical: syntheticWaId,
+        conversationKey: `${tenantKey}:instagram:${event.channelAccountId}:${externalUserHash}`,
+        ...channelFields,
+        firstSeenAt: createdAt,
+        windowIsOpen: true,
+        lastInboundAt: createdAt,
+        lastInboundMessageId: messageId,
+        handoffStatus: HandoffStatus.NONE,
+        mode: "HUMAN",
+        status: ConversationOperationalStatus.WAITING,
+        departmentId: operationalRoute.departmentId,
+        queueId: operationalRoute.queueId,
+      },
+      update: {
+        waIdCanonical: syntheticWaId,
+        ...channelFields,
+        lastInboundAt: createdAt,
+        lastInboundMessageId: messageId,
+        mode: "HUMAN",
+        status: ConversationOperationalStatus.WAITING,
+        departmentId: operationalRoute.departmentId,
+        queueId: operationalRoute.queueId,
+        closedAt: null,
+      },
+      select: { id: true },
+    }),
+    prisma.inboundMessage.create({
+      data: {
+        clientId: client.id,
+        phoneNumberId: null,
+        waId: syntheticWaId,
+        waIdCanonical: syntheticWaId,
+        messageId,
+        ...channelFields,
+        externalMessageId: event.externalMessageId ?? null,
+        type: event.text ? MessageType.TEXT : MessageType.UNKNOWN,
+        bodyText: event.text ?? null,
+        allowlistHit: false,
+        requestId,
+        createdAt,
+      },
+      select: { id: true },
+    }),
+    prisma.contact.upsert({
+      where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
+      create: {
+        clientId: client.id,
+        waId: syntheticWaId,
+        name: "Contato Instagram",
+        ...channelFields,
+      },
+      update: {
+        ...channelFields,
+      },
+      select: { id: true },
+    }),
+    prisma.lead.upsert({
+      where: { tenantId_waId: { tenantId: client.id, waId: syntheticWaId } },
+      create: {
+        tenantId: client.id,
+        waId: syntheticWaId,
+        waIdCanonical: syntheticWaId,
+        name: "Contato Instagram",
+        phone: null,
+        status: "NEW",
+        ...channelFields,
+      },
+      update: {
+        waIdCanonical: syntheticWaId,
+        ...channelFields,
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  logPersistence({
+    event: "instagram.inbound_persistence.persisted",
+    requestId,
+    tenantKey,
+    channelAccountId: event.channelAccountId,
+    externalMessageId: event.externalMessageId,
+    externalUserHash,
+    reason: "persisted",
+  });
+
+  return {
+    persisted: true,
+    reason: "persisted",
+    syntheticWaId,
+    conversationId: conversation.id,
+    runtimeStateId: runtimeState.id,
+    inboundMessageId: inbound.id,
+  };
+}

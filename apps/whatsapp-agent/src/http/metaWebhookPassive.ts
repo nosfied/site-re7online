@@ -18,9 +18,11 @@ import {
   buildChannelPersistencePlan,
   summarizeChannelPersistencePlan,
 } from "../channels/channelPersistencePlan.js";
+import { persistInstagramInboundEvent } from "../channels/instagramInboundPersistence.js";
 import { persistMessengerInboundEvent } from "../channels/messengerInboundPersistence.js";
 import { findTenantChannelAccount, resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
+import type { Channel } from "../channels/channel.types.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
 
@@ -175,7 +177,7 @@ export function verifyPassiveMetaWebhookSignature(
   return { ok: true, status: "valid" };
 }
 
-function getMessengerEvents(payload: MetaWebhookPayload) {
+function getMetaMessagingEvents(payload: MetaWebhookPayload) {
   const events: Array<{ pageId: string; event: MetaMessagingEvent }> = [];
   for (const entry of payload.entry ?? []) {
     const entryPageId = normalizeId(entry.id);
@@ -196,16 +198,17 @@ function getEventMessageId(event: MetaMessagingEvent) {
   return typeof mid === "string" || typeof mid === "number" ? String(mid).trim() || null : null;
 }
 
-function isMessengerEchoEvent(event: MetaMessagingEvent) {
+function isMetaEchoEvent(event: MetaMessagingEvent) {
   return event.message?.is_echo === true;
 }
 
-function hasMessengerText(event: MetaMessagingEvent) {
+function hasMetaText(event: MetaMessagingEvent) {
   return typeof event.message?.text === "string" && event.message.text.trim().length > 0;
 }
 
 function logPassiveReceived(params: {
   requestId: string;
+  channel: Channel;
   channelAccountId: string;
   externalUserHash: string | null;
   externalMessageId: string | null;
@@ -216,7 +219,7 @@ function logPassiveReceived(params: {
     event: "channel.webhook.passive_received",
     route: "/meta/webhook",
     requestId: params.requestId,
-    channel: "messenger",
+    channel: params.channel,
     provider: "meta",
     channelAccountId: params.channelAccountId || null,
     tenantKey: params.tenantKey ?? null,
@@ -229,6 +232,7 @@ function logPassiveReceived(params: {
 
 function logTenantResolution(params: {
   requestId: string;
+  channel: Channel;
   channelAccountId: string;
   externalUserHash: string | null;
   externalMessageId: string | null;
@@ -239,7 +243,7 @@ function logTenantResolution(params: {
     event: `channel.tenant_resolution.${params.resolution}`,
     route: "/meta/webhook",
     requestId: params.requestId,
-    channel: "messenger",
+    channel: params.channel,
     provider: "meta",
     channelAccountId: params.channelAccountId || null,
     tenantKey: params.tenantKey ?? null,
@@ -276,6 +280,7 @@ function logRuntimeDryRun(params: {
 
 function logRuntimeGate(params: {
   requestId: string;
+  channel: Channel;
   tenantKey?: string;
   channelAccountId: string;
   reason: string;
@@ -289,7 +294,7 @@ function logRuntimeGate(params: {
     route: "/meta/webhook",
     requestId: params.requestId,
     tenantKey: params.tenantKey ?? null,
-    channel: "messenger",
+    channel: params.channel,
     provider: "meta",
     channelAccountId: params.channelAccountId || null,
     reason: params.reason,
@@ -364,10 +369,12 @@ export async function processPassiveMetaWebhookPayload(
     object: typeof parsed.object === "string" ? parsed.object : "unknown",
   });
 
-  if (parsed.object !== "page") {
+  const channel: Channel = parsed.object === "instagram" ? "instagram" : "messenger";
+
+  if (parsed.object !== "page" && parsed.object !== "instagram") {
     recordObservedChannelEvent({
       provider: "meta",
-      channel: parsed.object === "instagram" ? "instagram" : "messenger",
+      channel,
       channelAccountId: "unknown",
       resolution: "unsupported_object",
       eventType: "unsupported",
@@ -382,11 +389,11 @@ export async function processPassiveMetaWebhookPayload(
     return { ok: true, normalizedCount: 0, unsupportedCount: 1 };
   }
 
-  const events = getMessengerEvents(parsed);
+  const events = getMetaMessagingEvents(parsed);
   if (events.length === 0) {
     recordObservedChannelEvent({
       provider: "meta",
-      channel: "messenger",
+      channel,
       channelAccountId: "unknown",
       resolution: "no_messaging_events",
       eventType: "unsupported",
@@ -395,7 +402,7 @@ export async function processPassiveMetaWebhookPayload(
       event: "meta.webhook.unsupported",
       route: "/meta/webhook",
       requestId: options.requestId,
-      object: "page",
+      object: typeof parsed.object === "string" ? parsed.object : "unknown",
       reason: "no_messaging_events",
     });
     return { ok: true, normalizedCount: 0, unsupportedCount: 1 };
@@ -411,12 +418,13 @@ export async function processPassiveMetaWebhookPayload(
     const externalMessageId = getEventMessageId(item.event);
     const resolution = resolveTenantForChannelAccount({
       tenants,
-      channel: "messenger",
+      channel,
       provider: "meta",
       channelAccountId: item.pageId,
     });
     logPassiveReceived({
       requestId: options.requestId,
+      channel,
       channelAccountId: item.pageId,
       externalUserHash,
       externalMessageId,
@@ -425,6 +433,7 @@ export async function processPassiveMetaWebhookPayload(
     });
     logTenantResolution({
       requestId: options.requestId,
+      channel,
       channelAccountId: item.pageId,
       externalUserHash,
       externalMessageId,
@@ -433,7 +442,7 @@ export async function processPassiveMetaWebhookPayload(
     });
     recordObservedChannelEvent({
       provider: "meta",
-      channel: "messenger",
+      channel,
       channelAccountId: item.pageId || "unknown",
       tenantKey: resolution.tenantKey,
       resolution: resolution.resolution,
@@ -446,37 +455,37 @@ export async function processPassiveMetaWebhookPayload(
       unsupportedCount += 1;
       continue;
     }
-    if (isMessengerEchoEvent(item.event)) {
+    if (isMetaEchoEvent(item.event)) {
       unsupportedCount += 1;
       logger.info({
         event: "meta.webhook.unsupported",
         route: "/meta/webhook",
         requestId: options.requestId,
-        object: "page",
-        channel: "messenger",
+        object: typeof parsed.object === "string" ? parsed.object : "unknown",
+        channel,
         provider: "meta",
         channelAccountId: item.pageId || null,
         tenantKey: resolution.tenantKey ?? null,
         externalUserHash,
         externalMessageId,
-        reason: "messenger_echo",
+        reason: `${channel}_echo`,
       });
       continue;
     }
-    if (!hasMessengerText(item.event)) {
+    if (!hasMetaText(item.event)) {
       unsupportedCount += 1;
       logger.info({
         event: "meta.webhook.unsupported",
         route: "/meta/webhook",
         requestId: options.requestId,
-        object: "page",
-        channel: "messenger",
+        object: typeof parsed.object === "string" ? parsed.object : "unknown",
+        channel,
         provider: "meta",
         channelAccountId: item.pageId || null,
         tenantKey: resolution.tenantKey ?? null,
         externalUserHash,
         externalMessageId,
-        reason: "messenger_non_text_event",
+        reason: `${channel}_non_text_event`,
       });
       continue;
     }
@@ -486,7 +495,7 @@ export async function processPassiveMetaWebhookPayload(
       tenant && resolution.tenantKey
         ? findTenantChannelAccount(tenant.channelAccounts ?? [], {
             tenantKey: resolution.tenantKey,
-            channel: "messenger",
+            channel,
             provider: "meta",
             channelAccountId: item.pageId,
           }) ?? resolution.account
@@ -495,7 +504,7 @@ export async function processPassiveMetaWebhookPayload(
     const persistencePlan = buildChannelPersistencePlan(
       {
         tenantKey,
-        channel: "messenger",
+        channel,
         provider: "meta",
         channelAccountId: item.pageId,
         externalUserId: normalizeId(item.event.sender?.id),
@@ -508,7 +517,7 @@ export async function processPassiveMetaWebhookPayload(
     );
     const shadowPlan = buildChannelRuntimeShadowPlan({
       tenantKey,
-      channel: "messenger",
+      channel,
       provider: "meta",
       channelAccountId: item.pageId,
       externalUserHash,
@@ -519,6 +528,7 @@ export async function processPassiveMetaWebhookPayload(
     });
     logRuntimeGate({
       requestId: options.requestId,
+      channel,
       tenantKey: resolution.tenantKey,
       channelAccountId: item.pageId,
       reason: runtimeGate.reason,
@@ -536,7 +546,7 @@ export async function processPassiveMetaWebhookPayload(
     try {
       const normalized = normalizeChannelInboundEvent({
         tenantKey,
-        channel: "messenger",
+        channel,
         provider: "meta",
         registry,
         raw: {
@@ -579,12 +589,21 @@ export async function processPassiveMetaWebhookPayload(
         continue;
       }
 
-      await persistMessengerInboundEvent({
-        event: normalized,
-        tenantKey,
-        account: accountForPersistence,
-        requestId: options.requestId,
-      });
+      if (normalized.channel === "instagram") {
+        await persistInstagramInboundEvent({
+          event: normalized,
+          tenantKey,
+          account: accountForPersistence,
+          requestId: options.requestId,
+        });
+      } else {
+        await persistMessengerInboundEvent({
+          event: normalized,
+          tenantKey,
+          account: accountForPersistence,
+          requestId: options.requestId,
+        });
+      }
 
       try {
         logRuntimeDryRun({
@@ -656,7 +675,7 @@ export async function processPassiveMetaWebhookPayload(
         event: "meta.webhook.error",
         route: "/meta/webhook",
         requestId: options.requestId,
-        channel: "messenger",
+        channel,
         provider: "meta",
         channelAccountId: item.pageId || null,
         reason: (error as Error).message,

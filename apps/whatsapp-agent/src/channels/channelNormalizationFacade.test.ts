@@ -45,11 +45,12 @@ test("normalizeChannelInboundEvent fails clearly when adapter is missing", () =>
     () =>
       normalizeChannelInboundEvent({
         tenantKey: "tenant-a",
-        channel: "instagram",
+        channel: "messenger",
         provider: "meta",
         raw: {},
+        registry: new ChannelAdapterRegistry(),
       }),
-    /channel_adapter_not_found:meta:instagram/
+    /channel_adapter_not_found:meta:messenger/
   );
 });
 
@@ -154,10 +155,10 @@ test("normalizeChannelInboundEvent keeps future channels isolated by channel and
   assert.notEqual(instagram.conversationKey, messenger.conversationKey);
 });
 
-test("createDefaultChannelAdapterRegistry includes passive WhatsApp and Messenger adapters", () => {
+test("createDefaultChannelAdapterRegistry includes passive WhatsApp, Instagram and Messenger adapters", () => {
   const registry = createDefaultChannelAdapterRegistry();
 
   assert.equal(registry.has("whatsapp", "meta"), true);
-  assert.equal(registry.has("instagram", "meta"), false);
+  assert.equal(registry.has("instagram", "meta"), true);
   assert.equal(registry.has("messenger", "meta"), true);
 });

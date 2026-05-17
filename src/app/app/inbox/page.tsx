@@ -2740,6 +2740,10 @@ export default function AppInboxPage() {
     selectedConversationChannel === "whatsapp" ||
     (selectedConversationChannel === "messenger" &&
       selectedConversation?.channelOutboundEnabled === true);
+  const selectedConversationOutboundDisabledMessage =
+    selectedConversationChannel === "instagram"
+      ? "Envio por Instagram ainda não está habilitado neste canal."
+      : "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
   const isHydratingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
@@ -3114,7 +3118,7 @@ export default function AppInboxPage() {
   const handleSendMessage = async () => {
     if (!session || !selectedConversationWaId || !selectedConversation) return;
     if (!selectedConversationSupportsOutbound) {
-      setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+      setError(selectedConversationOutboundDisabledMessage);
       setErrorDetails(null);
       return;
     }
@@ -3143,7 +3147,7 @@ export default function AppInboxPage() {
     async (file: File, caption?: string) => {
       if (!session || !selectedConversationWaId || !selectedConversation) return;
       if (!selectedConversationSupportsOutbound) {
-        setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+        setError(selectedConversationOutboundDisabledMessage);
         setErrorDetails(null);
         return;
       }
@@ -3246,6 +3250,7 @@ export default function AppInboxPage() {
       focusComposer,
       handleUnauthorized,
       selectedConversation,
+      selectedConversationOutboundDisabledMessage,
       selectedConversationSupportsOutbound,
       selectedConversationWaId,
       session,
@@ -3268,7 +3273,7 @@ export default function AppInboxPage() {
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
     if (!selectedConversationSupportsOutbound) {
-      setError("Envio por Facebook/Messenger ainda não está habilitado neste canal.");
+      setError(selectedConversationOutboundDisabledMessage);
       setErrorDetails(null);
       return;
     }
@@ -4345,7 +4350,7 @@ export default function AppInboxPage() {
             ) : null}
             {selectedConversation && !selectedConversationSupportsOutbound ? (
               <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
-                Envio por Facebook/Messenger ainda não está habilitado neste canal.
+                {selectedConversationOutboundDisabledMessage}
               </div>
             ) : null}
             <div className="relative flex items-center gap-2 max-[1440px]:gap-1.5">
@@ -4426,7 +4431,7 @@ export default function AppInboxPage() {
                   onKeyDown={handleComposerKeyDown}
                   placeholder={
                     selectedConversation && !selectedConversationSupportsOutbound
-                      ? "Envio por Facebook/Messenger ainda não está habilitado neste canal."
+                      ? selectedConversationOutboundDisabledMessage
                       : canReply
                       ? isHydratingSelectedTimeline
                         ? "Carregando mensagens..."

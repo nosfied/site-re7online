@@ -124,6 +124,7 @@ import {
   handlePassiveMetaWebhookPost,
   verifyPassiveMetaWebhookSignature,
 } from "./metaWebhookPassive.js";
+import { INSTAGRAM_OUTBOUND_DISABLED_MESSAGE } from "../channels/instagramInboundPersistence.js";
 import { MESSENGER_OUTBOUND_DISABLED_MESSAGE } from "../channels/messengerInboundPersistence.js";
 import {
   decryptMessengerExternalUserRef,
@@ -1944,7 +1945,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (isConversationOutboundBlocked(resolvedConversation.winner)) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
-          message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+          message:
+            resolvedChannel === "instagram"
+              ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
+              : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
         });
         return;
       }
@@ -2144,7 +2148,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (isConversationOutboundBlocked(resolvedConversation.winner) || resolvedChannel === "messenger") {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
-          message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+          message:
+            resolvedChannel === "instagram"
+              ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
+              : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
         });
         return;
       }

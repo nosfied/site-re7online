@@ -46,6 +46,27 @@ const messengerPayload = {
   ],
 };
 
+const instagramPayload = {
+  object: "instagram",
+  entry: [
+    {
+      id: "ig-account-1",
+      time: 1760000000000,
+      messaging: [
+        {
+          sender: { id: "ig-user-1" },
+          recipient: { id: "ig-account-1" },
+          timestamp: 1760000000000,
+          message: {
+            mid: "ig-mid-1",
+            text: "oi instagram",
+          },
+        },
+      ],
+    },
+  ],
+};
+
 function messengerPayloadWithText(text: string, mid: string) {
   return {
     object: "page",
@@ -669,6 +690,34 @@ test("passive processor normalizes Messenger and resolves tenant from channelAcc
             channel: "messenger",
             provider: "meta",
             channelAccountId: "page-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
+});
+
+test("passive processor normalizes Instagram and resolves tenant from channelAccounts", async () => {
+  const result = await processPassiveMetaWebhookPayload(instagramPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "ig-account-1",
             enabled: true,
           },
         ],
