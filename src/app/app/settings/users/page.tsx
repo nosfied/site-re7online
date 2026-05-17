@@ -55,7 +55,7 @@ function InfoBadge({
         ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
         : "border-white/15 bg-white/5 text-white/80";
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${toneClass}`}>
       {label}
     </span>
   );
@@ -102,6 +102,7 @@ export default function AppSettingsUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [userError, setUserError] = useState<string | null>(null);
   const [userSuccess, setUserSuccess] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export default function AppSettingsUsersPage() {
         isActive: userForm.isActive,
       });
       setUserForm(EMPTY_USER_FORM);
+      setShowCreateUserForm(false);
       await loadPageData(session);
       setUserSuccess(`Usuario criado com sucesso. Email: ${emailUsed}`);
     } catch (err) {
@@ -331,118 +333,145 @@ export default function AppSettingsUsersPage() {
       <FeedbackToast message={userSuccess || actionSuccess} variant="success" {...toastHandlers} />
       <FeedbackToast message={userError || actionError} variant="error" {...toastHandlers} />
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
-        <div className="mb-5 flex flex-col gap-2">
-          <span className="w-fit rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/70">
-            Novo usuario
-          </span>
-          <p className="text-sm text-white/65">
-            Crie usuarios do tenant. O backend aplica automaticamente o escopo de supervisor e admin.
-          </p>
-        </div>
-
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Nome</span>
-            <input
-              value={userForm.name}
-              onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Email</span>
-            <input
-              value={userForm.email}
-              onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Senha</span>
-            <input
-              type="password"
-              value={userForm.password}
-              onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Perfil</span>
-            <select
-              value={userForm.role}
-              onChange={(event) =>
-                setUserForm((current) => ({
-                  ...current,
-                  role: event.target.value,
-                  departmentId: isDepartmentRequired(event.target.value) ? current.departmentId : "",
-                }))
-              }
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            >
-              {USER_ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Setor</span>
-            <select
-              value={userForm.departmentId}
-              onChange={(event) =>
-                setUserForm((current) => ({ ...current, departmentId: event.target.value }))
-              }
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            >
-              <option value="">-</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                  {department.isActive ? "" : " (inativo)"}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-white/75">
-            <span>Status</span>
-            <select
-              value={userForm.isActive ? "active" : "inactive"}
-              onChange={(event) =>
-                setUserForm((current) => ({
-                  ...current,
-                  isActive: event.target.value === "active",
-                }))
-              }
-              className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-            >
-              <option value="active">Ativo</option>
-              <option value="inactive">Inativo</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-white/55">
-            Reset de senha ainda nao existe no /app. A rota equivalente precisa ser criada no backend antes da UI.
-          </p>
+      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="w-fit rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70">
+              Novo usuario
+            </span>
+            <p className="text-xs text-white/65 sm:text-sm">
+              Crie usuarios do tenant apenas quando necessario.
+            </p>
+          </div>
           <button
             type="button"
-            onClick={handleCreateUser}
-            disabled={creatingUser}
-            className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setShowCreateUserForm((current) => !current)}
+            className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 sm:text-sm"
           >
-            {creatingUser ? "Criando..." : "Criar usuario"}
+            {showCreateUserForm ? "Fechar" : "Adicionar usuario"}
           </button>
         </div>
+
+        {showCreateUserForm ? (
+          <>
+            <div className="mt-4 grid max-w-5xl min-w-0 gap-3 border-t border-white/10 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Nome</span>
+                <input
+                  value={userForm.name}
+                  onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))}
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Email</span>
+                <input
+                  value={userForm.email}
+                  onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Senha</span>
+                <input
+                  type="password"
+                  value={userForm.password}
+                  onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Perfil</span>
+                <select
+                  value={userForm.role}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      role: event.target.value,
+                      departmentId: isDepartmentRequired(event.target.value) ? current.departmentId : "",
+                    }))
+                  }
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                >
+                  {USER_ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Setor</span>
+                <select
+                  value={userForm.departmentId}
+                  onChange={(event) =>
+                    setUserForm((current) => ({ ...current, departmentId: event.target.value }))
+                  }
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                >
+                  <option value="">-</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                      {department.isActive ? "" : " (inativo)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-white/75">
+                <span>Status</span>
+                <select
+                  value={userForm.isActive ? "active" : "inactive"}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      isActive: event.target.value === "active",
+                    }))
+                  }
+                  className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                >
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-white/55">
+                Reset de senha ainda nao existe no /app. A rota equivalente precisa ser criada no backend antes da UI.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserForm(EMPTY_USER_FORM);
+                    setShowCreateUserForm(false);
+                    setUserError(null);
+                  }}
+                  disabled={creatingUser}
+                  className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateUser}
+                  disabled={creatingUser}
+                  className="rounded-md bg-re7-orange px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                >
+                  {creatingUser ? "Criando..." : "Criar usuario"}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold">Usuarios do tenant</h2>
-            <p className="mt-1 text-sm text-white/65">
+            <h2 className="text-base font-semibold">Usuarios do tenant</h2>
+            <p className="mt-0.5 text-xs text-white/65 sm:text-sm">
               Edite os dados na linha do usuario e clique em Salvar.
             </p>
           </div>
@@ -458,7 +487,7 @@ export default function AppSettingsUsersPage() {
         ) : users.length === 0 ? (
           <p className="text-sm text-white/70">Nenhum usuario encontrado.</p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {users.map((item, index) => {
               const draft = userDrafts[item.id];
               if (!draft) return null;
@@ -470,140 +499,141 @@ export default function AppSettingsUsersPage() {
                   key={item.id}
                   className={`theme-list-row ${
                     index % 2 === 0 ? "theme-list-row-even" : "theme-list-row-odd"
-                  } rounded-xl border p-4 ${
+                  } rounded-xl border p-3 ${
                     index % 2 === 0
                       ? "border-white/10 bg-re7-navy/45"
                       : "border-white/15 bg-white/[0.075]"
                   }`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold text-white">{item.name}</h3>
-                      <p className="text-sm text-white/60">{item.email}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <InfoBadge label={`Perfil: ${draft.role}`} />
-                        <InfoBadge label={`Setor: ${departmentLabel}`} />
-                        <InfoBadge
-                          label={draft.isActive ? "Ativo" : "Inativo"}
-                          tone={draft.isActive ? "success" : "warning"}
-                        />
-                      </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <InfoBadge label={`Perfil: ${draft.role}`} />
+                      <InfoBadge label={`Setor: ${departmentLabel}`} />
+                      <InfoBadge
+                        label={draft.isActive ? "Ativo" : "Inativo"}
+                        tone={draft.isActive ? "success" : "warning"}
+                      />
                     </div>
-                    <div className="text-sm text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
+                    <div className="text-xs text-white/55">Criado em {formatDateTime(item.createdAt)}</div>
                   </div>
 
-                  <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    <label className="flex flex-col gap-2 text-sm text-white/75">
-                      <span>Nome</span>
-                      <input
-                        value={draft.name}
-                        onChange={(event) =>
-                          setUserDrafts((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...current[item.id],
-                              name: event.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm text-white/75">
-                      <span>Email</span>
-                      <input
-                        value={draft.email}
-                        onChange={(event) =>
-                          setUserDrafts((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...current[item.id],
-                              email: event.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm text-white/75">
-                      <span>Perfil</span>
-                      <select
-                        value={draft.role}
-                        onChange={(event) =>
-                          setUserDrafts((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...current[item.id],
-                              role: event.target.value,
-                              departmentId: isDepartmentRequired(event.target.value)
-                                ? current[item.id].departmentId
-                                : "",
-                            },
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-                      >
-                        {USER_ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm text-white/75">
-                      <span>Setor</span>
-                      <select
-                        value={draft.departmentId}
-                        onChange={(event) =>
-                          setUserDrafts((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...current[item.id],
-                              departmentId: event.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-                      >
-                        <option value="">-</option>
-                        {departments.map((department) => (
-                          <option key={department.id} value={department.id}>
-                            {department.name}
-                            {department.isActive ? "" : " (inativo)"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm text-white/75">
-                      <span>Status</span>
-                      <select
-                        value={draft.isActive ? "active" : "inactive"}
-                        onChange={(event) =>
-                          setUserDrafts((current) => ({
-                            ...current,
-                            [item.id]: {
-                              ...current[item.id],
-                              isActive: event.target.value === "active",
-                            },
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0"
-                      >
-                        <option value="active">Ativo</option>
-                        <option value="inactive">Inativo</option>
-                      </select>
-                    </label>
+                  <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                    <div className="grid max-w-4xl min-w-0 gap-3 lg:grid-cols-[minmax(260px,0.9fr)_minmax(320px,1.1fr)]">
+                      <label className="flex min-w-0 flex-col text-sm text-white/75">
+                        <input
+                          aria-label="Nome"
+                          value={draft.name}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...current[item.id],
+                                name: event.target.value,
+                              },
+                            }))
+                          }
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                        />
+                      </label>
+                      <label className="flex min-w-0 flex-col text-sm text-white/75">
+                        <input
+                          aria-label="Email"
+                          value={draft.email}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...current[item.id],
+                                email: event.target.value,
+                              },
+                            }))
+                          }
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid max-w-3xl min-w-0 gap-3 sm:grid-cols-[180px_minmax(220px,1fr)_160px]">
+                      <label className="flex flex-col gap-2 text-sm text-white/75">
+                        <span>Perfil</span>
+                        <select
+                          value={draft.role}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...current[item.id],
+                                role: event.target.value,
+                                departmentId: isDepartmentRequired(event.target.value)
+                                  ? current[item.id].departmentId
+                                  : "",
+                              },
+                            }))
+                          }
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                        >
+                          {USER_ROLE_OPTIONS.map((role) => (
+                            <option key={role} value={role}>
+                              {role}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-2 text-sm text-white/75">
+                        <span>Setor</span>
+                        <select
+                          value={draft.departmentId}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...current[item.id],
+                                departmentId: event.target.value,
+                              },
+                            }))
+                          }
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                        >
+                          <option value="">-</option>
+                          {departments.map((department) => (
+                            <option key={department.id} value={department.id}>
+                              {department.name}
+                              {department.isActive ? "" : " (inativo)"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-2 text-sm text-white/75">
+                        <span>Status</span>
+                        <select
+                          value={draft.isActive ? "active" : "inactive"}
+                          onChange={(event) =>
+                            setUserDrafts((current) => ({
+                              ...current,
+                              [item.id]: {
+                                ...current[item.id],
+                                isActive: event.target.value === "active",
+                              },
+                            }))
+                          }
+                          className="w-full min-w-0 rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0"
+                        >
+                          <option value="active">Ativo</option>
+                          <option value="inactive">Inativo</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm text-white/55">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-white/55">
                       Reset de senha ainda indisponivel no /app.
                     </p>
                     <button
                       type="button"
                       onClick={() => handleUpdateUser(item)}
                       disabled={savingUserId === item.id}
-                      className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-white/20 px-2.5 py-1.5 text-xs text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                     >
                       <ActionIcon>✓</ActionIcon>
                       {savingUserId === item.id ? "Salvando..." : "Salvar"}

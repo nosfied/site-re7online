@@ -27,7 +27,7 @@ type NavItem = {
 };
 
 function getLinkClasses(active: boolean) {
-  return `inline-flex h-8 min-w-0 items-center justify-center rounded-md border px-2.5 text-xs leading-none transition lg:h-9 lg:px-3 lg:text-sm ${
+  return `inline-flex h-8 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs leading-none transition lg:h-8 lg:px-2.5 lg:text-xs min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
     active ? "theme-nav-link-active" : "theme-nav-link"
   }`;
 }
@@ -174,8 +174,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     );
   };
 
-  const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5";
-  const navLinksClasses = "flex min-w-0 flex-wrap items-center justify-center gap-1";
+  const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5 lg:px-1.5 min-[1441px]:px-2";
+  const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
   const userActions = (
     <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
       <div className="min-w-0 text-right">
@@ -194,7 +194,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <button
         type="button"
         onClick={handleLogout}
-        className="h-8 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 lg:h-9 lg:text-sm"
+      className="h-8 rounded-md bg-re7-orange px-2.5 text-xs font-semibold leading-none text-white shadow-sm hover:brightness-110 min-[1441px]:h-9 min-[1441px]:text-sm"
       >
         Sair
       </button>
@@ -205,7 +205,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       type="button"
       onClick={() => router.push("/app/inbox")}
       title="Abrir inbox"
-      className="relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[109px] lg:w-[247px]"
+      className="relative m-0 flex h-[82px] w-[195px] shrink-0 items-center justify-center overflow-visible p-0 sm:h-[95px] sm:w-[213px] lg:h-[66px] lg:w-[154px] min-[1441px]:h-[109px] min-[1441px]:w-[247px]"
     >
       <Image
         src="/images/converta-logo-light.png"
@@ -213,7 +213,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         width={160}
         height={200}
         priority
-        className="theme-logo-light absolute left-1/2 top-1/2 m-0 block h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[177px]"
+        className="theme-logo-light absolute left-1/2 top-1/2 m-0 block h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[104px] min-[1441px]:h-[177px]"
       />
       <Image
         src="/images/converta-logo-dark.png"
@@ -221,7 +221,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         width={160}
         height={200}
         priority
-        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[72px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[82px] lg:h-[102px]"
+        className="theme-logo-dark absolute left-1/2 top-1/2 m-0 h-[72px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[82px] lg:h-[62px] min-[1441px]:h-[102px]"
       />
     </button>
   );
@@ -326,7 +326,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     <main className="theme-bg theme-workspace min-h-screen overflow-x-hidden px-3 py-3 sm:px-4 lg:px-5">
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-2.5">
         <header className="theme-surface-strong theme-shadow fixed left-3 right-3 top-2 z-50 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-1.5 backdrop-blur sm:left-4 sm:right-4 sm:w-[calc(100%-2rem)] lg:left-5 lg:right-5 lg:w-[calc(100%-2.5rem)]">
-          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[120px_minmax(0,1fr)_150px] lg:items-center lg:gap-3 xl:grid-cols-[128px_minmax(0,1fr)_160px]">
+          <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[82px_minmax(0,1fr)_124px] lg:items-center lg:gap-2 min-[1441px]:grid-cols-[128px_minmax(0,1fr)_160px] min-[1441px]:gap-3">
             <div className="flex min-w-0 items-center justify-between gap-2 lg:flex lg:justify-center">
               {logoButton}
               <div className="min-w-0 lg:hidden">
@@ -334,7 +334,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[auto_auto_auto] lg:items-center lg:justify-center lg:gap-2 xl:gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:justify-center lg:gap-2 min-[1441px]:grid-cols-[auto_auto_auto] min-[1441px]:gap-3">
               <div className={navGroupClasses}>
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
@@ -355,12 +355,12 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
-        <section className="theme-surface theme-shadow fixed left-3 right-3 top-[170px] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[184px] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[138px] lg:w-[calc(100%-2.5rem)]">
-          <h1 className="text-lg font-bold">{title}</h1>
-          {subtitle ? <p className="theme-muted mt-0.5 text-sm">{subtitle}</p> : null}
+        <section className="theme-surface theme-shadow fixed left-3 right-3 top-[170px] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[184px] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2">
+          <h1 className="text-base font-bold min-[1441px]:text-lg">{title}</h1>
+          {subtitle ? <p className="theme-muted mt-0.5 text-xs min-[1441px]:text-sm">{subtitle}</p> : null}
         </section>
 
-        <div aria-hidden="true" className="h-[230px] sm:h-[244px] lg:h-[196px]" />
+        <div aria-hidden="true" className="h-[230px] sm:h-[244px] lg:h-[144px] min-[1441px]:h-[196px]" />
 
         {children}
       </div>

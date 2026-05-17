@@ -351,13 +351,13 @@ html {
   }
 
   :root[data-theme="light"] .theme-workspace .theme-list-row-even {
-    background-color: #ffffff !important;
-    border-color: rgba(6, 19, 42, 0.12) !important;
+    background-color: #f7fafc !important;
+    border-color: rgba(6, 19, 42, 0.14) !important;
   }
 
   :root[data-theme="light"] .theme-workspace .theme-list-row-odd {
-    background-color: #edf4fb !important;
-    border-color: rgba(12, 89, 132, 0.16) !important;
+    background-color: #eaf2fb !important;
+    border-color: rgba(12, 89, 132, 0.18) !important;
   }
 
   :root[data-theme="light"] .theme-inbox aside[class*="bg-[#0c1930]"],
@@ -744,5 +744,151 @@ html {
 
   .wa-composer-shell {
     background: linear-gradient(180deg, rgba(244, 236, 224, 0.98), rgba(237, 228, 215, 0.94));
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1440px) {
+  .theme-workspace {
+    font-size: 0.9375rem;
+  }
+
+  .theme-workspace button,
+  .theme-workspace a,
+  .theme-workspace select,
+  .theme-workspace [role="button"] {
+    white-space: nowrap;
+  }
+
+  .theme-workspace button,
+  .theme-workspace select,
+  .theme-workspace input,
+  .theme-workspace textarea {
+    font-size: 0.8125rem;
+  }
+
+  .theme-workspace input:not([type="checkbox"]):not([type="radio"]),
+  .theme-workspace select {
+    min-height: 2rem;
+  }
+
+  .theme-workspace textarea {
+    line-height: 1.25rem;
+  }
+
+  .theme-workspace label {
+    gap: 0.35rem;
+  }
+
+  .theme-workspace form {
+    gap: 0.75rem;
+  }
+
+  .theme-workspace .text-sm {
+    font-size: 0.8125rem;
+    line-height: 1.15rem;
+  }
+
+  .theme-workspace .text-xs {
+    font-size: 0.6875rem;
+    line-height: 0.95rem;
+  }
+
+  .theme-workspace .text-lg {
+    font-size: 1rem;
+    line-height: 1.35rem;
+  }
+
+  .theme-workspace .rounded-xl {
+    border-radius: 0.625rem;
+  }
+
+  .theme-workspace .p-6 {
+    padding: 1rem;
+  }
+
+  .theme-workspace .p-5 {
+    padding: 0.875rem;
+  }
+
+  .theme-workspace .p-4 {
+    padding: 0.75rem;
+  }
+
+  .theme-workspace .p-3 {
+    padding: 0.625rem;
+  }
+
+  .theme-workspace .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .theme-workspace .px-5 {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+
+  .theme-workspace .px-4 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .theme-workspace .px-3 {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+  }
+
+  .theme-workspace .py-4 {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .theme-workspace .py-3 {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+
+  .theme-workspace .py-2 {
+    padding-top: 0.4375rem;
+    padding-bottom: 0.4375rem;
+  }
+
+  .theme-workspace .gap-4 {
+    gap: 0.75rem;
+  }
+
+  .theme-workspace .gap-3 {
+    gap: 0.625rem;
+  }
+
+  .theme-workspace .gap-2 {
+    gap: 0.4375rem;
+  }
+
+  .theme-workspace .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.75rem * var(--tw-space-y-reverse));
+  }
+
+  .theme-workspace .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.625rem * var(--tw-space-y-reverse));
+  }
+
+  .theme-workspace .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.4375rem * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.4375rem * var(--tw-space-y-reverse));
+  }
+
+  .theme-workspace .flex-wrap {
+    align-content: flex-start;
+  }
+
+  .theme-workspace table.text-sm,
+  .theme-workspace table .text-sm {
+    font-size: 0.8125rem;
   }
 }

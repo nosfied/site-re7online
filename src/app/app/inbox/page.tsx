@@ -3702,9 +3702,9 @@ export default function AppInboxPage() {
         </div>
       ) : null}
 
-      <section className="grid h-full min-h-0 grid-cols-[300px_minmax(0,1fr)_280px] overflow-hidden xl:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
+      <section className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)_230px] overflow-hidden min-[1367px]:grid-cols-[280px_minmax(0,1fr)_250px] min-[1441px]:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
         <aside className="flex min-h-0 flex-col border-r border-white/10 bg-[#0c1930]">
-          <div className="border-b border-white/10 bg-[#10213d] px-4 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]">
+          <div className="border-b border-white/10 bg-[#10213d] px-4 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 max-[1280px]:py-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p
@@ -3743,12 +3743,12 @@ export default function AppInboxPage() {
                 </button>
               </div>
             </div>
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
               {isAdminUser ? (
                 <select
                   value={departmentFilter}
                   onChange={(event) => setDepartmentFilter(event.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none [&>option]:bg-re7-navy [&>option]:text-white"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs [&>option]:bg-re7-navy [&>option]:text-white"
                 >
                   <option value="ALL">Todos os setores</option>
                   {departmentOptions.map((department) => (
@@ -3763,95 +3763,102 @@ export default function AppInboxPage() {
                 value={conversationSearch}
                 onChange={(event) => setConversationSearch(event.target.value)}
                 placeholder="Buscar conversa"
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               />
-              <div className="relative flex flex-wrap gap-1.5">
-                {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
-                  const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
-                  if (!filter) return null;
-                  return (
+              <div className="relative space-y-1.5">
+                <div className="grid max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 pb-0.5 max-[1440px]:gap-1">
+                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[1440px]:gap-1">
+                    {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
+                      const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
+                      if (!filter) return null;
+                      return (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() => applyConversationFilter(filter.value)}
+                          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                            conversationFilter === filter.value &&
+                            (filter.value !== "ALL" || conversationChannelFilter === "ALL")
+                              ? "bg-re7-sky/30 text-white"
+                              : "bg-white/5 text-white/65 hover:bg-white/10"
+                          }`}
+                        >
+                          <span>{filter.label}</span>
+                          <span
+                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                              conversationFilter === filter.value &&
+                              (filter.value !== "ALL" || conversationChannelFilter === "ALL")
+                                ? "bg-white/20 text-white"
+                                : "bg-white/10 text-white/55"
+                            }`}
+                          >
+                            {conversationFilterCounts[filter.value]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <button
-                    key={filter.value}
                     type="button"
-                    onClick={() => applyConversationFilter(filter.value)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] transition ${
-                      conversationFilter === filter.value &&
-                      (filter.value !== "ALL" || conversationChannelFilter === "ALL")
-                        ? "bg-re7-sky/30 text-white"
-                        : "bg-white/5 text-white/65 hover:bg-white/10"
+                    onClick={() => setShowMoreConversationFilters((current) => !current)}
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                      selectedMoreConversationFilter
+                        ? "border-re7-sky/60 bg-re7-sky/30 text-white"
+                        : "border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white"
                     }`}
                   >
-                    <span>{filter.label}</span>
-                    <span
-                      className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
-                        conversationFilter === filter.value &&
-                        (filter.value !== "ALL" || conversationChannelFilter === "ALL")
-                          ? "bg-white/20 text-white"
-                          : "bg-white/10 text-white/55"
-                      }`}
-                    >
-                      {conversationFilterCounts[filter.value]}
-                    </span>
+                    <span>{selectedMoreConversationFilter?.label ?? "Mais"}</span>
+                    {selectedMoreConversationFilter ? (
+                      <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                        {conversationFilterCounts[selectedMoreConversationFilter.value]}
+                      </span>
+                    ) : (
+                      <span className="ml-1 text-[10px] text-white/45">▾</span>
+                    )}
                   </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  onClick={() => setShowMoreConversationFilters((current) => !current)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] transition ${
-                    selectedMoreConversationFilter
-                      ? "bg-re7-sky/30 text-white"
-                      : "bg-white/5 text-white/65 hover:bg-white/10"
-                  }`}
-                >
-                  <span>{selectedMoreConversationFilter?.label ?? "Mais"}</span>
-                  {selectedMoreConversationFilter ? (
-                    <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] leading-none text-white">
-                      {conversationFilterCounts[selectedMoreConversationFilter.value]}
-                    </span>
-                  ) : (
-                    <span className="ml-1 text-[10px] text-white/45">▾</span>
-                  )}
-                </button>
-                <span className="mx-0.5 h-6 w-px self-center bg-white/10" aria-hidden="true" />
-                {CONVERSATION_CHANNEL_FILTERS.map((filter) => {
-                  const selected = conversationChannelFilter === filter.value;
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      onClick={() =>
-                        setConversationChannelFilter((current) =>
-                          current === filter.value ? "ALL" : filter.value
-                        )
-                      }
-                      title={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
-                      aria-label={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
-                      aria-pressed={selected}
-                      className={`flex h-7 w-7 items-center justify-center rounded-full border p-0.5 transition ${
-                        selected
-                          ? "border-re7-sky/55 bg-re7-sky/30 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]"
-                          : "border-white/10 bg-white/5 opacity-75 hover:bg-white/10 hover:opacity-100"
-                      }`}
-                    >
-                      <ConversationChannelLogo item={{ channel: filter.value }} className="h-full w-full" />
-                    </button>
-                  );
-                })}
+                </div>
+                <div className="grid max-w-full grid-cols-3 gap-1.5 pb-0.5 max-[1440px]:gap-1">
+                  {CONVERSATION_CHANNEL_FILTERS.map((filter) => {
+                    const selected = conversationChannelFilter === filter.value;
+                    const compactLabel = filter.value === "messenger" ? "Facebook" : filter.label;
+                    return (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() =>
+                          setConversationChannelFilter((current) =>
+                            current === filter.value ? "ALL" : filter.value
+                          )
+                        }
+                        title={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
+                        aria-label={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
+                        aria-pressed={selected}
+                        className={`flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none transition max-[1440px]:h-6 max-[1440px]:gap-1 max-[1440px]:px-1.5 max-[1440px]:text-[9px] ${
+                          selected
+                            ? "border-re7-sky/70 bg-re7-sky/35 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.28)]"
+                            : "border-white/20 bg-white/10 text-white/78 hover:border-white/35 hover:bg-white/15 hover:text-white"
+                        }`}
+                      >
+                        <ConversationChannelLogo item={{ channel: filter.value }} className="h-5 w-5 shrink-0 max-[1440px]:h-4 max-[1440px]:w-4" />
+                        <span className="min-w-0 truncate">{compactLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
                 {showMoreConversationFilters ? (
-                  <div className="absolute left-0 top-full z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)]">
+                  <div className="absolute left-0 top-7 z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)] max-[1440px]:w-48">
                     {MORE_CONVERSATION_FILTERS.map((filter) => (
                       <button
                         key={filter.value}
                         type="button"
                         onClick={() => applyConversationFilter(filter.value)}
-                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition max-[1440px]:px-2 max-[1440px]:py-1.5 max-[1440px]:text-[11px] ${
                           conversationFilter === filter.value
                             ? "bg-re7-sky/25 text-white"
                             : "text-white/70 hover:bg-white/10 hover:text-white"
                         }`}
                       >
-                        <span>{filter.label}</span>
+                        <span className="whitespace-nowrap">{filter.label}</span>
                         <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] leading-none text-white/65">
                           {conversationFilterCounts[filter.value]}
                         </span>
@@ -3918,7 +3925,7 @@ export default function AppInboxPage() {
                     setShowMoreActions(false);
                     detailRequestSeqRef.current += 1;
                   }}
-                  className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition ${
+                  className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
@@ -3929,13 +3936,13 @@ export default function AppInboxPage() {
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
                         <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
                           {label}
                         </p>
                         <span
-                          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border p-0.5 ${getConversationChannelBadgeClass(item)}`}
+                          className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-5 max-[1440px]:w-5 ${getConversationChannelBadgeClass(item)}`}
                           title={channelLabel}
                           aria-label={channelLabel}
                         >
@@ -3953,18 +3960,18 @@ export default function AppInboxPage() {
                         </p>
                       ) : null}
                     </div>
-                    <span className={`shrink-0 text-[11px] ${isActive ? "text-white/70" : "text-white/45"}`}>
+                    <span className={`shrink-0 whitespace-nowrap text-[11px] max-[1440px]:text-[10px] ${isActive ? "text-white/70" : "text-white/45"}`}>
                       {formatDateTime(item.updatedAt)}
                     </span>
                   </div>
-                  <div className={`mt-2 flex items-center gap-2 text-[11px] ${isActive ? "text-white/78" : "text-white/58"}`}>
-                    <span className={`rounded-full px-2 py-0.5 ${getConversationStatusClass(status)}`}>
+                  <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isActive ? "text-white/78" : "text-white/58"}`}>
+                    <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
                     {unread ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#20b15a]" /> : null}
                   </div>
-                  <p className={`mt-2 line-clamp-2 text-sm leading-5 ${isActive ? "text-white/88" : "text-white/68"}`}>
+                  <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isActive ? "text-white/88" : "text-white/68"}`}>
                     {getConversationPreviewText(item)}
                   </p>
                 </button>
@@ -3986,17 +3993,17 @@ export default function AppInboxPage() {
         </aside>
 
         <div className="relative flex min-h-0 flex-col overflow-hidden bg-[#eadfcd]">
-          <header className="flex min-h-16 items-center justify-between border-b border-black/8 px-4 py-3 max-[1366px]:min-h-14 max-[1366px]:px-3 max-[1366px]:py-2 [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
+          <header className="flex min-h-16 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h2 className="truncate text-base font-semibold text-slate-900">
+                <h2 className="truncate text-base font-semibold text-slate-900 max-[1440px]:text-sm">
                   {selectedConversation
                     ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
                     : "Conversa"}
                 </h2>
                 {selectedConversation ? (
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 ${getConversationChannelBadgeClass(selectedConversation)}`}
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-6 max-[1440px]:w-6 ${getConversationChannelBadgeClass(selectedConversation)}`}
                     title={getConversationChannelLabel(selectedConversation)}
                     aria-label={getConversationChannelLabel(selectedConversation)}
                   >
@@ -4004,13 +4011,13 @@ export default function AppInboxPage() {
                   </span>
                 ) : null}
                 {isBusinessTenant && selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getLeadTemperatureClass(selectedConversation)}`}>
+                  <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold max-[1440px]:px-1.5 max-[1440px]:text-[10px] ${getLeadTemperatureClass(selectedConversation)}`}>
                     {getLeadTemperatureLabel(selectedConversation)}
                   </span>
                 ) : null}
               </div>
               {selectedConversation ? (
-                <p className="mt-0.5 truncate text-sm text-slate-600">
+                <p className="mt-0.5 truncate text-sm text-slate-600 max-[1440px]:text-xs">
                   {getConversationChannelLabel(selectedConversation)}
                   {" • "}
                   {getConversationModeLabel(selectedConversation)}
@@ -4024,7 +4031,7 @@ export default function AppInboxPage() {
                 </p>
               ) : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2 max-[1440px]:gap-1.5">
               {isAdminUser ? (
                 <button
                   type="button"
@@ -4303,7 +4310,7 @@ export default function AppInboxPage() {
               <button
                 type="button"
                 onClick={scrollTimelineToBottom}
-                className="pointer-events-auto rounded-full border border-[#d4c7b5] bg-white/92 px-4 py-2 text-sm font-medium text-slate-800 shadow-md transition hover:bg-white"
+              className="pointer-events-auto whitespace-nowrap rounded-full border border-[#d4c7b5] bg-white/92 px-4 py-2 text-sm font-medium text-slate-800 shadow-md transition hover:bg-white max-[1440px]:px-3 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               >
                 Ir para a mais recente
               </button>
@@ -4341,7 +4348,7 @@ export default function AppInboxPage() {
                 Envio por Facebook/Messenger ainda não está habilitado neste canal.
               </div>
             ) : null}
-            <div className="relative flex items-center gap-2">
+            <div className="relative flex items-center gap-2 max-[1440px]:gap-1.5">
               {showEmojiPicker ? (
                 <div className="absolute bottom-full left-12 z-20 mb-2 flex flex-wrap gap-1.5 rounded-2xl border border-[#d4c7b5] bg-white/95 p-2 shadow-[0_12px_28px_rgba(15,23,42,0.18)]">
                   {QUICK_EMOJIS.map((emoji) => (
@@ -4439,7 +4446,7 @@ export default function AppInboxPage() {
                   sendingMessage
                 }
                 onClick={handlePrimarySend}
-                className="h-10 shrink-0 rounded-2xl bg-[#20b15a] px-3.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-3"
+                className="h-10 shrink-0 whitespace-nowrap rounded-2xl bg-[#20b15a] px-3.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:text-xs"
               >
                 Enviar
               </button>
@@ -4448,7 +4455,7 @@ export default function AppInboxPage() {
         </div>
 
         <aside className="flex min-h-0 flex-col border-l border-white/10 bg-[#0c1930]">
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 max-[1440px]:gap-2 max-[1440px]:px-2.5 max-[1440px]:py-1.5">
             <h2 className="text-sm font-semibold text-white">CRM</h2>
             <button
               type="button"
@@ -4456,7 +4463,7 @@ export default function AppInboxPage() {
               aria-label="Ver histórico do contato"
               disabled={!selectedConversation}
               onClick={handleOpenContactTimeline}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:px-2 max-[1440px]:text-[11px]"
             >
               <span aria-hidden="true">◷</span>
               Histórico
@@ -4487,11 +4494,11 @@ export default function AppInboxPage() {
                   </section>
                 ) : null}
 
-                <section className="border-b border-white/10 px-3 py-3">
+                <section className="border-b border-white/10 px-3 py-3 max-[1440px]:px-2.5 max-[1440px]:py-2">
                   <div className="space-y-2 text-sm text-white/85">
                     <label className="grid">
                       <input
-                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                         value={leadNameDraft}
                         onChange={(event) => setLeadNameDraft(event.target.value)}
                         onBlur={() => void handleSaveLeadDetails()}
@@ -4507,7 +4514,7 @@ export default function AppInboxPage() {
                     </label>
                     <label className="grid">
                       <input
-                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                         value={leadEmailDraft}
                         onChange={(event) => setLeadEmailDraft(event.target.value)}
                         onBlur={() => void handleSaveLeadDetails()}
@@ -4517,7 +4524,7 @@ export default function AppInboxPage() {
                     </label>
                     <label className="grid">
                       <input
-                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                        className="min-w-0 rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                         value={leadCompanyDraft}
                         onChange={(event) => setLeadCompanyDraft(event.target.value)}
                         onBlur={() => void handleSaveLeadDetails()}
@@ -4529,10 +4536,10 @@ export default function AppInboxPage() {
                   </div>
                 </section>
 
-                <section className="border-b border-white/10 px-3 py-3">
+                <section className="border-b border-white/10 px-3 py-3 max-[1440px]:px-2.5 max-[1440px]:py-2">
                   <div className="space-y-2">
                     <select
-                      className="w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                      className="w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-1.5 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                       value={statusDraft}
                       onChange={(event) => void handleLeadStatusChange(event.target.value as LeadStatus)}
                       disabled={!isSelectedConversationOwnedByCurrentUser || savingLeadStatus}
@@ -4550,10 +4557,10 @@ export default function AppInboxPage() {
                   </div>
                 </section>
 
-                <section className="border-b border-white/10 px-3 py-3">
+                <section className="border-b border-white/10 px-3 py-3 max-[1440px]:px-2.5 max-[1440px]:py-2">
                   <div className="space-y-2">
                     <textarea
-                      className="min-h-20 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      className="min-h-20 w-full rounded-xl border border-white/15 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky max-[1440px]:min-h-16 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
                       value={noteDraft}
                       onChange={(event) => setNoteDraft(event.target.value)}
                       placeholder="Add nota"
@@ -4563,14 +4570,14 @@ export default function AppInboxPage() {
                       type="button"
                       disabled={!noteDraft.trim() || savingLeadNote || !isSelectedConversationOwnedByCurrentUser}
                       onClick={handleAddLeadNote}
-                      className="rounded-xl bg-re7-orange px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="whitespace-nowrap rounded-xl bg-re7-orange px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:text-xs"
                     >
                       {savingLeadNote ? "Salvando..." : "Add nota"}
                     </button>
                   </div>
                 </section>
 
-                <section className="px-3 py-3">
+                <section className="px-3 py-3 max-[1440px]:px-2.5 max-[1440px]:py-2">
                   {loadingLeadNotes ? (
                     <p className="text-sm text-white/70">Carregando notas...</p>
                   ) : null}
