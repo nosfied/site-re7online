@@ -2723,6 +2723,13 @@ export default function AppInboxPage() {
     () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
     [conversationFilter]
   );
+  const applyConversationFilter = useCallback((filter: ConversationFilter) => {
+    setConversationFilter(filter);
+    if (filter === "ALL") {
+      setConversationChannelFilter("ALL");
+    }
+    setShowMoreConversationFilters(false);
+  }, []);
 
   const canReply = useMemo(
     () => (session ? canReplyToConversation(selectedConversation, session.user.id) : false),
@@ -3766,12 +3773,10 @@ export default function AppInboxPage() {
                   <button
                     key={filter.value}
                     type="button"
-                    onClick={() => {
-                      setConversationFilter(filter.value);
-                      setShowMoreConversationFilters(false);
-                    }}
+                    onClick={() => applyConversationFilter(filter.value)}
                     className={`rounded-full px-2.5 py-1 text-[11px] transition ${
-                      conversationFilter === filter.value
+                      conversationFilter === filter.value &&
+                      (filter.value !== "ALL" || conversationChannelFilter === "ALL")
                         ? "bg-re7-sky/30 text-white"
                         : "bg-white/5 text-white/65 hover:bg-white/10"
                     }`}
@@ -3779,7 +3784,8 @@ export default function AppInboxPage() {
                     <span>{filter.label}</span>
                     <span
                       className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
-                        conversationFilter === filter.value
+                        conversationFilter === filter.value &&
+                        (filter.value !== "ALL" || conversationChannelFilter === "ALL")
                           ? "bg-white/20 text-white"
                           : "bg-white/10 text-white/55"
                       }`}
@@ -3838,10 +3844,7 @@ export default function AppInboxPage() {
                       <button
                         key={filter.value}
                         type="button"
-                        onClick={() => {
-                          setConversationFilter(filter.value);
-                          setShowMoreConversationFilters(false);
-                        }}
+                        onClick={() => applyConversationFilter(filter.value)}
                         className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
                           conversationFilter === filter.value
                             ? "bg-re7-sky/25 text-white"
