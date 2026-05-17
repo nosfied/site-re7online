@@ -561,8 +561,7 @@ const CONVERSATION_FILTER_BY_VALUE = new Map(CONVERSATION_FILTERS.map((item) => 
 type DepartmentFilter = "ALL" | string;
 type ConversationChannelFilter = "ALL" | InboxChannel;
 
-const CONVERSATION_CHANNEL_FILTERS: Array<{ value: ConversationChannelFilter; label: string }> = [
-  { value: "ALL", label: "Todos" },
+const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }> = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "instagram", label: "Instagram" },
   { value: "messenger", label: "Facebook/Messenger" },
@@ -3759,22 +3758,6 @@ export default function AppInboxPage() {
                 placeholder="Buscar conversa"
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40"
               />
-              <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
-                {CONVERSATION_CHANNEL_FILTERS.map((filter) => (
-                  <button
-                    key={filter.value}
-                    type="button"
-                    onClick={() => setConversationChannelFilter(filter.value)}
-                    className={`min-h-7 rounded-lg px-2 text-[11px] transition ${
-                      conversationChannelFilter === filter.value
-                        ? "bg-re7-sky/30 text-white"
-                        : "text-white/60 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
-              </div>
               <div className="relative flex flex-wrap gap-1.5">
                 {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
                   const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
@@ -3824,6 +3807,31 @@ export default function AppInboxPage() {
                     <span className="ml-1 text-[10px] text-white/45">▾</span>
                   )}
                 </button>
+                <span className="mx-0.5 h-6 w-px self-center bg-white/10" aria-hidden="true" />
+                {CONVERSATION_CHANNEL_FILTERS.map((filter) => {
+                  const selected = conversationChannelFilter === filter.value;
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() =>
+                        setConversationChannelFilter((current) =>
+                          current === filter.value ? "ALL" : filter.value
+                        )
+                      }
+                      title={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
+                      aria-label={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
+                      aria-pressed={selected}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full border p-0.5 transition ${
+                        selected
+                          ? "border-re7-sky/55 bg-re7-sky/30 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]"
+                          : "border-white/10 bg-white/5 opacity-75 hover:bg-white/10 hover:opacity-100"
+                      }`}
+                    >
+                      <ConversationChannelLogo item={{ channel: filter.value }} className="h-full w-full" />
+                    </button>
+                  );
+                })}
                 {showMoreConversationFilters ? (
                   <div className="absolute left-0 top-full z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)]">
                     {MORE_CONVERSATION_FILTERS.map((filter) => (
