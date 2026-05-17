@@ -8,24 +8,27 @@ import {
   type WhatsAppBackfillClient,
 } from "./whatsappBackfillDryRun.js";
 
-export type WhatsAppShadowCompareStatus = "matched" | "missing" | "mismatched";
+export type WhatsAppShadowCompareStatus = "matched" | "missing" | "mismatched" | "warning";
 
 export type WhatsAppShadowCompareModelSummary = {
   checked: number;
   matched: number;
   missing: number;
   mismatched: number;
+  warnings: number;
 };
 
 export type WhatsAppShadowCompareSample = {
   model: BackfillModelName;
   recordId: string;
   status: WhatsAppShadowCompareStatus;
+  clientKey?: string;
   waIdHash: string | null;
   channelAccountIdHash: string | null;
   missingFields?: string[];
   mismatchedFields?: string[];
   reason?: string;
+  warningType?: "non_blocking_anonymized_drift";
 };
 
 export type WhatsAppShadowCompareReport = {
@@ -35,9 +38,17 @@ export type WhatsAppShadowCompareReport = {
     tenant: string | null;
     limit: number;
     includeSamples: boolean;
+    includeAnonymized: boolean;
   };
   counts: WhatsAppShadowCompareModelSummary;
   byModel: Record<BackfillModelName, WhatsAppShadowCompareModelSummary>;
+  blockingMissing: number;
+  blockingMismatched: number;
+  nonBlockingWarnings: Array<{
+    type: "non_blocking_anonymized_drift";
+    model: BackfillModelName;
+    count: number;
+  }>;
   samples: WhatsAppShadowCompareSample[];
 };
 
@@ -64,6 +75,7 @@ function emptySummary(): WhatsAppShadowCompareModelSummary {
     matched: 0,
     missing: 0,
     mismatched: 0,
+    warnings: 0,
   };
 }
 
@@ -85,20 +97,30 @@ function isWhatsAppCompareRecord(record: WhatsAppBackfillExecutableRecord) {
   return channel === "" || channel === "whatsapp";
 }
 
+function isAnonymizedOrMaskedWaId(value: unknown) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized.startsWith("anon:") || normalized.includes("*");
+}
+
 function compareRecord(
   record: WhatsAppBackfillExecutableRecord,
-  client?: WhatsAppBackfillClient
+  client?: WhatsAppBackfillClient,
+  options?: { includeAnonymized?: boolean }
 ): WhatsAppShadowCompareSample {
   const expected = buildWhatsAppBackfillExpectedFields(record, client);
   const waIdHash = hashForReport(record.waId);
   if (!expected) {
+    const status: WhatsAppShadowCompareStatus =
+      !options?.includeAnonymized && isAnonymizedOrMaskedWaId(record.waId) ? "warning" : "missing";
     return {
       model: record.model,
       recordId: record.id,
-      status: "missing",
+      status,
+      clientKey: record.clientKey,
       waIdHash,
       channelAccountIdHash: null,
-      reason: "missing_expected_fields",
+      reason: status === "warning" ? "anonymized_or_masked_identity" : "missing_expected_fields",
+      ...(status === "warning" ? { warningType: "non_blocking_anonymized_drift" as const } : {}),
     };
   }
 
@@ -127,15 +149,23 @@ function compareRecord(
       : missingFields.length > 0
         ? "missing"
         : "matched";
+  const finalStatus: WhatsAppShadowCompareStatus =
+    status !== "matched" && !options?.includeAnonymized && isAnonymizedOrMaskedWaId(record.waId)
+      ? "warning"
+      : status;
 
   return {
     model: record.model,
     recordId: record.id,
-    status,
+    status: finalStatus,
+    clientKey: record.clientKey,
     waIdHash,
     channelAccountIdHash: hashForReport(expected.channelAccountId),
     ...(missingFields.length ? { missingFields } : {}),
     ...(mismatchedFields.length ? { mismatchedFields } : {}),
+    ...(finalStatus === "warning"
+      ? { reason: "anonymized_or_masked_identity", warningType: "non_blocking_anonymized_drift" as const }
+      : {}),
   };
 }
 
@@ -145,6 +175,7 @@ export function buildWhatsAppShadowCompareReport(input: {
   tenant?: string | null;
   limit?: number;
   includeSamples?: boolean;
+  includeAnonymized?: boolean;
   nowIso?: string;
 }): WhatsAppShadowCompareReport {
   const clientsById = new Map(input.clients.map((client) => [client.id, client]));
@@ -159,10 +190,16 @@ export function buildWhatsAppShadowCompareReport(input: {
   for (const model of MODEL_NAMES) {
     for (const record of input.records[model] ?? []) {
       if (!isWhatsAppCompareRecord(record)) continue;
-      const comparison = compareRecord(record, clientsById.get(record.clientId));
+      const comparison = compareRecord(record, clientsById.get(record.clientId), {
+        includeAnonymized: input.includeAnonymized === true,
+      });
       const summary = byModel[model];
       summary.checked += 1;
-      summary[comparison.status] += 1;
+      if (comparison.status === "warning") {
+        summary.warnings += 1;
+      } else {
+        summary[comparison.status] += 1;
+      }
       if (includeSamples && comparison.status !== "matched" && samples.length < limit) {
         samples.push(comparison);
       }
@@ -175,19 +212,28 @@ export function buildWhatsAppShadowCompareReport(input: {
     total.matched += current.matched;
     total.missing += current.missing;
     total.mismatched += current.mismatched;
+    total.warnings += current.warnings;
     return total;
   }, emptySummary());
+  const nonBlockingWarnings = MODEL_NAMES.flatMap((model) => {
+    const count = byModel[model].warnings;
+    return count > 0 ? [{ type: "non_blocking_anonymized_drift" as const, model, count }] : [];
+  });
 
   return {
-    ok: counts.mismatched === 0,
+    ok: counts.missing === 0 && counts.mismatched === 0,
     generatedAt: input.nowIso ?? new Date().toISOString(),
     filters: {
       tenant: input.tenant ?? null,
       limit,
       includeSamples,
+      includeAnonymized: input.includeAnonymized === true,
     },
     counts,
     byModel,
+    blockingMissing: counts.missing,
+    blockingMismatched: counts.mismatched,
+    nonBlockingWarnings,
     samples,
   };
 }

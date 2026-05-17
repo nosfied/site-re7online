@@ -19,6 +19,7 @@ type Options = {
   tenant?: string;
   limit: number;
   includeSamples: boolean;
+  includeAnonymized: boolean;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -26,6 +27,7 @@ function parseArgs(argv: string[]): Options {
     json: false,
     limit: 20,
     includeSamples: false,
+    includeAnonymized: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -53,6 +55,9 @@ function parseArgs(argv: string[]): Options {
       }
       case "--include-samples":
         options.includeSamples = true;
+        break;
+      case "--include-anonymized":
+        options.includeAnonymized = true;
         break;
       default:
         throw new Error(`flag não reconhecida: ${current}`);
@@ -253,10 +258,14 @@ async function loadRecords(
 }
 
 function printHuman(report: ReturnType<typeof buildWhatsAppShadowCompareReport>) {
-  console.log(`shadow compare ok=${report.ok} checked=${report.counts.checked} matched=${report.counts.matched} missing=${report.counts.missing} mismatched=${report.counts.mismatched}`);
+  console.log(`shadow compare ok=${report.ok} checked=${report.counts.checked} matched=${report.counts.matched} missing=${report.counts.missing} mismatched=${report.counts.mismatched} warnings=${report.counts.warnings}`);
+  console.log(`blocking: missing=${report.blockingMissing} mismatched=${report.blockingMismatched}`);
   for (const [model, summary] of Object.entries(report.byModel)) {
     if (summary.checked === 0) continue;
-    console.log(`${model}: checked=${summary.checked} matched=${summary.matched} missing=${summary.missing} mismatched=${summary.mismatched}`);
+    console.log(`${model}: checked=${summary.checked} matched=${summary.matched} missing=${summary.missing} mismatched=${summary.mismatched} warnings=${summary.warnings}`);
+  }
+  if (report.nonBlockingWarnings.length > 0) {
+    console.log(JSON.stringify({ nonBlockingWarnings: report.nonBlockingWarnings }, null, 2));
   }
   if (report.samples.length > 0) {
     console.log(JSON.stringify({ samples: report.samples }, null, 2));
@@ -277,13 +286,14 @@ async function main() {
       tenant: options.tenant ?? null,
       limit: options.limit,
       includeSamples: options.includeSamples,
+      includeAnonymized: options.includeAnonymized,
     });
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
       printHuman(report);
     }
-    if (report.counts.mismatched > 0) {
+    if (!report.ok) {
       process.exitCode = 1;
     }
   } finally {

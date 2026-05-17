@@ -50,6 +50,7 @@ export function buildWhatsAppShadowRolloutCheckReport(input: {
     matched: 0,
     missing: 0,
     mismatched: 0,
+    warnings: 0,
   };
   const shadowWriteEnabled = isTrue(env.MULTICHANNEL_SHADOW_WRITE);
   const shadowStrictDisabled = !isTrue(env.MULTICHANNEL_SHADOW_STRICT);

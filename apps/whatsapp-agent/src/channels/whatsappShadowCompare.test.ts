@@ -58,7 +58,7 @@ test("matched records count as matched", () => {
   assert.equal(report.byModel.inboundMessages.matched, 1);
 });
 
-test("missing fields are reported without failing ok", () => {
+test("missing active fields are blocking", () => {
   const records = emptyRecords();
   records.inboundMessages.push(record({ channel: null, externalUserHash: null }));
   const report = buildWhatsAppShadowCompareReport({
@@ -67,7 +67,8 @@ test("missing fields are reported without failing ok", () => {
     includeSamples: true,
   });
 
-  assert.equal(report.ok, true);
+  assert.equal(report.ok, false);
+  assert.equal(report.blockingMissing, 1);
   assert.equal(report.counts.missing, 1);
   assert.deepEqual(report.samples[0]?.missingFields, ["channel", "externalUserHash"]);
 });
@@ -82,6 +83,7 @@ test("mismatched fields make report not ok", () => {
   });
 
   assert.equal(report.ok, false);
+  assert.equal(report.blockingMismatched, 1);
   assert.equal(report.counts.mismatched, 1);
   assert.deepEqual(report.samples[0]?.mismatchedFields, ["provider", "channelAccountId"]);
 });
@@ -125,6 +127,61 @@ test("non-whatsapp records are ignored by whatsapp shadow compare", () => {
   assert.equal(report.counts.matched, 1);
   assert.equal(report.counts.mismatched, 0);
   assert.equal(report.byModel.inboundMessages.checked, 1);
+});
+
+test("anonymized WhatsApp drift is reported as non-blocking warning by default", () => {
+  const records = emptyRecords();
+  records.conversations.push(
+    record({
+      model: "conversations",
+      id: "conversation-1",
+      waId: "5584******9999:abc12345",
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: "phone-1",
+      externalUserHash: hashWhatsAppExternalUser("558499999999"),
+      legacyWaId: "558499999999",
+    })
+  );
+  const report = buildWhatsAppShadowCompareReport({
+    clients: [client],
+    records,
+    includeSamples: true,
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.counts.warnings, 1);
+  assert.equal(report.blockingMismatched, 0);
+  assert.equal(report.nonBlockingWarnings[0]?.type, "non_blocking_anonymized_drift");
+  assert.equal(report.samples[0]?.status, "warning");
+  assert.equal(report.samples[0]?.warningType, "non_blocking_anonymized_drift");
+});
+
+test("includeAnonymized audits anonymized drift as blocking mismatch", () => {
+  const records = emptyRecords();
+  records.conversations.push(
+    record({
+      model: "conversations",
+      id: "conversation-1",
+      waId: "anon:conversation",
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: "phone-1",
+      externalUserHash: hashWhatsAppExternalUser("558499999999"),
+      legacyWaId: "558499999999",
+    })
+  );
+  const report = buildWhatsAppShadowCompareReport({
+    clients: [client],
+    records,
+    includeSamples: true,
+    includeAnonymized: true,
+  });
+
+  assert.equal(report.ok, false);
+  assert.equal(report.counts.mismatched, 1);
+  assert.equal(report.counts.warnings, 0);
+  assert.equal(report.samples[0]?.status, "mismatched");
 });
 
 test("report samples do not expose raw waId", () => {

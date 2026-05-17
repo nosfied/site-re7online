@@ -8,6 +8,7 @@ const healthyCompare = {
     matched: 10,
     missing: 0,
     mismatched: 0,
+    warnings: 0,
   },
 };
 
@@ -53,6 +54,7 @@ test("rollout check blocks missing or mismatched compare", () => {
         matched: 8,
         missing: 1,
         mismatched: 1,
+        warnings: 0,
       },
     },
     replayPassed: true,
