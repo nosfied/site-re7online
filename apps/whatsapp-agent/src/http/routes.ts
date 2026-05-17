@@ -3763,6 +3763,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const operationalConversation = materializeConversationOperationalState(conversation, defaults) ?? conversation;
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
@@ -3772,7 +3774,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
           userDepartmentId: departmentAccess.departmentId,
-          conversationDepartmentId: conversation.departmentId ?? null,
+          conversationDepartmentId: operationalConversation.departmentId ?? null,
         })
       ) {
         logAppDepartmentDenied({
@@ -3781,7 +3783,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           userId: clientAuth.userId,
           clientId: client.id,
           departmentId: departmentAccess.departmentId,
-          conversationDepartmentId: conversation.departmentId ?? null,
+          conversationDepartmentId: operationalConversation.departmentId ?? null,
           waId: resolvedConversation.resolvedWaIdCanonical,
         });
         json(res, 403, {
@@ -3844,11 +3846,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const routing = await resolveAssignmentRouting(prisma, {
         clientId: client.id,
         assignedUserDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
-        fallbackDepartmentId: conversation.departmentId ?? null,
+        fallbackDepartmentId: operationalConversation.departmentId ?? null,
       });
       const assignedAt = new Date().toISOString();
       const nextState = {
-        ...conversation,
+        ...operationalConversation,
         mode: "HUMAN" as const,
         handoff: {
           ...conversation.handoff,

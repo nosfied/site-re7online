@@ -19,7 +19,7 @@ import {
   summarizeChannelPersistencePlan,
 } from "../channels/channelPersistencePlan.js";
 import { persistMessengerInboundEvent } from "../channels/messengerInboundPersistence.js";
-import { resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
+import { findTenantChannelAccount, resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
@@ -480,9 +480,18 @@ export async function processPassiveMetaWebhookPayload(
       });
       continue;
     }
-    const runtimeGate = resolveChannelRuntimeGate(resolution.account);
     const tenantKey = resolution.tenantKey ?? "unknown";
     const tenant = tenants[tenantKey];
+    const accountForPersistence =
+      tenant && resolution.tenantKey
+        ? findTenantChannelAccount(tenant.channelAccounts ?? [], {
+            tenantKey: resolution.tenantKey,
+            channel: "messenger",
+            provider: "meta",
+            channelAccountId: item.pageId,
+          }) ?? resolution.account
+        : resolution.account;
+    const runtimeGate = resolveChannelRuntimeGate(accountForPersistence);
     const persistencePlan = buildChannelPersistencePlan(
       {
         tenantKey,
@@ -573,7 +582,7 @@ export async function processPassiveMetaWebhookPayload(
       await persistMessengerInboundEvent({
         event: normalized,
         tenantKey,
-        account: resolution.account,
+        account: accountForPersistence,
         requestId: options.requestId,
       });
 
