@@ -10,6 +10,13 @@ import { validateTenantChannelAccount } from "./tenantChannelAccount.js";
 
 function createFakePrisma() {
   const client = { id: "client-1", clientKey: "tenant-a", status: "ACTIVE" };
+  const defaultDepartment = {
+    id: "department-default",
+    name: "Atendimento Geral",
+    slug: "atendimento-geral",
+    isActive: true,
+  };
+  const defaultQueue = { id: "queue-default", name: "Fila Geral", departmentId: defaultDepartment.id };
   const inboundMessages = new Map<string, any>();
   const conversations = new Map<string, any>();
   const runtimeStates = new Map<string, any>();
@@ -21,6 +28,19 @@ function createFakePrisma() {
     client: {
       async findUnique(args: any) {
         return args.where.clientKey === client.clientKey ? client : null;
+      },
+    },
+    department: {
+      async findFirst() {
+        return defaultDepartment;
+      },
+      async create(args: any) {
+        return { ...defaultDepartment, ...args.data };
+      },
+    },
+    queue: {
+      async upsert(args: any) {
+        return { ...defaultQueue, ...args.create, ...args.update };
       },
     },
     inboundMessage: {
@@ -195,8 +215,11 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
   const contact = Array.from(prisma.state.contacts.values())[0];
   const lead = Array.from(prisma.state.leads.values())[0];
   assert.equal(conversation.channel, "messenger");
+  assert.equal(conversation.departmentId, "department-default");
   assert.equal(runtime.mode, "HUMAN");
   assert.equal(runtime.status, "WAITING");
+  assert.equal(runtime.departmentId, "department-default");
+  assert.equal(runtime.queueId, "queue-default");
   assert.equal(inbound.externalMessageId, "mid-1");
   assert.equal(contact.name, "Maria Silva");
   assert.equal(lead.name, "Maria Silva");

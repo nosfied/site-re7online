@@ -14457,7 +14457,6 @@ async function buildConversationListPayload(
     deletedAt: null,
     anonymizedAt: null,
     lastInboundAt: { not: null },
-    ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
     ...(params.cursor
       ? {
           OR: [

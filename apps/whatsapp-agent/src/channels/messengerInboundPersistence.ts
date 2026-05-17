@@ -6,6 +6,7 @@ import type { NormalizedInboundEvent } from "./channel.types.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { canPersistChannelInbound } from "./tenantChannelAccount.js";
 import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
+import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -251,6 +252,12 @@ export async function persistMessengerInboundEvent(params: {
     };
   }
 
+  const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, client.id);
+  const operationalRoute = {
+    departmentId: defaults.department.id,
+    queueId: defaults.queue.id,
+  };
+
   const [conversation, runtimeState, inbound] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
@@ -260,12 +267,14 @@ export async function persistMessengerInboundEvent(params: {
         waIdCanonical: syntheticWaId,
         phoneNumberId: null,
         ...channelFields,
+        departmentId: operationalRoute.departmentId,
         windowIsOpen: true,
         lastInboundAt: createdAt,
       },
       update: {
         waIdCanonical: syntheticWaId,
         ...channelFields,
+        departmentId: operationalRoute.departmentId,
         lastInboundAt: createdAt,
         deletedAt: null,
         anonymizedAt: null,
@@ -287,6 +296,8 @@ export async function persistMessengerInboundEvent(params: {
         handoffStatus: HandoffStatus.NONE,
         mode: "HUMAN",
         status: ConversationOperationalStatus.WAITING,
+        departmentId: operationalRoute.departmentId,
+        queueId: operationalRoute.queueId,
       },
       update: {
         waIdCanonical: syntheticWaId,
@@ -295,6 +306,8 @@ export async function persistMessengerInboundEvent(params: {
         lastInboundMessageId: messageId,
         mode: "HUMAN",
         status: ConversationOperationalStatus.WAITING,
+        departmentId: operationalRoute.departmentId,
+        queueId: operationalRoute.queueId,
         closedAt: null,
       },
       select: { id: true },
