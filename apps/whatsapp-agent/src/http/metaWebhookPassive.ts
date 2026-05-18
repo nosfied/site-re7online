@@ -52,7 +52,8 @@ export type PassiveMetaWebhookProcessResult = {
 };
 
 export type PassiveMetaSignatureVerification =
-  | { ok: true; status: "valid" | "skipped" }
+  | { ok: true; status: "valid"; secretScope: "default" | "instagram" }
+  | { ok: true; status: "skipped" }
   | { ok: false; statusCode: 403 | 503; reason: string };
 
 function getVerifyToken() {
@@ -93,15 +94,33 @@ function normalizeSignatureHeader(header: string | string[] | undefined) {
   return Array.isArray(header) ? header[0] : header;
 }
 
+function getMetaWebhookSignatureSecrets() {
+  const candidates: Array<{ secretScope: "default" | "instagram"; secret: string }> = [
+    { secretScope: "default", secret: String(process.env.META_APP_SECRET ?? "").trim() },
+    {
+      secretScope: "instagram",
+      secret: String(process.env.META_INSTAGRAM_APP_SECRET ?? "").trim(),
+    },
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (!candidate.secret || seen.has(candidate.secret)) {
+      return false;
+    }
+    seen.add(candidate.secret);
+    return true;
+  });
+}
+
 export function verifyPassiveMetaWebhookSignature(
   rawBody: Buffer,
   signatureHeader: string | string[] | undefined,
   requestId: string
 ): PassiveMetaSignatureVerification {
-  const appSecret = String(process.env.META_APP_SECRET ?? "").trim();
+  const secrets = getMetaWebhookSignatureSecrets();
   const route = "/meta/webhook";
 
-  if (!appSecret) {
+  if (secrets.length === 0) {
     if (process.env.NODE_ENV === "production") {
       logger.error({
         event: "meta.webhook.signature.missing",
@@ -152,29 +171,32 @@ export function verifyPassiveMetaWebhookSignature(
     return { ok: false, statusCode: 403, reason: "invalid_format" };
   }
 
-  const actual = crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex");
   const expectedBuffer = Buffer.from(expected, "hex");
-  const actualBuffer = Buffer.from(actual, "hex");
-  const valid =
-    expectedBuffer.length === actualBuffer.length &&
-    crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+  for (const candidate of secrets) {
+    const actual = crypto.createHmac("sha256", candidate.secret).update(rawBody).digest("hex");
+    const actualBuffer = Buffer.from(actual, "hex");
+    const valid =
+      expectedBuffer.length === actualBuffer.length &&
+      crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 
-  if (!valid) {
-    logger.warn({
-      event: "meta.webhook.signature.invalid",
-      route,
-      requestId,
-      reason: "invalid_signature",
-    });
-    return { ok: false, statusCode: 403, reason: "invalid_signature" };
+    if (valid) {
+      logger.info({
+        event: "meta.webhook.signature.valid",
+        route,
+        requestId,
+        secretScope: candidate.secretScope,
+      });
+      return { ok: true, status: "valid", secretScope: candidate.secretScope };
+    }
   }
 
-  logger.info({
-    event: "meta.webhook.signature.valid",
+  logger.warn({
+    event: "meta.webhook.signature.invalid",
     route,
     requestId,
+    reason: "invalid_signature",
   });
-  return { ok: true, status: "valid" };
+  return { ok: false, statusCode: 403, reason: "invalid_signature" };
 }
 
 function getMetaMessagingEvents(payload: MetaWebhookPayload) {

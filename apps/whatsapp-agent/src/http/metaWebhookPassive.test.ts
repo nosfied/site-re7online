@@ -17,6 +17,7 @@ process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "meta-webhook-admin-test-to
 
 const originalCwd = process.cwd();
 const originalMetaAppSecret = process.env.META_APP_SECRET;
+const originalMetaInstagramAppSecret = process.env.META_INSTAGRAM_APP_SECRET;
 const originalNodeEnv = process.env.NODE_ENV;
 let tempRoot = "";
 let tenantsPath = "";
@@ -236,6 +237,7 @@ async function flushPassiveWebhookProcessing() {
 
 test.before(async () => {
   process.env.META_APP_SECRET = "";
+  process.env.META_INSTAGRAM_APP_SECRET = "";
   process.env.NODE_ENV = "test";
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "re7-meta-webhook-"));
   tenantsPath = path.join(tempRoot, ".data", "tenants.json");
@@ -269,6 +271,7 @@ test.after(async () => {
   });
   process.chdir(originalCwd);
   restoreEnv("META_APP_SECRET", originalMetaAppSecret);
+  restoreEnv("META_INSTAGRAM_APP_SECRET", originalMetaInstagramAppSecret);
   restoreEnv("NODE_ENV", originalNodeEnv);
   await fs.rm(tempRoot, { recursive: true, force: true });
 });
@@ -598,15 +601,49 @@ test("POST meta webhook accepts valid signature when secret is configured", asyn
   }
 });
 
+test("POST meta webhook accepts valid Instagram signature when Instagram secret is configured", async () => {
+  const previousSecret = process.env.META_APP_SECRET;
+  const previousInstagramSecret = process.env.META_INSTAGRAM_APP_SECRET;
+  process.env.META_APP_SECRET = "signature-secret";
+  process.env.META_INSTAGRAM_APP_SECRET = "instagram-signature-secret";
+  try {
+    const rawBody = JSON.stringify(instagramPayload);
+    const response = await post(
+      "/meta/webhook",
+      instagramPayload,
+      signRawBody(rawBody, "instagram-signature-secret")
+    );
+    const helperResult = verifyPassiveMetaWebhookSignature(
+      Buffer.from(rawBody),
+      signRawBody(rawBody, "instagram-signature-secret"),
+      "instagram-signature-test"
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.ok, true);
+    assert.deepEqual(helperResult, {
+      ok: true,
+      status: "valid",
+      secretScope: "instagram",
+    });
+  } finally {
+    restoreEnv("META_APP_SECRET", previousSecret);
+    restoreEnv("META_INSTAGRAM_APP_SECRET", previousInstagramSecret);
+  }
+});
+
 test("POST meta webhook rejects invalid signature when secret is configured", async () => {
   const previousSecret = process.env.META_APP_SECRET;
+  const previousInstagramSecret = process.env.META_INSTAGRAM_APP_SECRET;
   process.env.META_APP_SECRET = "signature-secret";
+  process.env.META_INSTAGRAM_APP_SECRET = "instagram-signature-secret";
   try {
     const response = await post("/meta/webhook", messengerPayload, "sha256=deadbeef");
 
     assert.equal(response.status, 403);
   } finally {
     restoreEnv("META_APP_SECRET", previousSecret);
+    restoreEnv("META_INSTAGRAM_APP_SECRET", previousInstagramSecret);
   }
 });
 
@@ -644,8 +681,10 @@ test("POST meta webhook invalid json returns 400", async () => {
 
 test("signature helper allows missing secret outside production", () => {
   const previousSecret = process.env.META_APP_SECRET;
+  const previousInstagramSecret = process.env.META_INSTAGRAM_APP_SECRET;
   const previousNodeEnv = process.env.NODE_ENV;
   delete process.env.META_APP_SECRET;
+  delete process.env.META_INSTAGRAM_APP_SECRET;
   process.env.NODE_ENV = "test";
   try {
     const result = verifyPassiveMetaWebhookSignature(Buffer.from("{}"), undefined, "test-request");
@@ -653,14 +692,17 @@ test("signature helper allows missing secret outside production", () => {
     assert.deepEqual(result, { ok: true, status: "skipped" });
   } finally {
     restoreEnv("META_APP_SECRET", previousSecret);
+    restoreEnv("META_INSTAGRAM_APP_SECRET", previousInstagramSecret);
     restoreEnv("NODE_ENV", previousNodeEnv);
   }
 });
 
 test("signature helper blocks missing secret in production", () => {
   const previousSecret = process.env.META_APP_SECRET;
+  const previousInstagramSecret = process.env.META_INSTAGRAM_APP_SECRET;
   const previousNodeEnv = process.env.NODE_ENV;
   delete process.env.META_APP_SECRET;
+  delete process.env.META_INSTAGRAM_APP_SECRET;
   process.env.NODE_ENV = "production";
   try {
     const result = verifyPassiveMetaWebhookSignature(Buffer.from("{}"), undefined, "test-request");
@@ -668,6 +710,7 @@ test("signature helper blocks missing secret in production", () => {
     assert.deepEqual(result, { ok: false, statusCode: 503, reason: "missing_app_secret" });
   } finally {
     restoreEnv("META_APP_SECRET", previousSecret);
+    restoreEnv("META_INSTAGRAM_APP_SECRET", previousInstagramSecret);
     restoreEnv("NODE_ENV", previousNodeEnv);
   }
 });
