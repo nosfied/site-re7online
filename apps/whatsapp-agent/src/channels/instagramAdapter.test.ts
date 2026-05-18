@@ -41,6 +41,42 @@ test("instagram passive adapter normalizes webhook payload", () => {
   assert.equal(event.raw, instagramPayload);
 });
 
+test("instagram passive adapter normalizes message_edit payload shape", () => {
+  const adapter = createInstagramPassiveAdapter();
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        time: 1760000000000,
+        messaging: [
+          {
+            timestamp: 1760000000000,
+            message_edit: {
+              sender: { id: "ig-user-1" },
+              message: {
+                mid: "ig-mid-1",
+                text: "oi instagram",
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const event = adapter.normalizeInbound({
+    tenantKey: "tenant-a",
+    payload,
+  });
+
+  assert.equal(event.tenantKey, "tenant-a");
+  assert.equal(event.channelAccountId, "ig-account-1");
+  assert.equal(event.externalUserId, "ig-user-1");
+  assert.equal(event.externalMessageId, "ig-mid-1");
+  assert.equal(event.text, "oi instagram");
+});
+
 test("instagram inbound facade builds tenant/channel/account/user conversation key", () => {
   const event = normalizeChannelInboundEvent({
     tenantKey: "tenant-a",

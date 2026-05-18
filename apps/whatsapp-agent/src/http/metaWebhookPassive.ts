@@ -36,6 +36,7 @@ type MetaMessagingEvent = {
     is_echo?: unknown;
     attachments?: unknown;
   };
+  message_edit?: unknown;
   read?: unknown;
   delivery?: unknown;
   reaction?: unknown;
@@ -226,11 +227,74 @@ function getMetaMessagingEvents(payload: MetaWebhookPayload) {
   return events;
 }
 
-function getEventExternalUserHash(event: MetaMessagingEvent) {
-  return hashExternalUserId(normalizeId(event.sender?.id));
+function asPlainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
-function getEventMessageId(event: MetaMessagingEvent) {
+function getNestedRecord(record: Record<string, unknown> | null, key: string) {
+  return record ? asPlainRecord(record[key]) : null;
+}
+
+function normalizeOptionalString(value: unknown) {
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+function pickString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = normalizeOptionalString(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function getInstagramMessageEditRecord(event: MetaMessagingEvent) {
+  return asPlainRecord(event.message_edit);
+}
+
+function getInstagramMessageEditParts(event: MetaMessagingEvent) {
+  const messageEdit = getInstagramMessageEditRecord(event);
+  const nestedMessage = getNestedRecord(messageEdit, "message");
+  const sender = getNestedRecord(messageEdit, "sender") ?? getNestedRecord(messageEdit, "from");
+  const recipient =
+    getNestedRecord(messageEdit, "recipient") ?? getNestedRecord(messageEdit, "to");
+
+  return {
+    senderId: pickString(sender?.id, messageEdit?.sender_id, messageEdit?.from_id),
+    recipientId: pickString(recipient?.id, messageEdit?.recipient_id, messageEdit?.to_id),
+    messageId: pickString(
+      nestedMessage?.mid,
+      nestedMessage?.id,
+      messageEdit?.mid,
+      messageEdit?.message_id,
+      messageEdit?.id
+    ),
+    text: pickString(nestedMessage?.text, messageEdit?.text),
+    timestamp: pickString(messageEdit?.timestamp, nestedMessage?.timestamp),
+    messageEdit,
+    nestedMessage,
+    sender,
+    recipient,
+  };
+}
+
+function getEventExternalUserId(channel: Channel, event: MetaMessagingEvent) {
+  if (channel === "instagram") {
+    return normalizeId(event.sender?.id) || getInstagramMessageEditParts(event).senderId;
+  }
+  return normalizeId(event.sender?.id);
+}
+
+function getChannelEventExternalUserHash(channel: Channel, event: MetaMessagingEvent) {
+  return hashExternalUserId(getEventExternalUserId(channel, event));
+}
+
+function getEventMessageId(channel: Channel, event: MetaMessagingEvent) {
+  if (channel === "instagram") {
+    const messageEditId = getInstagramMessageEditParts(event).messageId;
+    if (messageEditId) return messageEditId;
+  }
   const mid = event.message?.mid;
   return typeof mid === "string" || typeof mid === "number" ? String(mid).trim() || null : null;
 }
@@ -241,6 +305,29 @@ function isMetaEchoEvent(event: MetaMessagingEvent) {
 
 function hasMetaText(event: MetaMessagingEvent) {
   return typeof event.message?.text === "string" && event.message.text.trim().length > 0;
+}
+
+function hasChannelText(channel: Channel, event: MetaMessagingEvent) {
+  if (hasMetaText(event)) return true;
+  if (channel === "instagram") {
+    return getInstagramMessageEditParts(event).text.length > 0;
+  }
+  return false;
+}
+
+function getEventTimestamp(channel: Channel, event: MetaMessagingEvent) {
+  if (typeof event.timestamp === "number" && Number.isFinite(event.timestamp)) {
+    return new Date(event.timestamp).toISOString();
+  }
+  if (channel === "instagram") {
+    const timestamp = getInstagramMessageEditParts(event).timestamp;
+    if (timestamp) {
+      const parsed = Number(timestamp);
+      if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+      return timestamp;
+    }
+  }
+  return undefined;
 }
 
 function valueType(value: unknown): string {
@@ -273,6 +360,9 @@ function classifyInstagramUnsupportedEvent(event: MetaMessagingEvent) {
   if (Array.isArray(event.message?.attachments) && event.message.attachments.length > 0) {
     return "attachment_candidate";
   }
+  const messageEdit = getInstagramMessageEditParts(event);
+  if (messageEdit.text) return "supported_candidate";
+  if (messageEdit.messageEdit) return "unsupported_message_edit";
   if (event.message && typeof event.message === "object") return "unsupported_non_text";
   return "unsupported_unknown_shape";
 }
@@ -289,6 +379,7 @@ function logInstagramPayloadShapeAudit(params: {
 }) {
   const entry = params.payload.entry?.[params.entryIndex];
   const event = params.event;
+  const messageEdit = getInstagramMessageEditParts(event);
   logger.info({
     event: "instagram.payload_shape.audit",
     route: "/meta/webhook",
@@ -323,6 +414,22 @@ function logInstagramPayloadShapeAudit(params: {
       attachmentsCount: Array.isArray(event.message?.attachments)
         ? event.message.attachments.length
         : 0,
+    },
+    messageEdit: {
+      present: Boolean(messageEdit.messageEdit),
+      type: valueType(event.message_edit),
+      keys: safeKeys(event.message_edit),
+      senderKeys: safeKeys(messageEdit.sender),
+      senderIdType: valueType(messageEdit.sender?.id),
+      recipientKeys: safeKeys(messageEdit.recipient),
+      recipientIdType: valueType(messageEdit.recipient?.id),
+      messageKeys: safeKeys(messageEdit.nestedMessage),
+      midType: valueType(messageEdit.nestedMessage?.mid ?? messageEdit.messageEdit?.mid),
+      textType: valueType(messageEdit.nestedMessage?.text ?? messageEdit.messageEdit?.text),
+      hasText: messageEdit.text.length > 0,
+      timestampType: valueType(
+        messageEdit.messageEdit?.timestamp ?? messageEdit.nestedMessage?.timestamp
+      ),
     },
     callbackPresence: {
       read: Boolean(event.read),
@@ -551,8 +658,8 @@ export async function processPassiveMetaWebhookPayload(
   let unsupportedCount = 0;
 
   for (const item of events) {
-    const externalUserHash = getEventExternalUserHash(item.event);
-    const externalMessageId = getEventMessageId(item.event);
+    const externalUserHash = getChannelEventExternalUserHash(channel, item.event);
+    const externalMessageId = getEventMessageId(channel, item.event);
     const resolution = resolveTenantForChannelAccount({
       tenants,
       channel,
@@ -609,7 +716,7 @@ export async function processPassiveMetaWebhookPayload(
       });
       continue;
     }
-    if (!hasMetaText(item.event)) {
+    if (!hasChannelText(channel, item.event)) {
       unsupportedCount += 1;
       const unsupportedClass =
         channel === "instagram"
@@ -661,10 +768,10 @@ export async function processPassiveMetaWebhookPayload(
         channel,
         provider: "meta",
         channelAccountId: item.pageId,
-        externalUserId: normalizeId(item.event.sender?.id),
+        externalUserId: getEventExternalUserId(channel, item.event),
         ...(externalMessageId ? { externalMessageId } : {}),
-        ...(typeof item.event.timestamp === "number"
-          ? { timestamp: new Date(item.event.timestamp).toISOString() }
+        ...(getEventTimestamp(channel, item.event)
+          ? { timestamp: getEventTimestamp(channel, item.event) }
           : {}),
       },
       tenant

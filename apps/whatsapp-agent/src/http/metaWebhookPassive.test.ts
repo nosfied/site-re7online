@@ -771,6 +771,55 @@ test("passive processor normalizes Instagram and resolves tenant from channelAcc
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
+test("passive processor normalizes Instagram message_edit payload shape", async () => {
+  const messageEditPayload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        messaging: [
+          {
+            timestamp: 1760000000000,
+            message_edit: {
+              sender: { id: "ig-user-1" },
+              message: {
+                mid: "ig-mid-1",
+                text: "oi instagram",
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = await processPassiveMetaWebhookPayload(messageEditPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "ig-account-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
+});
+
 test("passive processor skips Messenger echo events without normalizing", async () => {
   const echoPayload = messengerPayloadWithText("echo", "mid-echo");
   echoPayload.entry[0]!.messaging[0]!.message = {
