@@ -40,7 +40,8 @@
     "pm2:start": "pm2 start ecosystem.config.cjs --env production",
     "pm2:reload": "pm2 reload ecosystem.config.cjs --env production",
     "channels:shadow:compare": "node --import tsx scripts/channels-shadow-compare.ts",
-    "channels:shadow:rollout-check": "node --import tsx scripts/channels-shadow-rollout-check.ts"
+    "channels:shadow:rollout-check": "node --import tsx scripts/channels-shadow-rollout-check.ts",
+    "channels:shadow:repair-missing": "node --import tsx scripts/channels-shadow-repair-missing.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.1",
