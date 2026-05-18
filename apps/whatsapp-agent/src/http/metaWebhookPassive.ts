@@ -34,7 +34,14 @@ type MetaMessagingEvent = {
     mid?: unknown;
     text?: unknown;
     is_echo?: unknown;
+    attachments?: unknown;
   };
+  read?: unknown;
+  delivery?: unknown;
+  reaction?: unknown;
+  standby?: unknown;
+  postback?: unknown;
+  referral?: unknown;
 };
 
 type MetaWebhookPayload = {
@@ -42,8 +49,11 @@ type MetaWebhookPayload = {
   entry?: Array<{
     id?: unknown;
     messaging?: MetaMessagingEvent[];
+    changes?: unknown[];
   }>;
 };
+
+type MetaWebhookEntry = NonNullable<MetaWebhookPayload["entry"]>[number];
 
 export type PassiveMetaWebhookProcessResult = {
   ok: boolean;
@@ -200,12 +210,17 @@ export function verifyPassiveMetaWebhookSignature(
 }
 
 function getMetaMessagingEvents(payload: MetaWebhookPayload) {
-  const events: Array<{ pageId: string; event: MetaMessagingEvent }> = [];
-  for (const entry of payload.entry ?? []) {
+  const events: Array<{
+    pageId: string;
+    event: MetaMessagingEvent;
+    entryIndex: number;
+    eventIndex: number;
+  }> = [];
+  for (const [entryIndex, entry] of (payload.entry ?? []).entries()) {
     const entryPageId = normalizeId(entry.id);
-    for (const messaging of entry.messaging ?? []) {
+    for (const [eventIndex, messaging] of (entry.messaging ?? []).entries()) {
       const pageId = normalizeId(messaging.recipient?.id) || entryPageId;
-      events.push({ pageId, event: messaging });
+      events.push({ pageId, event: messaging, entryIndex, eventIndex });
     }
   }
   return events;
@@ -226,6 +241,106 @@ function isMetaEchoEvent(event: MetaMessagingEvent) {
 
 function hasMetaText(event: MetaMessagingEvent) {
   return typeof event.message?.text === "string" && event.message.text.trim().length > 0;
+}
+
+function valueType(value: unknown): string {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value;
+}
+
+function safeKeys(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.keys(value as Record<string, unknown>).sort();
+}
+
+function getEntryShape(entry: MetaWebhookEntry) {
+  return {
+    keys: safeKeys(entry),
+    messagingCount: Array.isArray(entry.messaging) ? entry.messaging.length : 0,
+    changesCount: Array.isArray(entry.changes) ? entry.changes.length : 0,
+    messagingType: valueType(entry.messaging),
+    changesType: valueType(entry.changes),
+  };
+}
+
+function classifyInstagramUnsupportedEvent(event: MetaMessagingEvent) {
+  if (event.message?.is_echo === true) return "echo";
+  if (event.read) return "read";
+  if (event.delivery) return "delivery";
+  if (event.reaction) return "reaction";
+  if (event.standby) return "standby";
+  if (Array.isArray(event.message?.attachments) && event.message.attachments.length > 0) {
+    return "attachment_candidate";
+  }
+  if (event.message && typeof event.message === "object") return "unsupported_non_text";
+  return "unsupported_unknown_shape";
+}
+
+function logInstagramPayloadShapeAudit(params: {
+  payload: MetaWebhookPayload;
+  entryIndex: number;
+  eventIndex: number;
+  event: MetaMessagingEvent;
+  requestId: string;
+  tenantKey?: string;
+  channelAccountId: string;
+  unsupportedClass: string;
+}) {
+  const entry = params.payload.entry?.[params.entryIndex];
+  const event = params.event;
+  logger.info({
+    event: "instagram.payload_shape.audit",
+    route: "/meta/webhook",
+    requestId: params.requestId,
+    object: typeof params.payload.object === "string" ? params.payload.object : "unknown",
+    tenantKey: params.tenantKey ?? null,
+    channelAccountId: params.channelAccountId || null,
+    unsupportedClass: params.unsupportedClass,
+    topLevelKeys: safeKeys(params.payload),
+    entryIndex: params.entryIndex,
+    entryShape: entry ? getEntryShape(entry) : null,
+    eventIndex: params.eventIndex,
+    eventKeys: safeKeys(event),
+    sender: {
+      present: Boolean(event.sender),
+      keys: safeKeys(event.sender),
+      idType: valueType(event.sender?.id),
+    },
+    recipient: {
+      present: Boolean(event.recipient),
+      keys: safeKeys(event.recipient),
+      idType: valueType(event.recipient?.id),
+    },
+    message: {
+      present: Boolean(event.message),
+      keys: safeKeys(event.message),
+      midType: valueType(event.message?.mid),
+      textType: valueType(event.message?.text),
+      hasText: typeof event.message?.text === "string" && event.message.text.trim().length > 0,
+      isEcho: event.message?.is_echo === true,
+      attachmentsType: valueType(event.message?.attachments),
+      attachmentsCount: Array.isArray(event.message?.attachments)
+        ? event.message.attachments.length
+        : 0,
+    },
+    callbackPresence: {
+      read: Boolean(event.read),
+      delivery: Boolean(event.delivery),
+      reaction: Boolean(event.reaction),
+      standby: Boolean(event.standby),
+      postback: Boolean(event.postback),
+      referral: Boolean(event.referral),
+    },
+    callbackKeys: {
+      read: safeKeys(event.read),
+      delivery: safeKeys(event.delivery),
+      reaction: safeKeys(event.reaction),
+      standby: safeKeys(event.standby),
+      postback: safeKeys(event.postback),
+      referral: safeKeys(event.referral),
+    },
+  });
 }
 
 function logPassiveReceived(params: {
@@ -496,6 +611,22 @@ export async function processPassiveMetaWebhookPayload(
     }
     if (!hasMetaText(item.event)) {
       unsupportedCount += 1;
+      const unsupportedClass =
+        channel === "instagram"
+          ? classifyInstagramUnsupportedEvent(item.event)
+          : `${channel}_non_text_event`;
+      if (channel === "instagram") {
+        logInstagramPayloadShapeAudit({
+          payload: parsed,
+          entryIndex: item.entryIndex,
+          eventIndex: item.eventIndex,
+          event: item.event,
+          requestId: options.requestId,
+          tenantKey: resolution.tenantKey,
+          channelAccountId: item.pageId,
+          unsupportedClass,
+        });
+      }
       logger.info({
         event: "meta.webhook.unsupported",
         route: "/meta/webhook",
@@ -508,6 +639,7 @@ export async function processPassiveMetaWebhookPayload(
         externalUserHash,
         externalMessageId,
         reason: `${channel}_non_text_event`,
+        unsupportedClass,
       });
       continue;
     }
