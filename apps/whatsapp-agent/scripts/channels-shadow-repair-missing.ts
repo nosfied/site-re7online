@@ -117,6 +117,11 @@ function selectExisting(record: {
   };
 }
 
+function isAnonymizedOrMaskedWaId(value: unknown) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return normalized.startsWith("anon:") || normalized.includes("*");
+}
+
 async function loadCandidates(prisma: PrismaClient, clientIds: string[], clientMap: Map<string, string>) {
   const selectMultichannel = {
     channel: true,
@@ -169,7 +174,9 @@ async function loadCandidates(prisma: PrismaClient, clientIds: string[], clientM
     })),
   ];
 
-  return records.filter(shouldLoadWhatsAppShadowRepairCandidate);
+  return records.filter((record) =>
+    shouldLoadWhatsAppShadowRepairCandidate(record) && !isAnonymizedOrMaskedWaId(record.waId)
+  );
 }
 
 function printHuman(report: ReturnType<typeof buildWhatsAppShadowRepairReport>) {
