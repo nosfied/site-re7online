@@ -400,6 +400,7 @@ export type AdminTemplateRequestItem = {
 
 export type TenantOnboardingExchangePayload = {
   code: string;
+  replaceExistingMetaIdentity?: boolean;
   embeddedSignup?: {
     businessId?: string | null;
     businessPortfolioId?: string | null;
@@ -415,6 +416,7 @@ export type TenantOnboardingManualBindPayload = {
   wabaId?: string | null;
   businessId?: string | null;
   businessPortfolioId?: string | null;
+  replaceExistingMetaIdentity?: boolean;
   raw?: unknown;
 };
 

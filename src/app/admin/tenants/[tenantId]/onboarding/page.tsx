@@ -474,6 +474,7 @@ export default function TenantOnboardingPage() {
     try {
       const response = await onboardingExchangeCode(connection, tenantId, {
         code: code.trim(),
+        replaceExistingMetaIdentity: reconnectMode,
         embeddedSignup: {
           wabaId: wabaId.trim() || null,
           phoneNumberId: phoneNumberId.trim() || null,
@@ -530,6 +531,7 @@ export default function TenantOnboardingPage() {
         wabaId: wabaId.trim() || null,
         businessId: businessId.trim() || null,
         businessPortfolioId: businessPortfolioId.trim() || null,
+        replaceExistingMetaIdentity: reconnectMode,
         raw: rawPayload ?? null,
       });
       setResultSnapshot(response);

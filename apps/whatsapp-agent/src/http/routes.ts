@@ -9212,6 +9212,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         body.embeddedSignup && typeof body.embeddedSignup === "object"
           ? (body.embeddedSignup as Record<string, unknown>)
           : null;
+      const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
@@ -9237,6 +9238,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
 
       try {
+        const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            businessId: true,
+            businessPortfolioId: true,
+            wabaId: true,
+            phoneNumberId: true,
+          },
+        });
         const exchange = await exchangeEmbeddedSignupCode({ code });
         const manualBusinessId = normalizeOptionalString(embeddedSignupInput?.businessId);
         const manualBusinessPortfolioId = normalizeOptionalString(
@@ -9285,14 +9295,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : null,
         };
         const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload(rawPayload);
+        const phoneNumberChanged =
+          Boolean(previousMetaConfig?.phoneNumberId) &&
+          Boolean(finalPhoneNumberId) &&
+          previousMetaConfig?.phoneNumberId !== finalPhoneNumberId;
+        const shouldClearPreviousMetaIdentity =
+          !finalWabaId && (phoneNumberChanged || replaceExistingMetaIdentity);
+        const onboardingWarnings = buildOnboardingConnectionWarnings({
+          businessTokenStored: Boolean(exchange.businessToken),
+          finalWabaId,
+          phoneNumberChanged,
+          replaceExistingMetaIdentity,
+          rawPayload,
+        });
 
         await prisma.tenantMetaConfig.upsert({
           where: { clientId: client.id },
           update: {
             businessToken: exchange.businessToken ?? undefined,
-            businessId: finalBusinessId ?? undefined,
-            businessPortfolioId: finalBusinessPortfolioId ?? undefined,
-            wabaId: finalWabaId ?? undefined,
+            businessId: finalBusinessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            businessPortfolioId:
+              finalBusinessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            wabaId: finalWabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
             phoneNumberId: finalPhoneNumberId ?? undefined,
             rawPayload: rawPayload as Prisma.InputJsonValue,
           },
@@ -9348,8 +9372,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessId: finalBusinessId,
           businessPortfolioId: finalBusinessPortfolioId,
           warning:
-            Boolean(exchange.businessToken) && !finalWabaId
-              ? "Conexao parcial: token salvo, mas WABA ID nao foi resolvido automaticamente. Informe o WABA ID para habilitar templates self-service."
+            onboardingWarnings.length > 0
+              ? onboardingWarnings.join(" ")
               : null,
         });
       } catch (error) {
@@ -9427,10 +9451,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
 
       try {
+        const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            businessId: true,
+            businessPortfolioId: true,
+            wabaId: true,
+            phoneNumberId: true,
+          },
+        });
+        const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
         const displayPhoneNumber = normalizeOptionalString(body.displayPhoneNumber);
         const businessId = normalizeOptionalString(body.businessId);
         const businessPortfolioId = normalizeOptionalString(body.businessPortfolioId);
         const wabaId = normalizeOptionalString(body.wabaId);
+        const phoneNumberChanged =
+          Boolean(previousMetaConfig?.phoneNumberId) &&
+          previousMetaConfig?.phoneNumberId !== phoneNumberId;
+        const shouldClearPreviousMetaIdentity =
+          !wabaId && (phoneNumberChanged || replaceExistingMetaIdentity);
         const rawPayload = {
           source: "manual_bind_connected_number",
           phoneNumberId,
@@ -9447,9 +9486,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         await prisma.tenantMetaConfig.upsert({
           where: { clientId: client.id },
           update: {
-            businessId: businessId ?? undefined,
-            businessPortfolioId: businessPortfolioId ?? undefined,
-            wabaId: wabaId ?? undefined,
+            businessId: businessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            businessPortfolioId:
+              businessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            wabaId: wabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
             phoneNumberId,
             rawPayload: rawPayload as Prisma.InputJsonValue,
           },
@@ -9495,7 +9535,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessPortfolioId,
           phoneMappingAction: syncResult.action,
           warning:
-            "Numero vinculado manualmente. O envio usara o token global se este numero pertencer ao portfolio/token da operacao.",
+            [
+              "Numero vinculado manualmente. O envio usara o token global se este numero pertencer ao portfolio/token da operacao.",
+              shouldClearPreviousMetaIdentity
+                ? "Reconexao sem WABA ID: WABA/business antigos foram limpos para evitar falso conectado. Se o painel Meta ainda mostrar pendente, conclua a conexao no Meta e reprocesse o onboarding."
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" "),
         });
       } catch (error) {
         logger.error({
@@ -11845,6 +11892,56 @@ function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown): string | 
     if (displayPhone) return displayPhone;
   }
   return normalizeOptionalString(payload.display_phone_number);
+}
+
+function extractMetaPhoneNumberPayload(rawPayload: unknown): Record<string, unknown> | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const payload = rawPayload as Record<string, unknown>;
+  const enrich = payload.enrich;
+  if (enrich && typeof enrich === "object" && !Array.isArray(enrich)) {
+    const nested = extractMetaPhoneNumberPayload(enrich);
+    if (nested) return nested;
+  }
+  const phoneNumber = payload.phoneNumber;
+  return phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)
+    ? (phoneNumber as Record<string, unknown>)
+    : null;
+}
+
+function buildOnboardingConnectionWarnings(params: {
+  businessTokenStored: boolean;
+  finalWabaId: string | null | undefined;
+  phoneNumberChanged: boolean;
+  replaceExistingMetaIdentity: boolean;
+  rawPayload: unknown;
+}) {
+  const warnings: string[] = [];
+  if (params.businessTokenStored && !params.finalWabaId) {
+    warnings.push(
+      "Conexao parcial: token e phoneNumberId salvos, mas a WABA ID nao foi resolvida automaticamente. Se o painel Meta ainda mostrar pendente, conclua a conexao no Meta e reprocesse o onboarding."
+    );
+  }
+  if ((params.phoneNumberChanged || params.replaceExistingMetaIdentity) && !params.finalWabaId) {
+    warnings.push(
+      "Reconexao sem WABA ID: WABA/business antigos foram limpos da configuracao local para evitar falso conectado."
+    );
+  }
+
+  const phonePayload = extractMetaPhoneNumberPayload(params.rawPayload);
+  const codeVerificationStatus = normalizeOptionalString(phonePayload?.code_verification_status);
+  const nameStatus =
+    normalizeOptionalString(phonePayload?.name_status) ??
+    normalizeOptionalString(phonePayload?.new_name_status);
+  if (codeVerificationStatus && codeVerificationStatus !== "VERIFIED") {
+    warnings.push(`Meta reportou code_verification_status=${codeVerificationStatus}.`);
+  }
+  if (nameStatus && !["APPROVED", "AVAILABLE_WITHOUT_REVIEW"].includes(nameStatus)) {
+    warnings.push(`Meta reportou name_status=${nameStatus}.`);
+  }
+
+  return warnings;
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {
