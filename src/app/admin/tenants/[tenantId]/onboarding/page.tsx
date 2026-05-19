@@ -615,6 +615,12 @@ export default function TenantOnboardingPage() {
     () => JSON.stringify(sanitizeDebugValue(entries), null, 2),
     [entries]
   );
+  const effectivePhoneNumberId =
+    resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || "";
+  const hasEffectivePhoneLink =
+    Boolean(effectivePhoneNumberId) &&
+    phoneNumberId.trim() === effectivePhoneNumberId &&
+    !reconnectMode;
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -687,13 +693,13 @@ export default function TenantOnboardingPage() {
               </p>
             </div>
           </div>
-          <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-500/10 p-3">
+          <div className="theme-soft-warning-panel mt-4 rounded-lg border p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-amber-100">
+                <p className="text-sm font-semibold text-current">
                   Alterar numero conectado
                 </p>
-                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-amber-100/75">
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-current opacity-80">
                   Use esta acao quando o tenant foi conectado com o numero errado ou quando precisa refazer
                   o Embedded Signup. Ela limpa os campos da tela para evitar reaproveitar o phoneNumberId antigo.
                 </p>
@@ -704,7 +710,7 @@ export default function TenantOnboardingPage() {
                     type="button"
                     onClick={handleCancelReconnect}
                     disabled={processing || starting}
-                    className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-current/25 px-3 py-2 text-sm font-semibold text-current hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancelar troca
                   </button>
@@ -713,14 +719,14 @@ export default function TenantOnboardingPage() {
                   type="button"
                   onClick={handleStartReconnect}
                   disabled={processing || starting}
-                  className="rounded-md border border-amber-200/40 bg-amber-300/15 px-3 py-2 text-sm font-semibold text-amber-50 hover:bg-amber-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-current/25 bg-black/10 px-3 py-2 text-sm font-semibold text-current hover:bg-black/15 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Alterar numero / refazer conexao
                 </button>
               </div>
             </div>
             {reconnectMode ? (
-              <p className="mt-3 rounded-md border border-amber-200/25 bg-black/15 px-3 py-2 text-xs font-medium text-amber-50">
+              <p className="mt-3 rounded-md border border-current/20 bg-black/10 px-3 py-2 text-xs font-medium text-current">
                 Modo de troca ativo: capture uma nova conexao Meta ou informe o novo phoneNumberId e use
                 "Vincular numero conectado". Nada sera salvo ate processar.
               </p>
@@ -772,7 +778,11 @@ export default function TenantOnboardingPage() {
                 disabled={processing || !phoneNumberId.trim()}
                 className="rounded-md border border-emerald-300/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {processing ? "Vinculando..." : "Vincular numero conectado"}
+                {processing
+                  ? "Vinculando..."
+                  : hasEffectivePhoneLink
+                    ? "Atualizar vinculo do numero"
+                    : "Vincular numero conectado"}
               </button>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -851,14 +861,14 @@ export default function TenantOnboardingPage() {
               </label>
             </div>
 
-            <div className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3">
+            <div className="theme-surface-strong rounded-lg border border-sky-300/25 p-3">
               <div className="flex flex-wrap items-end gap-3">
                 <label className="grid min-w-[180px] max-w-[220px] gap-1 text-sm">
-                  <span className="text-sky-100">PIN de registro Cloud API</span>
+                  <span className="theme-text font-semibold">PIN de registro Cloud API</span>
                   <input
                     inputMode="numeric"
                     maxLength={6}
-                    className="rounded-md border border-sky-200/30 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    className="theme-select rounded-md px-3 py-2 outline-none"
                     value={registrationPin}
                     onChange={(event) =>
                       setRegistrationPin(event.target.value.replace(/\D/g, "").slice(0, 6))
@@ -874,12 +884,12 @@ export default function TenantOnboardingPage() {
                     !phoneNumberId.trim() ||
                     !/^\d{6}$/.test(registrationPin.trim())
                   }
-                  className="rounded-md border border-sky-200/40 bg-sky-400/15 px-4 py-2 text-sm font-semibold text-sky-50 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border border-sky-300/45 bg-re7-sky px-4 py-2 text-sm font-semibold text-[#06132a] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {registeringPhone ? "Registrando..." : "Registrar numero na Cloud API"}
                 </button>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-sky-50/75">
+              <p className="theme-muted mt-2 text-xs leading-relaxed">
                 Use quando a Meta exibir que o numero precisa ser registrado. O PIN nao e salvo; ele e enviado
                 apenas para a API de registro do phoneNumberId configurado neste tenant.
               </p>
