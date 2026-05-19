@@ -266,14 +266,14 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="theme-bg theme-inbox h-screen w-screen overflow-hidden [@media(max-height:760px)]:h-[100dvh]">
-        <div className="grid h-full w-full grid-cols-[72px_minmax(0,1fr)] overflow-hidden">
-          <aside className="flex h-full min-h-0 flex-col items-center border-r border-white/10 bg-[#081327] py-3 [@media(max-height:760px)]:py-2">
+      <main className="theme-bg theme-inbox h-[100dvh] w-screen overflow-hidden">
+        <div className="grid h-full w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1">
+          <aside className="order-2 flex min-h-0 flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:order-none md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
             <button
               type="button"
               onClick={() => router.push("/app/inbox")}
               title="Abrir inbox"
-              className="flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
+              className="hidden h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa] [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl">
                 <Image
@@ -285,7 +285,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 />
               </span>
             </button>
-            <nav className="mt-4 flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto px-2 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:gap-1">
+            <nav className="flex min-h-0 w-full flex-1 items-center gap-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mt-4 md:flex-col md:gap-2 md:overflow-x-hidden md:overflow-y-auto md:px-2 md:[@media(max-height:760px)]:mt-2 md:[@media(max-height:760px)]:gap-1 [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
@@ -293,7 +293,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                     key={item.href}
                     href={item.href}
                     title={item.labels[profile]}
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl ${
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl ${
                       active
                         ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
@@ -304,18 +304,18 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 );
               })}
             </nav>
-            <ThemeSelector className="mt-2 flex-col gap-1 [&_select]:h-8 [&_select]:w-14 [&_select]:px-1 [&_select]:text-[10px]" />
+            <ThemeSelector className="hidden md:mt-2 md:flex md:flex-col md:gap-1 md:[&_select]:h-8 md:[&_select]:w-14 md:[&_select]:px-1 md:[&_select]:text-[10px]" />
             <button
               type="button"
               onClick={handleLogout}
               title="Sair"
-              className="mt-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-re7-orange/35 bg-re7-orange/15 text-xs font-semibold text-orange-100 shadow-sm transition hover:bg-re7-orange/25 [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-re7-orange/35 bg-re7-orange/15 text-xs font-semibold text-orange-100 shadow-sm transition hover:bg-re7-orange/25 md:mt-2 md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl"
             >
               <span className="text-xl leading-none [@media(max-height:760px)]:text-lg">🚪</span>
             </button>
           </aside>
 
-          <section className="min-h-0 min-w-0 overflow-hidden">{children}</section>
+          <section className="order-1 min-h-0 min-w-0 overflow-hidden md:order-none">{children}</section>
         </div>
         {brandModal}
       </main>

@@ -8,6 +8,12 @@ export const metadata: Metadata = {
   },
   description: "Converta — atendimento inteligente via WhatsApp com automacao, campanhas e gestao de leads.",
   applicationName: "Converta",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Converta",
+  },
   icons: {
     icon: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
     shortcut: ["/converta-favicon.png?v=converta-dark"],

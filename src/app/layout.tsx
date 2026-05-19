@@ -1,14 +1,28 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
   title: "Re7Online | Comunicação, Marketing e Tecnologia",
   description:
     "Menos ruído. Mais resultados. Comunicação, marketing e tecnologia para negócios que querem crescer com estratégia.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Converta",
+  },
   icons: {
     icon: [{ url: "/re7-favicon.ico?v=re7", sizes: "64x62", type: "image/x-icon" }],
     shortcut: ["/re7-favicon.ico?v=re7"],
+    apple: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#06132a",
 };
 
 const themeBootstrapScript = `
