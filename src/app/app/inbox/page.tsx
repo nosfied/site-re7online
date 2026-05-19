@@ -244,6 +244,13 @@ function getConversationPreviewText(item: InboxConversationItem) {
   }
 }
 
+function getChannelEmptyStateLabel(channel: ConversationChannelFilter) {
+  if (channel === "messenger") return "Facebook/Messenger";
+  if (channel === "instagram") return "Instagram";
+  if (channel === "whatsapp") return "WhatsApp";
+  return "Todos os canais";
+}
+
 function isUnsupportedMessage(item: InboxMessageItem) {
   return item.type === "UNKNOWN" && !item.bodyText && !item.media;
 }
@@ -567,6 +574,16 @@ const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }
   { value: "messenger", label: "Facebook/Messenger" },
 ];
 
+const CONVERSATION_QUICK_FILTERS = [
+  { value: "ALL", label: "Todos" },
+  { value: "UNREAD", label: "Não lidas" },
+  { value: "HUMAN", label: "Humano" },
+  { value: "BOT", label: "Bot" },
+  { value: "ASSIGNED", label: "Atribuídas" },
+] as const;
+
+type ConversationQuickFilter = (typeof CONVERSATION_QUICK_FILTERS)[number]["value"];
+
 type DepartmentOption = {
   id: string;
   name: string;
@@ -761,6 +778,14 @@ function isConversationUnreadForUser(
   if (!user) return false;
   if (!canUserReceiveTargetedNotification(item, user)) return false;
   return isConversationUnread(item, state);
+}
+
+function getConversationUnreadBadgeCount(
+  item: InboxConversationItem,
+  state: InboxReadState,
+  user: AppSession["user"] | null | undefined
+) {
+  return isConversationUnreadForUser(item, state, user) ? 1 : 0;
 }
 
 function getLatestReadAtForConversation(
@@ -1310,6 +1335,8 @@ export default function AppInboxPage() {
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
   const [conversationChannelFilter, setConversationChannelFilter] =
     useState<ConversationChannelFilter>("ALL");
+  const [conversationQuickFilter, setConversationQuickFilter] =
+    useState<ConversationQuickFilter>("ALL");
   const [conversationSearch, setConversationSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<DepartmentFilter>("ALL");
   const [conversationFilterCounts, setConversationFilterCounts] = useState<Record<ConversationFilter, number>>({
@@ -2682,6 +2709,22 @@ export default function AppInboxPage() {
         return false;
       }
       const status = getConversationOperationalStatus(item);
+      switch (conversationQuickFilter) {
+        case "UNREAD":
+          if (!isConversationUnreadForUser(item, readState, session?.user)) return false;
+          break;
+        case "HUMAN":
+          if (item.mode !== "HUMAN") return false;
+          break;
+        case "BOT":
+          if (item.mode !== "BOT") return false;
+          break;
+        case "ASSIGNED":
+          if (!item.assignedUserId) return false;
+          break;
+        default:
+          break;
+      }
       switch (conversationFilter) {
         case "WAITING":
         case "IN_PROGRESS":
@@ -2699,11 +2742,14 @@ export default function AppInboxPage() {
   }, [
     conversationChannelFilter,
     conversationFilter,
+    conversationQuickFilter,
     conversationSearch,
     conversations,
     departmentFilter,
     isAdminUser,
+    readState,
     session?.user.id,
+    session?.user,
   ]);
   useEffect(() => {
     if (!isBusinessTenant) return;
@@ -3601,7 +3647,7 @@ export default function AppInboxPage() {
     <AppShell
       session={session}
       title="Inbox"
-      subtitle="Atendimentos do seu WhatsApp em um so lugar."
+      subtitle="Atendimentos WhatsApp, Facebook/Messenger e Instagram em uma fila operacional."
       fullScreen
     >
       <FeedbackToast
@@ -3850,6 +3896,26 @@ export default function AppInboxPage() {
                     );
                   })}
                 </div>
+                <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[1440px]:gap-1">
+                  {CONVERSATION_QUICK_FILTERS.map((filter) => {
+                    const selected = conversationQuickFilter === filter.value;
+                    return (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => setConversationQuickFilter(filter.value)}
+                        aria-pressed={selected}
+                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[9px] ${
+                          selected
+                            ? "border-emerald-300/50 bg-emerald-400/18 text-white"
+                            : "border-white/15 bg-white/5 text-white/62 hover:border-white/25 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 {showMoreConversationFilters ? (
                   <div className="absolute left-0 top-7 z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)] max-[1440px]:w-48">
                     {MORE_CONVERSATION_FILTERS.map((filter) => (
@@ -3876,16 +3942,39 @@ export default function AppInboxPage() {
           </div>
           <div ref={conversationListRef} className="min-h-0 flex-1 overflow-y-auto overflow-anchor-none">
             {loadingConversations ? (
-              <p className="px-4 py-4 text-sm text-white/70">Carregando conversas...</p>
+              <div className="space-y-2 px-3 py-4">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="animate-pulse rounded-xl border border-white/8 bg-white/5 p-3">
+                    <div className="h-3 w-2/3 rounded bg-white/12" />
+                    <div className="mt-3 h-2.5 w-1/2 rounded bg-white/8" />
+                    <div className="mt-3 h-2.5 w-full rounded bg-white/8" />
+                  </div>
+                ))}
+              </div>
             ) : null}
             {!loadingConversations && filteredConversations.length === 0 ? (
-              <p className="px-4 py-4 text-sm text-white/70">Nenhuma conversa encontrada.</p>
+              <div className="px-4 py-8 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-white/8">
+                  {conversationChannelFilter === "ALL" ? (
+                    <span className="text-lg text-white/70">☰</span>
+                  ) : (
+                    <ConversationChannelLogo item={{ channel: conversationChannelFilter }} className="h-7 w-7" />
+                  )}
+                </div>
+                <p className="mt-3 text-sm font-semibold text-white">Nenhuma conversa encontrada</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/55">
+                  {conversationSearch.trim()
+                    ? "Ajuste a busca ou limpe os filtros para ampliar a fila."
+                    : `Sem conversas em ${getChannelEmptyStateLabel(conversationChannelFilter)} com os filtros atuais.`}
+                </p>
+              </div>
             ) : null}
             {filteredConversations.map((item, index) => {
               const conversationIdentity = getConversationIdentity(item);
               const conversationIdentityCandidates = getConversationIdentityCandidates(item);
               const isActive = conversationIdentity === selectedConversationKey;
               const unread = !isActive && isConversationUnreadForUser(item, readState, session?.user);
+              const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
               const status = getConversationOperationalStatus(item);
               const label = getConversationLabel(item);
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
@@ -3934,7 +4023,9 @@ export default function AppInboxPage() {
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
-                          index % 2 === 0
+                          unread
+                            ? "bg-[#163153]"
+                            : index % 2 === 0
                             ? "theme-conversation-row-even"
                             : "theme-conversation-row-odd"
                         }`
@@ -3973,8 +4064,18 @@ export default function AppInboxPage() {
                     <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
+                    <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5">
+                      {channelLabel}
+                    </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
-                    {unread ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#20b15a]" /> : null}
+                    {unread ? (
+                      <span
+                        className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#20b15a] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_rgba(32,177,90,0.2)]"
+                        aria-label={`${unreadCount} mensagem nao lida`}
+                      >
+                        {unreadCount}
+                      </span>
+                    ) : null}
                   </div>
                   <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isActive ? "text-white/88" : "text-white/68"}`}>
                     {getConversationPreviewText(item)}
@@ -4226,10 +4327,28 @@ export default function AppInboxPage() {
 
           <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto px-4 py-4 max-[1366px]:px-3 max-[1366px]:py-3 [@media(max-height:760px)]:py-2">
             {!selectedConversationWaId ? (
-              <p className="text-sm text-slate-700/80">Selecione uma conversa para ver a timeline.</p>
+              <div className="flex h-full min-h-[260px] items-center justify-center">
+                <div className="max-w-sm rounded-2xl border border-black/8 bg-white/50 px-6 py-5 text-center shadow-sm">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                    ☰
+                  </div>
+                  <p className="mt-3 text-sm font-semibold text-slate-900">
+                    Selecione uma conversa
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                    A timeline omnichannel, histórico e ações do atendimento aparecem aqui.
+                  </p>
+                </div>
+              </div>
             ) : null}
             {selectedConversationWaId && isHydratingSelectedTimeline ? (
-              <p className="text-sm text-slate-700/80">Carregando mensagens...</p>
+              <div className="space-y-3">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className={`flex ${item % 2 === 0 ? "justify-start" : "justify-end"}`}>
+                    <div className="h-16 w-64 animate-pulse rounded-2xl bg-white/45 shadow-sm" />
+                  </div>
+                ))}
+              </div>
             ) : null}
             {selectedConversationWaId && isRefreshingSelectedTimeline ? (
               <p className="text-sm text-slate-700/80">Atualizando mensagens...</p>
@@ -4274,6 +4393,13 @@ export default function AppInboxPage() {
                           item.direction === "INBOUND" ? "wa-bubble-inbound" : "wa-bubble-outbound"
                         } ${item.media?.kind === "audio" ? "min-w-[19rem]" : ""}`}
                       >
+                        <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase text-slate-500/80">
+                          <ConversationChannelLogo item={selectedConversation} className="h-3.5 w-3.5" />
+                          <span>
+                            {item.direction === "INBOUND" ? "Recebida" : "Enviada"} via{" "}
+                            {getConversationChannelLabel(selectedConversation)}
+                          </span>
+                        </div>
                         {item.bodyText ? (
                           <p className="wa-bubble-text text-sm leading-relaxed">
                             {item.bodyText}
