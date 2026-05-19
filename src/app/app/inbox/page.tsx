@@ -575,14 +575,15 @@ const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }
 ];
 
 const CONVERSATION_QUICK_FILTERS = [
-  { value: "ALL", label: "Todos" },
   { value: "UNREAD", label: "Não lidas" },
   { value: "HUMAN", label: "Humano" },
   { value: "BOT", label: "Bot" },
   { value: "ASSIGNED", label: "Atribuídas" },
 ] as const;
 
-type ConversationQuickFilter = (typeof CONVERSATION_QUICK_FILTERS)[number]["value"];
+type ConversationQuickFilter =
+  | "ALL"
+  | (typeof CONVERSATION_QUICK_FILTERS)[number]["value"];
 
 type DepartmentOption = {
   id: string;
@@ -775,6 +776,8 @@ function isConversationUnreadForUser(
   state: InboxReadState,
   user: AppSession["user"] | null | undefined
 ) {
+  const identityCandidates = getConversationIdentityCandidates(item);
+  if (identityCandidates.some((key) => state.manuallyUnreadByConversationKey[key])) return true;
   if (!user) return false;
   if (!canUserReceiveTargetedNotification(item, user)) return false;
   return isConversationUnread(item, state);
@@ -785,7 +788,9 @@ function getConversationUnreadBadgeCount(
   state: InboxReadState,
   user: AppSession["user"] | null | undefined
 ) {
-  return isConversationUnreadForUser(item, state, user) ? 1 : 0;
+  if (!isConversationUnreadForUser(item, state, user)) return 0;
+  const count = Number(item.unreadCount ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 1;
 }
 
 function getLatestReadAtForConversation(
@@ -2769,10 +2774,13 @@ export default function AppInboxPage() {
     () => MORE_CONVERSATION_FILTERS.find((item) => item.value === conversationFilter) ?? null,
     [conversationFilter]
   );
+  const hasMoreConversationFilter =
+    Boolean(selectedMoreConversationFilter) ||
+    conversationQuickFilter !== "ALL";
   const applyConversationFilter = useCallback((filter: ConversationFilter) => {
     setConversationFilter(filter);
     if (filter === "ALL") {
-      setConversationChannelFilter("ALL");
+      setConversationQuickFilter("ALL");
     }
     setShowMoreConversationFilters(false);
   }, []);
@@ -3827,9 +3835,8 @@ export default function AppInboxPage() {
                           key={filter.value}
                           type="button"
                           onClick={() => applyConversationFilter(filter.value)}
-                          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
-                            conversationFilter === filter.value &&
-                            (filter.value !== "ALL" || conversationChannelFilter === "ALL")
+                          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                            conversationFilter === filter.value
                               ? "bg-re7-sky/30 text-white"
                               : "bg-white/5 text-white/65 hover:bg-white/10"
                           }`}
@@ -3837,8 +3844,7 @@ export default function AppInboxPage() {
                           <span>{filter.label}</span>
                           <span
                             className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
-                              conversationFilter === filter.value &&
-                              (filter.value !== "ALL" || conversationChannelFilter === "ALL")
+                              conversationFilter === filter.value
                                 ? "bg-white/20 text-white"
                                 : "bg-white/10 text-white/55"
                             }`}
@@ -3852,17 +3858,19 @@ export default function AppInboxPage() {
                   <button
                     type="button"
                     onClick={() => setShowMoreConversationFilters((current) => !current)}
-                    className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
-                      selectedMoreConversationFilter
+                    className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                      hasMoreConversationFilter
                         ? "border-re7-sky/60 bg-re7-sky/30 text-white"
                         : "border-white/20 bg-white/10 text-white/80 hover:bg-white/15 hover:text-white"
                     }`}
                   >
-                    <span>{selectedMoreConversationFilter?.label ?? "Mais"}</span>
+                    <span>Mais</span>
                     {selectedMoreConversationFilter ? (
                       <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] leading-none text-white">
                         {conversationFilterCounts[selectedMoreConversationFilter.value]}
                       </span>
+                    ) : hasMoreConversationFilter ? (
+                      <span className="ml-1 h-1.5 w-1.5 rounded-full bg-re7-sky" />
                     ) : (
                       <span className="ml-1 text-[10px] text-white/45">▾</span>
                     )}
@@ -3884,7 +3892,7 @@ export default function AppInboxPage() {
                         title={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
                         aria-label={selected ? `Remover filtro ${filter.label}` : `Filtrar ${filter.label}`}
                         aria-pressed={selected}
-                        className={`flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none transition max-[1440px]:h-6 max-[1440px]:gap-1 max-[1440px]:px-1.5 max-[1440px]:text-[9px] ${
+                        className={`flex h-7 min-w-0 items-center justify-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-bold leading-none transition max-[1440px]:h-6 max-[1440px]:gap-1 max-[1440px]:px-1.5 max-[1440px]:text-[9px] ${
                           selected
                             ? "border-re7-sky/70 bg-re7-sky/35 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.28)]"
                             : "border-white/20 bg-white/10 text-white/78 hover:border-white/35 hover:bg-white/15 hover:text-white"
@@ -3896,34 +3904,14 @@ export default function AppInboxPage() {
                     );
                   })}
                 </div>
-                <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[1440px]:gap-1">
-                  {CONVERSATION_QUICK_FILTERS.map((filter) => {
-                    const selected = conversationQuickFilter === filter.value;
-                    return (
-                      <button
-                        key={filter.value}
-                        type="button"
-                        onClick={() => setConversationQuickFilter(filter.value)}
-                        aria-pressed={selected}
-                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[9px] ${
-                          selected
-                            ? "border-emerald-300/50 bg-emerald-400/18 text-white"
-                            : "border-white/15 bg-white/5 text-white/62 hover:border-white/25 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {filter.label}
-                      </button>
-                    );
-                  })}
-                </div>
                 {showMoreConversationFilters ? (
-                  <div className="absolute left-0 top-7 z-30 mt-1 w-52 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)] max-[1440px]:w-48">
+                  <div className="absolute left-0 top-7 z-30 mt-1 w-64 rounded-xl border border-white/10 bg-[#101f3a] p-1.5 shadow-[0_16px_32px_rgba(0,0,0,0.28)] max-[1440px]:w-56">
                     {MORE_CONVERSATION_FILTERS.map((filter) => (
                       <button
                         key={filter.value}
                         type="button"
                         onClick={() => applyConversationFilter(filter.value)}
-                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition max-[1440px]:px-2 max-[1440px]:py-1.5 max-[1440px]:text-[11px] ${
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-bold transition max-[1440px]:px-2 max-[1440px]:py-1.5 max-[1440px]:text-[11px] ${
                           conversationFilter === filter.value
                             ? "bg-re7-sky/25 text-white"
                             : "text-white/70 hover:bg-white/10 hover:text-white"
@@ -3935,6 +3923,33 @@ export default function AppInboxPage() {
                         </span>
                       </button>
                     ))}
+                    <div className="my-1 border-t border-white/10" />
+                    <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/45">Atalhos</p>
+                    {CONVERSATION_QUICK_FILTERS.map((filter) => {
+                      const selected = conversationQuickFilter === filter.value;
+                      return (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() =>
+                            {
+                              setConversationQuickFilter((current) =>
+                                current === filter.value ? "ALL" : filter.value
+                              );
+                              setShowMoreConversationFilters(false);
+                            }
+                          }
+                          aria-pressed={selected}
+                          className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-bold transition max-[1440px]:px-2 max-[1440px]:py-1.5 max-[1440px]:text-[11px] ${
+                            selected
+                              ? "bg-emerald-400/18 text-white"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          <span className="whitespace-nowrap">{filter.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -3979,7 +3994,6 @@ export default function AppInboxPage() {
               const label = getConversationLabel(item);
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
-              const channelLabel = getConversationChannelLabel(item);
               return (
                 <button
                   key={conversationIdentity}
@@ -4023,9 +4037,7 @@ export default function AppInboxPage() {
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
-                          unread
-                            ? "bg-[#163153]"
-                            : index % 2 === 0
+                          index % 2 === 0
                             ? "theme-conversation-row-even"
                             : "theme-conversation-row-odd"
                         }`
@@ -4034,16 +4046,16 @@ export default function AppInboxPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
-                          {label}
-                        </p>
                         <span
                           className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-5 max-[1440px]:w-5 ${getConversationChannelBadgeClass(item)}`}
-                          title={channelLabel}
-                          aria-label={channelLabel}
+                          title={getConversationChannelLabel(item)}
+                          aria-label={getConversationChannelLabel(item)}
                         >
                           <ConversationChannelLogo item={item} className="h-full w-full" />
                         </span>
+                        <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
+                          {label}
+                        </p>
                         {isBusinessTenant && leadTemperatureLabel ? (
                           <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${getLeadTemperatureClass(item)}`}>
                             {leadTemperatureLabel}
@@ -4063,9 +4075,6 @@ export default function AppInboxPage() {
                   <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isActive ? "text-white/78" : "text-white/58"}`}>
                     <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
-                    </span>
-                    <span className="shrink-0 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5">
-                      {channelLabel}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
                     {unread ? (
@@ -4105,7 +4114,7 @@ export default function AppInboxPage() {
                 <h2 className="truncate text-base font-semibold text-slate-900 max-[1440px]:text-sm">
                   {selectedConversation
                     ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
-                    : "Conversa"}
+                    : "Atendimento"}
                 </h2>
                 {selectedConversation ? (
                   <span
@@ -4203,8 +4212,8 @@ export default function AppInboxPage() {
                 disabled={!selectedConversation}
                 onClick={() => {
                   if (!selectedConversation) return;
-                  markConversationAsUnread(
-                    getConversationIdentity(selectedConversation),
+                  markConversationIdentitiesAsUnread(
+                    getConversationIdentityCandidates(selectedConversation),
                     selectedConversation.waId
                   );
                   clearSelectedConversation();

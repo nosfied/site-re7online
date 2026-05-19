@@ -515,7 +515,7 @@ html {
   }
 
   .theme-inbox .theme-conversation-row-odd {
-    background-color: #10213d;
+    background-color: #0d1b33;
   }
 
   .theme-inbox .theme-conversation-row-even:hover,
@@ -568,11 +568,11 @@ html {
   }
 
   :root[data-theme="light"] .theme-inbox .theme-conversation-row-even {
-    background-color: #ffffff;
+    background-color: #fbfdff;
   }
 
   :root[data-theme="light"] .theme-inbox .theme-conversation-row-odd {
-    background-color: #f3f7fb;
+    background-color: #edf4fb;
   }
 
   :root[data-theme="light"] .theme-inbox .theme-conversation-row-even:hover,

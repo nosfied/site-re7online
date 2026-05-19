@@ -14401,7 +14401,8 @@ function buildConversationFilterCounts(
     departmentId: string | null;
     assignedUserId: string | null;
   }>,
-  filters: ConversationListFilters
+  filters: ConversationListFilters,
+  currentUserId?: string | null
 ) {
   const baseFilters = {
     ...filters,
@@ -14423,7 +14424,7 @@ function buildConversationFilterCounts(
     if (item.status && Object.prototype.hasOwnProperty.call(counts, item.status)) {
       counts[item.status] += 1;
     }
-    if (filters.assignedUserId && item.assignedUserId === filters.assignedUserId) {
+    if (currentUserId && item.assignedUserId === currentUserId) {
       counts.MINE += 1;
     }
     if (!item.assignedUserId) {
@@ -14673,6 +14674,30 @@ async function buildConversationListPayload(
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
 
+  const unreadInboundCountByWaId = new Map<string, number>();
+  for (const conversation of winners) {
+    const key = conversation.waIdCanonical;
+    const identityKeys = Array.from(new Set([key, conversation.waId].filter(Boolean)));
+    const latestReadAt = identityKeys
+      .map((identity) => Date.parse(readState.lastReadAtByConversationKey[identity] ?? ""))
+      .filter((timestamp) => Number.isFinite(timestamp))
+      .reduce<number | null>(
+        (latest, timestamp) => (latest === null ? timestamp : Math.max(latest, timestamp)),
+        null
+      );
+    const manualUnread = identityKeys.some((identity) => readState.manuallyUnreadByConversationKey[identity]);
+    let unreadCount = 0;
+    for (const message of inbound) {
+      if (getWaIdGroupKey(message.waId, message.waIdCanonical) !== key) continue;
+      if (!isVisibleInCurrentOperation(key, message.createdAt)) continue;
+      const createdAt = message.createdAt.getTime();
+      if (latestReadAt === null || createdAt > latestReadAt) {
+        unreadCount += 1;
+      }
+    }
+    unreadInboundCountByWaId.set(key, manualUnread ? Math.max(unreadCount, 1) : unreadCount);
+  }
+
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
@@ -14777,6 +14802,7 @@ async function buildConversationListPayload(
       leadCompany: lead?.company ?? null,
       ...operationalFields,
       departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
+      unreadCount: unreadInboundCountByWaId.get(key) ?? 0,
       updatedAt: conversation.updatedAt,
     };
   });
@@ -14789,7 +14815,8 @@ async function buildConversationListPayload(
   );
   const filterCounts = buildConversationFilterCounts(
     allItems.filter(conversationListItemIsInHumanFlow),
-    params.filters
+    params.filters,
+    params.userId ?? null
   );
   const items = filteredItems.slice(0, params.limit);
   const nextCursorSource =

@@ -17,9 +17,9 @@ import {
 } from "@/lib/appRealtime";
 import { loadAppSession, type AppSession } from "@/lib/appClientApi";
 
-const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const NOTIFICATION_MAX_QUEUE = 10;
+const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
@@ -48,6 +48,7 @@ export default function AppRealtimeBridge() {
   const [mounted, setMounted] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState("unsupported");
+  const [dismissedActivationPrompt, setDismissedActivationPrompt] = useState(false);
 
   const syncAudioState = useCallback((unlocked: boolean) => {
     setAudioUnlocked(unlocked);
@@ -115,6 +116,7 @@ export default function AppRealtimeBridge() {
 
   const activateAlerts = useCallback(() => {
     if (typeof window === "undefined") return;
+    setDismissedActivationPrompt(true);
     primeNotificationAudio();
     if ("Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission()
@@ -128,6 +130,10 @@ export default function AppRealtimeBridge() {
       setNotificationPermission(getNotificationPermissionState());
     }
   }, [primeNotificationAudio]);
+
+  const dismissAlertActivation = useCallback(() => {
+    setDismissedActivationPrompt(true);
+  }, []);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -331,6 +337,7 @@ export default function AppRealtimeBridge() {
   const currentPathname = pathname ?? "";
   const shouldShowAlertActivation =
     mounted &&
+    !dismissedActivationPrompt &&
     currentPathname.startsWith("/app") &&
     currentPathname !== "/app/login" &&
     isSoundEnabled() &&
@@ -339,18 +346,32 @@ export default function AppRealtimeBridge() {
   if (!shouldShowAlertActivation) return null;
 
   return (
-    <button
-      type="button"
-      onClick={activateAlerts}
-      className="fixed left-1/2 top-4 z-[70] flex w-[min(92vw,320px)] -translate-x-1/2 items-center gap-3 rounded-xl border border-amber-700 bg-amber-500 px-4 py-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur transition hover:bg-amber-400"
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/65 text-base">
-        🔔
-      </span>
-      <span className="min-w-0">
-        <span className="block font-semibold">Ativar alertas</span>
-        <span className="block text-slate-900/75">Necessario apos atualizar a pagina.</span>
-      </span>
-    </button>
+    <div className="fixed left-1/2 top-4 z-[70] w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/65 text-base">
+          🔔
+        </span>
+        <span className="min-w-0">
+          <span className="block font-semibold">Ativar alertas?</span>
+          <span className="block text-slate-900/75">Necessario apos atualizar a pagina.</span>
+        </span>
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={dismissAlertActivation}
+          className="rounded-md px-2.5 py-1 text-[11px] font-semibold text-slate-900/75 transition hover:bg-white/25 hover:text-slate-950"
+        >
+          Não
+        </button>
+        <button
+          type="button"
+          onClick={activateAlerts}
+          className="rounded-md bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+        >
+          Sim
+        </button>
+      </div>
+    </div>
   );
 }
