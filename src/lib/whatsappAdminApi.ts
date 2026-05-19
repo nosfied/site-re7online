@@ -420,6 +420,11 @@ export type TenantOnboardingManualBindPayload = {
   raw?: unknown;
 };
 
+export type TenantOnboardingRegisterPhonePayload = {
+  phoneNumberId?: string | null;
+  pin: string;
+};
+
 export type Channel = "whatsapp" | "instagram" | "messenger";
 
 export type Provider = "meta";
@@ -1616,6 +1621,26 @@ export async function onboardingManualBindNumber(
   return requestJson(
     connection,
     `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/manual-bind`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function onboardingRegisterPhoneNumber(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: TenantOnboardingRegisterPhonePayload
+): Promise<{
+  success: true;
+  phoneNumberId: string;
+  registered: boolean;
+  warning?: string | null;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/register-phone`,
     {
       method: "POST",
       body: JSON.stringify(payload),

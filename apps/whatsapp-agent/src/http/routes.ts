@@ -46,6 +46,7 @@ import {
   enrichMetaOnboardingResult,
   exchangeEmbeddedSignupCode,
   MetaOnboardingExchangeError,
+  registerMetaPhoneNumber,
 } from "../meta/onboarding.service.js";
 import {
   submitTemplateToMeta,
@@ -9409,6 +9410,153 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
 
         json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/onboarding/register-phone")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const pin = String(body.pin ?? "").trim();
+      if (!/^\d{6}$/.test(pin)) {
+        json(res, 400, httpError("invalid_pin", "Registration PIN must have 6 digits"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
+        where: { clientId: client.id },
+        select: {
+          businessToken: true,
+          phoneNumberId: true,
+          rawPayload: true,
+        },
+      });
+      const configuredPhoneNumberId =
+        normalizeOptionalString(tenantMetaConfig?.phoneNumberId) ??
+        normalizeOptionalString(tenant.metaPhoneNumberId);
+      const requestedPhoneNumberId =
+        normalizeOptionalString(body.phoneNumberId) ?? configuredPhoneNumberId;
+      if (!requestedPhoneNumberId) {
+        json(res, 409, httpError("missing_phone_number_id", "No phone number id configured"));
+        return;
+      }
+      if (configuredPhoneNumberId && requestedPhoneNumberId !== configuredPhoneNumberId) {
+        json(
+          res,
+          409,
+          httpError(
+            "phone_number_mismatch",
+            "Requested phone number does not match the tenant configured phone number"
+          )
+        );
+        return;
+      }
+      const businessToken = normalizeOptionalString(tenantMetaConfig?.businessToken);
+      if (!businessToken) {
+        json(
+          res,
+          409,
+          httpError(
+            "missing_business_token",
+            "Tenant does not have a stored Meta business token for phone registration"
+          )
+        );
+        return;
+      }
+
+      try {
+        const registration = await registerMetaPhoneNumber({
+          phoneNumberId: requestedPhoneNumberId,
+          accessToken: businessToken,
+          pin,
+        });
+        const previousRawPayload =
+          tenantMetaConfig?.rawPayload &&
+          typeof tenantMetaConfig.rawPayload === "object" &&
+          !Array.isArray(tenantMetaConfig.rawPayload)
+            ? (tenantMetaConfig.rawPayload as Record<string, unknown>)
+            : {};
+
+        await prisma.tenantMetaConfig.update({
+          where: { clientId: client.id },
+          data: {
+            rawPayload: {
+              ...previousRawPayload,
+              phoneRegistration: {
+                success: registration.success,
+                registeredAt: new Date().toISOString(),
+                phoneNumberId: requestedPhoneNumberId,
+                rawPayload: registration.rawPayload,
+              },
+            } as Prisma.InputJsonValue,
+          },
+        });
+
+        logger.info({
+          event: "onboarding.phone_registration.success",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          phoneNumberId: requestedPhoneNumberId,
+          success: registration.success,
+        });
+
+        json(res, 200, {
+          success: true,
+          phoneNumberId: requestedPhoneNumberId,
+          registered: registration.success,
+          warning: registration.success
+            ? null
+            : "Meta aceitou a requisicao, mas nao retornou success=true. Confira o painel Meta.",
+        });
+      } catch (error) {
+        logger.error({
+          event: "onboarding.phone_registration.failed",
+          tenantId,
+          requestId,
+          phoneNumberId: requestedPhoneNumberId,
+          status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+          message: (error as Error).message,
+        });
+        if (error instanceof MetaOnboardingExchangeError && error.status && error.status < 500) {
+          json(
+            res,
+            409,
+            httpError(
+              "meta_phone_registration_failed",
+              "Meta rejected phone registration. Check the PIN and phone number status."
+            )
+          );
+          return;
+        }
+        json(res, 502, httpError("meta_phone_registration_failed", "Meta phone registration failed"));
       }
       return;
     }

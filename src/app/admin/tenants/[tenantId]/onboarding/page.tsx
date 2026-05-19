@@ -9,6 +9,7 @@ import {
   fetchTenantById,
   onboardingExchangeCode,
   onboardingManualBindNumber,
+  onboardingRegisterPhoneNumber,
   TenantConfigResponse,
 } from "@/lib/whatsappAdminApi";
 import {
@@ -152,6 +153,8 @@ export default function TenantOnboardingPage() {
   const [businessId, setBusinessId] = useState("");
   const [businessPortfolioId, setBusinessPortfolioId] = useState("");
   const [reconnectMode, setReconnectMode] = useState(false);
+  const [registrationPin, setRegistrationPin] = useState("");
+  const [registeringPhone, setRegisteringPhone] = useState(false);
   const [rawPayload, setRawPayload] = useState<unknown>(null);
   const [resultSnapshot, setResultSnapshot] = useState<{
     phoneNumberId: string | null;
@@ -556,6 +559,54 @@ export default function TenantOnboardingPage() {
     }
   };
 
+  const handleRegisterPhoneNumber = async () => {
+    if (!tenantId) return;
+    if (!connection.baseUrl || !connection.adminToken) {
+      setStatus("error");
+      setErrorMessage("Configure a conexao admin antes de registrar o numero.");
+      return;
+    }
+    if (!phoneNumberId.trim()) {
+      setStatus("error");
+      setErrorMessage("Informe o phoneNumberId antes de registrar o numero.");
+      return;
+    }
+    if (!/^\d{6}$/.test(registrationPin.trim())) {
+      setStatus("error");
+      setErrorMessage("Informe o PIN de registro com 6 digitos.");
+      return;
+    }
+
+    setRegisteringPhone(true);
+    setStatus("processing");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await onboardingRegisterPhoneNumber(connection, tenantId, {
+        phoneNumberId: phoneNumberId.trim(),
+        pin: registrationPin.trim(),
+      });
+      setStatus("success");
+      setRegistrationPin("");
+      setSuccessMessage(
+        response.warning ||
+          `Numero ${response.phoneNumberId} registrado na Cloud API com sucesso.`
+      );
+    } catch (error) {
+      const typed = error as { message?: string; status?: number };
+      setStatus("error");
+      setErrorMessage(
+        typed.message ||
+          (typed.status
+            ? `Falha ao registrar numero na Cloud API (${typed.status}).`
+            : "Falha ao registrar numero na Cloud API.")
+      );
+    } finally {
+      setRegisteringPhone(false);
+    }
+  };
+
   const rawPayloadJson = useMemo(
     () => (rawPayload == null ? "-" : JSON.stringify(sanitizeDebugValue(rawPayload), null, 2)),
     [rawPayload]
@@ -798,6 +849,40 @@ export default function TenantOnboardingPage() {
                   onChange={(event) => setBusinessPortfolioId(event.target.value)}
                 />
               </label>
+            </div>
+
+            <div className="rounded-lg border border-sky-300/20 bg-sky-500/10 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="grid min-w-[180px] max-w-[220px] gap-1 text-sm">
+                  <span className="text-sky-100">PIN de registro Cloud API</span>
+                  <input
+                    inputMode="numeric"
+                    maxLength={6}
+                    className="rounded-md border border-sky-200/30 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                    value={registrationPin}
+                    onChange={(event) =>
+                      setRegistrationPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="6 digitos"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleRegisterPhoneNumber}
+                  disabled={
+                    registeringPhone ||
+                    !phoneNumberId.trim() ||
+                    !/^\d{6}$/.test(registrationPin.trim())
+                  }
+                  className="rounded-md border border-sky-200/40 bg-sky-400/15 px-4 py-2 text-sm font-semibold text-sky-50 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {registeringPhone ? "Registrando..." : "Registrar numero na Cloud API"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-sky-50/75">
+                Use quando a Meta exibir que o numero precisa ser registrado. O PIN nao e salvo; ele e enviado
+                apenas para a API de registro do phoneNumberId configurado neste tenant.
+              </p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-4">
