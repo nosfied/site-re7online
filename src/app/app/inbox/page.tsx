@@ -2780,6 +2780,7 @@ export default function AppInboxPage() {
   const applyConversationFilter = useCallback((filter: ConversationFilter) => {
     setConversationFilter(filter);
     if (filter === "ALL") {
+      setConversationChannelFilter("ALL");
       setConversationQuickFilter("ALL");
     }
     setShowMoreConversationFilters(false);
