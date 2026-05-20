@@ -266,9 +266,9 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="theme-bg theme-inbox h-[100dvh] w-screen overflow-hidden">
-        <div className="grid h-full w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1">
-          <aside className="order-2 flex min-h-0 flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:order-none md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
+      <main className="theme-bg theme-inbox h-[100dvh] w-full max-w-[100vw] overflow-hidden">
+        <div className="grid h-full w-full max-w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1">
+          <aside className="order-2 flex min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:order-none md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
             <button
               type="button"
               onClick={() => router.push("/app/inbox")}
@@ -315,7 +315,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             </button>
           </aside>
 
-          <section className="order-1 min-h-0 min-w-0 overflow-hidden md:order-none">{children}</section>
+          <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
         </div>
         {brandModal}
       </main>

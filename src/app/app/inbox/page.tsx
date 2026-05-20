@@ -3762,8 +3762,8 @@ export default function AppInboxPage() {
         </div>
       ) : null}
 
-      <section className="grid h-full min-h-0 grid-cols-1 overflow-hidden md:grid-cols-[260px_minmax(0,1fr)_230px] min-[1367px]:grid-cols-[280px_minmax(0,1fr)_250px] min-[1441px]:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
-        <aside className={`min-h-0 flex-col border-r border-white/10 bg-[#0c1930] max-md:border-r-0 md:flex ${selectedConversationKey ? "max-md:hidden" : "flex"}`}>
+      <section className="grid h-full min-h-0 w-full max-w-full grid-cols-1 overflow-hidden md:grid-cols-[260px_minmax(0,1fr)_230px] min-[1367px]:grid-cols-[280px_minmax(0,1fr)_250px] min-[1441px]:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
+        <aside className={`min-h-0 min-w-0 max-w-full flex-col border-r border-white/10 bg-[#0c1930] max-md:border-r-0 md:flex ${selectedConversationKey ? "max-md:hidden" : "flex"}`}>
           <div className="border-b border-white/10 bg-[#10213d] px-4 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 max-[1280px]:py-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -4108,7 +4108,7 @@ export default function AppInboxPage() {
           </div>
         </aside>
 
-        <div className={`relative min-h-0 flex-col overflow-hidden bg-[#eadfcd] ${selectedConversationKey ? "flex" : "max-md:hidden md:flex"}`}>
+        <div className={`relative min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-[#eadfcd] ${selectedConversationKey ? "flex" : "max-md:hidden md:flex"}`}>
           <header className="flex min-h-16 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-20 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <button
               type="button"

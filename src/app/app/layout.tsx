@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import AppRealtimeBridge from "@/components/app/AppRealtimeBridge";
+import PwaInstallCoach from "@/components/app/PwaInstallCoach";
 
 export const metadata: Metadata = {
   title: {
@@ -29,6 +30,7 @@ export default function AppLayout({
   return (
     <>
       <AppRealtimeBridge />
+      <PwaInstallCoach />
       {children}
     </>
   );

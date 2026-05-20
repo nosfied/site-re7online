@@ -114,23 +114,6 @@ export default function AppRealtimeBridge() {
     }
   }, [syncAudioState]);
 
-  const activateAlerts = useCallback(() => {
-    if (typeof window === "undefined") return;
-    setDismissedActivationPrompt(true);
-    primeNotificationAudio();
-    if ("Notification" in window && Notification.permission === "default") {
-      void Notification.requestPermission()
-        .then(() => {
-          setNotificationPermission(getNotificationPermissionState());
-        })
-        .catch(() => {
-          setNotificationPermission(getNotificationPermissionState());
-        });
-    } else {
-      setNotificationPermission(getNotificationPermissionState());
-    }
-  }, [primeNotificationAudio]);
-
   const dismissAlertActivation = useCallback(() => {
     setDismissedActivationPrompt(true);
   }, []);
@@ -348,28 +331,20 @@ export default function AppRealtimeBridge() {
   return (
     <div className="fixed left-1/2 top-4 z-[70] w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
       <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/65 text-base">
-          🔔
-        </span>
         <span className="min-w-0">
-          <span className="block font-semibold">Ativar alertas?</span>
-          <span className="block text-slate-900/75">Necessario apos atualizar a pagina.</span>
+          <span className="block font-semibold">Restaurar som das notificacoes</span>
+          <span className="block text-slate-900/75">
+            Apos atualizar a pagina, clique duas vezes no sininho do inbox para restaurar os alertas sonoros.
+          </span>
         </span>
       </div>
       <div className="mt-2 flex justify-end gap-2">
         <button
           type="button"
           onClick={dismissAlertActivation}
-          className="rounded-md px-2.5 py-1 text-[11px] font-semibold text-slate-900/75 transition hover:bg-white/25 hover:text-slate-950"
-        >
-          Não
-        </button>
-        <button
-          type="button"
-          onClick={activateAlerts}
           className="rounded-md bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
         >
-          Sim
+          Entendi
         </button>
       </div>
     </div>
