@@ -615,6 +615,22 @@ export default function TenantOnboardingPage() {
       });
       setStatus("success");
       setRegistrationPin("");
+      if (response.displayPhoneNumber) setDisplayPhoneNumber(response.displayPhoneNumber);
+      if (response.displayPhoneNumber || response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                  displayPhoneNumber:
+                    response.displayPhoneNumber || current.tenant.displayPhoneNumber,
+                },
+              }
+            : current
+        );
+      }
       setSuccessMessage(
         response.warning ||
           `Numero ${response.phoneNumberId} registrado na Cloud API com sucesso.`

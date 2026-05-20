@@ -1635,6 +1635,7 @@ export async function onboardingRegisterPhoneNumber(
 ): Promise<{
   success: true;
   phoneNumberId: string;
+  displayPhoneNumber?: string | null;
   registered: boolean;
   warning?: string | null;
 }> {

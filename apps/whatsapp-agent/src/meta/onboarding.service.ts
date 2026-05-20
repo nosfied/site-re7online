@@ -208,6 +208,31 @@ export async function registerMetaPhoneNumber(params: {
   };
 }
 
+export async function subscribeMetaWabaToApp(params: {
+  wabaId: string;
+  accessToken: string;
+}): Promise<{ success: boolean; rawPayload: MetaGraphPayload }> {
+  const wabaId = params.wabaId.trim();
+  const accessToken = params.accessToken.trim();
+  if (!wabaId) {
+    throw new MetaOnboardingExchangeError("WABA id is required", 400);
+  }
+  if (!accessToken) {
+    throw new MetaOnboardingExchangeError("Access token is required", 400);
+  }
+
+  const payload = await postMetaGraphJson({
+    path: `${encodeURIComponent(wabaId)}/subscribed_apps`,
+    accessToken,
+    body: {},
+  });
+
+  return {
+    success: payload.success === true || payload.success === "true",
+    rawPayload: payload,
+  };
+}
+
 export async function enrichMetaOnboardingResult(
   params: EnrichOnboardingParams
 ): Promise<{

@@ -47,6 +47,7 @@ import {
   exchangeEmbeddedSignupCode,
   MetaOnboardingExchangeError,
   registerMetaPhoneNumber,
+  subscribeMetaWabaToApp,
 } from "../meta/onboarding.service.js";
 import {
   submitTemplateToMeta,
@@ -9349,6 +9350,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
           });
         }
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId: finalWabaId,
+          businessToken: exchange.businessToken,
+        });
 
         logger.info({
           event: "onboarding.exchange.success",
@@ -9363,6 +9371,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           partialMetaConfig: Boolean(exchange.businessToken) && !finalWabaId,
           phoneMappingAction,
           fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
+          wabaSubscription,
         });
 
         json(res, 200, {
@@ -9373,8 +9382,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessId: finalBusinessId,
           businessPortfolioId: finalBusinessPortfolioId,
           warning:
-            onboardingWarnings.length > 0
-              ? onboardingWarnings.join(" ")
+            [...onboardingWarnings, ...buildWabaSubscriptionWarnings(wabaSubscription)].length > 0
+              ? [...onboardingWarnings, ...buildWabaSubscriptionWarnings(wabaSubscription)].join(" ")
               : null,
         });
       } catch (error) {
@@ -9455,6 +9464,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         select: {
           businessToken: true,
           phoneNumberId: true,
+          wabaId: true,
           rawPayload: true,
         },
       });
@@ -9497,6 +9507,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           accessToken: businessToken,
           pin,
         });
+        const enriched = await enrichMetaOnboardingResult({
+          businessToken,
+          wabaId: normalizeOptionalString(tenantMetaConfig?.wabaId),
+          phoneNumberId: requestedPhoneNumberId,
+        });
+        const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload({
+          enrich: enriched.rawPayload,
+        });
+        if (displayPhoneNumber) {
+          await syncTenantPhoneNumberMapping({
+            clientId: client.id,
+            phoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+          await saveTenantPatch(tenantId, {
+            metaPhoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+        }
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId: normalizeOptionalString(tenantMetaConfig?.wabaId),
+          businessToken,
+        });
         const previousRawPayload =
           tenantMetaConfig?.rawPayload &&
           typeof tenantMetaConfig.rawPayload === "object" &&
@@ -9515,6 +9551,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 phoneNumberId: requestedPhoneNumberId,
                 rawPayload: registration.rawPayload,
               },
+              phoneRegistrationEnrich: enriched.rawPayload,
+              wabaSubscription,
             } as Prisma.InputJsonValue,
           },
         });
@@ -9525,16 +9563,25 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientKey: client.clientKey,
           requestId,
           phoneNumberId: requestedPhoneNumberId,
+          displayPhoneNumber,
           success: registration.success,
+          wabaSubscription,
         });
 
         json(res, 200, {
           success: true,
           phoneNumberId: requestedPhoneNumberId,
+          displayPhoneNumber,
           registered: registration.success,
-          warning: registration.success
-            ? null
-            : "Meta aceitou a requisicao, mas nao retornou success=true. Confira o painel Meta.",
+          warning:
+            [
+              registration.success
+                ? null
+                : "Meta aceitou a requisicao, mas nao retornou success=true. Confira o painel Meta.",
+              ...buildWabaSubscriptionWarnings(wabaSubscription),
+            ]
+              .filter(Boolean)
+              .join(" ") || null,
         });
       } catch (error) {
         logger.error({
@@ -9614,13 +9661,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             businessPortfolioId: true,
             wabaId: true,
             phoneNumberId: true,
+            businessToken: true,
           },
         });
         const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
-        const displayPhoneNumber = normalizeOptionalString(body.displayPhoneNumber);
+        const businessToken = normalizeOptionalString(previousMetaConfig?.businessToken);
+        let displayPhoneNumber = normalizeOptionalString(body.displayPhoneNumber);
         const businessId = normalizeOptionalString(body.businessId);
         const businessPortfolioId = normalizeOptionalString(body.businessPortfolioId);
         const wabaId = normalizeOptionalString(body.wabaId);
+        const enriched =
+          businessToken && phoneNumberId && !displayPhoneNumber
+            ? await enrichMetaOnboardingResult({
+                businessToken,
+                businessId,
+                businessPortfolioId,
+                wabaId,
+                phoneNumberId,
+              })
+            : null;
+        displayPhoneNumber =
+          displayPhoneNumber ??
+          (enriched ? extractTenantDisplayPhoneFromRawPayload({ enrich: enriched.rawPayload }) : null);
         const phoneNumberChanged =
           Boolean(previousMetaConfig?.phoneNumberId) &&
           previousMetaConfig?.phoneNumberId !== phoneNumberId;
@@ -9668,6 +9730,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           metaPhoneNumberId: phoneNumberId,
           ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
         });
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId,
+          businessToken,
+        });
 
         logger.info({
           event: "onboarding.manual_bind.success",
@@ -9680,6 +9749,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessPortfolioId,
           phoneMappingAction: syncResult.action,
           fieldsChanged: tenantUpdate.fieldsChanged,
+          wabaSubscription,
         });
 
         json(res, 200, {
@@ -9696,6 +9766,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               shouldClearPreviousMetaIdentity
                 ? "Reconexao sem WABA ID: WABA/business antigos foram limpos para evitar falso conectado. Se o painel Meta ainda mostrar pendente, conclua a conexao no Meta e reprocesse o onboarding."
                 : null,
+              ...buildWabaSubscriptionWarnings(wabaSubscription),
             ]
               .filter(Boolean)
               .join(" "),
@@ -12098,6 +12169,64 @@ function buildOnboardingConnectionWarnings(params: {
   }
 
   return warnings;
+}
+
+type WabaSubscriptionStatus =
+  | { attempted: false; reason: "missing_waba_or_token" }
+  | { attempted: true; ok: true; success: boolean }
+  | { attempted: true; ok: false; status: number | null; message: string };
+
+async function trySubscribeMetaWabaToApp(params: {
+  tenantId: string;
+  clientKey: string;
+  requestId: string;
+  wabaId: string | null | undefined;
+  businessToken: string | null | undefined;
+}): Promise<WabaSubscriptionStatus> {
+  const wabaId = normalizeOptionalString(params.wabaId);
+  const businessToken = normalizeOptionalString(params.businessToken);
+  if (!wabaId || !businessToken) {
+    return { attempted: false, reason: "missing_waba_or_token" };
+  }
+
+  try {
+    const subscription = await subscribeMetaWabaToApp({
+      wabaId,
+      accessToken: businessToken,
+    });
+    logger.info({
+      event: "onboarding.waba_subscription.success",
+      tenantId: params.tenantId,
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      wabaId,
+      success: subscription.success,
+    });
+    return { attempted: true, ok: true, success: subscription.success };
+  } catch (error) {
+    logger.warn({
+      event: "onboarding.waba_subscription.failed",
+      tenantId: params.tenantId,
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      wabaId,
+      status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+      message: (error as Error).message,
+    });
+    return {
+      attempted: true,
+      ok: false,
+      status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+      message: (error as Error).message,
+    };
+  }
+}
+
+function buildWabaSubscriptionWarnings(status: WabaSubscriptionStatus): string[] {
+  if (!status.attempted || status.ok) return [];
+  return [
+    "A WABA foi salva, mas a inscricao do app para webhooks falhou. Mensagens inbound podem nao chegar ao inbox ate reinscrever o app na WABA.",
+  ];
 }
 
 function json(res: ServerResponse, status: number, payload: unknown) {
