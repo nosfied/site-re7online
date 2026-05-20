@@ -491,6 +491,19 @@ export default function TenantOnboardingPage() {
       if (response.wabaId) setWabaId(response.wabaId);
       if (response.businessId) setBusinessId(response.businessId);
       if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+      if (response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                },
+              }
+            : current
+        );
+      }
       setReconnectMode(false);
       setStatus("success");
       setSuccessMessage(
@@ -542,6 +555,19 @@ export default function TenantOnboardingPage() {
       if (response.wabaId) setWabaId(response.wabaId);
       if (response.businessId) setBusinessId(response.businessId);
       if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+      if (response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                },
+              }
+            : current
+        );
+      }
       setReconnectMode(false);
       setStatus("success");
       setSuccessMessage(response.warning || "Numero conectado vinculado ao tenant com sucesso.");
@@ -616,7 +642,7 @@ export default function TenantOnboardingPage() {
     [entries]
   );
   const effectivePhoneNumberId =
-    resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || "";
+    resultSnapshot?.phoneNumberId || phoneNumberId.trim() || tenantSnapshot?.tenant.metaPhoneNumberId || "";
   const hasEffectivePhoneLink =
     Boolean(effectivePhoneNumberId) &&
     phoneNumberId.trim() === effectivePhoneNumberId &&
@@ -683,7 +709,7 @@ export default function TenantOnboardingPage() {
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
               <p className="text-xs uppercase tracking-wide text-white/60">phoneNumberId</p>
               <p className="mt-2 break-all font-mono text-sm">
-                {resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || "-"}
+                {effectivePhoneNumberId || "-"}
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
