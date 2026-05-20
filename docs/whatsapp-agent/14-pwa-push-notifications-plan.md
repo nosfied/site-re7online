@@ -3,6 +3,21 @@
 Este documento define a arquitetura alvo para notificacoes em segundo plano no
 Converta PWA. Ele nao ativa push real nesta etapa.
 
+## Diagnostico 66N.2
+
+- Som disparado por JavaScript local funciona apenas com a aplicacao ativa em
+  foreground e apos gesto do usuario, por politicas de autoplay dos navegadores.
+- Em mobile, com app em segundo plano ou tela bloqueada, o navegador pode
+  suspender JavaScript, timers e websocket. Ajustes visuais ou no player de som
+  nao resolvem notificacao em background.
+- Permissao `Notification` isolada nao cria notificacao quando nao existe
+  Service Worker recebendo eventos `push`.
+- A solucao profissional para tela bloqueada/background e Web Push com Service
+  Worker, VAPID, subscriptions persistidas por usuario/tenant/dispositivo e
+  disparo backend no evento inbound.
+- No iOS, Web Push exige app adicionado a Tela de Inicio e iOS 16.4+; Safari ou
+  Chrome abertos como aba comum nao garantem push em background.
+
 ## Estado atual
 
 - O inbox usa websocket/realtime enquanto a aplicacao esta aberta.
@@ -168,3 +183,13 @@ browser. Ainda assim, a UX recomendada e instalar o app.
 - Teste multi-tenant com usuario de setores diferentes.
 - Opt-out e revogacao de dispositivo funcionando.
 - Logs sem PII.
+
+## Foundation segura ate a implementacao real
+
+- Detectar suporte de `Notification`, `serviceWorker` e `PushManager` no
+  frontend.
+- Exibir UI discreta de permissao apenas quando houver endpoints, VAPID e
+  storage prontos.
+- Nao prometer notificacao em background enquanto o backend nao persistir
+  subscriptions e nao enviar Web Push real.
+- Manter websocket e som local como recursos de foreground.

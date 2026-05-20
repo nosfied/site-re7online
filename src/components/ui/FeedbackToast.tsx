@@ -56,7 +56,7 @@ export function FeedbackToast({
 
   return (
     <div
-      className={`fixed right-4 top-4 z-50 max-w-md whitespace-pre-line rounded-md border px-4 py-3 text-sm shadow-lg ${style}`}
+      className={`fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[90] w-[calc(100vw-1.5rem)] max-w-md -translate-x-1/2 whitespace-pre-line rounded-md border px-4 py-3 text-sm shadow-lg sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:w-auto sm:translate-x-0 ${style}`}
       role="status"
       aria-live="polite"
       tabIndex={0}

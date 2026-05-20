@@ -72,19 +72,19 @@ export default function AppLoginPage() {
   };
 
   return (
-    <main className="theme-bg flex min-h-screen overflow-x-hidden px-3 py-6 sm:items-center sm:justify-center sm:px-4 sm:py-8">
-      <div className="theme-surface mx-auto w-full max-w-md rounded-2xl border p-4 shadow-2xl shadow-black/10 sm:p-6">
-        <div className="mb-4 flex justify-end">
+    <main className="theme-bg flex min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden px-3 py-3 sm:min-h-screen sm:items-center sm:justify-center sm:px-4 sm:py-8">
+      <div className="theme-surface mx-auto w-full max-w-[calc(100vw-1.5rem)] rounded-xl border p-3 shadow-2xl shadow-black/10 sm:max-w-md sm:rounded-2xl sm:p-6">
+        <div className="mb-2 flex justify-end sm:mb-4">
           <ThemeSelector />
         </div>
-        <div className="mb-6 flex justify-center">
+        <div className="mb-3 flex justify-center sm:mb-6">
           <Image
             src="/images/converta-logo-light.png"
             alt="Converta"
             width={240}
             height={88}
             priority
-            className="theme-logo-light h-auto w-full max-w-[220px] object-contain"
+            className="theme-logo-light h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
           />
           <Image
             src="/images/converta-logo-dark.png"
@@ -92,14 +92,14 @@ export default function AppLoginPage() {
             width={240}
             height={88}
             priority
-            className="theme-logo-dark h-auto w-full max-w-[220px] object-contain"
+            className="theme-logo-dark h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
           />
         </div>
 
         {checkingSession ? <p className="theme-muted text-sm">Verificando acesso...</p> : null}
 
         {!checkingSession ? (
-          <form className="grid gap-4" onSubmit={handleSubmit}>
+          <form className="grid gap-3 sm:gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm">
               <span className="theme-muted">Email</span>
               <input
@@ -140,7 +140,7 @@ export default function AppLoginPage() {
           </form>
         ) : null}
 
-        <div className="theme-soft mt-6 text-center text-xs">
+        <div className="theme-soft mt-4 text-center text-xs sm:mt-6">
           <button
             type="button"
             onClick={() =>

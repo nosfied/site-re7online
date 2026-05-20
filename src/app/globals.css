@@ -69,6 +69,25 @@ html {
     max-width: 100vw;
     overflow-x: hidden;
   }
+
+  html[data-ios-like="true"],
+  html[data-ios-like="true"] body,
+  html[data-standalone="true"],
+  html[data-standalone="true"] body {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    html,
+    body {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+  }
 }
 
 /* ===== Helpers ===== */

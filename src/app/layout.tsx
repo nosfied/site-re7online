@@ -38,9 +38,20 @@ const themeBootstrapScript = `
     document.documentElement.dataset.themePreference = preference;
     document.documentElement.dataset.theme = resolved;
     document.documentElement.style.colorScheme = resolved;
+    var standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.matchMedia("(display-mode: fullscreen)").matches ||
+      window.navigator.standalone === true;
+    var iosLike =
+      /iPad|iPhone|iPod/i.test(window.navigator.userAgent || "") ||
+      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
+    document.documentElement.dataset.standalone = standalone ? "true" : "false";
+    document.documentElement.dataset.iosLike = iosLike ? "true" : "false";
   } catch (error) {
     document.documentElement.dataset.themePreference = "dark";
     document.documentElement.dataset.theme = "dark";
+    document.documentElement.dataset.standalone = "false";
+    document.documentElement.dataset.iosLike = "false";
   }
 })();
 `;
