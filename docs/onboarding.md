@@ -51,6 +51,54 @@ git rev-parse --show-toplevel
 
 O console interno suporta dois caminhos de ativação do WhatsApp por tenant.
 
+### Estado conectado valido
+
+Considere um tenant realmente conectado somente quando todos os pontos abaixo
+estiverem coerentes:
+
+- `TenantMetaConfig.phoneNumberId` aponta para o `phoneNumberId` correto.
+- `tenants.json -> metaPhoneNumberId` aponta para o mesmo `phoneNumberId`.
+- `WaPhoneNumber.phoneNumberId` existe e esta mapeado para o `Client` do tenant.
+- `TenantMetaConfig.wabaId` aponta para a WABA correta quando o numero pertence
+  a uma WABA conhecida.
+- O `displayPhoneNumber` exibido no console bate com o
+  `display_phone_number` retornado pela Graph API para o `phoneNumberId`.
+- A WABA esta inscrita no app Meta usado pelo Converta (`subscribed_apps`).
+- O webhook WhatsApp publico recebe evento real e grava inbound no inbox.
+
+Nao trate apenas o status visual verde no Business Manager como prova de
+inbound operacional. O numero pode estar registrado na Cloud API e ainda assim
+nao entregar mensagens ao Converta se a WABA nao estiver inscrita no app ou se
+o app/token nao tiver acesso ao ativo correto.
+
+### Troca de numero conectado
+
+Quando um tenant troca de numero, WABA ou Business Portfolio:
+
+1) Ative o modo de troca no console.
+2) Informe o novo `phoneNumberId`.
+3) Informe o `WABA ID` correto quando conhecido.
+4) Use `Processar conexao` ou `Vincular numero conectado`.
+5) Confira se a UI atualizou o telefone exibido para o numero novo.
+6) Registre o numero na Cloud API quando a Meta mostrar o estado pendente.
+7) Valide a inscricao da WABA no app.
+8) Envie mensagem real para confirmar inbox.
+
+Se a nova conexao nao retornar WABA ID, a rotina limpa WABA/business antigos da
+configuracao local para evitar falso conectado. Nesse caso, preencha o WABA ID
+manual conhecido antes de validar o inbound.
+
+Ao trocar de numero, nunca reaproveite como evidencia operacional:
+
+- phoneNumberId antigo;
+- WABA antiga;
+- displayPhoneNumber antigo;
+- status antigo de BM compartilhado;
+- mensagem antiga no inbox.
+
+O criterio final e uma mensagem nova recebida pelo endpoint `/webhook` e
+persistida no tenant correto.
+
 ### Cenário A — número/WABA já está no portfólio da Re7/Reset
 
 Use quando o número já aparece como conectado no nosso Business Portfolio/WABA e o token global da operação tem acesso a esse `phoneNumberId`.
@@ -78,6 +126,9 @@ Importante:
 - Só funciona se o token global tiver permissão sobre o número informado.
 - A WABA precisa estar inscrita no app para entregar webhooks. Se `subscribed_apps`
   estiver vazio, inscreva a WABA no app antes de validar inbound.
+- O console tenta inscrever a WABA no app automaticamente quando existe WABA ID
+  e token com permissao. Se falhar, o numero pode parecer conectado no BM, mas
+  mensagens inbound nao chegam ao inbox.
 - Novos tenants nascem com automação desligada; ative somente depois de criar o
   fluxo configurável ou definir outra política de atendimento.
 - No bootstrap operacional, apenas `Atendimento Geral` fica ativo por padrão.
@@ -108,6 +159,88 @@ Importante:
 - Esse caminho é o correto para número do cliente.
 - O tenant passa a usar credenciais próprias quando `businessToken` e `phoneNumberId` estiverem salvos.
 - Se a conexão vier parcial, o console mostra aviso para preencher `WABA ID`/dados faltantes.
+- Se o numero foi movido de uma WABA para outra, confirme que o token novo
+  enxerga a WABA nova e o `phoneNumberId` novo. Tokens antigos podem continuar
+  validos para outros ativos, mas nao necessariamente para o numero recadastrado.
+
+### Registro Cloud API do numero
+
+Quando a Meta exibir:
+
+> Registre este numero de telefone usando a API de registro ou entre em contato
+> com seu parceiro para registrar o numero de telefone.
+
+Use o bloco `Registrar numero na Cloud API` no console interno.
+
+Regras:
+
+- O tenant precisa ter `phoneNumberId` e token Meta salvos.
+- O `phoneNumberId` informado deve bater com o `phoneNumberId` configurado no
+  tenant.
+- O PIN enviado para `/register` e o PIN de verificacao em duas etapas da Cloud
+  API do numero, nao o codigo SMS de posse do numero.
+- O codigo SMS pode aparecer durante o Embedded Signup ou verificacao de posse
+  do numero, mas ele nao substitui o PIN usado pela API `/register`.
+- Se o numero acabou de ser transferido entre WABAs/BMs, aguarde a Meta refletir
+  a transferencia e confirme que o token atual acessa o novo ativo.
+- Apos registrar, confira `display_phone_number`,
+  `code_verification_status=VERIFIED`, `account_mode=LIVE` e
+  `quality_rating`.
+- Apos registrar, valide tambem `/{WABA_ID}/subscribed_apps`; sem essa inscricao
+  a Cloud API pode estar verde, mas o Converta nao recebe inbound.
+
+Erros comuns:
+
+- `Meta rejected phone registration`: PIN incorreto, numero ainda nao elegivel
+  para Cloud API, token sem acesso ao phoneNumberId, ou estado Meta ainda
+  pendente apos transferencia.
+- `A conta nao existe na API de Nuvem`: o numero ainda nao foi registrado na
+  Cloud API; use `/register` com o `phoneNumberId` correto e PIN correto.
+- Conexao parcial sem WABA ID: preencha WABA ID manualmente e reprocesse/vincule
+  para evitar manter WABA antiga.
+
+### Validacao operacional apos onboarding
+
+Checklist minimo antes de liberar o tenant:
+
+1) Health:
+```bash
+curl -sS https://converta.re7online.com/agent-api/health
+```
+
+2) Confirmar dados salvos no console:
+- `phoneNumberId`;
+- `WABA ID`;
+- telefone exibido;
+- status da conexao;
+- token armazenado quando o tenant usa credenciais proprias.
+
+3) Confirmar subscription da WABA no app pela Graph API:
+```bash
+GET /<WABA_ID>/subscribed_apps
+```
+
+Esperado: lista contendo o app Meta do Converta.
+
+4) Enviar uma mensagem WhatsApp real para o numero do tenant.
+
+5) Conferir logs sem expor PII:
+```bash
+pm2 logs re7-whatsapp-agent --lines 300 --nostream \
+  | grep -E "webhook.signature.valid|webhook.received|webhook.change.received|webhook.inbound|webhook.message.discarded"
+```
+
+6) Conferir inbox:
+- conversa aparece no tenant correto;
+- telefone/contato exibido esta coerente;
+- mensagens novas entram em tempo real;
+- nao ha `webhook.message.discarded` por `missing_phone_number_id`.
+
+Se nao aparecer `webhook.received`, a Meta nao entregou o evento ao Converta.
+Revise callback, campo `messages`, subscription da WABA e permissao do app/token.
+Se aparecer `webhook.received`, mas a conversa nao entra no inbox, audite
+`metadata.phone_number_id`, mapeamento `WaPhoneNumber -> Client` e logs de
+discard.
 
 ## Onboarding via script
 Caminho oficial para criar tenant novo (DB + `tenants.json`) sem editar arquivo manualmente:
