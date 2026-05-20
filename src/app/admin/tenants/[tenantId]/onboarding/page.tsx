@@ -890,8 +890,9 @@ export default function TenantOnboardingPage() {
                 </button>
               </div>
               <p className="theme-muted mt-2 text-xs leading-relaxed">
-                Use quando a Meta exibir que o numero precisa ser registrado. O PIN nao e salvo; ele e enviado
-                apenas para a API de registro do phoneNumberId configurado neste tenant.
+                Use quando a Meta exibir que o numero precisa ser registrado. Este PIN e o codigo de
+                verificacao em duas etapas da Cloud API, nao o codigo SMS de posse do numero. Ele nao e salvo;
+                e enviado apenas para a API de registro do phoneNumberId configurado neste tenant.
               </p>
             </div>
 

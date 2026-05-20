@@ -9543,6 +9543,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
           phoneNumberId: requestedPhoneNumberId,
           status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+          errorBody:
+            error instanceof MetaOnboardingExchangeError
+              ? error.errorBody?.slice(0, 1000) ?? null
+              : null,
           message: (error as Error).message,
         });
         if (error instanceof MetaOnboardingExchangeError && error.status && error.status < 500) {
@@ -9551,7 +9555,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             409,
             httpError(
               "meta_phone_registration_failed",
-              "Meta rejected phone registration. Check the PIN and phone number status."
+              "Meta rejected phone registration. Check the two-step verification PIN and phone number status.",
+              {
+                status: error.status ?? null,
+                errorBody: error.errorBody ?? null,
+              }
             )
           );
           return;
