@@ -1392,6 +1392,7 @@ export default function AppInboxPage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showMoreActions, setShowMoreActions] = useState(false);
   const [showMoreConversationFilters, setShowMoreConversationFilters] = useState(false);
+  const [showMobileCrm, setShowMobileCrm] = useState(false);
   const [showContactTimeline, setShowContactTimeline] = useState(false);
   const [contactTimelineItems, setContactTimelineItems] = useState<AppContactTimelineItem[]>([]);
   const [contactTimelineCursor, setContactTimelineCursor] = useState<string | null>(null);
@@ -2981,6 +2982,7 @@ export default function AppInboxPage() {
       setStatusActionDraft("");
       setTransferUserId("");
       setTransferDepartmentId("");
+      setShowMobileCrm(false);
       return;
     }
     const currentStatus = getConversationOperationalStatus(selectedConversation);
@@ -4315,7 +4317,7 @@ export default function AppInboxPage() {
         </aside>
 
         <div className={`relative min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-[#eadfcd] ${selectedConversationKey ? "flex" : "max-md:hidden md:flex"}`}>
-          <header className="flex min-h-16 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-20 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
+          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-30 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <button
               type="button"
               onClick={clearSelectedConversation}
@@ -4334,7 +4336,7 @@ export default function AppInboxPage() {
                 </h2>
                 {selectedConversation ? (
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-6 max-[1440px]:w-6 ${getConversationChannelBadgeClass(selectedConversation)}`}
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-6 max-[1440px]:w-6 max-md:hidden ${getConversationChannelBadgeClass(selectedConversation)}`}
                     title={getConversationChannelLabel(selectedConversation)}
                     aria-label={getConversationChannelLabel(selectedConversation)}
                   >
@@ -4342,7 +4344,7 @@ export default function AppInboxPage() {
                   </span>
                 ) : null}
                 {isBusinessTenant && selectedConversation && getLeadTemperatureLabel(selectedConversation) ? (
-                  <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold max-[1440px]:px-1.5 max-[1440px]:text-[10px] ${getLeadTemperatureClass(selectedConversation)}`}>
+                  <span className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold max-[1440px]:px-1.5 max-[1440px]:text-[10px] max-md:hidden ${getLeadTemperatureClass(selectedConversation)}`}>
                     {getLeadTemperatureLabel(selectedConversation)}
                   </span>
                 ) : null}
@@ -4362,7 +4364,111 @@ export default function AppInboxPage() {
                 </p>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2 max-[1440px]:gap-1.5 max-md:gap-1">
+            <div className="relative hidden shrink-0 items-center gap-1.5 max-md:flex">
+              <button
+                type="button"
+                title="Ações da conversa"
+                aria-label="Abrir ações da conversa"
+                disabled={!selectedConversation}
+                onClick={() => setShowMoreActions((current) => !current)}
+                className="h-10 rounded-xl border border-[#d4c7b5] bg-white/75 px-3 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Ações
+              </button>
+              <button
+                type="button"
+                title="Abrir CRM"
+                aria-label="Abrir CRM da conversa"
+                disabled={!selectedConversation}
+                onClick={() => setShowMobileCrm(true)}
+                className="h-10 rounded-xl border border-[#d4c7b5] bg-white/75 px-3 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                CRM
+              </button>
+              {showMoreActions && selectedConversation ? (
+                <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[#d4c7b5] bg-white text-sm text-slate-800 shadow-2xl">
+                  {isAdminUser ? (
+                    <button
+                      type="button"
+                      className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!selectedConversation}
+                      onClick={() => {
+                        router.push(
+                          `/app/settings/privacy?conversationId=${encodeURIComponent(
+                            selectedConversation.waIdCanonical ?? selectedConversation.waId
+                          )}`
+                        );
+                        setShowMoreActions(false);
+                      }}
+                    >
+                      Privacidade da conversa
+                    </button>
+                  ) : null}
+                  {selectedConversation.assignedUserId === session.user.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                        onClick={() => {
+                          setShowMoreActions(false);
+                          void handleReleaseConversation();
+                        }}
+                      >
+                        {conversationAction === "release" ? "Liberando..." : "Liberar para automação"}
+                      </button>
+                      <button
+                        type="button"
+                        className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                        onClick={() => {
+                          setShowMoreActions(false);
+                          void handleReleaseConversationToGeneral();
+                        }}
+                      >
+                        {conversationAction === "release-general"
+                          ? "Liberando..."
+                          : "Liberar para atendimento geral"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={
+                        !selectedConversationWaId ||
+                        Boolean(conversationAction) ||
+                        isSelectedConversationLocked
+                      }
+                      onClick={() => {
+                        setShowMoreActions(false);
+                        void handleClaimConversation();
+                      }}
+                    >
+                      {conversationAction === "claim" ? "Assumindo..." : "Assumir conversa"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!selectedConversation}
+                    onClick={() => {
+                      markConversationIdentitiesAsUnread(
+                        getConversationIdentityCandidates(selectedConversation),
+                        selectedConversation.waId
+                      );
+                      clearSelectedConversation();
+                      setUnreadSeparatorIndex(null);
+                      setUnreadAnchorMessageIdentity(null);
+                      setShowMoreActions(false);
+                    }}
+                  >
+                    Marcar como não lida
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2 max-[1440px]:gap-1.5 max-md:hidden">
               {isAdminUser ? (
                 <button
                   type="button"
@@ -4542,7 +4648,7 @@ export default function AppInboxPage() {
               </div>
             </div>
             {showMoreActions ? (
-              <p className="mt-2 text-xs text-slate-600">
+              <p className="mt-2 text-xs text-slate-600 max-md:hidden">
                 {selectedConversation?.assignedAt
                   ? `Conversa em andamento desde ${formatDateTime(selectedConversation.assignedAt)}.`
                   : "Ajuste status, atendente e setor conforme o andamento do atendimento."}
@@ -4810,20 +4916,29 @@ export default function AppInboxPage() {
           </div>
         </div>
 
-        <aside className="hidden min-h-0 flex-col border-l border-white/10 bg-[#0c1930] md:flex">
+        <aside className={`${showMobileCrm ? "fixed inset-0 z-40 flex pt-[var(--safe-top)]" : "hidden"} min-h-0 flex-col border-l border-white/10 bg-[#0c1930] md:static md:z-auto md:flex md:pt-0`}>
           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2 max-[1440px]:gap-2 max-[1440px]:px-2.5 max-[1440px]:py-1.5">
             <h2 className="text-sm font-semibold text-white">CRM</h2>
-            <button
-              type="button"
-              title="Ver histórico"
-              aria-label="Ver histórico do contato"
-              disabled={!selectedConversation}
-              onClick={handleOpenContactTimeline}
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:px-2 max-[1440px]:text-[11px]"
-            >
-              <span aria-hidden="true">◷</span>
-              Histórico
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                title="Ver histórico"
+                aria-label="Ver histórico do contato"
+                disabled={!selectedConversation}
+                onClick={handleOpenContactTimeline}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-medium text-white/85 hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50 max-[1440px]:px-2 max-[1440px]:text-[11px]"
+              >
+                <span aria-hidden="true">◷</span>
+                Histórico
+              </button>
+              <button
+                type="button"
+                className="hidden rounded-xl border border-white/15 bg-white/8 px-2.5 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/12 max-md:inline-flex"
+                onClick={() => setShowMobileCrm(false)}
+              >
+                Fechar
+              </button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!selectedLead ? (
