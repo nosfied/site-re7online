@@ -4351,8 +4351,6 @@ export default function AppInboxPage() {
               </div>
               {selectedConversation ? (
                 <p className="mt-0.5 truncate text-sm text-slate-600 max-[1440px]:text-xs">
-                  {getConversationChannelLabel(selectedConversation)}
-                  {" • "}
                   {getConversationModeLabel(selectedConversation)}
                   {" • "}
                   {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
