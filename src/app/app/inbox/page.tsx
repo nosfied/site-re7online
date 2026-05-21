@@ -1404,6 +1404,7 @@ export default function AppInboxPage() {
   const isBusinessTenant = isBusinessSession(session);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundPreferenceLoaded, setSoundPreferenceLoaded] = useState(false);
   const [pushStatus, setPushStatus] = useState<AppPushStatus | null>(null);
   const [pushUiStatus, setPushUiStatus] = useState<
     "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
@@ -1557,12 +1558,14 @@ export default function AppInboxPage() {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY);
     setSoundEnabled(stored === "1");
+    setSoundPreferenceLoaded(true);
   }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!soundPreferenceLoaded) return;
     window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
-  }, [soundEnabled]);
+  }, [soundEnabled, soundPreferenceLoaded]);
 
   const refreshPushStatus = useCallback(async () => {
     if (typeof window === "undefined") return;
