@@ -72,8 +72,8 @@ export default function AppLoginPage() {
   };
 
   return (
-    <main className="theme-bg flex min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden px-3 py-3 sm:min-h-screen sm:items-center sm:justify-center sm:px-4 sm:py-8">
-      <div className="theme-surface mx-auto w-full max-w-[calc(100vw-1.5rem)] rounded-xl border p-3 shadow-2xl shadow-black/10 sm:max-w-md sm:rounded-2xl sm:p-6">
+    <main className="theme-bg flex min-h-[100dvh] w-full max-w-full overflow-x-hidden px-3 pb-[calc(0.75rem+var(--safe-bottom))] pt-[calc(0.75rem+var(--safe-top))] sm:min-h-screen sm:items-center sm:justify-center sm:px-4 sm:py-8">
+      <div className="theme-surface mx-auto w-full max-w-[calc(100dvw-1.5rem)] rounded-xl border p-3 shadow-2xl shadow-black/10 sm:max-w-md sm:rounded-2xl sm:p-6">
         <div className="mb-2 flex justify-end sm:mb-4">
           <ThemeSelector />
         </div>

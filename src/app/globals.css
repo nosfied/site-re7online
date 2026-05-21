@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: dark;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-bg: #06132a;
   --app-bg-soft: #0b1830;
   --app-surface: rgba(255, 255, 255, 0.05);

@@ -1370,7 +1370,7 @@ export default function AppInboxPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const isBusinessTenant = isBusinessSession(session);
   const [leadError, setLeadError] = useState<string | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
@@ -1516,9 +1516,7 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY);
-    if (stored === "0") {
-      setSoundEnabled(false);
-    }
+    setSoundEnabled(stored === "1");
   }, []);
 
   useEffect(() => {
@@ -3788,9 +3786,14 @@ export default function AppInboxPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    requestBrowserNotificationPermission();
-                    requestAppNotificationAudioUnlock();
-                    setSoundEnabled((current) => !current);
+                    setSoundEnabled((current) => {
+                      const next = !current;
+                      if (next) {
+                        requestBrowserNotificationPermission();
+                        requestAppNotificationAudioUnlock();
+                      }
+                      return next;
+                    });
                   }}
                   title={soundEnabled ? "Silenciar notificações" : "Ativar notificações"}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${

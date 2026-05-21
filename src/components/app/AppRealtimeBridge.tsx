@@ -23,7 +23,7 @@ const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) !== "0";
+  return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
 }
 
 function getNotificationPermissionState() {
@@ -156,9 +156,8 @@ export default function AppRealtimeBridge() {
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
     const soundEnabled = isSoundEnabled();
-    const audioAlreadyPrimed = hasPrimedAudioRef.current;
-    if (request.notifyBrowser && (!appIsFocused || !audioAlreadyPrimed)) {
-      showBrowserNotification(request, audioAlreadyPrimed);
+    if (request.notifyBrowser && !appIsFocused) {
+      showBrowserNotification(request, true);
     }
     if (soundEnabled) {
       if (request.sound === "active") {
@@ -257,13 +256,9 @@ export default function AppRealtimeBridge() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.addEventListener("pointerdown", primeNotificationAudio, { passive: true });
-    window.addEventListener("keydown", primeNotificationAudio);
     window.addEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
 
     return () => {
-      window.removeEventListener("pointerdown", primeNotificationAudio);
-      window.removeEventListener("keydown", primeNotificationAudio);
       window.removeEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
     };
   }, [primeNotificationAudio]);
@@ -329,7 +324,7 @@ export default function AppRealtimeBridge() {
   if (!shouldShowAlertActivation) return null;
 
   return (
-    <div className="fixed left-1/2 top-4 z-[70] w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
+    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[70] w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
       <div className="flex items-center gap-3">
         <span className="min-w-0">
           <span className="block font-semibold">Restaurar som das notificacoes</span>
