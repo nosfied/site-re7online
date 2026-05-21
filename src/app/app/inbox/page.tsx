@@ -43,7 +43,11 @@ import {
   updateAppLeadStatus,
   updateAppConversationReadState,
   logAppInboxEvent,
+  getAppPushStatus,
+  subscribeAppPush,
+  unsubscribeAppPush,
   type AppApiError,
+  type AppPushStatus,
 } from "@/lib/appClientApi";
 import {
   ConversationOperationalStatus,
@@ -76,6 +80,35 @@ const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index);
+  }
+  return outputArray;
+}
+
+function isIosLikeDevice() {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent || "";
+  const platform = window.navigator.platform || "";
+  const touchPoints = window.navigator.maxTouchPoints || 0;
+  return /iPad|iPhone|iPod/i.test(ua) || (platform === "MacIntel" && touchPoints > 1);
+}
+
+function isStandalonePwa() {
+  if (typeof window === "undefined") return false;
+  const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+  return (
+    standaloneNavigator.standalone === true ||
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches
+  );
+}
 
 function getMediaCacheKey(messageId: string | null, mediaKind?: string | null) {
   if (!messageId) return null;
@@ -1371,6 +1404,11 @@ export default function AppInboxPage() {
   const isBusinessTenant = isBusinessSession(session);
   const [leadError, setLeadError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [pushStatus, setPushStatus] = useState<AppPushStatus | null>(null);
+  const [pushUiStatus, setPushUiStatus] = useState<
+    "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
+  >("checking");
+  const [pushBusy, setPushBusy] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
@@ -1525,6 +1563,95 @@ export default function AppInboxPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
   }, [soundEnabled]);
+
+  const refreshPushStatus = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!session) {
+      setPushUiStatus("checking");
+      setPushStatus(null);
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushUiStatus("unsupported");
+      setPushStatus(null);
+      return;
+    }
+    if (isIosLikeDevice() && !isStandalonePwa()) {
+      setPushUiStatus("needs_install");
+      setPushStatus(null);
+      return;
+    }
+    try {
+      const status = await getAppPushStatus(session);
+      setPushStatus(status);
+      if (!status.configured || !status.publicKey) {
+        setPushUiStatus("not_configured");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        setPushUiStatus("denied");
+        return;
+      }
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const subscription = await registration.pushManager.getSubscription();
+      setPushUiStatus(subscription || status.subscribed ? "enabled" : "ready");
+    } catch {
+      setPushUiStatus("error");
+    }
+  }, [session]);
+
+  useEffect(() => {
+    void refreshPushStatus();
+  }, [refreshPushStatus]);
+
+  const handleEnablePush = useCallback(async () => {
+    if (!session || !pushStatus?.publicKey || pushBusy) return;
+    setPushBusy(true);
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushUiStatus(permission === "denied" ? "denied" : "ready");
+        return;
+      }
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const existing = await registration.pushManager.getSubscription();
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(pushStatus.publicKey),
+        }));
+      await subscribeAppPush(session, subscription.toJSON(), isIosLikeDevice() ? "iOS PWA" : "PWA");
+      setPushUiStatus("enabled");
+      void refreshPushStatus();
+    } catch (error) {
+      setPushUiStatus("error");
+      setError((error as Error).message || "Nao foi possivel ativar notificacoes push.");
+    } finally {
+      setPushBusy(false);
+    }
+  }, [pushBusy, pushStatus?.publicKey, refreshPushStatus, session]);
+
+  const handleDisablePush = useCallback(async () => {
+    if (!session || pushBusy) return;
+    setPushBusy(true);
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+      const subscription = await registration?.pushManager.getSubscription();
+      const endpoint = subscription?.endpoint ?? null;
+      if (subscription) {
+        await subscription.unsubscribe();
+      }
+      await unsubscribeAppPush(session, endpoint);
+      setPushUiStatus("ready");
+      void refreshPushStatus();
+    } catch (error) {
+      setPushUiStatus("error");
+      setError((error as Error).message || "Nao foi possivel desativar notificacoes push.");
+    } finally {
+      setPushBusy(false);
+    }
+  }, [pushBusy, refreshPushStatus, session]);
 
   useEffect(
     () => () => {
@@ -3809,6 +3936,49 @@ export default function AppInboxPage() {
               </div>
             </div>
             <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-white/70 max-[1440px]:rounded-lg">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">Push em segundo plano</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-white/55">
+                      {pushUiStatus === "enabled"
+                        ? "Ativado neste dispositivo."
+                        : pushUiStatus === "ready"
+                          ? "Receba avisos mesmo fora do app."
+                          : pushUiStatus === "needs_install"
+                            ? "No iPhone, instale na Tela de Início."
+                            : pushUiStatus === "not_configured"
+                              ? "Aguardando configuração VAPID."
+                              : pushUiStatus === "denied"
+                                ? "Permissão negada no navegador."
+                                : pushUiStatus === "unsupported"
+                                  ? "Indisponível neste navegador."
+                                  : pushUiStatus === "checking"
+                                    ? "Verificando suporte..."
+                                    : "Nao foi possivel verificar."}
+                    </p>
+                  </div>
+                  {pushUiStatus === "enabled" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDisablePush()}
+                      disabled={pushBusy}
+                      className="shrink-0 rounded-lg border border-white/15 bg-white/8 px-2 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/12 disabled:opacity-50"
+                    >
+                      Desativar
+                    </button>
+                  ) : pushUiStatus === "ready" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleEnablePush()}
+                      disabled={pushBusy}
+                      className="shrink-0 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
+                    >
+                      Ativar
+                    </button>
+                  ) : null}
+                </div>
+              </div>
               {isAdminUser ? (
                 <select
                   value={departmentFilter}

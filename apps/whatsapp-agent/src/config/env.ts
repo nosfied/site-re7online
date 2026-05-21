@@ -56,6 +56,9 @@ export type Env = {
   MULTICHANNEL_SHADOW_WRITE: boolean;
   MULTICHANNEL_SHADOW_STRICT: boolean;
   MULTICHANNEL_DUAL_READ: boolean;
+  WEB_PUSH_VAPID_PUBLIC_KEY: string;
+  WEB_PUSH_VAPID_PRIVATE_KEY: string;
+  WEB_PUSH_SUBJECT: string;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -214,6 +217,9 @@ export function getEnv(): Env {
     (process.env.MULTICHANNEL_SHADOW_STRICT ?? "false") === "true";
   const MULTICHANNEL_DUAL_READ =
     (process.env.MULTICHANNEL_DUAL_READ ?? "false") === "true";
+  const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "";
+  const WEB_PUSH_VAPID_PRIVATE_KEY = process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? "";
+  const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT ?? "mailto:suporte@re7online.com";
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -307,6 +313,9 @@ export function getEnv(): Env {
     MULTICHANNEL_SHADOW_WRITE,
     MULTICHANNEL_SHADOW_STRICT,
     MULTICHANNEL_DUAL_READ,
+    WEB_PUSH_VAPID_PUBLIC_KEY,
+    WEB_PUSH_VAPID_PRIVATE_KEY,
+    WEB_PUSH_SUBJECT,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,

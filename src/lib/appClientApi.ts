@@ -36,6 +36,15 @@ export type AppInboxReadState = {
   manuallyUnreadByConversationKey: Record<string, boolean>;
 };
 
+export type AppPushStatus = {
+  ok: true;
+  supported: boolean;
+  configured: boolean;
+  publicKey: string | null;
+  subscribed: boolean;
+  subscriptions: number;
+};
+
 export type AppApiError = Error & {
   status?: number;
   errorCode?: string;
@@ -1334,6 +1343,39 @@ export function logAppInboxEvent(
     method: "POST",
     body: JSON.stringify({ event, payload }),
     timeoutMs: 3000,
+  });
+}
+
+export function getAppPushStatus(session: AppSession): Promise<AppPushStatus> {
+  return requestAppJson(session, "/app/push/status");
+}
+
+export function subscribeAppPush(
+  session: AppSession,
+  subscription: PushSubscriptionJSON,
+  deviceLabel?: string
+): Promise<{
+  ok: true;
+  subscription: {
+    id: string;
+    endpointHash: string;
+    updatedAt: string;
+  };
+  publicKey: string;
+}> {
+  return requestAppJson(session, "/app/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ subscription, deviceLabel }),
+  });
+}
+
+export function unsubscribeAppPush(
+  session: AppSession,
+  endpoint?: string | null
+): Promise<{ ok: true; revoked: number }> {
+  return requestAppJson(session, "/app/push/subscribe", {
+    method: "DELETE",
+    body: JSON.stringify({ endpoint: endpoint ?? null }),
   });
 }
 

@@ -1,7 +1,7 @@
 # Plano de notificacoes Push PWA
 
 Este documento define a arquitetura alvo para notificacoes em segundo plano no
-Converta PWA. Ele nao ativa push real nesta etapa.
+Converta PWA e registra a implementacao inicial da Sprint 66O.
 
 ## Diagnostico 66N.2
 
@@ -18,44 +18,43 @@ Converta PWA. Ele nao ativa push real nesta etapa.
 - No iOS, Web Push exige app adicionado a Tela de Inicio e iOS 16.4+; Safari ou
   Chrome abertos como aba comum nao garantem push em background.
 
-## Estado atual
+## Estado atual apos 66O
 
 - O inbox usa websocket/realtime enquanto a aplicacao esta aberta.
-- O som local depende de gesto do usuario apos reload, por politica de autoplay
-  dos navegadores.
-- Em mobile, websocket nao garante notificacao quando o app esta fechado,
-  suspenso ou em segundo plano.
+- O som local segue desativado por padrao porque depende de gesto do usuario e
+  nao cobre tela travada/background de forma confiavel.
+- Web Push foi implementado com Service Worker, VAPID, subscription persistida
+  por tenant/usuario e disparo backend em mensagem inbound.
+- Se VAPID nao estiver configurado, a aplicacao continua funcionando sem push e
+  os endpoints retornam estado desabilitado/seguro.
 - Android/Chrome suporta Web Push em browser e PWA instalado.
 - iOS suporta Web Push apenas para apps adicionados a Tela de Inicio em iOS
   16.4+.
 
-## Objetivo futuro
-
-Enviar notificacoes push para operadores quando uma conversa elegivel receber
-mensagem inbound ou evento operacional, respeitando tenant, setor, atribuicao,
-permissoes e preferencia do usuario.
-
-## Componentes necessarios
+## Componentes implementados
 
 ### Service worker
 
-- Registrar service worker somente para o app.
-- Receber eventos `push`.
-- Exibir notificacao com titulo, resumo seguro e identificador tecnico.
-- Abrir `/app/inbox` ou conversa especifica ao clicar.
-- Nao interceptar APIs de forma agressiva.
-- Nao implementar offline complexo no primeiro ciclo.
+- Arquivo publico `public/sw.js`.
+- Recebe eventos `push`.
+- Exibe notificacao com titulo e corpo genericos, sem conteudo sensivel.
+- Ao clicar, abre ou foca `/app/inbox`.
+- Nao intercepta APIs nem implementa cache/offline agressivo.
 
 ### VAPID
 
-- Criar par VAPID por ambiente.
-- Armazenar secrets apenas no backend.
-- Public key pode ser entregue ao frontend.
-- Rotacao deve revogar subscriptions antigas quando necessario.
+- Script:
+  `npm run push:vapid:generate`
+- Variaveis:
+  - `WEB_PUSH_VAPID_PUBLIC_KEY`
+  - `WEB_PUSH_VAPID_PRIVATE_KEY`
+  - `WEB_PUSH_SUBJECT`
+- Apenas a public key e entregue ao frontend.
+- A private key deve ficar somente no ambiente backend.
 
 ### Persistencia de subscriptions
 
-Modelo futuro sugerido:
+Modelo implementado:
 
 - `PushSubscription`
   - `id`
@@ -66,8 +65,6 @@ Modelo futuro sugerido:
   - `auth`
   - `userAgent`
   - `deviceLabel`
-  - `platform`
-  - `enabled`
   - `createdAt`
   - `updatedAt`
   - `revokedAt`
@@ -75,18 +72,69 @@ Modelo futuro sugerido:
 Regras:
 
 - Subscription pertence sempre a um usuario e tenant.
+- `endpoint` e unico e pode ser atualizado de forma idempotente.
+- Unsubscribe marca `revokedAt`.
+- Endpoint morto `404/410` e revogado automaticamente.
+- Nenhum payload de mensagem e armazenado na subscription.
+
+### Endpoints
+
+- `GET /app/push/status`
+- `POST /app/push/subscribe`
+- `DELETE /app/push/subscribe`
+
+Todos exigem sessao do app e usam o tenant/usuario autenticado. O body nao
+aceita tenant arbitrario.
+
+### Envio de push
+
+Disparador inicial:
+
+- mensagem inbound nova publicada pelo realtime.
+
+Escopo inicial:
+
+- conversa atribuida: notifica o usuario atribuido;
+- conversa em setor: notifica admins e usuarios ativos do setor;
+- sem setor/atribuicao: notifica usuarios ativos do tenant.
+
+O payload e redigido:
+
+- title: `Nova mensagem no Converta`;
+- body: `Voce recebeu uma nova mensagem.`;
+- url: `/app/inbox`;
+- tag tecnica para dedupe.
+
+Nao inclui texto da mensagem, waId, PSID, IG user id, telefone, token ou raw.
+
+## Objetivo futuro
+
+Enviar notificacoes push para operadores quando uma conversa elegivel receber
+mensagem inbound ou evento operacional, respeitando tenant, setor, atribuicao,
+permissoes e preferencia do usuario.
+
+## Evolucoes planejadas
+
+### Service worker
+
+- Abrir conversa especifica ao clicar quando houver identificador interno seguro.
+- Badge nativo/unread quando suportado.
+
+### VAPID
+
+- Rotacao deve revogar subscriptions antigas quando necessario.
+
+### Persistencia de subscriptions
+
 - Logout deve desativar ou revogar subscription local.
 - Admin deve poder revogar dispositivos de um usuario.
-- Nunca compartilhar subscription entre tenants.
+- Campo de plataforma/dispositivo pode ser adicionado se a gestao de dispositivos
+  crescer.
 
-### Endpoints futuros
+### Endpoints futuros de gestao
 
-- `POST /app/push/subscribe`
-- `POST /app/push/unsubscribe`
 - `GET /app/push/devices`
 - `DELETE /app/push/devices/:id`
-
-Todos exigem sessao do app e escopo do tenant.
 
 ## Envio de push
 
@@ -175,21 +223,11 @@ browser. Ainda assim, a UX recomendada e instalar o app.
 - Subscriptions obsoletas gerando erro recorrente.
 - iOS com comportamento diferente entre Safari, Chrome e standalone.
 
-## Criterio para implementar push real
+## Criterio para rollout operacional
 
-- Modelo de dados aprovado.
+- Migration `PushSubscription` aplicada.
 - VAPID configurado por ambiente.
 - Service worker validado em Android e iOS instalado.
-- Teste multi-tenant com usuario de setores diferentes.
+- Teste multi-tenant com usuarios de setores diferentes.
 - Opt-out e revogacao de dispositivo funcionando.
 - Logs sem PII.
-
-## Foundation segura ate a implementacao real
-
-- Detectar suporte de `Notification`, `serviceWorker` e `PushManager` no
-  frontend.
-- Exibir UI discreta de permissao apenas quando houver endpoints, VAPID e
-  storage prontos.
-- Nao prometer notificacao em background enquanto o backend nao persistir
-  subscriptions e nao enviar Web Push real.
-- Manter websocket e som local como recursos de foreground.

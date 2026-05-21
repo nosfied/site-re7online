@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { logger } from "../logger/logger.js";
 import { InboxRealtimeEvent } from "./events.js";
+import { dispatchWebPushForRealtimeEvent } from "../push/webPushService.js";
 
 type RealtimeRole = "AGENT" | "SUPERVISOR" | "ADMIN";
 
@@ -120,4 +121,12 @@ export function publishRealtimeEvent(event: InboxRealtimeEvent) {
       delivered,
     });
   }
+  void dispatchWebPushForRealtimeEvent(event).catch((error) => {
+    logger.warn({
+      event: "push.failed",
+      reason: "dispatch_error",
+      clientId: event.clientId,
+      message: (error as Error).message,
+    });
+  });
 }

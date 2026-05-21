@@ -42,12 +42,15 @@
     "channels:shadow:compare": "node --import tsx scripts/channels-shadow-compare.ts",
     "channels:shadow:rollout-check": "node --import tsx scripts/channels-shadow-rollout-check.ts",
     "channels:shadow:repair-missing": "node --import tsx scripts/channels-shadow-repair-missing.ts",
-    "channels:shadow:release-anonymized-identity": "node --import tsx scripts/channels-shadow-release-anonymized-identity.ts"
+    "channels:shadow:release-anonymized-identity": "node --import tsx scripts/channels-shadow-release-anonymized-identity.ts",
+    "push:vapid:generate": "node --import tsx scripts/generate-vapid-keys.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.1",
+    "@types/web-push": "^3.6.4",
     "dotenv": "^16.6.1",
     "openai": "^6.17.0",
+    "web-push": "^3.6.7",
     "ws": "^8.20.0"
   },
   "devDependencies": {

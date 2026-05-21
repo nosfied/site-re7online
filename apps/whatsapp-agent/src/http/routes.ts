@@ -99,6 +99,13 @@ import {
 } from "../inbox/readStateStore.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
+  getPushStatus,
+  getWebPushPublicKey,
+  isWebPushConfigured,
+  revokePushSubscription,
+  upsertPushSubscription,
+} from "../push/webPushService.js";
+import {
   executePrivacyRetention,
   findPrivacyConversationTarget,
   getOrCreateRetentionConfig,
@@ -352,6 +359,104 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         event: "app.tenant.get.error",
         requestId,
         message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/push/status") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const status = await getPushStatus({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+      });
+      json(res, 200, {
+        ok: true,
+        supported: true,
+        configured: status.configured,
+        publicKey: status.publicKey,
+        subscribed: status.subscribed,
+        subscriptions: status.subscriptions,
+      });
+    } catch (error) {
+      logger.error({
+        event: "push.status.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/push/subscribe") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isWebPushConfigured()) {
+      json(res, 409, {
+        error: "push_not_configured",
+        message: "Web Push ainda nao esta configurado neste ambiente.",
+      });
+      return;
+    }
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await upsertPushSubscription({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        subscription: body.subscription ?? body,
+        userAgent: req.headers["user-agent"] ?? null,
+        deviceLabel: typeof body.deviceLabel === "string" ? body.deviceLabel : null,
+      });
+      if (!result.ok) {
+        json(res, result.reason === "invalid_subscription" ? 400 : 409, {
+          error: result.reason,
+        });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        subscription: result.subscription,
+        publicKey: getWebPushPublicKey(),
+      });
+    } catch (error) {
+      logger.error({
+        event: "push.subscribe.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "DELETE" && pathname === "/app/push/subscribe") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res).catch(() => null);
+      const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
+      const result = await revokePushSubscription({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        endpoint,
+      });
+      json(res, 200, { ok: true, revoked: result.revoked });
+    } catch (error) {
+      logger.error({
+        event: "push.unsubscribe.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
       });
       json(res, 500, { error: "server_error" });
     }
