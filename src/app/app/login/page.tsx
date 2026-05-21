@@ -20,7 +20,6 @@ export default function AppLoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let fallbackTimer: number | null = null;
@@ -51,7 +50,6 @@ export default function AppLoginPage() {
 
     setLoading(true);
     setError(null);
-    setInfoMessage(null);
     try {
       const response = await loginAppUser(normalizedEmail, password);
       const session: AppSession = {
@@ -125,11 +123,6 @@ export default function AppLoginPage() {
                 {error}
               </p>
             ) : null}
-            {infoMessage ? (
-              <p className="rounded-md border border-amber-400/30 bg-amber-900/30 p-3 text-sm text-amber-100">
-                {infoMessage}
-              </p>
-            ) : null}
             <button
               type="submit"
               disabled={loading}
@@ -141,15 +134,9 @@ export default function AppLoginPage() {
         ) : null}
 
         <div className="theme-soft mt-4 text-center text-xs sm:mt-6">
-          <button
-            type="button"
-            onClick={() =>
-              setInfoMessage("Recuperacao de senha ainda nao esta disponivel no portal. Solicite o reset ao administrador.")
-            }
-            className="hover:text-re7-sky"
-          >
+          <Link href="/app/forgot-password" className="hover:text-re7-sky">
             Recuperar senha
-          </button>
+          </Link>
         </div>
       </div>
     </main>

@@ -66,6 +66,8 @@ model Client {
   leads         Lead[]
   leadNotes     LeadNote[]
   users         User[]
+  authSessions  AppAuthSession[]
+  passwordResetTokens PasswordResetToken[]
   pushSubscriptions PushSubscription[]
   runtimeStates ConversationRuntimeState[]
   departments   Department[]
@@ -94,11 +96,51 @@ model User {
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  authSessions AppAuthSession[]
+  passwordResetTokens PasswordResetToken[]
   pushSubscriptions PushSubscription[]
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
   @@index([clientId, departmentId])
+}
+
+model AppAuthSession {
+  id           String   @id @default(cuid())
+  clientId     String   @db.Uuid
+  userId       String
+  userAgent    String?
+  ipHash       String?
+  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokeReason String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, revokedAt])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  userId          String
+  tokenHash       String   @unique
+  requestedIpHash String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  usedAt          DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, expiresAt])
+  @@index([expiresAt])
 }
 
 model PushSubscription {

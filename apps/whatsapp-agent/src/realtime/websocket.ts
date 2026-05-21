@@ -1,8 +1,7 @@
 import http from "node:http";
 import { Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
-import { verifyClientAuthToken } from "../auth/clientAuth.js";
-import { normalizeUserRole } from "../auth/clientAuthMiddleware.js";
+import { validateAppSessionFromRequest } from "../auth/appSessionService.js";
 import { logger } from "../logger/logger.js";
 import { addConnection } from "./hub.js";
 
@@ -30,21 +29,31 @@ export function attachRealtimeWebSocket(server: http.Server) {
         closeUnauthorized(socket, "missing_token");
         return;
       }
+      req.headers.authorization = `Bearer ${token}`;
 
-      const payload = verifyClientAuthToken(token);
-      if (!payload) {
-        closeUnauthorized(socket, "invalid_token");
-        return;
-      }
-
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        addConnection(ws, {
-          userId: payload.sub,
-          clientId: payload.clientId,
-          email: payload.email,
-          role: normalizeUserRole(payload.role),
+      void validateAppSessionFromRequest(req)
+        .then((validation) => {
+          if (!validation.ok) {
+            closeUnauthorized(socket, validation.reason);
+            return;
+          }
+          wss.handleUpgrade(req, socket, head, (ws) => {
+            addConnection(ws, {
+              userId: validation.auth.userId,
+              clientId: validation.auth.clientId,
+              email: validation.auth.email,
+              role: validation.auth.role,
+            });
+          });
+        })
+        .catch((error) => {
+          logger.warn({
+            event: "realtime.websocket.auth_failed",
+            reason: "session_validation_error",
+            message: (error as Error).message,
+          });
+          socket.destroy();
         });
-      });
     } catch (error) {
       logger.warn({
         event: "realtime.websocket.auth_failed",

@@ -59,6 +59,12 @@ export type Env = {
   WEB_PUSH_VAPID_PUBLIC_KEY: string;
   WEB_PUSH_VAPID_PRIVATE_KEY: string;
   WEB_PUSH_SUBJECT: string;
+  PASSWORD_RESET_BASE_URL: string;
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_USER: string;
+  SMTP_PASS: string;
+  SMTP_FROM: string;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -220,6 +226,12 @@ export function getEnv(): Env {
   const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "";
   const WEB_PUSH_VAPID_PRIVATE_KEY = process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? "";
   const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT ?? "mailto:suporte@re7online.com";
+  const PASSWORD_RESET_BASE_URL = process.env.PASSWORD_RESET_BASE_URL ?? "";
+  const SMTP_HOST = process.env.SMTP_HOST ?? "";
+  const SMTP_PORT = toNumber(process.env.SMTP_PORT, 587);
+  const SMTP_USER = process.env.SMTP_USER ?? "";
+  const SMTP_PASS = process.env.SMTP_PASS ?? "";
+  const SMTP_FROM = process.env.SMTP_FROM ?? "";
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -316,6 +328,12 @@ export function getEnv(): Env {
     WEB_PUSH_VAPID_PUBLIC_KEY,
     WEB_PUSH_VAPID_PRIVATE_KEY,
     WEB_PUSH_SUBJECT,
+    PASSWORD_RESET_BASE_URL,
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_PASS,
+    SMTP_FROM,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,

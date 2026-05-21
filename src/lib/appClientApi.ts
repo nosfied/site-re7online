@@ -291,7 +291,7 @@ function normalizeBaseUrl(input: string) {
   }
 }
 
-function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
+function decodeClientAuthToken(token: string): Partial<AppSessionUser> & { sid?: string } {
   try {
     const [, payload] = token.split(".");
     if (!payload) return {};
@@ -302,6 +302,7 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
       email: string;
       clientId: string;
       role: string;
+      sid: string;
       departmentId?: string | null;
       departmentName?: string | null;
     }>;
@@ -311,6 +312,7 @@ function decodeClientAuthToken(token: string): Partial<AppSessionUser> {
       email: typeof parsed.email === "string" ? parsed.email : undefined,
       clientId: typeof parsed.clientId === "string" ? parsed.clientId : undefined,
       role: typeof parsed.role === "string" ? parsed.role : undefined,
+      sid: typeof parsed.sid === "string" ? parsed.sid : undefined,
       departmentId: typeof parsed.departmentId === "string" ? parsed.departmentId : undefined,
       departmentName: typeof parsed.departmentName === "string" ? parsed.departmentName : undefined,
     };
@@ -340,7 +342,7 @@ function parseStoredSession(raw: string | null): AppSession | null {
           ? parsed.user.departmentName
           : tokenUser.departmentName ?? null,
     };
-    if (!token || !resolvedUser.id || !resolvedUser.clientId || !resolvedUser.email) {
+    if (!token || !tokenUser.sid || !resolvedUser.id || !resolvedUser.clientId || !resolvedUser.email) {
       return null;
     }
     return {
@@ -459,7 +461,17 @@ async function requestAppJson<T>(
     error.errorCode = errorCode;
     error.details = details;
     error.payload = payload;
-    if (res.status === 401) error.message = "Sessao expirada. Faca login novamente.";
+    if (res.status === 401) {
+      if (errorCode === "session_replaced") {
+        error.message = "Sua sessao foi encerrada porque houve um novo login em outro dispositivo.";
+      } else if (errorCode === "session_revoked") {
+        error.message = "Sessao encerrada. Faca login novamente.";
+      } else if (errorCode === "session_expired" || errorCode === "token_expired") {
+        error.message = "Sessao expirada. Faca login novamente.";
+      } else {
+        error.message = "Sessao invalida. Faca login novamente.";
+      }
+    }
     if (res.status === 403) error.message = "Sem permissao (403).";
     if (errorCode === "feature_disabled" || errorCode === "feature_not_enabled") {
       error.message = "Este modulo nao esta disponivel para este perfil.";
@@ -723,6 +735,60 @@ export async function loginAppUser(
       departmentName: payload.user.departmentName ?? tokenUser.departmentName ?? null,
     },
   };
+}
+
+export async function requestAppPasswordReset(email: string): Promise<{ ok: true; message: string }> {
+  const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const res = await fetch(`${baseUrl}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error("Nao foi possivel solicitar a recuperacao agora.");
+  }
+  return (await res.json()) as { ok: true; message: string };
+}
+
+export async function resetAppPassword(
+  token: string,
+  password: string
+): Promise<{ ok: true; message: string }> {
+  const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const res = await fetch(`${baseUrl}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+    cache: "no-store",
+  });
+  const body = (await res.json().catch(() => null)) as
+    | { ok?: true; message?: string; error?: string | { message?: string } }
+    | null;
+  if (!res.ok) {
+    const message =
+      (typeof body?.message === "string" && body.message) ||
+      (typeof body?.error === "object" && typeof body.error.message === "string"
+        ? body.error.message
+        : "") ||
+      "Nao foi possivel alterar a senha.";
+    throw new Error(message);
+  }
+  return {
+    ok: true,
+    message: typeof body?.message === "string" ? body.message : "Senha alterada com sucesso.",
+  };
+}
+
+export function logoutAppSession(
+  session: AppSession,
+  endpoint?: string | null
+): Promise<{ ok: true }> {
+  return requestAppJson(session, "/auth/logout", {
+    method: "POST",
+    body: JSON.stringify({ endpoint: endpoint ?? null }),
+    timeoutMs: 3000,
+  });
 }
 
 export async function fetchAppConversations(

@@ -58,7 +58,19 @@ import {
 } from "../meta/template.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
-import { normalizeUserRole, requireClientAuth } from "../auth/clientAuthMiddleware.js";
+import {
+  normalizeUserRole,
+  requireClientAuth,
+  setValidatedClientAuth,
+} from "../auth/clientAuthMiddleware.js";
+import {
+  buildSessionExpiredMessage,
+  createExclusiveAppSession,
+  requestPasswordReset,
+  resetPasswordWithToken,
+  revokeAppSession,
+  validateAppSessionFromRequest,
+} from "../auth/appSessionService.js";
 import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
@@ -221,16 +233,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
 
       if (users.length === 0) {
+        logger.info({ event: "auth.login.failed", reason: "invalid_credentials", requestId });
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
       if (users.length > 1) {
+        logger.info({ event: "auth.login.failed", reason: "ambiguous_login", requestId });
         json(res, 409, { error: "ambiguous_login" });
         return;
       }
 
       const user = users[0];
       if (user.client.status !== "ACTIVE") {
+        logger.info({ event: "auth.login.failed", reason: "client_inactive", clientId: user.clientId, userId: user.id, requestId });
         json(res, 403, { error: "client_inactive" });
         return;
       }
@@ -249,16 +264,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       if (!verifyPassword(password, user.passwordHash)) {
+        logger.info({ event: "auth.login.failed", reason: "invalid_credentials", clientId: user.clientId, userId: user.id, requestId });
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
 
-      const token = issueClientAuthToken({
-        id: user.id,
+      const session = await createExclusiveAppSession({
         clientId: user.clientId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        userId: user.id,
+        req,
+      });
+      const token = issueClientAuthToken(
+        {
+          id: user.id,
+          clientId: user.clientId,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        session.id
+      );
+
+      logger.info({
+        event: "auth.login.success",
+        clientId: user.clientId,
+        userId: user.id,
+        sessionId: session.id,
+        requestId,
       });
 
       json(res, 200, {
@@ -284,6 +316,104 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 500, { error: "server_error" });
     }
     return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/forgot-password") {
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      await requestPasswordReset({
+        email: String(body.email ?? ""),
+        req,
+      });
+      json(res, 200, {
+        ok: true,
+        message: "Se existir uma conta para este email, enviaremos instrucoes de recuperacao.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.password_reset.request.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 200, {
+        ok: true,
+        message: "Se existir uma conta para este email, enviaremos instrucoes de recuperacao.",
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/reset-password") {
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const token = String(body.token ?? "").trim();
+      const password = String(body.password ?? "");
+      if (!token || !password) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const result = await resetPasswordWithToken({ token, password });
+      if (!result.ok) {
+        const status = result.reason === "weak_password" ? 400 : 401;
+        json(res, status, {
+          error: result.reason,
+          message:
+            result.reason === "weak_password"
+              ? "A senha deve ter pelo menos 8 caracteres."
+              : "Link de recuperacao invalido ou expirado.",
+        });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        message: "Senha alterada com sucesso. Faca login novamente.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.password_reset.complete.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/logout") {
+    const validation = await validateAppSessionFromRequest(req);
+    if (validation.ok) {
+      await revokeAppSession({
+        clientId: validation.auth.clientId,
+        userId: validation.auth.userId,
+        sessionId: validation.auth.sessionId ?? "",
+        reason: "logout",
+      });
+      const body = await readJsonBody(req, res).catch(() => null);
+      const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
+      if (endpoint) {
+        await revokePushSubscription({
+          clientId: validation.auth.clientId,
+          userId: validation.auth.userId,
+          endpoint,
+        });
+      }
+    }
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  if (pathname.startsWith("/app/")) {
+    const validation = await validateAppSessionFromRequest(req);
+    if (!validation.ok) {
+      json(res, 401, {
+        error: validation.reason,
+        message: buildSessionExpiredMessage(validation.reason),
+      });
+      return;
+    }
+    setValidatedClientAuth(req, validation.auth);
   }
 
   if (

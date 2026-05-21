@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { env } from "../config/env.js";
 
 const TOKEN_VERSION = 1;
-const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+export const CLIENT_AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 12;
 
 type ClientAuthTokenPayload = {
   sub: string;
@@ -10,6 +10,7 @@ type ClientAuthTokenPayload = {
   email: string;
   name: string;
   role: string;
+  sid: string;
   iat: number;
   exp: number;
   typ: "client-auth";
@@ -25,7 +26,7 @@ export type ClientAuthUser = {
 };
 
 function getClientAuthSecret() {
-  return env.APP_AUTH_SECRET || env.ADMIN_TOKEN;
+  return process.env.APP_AUTH_SECRET || process.env.ADMIN_TOKEN || env.APP_AUTH_SECRET || env.ADMIN_TOKEN;
 }
 
 function toBase64Url(input: string | Buffer) {
@@ -70,7 +71,7 @@ export function verifyPassword(password: string, passwordHash: string | null | u
   }
 }
 
-export function issueClientAuthToken(user: ClientAuthUser) {
+export function issueClientAuthToken(user: ClientAuthUser, sessionId: string) {
   const now = Math.floor(Date.now() / 1000);
   const payload: ClientAuthTokenPayload = {
     sub: user.id,
@@ -78,8 +79,9 @@ export function issueClientAuthToken(user: ClientAuthUser) {
     email: user.email,
     name: user.name,
     role: user.role,
+    sid: sessionId,
     iat: now,
-    exp: now + TOKEN_TTL_SECONDS,
+    exp: now + CLIENT_AUTH_TOKEN_TTL_SECONDS,
     typ: "client-auth",
     ver: TOKEN_VERSION,
   };
@@ -90,15 +92,30 @@ export function issueClientAuthToken(user: ClientAuthUser) {
   return `${unsignedToken}.${signTokenPart(unsignedToken)}`;
 }
 
-export function verifyClientAuthToken(token: string) {
+export type ClientAuthTokenVerification =
+  | { ok: true; payload: ClientAuthTokenPayload }
+  | {
+      ok: false;
+      reason:
+        | "malformed"
+        | "invalid_signature"
+        | "invalid_payload"
+        | "token_expired";
+    };
+
+export function verifyClientAuthTokenDetailed(token: string): ClientAuthTokenVerification {
   const [encodedHeader, encodedPayload, signature] = token.split(".");
-  if (!encodedHeader || !encodedPayload || !signature) return null;
+  if (!encodedHeader || !encodedPayload || !signature) return { ok: false, reason: "malformed" };
   const unsignedToken = `${encodedHeader}.${encodedPayload}`;
   const expectedSignature = signTokenPart(unsignedToken);
   const actualSignature = Buffer.from(signature);
   const expectedSignatureBuffer = Buffer.from(expectedSignature);
-  if (actualSignature.length !== expectedSignatureBuffer.length) return null;
-  if (!crypto.timingSafeEqual(actualSignature, expectedSignatureBuffer)) return null;
+  if (actualSignature.length !== expectedSignatureBuffer.length) {
+    return { ok: false, reason: "invalid_signature" };
+  }
+  if (!crypto.timingSafeEqual(actualSignature, expectedSignatureBuffer)) {
+    return { ok: false, reason: "invalid_signature" };
+  }
   try {
     const payload = JSON.parse(fromBase64Url(encodedPayload).toString("utf8")) as ClientAuthTokenPayload;
     if (
@@ -108,14 +125,20 @@ export function verifyClientAuthToken(token: string) {
       !payload.clientId ||
       !payload.email ||
       !payload.name ||
-      !payload.role
+      !payload.role ||
+      !payload.sid
     ) {
-      return null;
+      return { ok: false, reason: "invalid_payload" };
     }
     const now = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp <= now) return null;
-    return payload;
+    if (!payload.exp || payload.exp <= now) return { ok: false, reason: "token_expired" };
+    return { ok: true, payload };
   } catch {
-    return null;
+    return { ok: false, reason: "invalid_payload" };
   }
+}
+
+export function verifyClientAuthToken(token: string) {
+  const result = verifyClientAuthTokenDetailed(token);
+  return result.ok ? result.payload : null;
 }

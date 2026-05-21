@@ -1,12 +1,17 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import { verifyClientAuthToken } from "./clientAuth.js";
 
+export type NormalizedUserRole = "ADMIN" | "SUPERVISOR" | "AGENT";
+
 export type ClientAuthContext = {
   userId: string;
   clientId: string;
-  role: string;
+  role: NormalizedUserRole;
   email: string;
+  sessionId?: string;
 };
+
+const validatedAuthByRequest = new WeakMap<IncomingMessage, ClientAuthContext>();
 
 export function normalizeUserRole(role: string | null | undefined) {
   const normalized = String(role || "").trim().toUpperCase();
@@ -55,6 +60,8 @@ function json(res: ServerResponse, status: number, payload: unknown) {
 }
 
 export function resolveClientAuth(req: IncomingMessage): ClientAuthContext | null {
+  const validated = validatedAuthByRequest.get(req);
+  if (validated) return validated;
   const token = getBearerToken(req);
   if (!token) return null;
   const payload = verifyClientAuthToken(token);
@@ -64,7 +71,12 @@ export function resolveClientAuth(req: IncomingMessage): ClientAuthContext | nul
     clientId: payload.clientId,
     role: normalizeUserRole(payload.role),
     email: payload.email,
+    sessionId: payload.sid,
   };
+}
+
+export function setValidatedClientAuth(req: IncomingMessage, auth: ClientAuthContext) {
+  validatedAuthByRequest.set(req, auth);
 }
 
 export function requireClientAuth(

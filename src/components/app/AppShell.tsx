@@ -9,6 +9,7 @@ import {
   AppSession,
   clearAppSession,
   fetchAppTenantSummary,
+  logoutAppSession,
   unsubscribeAppPush,
 } from "@/lib/appClientApi";
 import { getAppFeatures, getAppProfile, type AppFeatureKey, type AppProfile } from "@/lib/appFeatures";
@@ -164,7 +165,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         if (subscription) {
           await subscription.unsubscribe();
         }
-        await unsubscribeAppPush(session, endpoint);
+        await logoutAppSession(session, endpoint).catch(() => null);
+        await unsubscribeAppPush(session, endpoint).catch(() => null);
       } catch {
         // Logout must remain fail-open even if the browser denies service worker access.
       } finally {
