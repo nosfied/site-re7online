@@ -288,12 +288,13 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <nav className="flex min-h-0 w-full flex-1 items-center gap-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mt-4 md:flex-col md:gap-2 md:overflow-x-hidden md:overflow-y-auto md:px-2 md:[@media(max-height:760px)]:mt-2 md:[@media(max-height:760px)]:gap-1 [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const mobileOnlyInbox = item.href === "/app/inbox";
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     title={item.labels[profile]}
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl ${
+                    className={`${mobileOnlyInbox ? "flex" : "hidden md:flex"} h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl ${
                       active
                         ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
                         : "text-white/70 hover:bg-white/10 hover:text-white"

@@ -1382,6 +1382,8 @@ export default function AppInboxPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const conversationListRef = useRef<HTMLDivElement | null>(null);
+  const conversationListTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const conversationListTouchMovedRef = useRef(false);
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
@@ -3959,7 +3961,31 @@ export default function AppInboxPage() {
               </div>
             </div>
           </div>
-          <div ref={conversationListRef} className="min-h-0 flex-1 overflow-y-auto overflow-anchor-none">
+          <div
+            ref={conversationListRef}
+            className="min-h-0 flex-1 select-none overflow-y-auto overflow-anchor-none touch-pan-y [-webkit-tap-highlight-color:transparent]"
+            onTouchStart={(event) => {
+              const touch = event.touches.item(0);
+              conversationListTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+              conversationListTouchMovedRef.current = false;
+            }}
+            onTouchMove={(event) => {
+              const start = conversationListTouchStartRef.current;
+              const touch = event.touches.item(0);
+              if (!start || !touch) return;
+              const deltaX = Math.abs(touch.clientX - start.x);
+              const deltaY = Math.abs(touch.clientY - start.y);
+              if (deltaX > 8 || deltaY > 8) {
+                conversationListTouchMovedRef.current = true;
+              }
+            }}
+            onTouchEnd={() => {
+              window.setTimeout(() => {
+                conversationListTouchMovedRef.current = false;
+                conversationListTouchStartRef.current = null;
+              }, 160);
+            }}
+          >
             {loadingConversations ? (
               <div className="space-y-2 px-3 py-4">
                 {[0, 1, 2].map((item) => (
@@ -4002,7 +4028,11 @@ export default function AppInboxPage() {
                 <button
                   key={conversationIdentity}
                   type="button"
-                  onClick={() => {
+                  onClick={(event) => {
+                    if (conversationListTouchMovedRef.current) {
+                      event.preventDefault();
+                      return;
+                    }
                     const shouldOpenAtUnread = isConversationUnreadForUser(item, readState, session?.user);
                     const activityAt = getConversationActivityAt(item);
                     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
@@ -4037,7 +4067,7 @@ export default function AppInboxPage() {
                     setShowMoreActions(false);
                     detailRequestSeqRef.current += 1;
                   }}
-                  className={`min-h-[76px] w-full border-b px-4 py-3.5 text-left transition max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
+                  className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
