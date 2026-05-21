@@ -18,6 +18,18 @@ export type BrowserPushSubscriptionInput = {
 const recentPushKeys = new Set<string>();
 const recentPushKeyOrder: string[] = [];
 const MAX_RECENT_PUSH_KEYS = 1000;
+const PUSH_PRESENCE_TTL_MS = 60_000;
+
+type PushPresence = {
+  clientId: string;
+  userId: string;
+  endpoint: string;
+  visible: boolean;
+  focused: boolean;
+  updatedAtMs: number;
+};
+
+const pushPresenceByEndpoint = new Map<string, PushPresence>();
 
 function rememberPushKey(key: string) {
   if (recentPushKeys.has(key)) return false;
@@ -63,6 +75,54 @@ export function normalizePushSubscriptionInput(input: BrowserPushSubscriptionInp
   if (!endpoint || !/^https:\/\//i.test(endpoint)) return null;
   if (!p256dh || !auth) return null;
   return { endpoint, p256dh, auth };
+}
+
+function pruneExpiredPushPresence(nowMs = Date.now()) {
+  for (const [endpoint, presence] of pushPresenceByEndpoint.entries()) {
+    if (nowMs - presence.updatedAtMs > PUSH_PRESENCE_TTL_MS) {
+      pushPresenceByEndpoint.delete(endpoint);
+    }
+  }
+}
+
+export function updatePushPresence(params: {
+  clientId: string;
+  userId: string;
+  endpoint: string;
+  visible: boolean;
+  focused: boolean;
+  nowMs?: number;
+}) {
+  const endpoint = params.endpoint.trim();
+  if (!endpoint || !/^https:\/\//i.test(endpoint)) {
+    return { ok: false as const, reason: "invalid_endpoint" as const };
+  }
+  const nowMs = params.nowMs ?? Date.now();
+  pruneExpiredPushPresence(nowMs);
+  pushPresenceByEndpoint.set(endpoint, {
+    clientId: params.clientId,
+    userId: params.userId,
+    endpoint,
+    visible: params.visible,
+    focused: params.focused,
+    updatedAtMs: nowMs,
+  });
+  return { ok: true as const };
+}
+
+export function shouldSuppressPushForForegroundSubscription(params: {
+  clientId: string;
+  userId: string;
+  endpoint: string;
+  nowMs?: number;
+}) {
+  const nowMs = params.nowMs ?? Date.now();
+  pruneExpiredPushPresence(nowMs);
+  const presence = pushPresenceByEndpoint.get(params.endpoint);
+  if (!presence) return false;
+  if (presence.clientId !== params.clientId || presence.userId !== params.userId) return false;
+  if (!presence.visible) return false;
+  return nowMs - presence.updatedAtMs <= PUSH_PRESENCE_TTL_MS;
 }
 
 export async function getPushStatus(params: { clientId: string; userId: string }) {
@@ -251,6 +311,22 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
   let sent = 0;
   let failed = 0;
   for (const subscription of subscriptions) {
+    if (
+      shouldSuppressPushForForegroundSubscription({
+        clientId: event.clientId,
+        userId: subscription.userId,
+        endpoint: subscription.endpoint,
+      })
+    ) {
+      logger.info({
+        event: "push.skipped",
+        reason: "foreground_visible",
+        clientId: event.clientId,
+        userId: subscription.userId,
+        endpointHash: hashEndpoint(subscription.endpoint),
+      });
+      continue;
+    }
     try {
       await webPush.sendNotification(
         {

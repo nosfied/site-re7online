@@ -15,11 +15,12 @@ import {
   type AppRealtimeEvent,
   type AppNotificationRequest,
 } from "@/lib/appRealtime";
-import { loadAppSession, type AppSession } from "@/lib/appClientApi";
+import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/appClientApi";
 
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const NOTIFICATION_MAX_QUEUE = 10;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+const PUSH_PRESENCE_INTERVAL_MS = 25_000;
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
@@ -34,6 +35,13 @@ function getNotificationPermissionState() {
 function getSessionKey(session: AppSession | null) {
   if (!session?.token) return null;
   return `${session.baseUrl}:${session.user.clientId}:${session.user.id}:${session.token}`;
+}
+
+async function getCurrentPushEndpoint() {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
+  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  const subscription = await registration?.pushManager.getSubscription();
+  return subscription?.endpoint ?? null;
 }
 
 export default function AppRealtimeBridge() {
@@ -311,6 +319,59 @@ export default function AppRealtimeBridge() {
     clientRef.current = realtime;
     realtime.connect();
   }, [handleRealtimeEvent, pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const currentPathname = pathname ?? "";
+    if (!currentPathname.startsWith("/app") || currentPathname === "/app/login") return;
+
+    const session = loadAppSession();
+    if (!session) return;
+
+    let cancelled = false;
+    let lastSentKey = "";
+    let lastSentAt = 0;
+
+    const sendPresence = async (force = false) => {
+      if (cancelled) return;
+      const endpoint = await getCurrentPushEndpoint().catch(() => null);
+      if (!endpoint || cancelled) return;
+      const visible = document.visibilityState === "visible";
+      const focused = document.hasFocus();
+      const now = Date.now();
+      const key = `${endpoint}:${visible ? "1" : "0"}:${focused ? "1" : "0"}`;
+      if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
+      lastSentKey = key;
+      lastSentAt = now;
+      await updateAppPushPresence(session, endpoint, { visible, focused }).catch(() => undefined);
+    };
+
+    const handlePresenceChange = () => {
+      void sendPresence(true);
+    };
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void sendPresence(false);
+      }
+    }, PUSH_PRESENCE_INTERVAL_MS);
+
+    void sendPresence(true);
+    document.addEventListener("visibilitychange", handlePresenceChange);
+    window.addEventListener("focus", handlePresenceChange);
+    window.addEventListener("blur", handlePresenceChange);
+    window.addEventListener("pagehide", handlePresenceChange);
+    window.addEventListener("pageshow", handlePresenceChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handlePresenceChange);
+      window.removeEventListener("focus", handlePresenceChange);
+      window.removeEventListener("blur", handlePresenceChange);
+      window.removeEventListener("pagehide", handlePresenceChange);
+      window.removeEventListener("pageshow", handlePresenceChange);
+    };
+  }, [pathname]);
 
   const currentPathname = pathname ?? "";
   const shouldShowAlertActivation =

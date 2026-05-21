@@ -5,7 +5,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
-import { AppSession, clearAppSession, fetchAppTenantSummary } from "@/lib/appClientApi";
+import {
+  AppSession,
+  clearAppSession,
+  fetchAppTenantSummary,
+  unsubscribeAppPush,
+} from "@/lib/appClientApi";
 import { getAppFeatures, getAppProfile, type AppFeatureKey, type AppProfile } from "@/lib/appFeatures";
 
 type AppShellProps = {
@@ -151,8 +156,22 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   }, [session]);
 
   const handleLogout = () => {
-    clearAppSession();
-    router.replace("/app/login");
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker?.getRegistration("/sw.js");
+        const subscription = await registration?.pushManager.getSubscription();
+        const endpoint = subscription?.endpoint ?? null;
+        if (subscription) {
+          await subscription.unsubscribe();
+        }
+        await unsubscribeAppPush(session, endpoint);
+      } catch {
+        // Logout must remain fail-open even if the browser denies service worker access.
+      } finally {
+        clearAppSession();
+        router.replace("/app/login");
+      }
+    })();
   };
 
   const visibleNavItems = APP_NAV_ITEMS.filter((item) => {

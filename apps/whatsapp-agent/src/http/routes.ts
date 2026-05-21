@@ -103,6 +103,7 @@ import {
   getWebPushPublicKey,
   isWebPushConfigured,
   revokePushSubscription,
+  updatePushPresence,
   upsertPushSubscription,
 } from "../push/webPushService.js";
 import {
@@ -453,6 +454,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "push.unsubscribe.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/push/presence") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+      const result = updatePushPresence({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        endpoint,
+        visible: body.visible === true,
+        focused: body.focused === true,
+      });
+      if (!result.ok) {
+        json(res, 400, { error: result.reason });
+        return;
+      }
+      json(res, 200, { ok: true });
+    } catch (error) {
+      logger.error({
+        event: "push.presence.error",
         clientId: clientAuth.clientId,
         userId: clientAuth.userId,
         message: (error as Error).message,

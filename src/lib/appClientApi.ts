@@ -1379,6 +1379,22 @@ export function unsubscribeAppPush(
   });
 }
 
+export function updateAppPushPresence(
+  session: AppSession,
+  endpoint: string,
+  presence: { visible: boolean; focused: boolean }
+): Promise<{ ok: true }> {
+  return requestAppJson(session, "/app/push/presence", {
+    method: "POST",
+    body: JSON.stringify({
+      endpoint,
+      visible: presence.visible,
+      focused: presence.focused,
+    }),
+    timeoutMs: 3000,
+  });
+}
+
 export async function listAppCampaigns(
   session: AppSession,
   options?: { limit?: number }
