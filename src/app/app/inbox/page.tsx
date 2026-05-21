@@ -4336,7 +4336,7 @@ export default function AppInboxPage() {
                 </h2>
                 {selectedConversation ? (
                   <span
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-6 max-[1440px]:w-6 max-md:hidden ${getConversationChannelBadgeClass(selectedConversation)}`}
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border p-0.5 max-[1440px]:h-6 max-[1440px]:w-6 max-md:h-6 max-md:w-6 ${getConversationChannelBadgeClass(selectedConversation)}`}
                     title={getConversationChannelLabel(selectedConversation)}
                     aria-label={getConversationChannelLabel(selectedConversation)}
                   >
@@ -4387,23 +4387,6 @@ export default function AppInboxPage() {
               </button>
               {showMoreActions && selectedConversation ? (
                 <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[#d4c7b5] bg-white text-sm text-slate-800 shadow-2xl">
-                  {isAdminUser ? (
-                    <button
-                      type="button"
-                      className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!selectedConversation}
-                      onClick={() => {
-                        router.push(
-                          `/app/settings/privacy?conversationId=${encodeURIComponent(
-                            selectedConversation.waIdCanonical ?? selectedConversation.waId
-                          )}`
-                        );
-                        setShowMoreActions(false);
-                      }}
-                    >
-                      Privacidade da conversa
-                    </button>
-                  ) : null}
                   {selectedConversation.assignedUserId === session.user.id ? (
                     <>
                       <button
