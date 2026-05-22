@@ -385,7 +385,7 @@ export default function AppRealtimeBridge() {
   if (!shouldShowAlertActivation) return null;
 
   return (
-    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[10000] w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
+    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[10000] hidden w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur md:block">
       <div className="flex items-center gap-3">
         <span className="min-w-0">
           <span className="block font-semibold">Restaurar som das notificacoes</span>

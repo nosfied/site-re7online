@@ -1411,6 +1411,7 @@ export default function AppInboxPage() {
     "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
+  const [mobilePushNotice, setMobilePushNotice] = useState<string | null>(null);
   const pushMobileNoticeShownRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
@@ -1728,11 +1729,11 @@ export default function AppInboxPage() {
     pushMobileNoticeShownRef.current = true;
     const message =
       pushUiStatus === "denied"
-        ? "As notificacoes estao bloqueadas no navegador. Para receber avisos em segundo plano, libere a permissao do site e toque no sininho."
+        ? "As notificacoes estao bloqueadas no navegador. Para receber avisos em segundo plano, libere a permissao do site e toque duas vezes no sininho para desativar e ativar novamente."
         : pushUiStatus === "needs_install"
-          ? "Para receber push no iPhone, instale o Converta na Tela de Inicio e toque no sininho."
-          : "Para receber avisos em segundo plano, toque no sininho no topo da lista de conversas.";
-    setError(message);
+          ? "Para receber push no iPhone, instale o Converta na Tela de Inicio e toque duas vezes no sininho para desativar e ativar novamente."
+          : "Para receber avisos em segundo plano, toque duas vezes no sininho no topo da lista de conversas para desativar e ativar novamente.";
+    setMobilePushNotice(message);
   }, [pushUiStatus, session]);
 
   useEffect(
@@ -3892,6 +3893,21 @@ export default function AppInboxPage() {
         onFocus={() => setPauseErrorToast(true)}
         onBlur={() => setPauseErrorToast(false)}
       />
+      {mobilePushNotice ? (
+        <div className="fixed inset-x-3 bottom-[calc(1rem+var(--safe-bottom))] z-[95] rounded-2xl border border-amber-600 bg-amber-400 p-3 text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.25)] md:hidden">
+          <p className="font-semibold">Notificações em segundo plano</p>
+          <p className="mt-1 leading-relaxed text-slate-900/80">{mobilePushNotice}</p>
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setMobilePushNotice(null)}
+              className="rounded-lg bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {showContactTimeline ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
@@ -4021,6 +4037,13 @@ export default function AppInboxPage() {
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
                   {soundEnabled || pushUiStatus === "enabled" ? "🔔" : "🔕"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="hidden h-8 items-center justify-center rounded-lg border border-re7-orange/35 bg-re7-orange/15 px-2 text-[11px] font-semibold text-orange-100 shadow-sm transition hover:bg-re7-orange/25 max-md:flex"
+                >
+                  Sair
                 </button>
               </div>
             </div>
@@ -4811,7 +4834,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pb-[calc(0.65rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:py-1.5">
+          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:bottom-[var(--safe-bottom)] max-md:px-2.5 max-md:pb-[calc(1.35rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:py-1.5">
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
