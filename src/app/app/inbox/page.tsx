@@ -10,7 +10,6 @@ import {
   canUserReceiveTargetedNotification,
   handleRealtimeNotificationCandidate,
   requestAppNotificationAudioUnlock,
-  requestBrowserNotificationPermission,
   setActiveConversationIdentity,
   setActiveInboxConversation,
   type AppRealtimeEvent,
@@ -1411,6 +1410,7 @@ export default function AppInboxPage() {
     "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
+  const pushMobileNoticeShownRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
@@ -1615,6 +1615,11 @@ export default function AppInboxPage() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setPushUiStatus(permission === "denied" ? "denied" : "ready");
+        setError(
+          permission === "denied"
+            ? "Notificacoes bloqueadas no navegador. Libere a permissao do site para ativar."
+            : "Permissao de notificacao nao concedida."
+        );
         return;
       }
       const registration = await navigator.serviceWorker.register("/sw.js");
@@ -1627,6 +1632,7 @@ export default function AppInboxPage() {
         }));
       await subscribeAppPush(session, subscription.toJSON(), isIosLikeDevice() ? "iOS PWA" : "PWA");
       setPushUiStatus("enabled");
+      setSuccess("Notificacoes push ativadas neste dispositivo.");
       void refreshPushStatus();
     } catch (error) {
       setPushUiStatus("error");
@@ -1648,6 +1654,7 @@ export default function AppInboxPage() {
       }
       await unsubscribeAppPush(session, endpoint);
       setPushUiStatus("ready");
+      setSuccess("Notificacoes push desativadas neste dispositivo.");
       void refreshPushStatus();
     } catch (error) {
       setPushUiStatus("error");
@@ -1656,6 +1663,55 @@ export default function AppInboxPage() {
       setPushBusy(false);
     }
   }, [pushBusy, refreshPushStatus, session]);
+
+  const handleNotificationToggle = useCallback(() => {
+    if (soundEnabled || pushUiStatus === "enabled") {
+      setSoundEnabled(false);
+      if (pushUiStatus === "enabled") {
+        void handleDisablePush();
+      }
+      return;
+    }
+
+    setSoundEnabled(true);
+    requestAppNotificationAudioUnlock();
+    if (pushUiStatus === "ready") {
+      void handleEnablePush();
+      return;
+    }
+    if (pushUiStatus === "denied") {
+      setError("Notificacoes bloqueadas no navegador. Libere a permissao do site para ativar.");
+      return;
+    }
+    if (pushUiStatus === "needs_install") {
+      setError("No iPhone, instale o Converta na Tela de Inicio antes de ativar push.");
+      return;
+    }
+    if (pushUiStatus === "not_configured") {
+      setError("Push ainda nao esta configurado neste ambiente.");
+      return;
+    }
+    if (pushUiStatus === "unsupported") {
+      setError("Este navegador nao oferece suporte a push em segundo plano.");
+    }
+  }, [handleDisablePush, handleEnablePush, pushUiStatus, soundEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!session) return;
+    if (pushMobileNoticeShownRef.current) return;
+    if (pushUiStatus === "checking" || pushUiStatus === "enabled") return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+
+    pushMobileNoticeShownRef.current = true;
+    const message =
+      pushUiStatus === "denied"
+        ? "As notificacoes estao bloqueadas no navegador. Para receber avisos em segundo plano, libere a permissao do site e toque no sininho."
+        : pushUiStatus === "needs_install"
+          ? "Para receber push no iPhone, instale o Converta na Tela de Inicio e toque no sininho."
+          : "Para receber avisos em segundo plano, toque no sininho no topo da lista de conversas.";
+    setError(message);
+  }, [pushUiStatus, session]);
 
   useEffect(
     () => () => {
@@ -3919,71 +3975,26 @@ export default function AppInboxPage() {
               <div className="flex items-start gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSoundEnabled((current) => {
-                      const next = !current;
-                      if (next) {
-                        requestBrowserNotificationPermission();
-                        requestAppNotificationAudioUnlock();
-                      }
-                      return next;
-                    });
-                  }}
-                  title={soundEnabled ? "Silenciar notificações" : "Ativar notificações"}
+                  onClick={handleNotificationToggle}
+                  disabled={pushBusy}
+                  title={
+                    soundEnabled || pushUiStatus === "enabled"
+                      ? "Silenciar notificações"
+                      : pushUiStatus === "denied"
+                        ? "Notificações bloqueadas no navegador"
+                        : "Ativar notificações"
+                  }
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
-                    soundEnabled
+                    soundEnabled || pushUiStatus === "enabled"
                       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
                       : "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
-                  }`}
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
-                  {soundEnabled ? "🔔" : "🔕"}
+                  {soundEnabled || pushUiStatus === "enabled" ? "🔔" : "🔕"}
                 </button>
               </div>
             </div>
             <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs text-white/70 max-[1440px]:rounded-lg">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-white">Push em segundo plano</p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-white/55">
-                      {pushUiStatus === "enabled"
-                        ? "Ativado neste dispositivo."
-                        : pushUiStatus === "ready"
-                          ? "Receba avisos mesmo fora do app."
-                          : pushUiStatus === "needs_install"
-                            ? "No iPhone, instale na Tela de Início."
-                            : pushUiStatus === "not_configured"
-                              ? "Aguardando configuração VAPID."
-                              : pushUiStatus === "denied"
-                                ? "Permissão negada no navegador."
-                                : pushUiStatus === "unsupported"
-                                  ? "Indisponível neste navegador."
-                                  : pushUiStatus === "checking"
-                                    ? "Verificando suporte..."
-                                    : "Nao foi possivel verificar."}
-                    </p>
-                  </div>
-                  {pushUiStatus === "enabled" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleDisablePush()}
-                      disabled={pushBusy}
-                      className="shrink-0 rounded-lg border border-white/15 bg-white/8 px-2 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/12 disabled:opacity-50"
-                    >
-                      Desativar
-                    </button>
-                  ) : pushUiStatus === "ready" ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleEnablePush()}
-                      disabled={pushBusy}
-                      className="shrink-0 rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-50"
-                    >
-                      Ativar
-                    </button>
-                  ) : null}
-                </div>
-              </div>
               {isAdminUser ? (
                 <select
                   value={departmentFilter}
