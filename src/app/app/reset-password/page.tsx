@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import ThemeSelector from "@/components/ThemeSelector";
 import { resetAppPassword } from "@/lib/appClientApi";
 
 function ResetPasswordForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [password, setPassword] = useState("");
@@ -15,6 +16,7 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -38,6 +40,7 @@ function ResetPasswordForm() {
       setMessage(response.message || "Senha alterada com sucesso.");
       setPassword("");
       setConfirmation("");
+      window.setTimeout(() => router.replace("/app/login"), 1800);
     } catch (err) {
       setError((err as Error).message || "Nao foi possivel alterar a senha.");
     } finally {
@@ -53,18 +56,27 @@ function ResetPasswordForm() {
       </div>
       <label className="grid gap-1 text-sm">
         <span className="theme-muted">Nova senha</span>
-        <input
-          type="password"
-          className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="new-password"
-        />
+        <div className="theme-select flex items-center rounded-md focus-within:border-re7-sky">
+          <input
+            type={showPassword ? "text" : "password"}
+            className="w-full min-w-0 bg-transparent px-3 py-2 outline-none"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((current) => !current)}
+            className="shrink-0 px-3 text-xs font-semibold text-re7-sky hover:brightness-110"
+          >
+            {showPassword ? "Ocultar" : "Mostrar"}
+          </button>
+        </div>
       </label>
       <label className="grid gap-1 text-sm">
         <span className="theme-muted">Confirmar senha</span>
         <input
-          type="password"
+          type={showPassword ? "text" : "password"}
           className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}

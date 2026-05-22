@@ -193,6 +193,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname.startsWith("/auth/")) {
+    const rate = checkRateLimit(req, pathname);
+    if (rate.limited) {
+      logger.warn({
+        event: "rate.limit.hit",
+        ip: rate.ip,
+        path: pathname,
+        requestId,
+        limit: rate.limit,
+        class: rate.bucketClass,
+        windowMs: rate.windowMs,
+      });
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      json(res, 429, { ok: false, error: "rate_limited", retryAfterSec: rate.retryAfterSec });
+      return;
+    }
+  }
+
   if (req.method === "POST" && pathname === "/auth/login") {
     const prisma = getPrisma();
     try {

@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   APP_AUTH_SESSION_TTL_MS,
   PASSWORD_RESET_TTL_MS,
+  buildPasswordResetEmail,
+  buildPasswordResetUrlFromBase,
   buildSessionExpiredMessage,
   hashSensitiveValue,
 } from "./appSessionService.js";
@@ -25,4 +27,29 @@ test("hashSensitiveValue is deterministic and does not expose the input", () => 
   assert.equal(first, second);
   assert.equal(first?.includes(value), false);
   assert.equal(hashSensitiveValue(""), null);
+});
+
+test("password reset email is branded and escapes user-controlled content", () => {
+  const email = buildPasswordResetEmail({
+    name: "<script>alert(1)</script>",
+    resetUrl: "https://converta.re7online.com/app/reset-password?token=abc123",
+  });
+
+  assert.match(email.subject, /senha/i);
+  assert.match(email.text, /30 minutos/i);
+  assert.match(email.html, /Converta/);
+  assert.match(email.html, /Redefinir senha/);
+  assert.equal(email.html.includes("<script>"), false);
+  assert.equal(email.html.includes("abc123"), true);
+});
+
+test("password reset url accepts base domain or full reset route", () => {
+  assert.equal(
+    buildPasswordResetUrlFromBase("https://converta.re7online.com", "abc 123"),
+    "https://converta.re7online.com/app/reset-password?token=abc%20123"
+  );
+  assert.equal(
+    buildPasswordResetUrlFromBase("https://converta.re7online.com/app/reset-password/", "abc"),
+    "https://converta.re7online.com/app/reset-password?token=abc"
+  );
 });

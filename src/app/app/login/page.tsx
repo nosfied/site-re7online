@@ -20,6 +20,7 @@ export default function AppLoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let fallbackTimer: number | null = null;
@@ -63,7 +64,7 @@ export default function AppLoginPage() {
       router.replace("/app/inbox");
     } catch (err) {
       const typed = err as { message?: string };
-      setError(typed.message || "Falha ao autenticar.");
+      setError(typed.message || "Nao foi possivel entrar. Verifique sua conexao e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -110,13 +111,22 @@ export default function AppLoginPage() {
             </label>
             <label className="grid gap-1 text-sm">
               <span className="theme-muted">Senha</span>
-              <input
-                type="password"
-                className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
+              <div className="theme-select flex items-center rounded-md focus-within:border-re7-sky">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  className="w-full min-w-0 bg-transparent px-3 py-2 outline-none"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="shrink-0 px-3 text-xs font-semibold text-re7-sky hover:brightness-110"
+                >
+                  {showPassword ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
             </label>
             {error ? (
               <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">

@@ -24,9 +24,9 @@ export default function AppForgotPasswordPage() {
     setMessage(null);
     try {
       const response = await requestAppPasswordReset(normalizedEmail);
-      setMessage(response.message || "Se existir uma conta, enviaremos instrucoes.");
+      setMessage(response.message || "Se existir uma conta, enviaremos instrucoes para redefinir a senha.");
     } catch (err) {
-      setError((err as Error).message || "Nao foi possivel solicitar a recuperacao.");
+      setError((err as Error).message || "Nao foi possivel solicitar a recuperacao agora. Tente novamente em alguns minutos.");
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export default function AppForgotPasswordPage() {
           <div className="grid gap-1">
             <h1 className="text-base font-semibold sm:text-lg">Recuperar senha</h1>
             <p className="theme-muted text-sm">
-              Informe o email de acesso. Se existir uma conta, enviaremos instrucoes.
+              Informe o email de acesso. Se existir uma conta, enviaremos um link valido por 30 minutos.
             </p>
           </div>
           <label className="grid gap-1 text-sm">

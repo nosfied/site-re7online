@@ -287,6 +287,90 @@ function isSmtpConfigured() {
   return Boolean(env.SMTP_HOST.trim() && env.SMTP_FROM.trim());
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function buildPasswordResetEmail(params: {
+  name: string;
+  resetUrl: string;
+}) {
+  const greetingName = params.name.trim() ? `, ${params.name.trim()}` : "";
+  const escapedGreetingName = escapeHtml(greetingName);
+  const escapedResetUrl = escapeHtml(params.resetUrl);
+  const text = [
+    `Ola${greetingName}.`,
+    "",
+    "Recebemos uma solicitacao para redefinir sua senha no Converta.",
+    "Use o link abaixo em ate 30 minutos:",
+    params.resetUrl,
+    "",
+    "Se voce nao solicitou isso, ignore esta mensagem. Nenhuma alteracao sera feita sem acessar o link.",
+    "",
+    "Equipe Converta",
+  ].join("\n");
+  const html = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recuperacao de senha Converta</title>
+  </head>
+  <body style="margin:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#10203b;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f7fb;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #d9e2ef;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="background:#06132a;padding:22px 24px;color:#ffffff;">
+                <div style="font-size:20px;font-weight:700;letter-spacing:.2px;">Converta</div>
+                <div style="margin-top:4px;font-size:13px;color:#cbd5e1;">Recuperacao de senha</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 24px;">
+                <p style="margin:0 0 14px;font-size:16px;line-height:1.5;">Ola${escapedGreetingName}.</p>
+                <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#334155;">
+                  Recebemos uma solicitacao para redefinir sua senha no Converta.
+                  O link abaixo expira em <strong>30 minutos</strong> e pode ser usado apenas uma vez.
+                </p>
+                <p style="margin:26px 0;text-align:center;">
+                  <a href="${escapedResetUrl}" style="display:inline-block;background:#fc6c16;color:#ffffff;text-decoration:none;font-weight:700;border-radius:10px;padding:13px 20px;">
+                    Redefinir senha
+                  </a>
+                </p>
+                <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#64748b;">
+                  Se o botao nao funcionar, copie e cole este link no navegador:
+                </p>
+                <p style="margin:0 0 18px;word-break:break-all;font-size:12px;line-height:1.5;color:#475569;">${escapedResetUrl}</p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
+                  Se voce nao solicitou essa alteracao, ignore este e-mail. Nenhuma alteracao sera feita sem acessar o link.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="border-top:1px solid #e2e8f0;padding:16px 24px;font-size:12px;color:#64748b;background:#f8fafc;">
+                E-mail automatico. Nao responda esta mensagem.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  return {
+    subject: "Redefina sua senha no Converta",
+    text,
+    html,
+  };
+}
+
 async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
@@ -302,27 +386,31 @@ async function sendPasswordResetEmail(params: {
         ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
         : undefined,
   });
+  const message = buildPasswordResetEmail({
+    name: params.name,
+    resetUrl: params.resetUrl,
+  });
   await transporter.sendMail({
     from: env.SMTP_FROM,
     to: params.to,
-    subject: "Recuperacao de senha do Converta",
-    text: [
-      `Ola${params.name ? `, ${params.name}` : ""}.`,
-      "",
-      "Recebemos uma solicitacao para redefinir sua senha no Converta.",
-      "Use o link abaixo em ate 30 minutos:",
-      params.resetUrl,
-      "",
-      "Se voce nao solicitou isso, ignore esta mensagem.",
-    ].join("\n"),
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
   });
   return { ok: true as const };
 }
 
-function buildPasswordResetUrl(token: string) {
-  const baseUrl = env.PASSWORD_RESET_BASE_URL.trim().replace(/\/+$/, "");
+export function buildPasswordResetUrlFromBase(base: string, token: string) {
+  const baseUrl = base.trim().replace(/\/+$/, "");
   if (!baseUrl) return "";
-  return `${baseUrl}/app/reset-password?token=${encodeURIComponent(token)}`;
+  const resetBaseUrl = baseUrl.endsWith("/app/reset-password")
+    ? baseUrl
+    : `${baseUrl}/app/reset-password`;
+  return `${resetBaseUrl}?token=${encodeURIComponent(token)}`;
+}
+
+export function buildPasswordResetUrl(token: string) {
+  return buildPasswordResetUrlFromBase(env.PASSWORD_RESET_BASE_URL, token);
 }
 
 export async function requestPasswordReset(params: {
@@ -391,14 +479,36 @@ export async function requestPasswordReset(params: {
         resetUrl,
       });
       delivered = emailResult.ok;
+      if (emailResult.ok) {
+        logger.info({
+          event: "auth.password_reset.email_sent",
+          clientId: user.clientId,
+          userId: user.id,
+        });
+      }
     } catch (error) {
       logger.warn({
-        event: "auth.password_reset.delivery_failed",
+        event: "auth.password_reset.email_failed",
         clientId: user.clientId,
         userId: user.id,
         message: (error as Error).message,
       });
     }
+  } else {
+    logger.warn({
+      event: "auth.password_reset.email_failed",
+      clientId: user.clientId,
+      userId: user.id,
+      reason: "password_reset_base_url_missing",
+    });
+  }
+  if (resetUrl && !isSmtpConfigured()) {
+    logger.warn({
+      event: "auth.password_reset.email_failed",
+      clientId: user.clientId,
+      userId: user.id,
+      reason: "smtp_not_configured",
+    });
   }
 
   logger.info({
