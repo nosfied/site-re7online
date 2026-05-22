@@ -371,12 +371,68 @@ export function buildPasswordResetEmail(params: {
   };
 }
 
+export function buildResendPasswordResetPayload(params: {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+}) {
+  return {
+    from: params.from,
+    to: [params.to],
+    subject: params.subject,
+    text: params.text,
+    html: params.html,
+  };
+}
+
+function shouldUseResendApiFallback() {
+  return env.SMTP_HOST.trim().toLowerCase() === "smtp.resend.com";
+}
+
+async function sendPasswordResetViaResendApi(params: {
+  to: string;
+  message: ReturnType<typeof buildPasswordResetEmail>;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.SMTP_PASS}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(
+      buildResendPasswordResetPayload({
+        from: env.SMTP_FROM,
+        to: params.to,
+        subject: params.message.subject,
+        text: params.message.text,
+        html: params.message.html,
+      })
+    ),
+  });
+  if (!response.ok) {
+    throw new Error(`resend_api_failed:${response.status}`);
+  }
+}
+
 async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
   resetUrl: string;
 }) {
   if (!isSmtpConfigured()) return { ok: false as const, reason: "smtp_not_configured" as const };
+  const message = buildPasswordResetEmail({
+    name: params.name,
+    resetUrl: params.resetUrl,
+  });
+  if (shouldUseResendApiFallback()) {
+    await sendPasswordResetViaResendApi({
+      to: params.to,
+      message,
+    });
+    return { ok: true as const };
+  }
   const transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
@@ -385,10 +441,6 @@ async function sendPasswordResetEmail(params: {
       env.SMTP_USER.trim() || env.SMTP_PASS.trim()
         ? { user: env.SMTP_USER, pass: env.SMTP_PASS }
         : undefined,
-  });
-  const message = buildPasswordResetEmail({
-    name: params.name,
-    resetUrl: params.resetUrl,
   });
   await transporter.sendMail({
     from: env.SMTP_FROM,

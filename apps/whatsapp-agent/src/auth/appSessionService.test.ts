@@ -5,6 +5,7 @@ import {
   PASSWORD_RESET_TTL_MS,
   buildPasswordResetEmail,
   buildPasswordResetUrlFromBase,
+  buildResendPasswordResetPayload,
   buildSessionExpiredMessage,
   hashSensitiveValue,
 } from "./appSessionService.js";
@@ -52,4 +53,18 @@ test("password reset url accepts base domain or full reset route", () => {
     buildPasswordResetUrlFromBase("https://converta.re7online.com/app/reset-password/", "abc"),
     "https://converta.re7online.com/app/reset-password?token=abc"
   );
+});
+
+test("resend payload keeps API key and reset token out of metadata", () => {
+  const payload = buildResendPasswordResetPayload({
+    from: "Converta <noreply@converta.re7online.com>",
+    to: "user@example.com",
+    subject: "Redefina sua senha no Converta",
+    text: "Use https://converta.re7online.com/app/reset-password?token=abc123",
+    html: "<a href=\"https://converta.re7online.com/app/reset-password?token=abc123\">Redefinir</a>",
+  });
+
+  assert.deepEqual(Object.keys(payload).sort(), ["from", "html", "subject", "text", "to"]);
+  assert.deepEqual(payload.to, ["user@example.com"]);
+  assert.equal(JSON.stringify(payload).includes("re_"), false);
 });
