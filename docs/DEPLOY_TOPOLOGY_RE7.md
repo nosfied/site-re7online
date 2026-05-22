@@ -97,8 +97,20 @@ Usar quando mudar:
 
 Passos:
 1. commit e push no GitHub
-2. promover a versao na `Vercel`
-3. validar a URL publica
+2. abrir o painel da `Vercel` e localizar o deployment gerado para o commit/branch
+3. se a mudanca saiu como preview, usar `Promote to Production` no deployment correto
+4. confirmar que o commit promovido e o commit esperado
+5. validar a URL publica
+
+Exemplo real:
+- o commit `e944250` alterava a pagina `/sistemas`
+- o deploy/pull na VPS nao alterou `https://re7online.com/sistemas`
+- a mudanca ficou visivel somente depois de promover o deployment do commit `e944250` para producao na Vercel
+
+Observacao:
+- `git pull` + `pm2 reload` na VPS nao publica alteracoes em `re7online.com`
+- a VPS afeta `converta.re7online.com`, `admin.re7online.com` e os backends operacionais
+- o site publico `re7online.com` depende de deployment/promocao na Vercel
 
 ### 2. Portal Converta / console interno (`converta.re7online.com`)
 Usar quando mudar:
@@ -178,6 +190,8 @@ Se vier header da Vercel, como:
 - `x-vercel-id`
 
 entao a resposta publica esta vindo da Vercel, nao da VPS.
+
+Se o header for da Vercel e o conteudo publico nao refletir o commit esperado, conferir no painel da Vercel se o deployment correto foi promovido para producao.
 
 Validar Nginx da VPS:
 
