@@ -29,6 +29,7 @@ import {
   fetchAppTenantSummary,
   sendAppConversationMedia,
   fetchAppUsers,
+  logoutAppSession,
   updateAppLead,
   loadAppSession,
   releaseAppConversation,
@@ -1456,6 +1457,27 @@ export default function AppInboxPage() {
     router.replace("/app/login");
   }, [router]);
 
+  const handleLogout = useCallback(() => {
+    if (!session) return;
+    void (async () => {
+      try {
+        const registration = await navigator.serviceWorker?.getRegistration("/sw.js");
+        const subscription = await registration?.pushManager.getSubscription();
+        const endpoint = subscription?.endpoint ?? null;
+        if (subscription) {
+          await subscription.unsubscribe();
+        }
+        await logoutAppSession(session, endpoint).catch(() => null);
+        await unsubscribeAppPush(session, endpoint).catch(() => null);
+      } catch {
+        // Logout must remain available even if service worker access fails.
+      } finally {
+        clearAppSession();
+        router.replace("/app/login");
+      }
+    })();
+  }, [router, session]);
+
   const clearSelectedConversation = useCallback(() => {
     detailRequestSeqRef.current += 1;
     selectedConversationIdentityCandidatesRef.current = [];
@@ -1848,6 +1870,14 @@ export default function AppInboxPage() {
     composerRef.current.focus();
     const caretPosition = composerRef.current.value.length;
     composerRef.current.setSelectionRange(caretPosition, caretPosition);
+  }, []);
+
+  const restoreMobileConversationViewport = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, 120);
   }, []);
 
   const markConversationAsRead = useCallback((
@@ -4328,7 +4358,7 @@ export default function AppInboxPage() {
         </aside>
 
         <div className={`relative min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-[#eadfcd] ${selectedConversationKey ? "flex" : "max-md:hidden md:flex"}`}>
-          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-30 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
+          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-[var(--safe-top)] max-md:z-30 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
             <button
               type="button"
               onClick={clearSelectedConversation}
@@ -4376,16 +4406,6 @@ export default function AppInboxPage() {
             <div className="relative hidden shrink-0 items-center gap-1.5 max-md:flex">
               <button
                 type="button"
-                title="Ações da conversa"
-                aria-label="Abrir ações da conversa"
-                disabled={!selectedConversation}
-                onClick={() => setShowMoreActions((current) => !current)}
-                className="h-10 rounded-xl border border-[#d4c7b5] bg-white/75 px-3 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Ações
-              </button>
-              <button
-                type="button"
                 title="Abrir CRM"
                 aria-label="Abrir CRM da conversa"
                 disabled={!selectedConversation}
@@ -4393,6 +4413,16 @@ export default function AppInboxPage() {
                 className="h-10 rounded-xl border border-[#d4c7b5] bg-white/75 px-3 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 CRM
+              </button>
+              <button
+                type="button"
+                title="Ações da conversa"
+                aria-label="Abrir ações da conversa"
+                disabled={!selectedConversation}
+                onClick={() => setShowMoreActions((current) => !current)}
+                className="h-10 rounded-xl border border-[#d4c7b5] bg-white/75 px-3 text-xs font-semibold text-slate-800 shadow-sm hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Ações
               </button>
               {showMoreActions && selectedConversation ? (
                 <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-[#d4c7b5] bg-white text-sm text-slate-800 shadow-2xl">
@@ -4456,6 +4486,16 @@ export default function AppInboxPage() {
                     }}
                   >
                     Marcar como não lida
+                  </button>
+                  <button
+                    type="button"
+                    className="block w-full border-t border-slate-100 px-4 py-3 text-left font-semibold text-red-700 hover:bg-red-50"
+                    onClick={() => {
+                      setShowMoreActions(false);
+                      handleLogout();
+                    }}
+                  >
+                    Sair
                   </button>
                 </div>
               ) : null}
@@ -4877,6 +4917,7 @@ export default function AppInboxPage() {
                   className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2 max-md:h-12 max-md:min-h-12 max-md:px-3 max-md:py-2 [@media(max-height:760px)]:h-14 [@media(max-height:760px)]:min-h-14"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
+                  onBlur={restoreMobileConversationViewport}
                   onKeyDown={handleComposerKeyDown}
                   placeholder={
                     selectedConversation && !selectedConversationSupportsOutbound
