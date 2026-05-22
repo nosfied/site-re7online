@@ -4041,7 +4041,7 @@ export default function AppInboxPage() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="hidden h-8 items-center justify-center rounded-lg border border-re7-orange/35 bg-re7-orange/15 px-2 text-[11px] font-semibold text-orange-100 shadow-sm transition hover:bg-re7-orange/25 max-md:flex"
+                  className="hidden h-8 items-center justify-center rounded-lg border border-orange-500 bg-orange-500 px-2 text-[11px] font-semibold text-white shadow-sm transition hover:bg-orange-600 max-md:flex"
                 >
                   Sair
                 </button>
@@ -4509,16 +4509,6 @@ export default function AppInboxPage() {
                     }}
                   >
                     Marcar como não lida
-                  </button>
-                  <button
-                    type="button"
-                    className="block w-full border-t border-slate-100 px-4 py-3 text-left font-semibold text-red-700 hover:bg-red-50"
-                    onClick={() => {
-                      setShowMoreActions(false);
-                      handleLogout();
-                    }}
-                  >
-                    Sair
                   </button>
                 </div>
               ) : null}
