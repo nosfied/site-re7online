@@ -4202,7 +4202,7 @@ export default function AppInboxPage() {
           </div>
           <div
             ref={conversationListRef}
-            className="min-h-0 flex-1 select-none overflow-y-auto overflow-anchor-none touch-pan-y [-webkit-tap-highlight-color:transparent]"
+            className="min-h-0 flex-1 select-none overflow-y-auto overflow-anchor-none touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
             onTouchStart={(event) => {
               const touch = event.touches.item(0);
               conversationListTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
@@ -4306,7 +4306,11 @@ export default function AppInboxPage() {
                     setShowMoreActions(false);
                     detailRequestSeqRef.current += 1;
                   }}
-                  className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
+                  onTouchCancel={() => {
+                    conversationListTouchMovedRef.current = false;
+                    conversationListTouchStartRef.current = null;
+                  }}
+                  className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
@@ -4824,7 +4828,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:bottom-[var(--safe-bottom)] max-md:px-2.5 max-md:pb-[calc(1.35rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:py-1.5">
+          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pb-[calc(0.85rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:py-1.5">
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">

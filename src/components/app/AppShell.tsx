@@ -287,7 +287,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   if (fullScreen) {
     return (
-      <main className="theme-bg theme-inbox box-border h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden pt-[var(--safe-top)] md:pt-0">
+      <main className="theme-bg theme-inbox box-border h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden">
         <div className="grid h-full w-full max-w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1">
           <aside className="order-2 hidden min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+var(--safe-bottom))] md:order-none md:flex md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
             <button
