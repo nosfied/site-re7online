@@ -30,6 +30,44 @@ function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+function InstagramIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="instagram-gradient" x1="2" x2="22" y1="22" y2="2" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#feda75" />
+          <stop offset="0.28" stopColor="#fa7e1e" />
+          <stop offset="0.52" stopColor="#d62976" />
+          <stop offset="0.75" stopColor="#962fbf" />
+          <stop offset="1" stopColor="#4f5bd5" />
+        </linearGradient>
+      </defs>
+      <rect width="20" height="20" x="2" y="2" rx="6" fill="url(#instagram-gradient)" />
+      <circle cx="12" cy="12" r="4.2" fill="none" stroke="white" strokeWidth="2" />
+      <circle cx="17.2" cy="6.8" r="1.2" fill="white" />
+    </svg>
+  );
+}
+
+function MessengerIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="messenger-gradient" x1="4" x2="20" y1="22" y2="2" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#00b2ff" />
+          <stop offset="0.52" stopColor="#006aff" />
+          <stop offset="1" stopColor="#a033ff" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 2C6.48 2 2.18 6.04 2.18 11.5c0 2.86 1.18 5.35 3.12 7.08v3.16l2.85-1.56c1.15.52 2.45.82 3.85.82 5.52 0 9.82-4.04 9.82-9.5S17.52 2 12 2Z"
+        fill="url(#messenger-gradient)"
+      />
+      <path d="m6.95 14.28 3.05-4.84 3.24 2.43 3.78-2.43-3.05 4.84-3.24-2.43-3.78 2.43Z" fill="white" />
+    </svg>
+  );
+}
+
 function AccessButton() {
   const href =
     process.env.NODE_ENV === "development" ? "/app/login" : "https://converta.re7online.com/app/login";
@@ -46,13 +84,37 @@ function AccessButton() {
   );
 }
 
-function WhatsAppBadge() {
+const channelBadges = [
+  {
+    label: "WhatsApp",
+    description: "Atendimento, automacao e campanhas pelo canal principal.",
+    icon: <WhatsAppIcon className="h-4 w-4 text-[#25d366]" />,
+    className: "border-emerald-400/30 bg-emerald-500/14 text-emerald-100",
+    iconClassName: "bg-[#25d366] text-white",
+  },
+  {
+    label: "Instagram",
+    description: "Direct integrado ao inbox omnichannel.",
+    icon: <InstagramIcon className="h-4 w-4" />,
+    className: "border-pink-300/30 bg-pink-500/14 text-pink-100",
+    iconClassName: "bg-white/10",
+  },
+  {
+    label: "Facebook/Messenger",
+    description: "Mensagens da pagina em uma fila unica de atendimento.",
+    icon: <MessengerIcon className="h-4 w-4" />,
+    className: "border-sky-300/30 bg-sky-500/14 text-sky-100",
+    iconClassName: "bg-white/10",
+  },
+];
+
+function ChannelBadge({ badge }: { badge: (typeof channelBadges)[number] }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/14 px-3 py-1 text-xs font-medium text-emerald-100">
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#25d366] text-white shadow-sm">
-        <WhatsAppIcon className="h-4 w-4 text-[#25d366]" />
+    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${badge.className}`}>
+      <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full shadow-sm ${badge.iconClassName}`}>
+        {badge.icon}
       </span>
-      WhatsApp
+      {badge.label}
     </div>
   );
 }
@@ -73,10 +135,14 @@ export default function SistemasPage() {
           <article className="group rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.26)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Converta</span>
-              <WhatsAppBadge />
+              <div className="flex flex-wrap justify-end gap-2">
+                {channelBadges.map((badge) => (
+                  <ChannelBadge key={badge.label} badge={badge} />
+                ))}
+              </div>
             </div>
 
-            <div className="mt-3 flex min-h-[78px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-3 py-4">
+            <div className="mt-4 flex min-h-[78px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-3 py-4">
               <Image
                 src="/images/converta-logo-light.png"
                 alt="Converta"
@@ -90,8 +156,23 @@ export default function SistemasPage() {
             <div className="mt-4">
               <h2 className="text-lg font-semibold text-white">Converta</h2>
               <p className="mt-1.5 text-xs leading-5 text-white/72">
-                Atendimento inteligente via WhatsApp com automacao, campanhas, chatbot, midia e gestao de leads.
+                Atendimento omnichannel para WhatsApp, Instagram e Facebook/Messenger com inbox unificado,
+                automacao, campanhas, chatbot, midia e gestao de leads.
               </p>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              {channelBadges.map((badge) => (
+                <div key={badge.label} className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2">
+                  <span className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${badge.iconClassName}`}>
+                    {badge.icon}
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold text-white">{badge.label}</p>
+                    <p className="mt-0.5 text-[0.72rem] leading-4 text-white/58">{badge.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-4">
