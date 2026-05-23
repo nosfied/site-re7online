@@ -54,9 +54,9 @@ export default function Diagnostic() {
   }
 
   return (
-    <section id="diagnostico" className="scroll-mt-24 py-16">
+    <section id="diagnostico" className="scroll-mt-24 py-10 md:py-16">
       <Container>
-        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/6 via-white/3 to-transparent p-8 md:p-12">
+        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/6 via-white/3 to-transparent p-5 md:p-12">
           <div className="grid gap-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-re7-gray/70">
@@ -77,7 +77,7 @@ export default function Diagnostic() {
 
             <form
               onSubmit={handleSubmit}
-              className="rounded-2xl border border-white/10 bg-white/5 p-6"
+              className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-6"
             >
               <div className="space-y-4 text-sm text-re7-gray/80">
                 <label className="block">

@@ -25,7 +25,7 @@ const services = [
 
 export default function Services() {
   return (
-    <section id="servicos" className="scroll-mt-24 py-16">
+    <section id="servicos" className="scroll-mt-24 py-10 md:py-16">
       <Container>
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
@@ -45,7 +45,7 @@ export default function Services() {
           {services.map((service) => (
             <div
               key={service.title}
-              className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/6 via-white/3 to-transparent p-6"
+              className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/6 via-white/3 to-transparent p-5 md:p-6"
             >
               <h3 className="text-lg font-semibold text-white">{service.title}</h3>
               <p className="mt-3 text-sm text-re7-gray/85">{service.desc}</p>

@@ -50,7 +50,7 @@ export default function Header() {
   }, []);
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-re7-navy/80 backdrop-blur transition">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur transition">
       <Container className="flex h-16 items-center justify-between">
         <a href="#topo" className="text-lg font-semibold tracking-tight text-white">
           Re7Online
@@ -110,10 +110,10 @@ export default function Header() {
             >
               <div
                 id="mobile-menu"
-                className="absolute inset-0 h-full w-full bg-re7-navy/80 shadow-2xl ring-1 ring-white/10"
+                className="absolute inset-0 h-full w-full bg-re7-navy/95 shadow-2xl ring-1 ring-white/10"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="flex h-full flex-col gap-6 px-6 py-7">
+                <div className="flex h-full flex-col gap-6 px-5 py-6">
                   <div className="flex items-center justify-between">
                     <span className="text-base font-semibold text-white">Menu</span>
                     <button
@@ -126,14 +126,14 @@ export default function Header() {
                   </div>
 
                   <nav
-                    className="flex flex-col gap-5 text-base text-white/90"
+                    className="flex flex-col gap-3 text-base text-white/90"
                     onClick={() => setOpen(false)}
                   >
                     {nav.map((item) => (
                       <a
                         key={item.href}
                         href={item.href}
-                        className="transition hover:text-white"
+                        className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 transition hover:text-white"
                         onClick={() => setOpen(false)}
                       >
                         {item.label}

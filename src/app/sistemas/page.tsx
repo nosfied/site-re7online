@@ -108,17 +108,6 @@ const channelBadges = [
   },
 ];
 
-function ChannelBadge({ badge }: { badge: (typeof channelBadges)[number] }) {
-  return (
-    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${badge.className}`}>
-      <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full shadow-sm ${badge.iconClassName}`}>
-        {badge.icon}
-      </span>
-      {badge.label}
-    </div>
-  );
-}
-
 export default function SistemasPage() {
   return (
     <main className="flex min-h-screen overflow-x-hidden bg-re7-navy text-white">
@@ -133,13 +122,8 @@ export default function SistemasPage() {
 
         <div className="mx-auto mt-8 grid w-full max-w-sm gap-4 sm:mt-10">
           <article className="group rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)] transition hover:-translate-y-1 hover:border-re7-sky/30 hover:shadow-[0_20px_48px_rgba(0,0,0,0.26)]">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Converta</span>
-              <div className="flex flex-wrap justify-end gap-2">
-                {channelBadges.map((badge) => (
-                  <ChannelBadge key={badge.label} badge={badge} />
-                ))}
-              </div>
             </div>
 
             <div className="mt-4 flex min-h-[78px] items-center justify-center rounded-2xl border border-white/8 bg-[#081327] px-3 py-4">
@@ -157,7 +141,7 @@ export default function SistemasPage() {
               <h2 className="text-lg font-semibold text-white">Converta</h2>
               <p className="mt-1.5 text-xs leading-5 text-white/72">
                 Atendimento omnichannel para WhatsApp, Instagram e Facebook/Messenger com inbox unificado,
-                automacao, campanhas, chatbot, midia e gestao de leads.
+                automacao, campanhas, IA supervisionada, midia e gestao de leads.
               </p>
             </div>
 

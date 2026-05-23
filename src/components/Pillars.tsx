@@ -20,7 +20,7 @@ const pillars = [
 
 export default function Pillars() {
   return (
-    <section id="pilares" className="scroll-mt-24 pt-2 pb-20">
+    <section id="pilares" className="scroll-mt-24 pb-12 pt-2 md:pb-20">
       <Container>
         <div className="mb-10 max-w-2xl">
           <p className="text-xs uppercase tracking-[0.3em] text-re7-gray/70">
@@ -35,7 +35,7 @@ export default function Pillars() {
           {pillars.map((pillar) => (
             <div
               key={pillar.title}
-              className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-black/10 md:p-7"
+              className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-black/10 md:p-7"
             >
               <h3 className="text-lg font-semibold text-white">
                 {pillar.title}
