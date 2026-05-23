@@ -25,7 +25,7 @@ export default function ConvertaPage() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,19,42,0.74),rgba(6,19,42,1))]" />
       </div>
 
-      <header className="relative z-10 border-b border-white/10 bg-re7-navy/70 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur">
         <Container className="flex h-16 items-center justify-between gap-4">
           <Link href="/" className="text-lg font-semibold tracking-tight text-white">
             Re7Online
@@ -47,7 +47,7 @@ export default function ConvertaPage() {
         </Container>
       </header>
 
-      <section className="relative z-10 pb-10 pt-8 md:pb-14 md:pt-20">
+      <section className="relative z-10 pb-10 pt-5 md:pb-14 md:pt-8">
         <Container className="max-w-[1580px]">
           <div>
             <div className="mx-auto mb-5 max-w-7xl">
