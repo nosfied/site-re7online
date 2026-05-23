@@ -110,8 +110,8 @@ const channelBadges = [
 
 export default function SistemasPage() {
   return (
-    <main className="flex min-h-screen overflow-x-hidden bg-re7-navy text-white">
-      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
+    <main className="public-mobile-scroll flex min-h-screen overflow-x-hidden bg-re7-navy text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-3 pb-[calc(1.5rem+var(--safe-bottom))] pt-3 sm:px-6 sm:pb-6 sm:pt-4 lg:px-8">
         <div className="mx-auto max-w-lg text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-re7-sky/80">Re7</p>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-[2.35rem]">

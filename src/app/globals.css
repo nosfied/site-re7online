@@ -72,6 +72,16 @@ html {
     overflow-x: hidden;
   }
 
+  .public-mobile-scroll {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
   html[data-ios-like="true"],
   html[data-ios-like="true"] body,
   html[data-standalone="true"],

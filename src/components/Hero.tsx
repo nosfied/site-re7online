@@ -34,7 +34,7 @@ export default function Hero() {
               Comunicação • Marketing • Tecnologia
             </p>
 
-            <p className="mt-16 max-w-xl text-base text-white/90 text-balance md:mt-4 md:text-lg md:text-re7-gray/90">
+            <p className="mt-24 max-w-xl text-base text-white/90 text-balance sm:mt-20 md:mt-4 md:text-lg md:text-re7-gray/90">
               Comunicação, marketing e tecnologia para negócios que querem crescer
               com estratégia.
             </p>
