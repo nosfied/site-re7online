@@ -30,12 +30,12 @@ export default function ConvertaShowcase() {
       <Container>
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-xs uppercase tracking-[0.3em] text-re7-gray/70">Solução em ação</p>
+            <p className="text-sm uppercase tracking-[0.24em] text-re7-gray/70">Solução em ação</p>
             <h2 className="mt-3 text-2xl font-semibold text-white text-balance md:text-4xl">
               Veja o CONVERTA em ação.
             </h2>
           </div>
-          <p className="max-w-xl text-sm leading-6 text-re7-gray/85">
+          <p className="max-w-xl text-base leading-7 text-re7-gray/85 md:text-lg">
             Acompanhe cada atendimento, lead e campanha em uma experiência visual simples para a equipe
             operar melhor e vender com mais contexto.
           </p>
@@ -54,8 +54,8 @@ export default function ConvertaShowcase() {
                 />
               </div>
               <div className="px-1 pt-3 sm:pt-4">
-                <p className="text-base font-semibold text-white md:text-lg">{item.title}</p>
-                <p className="mt-2 text-sm leading-6 text-white/60">{item.desc}</p>
+                <p className="text-lg font-semibold text-white md:text-xl">{item.title}</p>
+                <p className="mt-2 text-base leading-7 text-white/64">{item.desc}</p>
               </div>
             </div>
           ))}

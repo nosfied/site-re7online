@@ -29,11 +29,11 @@ export default function Plans() {
     <section id="planos" className="scroll-mt-24 py-10 md:py-16">
       <Container>
         <div className="mb-8 max-w-2xl">
-          <p className="text-xs uppercase tracking-[0.3em] text-re7-gray/70">Planos</p>
+          <p className="text-sm uppercase tracking-[0.24em] text-re7-gray/70">Planos</p>
           <h2 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
             Escolha o nível de operação para o seu momento.
           </h2>
-          <p className="mt-4 text-sm leading-6 text-re7-gray/85">
+          <p className="mt-4 text-base leading-7 text-re7-gray/85 md:text-lg">
             Valores estruturados para facilitar a decisão comercial. Os planos podem ser ajustados
             conforme canais, volume e necessidade de implantação.
           </p>
@@ -49,10 +49,10 @@ export default function Plans() {
                   : "border-white/10 bg-white/[0.045]"
               }`}
             >
-              <p className="text-sm font-semibold text-white">{plan.name}</p>
+              <p className="text-base font-semibold text-white">{plan.name}</p>
               <p className="mt-3 text-3xl font-semibold text-white">{plan.price}</p>
-              <p className="mt-3 min-h-12 text-sm leading-6 text-re7-gray/82">{plan.desc}</p>
-              <ul className="mt-5 space-y-3 text-sm text-re7-gray/86">
+              <p className="mt-3 min-h-12 text-base leading-7 text-re7-gray/82">{plan.desc}</p>
+              <ul className="mt-5 space-y-3 text-base text-re7-gray/86">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex gap-2">
                     <span className="mt-1 text-re7-amber">✓</span>

@@ -79,7 +79,7 @@ html {
     overflow-y: auto;
     overscroll-behavior-y: auto;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
   }
 
   html[data-ios-like="true"],
