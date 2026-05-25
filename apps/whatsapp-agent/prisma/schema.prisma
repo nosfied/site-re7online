@@ -88,7 +88,7 @@ model User {
   clientId  String   @db.Uuid
   departmentId String?
   name      String
-  email     String
+  email     String   @unique
   passwordHash String?
   role      String   @default("AGENT")
   isActive  Boolean  @default(true)

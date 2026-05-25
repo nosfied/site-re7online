@@ -224,9 +224,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const users = await prisma.user.findMany({
+      const user = await prisma.user.findUnique({
         where: { email },
-        take: 2,
         select: {
           id: true,
           clientId: true,
@@ -251,18 +250,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         },
       });
 
-      if (users.length === 0) {
+      if (!user) {
         logger.info({ event: "auth.login.failed", reason: "invalid_credentials", requestId });
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
-      if (users.length > 1) {
-        logger.info({ event: "auth.login.failed", reason: "ambiguous_login", requestId });
-        json(res, 409, { error: "ambiguous_login" });
-        return;
-      }
-
-      const user = users[0];
       if (user.client.status !== "ACTIVE") {
         logger.info({ event: "auth.login.failed", reason: "client_inactive", clientId: user.clientId, userId: user.id, requestId });
         json(res, 403, { error: "client_inactive" });
@@ -2709,6 +2701,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
         return;
       }
+      const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+        email: parsed.data.email,
+      });
+      if (!emailAvailability.ok) {
+        json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
+        return;
+      }
       if (
         departmentAccess.requiresDepartmentScope &&
         (parsed.data.departmentId ?? null) !== departmentAccess.departmentId
@@ -2871,6 +2870,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       if (!parsed.ok) {
         json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+        email: parsed.data.email,
+        exceptUserId: existingUser.id,
+      });
+      if (!emailAvailability.ok) {
+        json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
         return;
       }
       if (Object.keys(parsed.data).length === 0) {
@@ -5827,6 +5834,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, parsed.status, httpError(parsed.code, parsed.message));
           return;
         }
+        const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+          email: parsed.data.email,
+        });
+        if (!emailAvailability.ok) {
+          json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
+          return;
+        }
         const { data } = parsed;
         const password = typeof body.password === "string" ? body.password : "";
         if (password && password.length < 6) {
@@ -5956,6 +5970,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         if (!parsed.ok) {
           json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+          email: parsed.data.email,
+          exceptUserId: existingUser.id,
+        });
+        if (!emailAvailability.ok) {
+          json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
           return;
         }
         if (Object.keys(parsed.data).length === 0) {
@@ -12697,6 +12719,30 @@ async function parseAdminUserUpsertPayload(
   return { ok: true, data };
 }
 
+async function assertGlobalUserEmailAvailable(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    email?: string;
+    exceptUserId?: string;
+  }
+): Promise<{ ok: true } | { ok: false; status: 409; code: string; message: string }> {
+  const email = params.email?.trim().toLowerCase();
+  if (!email) return { ok: true };
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (!existing || existing.id === params.exceptUserId) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    status: 409,
+    code: "user_email_already_in_use",
+    message: "Este e-mail ja esta vinculado a outro usuario.",
+  };
+}
+
 function parseDepartmentUpsertPayload(
   body: unknown,
   options?: { requireName?: boolean; currentName?: string | null }
@@ -12922,21 +12968,22 @@ async function bootstrapTenantDefaults(
 
       const email = String(parsed.data.email ?? "").trim().toLowerCase();
       const existingUser = await prisma.user.findUnique({
-        where: {
-          clientId_email: {
-            clientId: params.clientId,
-            email,
-          },
-        },
-        select: { id: true },
+        where: { email },
+        select: { id: true, clientId: true },
       });
+      if (existingUser && existingUser.clientId !== params.clientId) {
+        const error = new Error("Este e-mail ja esta vinculado a outro usuario.") as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = 409;
+        error.code = "user_email_already_in_use";
+        throw error;
+      }
 
       const user = await prisma.user.upsert({
         where: {
-          clientId_email: {
-            clientId: params.clientId,
-            email,
-          },
+          email,
         },
         update: {
           ...parsed.data,

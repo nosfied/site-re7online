@@ -206,8 +206,12 @@ async function upsertUsers(clientId, departments) {
   ];
   const users = {};
   for (const item of seeds) {
+    const existingUser = await prisma.user.findUnique({ where: { email: item.email } });
+    if (existingUser && existingUser.clientId !== clientId) {
+      throw new Error(`user_email_already_in_use:${item.email}`);
+    }
     const user = await prisma.user.upsert({
-      where: { clientId_email: { clientId, email: item.email } },
+      where: { email: item.email },
       update: {
         name: item.name,
         role: item.role,

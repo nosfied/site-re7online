@@ -471,14 +471,13 @@ export async function requestPasswordReset(params: {
 }) {
   const email = params.email.trim().toLowerCase();
   const prisma = getPrisma();
-  const users = email
-    ? await prisma.user.findMany({
+  const user = email
+    ? await prisma.user.findFirst({
         where: {
           email,
           isActive: true,
           client: { status: "ACTIVE" },
         },
-        take: 2,
         select: {
           id: true,
           clientId: true,
@@ -486,17 +485,16 @@ export async function requestPasswordReset(params: {
           name: true,
         },
       })
-    : [];
+    : null;
 
-  if (users.length !== 1) {
+  if (!user) {
     logger.info({
       event: "auth.password_reset.requested",
-      outcome: users.length > 1 ? "ambiguous_or_multiple" : "not_found_or_inactive",
+      outcome: "not_found_or_inactive",
     });
     return { ok: true as const, delivered: false };
   }
 
-  const user = users[0];
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashResetToken(token);
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
