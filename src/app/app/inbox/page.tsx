@@ -1412,6 +1412,7 @@ export default function AppInboxPage() {
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
   const [mobilePushNotice, setMobilePushNotice] = useState<string | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const pushMobileNoticeShownRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
@@ -1587,6 +1588,15 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const query = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobileViewport(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!soundPreferenceLoaded) return;
     window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, soundEnabled ? "1" : "0");
   }, [soundEnabled, soundPreferenceLoaded]);
@@ -1688,6 +1698,18 @@ export default function AppInboxPage() {
   }, [pushBusy, refreshPushStatus, session]);
 
   const handleNotificationToggle = useCallback(() => {
+    if (!isMobileViewport) {
+      const nextSoundEnabled = !soundEnabled;
+      setSoundEnabled(nextSoundEnabled);
+      if (nextSoundEnabled) {
+        requestAppNotificationAudioUnlock();
+        setSuccess("Som de novas mensagens ativado neste dispositivo.");
+      } else {
+        setSuccess("Som de novas mensagens desativado neste dispositivo.");
+      }
+      return;
+    }
+
     if (soundEnabled || pushUiStatus === "enabled") {
       setSoundEnabled(false);
       if (pushUiStatus === "enabled") {
@@ -1717,7 +1739,7 @@ export default function AppInboxPage() {
     if (pushUiStatus === "unsupported") {
       setError("Este navegador nao oferece suporte a push em segundo plano.");
     }
-  }, [handleDisablePush, handleEnablePush, pushUiStatus, soundEnabled]);
+  }, [handleDisablePush, handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3871,6 +3893,17 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
+  const notificationToggleActive = soundEnabled || (isMobileViewport && pushUiStatus === "enabled");
+  const notificationToggleTitle = notificationToggleActive
+    ? isMobileViewport
+      ? "Silenciar notificações"
+      : "Desativar som"
+    : isMobileViewport
+      ? pushUiStatus === "denied"
+        ? "Notificações bloqueadas no navegador"
+        : "Ativar notificações"
+      : "Ativar som";
+
   return (
     <AppShell
       session={session}
@@ -4023,20 +4056,14 @@ export default function AppInboxPage() {
                   type="button"
                   onClick={handleNotificationToggle}
                   disabled={pushBusy}
-                  title={
-                    soundEnabled || pushUiStatus === "enabled"
-                      ? "Silenciar notificações"
-                      : pushUiStatus === "denied"
-                        ? "Notificações bloqueadas no navegador"
-                        : "Ativar notificações"
-                  }
+                  title={notificationToggleTitle}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
-                    soundEnabled || pushUiStatus === "enabled"
+                    notificationToggleActive
                       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
                       : "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
-                  {soundEnabled || pushUiStatus === "enabled" ? "🔔" : "🔕"}
+                  {notificationToggleActive ? "🔔" : "🔕"}
                 </button>
                 <button
                   type="button"

@@ -19,6 +19,7 @@ const recentPushKeys = new Set<string>();
 const recentPushKeyOrder: string[] = [];
 const MAX_RECENT_PUSH_KEYS = 1000;
 const PUSH_PRESENCE_TTL_MS = 60_000;
+const SYSTEM_NOTIFICATION_TAG = "converta-inbox-notifications";
 
 type PushPresence = {
   clientId: string;
@@ -243,11 +244,12 @@ function buildPushDedupeKey(event: Extract<InboxRealtimeEvent, { type: "message.
 
 function buildPushPayload(event: Extract<InboxRealtimeEvent, { type: "message.created" }>) {
   return JSON.stringify({
-    title: "Nova mensagem no Converta",
-    body: "Voce recebeu uma nova mensagem.",
+    title: "Converta",
+    body: "Voce tem novas mensagens aguardando atendimento.",
     url: "/app/inbox",
     channel: null,
-    tag: buildPushDedupeKey(event),
+    tag: SYSTEM_NOTIFICATION_TAG,
+    unreadIncrement: 1,
   });
 }
 
