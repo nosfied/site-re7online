@@ -53,6 +53,31 @@ type AiIntentCatalogDraft = NonNullable<AdminAutomationSettings["aiAssistantInte
 type HandoffNotificationRecipient = NonNullable<
   AdminAutomationSettings["handoffLeadNotificationRecipients"]
 >[number];
+type MediaHandoffPolicy = NonNullable<AdminAutomationSettings["mediaHandoffPolicy"]>;
+
+const DEFAULT_MEDIA_HANDOFF_POLICY: MediaHandoffPolicy = {
+  enabled: true,
+  channels: ["whatsapp", "messenger", "instagram"],
+  behavior: "notify_and_reply",
+  customerNoticeText: "Recebemos sua mensagem. Vou encaminhar para uma pessoa da equipe verificar e te atender melhor.",
+  attendantSummaryText: "Midia recebida: sim",
+};
+
+const MEDIA_HANDOFF_CHANNELS: Array<{ key: MediaHandoffPolicy["channels"][number]; label: string }> = [
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "messenger", label: "Facebook/Messenger" },
+  { key: "instagram", label: "Instagram" },
+];
+
+const MEDIA_HANDOFF_BEHAVIOR_OPTIONS: Array<{
+  value: MediaHandoffPolicy["behavior"];
+  label: string;
+}> = [
+  { value: "notify_and_reply", label: "Notificar equipe e avisar cliente" },
+  { value: "notify_only", label: "Somente notificar equipe" },
+  { value: "reply_only", label: "Somente avisar cliente" },
+  { value: "ignore", label: "Ignorar tratamento especial" },
+];
 
 function createHandoffNotificationRecipient(): HandoffNotificationRecipient {
   return {
@@ -393,6 +418,44 @@ export default function AdminTenantChatbotPage() {
     });
   };
 
+  const updateMediaHandoffPolicy = (patch: Partial<MediaHandoffPolicy>) => {
+    setSettings((current) =>
+      current
+        ? {
+            ...current,
+            mediaHandoffPolicy: {
+              ...DEFAULT_MEDIA_HANDOFF_POLICY,
+              ...(current.mediaHandoffPolicy ?? {}),
+              ...patch,
+            },
+          }
+        : current
+    );
+  };
+
+  const toggleMediaHandoffChannel = (channel: MediaHandoffPolicy["channels"][number]) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const policy = {
+        ...DEFAULT_MEDIA_HANDOFF_POLICY,
+        ...(current.mediaHandoffPolicy ?? {}),
+      };
+      const currentChannels = new Set(policy.channels);
+      if (currentChannels.has(channel)) {
+        currentChannels.delete(channel);
+      } else {
+        currentChannels.add(channel);
+      }
+      return {
+        ...current,
+        mediaHandoffPolicy: {
+          ...policy,
+          channels: currentChannels.size ? Array.from(currentChannels) : [channel],
+        },
+      };
+    });
+  };
+
   const hydrateFlows = useCallback((items: AdminChatbotFlowItem[]) => {
     setFlows(items);
     setDrafts(
@@ -501,6 +564,11 @@ export default function AdminTenantChatbotPage() {
     followUpTemplateLang: "pt_BR",
     handoffLeadNotificationEnabled: false,
     handoffLeadNotificationRecipients: [],
+    mediaHandoffPolicy: DEFAULT_MEDIA_HANDOFF_POLICY,
+  };
+  const mediaHandoffPolicy = {
+    ...DEFAULT_MEDIA_HANDOFF_POLICY,
+    ...(automationDraft.mediaHandoffPolicy ?? {}),
   };
   const aiConfigStatus = getDraftAiStatus(automationDraft);
   const aiBaseReady = !automationDraft.disableAiFallback && aiConfigStatus.ready;
@@ -678,9 +746,9 @@ export default function AdminTenantChatbotPage() {
   };
 
   return (
-    <div className="px-4 pb-8 text-white md:px-8">
+    <div className="px-4 pb-8 text-slate-900 dark:text-white md:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-        <header className="sticky top-0 z-30 -mx-4 border-b border-white/10 bg-re7-navy/95 px-4 py-4 backdrop-blur md:-mx-8 md:px-8">
+        <header className="sticky top-0 z-30 -mx-4 border-b border-slate-200 bg-white/95 px-4 py-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-re7-navy/95 md:-mx-8 md:px-8">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -692,17 +760,17 @@ export default function AdminTenantChatbotPage() {
                   />
                 ) : null}
               </div>
-              <p className="text-sm text-white/70">
+              <p className="text-sm text-slate-600 dark:text-white/70">
                 {tenantName || tenantId} {clientKey ? `(${clientKey})` : ""}
               </p>
-              <p className="mt-1 text-xs text-white/50">
+              <p className="mt-1 text-xs text-slate-500 dark:text-white/50">
                 Configuracoes internas refletidas no /app do cliente. Revise IA, follow-up e flows antes de salvar.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={backHref}
-                className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-white/20 dark:text-white/80 dark:hover:bg-white/10"
               >
                 Voltar ao tenant
               </Link>
@@ -730,14 +798,14 @@ export default function AdminTenantChatbotPage() {
           </p>
         ) : null}
 
-        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/5">
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">Automacao do atendimento</h2>
-              <p className="mt-1 text-sm text-white/65">
+              <p className="mt-1 text-sm text-slate-600 dark:text-white/65">
                 Controle interno refletido no portal do cliente.
               </p>
-              <p className="mt-1 text-xs text-white/50">
+              <p className="mt-1 text-xs text-slate-500 dark:text-white/50">
                 IA: {automationDraft.aiConfigured ? "contexto configurado" : "contexto ausente"}.
               </p>
             </div>
@@ -1346,6 +1414,89 @@ export default function AdminTenantChatbotPage() {
                 >
                   Adicionar numero
                 </button>
+              </div>
+            </div>
+          ) : null}
+
+          {settings ? (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-re7-navy/40">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-950 dark:text-white">Tratamento de midia no handoff</h3>
+                  <p className="mt-1 max-w-3xl text-xs text-slate-600 dark:text-white/60">
+                    Define, por tenant e canal, o que acontece quando uma mensagem com midia leva o atendimento para humano.
+                    O texto nao cita o tipo de midia para evitar classificacao incorreta.
+                  </p>
+                </div>
+                <TogglePill
+                  checked={mediaHandoffPolicy.enabled === true}
+                  onToggle={() => updateMediaHandoffPolicy({ enabled: !mediaHandoffPolicy.enabled })}
+                />
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr]">
+                <div className="rounded-md border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-black/10">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                    Canais
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {MEDIA_HANDOFF_CHANNELS.map((channel) => {
+                      const checked = mediaHandoffPolicy.channels.includes(channel.key);
+                      return (
+                        <button
+                          key={channel.key}
+                          type="button"
+                          onClick={() => toggleMediaHandoffChannel(channel.key)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                            checked
+                              ? "border-re7-orange bg-re7-orange text-white"
+                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/15 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10"
+                          }`}
+                        >
+                          {channel.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                  Comportamento
+                  <select
+                    value={mediaHandoffPolicy.behavior}
+                    onChange={(event) =>
+                      updateMediaHandoffPolicy({
+                        behavior: event.target.value as MediaHandoffPolicy["behavior"],
+                      })
+                    }
+                    className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                  >
+                    {MEDIA_HANDOFF_BEHAVIOR_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                  Aviso ao cliente
+                  <textarea
+                    value={mediaHandoffPolicy.customerNoticeText}
+                    onChange={(event) => updateMediaHandoffPolicy({ customerNoticeText: event.target.value })}
+                    className="mt-1 min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-white/50">
+                  Texto interno para equipe
+                  <textarea
+                    value={mediaHandoffPolicy.attendantSummaryText}
+                    onChange={(event) => updateMediaHandoffPolicy({ attendantSummaryText: event.target.value })}
+                    className="mt-1 min-h-20 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900 outline-none focus:border-re7-sky dark:border-white/20 dark:bg-re7-navy/80 dark:text-white"
+                  />
+                </label>
               </div>
             </div>
           ) : null}

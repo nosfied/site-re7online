@@ -3379,7 +3379,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             tenant.handoffLeadNotificationRecipients
           ),
-          mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -3436,7 +3435,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const allowedKeys = new Set([
         "handoffLeadNotificationEnabled",
         "handoffLeadNotificationRecipients",
-        "mediaHandoffPolicy",
       ]);
       const unsupportedKeys = Object.keys(data).filter((key) => !allowedKeys.has(key));
       if (unsupportedKeys.length > 0) {
@@ -3471,9 +3469,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         patch.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
           data.handoffLeadNotificationRecipients
         );
-      }
-      if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
-        patch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
       }
       if (Object.keys(patch).length === 0) {
         json(res, 400, httpError("bad_request", "Provide notification settings to update"));
@@ -3519,7 +3514,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             saved.tenant.handoffLeadNotificationRecipients
           ),
-          mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
