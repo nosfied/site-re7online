@@ -1991,7 +1991,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
   const notifyHandoffLeadArrival = async (params: {
     state: ConversationState;
-    source: "ai_orchestrator" | "flow";
+    source: "ai_orchestrator" | "flow" | "runtime_transition";
     messageId: string;
     reason?: string | null;
     score?: number | null;
@@ -2028,7 +2028,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     const existing = await prisma.event.findFirst({
       where: {
         clientId: tenantClientId,
-        requestId: eventRequestId,
+        OR: [
+          { requestId: eventRequestId },
+          {
+            waId: params.state.waId,
+            messageId: params.messageId,
+          },
+        ],
         eventName: {
           in: [
             "handoff.lead_notification.sent",
@@ -2366,6 +2372,38 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       score: params.score,
       summary,
       pending: false,
+    });
+  };
+
+  const notifyHandoffLeadArrivalOnRuntimeTransition = async (params: {
+    previousState: ConversationState;
+    nextState: ConversationState;
+    messageId: string;
+    messageType?: string | null;
+    reason: string;
+    crmSummary?: string | null;
+  }) => {
+    const previousIsHuman =
+      params.previousState.mode === "HUMAN" ||
+      getHandoffStatus(params.previousState) === "active";
+    const nextIsHuman =
+      params.nextState.mode === "HUMAN" ||
+      getHandoffStatus(params.nextState) === "active";
+    if (previousIsHuman || !nextIsHuman) return;
+    await notifyHandoffLeadArrival({
+      state: params.nextState,
+      source: "runtime_transition",
+      messageId: params.messageId,
+      reason: params.reason,
+      crmSummary:
+        params.crmSummary ??
+        [
+          "Origem: Transicao operacional para atendimento humano",
+          params.messageType ? `Mensagem recebida: ${params.messageType}` : null,
+          "Atendimento entrou na fila humana. Revise o inbox para ver o historico completo.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
     });
   };
 
@@ -3458,6 +3496,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           text: message.text,
           timestamp: message.timestamp,
         },
+      });
+      await notifyHandoffLeadArrivalOnRuntimeTransition({
+        previousState: currentConversation,
+        nextState: updatedConversation,
+        messageId: message.messageId,
+        messageType: message.type,
+        reason: "legacy_pending_handoff_runtime_transition",
       });
 
       logger.info({
@@ -4970,6 +5015,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         text: message.text,
         timestamp: message.timestamp,
       },
+    });
+    await notifyHandoffLeadArrivalOnRuntimeTransition({
+      previousState: currentConversation,
+      nextState: updatedConversation,
+      messageId: message.messageId,
+      messageType: message.type,
+      reason: "runtime_handoff_transition",
     });
 
     if (!allowlistHit) {
