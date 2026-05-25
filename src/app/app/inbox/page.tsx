@@ -1591,10 +1591,7 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const query = window.matchMedia("(max-width: 767px)");
-    const update = () => {
-      setIsMobileViewport(query.matches);
-      if (query.matches) setSoundEnabled(false);
-    };
+    const update = () => setIsMobileViewport(query.matches);
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
@@ -1733,7 +1730,8 @@ export default function AppInboxPage() {
       return;
     }
 
-    setSoundEnabled(false);
+    setSoundEnabled(true);
+    requestAppNotificationAudioUnlock();
     if (pushUiStatus === "ready") {
       void handleEnablePush();
       return;
@@ -1767,10 +1765,10 @@ export default function AppInboxPage() {
       pushUiStatus === "denied"
         ? "Notificacoes em segundo plano: bloqueadas no navegador. O controle fica no sininho no topo da lista de conversas."
         : pushUiStatus === "needs_install"
-          ? "Notificacoes em segundo plano: nao ativadas. No iPhone, instale o Converta na Tela de Inicio e use o sininho para ativar."
+          ? "Nao ativadas: no iPhone, instale o Converta na Tela de Inicio e use o sininho para ativar."
           : pushUiStatus === "not_configured" || pushUiStatus === "unsupported" || pushUiStatus === "error"
             ? "Notificacoes em segundo plano: indisponiveis neste dispositivo. O sininho continua controlando o som local."
-            : "Notificacoes em segundo plano: nao ativadas. Use o sininho no topo da lista de conversas para ativar ou desativar.";
+            : "Nao ativadas: use o sininho no topo da lista de conversas para ativar ou desativar.";
     setMobilePushNotice(message);
   }, [pushUiStatus, session]);
 
@@ -3909,7 +3907,7 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
-  const notificationToggleActive = isMobileViewport ? pushUiStatus === "enabled" : soundEnabled;
+  const notificationToggleActive = isMobileViewport ? soundEnabled || pushUiStatus === "enabled" : soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
       ? "Silenciar notificações"
@@ -3945,7 +3943,16 @@ export default function AppInboxPage() {
       {mobilePushNotice ? (
         <div className="fixed inset-x-3 bottom-[calc(1rem+var(--safe-bottom))] z-[95] rounded-2xl border border-amber-600 bg-amber-400 p-3 text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.25)] md:hidden">
           <p className="font-semibold">Notificações em segundo plano</p>
-          <p className="mt-1 leading-relaxed text-slate-900/80">{mobilePushNotice}</p>
+          <p className="mt-1 leading-relaxed text-slate-900/80">
+            {mobilePushNotice.startsWith("Nao ativadas:") ? (
+              <>
+                <strong>Não</strong>
+                {mobilePushNotice.slice("Nao".length)}
+              </>
+            ) : (
+              mobilePushNotice
+            )}
+          </p>
           <div className="mt-2 flex justify-end">
             <button
               type="button"
