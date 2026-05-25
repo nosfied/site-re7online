@@ -76,14 +76,14 @@ export default function AppLoginPage() {
         <div className="mb-2 flex justify-end sm:mb-4">
           <ThemeSelector />
         </div>
-        <div className="mb-3 flex h-[86px] justify-center sm:mb-6 sm:h-[110px]">
+        <div className="mb-3 flex justify-center sm:mb-6">
           <Image
             src="/images/converta-logo-light.png"
             alt="Converta"
             width={240}
             height={88}
             priority
-            className="theme-logo-light h-full w-[168px] object-contain sm:w-[220px]"
+            className="theme-logo-light h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
           />
           <Image
             src="/images/converta-logo-dark.png"
@@ -91,7 +91,7 @@ export default function AppLoginPage() {
             width={240}
             height={88}
             priority
-            className="theme-logo-dark h-full w-[168px] object-contain sm:w-[220px]"
+            className="theme-logo-dark h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
           />
         </div>
 

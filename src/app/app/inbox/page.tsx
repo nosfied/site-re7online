@@ -3907,7 +3907,7 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
-  const notificationToggleActive = isMobileViewport ? soundEnabled || pushUiStatus === "enabled" : soundEnabled;
+  const notificationToggleActive = isMobileViewport ? pushUiStatus === "enabled" : soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
       ? "Silenciar notificações"
@@ -3941,12 +3941,12 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
       {mobilePushNotice ? (
-        <div className="fixed inset-x-3 bottom-[calc(1rem+var(--safe-bottom))] z-[95] rounded-2xl border border-amber-600 bg-amber-400 p-3 text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.25)] md:hidden">
-          <p className="font-semibold">Notificações em segundo plano</p>
+        <div className="fixed inset-x-3 bottom-[calc(1rem+var(--safe-bottom))] z-[95] rounded-2xl border-2 border-orange-700 bg-orange-400 p-3 text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.28)] md:hidden">
+          <p className="text-sm font-black">Notificações em segundo plano</p>
           <p className="mt-1 leading-relaxed text-slate-900/80">
             {mobilePushNotice.startsWith("Nao ativadas:") ? (
               <>
-                <strong>Não</strong>
+                <strong className="font-black text-slate-950">Não</strong>
                 {mobilePushNotice.slice("Nao".length)}
               </>
             ) : (
