@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import AppShell from "@/components/app/AppShell";
+import ThemeSelector from "@/components/ThemeSelector";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
 import { isSelectableDepartment } from "@/lib/departments";
 import {
@@ -1413,6 +1414,7 @@ export default function AppInboxPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [mobilePushNotice, setMobilePushNotice] = useState<string | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const pushAutoEnableAttemptedRef = useRef(false);
   const pushMobileNoticeShownRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
@@ -1697,6 +1699,16 @@ export default function AppInboxPage() {
     }
   }, [pushBusy, refreshPushStatus, session]);
 
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    if (pushAutoEnableAttemptedRef.current) return;
+    if (pushUiStatus !== "ready") return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    pushAutoEnableAttemptedRef.current = true;
+    void handleEnablePush();
+  }, [handleEnablePush, isMobileViewport, pushUiStatus]);
+
   const handleNotificationToggle = useCallback(() => {
     if (!isMobileViewport) {
       const nextSoundEnabled = !soundEnabled;
@@ -1751,10 +1763,12 @@ export default function AppInboxPage() {
     pushMobileNoticeShownRef.current = true;
     const message =
       pushUiStatus === "denied"
-        ? "As notificacoes estao bloqueadas no navegador. Para receber avisos em segundo plano, libere a permissao do site e toque duas vezes no sininho para desativar e ativar novamente."
+        ? "Notificacoes em segundo plano: bloqueadas no navegador. O controle fica no sininho no topo da lista de conversas."
         : pushUiStatus === "needs_install"
-          ? "Para receber push no iPhone, instale o Converta na Tela de Inicio e toque duas vezes no sininho para desativar e ativar novamente."
-          : "Para receber avisos em segundo plano, toque duas vezes no sininho no topo da lista de conversas para desativar e ativar novamente.";
+          ? "Notificacoes em segundo plano: nao ativadas. No iPhone, instale o Converta na Tela de Inicio e use o sininho para ativar."
+          : pushUiStatus === "not_configured" || pushUiStatus === "unsupported" || pushUiStatus === "error"
+            ? "Notificacoes em segundo plano: indisponiveis neste dispositivo. O sininho continua controlando o som local."
+            : "Notificacoes em segundo plano: nao ativadas. Use o sininho no topo da lista de conversas para ativar ou desativar.";
     setMobilePushNotice(message);
   }, [pushUiStatus, session]);
 
@@ -4065,6 +4079,10 @@ export default function AppInboxPage() {
                 >
                   {notificationToggleActive ? "🔔" : "🔕"}
                 </button>
+                <ThemeSelector
+                  variant="icon"
+                  className="hidden h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5 text-sm text-white/75 transition hover:bg-white/10 max-md:flex"
+                />
                 <button
                   type="button"
                   onClick={handleLogout}

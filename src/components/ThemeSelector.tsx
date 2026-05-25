@@ -29,7 +29,7 @@ export default function ThemeSelector({
   variant = "select",
 }: {
   className?: string;
-  variant?: "select" | "switch";
+  variant?: "select" | "switch" | "icon";
 }) {
   const [preference, setPreference] = useState<ThemePreference>("dark");
 
@@ -53,10 +53,25 @@ export default function ThemeSelector({
     applyTheme(nextPreference);
   };
 
-  if (variant === "switch") {
-    const resolvedPreference = preference === "light" ? "light" : "dark";
-    const isLight = resolvedPreference === "light";
+  const resolvedPreference = preference === "light" ? "light" : "dark";
+  const isLight = resolvedPreference === "light";
 
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        aria-label={`Alternar para tema ${isLight ? "escuro" : "claro"}`}
+        aria-pressed={isLight}
+        title={`Tema ${isLight ? "claro" : "escuro"}`}
+        className={className}
+        onClick={() => handleChange(isLight ? "dark" : "light")}
+      >
+        {isLight ? "☀️" : "🌙"}
+      </button>
+    );
+  }
+
+  if (variant === "switch") {
     return (
       <div className={`theme-surface grid min-w-0 gap-1 rounded-lg border px-2 py-1.5 ${className}`}>
         <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
