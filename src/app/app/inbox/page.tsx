@@ -1591,7 +1591,10 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const query = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobileViewport(query.matches);
+    const update = () => {
+      setIsMobileViewport(query.matches);
+      if (query.matches) setSoundEnabled(false);
+    };
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
@@ -1730,8 +1733,7 @@ export default function AppInboxPage() {
       return;
     }
 
-    setSoundEnabled(true);
-    requestAppNotificationAudioUnlock();
+    setSoundEnabled(false);
     if (pushUiStatus === "ready") {
       void handleEnablePush();
       return;
@@ -3907,7 +3909,7 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
-  const notificationToggleActive = soundEnabled || (isMobileViewport && pushUiStatus === "enabled");
+  const notificationToggleActive = isMobileViewport ? pushUiStatus === "enabled" : soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
       ? "Silenciar notificações"

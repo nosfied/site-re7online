@@ -24,6 +24,7 @@ const PUSH_PRESENCE_INTERVAL_MS = 25_000;
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
+  if (window.matchMedia("(max-width: 767px)").matches) return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
 }
 
