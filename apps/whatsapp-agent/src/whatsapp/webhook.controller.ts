@@ -2379,7 +2379,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     previousState: ConversationState;
     nextState: ConversationState;
     messageId: string;
-    messageType?: string | null;
+    receivedMedia?: boolean;
     reason: string;
     crmSummary?: string | null;
   }) => {
@@ -2399,12 +2399,89 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         params.crmSummary ??
         [
           "Origem: Transicao operacional para atendimento humano",
-          params.messageType ? `Mensagem recebida: ${params.messageType}` : null,
+          params.receivedMedia ? "Midia recebida: sim" : null,
           "Atendimento entrou na fila humana. Revise o inbox para ver o historico completo.",
         ]
           .filter(Boolean)
           .join("\n"),
     });
+  };
+
+  const sendRuntimeHandoffMediaNotice = async (params: {
+    previousState: ConversationState;
+    nextState: ConversationState;
+    messageId: string;
+    toE164: string;
+    allowlistHit: boolean;
+    receivedMedia: boolean;
+    replyAlreadyPlanned?: boolean;
+    guard?: { version: number; lastInboundAt?: string };
+  }) => {
+    if (!params.receivedMedia) return params.nextState;
+    if (params.replyAlreadyPlanned) return params.nextState;
+    if (!params.allowlistHit || !env.outboundEnabled || !hasResolvedTenantConfig) {
+      return params.nextState;
+    }
+    if (!tenantClientId) return params.nextState;
+    const previousIsHuman =
+      params.previousState.mode === "HUMAN" ||
+      getHandoffStatus(params.previousState) === "active";
+    const nextIsHuman =
+      params.nextState.mode === "HUMAN" ||
+      getHandoffStatus(params.nextState) === "active";
+    if (previousIsHuman || !nextIsHuman) return params.nextState;
+
+    const noticeMessageId = `handoff.runtime.media_notice.${params.messageId}`;
+    const existingNotice = await getPrisma().outboundMessage.findFirst({
+      where: {
+        clientId: tenantClientId,
+        messageId: noticeMessageId,
+      },
+      select: { id: true },
+    });
+    if (existingNotice) {
+      logger.info({
+        event: "handoff.runtime.media_notice.skipped",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.nextState.waId),
+        reason: "already_sent",
+        requestId: meta?.requestId,
+      });
+      return params.nextState;
+    }
+
+    const replyText =
+      "Recebemos sua mensagem. Vou encaminhar para uma pessoa da equipe verificar e te atender melhor.";
+    const result = await sendOutboundText({
+      toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || params.nextState.waId : params.toE164,
+      waId: params.nextState.waId,
+      intent: params.nextState.intent,
+      messageId: noticeMessageId,
+      replyText,
+      guard: params.guard,
+    });
+    if (!result.ok) {
+      logger.warn({
+        event: "handoff.runtime.media_notice.failed",
+        clientId: tenantClientId,
+        clientKey: tenantClientKey,
+        waId: maskNumber(params.nextState.waId),
+        status: result.status,
+        errorBody: result.errorBody,
+        requestId: meta?.requestId,
+      });
+      return params.nextState;
+    }
+    logger.info({
+      event: "handoff.runtime.media_notice.sent",
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+      waId: maskNumber(params.nextState.waId),
+      metaMessageId: result.messageId,
+      requestId: meta?.requestId,
+    });
+    return persistOutboundConversation(params.nextState, result.messageId);
   };
 
   const serializeWebhookStatuses = (input: unknown) => {
@@ -3501,8 +3578,17 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         previousState: currentConversation,
         nextState: updatedConversation,
         messageId: message.messageId,
-        messageType: message.type,
+        receivedMedia: isWhatsAppInboundMediaMessage(message.type),
         reason: "legacy_pending_handoff_runtime_transition",
+      });
+      updatedConversation = await sendRuntimeHandoffMediaNotice({
+        previousState: currentConversation,
+        nextState: updatedConversation,
+        messageId: message.messageId,
+        toE164: message.from,
+        allowlistHit,
+        receivedMedia: isWhatsAppInboundMediaMessage(message.type),
+        replyAlreadyPlanned: Boolean(handoffResult.replyText?.trim()),
       });
 
       logger.info({
@@ -5020,8 +5106,18 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       previousState: currentConversation,
       nextState: updatedConversation,
       messageId: message.messageId,
-      messageType: message.type,
+      receivedMedia: isWhatsAppInboundMediaMessage(message.type),
       reason: "runtime_handoff_transition",
+    });
+    updatedConversation = await sendRuntimeHandoffMediaNotice({
+      previousState: currentConversation,
+      nextState: updatedConversation,
+      messageId: message.messageId,
+      toE164: message.from,
+      allowlistHit,
+      receivedMedia: isWhatsAppInboundMediaMessage(message.type),
+      replyAlreadyPlanned: Boolean(chatbotFlowResult.pendingHandoff && chatbotFlowResult.replyText?.trim()),
+      guard: inboundGuard,
     });
 
     if (!allowlistHit) {
@@ -7625,6 +7721,11 @@ function mapMessageType(type: string): MessageType {
   if (type === "document") return MessageType.DOCUMENT;
   if (type === "template") return MessageType.TEMPLATE;
   return MessageType.UNKNOWN;
+}
+
+function isWhatsAppInboundMediaMessage(type?: string | null): boolean {
+  const normalized = (type ?? "").trim().toLowerCase();
+  return ["image", "audio", "video", "document", "sticker"].includes(normalized);
 }
 
 function buildRealtimeMessageDownloadPath(waId: string, messageId: string) {
