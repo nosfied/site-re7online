@@ -75,6 +75,7 @@ import {
   getTenantByClientKeyOrPhoneNumberId,
   isAiAssistantConfigured,
   normalizeHandoffLeadNotificationRecipients,
+  normalizeTenantMediaHandoffPolicy,
 } from "../config/tenantConfig.js";
 import {
   resolveFallbackTemplate,
@@ -2390,6 +2391,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       params.nextState.mode === "HUMAN" ||
       getHandoffStatus(params.nextState) === "active";
     if (previousIsHuman || !nextIsHuman) return;
+    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig?.mediaHandoffPolicy);
+    const includeMediaSummary =
+      params.receivedMedia === true &&
+      mediaPolicy.enabled &&
+      mediaPolicy.channels.includes("whatsapp") &&
+      (mediaPolicy.behavior === "notify_and_reply" || mediaPolicy.behavior === "notify_only");
     await notifyHandoffLeadArrival({
       state: params.nextState,
       source: "runtime_transition",
@@ -2399,7 +2406,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         params.crmSummary ??
         [
           "Origem: Transicao operacional para atendimento humano",
-          params.receivedMedia ? "Midia recebida: sim" : null,
+          includeMediaSummary ? mediaPolicy.attendantSummaryText : null,
           "Atendimento entrou na fila humana. Revise o inbox para ver o historico completo.",
         ]
           .filter(Boolean)
@@ -2423,6 +2430,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return params.nextState;
     }
     if (!tenantClientId) return params.nextState;
+    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig?.mediaHandoffPolicy);
+    const shouldReply =
+      mediaPolicy.enabled &&
+      mediaPolicy.channels.includes("whatsapp") &&
+      (mediaPolicy.behavior === "notify_and_reply" || mediaPolicy.behavior === "reply_only");
+    if (!shouldReply) return params.nextState;
     const previousIsHuman =
       params.previousState.mode === "HUMAN" ||
       getHandoffStatus(params.previousState) === "active";
@@ -2451,8 +2464,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return params.nextState;
     }
 
-    const replyText =
-      "Recebemos sua mensagem. Vou encaminhar para uma pessoa da equipe verificar e te atender melhor.";
+    const replyText = mediaPolicy.customerNoticeText;
     const result = await sendOutboundText({
       toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || params.nextState.waId : params.toE164,
       waId: params.nextState.waId,

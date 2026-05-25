@@ -168,6 +168,7 @@ export type AdminAutomationSettings = {
   aiAssistantPresetApplied?: string;
   handoffLeadNotificationEnabled?: boolean;
   handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
+  mediaHandoffPolicy?: MediaHandoffPolicy;
   aiAssistantGlobalSafety?: {
     questionStarters: string[];
     topicTerms: string[];
@@ -202,6 +203,14 @@ export type HandoffLeadNotificationRecipient = {
   waId: string;
   label?: string;
   isActive: boolean;
+};
+
+export type MediaHandoffPolicy = {
+  enabled: boolean;
+  channels: Array<"whatsapp" | "messenger" | "instagram">;
+  behavior: "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
+  customerNoticeText: string;
+  attendantSummaryText: string;
 };
 
 export type AiAssistantIntentCatalogItem = {

@@ -7,7 +7,33 @@ import {
   type AiQualificationSchema,
 } from "../agent/qualification.js";
 import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
+import type { Channel } from "../channels/channel.types.js";
 import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
+
+export type MediaHandoffBehavior = "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
+
+export type TenantMediaHandoffPolicy = {
+  enabled: boolean;
+  channels: Channel[];
+  behavior: MediaHandoffBehavior;
+  customerNoticeText: string;
+  attendantSummaryText: string;
+};
+
+const ALL_CHANNELS: Channel[] = ["whatsapp", "messenger", "instagram"];
+
+export const DEFAULT_MEDIA_HANDOFF_CUSTOMER_NOTICE =
+  "Recebemos sua mensagem. Vou encaminhar para uma pessoa da equipe verificar e te atender melhor.";
+
+export const DEFAULT_MEDIA_HANDOFF_ATTENDANT_SUMMARY = "Midia recebida: sim";
+
+export const DEFAULT_MEDIA_HANDOFF_POLICY: TenantMediaHandoffPolicy = {
+  enabled: true,
+  channels: [...ALL_CHANNELS],
+  behavior: "notify_and_reply",
+  customerNoticeText: DEFAULT_MEDIA_HANDOFF_CUSTOMER_NOTICE,
+  attendantSummaryText: DEFAULT_MEDIA_HANDOFF_ATTENDANT_SUMMARY,
+};
 
 export type TenantConfig = {
   id: string;
@@ -70,6 +96,7 @@ export type TenantConfig = {
   followUpTemplateLang?: string;
   handoffLeadNotificationEnabled?: boolean;
   handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
+  mediaHandoffPolicy?: TenantMediaHandoffPolicy;
   aiAssistantEnabled?: boolean;
   aiAssistantMaxReplies?: number;
   aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
@@ -271,6 +298,9 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     nextTenant.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
       tenant.handoffLeadNotificationRecipients
     );
+    nextTenant.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(
+      tenant.mediaHandoffPolicy
+    );
     if (nextTenant.aiAssistantEnabled === undefined) {
       nextTenant.aiAssistantEnabled = false;
     }
@@ -445,6 +475,54 @@ export function normalizeHandoffLeadNotificationRecipients(
     });
   }
   return recipients;
+}
+
+function normalizeMediaHandoffChannels(input: unknown): Channel[] {
+  if (!Array.isArray(input)) return [...DEFAULT_MEDIA_HANDOFF_POLICY.channels];
+  const seen = new Set<Channel>();
+  for (const raw of input) {
+    if (raw === "whatsapp" || raw === "messenger" || raw === "instagram") {
+      seen.add(raw);
+    }
+  }
+  return seen.size ? [...seen] : [...DEFAULT_MEDIA_HANDOFF_POLICY.channels];
+}
+
+function normalizeMediaHandoffText(input: unknown, fallback: string, maxLength: number) {
+  return typeof input === "string" && input.trim()
+    ? input.trim().replace(/\s+/g, " ").slice(0, maxLength)
+    : fallback;
+}
+
+export function normalizeTenantMediaHandoffPolicy(
+  input: unknown
+): TenantMediaHandoffPolicy {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ...DEFAULT_MEDIA_HANDOFF_POLICY, channels: [...DEFAULT_MEDIA_HANDOFF_POLICY.channels] };
+  }
+  const raw = input as Record<string, unknown>;
+  const behavior: MediaHandoffBehavior =
+    raw.behavior === "notify_only" ||
+    raw.behavior === "reply_only" ||
+    raw.behavior === "ignore" ||
+    raw.behavior === "notify_and_reply"
+      ? raw.behavior
+      : DEFAULT_MEDIA_HANDOFF_POLICY.behavior;
+  return {
+    enabled: raw.enabled !== false,
+    channels: normalizeMediaHandoffChannels(raw.channels),
+    behavior,
+    customerNoticeText: normalizeMediaHandoffText(
+      raw.customerNoticeText,
+      DEFAULT_MEDIA_HANDOFF_POLICY.customerNoticeText,
+      500
+    ),
+    attendantSummaryText: normalizeMediaHandoffText(
+      raw.attendantSummaryText,
+      DEFAULT_MEDIA_HANDOFF_POLICY.attendantSummaryText,
+      180
+    ),
+  };
 }
 
 function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
@@ -691,6 +769,32 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
         ))
     ) {
       throw new Error(`invalid_tenant_handoff_lead_notification_recipients:${key}`);
+    }
+    if (tenant.mediaHandoffPolicy !== undefined) {
+      if (!tenant.mediaHandoffPolicy || typeof tenant.mediaHandoffPolicy !== "object" || Array.isArray(tenant.mediaHandoffPolicy)) {
+        throw new Error(`invalid_tenant_media_handoff_policy:${key}`);
+      }
+      const policy = tenant.mediaHandoffPolicy as Partial<TenantMediaHandoffPolicy>;
+      if (typeof policy.enabled !== "boolean") {
+        throw new Error(`invalid_tenant_media_handoff_policy_enabled:${key}`);
+      }
+      if (!Array.isArray(policy.channels) || policy.channels.some((channel) => channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram")) {
+        throw new Error(`invalid_tenant_media_handoff_policy_channels:${key}`);
+      }
+      if (
+        policy.behavior !== "notify_and_reply" &&
+        policy.behavior !== "notify_only" &&
+        policy.behavior !== "reply_only" &&
+        policy.behavior !== "ignore"
+      ) {
+        throw new Error(`invalid_tenant_media_handoff_policy_behavior:${key}`);
+      }
+      if (typeof policy.customerNoticeText !== "string" || !policy.customerNoticeText.trim()) {
+        throw new Error(`invalid_tenant_media_handoff_policy_customer_notice:${key}`);
+      }
+      if (typeof policy.attendantSummaryText !== "string" || !policy.attendantSummaryText.trim()) {
+        throw new Error(`invalid_tenant_media_handoff_policy_attendant_summary:${key}`);
+      }
     }
     if (tenant.aiAssistantEnabled !== undefined && typeof tenant.aiAssistantEnabled !== "boolean") {
       throw new Error(`invalid_tenant_ai_assistant_enabled:${key}`);

@@ -19,6 +19,7 @@ import {
   isAiAssistantConfigured,
   normalizeCrmBusinessStatuses,
   normalizeHandoffLeadNotificationRecipients,
+  normalizeTenantMediaHandoffPolicy,
   saveTenants,
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
@@ -3378,6 +3379,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             tenant.handoffLeadNotificationRecipients
           ),
+          mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -3434,6 +3436,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const allowedKeys = new Set([
         "handoffLeadNotificationEnabled",
         "handoffLeadNotificationRecipients",
+        "mediaHandoffPolicy",
       ]);
       const unsupportedKeys = Object.keys(data).filter((key) => !allowedKeys.has(key));
       if (unsupportedKeys.length > 0) {
@@ -3468,6 +3471,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         patch.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
           data.handoffLeadNotificationRecipients
         );
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
+        patch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
       }
       if (Object.keys(patch).length === 0) {
         json(res, 400, httpError("bad_request", "Provide notification settings to update"));
@@ -3513,6 +3519,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
             saved.tenant.handoffLeadNotificationRecipients
           ),
+          mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -7016,6 +7023,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
               tenant.handoffLeadNotificationRecipients
             ),
+            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
@@ -7277,6 +7285,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantPatch.handoffLeadNotificationRecipients =
             normalizeHandoffLeadNotificationRecipients(data.handoffLeadNotificationRecipients);
         }
+        if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
+          aiAssistantPatch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
+        }
         if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
           if (typeof data.disableAiFallback !== "boolean") {
             json(res, 400, httpError("bad_request", "disableAiFallback must be boolean"));
@@ -7423,6 +7434,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
               saved.tenant.handoffLeadNotificationRecipients
             ),
+            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
@@ -12286,6 +12298,7 @@ function diffTenantFields(
   compareField("followUpTemplateLang");
   compareField("handoffLeadNotificationEnabled");
   compareField("handoffLeadNotificationRecipients");
+  compareField("mediaHandoffPolicy");
   compareField("aiAssistantEnabled");
   compareField("aiAssistantMaxReplies");
   compareField("aiAssistantProfile");
