@@ -86,7 +86,7 @@ export default function AppLoginPage() {
             className="theme-logo-light h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
           />
           <Image
-            src="/images/converta-logo-dark.png"
+            src="/images/converta-logo-dark-20260526.png"
             alt="Converta"
             width={240}
             height={88}

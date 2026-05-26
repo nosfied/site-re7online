@@ -237,7 +237,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
         className="theme-logo-light absolute left-1/2 top-1/2 m-0 block h-[124px] w-auto -translate-x-1/2 -translate-y-1/2 object-contain p-0 sm:h-[141px] lg:h-[104px] min-[1441px]:h-[177px]"
       />
       <Image
-        src="/images/converta-logo-dark.png"
+        src="/images/converta-logo-dark-20260526.png"
         alt="Converta"
         width={160}
         height={200}
@@ -273,7 +273,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             className="theme-logo-light h-auto w-full max-w-[760px] object-contain"
           />
           <Image
-            src="/images/converta-logo-dark.png"
+            src="/images/converta-logo-dark-20260526.png"
             alt="Converta ampliada"
             width={900}
             height={340}
