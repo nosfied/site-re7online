@@ -133,7 +133,7 @@ function resolveNotificationSound(input: InboundOrHandoffNotificationInput) {
   if (input.isHandoffTransition && !isHumanNotificationContext(input.mode, input.handoffStatus)) return null;
 
   const isActiveConversation = input.conversationIdentity === getActiveConversationIdentity();
-  if (isActiveConversation && isAppVisibleAndFocused()) {
+  if (isActiveConversation && isAppVisible()) {
     return "active" as const;
   }
   return "primary" as const;
@@ -311,9 +311,9 @@ export function canUserReceiveRealtimeEvent(
   return true;
 }
 
-function isAppVisibleAndFocused() {
+function isAppVisible() {
   if (typeof document === "undefined") return true;
-  return document.visibilityState === "visible" && document.hasFocus();
+  return document.visibilityState === "visible";
 }
 
 export function shouldNotifyInboundOrHandoff(input: InboundOrHandoffNotificationInput) {

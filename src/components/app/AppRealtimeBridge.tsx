@@ -162,12 +162,12 @@ export default function AppRealtimeBridge() {
   }, []);
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
-    const appIsFocused = document.visibilityState === "visible" && document.hasFocus();
+    const appIsVisible = document.visibilityState === "visible";
     const soundEnabled = isSoundEnabled();
-    if (request.notifyBrowser && !appIsFocused) {
+    if (request.notifyBrowser && !appIsVisible) {
       showBrowserNotification(request, true);
     }
-    if (soundEnabled && appIsFocused) {
+    if (soundEnabled && appIsVisible) {
       if (request.sound === "active") {
         playNotificationSound("active");
       } else {

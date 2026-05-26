@@ -77,6 +77,7 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 ];
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
 const mediaBlobCache = new Map<string, Blob>();
@@ -1654,6 +1655,7 @@ export default function AppInboxPage() {
     if (!session || !pushStatus?.publicKey || pushBusy) return;
     setPushBusy(true);
     try {
+      window.localStorage.removeItem(INBOX_PUSH_DISABLED_STORAGE_KEY);
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setPushUiStatus(permission === "denied" ? "denied" : "ready");
@@ -1681,6 +1683,7 @@ export default function AppInboxPage() {
     if (!session || pushBusy) return;
     setPushBusy(true);
     try {
+      window.localStorage.setItem(INBOX_PUSH_DISABLED_STORAGE_KEY, "1");
       const registration = await navigator.serviceWorker.getRegistration("/sw.js");
       const subscription = await registration?.pushManager.getSubscription();
       const endpoint = subscription?.endpoint ?? null;
@@ -1702,6 +1705,7 @@ export default function AppInboxPage() {
     if (pushAutoEnableAttemptedRef.current) return;
     if (pushUiStatus !== "ready") return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (window.localStorage.getItem(INBOX_PUSH_DISABLED_STORAGE_KEY) === "1") return;
     if (Notification.permission !== "granted") return;
     pushAutoEnableAttemptedRef.current = true;
     void handleEnablePush();
