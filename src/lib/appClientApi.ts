@@ -234,6 +234,7 @@ export type AiAssistantIntentCatalogItem = {
   leadTemp?: "quente" | "morno" | "frio";
   priority?: "alta" | "media" | "baixa";
   handoff?: boolean;
+  preQualification?: boolean;
   tags?: string[];
 };
 

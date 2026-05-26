@@ -134,6 +134,7 @@ export type AiAssistantIntentCatalogItem = {
   leadTemp?: "quente" | "morno" | "frio";
   priority?: "alta" | "media" | "baixa";
   handoff?: boolean;
+  preQualification?: boolean;
   tags?: string[];
 };
 
@@ -574,6 +575,7 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
         ? { priority: item.priority }
         : {}),
       ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      ...(typeof item.preQualification === "boolean" ? { preQualification: item.preQualification } : {}),
       tags,
     });
   }

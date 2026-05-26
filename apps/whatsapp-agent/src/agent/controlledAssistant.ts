@@ -73,6 +73,7 @@ export type ResolvedTenantIntent = {
   leadTemp: OrchestratorLeadTemp | null;
   priority: OrchestratorPriority | null;
   handoff: boolean;
+  preQualification: boolean;
   tags: string[];
 };
 
@@ -617,6 +618,7 @@ export function resolveTenantIntent(
       leadTemp: item.leadTemp ?? null,
       priority: item.priority ?? null,
       handoff: item.handoff === true,
+      preQualification: item.preQualification === true,
       tags: Array.isArray(item.tags)
         ? item.tags
             .map((tag) => sanitizeCrmTag(tag))

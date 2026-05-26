@@ -6097,8 +6097,24 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
           const risk = classifyRisk(message.text, assistantTenantContext);
+          const preQualificationTenantIntent = !risk
+            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
+                preferredTopics: [
+                  resolveContextualContinuationTopic(updatedConversation),
+                  updatedConversation.answers?.aiMemory?.lastTopics?.[0],
+                  updatedConversation.answers?.flowContext?.servico,
+                  updatedConversation.answers?.flowContext?.intent,
+                ],
+              })
+            : null;
+          const shouldBypassQualificationForTenantIntent =
+            preQualificationTenantIntent?.preQualification === true;
           let qualificationHandled = false;
-          if (!risk && appliedTenantConfig.aiQualification?.enabled === true) {
+          if (
+            !risk &&
+            !shouldBypassQualificationForTenantIntent &&
+            appliedTenantConfig.aiQualification?.enabled === true
+          ) {
             const qualificationResult = handleQualificationTurn({
               schema: appliedTenantConfig.aiQualification,
               state: updatedConversation.answers?.aiQualification,
@@ -6359,14 +6375,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             fallbackDecision?.intent === "handoff_prompt" ||
             (contextualAckForIntent && !hasFormalHandoffPromptForIntent);
           const tenantIntent = !risk && !qualificationHandled && !shouldSkipCatalogForTurn
-            ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
-                preferredTopics: [
-                  resolveContextualContinuationTopic(updatedConversation),
-                  updatedConversation.answers?.aiMemory?.lastTopics?.[0],
-                  updatedConversation.answers?.flowContext?.servico,
-                  updatedConversation.answers?.flowContext?.intent,
-                ],
-              })
+            ? preQualificationTenantIntent ??
+              resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
+                  preferredTopics: [
+                    resolveContextualContinuationTopic(updatedConversation),
+                    updatedConversation.answers?.aiMemory?.lastTopics?.[0],
+                    updatedConversation.answers?.flowContext?.servico,
+                    updatedConversation.answers?.flowContext?.intent,
+                  ],
+                })
             : null;
           const currentFlowContext = updatedConversation.answers?.flowContext ?? {};
           const previousTenantIntentKey =
