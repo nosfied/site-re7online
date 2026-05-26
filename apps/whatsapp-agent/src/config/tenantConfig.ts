@@ -255,7 +255,7 @@ async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
   }
 }
 
-function normalizeTenantConfigMap(input: unknown): unknown {
+function normalizeTenantConfigMap(input: unknown, existingTenants?: TenantConfigMap): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return input;
   }
@@ -268,6 +268,7 @@ function normalizeTenantConfigMap(input: unknown): unknown {
       continue;
     }
     const tenant = value as Record<string, unknown>;
+    const existingTenant = existingTenants?.[key];
     const nextTenant: Record<string, unknown> = { ...tenant };
     if (nextTenant.disableLegacyFlows === undefined) {
       nextTenant.disableLegacyFlows = true;
@@ -333,7 +334,8 @@ function normalizeTenantConfigMap(input: unknown): unknown {
       const tenantKey = typeof tenant.id === "string" && tenant.id.trim() ? tenant.id : key;
       nextTenant.channelAccounts = normalizeTenantChannelAccountsForTenant(
         tenant.channelAccounts,
-        tenantKey
+        tenantKey,
+        existingTenant?.channelAccounts
       );
     }
     nextTenant.crmBusinessStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
@@ -1043,13 +1045,15 @@ export async function getDefaultTenant() {
 }
 
 export async function saveTenants(nextTenants: unknown) {
-  const normalizedTenants = normalizeTenantConfigMap(nextTenants);
-  assertTenantConfigMap(normalizedTenants);
   await ensureTenantsDir();
   const tenantsPath = getTenantsPath();
   const backupPath = getBackupPath();
+  let existingTenants: TenantConfigMap | undefined;
   try {
     const current = await fs.readFile(tenantsPath, "utf-8");
+    const currentTenants = normalizeTenantConfigMap(JSON.parse(current));
+    assertTenantConfigMap(currentTenants);
+    existingTenants = currentTenants;
     await fs.writeFile(backupPath, current, "utf-8");
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -1058,6 +1062,8 @@ export async function saveTenants(nextTenants: unknown) {
     }
   }
 
+  const normalizedTenants = normalizeTenantConfigMap(nextTenants, existingTenants);
+  assertTenantConfigMap(normalizedTenants);
   const payload = JSON.stringify(normalizedTenants, null, 2);
   const tempPath = `${tenantsPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tempPath, payload, "utf-8");
