@@ -40,11 +40,16 @@ export default function ConvertaPage() {
       </div>
 
       <header className="sticky top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur">
-        <Container className="flex h-16 items-center justify-between gap-4">
-          <Link href="/" className="text-lg font-semibold tracking-tight text-white">
-            Re7Online
-          </Link>
-          <nav className="hidden items-center gap-6 text-sm text-white/70 md:flex">
+        <Container className="flex flex-col gap-2 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0">
+          <div className="flex w-full min-w-0 items-center justify-between gap-3 md:w-auto">
+            <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight text-white">
+              Re7Online
+            </Link>
+            <Button href={demoUrl} variant="ghost" className="px-3 text-xs md:hidden" target="_blank" rel="noreferrer">
+              Quero ver funcionando
+            </Button>
+          </div>
+          <nav className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-0.5 text-xs text-white/74 [-ms-overflow-style:none] [scrollbar-width:none] [&>a]:shrink-0 [&>a]:whitespace-nowrap [&::-webkit-scrollbar]:hidden md:w-auto md:gap-6 md:overflow-visible md:pb-0 md:text-sm md:text-white/70">
             <a className="hover:text-white" href="#diagnostico">
               Diagnóstico
             </a>
@@ -58,7 +63,7 @@ export default function ConvertaPage() {
               Planos
             </a>
           </nav>
-          <Button href={demoUrl} variant="ghost" className="px-3 text-xs sm:px-4 sm:text-sm" target="_blank" rel="noreferrer">
+          <Button href={demoUrl} variant="ghost" className="hidden px-3 text-xs sm:px-4 sm:text-sm md:inline-flex" target="_blank" rel="noreferrer">
             Quero ver funcionando
           </Button>
         </Container>

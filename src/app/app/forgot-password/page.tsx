@@ -48,7 +48,7 @@ export default function AppForgotPasswordPage() {
             className="theme-logo-light h-auto w-full max-w-[142px] object-contain sm:max-w-[220px]"
           />
           <Image
-            src="/images/converta-logo-dark-20260526.png"
+            src="/images/converta-logo-dark2.png"
             alt="Converta"
             width={240}
             height={88}
