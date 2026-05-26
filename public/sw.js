@@ -10,7 +10,22 @@ self.addEventListener("push", (event) => {
   const increment = Number.isFinite(Number(data.unreadIncrement)) ? Math.max(1, Number(data.unreadIncrement)) : 1;
 
   event.waitUntil(
-    self.registration.getNotifications({ tag }).then((notifications) => {
+    Promise.all([
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }),
+      self.registration.getNotifications({ tag }),
+    ]).then(([clients, notifications]) => {
+      const hasVisibleAppClient = clients.some((client) => {
+        try {
+          const url = new URL(client.url);
+          return url.pathname.startsWith("/app") && client.visibilityState === "visible";
+        } catch {
+          return false;
+        }
+      });
+      if (hasVisibleAppClient) {
+        return undefined;
+      }
+
       const previousTotal = notifications.reduce((highest, notification) => {
         const total = Number(notification.data?.unreadTotal ?? 0);
         return Number.isFinite(total) && total > highest ? total : highest;
@@ -30,7 +45,9 @@ self.addEventListener("push", (event) => {
         },
         icon: "/converta-favicon.png?v=converta-dark",
         badge: "/converta-favicon.png?v=converta-dark",
-        renotify: false,
+        renotify: true,
+        silent: false,
+        timestamp: Date.now(),
       };
 
       return self.registration.showNotification(title, options);
@@ -40,13 +57,13 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/app/inbox";
+  const url = new URL(event.notification.data?.url || "/app/inbox", self.location.origin).href;
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
       for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
+        if ("navigate" in client && "focus" in client) {
+          const navigatedClient = await client.navigate(url).catch(() => null);
+          return (navigatedClient || client).focus();
         }
       }
       return self.clients.openWindow(url);

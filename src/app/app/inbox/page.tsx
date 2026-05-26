@@ -1421,10 +1421,8 @@ export default function AppInboxPage() {
     "checking" | "ready" | "enabled" | "denied" | "unsupported" | "needs_install" | "not_configured" | "error"
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
-  const [mobilePushNotice, setMobilePushNotice] = useState<string | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const pushAutoEnableAttemptedRef = useRef(false);
-  const pushMobileNoticeShownRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
   const [unreadAnchorMessageIdentity, setUnreadAnchorMessageIdentity] = useState<string | null>(null);
@@ -1659,11 +1657,6 @@ export default function AppInboxPage() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setPushUiStatus(permission === "denied" ? "denied" : "ready");
-        setError(
-          permission === "denied"
-            ? "Notificacoes bloqueadas no navegador. Libere a permissao do site para ativar."
-            : "Permissao de notificacao nao concedida."
-        );
         return;
       }
       const registration = await navigator.serviceWorker.register("/sw.js");
@@ -1676,11 +1669,9 @@ export default function AppInboxPage() {
         }));
       await subscribeAppPush(session, subscription.toJSON(), isIosLikeDevice() ? "iOS PWA" : "PWA");
       setPushUiStatus("enabled");
-      setSuccess("Notificacoes push ativadas neste dispositivo.");
       void refreshPushStatus();
-    } catch (error) {
+    } catch {
       setPushUiStatus("error");
-      setError((error as Error).message || "Nao foi possivel ativar notificacoes push.");
     } finally {
       setPushBusy(false);
     }
@@ -1698,11 +1689,9 @@ export default function AppInboxPage() {
       }
       await unsubscribeAppPush(session, endpoint);
       setPushUiStatus("ready");
-      setSuccess("Notificacoes push desativadas neste dispositivo.");
       void refreshPushStatus();
-    } catch (error) {
+    } catch {
       setPushUiStatus("error");
-      setError((error as Error).message || "Nao foi possivel desativar notificacoes push.");
     } finally {
       setPushBusy(false);
     }
@@ -1724,9 +1713,6 @@ export default function AppInboxPage() {
       setSoundEnabled(nextSoundEnabled);
       if (nextSoundEnabled) {
         requestAppNotificationAudioUnlock();
-        setSuccess("Som de novas mensagens ativado neste dispositivo.");
-      } else {
-        setSuccess("Som de novas mensagens desativado neste dispositivo.");
       }
       return;
     }
@@ -1754,40 +1740,15 @@ export default function AppInboxPage() {
       return;
     }
     if (pushUiStatus === "denied") {
-      setError("Notificacoes bloqueadas no navegador. Libere a permissao do site para ativar.");
       return;
     }
     if (pushUiStatus === "needs_install") {
-      setError("No iPhone, instale o Converta na Tela de Inicio antes de ativar push.");
       return;
     }
     if (pushUiStatus === "not_configured") {
-      setError("Push ainda nao esta configurado neste ambiente.");
       return;
     }
-    if (pushUiStatus === "unsupported") {
-      setError("Este navegador nao oferece suporte a push em segundo plano.");
-    }
   }, [handleDisablePush, handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!session) return;
-    if (pushMobileNoticeShownRef.current) return;
-    if (pushUiStatus === "checking" || pushUiStatus === "enabled") return;
-    if (!window.matchMedia("(max-width: 767px)").matches) return;
-
-    pushMobileNoticeShownRef.current = true;
-    const message =
-      pushUiStatus === "denied"
-        ? "Notificacoes em segundo plano: bloqueadas no navegador. O controle fica no sininho no topo da lista de conversas."
-        : pushUiStatus === "needs_install"
-          ? "Nao ativadas: no iPhone, instale o Converta na Tela de Inicio e use o sininho para ativar."
-          : pushUiStatus === "not_configured" || pushUiStatus === "unsupported" || pushUiStatus === "error"
-            ? "Notificacoes em segundo plano: indisponiveis neste dispositivo. O sininho continua controlando o som local."
-            : "Nao ativadas: use o sininho no topo da lista de conversas para ativar ou desativar.";
-    setMobilePushNotice(message);
-  }, [pushUiStatus, session]);
 
   useEffect(
     () => () => {
@@ -1928,17 +1889,46 @@ export default function AppInboxPage() {
     composerRef.current.setSelectionRange(caretPosition, caretPosition);
   }, []);
 
-  const restoreMobileConversationViewport = useCallback(() => {
+  const stabilizeMobileConversationViewport = useCallback(() => {
     if (typeof window === "undefined") return;
     if (!window.matchMedia("(max-width: 767px)").matches) return;
-    window.setTimeout(() => {
+    const applyViewport = () => {
+      const viewportHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      if (viewportHeight > 0) {
+        document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+      }
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    }, 120);
+    };
+    applyViewport();
+    window.setTimeout(applyViewport, 80);
+    window.setTimeout(applyViewport, 240);
   }, []);
 
   const handleJumpToLatest = useCallback(() => {
+    stabilizeMobileConversationViewport();
     scrollTimelineToBottom("auto");
-  }, [scrollTimelineToBottom]);
+  }, [scrollTimelineToBottom, stabilizeMobileConversationViewport]);
+
+  useEffect(() => {
+    if (!selectedConversationKey) return;
+    stabilizeMobileConversationViewport();
+  }, [selectedConversationKey, stabilizeMobileConversationViewport]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    const handleViewportChange = () => stabilizeMobileConversationViewport();
+    window.addEventListener("focus", handleViewportChange);
+    window.addEventListener("pageshow", handleViewportChange);
+    document.addEventListener("visibilitychange", handleViewportChange);
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
+    return () => {
+      window.removeEventListener("focus", handleViewportChange);
+      window.removeEventListener("pageshow", handleViewportChange);
+      document.removeEventListener("visibilitychange", handleViewportChange);
+      window.visualViewport?.removeEventListener("resize", handleViewportChange);
+    };
+  }, [stabilizeMobileConversationViewport]);
 
   const markConversationAsRead = useCallback((
     conversationKey: string,
@@ -2946,7 +2936,8 @@ export default function AppInboxPage() {
     setSelectedConversationWaId(item.waId);
     setShowMoreActions(false);
     detailRequestSeqRef.current += 1;
-  }, [readState, session?.user]);
+    stabilizeMobileConversationViewport();
+  }, [readState, session?.user, stabilizeMobileConversationViewport]);
 
   useEffect(() => {
     if (!loadingConversations && selectedConversationKey && !selectedConversation) {
@@ -3087,8 +3078,9 @@ export default function AppInboxPage() {
     );
     if (!target) return;
     openConversationItem(target, { fromPush: true });
+    stabilizeMobileConversationViewport();
     window.history.replaceState(null, "", "/app/inbox");
-  }, [conversations, openConversationItem]);
+  }, [conversations, openConversationItem, stabilizeMobileConversationViewport]);
 
   useEffect(() => {
     if (!isBusinessTenant) return;
@@ -4020,31 +4012,6 @@ export default function AppInboxPage() {
         onFocus={() => setPauseErrorToast(true)}
         onBlur={() => setPauseErrorToast(false)}
       />
-      {mobilePushNotice ? (
-        <div className="fixed inset-x-3 bottom-[calc(1rem+var(--safe-bottom))] z-[95] rounded-2xl border-2 border-orange-700 bg-orange-400 p-3 text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.28)] md:hidden">
-          <p className="text-sm font-black">Notificações em segundo plano</p>
-          <p className="mt-1 leading-relaxed text-slate-900/80">
-            {mobilePushNotice.startsWith("Nao ativadas:") ? (
-              <>
-                <strong className="font-black text-slate-950">Não</strong>
-                {mobilePushNotice.slice("Nao".length)}
-              </>
-            ) : (
-              mobilePushNotice
-            )}
-          </p>
-          <div className="mt-2 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setMobilePushNotice(null)}
-              className="rounded-lg bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {showContactTimeline ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
           <section className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -5035,7 +5002,7 @@ export default function AppInboxPage() {
                   className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2 max-md:h-12 max-md:min-h-12 max-md:px-3 max-md:py-2 [@media(max-height:760px)]:h-14 [@media(max-height:760px)]:min-h-14"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
-                  onBlur={restoreMobileConversationViewport}
+                  onBlur={stabilizeMobileConversationViewport}
                   onKeyDown={handleComposerKeyDown}
                   placeholder={
                     selectedConversation && !selectedConversationSupportsOutbound
