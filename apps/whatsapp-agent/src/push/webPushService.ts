@@ -243,10 +243,14 @@ function buildPushDedupeKey(event: Extract<InboxRealtimeEvent, { type: "message.
 }
 
 function buildPushPayload(event: Extract<InboxRealtimeEvent, { type: "message.created" }>) {
+  const conversationIdentity = event.waIdCanonical ?? event.waId;
+  const url = conversationIdentity
+    ? `/app/inbox?push=1&conversation=${encodeURIComponent(conversationIdentity)}`
+    : "/app/inbox?push=1";
   return JSON.stringify({
     title: "Converta",
     body: "Voce tem novas mensagens aguardando atendimento.",
-    url: "/app/inbox",
+    url,
     channel: null,
     tag: SYSTEM_NOTIFICATION_TAG,
     unreadIncrement: 1,

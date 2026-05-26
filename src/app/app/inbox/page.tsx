@@ -1455,6 +1455,7 @@ export default function AppInboxPage() {
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
   const renderedPriorityLogKeysRef = useRef(new Set<string>());
   const sortedLogSignatureRef = useRef<string | null>(null);
+  const lastHandledPushConversationRef = useRef<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -1724,6 +1725,13 @@ export default function AppInboxPage() {
 
     if (soundEnabled || pushUiStatus === "enabled") {
       setSoundEnabled(false);
+      if (
+        isMobileViewport &&
+        !["checking", "denied", "unsupported", "needs_install", "not_configured", "error"].includes(pushUiStatus)
+      ) {
+        void handleDisablePush();
+        return;
+      }
       if (pushUiStatus === "enabled") {
         void handleDisablePush();
       }
@@ -1879,7 +1887,7 @@ export default function AppInboxPage() {
 
   const scrollTimelineToBottom = useCallback(() => {
     if (!timelineRef.current) return;
-    timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
+    timelineRef.current.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
     setShowJumpToLatest(false);
   }, []);
 
@@ -1895,7 +1903,9 @@ export default function AppInboxPage() {
         const node = timelineRef.current;
         const target = node?.querySelector<HTMLElement>("[data-unread-anchor='true']");
         if (!node || !target) return;
-        node.scrollTop = Math.max(0, target.offsetTop - node.offsetTop - 24);
+        const mobileOffset =
+          typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches ? 96 : 24;
+        node.scrollTop = Math.max(0, target.offsetTop - node.offsetTop - mobileOffset);
         setShowJumpToLatest(true);
         onComplete?.();
       });
@@ -1916,6 +1926,11 @@ export default function AppInboxPage() {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     }, 120);
   }, []);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollTimelineToBottom();
+    restoreMobileConversationViewport();
+  }, [restoreMobileConversationViewport, scrollTimelineToBottom]);
 
   const markConversationAsRead = useCallback((
     conversationKey: string,
@@ -2200,6 +2215,9 @@ export default function AppInboxPage() {
       });
       setMessagesConversationKey(conversationKey);
       shouldScrollToBottomRef.current = shouldStickToBottom;
+      if (message.direction === "INBOUND" && document.visibilityState !== "visible") {
+        markConversationIdentitiesAsUnread([conversationKey, event.waId, event.waIdCanonical], event.waId);
+      }
       return;
     }
 
@@ -2881,6 +2899,43 @@ export default function AppInboxPage() {
     [conversations, selectedConversationKey]
   );
 
+  const openConversationItem = useCallback((item: InboxConversationItem, options?: { fromPush?: boolean }) => {
+    const conversationIdentity = getConversationIdentity(item);
+    const conversationIdentityCandidates = getConversationIdentityCandidates(item);
+    const shouldOpenAtUnread =
+      options?.fromPush === true || isConversationUnreadForUser(item, readState, session?.user);
+    const activityAt = getConversationActivityAt(item);
+    const latestReadAt = getLatestReadAtForConversation(item, readState);
+    pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
+      ? {
+          conversationKey: conversationIdentity,
+          lastReadAt: latestReadAt,
+        }
+      : null;
+    pendingUnreadAnchorConversationIdentityRef.current = shouldOpenAtUnread
+      ? conversationIdentity
+      : null;
+    pendingUnreadLastReadAtRef.current = shouldOpenAtUnread ? latestReadAt : null;
+    pendingUnreadAnchorMessageIdRef.current = null;
+    pendingReadAfterHydrationRef.current = {
+      conversationKey: conversationIdentity,
+      conversationKeys: conversationIdentityCandidates,
+      activityAt,
+      waId: item.waId,
+    };
+    shouldScrollToBottomRef.current = !shouldOpenAtUnread;
+    selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
+    setUnreadSeparatorIndex(null);
+    setUnreadAnchorMessageIdentity(null);
+    setActiveConversationIdentity(conversationIdentity);
+    setLoadingMessages(true);
+    setMessagesConversationKey(null);
+    setSelectedConversationKey(conversationIdentity);
+    setSelectedConversationWaId(item.waId);
+    setShowMoreActions(false);
+    detailRequestSeqRef.current += 1;
+  }, [readState, session?.user]);
+
   useEffect(() => {
     if (!loadingConversations && selectedConversationKey && !selectedConversation) {
       clearSelectedConversation();
@@ -3010,6 +3065,20 @@ export default function AppInboxPage() {
     session?.user.id,
     session?.user,
   ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pushConversation = new URLSearchParams(window.location.search).get("conversation")?.trim();
+    if (!pushConversation) return;
+    if (lastHandledPushConversationRef.current === pushConversation) return;
+    const target = conversations.find((item) =>
+      conversationIdentityMatches(getConversationIdentityCandidates(item), [pushConversation])
+    );
+    if (!target) return;
+    lastHandledPushConversationRef.current = pushConversation;
+    openConversationItem(target, { fromPush: true });
+  }, [conversations, openConversationItem]);
+
   useEffect(() => {
     if (!isBusinessTenant) return;
     const signature = filteredConversations
@@ -4309,7 +4378,6 @@ export default function AppInboxPage() {
             ) : null}
             {filteredConversations.map((item, index) => {
               const conversationIdentity = getConversationIdentity(item);
-              const conversationIdentityCandidates = getConversationIdentityCandidates(item);
               const isActive = conversationIdentity === selectedConversationKey;
               const unread = !isActive && isConversationUnreadForUser(item, readState, session?.user);
               const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
@@ -4326,39 +4394,7 @@ export default function AppInboxPage() {
                       event.preventDefault();
                       return;
                     }
-                    const shouldOpenAtUnread = isConversationUnreadForUser(item, readState, session?.user);
-                    const activityAt = getConversationActivityAt(item);
-                    pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
-                      ? {
-                          conversationKey: conversationIdentity,
-                          lastReadAt: getLatestReadAtForConversation(item, readState),
-                        }
-                      : null;
-                    pendingUnreadAnchorConversationIdentityRef.current = shouldOpenAtUnread
-                      ? conversationIdentity
-                      : null;
-                    pendingUnreadLastReadAtRef.current = shouldOpenAtUnread
-                      ? getLatestReadAtForConversation(item, readState)
-                      : null;
-                    pendingUnreadAnchorMessageIdRef.current = null;
-                    pendingReadAfterHydrationRef.current = {
-                      conversationKey: conversationIdentity,
-                      conversationKeys: conversationIdentityCandidates,
-                      activityAt,
-                      waId: item.waId,
-                    };
-                    markConversationIdentitiesAsRead(conversationIdentityCandidates, activityAt, item.waId);
-                    shouldScrollToBottomRef.current = !shouldOpenAtUnread;
-                    selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
-                    setUnreadSeparatorIndex(null);
-                    setUnreadAnchorMessageIdentity(null);
-                    setActiveConversationIdentity(conversationIdentity);
-                    setLoadingMessages(true);
-                    setMessagesConversationKey(null);
-                    setSelectedConversationKey(conversationIdentity);
-                    setSelectedConversationWaId(item.waId);
-                    setShowMoreActions(false);
-                    detailRequestSeqRef.current += 1;
+                    openConversationItem(item);
                   }}
                   onTouchCancel={() => {
                     conversationListTouchMovedRef.current = false;
@@ -4759,7 +4795,7 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:py-3 [@media(max-height:760px)]:py-2">
+          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:py-3 max-md:scroll-pb-40 [@media(max-height:760px)]:py-2">
             {!selectedConversationWaId ? (
               <div className="flex h-full min-h-[260px] items-center justify-center">
                 <div className="max-w-sm rounded-2xl border border-black/8 bg-white/50 px-6 py-5 text-center shadow-sm">
@@ -4871,10 +4907,10 @@ export default function AppInboxPage() {
             </div>
           </div>
           {selectedConversationKey && showJumpToLatest ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
+            <div className="pointer-events-none absolute inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] flex justify-center px-4 max-md:bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
               <button
                 type="button"
-                onClick={scrollTimelineToBottom}
+                onClick={handleJumpToLatest}
               className="pointer-events-auto whitespace-nowrap rounded-full border border-[#d4c7b5] bg-white/92 px-4 py-2 text-sm font-medium text-slate-800 shadow-md transition hover:bg-white max-[1440px]:px-3 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               >
                 Ir para a mais recente
@@ -4882,7 +4918,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pb-[calc(0.85rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:py-1.5">
+          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pb-[calc(1.6rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:pt-1.5">
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">

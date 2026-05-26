@@ -30,7 +30,7 @@ self.addEventListener("push", (event) => {
         },
         icon: "/converta-favicon.png?v=converta-dark",
         badge: "/converta-favicon.png?v=converta-dark",
-        renotify: true,
+        renotify: false,
       };
 
       return self.registration.showNotification(title, options);
