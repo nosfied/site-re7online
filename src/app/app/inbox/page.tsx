@@ -633,6 +633,7 @@ type PendingOutgoingMessage = {
 type PendingUnreadScrollTarget = {
   conversationKey: string;
   lastReadAt: string | null;
+  unreadCount: number;
 };
 
 type PendingReadAfterHydration = {
@@ -983,9 +984,17 @@ function getInboundNotificationIdentity(waId: string | null, item: InboxMessageI
   return `${waId ?? "unknown"}:${item.messageId ?? item.metaMessageId ?? item.createdAt}:${item.type}`;
 }
 
-function findFirstUnreadMessageIndex(items: InboxMessageItem[], lastReadAt: string | null) {
+function findFirstUnreadMessageIndex(items: InboxMessageItem[], lastReadAt: string | null, unreadCount = 0) {
   const lastReadTimestamp = Date.parse(lastReadAt ?? "");
   const hasReadTimestamp = Number.isFinite(lastReadTimestamp);
+  if (!hasReadTimestamp && unreadCount > 0) {
+    let remainingInbound = unreadCount;
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      if (items[index]?.direction !== "INBOUND") continue;
+      remainingInbound -= 1;
+      if (remainingInbound <= 0) return index;
+    }
+  }
   return items.findIndex((item) => {
     if (item.direction !== "INBOUND") return false;
     if (!hasReadTimestamp) return true;
@@ -1455,7 +1464,6 @@ export default function AppInboxPage() {
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
   const renderedPriorityLogKeysRef = useRef(new Set<string>());
   const sortedLogSignatureRef = useRef<string | null>(null);
-  const lastHandledPushConversationRef = useRef<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -1723,7 +1731,8 @@ export default function AppInboxPage() {
       return;
     }
 
-    if (soundEnabled || pushUiStatus === "enabled") {
+    const notificationsEnabled = soundEnabled || pushUiStatus === "enabled";
+    if (notificationsEnabled) {
       setSoundEnabled(false);
       if (
         isMobileViewport &&
@@ -1885,9 +1894,9 @@ export default function AppInboxPage() {
     };
   }, [adminClientKey, adminConnection, session]);
 
-  const scrollTimelineToBottom = useCallback(() => {
+  const scrollTimelineToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     if (!timelineRef.current) return;
-    timelineRef.current.scrollTo({ top: timelineRef.current.scrollHeight, behavior: "smooth" });
+    timelineRef.current.scrollTo({ top: timelineRef.current.scrollHeight, behavior });
     setShowJumpToLatest(false);
   }, []);
 
@@ -1928,9 +1937,8 @@ export default function AppInboxPage() {
   }, []);
 
   const handleJumpToLatest = useCallback(() => {
-    scrollTimelineToBottom();
-    restoreMobileConversationViewport();
-  }, [restoreMobileConversationViewport, scrollTimelineToBottom]);
+    scrollTimelineToBottom("auto");
+  }, [scrollTimelineToBottom]);
 
   const markConversationAsRead = useCallback((
     conversationKey: string,
@@ -2640,7 +2648,7 @@ export default function AppInboxPage() {
     const shouldRefreshUnreadWindow =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
-    const shouldStickToBottomAfterHydration = !shouldRefreshUnreadWindow && isTimelineNearBottom();
+    const shouldStickToBottomAfterHydration = !shouldRefreshUnreadWindow;
     setLoadingMessages(true);
     setError(null);
     setMessages(cachedMessages ?? []);
@@ -2721,7 +2729,6 @@ export default function AppInboxPage() {
   }, [
     clearSelectedConversation,
     handleUnauthorized,
-    isTimelineNearBottom,
     selectedConversationKey,
     selectedConversationWaId,
     session,
@@ -2795,7 +2802,11 @@ export default function AppInboxPage() {
       if (unreadTarget?.conversationKey === selectedConversationKey) {
         const lastReadAtBeforeOpen =
           pendingUnreadLastReadAtRef.current ?? unreadTarget.lastReadAt;
-        const unreadIndex = findFirstUnreadMessageIndex(messages, lastReadAtBeforeOpen);
+        const unreadIndex = findFirstUnreadMessageIndex(
+          messages,
+          lastReadAtBeforeOpen,
+          unreadTarget.unreadCount
+        );
         const unreadMessage = unreadIndex >= 0 ? messages[unreadIndex] : null;
         if (unreadMessage) {
           const unreadMessageIdentity = getMessageIdentity(unreadMessage);
@@ -2902,14 +2913,15 @@ export default function AppInboxPage() {
   const openConversationItem = useCallback((item: InboxConversationItem, options?: { fromPush?: boolean }) => {
     const conversationIdentity = getConversationIdentity(item);
     const conversationIdentityCandidates = getConversationIdentityCandidates(item);
-    const shouldOpenAtUnread =
-      options?.fromPush === true || isConversationUnreadForUser(item, readState, session?.user);
+    const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
+    const shouldOpenAtUnread = unreadCount > 0;
     const activityAt = getConversationActivityAt(item);
     const latestReadAt = getLatestReadAtForConversation(item, readState);
     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
       ? {
           conversationKey: conversationIdentity,
           lastReadAt: latestReadAt,
+          unreadCount,
         }
       : null;
     pendingUnreadAnchorConversationIdentityRef.current = shouldOpenAtUnread
@@ -3070,13 +3082,12 @@ export default function AppInboxPage() {
     if (typeof window === "undefined") return;
     const pushConversation = new URLSearchParams(window.location.search).get("conversation")?.trim();
     if (!pushConversation) return;
-    if (lastHandledPushConversationRef.current === pushConversation) return;
     const target = conversations.find((item) =>
       conversationIdentityMatches(getConversationIdentityCandidates(item), [pushConversation])
     );
     if (!target) return;
-    lastHandledPushConversationRef.current = pushConversation;
     openConversationItem(target, { fromPush: true });
+    window.history.replaceState(null, "", "/app/inbox");
   }, [conversations, openConversationItem]);
 
   useEffect(() => {
@@ -3976,15 +3987,15 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
-  const notificationToggleActive = isMobileViewport ? pushUiStatus === "enabled" : soundEnabled;
+  const notificationToggleActive = isMobileViewport ? soundEnabled || pushUiStatus === "enabled" : soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
-      ? "Silenciar notificações"
+      ? "Desativar notificações e som"
       : "Desativar som"
     : isMobileViewport
       ? pushUiStatus === "denied"
         ? "Notificações bloqueadas no navegador"
-        : "Ativar notificações"
+        : "Ativar notificações e som"
       : "Ativar som";
 
   return (
