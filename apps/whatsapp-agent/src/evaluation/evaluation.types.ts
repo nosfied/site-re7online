@@ -11,6 +11,7 @@ export type ConversationEvaluationExpected = {
   expectedStatus?: string;
   shouldAvoidFallback?: boolean;
   shouldAvoidTopic?: string[];
+  expectedOutputContains?: string[];
   expectedSemanticIntent?: string;
 };
 

@@ -107,6 +107,14 @@ export function scoreReplayTurn(params: {
     }
   }
 
+  for (const fragment of expected.expectedOutputContains ?? []) {
+    const normalizedFragment = normalizeText(fragment);
+    if (!normalizedFragment) continue;
+    if (!normalizeText(params.output).includes(normalizedFragment)) {
+      failures.push(`output missing expected fragment: ${fragment}`);
+    }
+  }
+
   if (!failures.length) return { score: "PASS", failures };
   const checkedCount = Object.keys(expected).length;
   return { score: failures.length < checkedCount ? "PARTIAL" : "FAIL", failures };

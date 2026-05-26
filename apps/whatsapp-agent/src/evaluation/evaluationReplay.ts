@@ -2,6 +2,10 @@ import {
   buildQualificationCrmArtifacts,
   handleQualificationTurn,
 } from "../agent/qualification.js";
+import {
+  buildTenantIntentCatalogReply,
+  resolveTenantIntent,
+} from "../agent/controlledAssistant.js";
 import type { TenantConfig } from "../config/tenantConfig.js";
 import { getTenant } from "../config/tenantConfig.js";
 import { combineScores, scoreReplayTurn } from "./evaluationScoring.js";
@@ -168,6 +172,15 @@ function runReplayTurn(params: {
     if (isHandoffRequest(params.inbound, params.tenant)) {
       state = createHandoffPrompt(state, nowIso);
       output = "Posso direcionar você para uma pessoa da equipe?";
+    }
+    return { state, output, logs: [] };
+  }
+
+  const preQualificationIntent = resolveTenantIntent(params.inbound, params.tenant.aiAssistantIntentCatalog);
+  if (preQualificationIntent?.preQualification === true) {
+    output = buildTenantIntentCatalogReply(preQualificationIntent);
+    if (preQualificationIntent.handoff && output) {
+      state = createHandoffPrompt(state, nowIso);
     }
     return { state, output, logs: [] };
   }

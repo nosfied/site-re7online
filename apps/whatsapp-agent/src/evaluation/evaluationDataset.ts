@@ -22,6 +22,32 @@ const tendenciaFixture: TenantConfig = {
   ],
   aiAssistantHandoffPrompt:
     "Esse atendimento pode ser melhor acompanhado por uma pessoa da equipe. Posso te encaminhar?",
+  aiAssistantIntentCatalog: [
+    {
+      key: "showroom_visita",
+      title: "Visita ao showroom",
+      topics: [
+        "onde fica",
+        "qual endereço",
+        "qual endereco",
+        "fica em mossoró",
+        "fica em mossoro",
+        "a loja fica em mossoró",
+        "a loja fica em mossoro",
+        "mossoró rn",
+        "mossoro rn",
+      ],
+      response:
+        "Sim, a Tendência Multimarcas fica em Mossoró/RN, no Bairro Aeroporto, Rua Felipe Camarão, nº 1570, em frente ao antigo posto de Rubinho e ao lado da galeteria Top Frango.",
+      nextQuestion:
+        "Você quer que eu direcione para a equipe confirmar o melhor horário de atendimento?",
+      leadTemp: "quente",
+      priority: "alta",
+      handoff: true,
+      preQualification: true,
+      tags: ["intent:showroom_visita", "area:comercial", "service:showroom"],
+    },
+  ],
   aiQualification: {
     enabled: true,
     semanticResolverEnabled: true,
@@ -40,7 +66,7 @@ const tendenciaFixture: TenantConfig = {
         type: "enum",
         required: true,
         allowedValues: ["atacado", "varejo"],
-        captureHints: ["atacado", "revenda", "lojista", "loja", "varejo", "uso próprio"],
+        captureHints: ["atacado", "revenda", "lojista", "varejo", "uso próprio"],
         question: "Você procura atendimento para atacado ou varejo?",
         crmMapping: {
           flowContextKey: "tipo_atendimento",
