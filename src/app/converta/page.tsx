@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import Button from "@/components/Button";
 import Container from "@/components/Container";
 import ConvertaAudiences from "@/components/ConvertaAudiences";
 import ConvertaDiagnosis from "@/components/ConvertaDiagnosis";
 import ConvertaFinalCta from "@/components/ConvertaFinalCta";
+import ConvertaHeader from "@/components/ConvertaHeader";
 import ConvertaHighlights from "@/components/ConvertaHighlights";
 import ConvertaOperations from "@/components/ConvertaOperations";
 import ConvertaShowcase from "@/components/ConvertaShowcase";
@@ -45,44 +45,9 @@ export default function ConvertaPage() {
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,19,42,0.74),rgba(6,19,42,1))]" />
       </div>
 
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur">
-        <Container className="flex flex-col gap-2 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0">
-          <div className="flex w-full min-w-0 items-center justify-between gap-3 md:w-auto">
-            <Link href="#inicio" className="inline-flex h-[50px] shrink-0 items-center overflow-hidden">
-              <Image
-                src="/images/converta-logo-light.png"
-                alt="Converta"
-                width={203}
-                height={254}
-                className="h-[254px] w-[203px] object-cover object-center"
-                sizes="203px"
-              />
-            </Link>
-            <Button href={demoUrl} variant="ghost" className="px-3 text-xs md:hidden" target="_blank" rel="noreferrer">
-              Quero ver funcionando
-            </Button>
-          </div>
-          <nav className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-0.5 text-xs text-white/74 [-ms-overflow-style:none] [scrollbar-width:none] [&>a]:shrink-0 [&>a]:whitespace-nowrap [&::-webkit-scrollbar]:hidden md:w-auto md:gap-6 md:overflow-visible md:pb-0 md:text-sm md:text-white/70">
-            <a className="hover:text-white" href="#diagnostico">
-              Diagnóstico
-            </a>
-            <a className="hover:text-white" href="#converta">
-              Controle
-            </a>
-            <a className="hover:text-white" href="#em-acao">
-              Em ação
-            </a>
-            <a className="hover:text-white" href="#planos">
-              Planos
-            </a>
-          </nav>
-          <Button href={demoUrl} variant="ghost" className="hidden px-3 text-xs sm:px-4 sm:text-sm md:inline-flex" target="_blank" rel="noreferrer">
-            Quero ver funcionando
-          </Button>
-        </Container>
-      </header>
+      <ConvertaHeader demoUrl={demoUrl} />
 
-      <section id="inicio" className="relative z-10 min-h-[calc(100svh-4rem)] scroll-mt-28 overflow-hidden pb-8 pt-28 md:min-h-[calc(100dvh-4rem)] md:scroll-mt-24 md:pb-14 md:pt-24">
+      <section id="inicio" className="relative z-10 min-h-[calc(100svh-4rem)] scroll-mt-20 overflow-hidden pb-8 pt-20 md:min-h-[calc(100dvh-4rem)] md:scroll-mt-24 md:pb-14 md:pt-24">
         <Image
           src="/images/converta/screenshots/principal1.png"
           alt=""
@@ -97,7 +62,7 @@ export default function ConvertaPage() {
         <Container className="relative z-10">
           <div className="flex max-w-xl flex-col md:min-h-[calc(100dvh-8rem)] lg:min-h-[720px] xl:min-h-[760px]">
             <div>
-              <p className="inline-flex w-full max-w-full items-center justify-center overflow-hidden rounded-full border border-re7-sky/25 bg-re7-navy/70 px-1 py-1.5 text-[0.42rem] font-semibold uppercase tracking-0 text-re7-sky backdrop-blur whitespace-nowrap min-[390px]:text-[0.44rem] sm:w-fit sm:max-w-full sm:px-2.5 sm:text-[0.62rem] sm:tracking-[0.08em] lg:text-[0.58rem] lg:tracking-[0.06em] xl:text-[0.68rem] xl:tracking-[0.1em]">
+              <p className="inline-flex w-full max-w-full items-center justify-center overflow-hidden rounded-full border border-re7-sky/25 bg-re7-navy/70 px-1.5 py-1.5 text-[0.48rem] font-semibold uppercase tracking-0 text-re7-sky backdrop-blur whitespace-nowrap min-[390px]:text-[0.5rem] sm:w-fit sm:max-w-full sm:px-2.5 sm:text-[0.62rem] sm:tracking-[0.08em] lg:text-[0.58rem] lg:tracking-[0.06em] xl:text-[0.68rem] xl:tracking-[0.1em]">
                 Central Inteligente de Operação Comercial e Atendimento
               </p>
 
