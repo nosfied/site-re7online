@@ -6,6 +6,7 @@ import Services from "@/components/Services";
 import HowItWorks from "@/components/HowItWorks";
 import Diagnostic from "@/components/Diagnostic";
 import Footer from "@/components/Footer";
+import FloatingWhatsAppButton from "@/components/FloatingWhatsAppButton";
 
 export default function Home() {
   return (
@@ -26,6 +27,7 @@ export default function Home() {
         <Diagnostic />
         <Footer />
       </div>
+      <FloatingWhatsAppButton message="Ola! Quero falar com a Re7Online sobre tecnologia, automacao e crescimento comercial." />
     </main>
   );
 }

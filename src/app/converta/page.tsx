@@ -9,6 +9,7 @@ import ConvertaFinalCta from "@/components/ConvertaFinalCta";
 import ConvertaHighlights from "@/components/ConvertaHighlights";
 import ConvertaOperations from "@/components/ConvertaOperations";
 import ConvertaShowcase from "@/components/ConvertaShowcase";
+import FloatingWhatsAppButton from "@/components/FloatingWhatsAppButton";
 import Plans from "@/components/Plans";
 import { buildWhatsAppUrl } from "@/lib/siteConfig";
 
@@ -42,8 +43,15 @@ export default function ConvertaPage() {
       <header className="sticky top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur">
         <Container className="flex flex-col gap-2 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0">
           <div className="flex w-full min-w-0 items-center justify-between gap-3 md:w-auto">
-            <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight text-white">
-              Re7Online
+            <Link href="/" className="inline-flex h-[50px] shrink-0 items-center overflow-hidden">
+              <Image
+                src="/images/converta-logo-light.png"
+                alt="Converta"
+                width={203}
+                height={254}
+                className="h-[254px] w-[203px] object-cover object-center"
+                sizes="203px"
+              />
             </Link>
             <Button href={demoUrl} variant="ghost" className="px-3 text-xs md:hidden" target="_blank" rel="noreferrer">
               Quero ver funcionando
@@ -150,6 +158,10 @@ export default function ConvertaPage() {
         <ConvertaFinalCta />
       </div>
 
+      <FloatingWhatsAppButton
+        message="Ola! Quero conhecer o Converta e entender como organizar meu atendimento."
+        label="Conhecer o Converta"
+      />
     </main>
   );
 }
