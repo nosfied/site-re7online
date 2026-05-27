@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   title: "Converta | Controle operacional para atendimento e vendas",
   description:
     "Central inteligente de operação comercial e atendimento para WhatsApp, Instagram e Messenger com CRM conversacional, IA supervisionada e previsibilidade de vendas.",
+  icons: {
+    icon: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
+    shortcut: ["/converta-favicon.png?v=converta-dark"],
+    apple: [{ url: "/converta-favicon.png?v=converta-dark", type: "image/png" }],
+  },
   keywords: [
     "central de atendimento WhatsApp",
     "CRM conversacional",
@@ -43,7 +48,7 @@ export default function ConvertaPage() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-re7-navy/90 backdrop-blur">
         <Container className="flex flex-col gap-2 py-3 md:h-16 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0">
           <div className="flex w-full min-w-0 items-center justify-between gap-3 md:w-auto">
-            <Link href="/converta" className="inline-flex h-[50px] shrink-0 items-center overflow-hidden">
+            <Link href="#inicio" className="inline-flex h-[50px] shrink-0 items-center overflow-hidden">
               <Image
                 src="/images/converta-logo-light.png"
                 alt="Converta"
@@ -77,7 +82,7 @@ export default function ConvertaPage() {
         </Container>
       </header>
 
-      <section className="relative z-10 min-h-[calc(100svh-4rem)] overflow-hidden pb-8 pt-28 md:min-h-[calc(100dvh-4rem)] md:pb-14 md:pt-24">
+      <section id="inicio" className="relative z-10 min-h-[calc(100svh-4rem)] scroll-mt-28 overflow-hidden pb-8 pt-28 md:min-h-[calc(100dvh-4rem)] md:scroll-mt-24 md:pb-14 md:pt-24">
         <Image
           src="/images/converta/screenshots/principal1.png"
           alt=""
