@@ -7,6 +7,7 @@ import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { canPersistChannelInbound } from "./tenantChannelAccount.js";
 import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
+import { publishRealtimeEvent } from "../realtime/hub.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -166,6 +167,7 @@ export async function persistMessengerInboundEvent(params: {
   account?: TenantChannelAccount | null;
   requestId: string;
   fetchImpl?: typeof fetch;
+  publishRealtimeEvent?: typeof publishRealtimeEvent;
 }): Promise<MessengerInboundPersistenceResult> {
   const { event, tenantKey, requestId } = params;
   if (event.channel !== "messenger" || event.provider !== "meta") {
@@ -371,6 +373,33 @@ export async function persistMessengerInboundEvent(params: {
     externalMessageId: event.externalMessageId,
     externalUserHash,
     reason: "persisted",
+  });
+
+  const publish = params.publishRealtimeEvent ?? publishRealtimeEvent;
+  publish({
+    type: "message.created",
+    clientId: client.id,
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    mode: "HUMAN",
+    handoffStatus: "none",
+    assignedUserId: null,
+    departmentId: operationalRoute.departmentId,
+    message: {
+      direction: "INBOUND",
+      type: event.text ? MessageType.TEXT : MessageType.UNKNOWN,
+      status: "RECEIVED",
+      intent: null,
+      bodyText: event.text ?? null,
+      media: undefined,
+      templateName: null,
+      templateLang: null,
+      requestId,
+      messageId,
+      metaMessageId: null,
+      errorBody: null,
+      createdAt: createdAt.toISOString(),
+    },
   });
 
   return {

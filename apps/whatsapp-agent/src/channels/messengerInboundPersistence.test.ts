@@ -176,6 +176,7 @@ test("fetchMessengerUserProfile fails open when profile is unavailable", async (
 
 test("persistMessengerInboundEvent persists Messenger inbound once and dedupes by mid", async () => {
   const prisma = createFakePrisma();
+  const realtimeEvents: any[] = [];
   const event = {
     tenantKey: "tenant-a",
     channel: "messenger" as const,
@@ -195,6 +196,9 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
     requestId: "req-1",
     fetchImpl: (async () =>
       new Response(JSON.stringify({ first_name: "Maria", last_name: "Silva" }), { status: 200 })) as typeof fetch,
+    publishRealtimeEvent: (event: any) => {
+      realtimeEvents.push(event);
+    },
   });
   const second = await persistMessengerInboundEvent({
     prisma: prisma as any,
@@ -224,6 +228,17 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
   assert.equal(contact.name, "Maria Silva");
   assert.equal(lead.name, "Maria Silva");
   assert.equal(JSON.stringify({ conversation, runtime, inbound }).includes("psid_user_001"), false);
+  assert.equal(realtimeEvents.length, 1);
+  assert.equal(realtimeEvents[0].type, "message.created");
+  assert.equal(realtimeEvents[0].clientId, "client-1");
+  assert.equal(realtimeEvents[0].waId, first.syntheticWaId);
+  assert.equal(realtimeEvents[0].waIdCanonical, first.syntheticWaId);
+  assert.equal(realtimeEvents[0].mode, "HUMAN");
+  assert.equal(realtimeEvents[0].handoffStatus, "none");
+  assert.equal(realtimeEvents[0].departmentId, "department-default");
+  assert.equal(realtimeEvents[0].message.direction, "INBOUND");
+  assert.equal(realtimeEvents[0].message.messageId, inbound.messageId);
+  assert.equal(realtimeEvents[0].message.bodyText, "olá");
 });
 
 test("persistMessengerInboundEvent does not persist when the account flag is off", async () => {

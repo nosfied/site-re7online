@@ -142,6 +142,7 @@ test("buildInstagramSyntheticWaId uses hash only", () => {
 
 test("persistInstagramInboundEvent persists Instagram inbound once and dedupes by mid", async () => {
   const prisma = createFakePrisma();
+  const realtimeEvents: any[] = [];
   const event = {
     tenantKey: "tenant-a",
     channel: "instagram" as const,
@@ -159,6 +160,9 @@ test("persistInstagramInboundEvent persists Instagram inbound once and dedupes b
     tenantKey: "tenant-a",
     account: enabledAccount,
     requestId: "req-1",
+    publishRealtimeEvent: (event: any) => {
+      realtimeEvents.push(event);
+    },
   });
   const second = await persistInstagramInboundEvent({
     prisma: prisma as any,
@@ -185,6 +189,17 @@ test("persistInstagramInboundEvent persists Instagram inbound once and dedupes b
   assert.equal(contact.name, "Contato Instagram");
   assert.equal(lead.name, "Contato Instagram");
   assert.equal(JSON.stringify({ conversation, runtime, inbound }).includes("ig-user-001"), false);
+  assert.equal(realtimeEvents.length, 1);
+  assert.equal(realtimeEvents[0].type, "message.created");
+  assert.equal(realtimeEvents[0].clientId, "client-1");
+  assert.equal(realtimeEvents[0].waId, first.syntheticWaId);
+  assert.equal(realtimeEvents[0].waIdCanonical, first.syntheticWaId);
+  assert.equal(realtimeEvents[0].mode, "HUMAN");
+  assert.equal(realtimeEvents[0].handoffStatus, "none");
+  assert.equal(realtimeEvents[0].departmentId, "department-default");
+  assert.equal(realtimeEvents[0].message.direction, "INBOUND");
+  assert.equal(realtimeEvents[0].message.messageId, inbound.messageId);
+  assert.equal(realtimeEvents[0].message.bodyText, "olá instagram");
 });
 
 test("persistInstagramInboundEvent does not persist when the account flag is off", async () => {
