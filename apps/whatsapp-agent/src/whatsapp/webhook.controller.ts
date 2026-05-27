@@ -1405,14 +1405,20 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       reason: "automation_layers_disabled" | "no_automation_reply_configured";
       timestamp: string;
       messageId: string;
+      toE164: string;
+      allowlistHit: boolean;
+      receivedMedia: boolean;
+      replyAlreadyPlanned?: boolean;
+      guard?: { version: number; lastInboundAt?: string };
     }
   ) => {
+    const previousState = state;
     const activatedHandoff = activateHumanHandoff(
       clearChatbotRuntime(state),
       params.timestamp,
       ""
     );
-    const routedConversation = await ensurePendingHandoffRouting({
+    let routedConversation = await ensurePendingHandoffRouting({
       ...activatedHandoff.state,
       mode: "HUMAN" as const,
       assignedUserId: null,
@@ -1457,6 +1463,23 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         updatedAt: parseWebhookTimestampToDate(params.timestamp).toISOString(),
       });
     }
+    await notifyHandoffLeadArrivalOnRuntimeTransition({
+      previousState,
+      nextState: routedConversation,
+      messageId: params.messageId,
+      receivedMedia: params.receivedMedia,
+      reason: params.reason,
+    });
+    routedConversation = await sendRuntimeHandoffMediaNotice({
+      previousState,
+      nextState: routedConversation,
+      messageId: params.messageId,
+      toE164: params.toE164,
+      allowlistHit: params.allowlistHit,
+      receivedMedia: params.receivedMedia,
+      replyAlreadyPlanned: params.replyAlreadyPlanned,
+      guard: params.guard,
+    });
     return routedConversation;
   };
   const upsertConversationSafe = async (state: ConversationState) => {
@@ -5800,6 +5823,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: "automation_layers_disabled",
         timestamp: message.timestamp,
         messageId: message.messageId,
+        toE164: message.from,
+        allowlistHit,
+        receivedMedia: isWhatsAppInboundMediaMessage(message.type),
+        guard: inboundGuard,
       });
       logger.info({
         event: "reply.skipped",
@@ -7538,6 +7565,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: "no_automation_reply_configured",
         timestamp: message.timestamp,
         messageId: message.messageId,
+        toE164: message.from,
+        allowlistHit,
+        receivedMedia: isWhatsAppInboundMediaMessage(message.type),
+        guard: inboundGuard,
       });
       logger.info({
         event: "reply.skipped",
