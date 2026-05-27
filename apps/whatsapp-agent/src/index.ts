@@ -1,6 +1,7 @@
 import "./bootstrap-env.js";
 import "./processHandlers.js";
 import { createServer } from "./http/server.js";
+import { attachRealtimeWebSocket } from "./realtime/websocket.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
 import { getTenants } from "./config/tenantConfig.js";
@@ -80,7 +81,7 @@ async function bootstrap() {
           data: {
             clientId: client.id,
             phoneNumberId,
-            display: phoneNumberId,
+            display: tenant.displayPhoneNumber?.trim() || phoneNumberId,
           },
         });
         logger.info({
@@ -97,7 +98,11 @@ async function bootstrap() {
       if (existingPhone.clientId === client.id) {
         const phone = await prisma.waPhoneNumber.update({
           where: { phoneNumberId },
-          data: { display: phoneNumberId },
+          data: tenant.displayPhoneNumber?.trim()
+            ? { display: tenant.displayPhoneNumber.trim() }
+            : existingPhone.display?.trim()
+              ? {}
+              : { display: phoneNumberId },
         });
         logger.info({
           event: "bootstrap.tenant.ready",
@@ -128,7 +133,7 @@ async function bootstrap() {
         where: { phoneNumberId },
         data: {
           clientId: client.id,
-          display: phoneNumberId,
+          display: tenant.displayPhoneNumber?.trim() || existingPhone.display || phoneNumberId,
         },
       });
       logger.warn({
@@ -150,6 +155,7 @@ async function bootstrap() {
   }
 
   const server = createServer();
+  attachRealtimeWebSocket(server);
   server.listen(env.PORT, () => {
     logger.info({ event: "server.started", port: env.PORT });
   });

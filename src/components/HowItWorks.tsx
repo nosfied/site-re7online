@@ -17,7 +17,7 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section id="como-funciona" className="scroll-mt-24 py-16">
+    <section id="como-funciona" className="scroll-mt-24 py-10 md:py-16">
       <Container>
         <div className="mb-8 max-w-2xl">
           <p className="text-xs uppercase tracking-[0.3em] text-re7-gray/70">
@@ -33,7 +33,7 @@ export default function HowItWorks() {
           {steps.map((step, index) => (
             <div
               key={step.title}
-              className="relative rounded-2xl border border-white/10 bg-white/5 p-6"
+              className="relative rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-re7-navy text-sm font-semibold text-white">
                 {index + 1}

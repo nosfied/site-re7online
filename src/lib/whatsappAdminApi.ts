@@ -25,6 +25,14 @@ export type InboxMessageItem = {
   status: string;
   intent: string | null;
   bodyText: string | null;
+  media?: {
+    kind: "image" | "audio" | "video" | "document";
+    mimeType?: string;
+    fileName?: string;
+    caption?: string;
+    hasDownload: boolean;
+    downloadUrl?: string;
+  } | null;
   templateName: string | null;
   templateLang: string | null;
   requestId: string | null;
@@ -34,13 +42,20 @@ export type InboxMessageItem = {
   createdAt: string;
 };
 
+export type InboxChannel = "whatsapp" | "messenger" | "instagram";
+
 export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
+  channel?: InboxChannel | string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+  channelOutboundEnabled?: boolean;
   lastMessage: {
     direction: "INBOUND" | "OUTBOUND";
     type: string;
     status: string;
+    messageId?: string | null;
     bodyText: string | null;
     templateName: string | null;
     createdAt: string;
@@ -51,19 +66,51 @@ export type InboxConversationItem = {
   leadPhone: string | null;
   leadCity: string | null;
   leadService: string | null;
+  leadEmail: string | null;
+  leadCompany: string | null;
   mode: "BOT" | "HUMAN";
+  handoffStatus?: "none" | "pending" | "active" | null;
   assignedUserId: string | null;
   assignedTo: string | null;
   assignedUserName: string | null;
   assignedAt: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  unreadCount?: number;
+  isUnassigned: boolean;
+  flowContext?: Record<string, string | number | boolean | null>;
+  flowTags?: string[];
   updatedAt: string;
 };
+
+export type ConversationOperationalStatus =
+  | "WAITING"
+  | "IN_PROGRESS"
+  | "WAITING_USER"
+  | "CLOSED";
 
 export type AdminUserItem = {
   id: string;
   name: string;
   email: string;
   role: string;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  isActive?: boolean;
+  createdAt: string;
+};
+
+export type AdminDepartmentItem = {
+  id: string;
+  name: string;
+  slug?: string;
+  isActive: boolean;
   createdAt: string;
 };
 
@@ -71,6 +118,7 @@ export type AdminClientItem = {
   id: string;
   name: string;
   clientKey: string;
+  profile?: "business" | "government";
   createdAt: string;
   updatedAt: string;
   phoneNumbers?: Array<{
@@ -80,12 +128,186 @@ export type AdminClientItem = {
   }>;
 };
 
+export type ConversationReportRange = "1d" | "7d" | "30d";
+
+export type AdminChatbotFlowItem = {
+  id: string;
+  clientId: string;
+  name: string;
+  isActive: boolean;
+  entryPoint: boolean;
+  definition: {
+    start: string;
+    nodes: Record<string, unknown>;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminAutomationSettings = {
+  disableAutoReply: boolean;
+  disableChatbot: boolean;
+  disableAiFallback: boolean;
+  disableIntentClassifier: boolean;
+  disableLegacyFlows?: boolean;
+  disableChatbotFlowEditing?: boolean;
+  aiAssistantEnabled?: boolean;
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
+  aiAssistantSystemPrompt?: string;
+  aiAssistantFallbackToHandoff?: boolean;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
+  aiAssistantHandoffKeywords?: string[];
+  aiAssistantGreetingMessage?: string;
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
+  aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
+  aiAssistantPresetApplied?: string;
+  handoffLeadNotificationEnabled?: boolean;
+  handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
+  mediaHandoffPolicy?: MediaHandoffPolicy;
+  aiAssistantGlobalSafety?: {
+    questionStarters: string[];
+    topicTerms: string[];
+    blockedTerms: string[];
+    handoffTerms?: string[];
+    maxInputChars: number;
+    personalDataBlocked: boolean;
+  };
+  aiAssistantConfigurationStatus?: {
+    ready: boolean;
+    missing: string[];
+    warnings: string[];
+    score: number;
+  };
+  aiBusinessContext?: string;
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  followUpMaxCount?: number;
+  followUpUseTemplate?: boolean;
+  followUpTemplateName?: string;
+  followUpTemplateLang?: string;
+  aiConfigured: boolean;
+  chatbotLocked?: boolean;
+  flowEditingLocked?: boolean;
+  aiLocked?: boolean;
+  aiAssistantLocked?: boolean;
+  intentClassifierLocked?: boolean;
+};
+
+export type HandoffLeadNotificationRecipient = {
+  id: string;
+  waId: string;
+  label?: string;
+  isActive: boolean;
+};
+
+export type MediaHandoffPolicy = {
+  enabled: boolean;
+  channels: Array<"whatsapp" | "messenger" | "instagram">;
+  behavior: "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
+  customerNoticeText: string;
+  attendantSummaryText: string;
+};
+
+export type AiAssistantIntentCatalogItem = {
+  key: string;
+  title?: string;
+  topics?: string[];
+  response?: string;
+  nextQuestion?: string;
+  leadTemp?: "quente" | "morno" | "frio";
+  priority?: "alta" | "media" | "baixa";
+  handoff?: boolean;
+  tags?: string[];
+};
+
+export type AiQualificationSlot = {
+  key: string;
+  label?: string;
+  type?: "text" | "enum" | "boolean";
+  required?: boolean;
+  requiredWhen?: Record<string, string | boolean | number>;
+  allowedValues?: string[];
+  question: string;
+  captureHints?: string[];
+  semanticAliases?: Record<string, string[]>;
+  askAfter?: string[];
+  crmMapping?: {
+    flowContextKey?: string;
+    leadField?: "company" | "service";
+    leadTemp?: "frio" | "morno" | "quente";
+    priority?: "baixa" | "media" | "alta";
+    whenValue?: string[];
+  };
+};
+
+export type AiQualificationCommercialContinuation = {
+  enabled?: boolean;
+  negativeReply?: string;
+  ambiguousEnumReply?: string;
+};
+
+export type AiQualificationSemanticConfirmation = {
+  enabled?: boolean;
+  minimumConfidence?: number;
+  autoAcceptConfidence?: number;
+  expirationMinutes?: number;
+};
+
+export type AiQualificationSchema = {
+  enabled?: boolean;
+  semanticResolverEnabled?: boolean;
+  semanticConfirmationEnabled?: boolean;
+  semanticConfirmation?: AiQualificationSemanticConfirmation;
+  schemaVersion?: string;
+  slots?: AiQualificationSlot[];
+  handoffWhen?: string[];
+  outcomes?: string[];
+  commercialContinuation?: AiQualificationCommercialContinuation;
+};
+
+export type ConversationReportByAgentItem = {
+  userId: string;
+  conversations: number;
+  avgResponseTimeSec: number | null;
+};
+
+export type ConversationReportByDepartmentItem = {
+  departmentId: string | null;
+  departmentName: string | null;
+  conversations: number;
+  avgResponseTimeSec: number | null;
+};
+
+export type ConversationReportResponse = {
+  ok: true;
+  range: ConversationReportRange;
+  userId: string | null;
+  departmentId: string | null;
+  totalConversations: number;
+  avgFirstResponseTimeSec: number | null;
+  avgResolutionTimeSec: number | null;
+  slaBreaches: number;
+  byAgent: ConversationReportByAgentItem[];
+  byDepartment: ConversationReportByDepartmentItem[];
+};
+
 export type LeadStatus =
   | "NEW"
   | "QUALIFIED"
   | "WAITING_ATTENDANT"
   | "IN_ATTENDANCE"
-  | "CLOSED";
+  | "CLOSED"
+  | "OPEN"
+  | "WON"
+  | "LOST"
+  | "FOLLOW_UP"
+  | "NO_RESPONSE"
+  | "NURTURE";
 
 export type LeadNoteItem = {
   id: string;
@@ -187,6 +409,7 @@ export type AdminTemplateRequestItem = {
 
 export type TenantOnboardingExchangePayload = {
   code: string;
+  replaceExistingMetaIdentity?: boolean;
   embeddedSignup?: {
     businessId?: string | null;
     businessPortfolioId?: string | null;
@@ -196,6 +419,47 @@ export type TenantOnboardingExchangePayload = {
   };
 };
 
+export type TenantOnboardingManualBindPayload = {
+  phoneNumberId: string;
+  displayPhoneNumber?: string | null;
+  wabaId?: string | null;
+  businessId?: string | null;
+  businessPortfolioId?: string | null;
+  replaceExistingMetaIdentity?: boolean;
+  raw?: unknown;
+};
+
+export type TenantOnboardingRegisterPhonePayload = {
+  phoneNumberId?: string | null;
+  pin: string;
+};
+
+export type Channel = "whatsapp" | "instagram" | "messenger";
+
+export type Provider = "meta";
+
+export type TenantChannelAccount = {
+  id: string;
+  tenantKey: string;
+  channel: Channel;
+  provider: Provider;
+  displayName?: string;
+  channelAccountId: string;
+  externalBusinessId?: string;
+  enabled: boolean;
+  automationEnabled?: boolean;
+  runtimeEnabled?: boolean;
+  inboundPersistenceEnabled?: boolean;
+  outboundEnabled?: boolean;
+  aiEnabled?: boolean;
+  handoffEnabled?: boolean;
+  status?: "connected" | "disabled" | "pending" | "error";
+  tokenStatus?: "not_required" | "configured" | "expired" | "missing";
+  pageAccessToken?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type TenantConfigResponse = {
   ok: boolean;
   tenantId: string;
@@ -203,21 +467,68 @@ export type TenantConfigResponse = {
     id: string;
     clientKey: string;
     status: string;
+    profile?: "business" | "government";
   } | null;
   tenant: {
     id: string;
     name: string;
     metaPhoneNumberId: string;
+    displayPhoneNumber?: string;
+    companyLegalName?: string;
+    companyTradeName?: string;
+    companyTaxId?: string;
+    companyStateRegistration?: string;
+    companyMunicipalRegistration?: string;
+    companyWebsite?: string;
+    companyIndustry?: string;
+    companyAddressStreet?: string;
+    companyAddressNumber?: string;
+    companyAddressComplement?: string;
+    companyAddressDistrict?: string;
+    companyAddressCity?: string;
+    companyAddressState?: string;
+    companyAddressZip?: string;
+    companyAddressCountry?: string;
+    legalRepresentativeName?: string;
+    legalRepresentativeCpf?: string;
+    legalRepresentativeEmail?: string;
+    legalRepresentativePhone?: string;
+    billingContactName?: string;
+    billingContactEmail?: string;
+    billingContactPhone?: string;
+    billingEmail?: string;
+    financialContactName?: string;
+    financialContactEmail?: string;
+    financialContactPhone?: string;
+    technicalContactName?: string;
+    technicalContactEmail?: string;
+    technicalContactPhone?: string;
+    contractPlanName?: string;
+    contractStartDate?: string;
+    contractEndDate?: string;
+    contractBillingDay?: number;
+    contractPaymentMethod?: string;
+    contractNotes?: string;
+    maxActiveAppUsers?: number;
     allowlist: string[];
     handoffAttendantWaid: string;
     defaultLanguage: string;
-    templates: {
-      manualHandoff: string;
+    disableAutoReply?: boolean;
+    disableChatbot?: boolean;
+    disableLegacyFlows?: boolean;
+    disableChatbotFlowEditing?: boolean;
+    disableAiFallback?: boolean;
+    disableIntentClassifier?: boolean;
+    appDisableIntentClassifier?: boolean;
+    aiBusinessContext?: string;
+    templates?: {
+      manualHandoff?: string;
     };
     quotaMonthlyConversations?: number;
     quotaWarnAtPct?: number;
     quotaBlockedReplyText?: string;
     quotaExcludeWaIds?: string[];
+    channelAccounts?: TenantChannelAccount[];
   };
 };
 
@@ -357,8 +668,17 @@ async function requestJson<T>(
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
-      const body = (await res.json()) as { error?: string; message?: string };
-      message = body.message || body.error || message;
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string };
+        message?: string;
+      };
+      message =
+        (typeof body.error === "object" && body.error && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        body.message ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
     } catch {
       // noop
     }
@@ -371,6 +691,75 @@ async function requestJson<T>(
   }
 
   return (await res.json()) as T;
+}
+
+async function requestText(
+  connection: AdminConnection,
+  path: string,
+  init?: RequestInit
+): Promise<string> {
+  const baseUrl = normalizeBaseUrl(connection.baseUrl);
+  if (!baseUrl) {
+    const error = new Error("Base URL invalida. Use http(s)://... ou /agent-api.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const adminToken = connection.adminToken.trim();
+  if (!adminToken) {
+    const error = new Error("Informe o X-Admin-Token.") as AdminApiError;
+    error.status = 400;
+    throw error;
+  }
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: {
+        "X-Admin-Token": adminToken,
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    globalThis.clearTimeout(timeout);
+    const error = new Error("Sem resposta do servidor.") as AdminApiError;
+    error.status = 0;
+    if ((fetchError as Error).name === "AbortError") {
+      error.message = "Timeout de conexao com o servidor.";
+    }
+    throw error;
+  }
+  globalThis.clearTimeout(timeout);
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as {
+        error?: string | { code?: string; message?: string };
+        message?: string;
+      };
+      message =
+        (typeof body.error === "object" && body.error && typeof body.error.message === "string"
+          ? body.error.message
+          : "") ||
+        body.message ||
+        (typeof body.error === "string" ? body.error : "") ||
+        message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AdminApiError;
+    error.status = res.status;
+    if (res.status === 401) error.message = "Token invalido (401).";
+    if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+
+  return res.text();
 }
 
 export async function testAdminConnection(connection: AdminConnection) {
@@ -396,12 +785,65 @@ export async function fetchAdminClients(
   return requestJson(connection, "/admin/clients");
 }
 
+export async function fetchConversationReport(
+  connection: AdminConnection,
+  params: {
+    clientKey: string;
+    range: ConversationReportRange;
+    userId?: string | null;
+    departmentId?: string | null;
+  }
+): Promise<ConversationReportResponse> {
+  const query = new URLSearchParams({
+    clientKey: params.clientKey,
+    range: params.range,
+  });
+  if (params.userId) {
+    query.set("userId", params.userId);
+  }
+  if (params.departmentId) {
+    query.set("departmentId", params.departmentId);
+  }
+  return requestJson(connection, `/admin/reports/conversations?${query.toString()}`);
+}
+
+export async function exportConversationReportCsv(
+  connection: AdminConnection,
+  params: {
+    clientKey: string;
+    range: ConversationReportRange;
+    userId?: string | null;
+    departmentId?: string | null;
+  }
+) {
+  const query = new URLSearchParams({
+    clientKey: params.clientKey,
+    range: params.range,
+  });
+  if (params.userId) {
+    query.set("userId", params.userId);
+  }
+  if (params.departmentId) {
+    query.set("departmentId", params.departmentId);
+  }
+  return requestText(connection, `/admin/reports/conversations/export?${query.toString()}`);
+}
+
 export async function createAdminClient(
   connection: AdminConnection,
   payload: {
     name: string;
     clientKey: string;
     phoneNumberId: string;
+    profile?: "business" | "government";
+    initialUser?: {
+      name: string;
+      email: string;
+      password?: string;
+      role?: string;
+      departmentId?: string | null;
+      isActive?: boolean;
+    };
   }
 ): Promise<AdminClientItem> {
   return requestJson(connection, "/admin/clients", {
@@ -410,6 +852,8 @@ export async function createAdminClient(
       name: payload.name,
       clientKey: payload.clientKey,
       phone_number_id: payload.phoneNumberId,
+      profile: payload.profile,
+      ...(payload.initialUser ? { initialUser: payload.initialUser } : {}),
     }),
   });
 }
@@ -441,10 +885,86 @@ export async function updateTenantById(
   });
 }
 
+export async function getTenantChannelAccounts(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  channelAccounts: TenantChannelAccount[];
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts`
+  );
+}
+
+export async function updateTenantChannelAccounts(
+  connection: AdminConnection,
+  tenantId: string,
+  accounts: unknown[]
+): Promise<{
+  ok: true;
+  tenantId: string;
+  backupPath: string;
+  fieldsChanged: string[];
+  channelAccounts: TenantChannelAccount[];
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channel-accounts`,
+    {
+      method: "PUT",
+      body: JSON.stringify(accounts),
+    }
+  );
+}
+
+export async function bootstrapTenantById(
+  connection: AdminConnection,
+  tenantId: string,
+  payload?: {
+    initialUser?: {
+      name: string;
+      email: string;
+      password?: string;
+      role?: string;
+      departmentId?: string | null;
+      isActive?: boolean;
+    };
+  }
+): Promise<{
+  ok: true;
+  tenantId: string;
+  clientId: string;
+  clientKey: string;
+  seed: {
+    created: number;
+    reactivated: number;
+    unchanged: number;
+    total: number;
+  };
+  initialUser: {
+    action: "created" | "updated";
+    id: string;
+    email: string;
+    role: string;
+    departmentId: string | null;
+    isActive: boolean;
+  } | null;
+  departmentCount: number;
+  firstDepartmentId: string | null;
+}> {
+  return requestJson(connection, `/admin/tenants/${encodeURIComponent(tenantId)}/bootstrap`, {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
 export async function fetchConversations(
   connection: AdminConnection,
   clientKey: string,
-  options?: { limit?: number }
+  options?: { limit?: number; channel?: string | null }
 ): Promise<{
   ok: true;
   count: number;
@@ -454,6 +974,9 @@ export async function fetchConversations(
   params.set("clientKey", clientKey);
   if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
     params.set("limit", String(options.limit));
+  }
+  if (options?.channel?.trim()) {
+    params.set("channel", options.channel.trim());
   }
   return requestJson(connection, `/admin/conversations?${params.toString()}`);
 }
@@ -466,6 +989,9 @@ export async function fetchConversation(
 ): Promise<{
   ok: true;
   waId: string;
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
   mode: "BOT" | "HUMAN";
   assignedUserId: string | null;
   assignedTo: string | null;
@@ -536,6 +1062,42 @@ export async function releaseConversation(
   );
 }
 
+export async function transferConversationDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  waId: string,
+  departmentId: string
+): Promise<{
+  ok: true;
+  waId: string;
+  waIdCanonical?: string | null;
+  mode: "BOT" | "HUMAN";
+  assignedUserId: string | null;
+  assignedTo: string | null;
+  assignedUserName: string | null;
+  assignedAt: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  isUnassigned: boolean;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/conversations/${encodeURIComponent(waId)}/transfer-department?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ departmentId }),
+    }
+  );
+}
+
 export async function fetchUsers(
   connection: AdminConnection,
   clientKey: string
@@ -549,10 +1111,101 @@ export async function fetchUsers(
   return requestJson(connection, `/admin/users?${params.toString()}`);
 }
 
+export async function fetchDepartments(
+  connection: AdminConnection,
+  clientKey: string,
+  options?: { includeInactive?: boolean }
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminDepartmentItem[];
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  if (options?.includeInactive) {
+    params.set("includeInactive", "true");
+  }
+  return requestJson(connection, `/admin/departments?${params.toString()}`);
+}
+
+export async function createDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: { name: string }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/departments?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  departmentId: string,
+  payload: { name?: string; isActive?: boolean }
+): Promise<{
+  ok: true;
+  department: AdminDepartmentItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/departments/${encodeURIComponent(departmentId)}?${params.toString()}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function consolidateDepartment(
+  connection: AdminConnection,
+  clientKey: string,
+  departmentId: string,
+  targetDepartmentId: string
+): Promise<{
+  ok: true;
+  sourceDepartment: AdminDepartmentItem;
+  targetDepartment: AdminDepartmentItem;
+  counts: {
+    usersMoved: number;
+    conversationsMoved: number;
+    runtimeStatesMoved: number;
+    queuesMoved: number;
+    queuesMerged: number;
+    runtimeStatesRequeued: number;
+  };
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(
+    connection,
+    `/admin/departments/${encodeURIComponent(departmentId)}/consolidate?${params.toString()}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ targetDepartmentId }),
+    }
+  );
+}
+
 export async function createUser(
   connection: AdminConnection,
   clientKey: string,
-  payload: { name: string; email: string; password?: string; role?: string }
+  payload: {
+    name: string;
+    email: string;
+    password?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
 ): Promise<{
   ok: true;
   user: AdminUserItem;
@@ -588,6 +1241,41 @@ export async function resetUserPassword(
       body: JSON.stringify({ password }),
     }
   );
+}
+
+export async function updateUser(
+  connection: AdminConnection,
+  userId: string,
+  clientKey: string,
+  payload: {
+    name?: string;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  }
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  const params = new URLSearchParams();
+  params.set("clientKey", clientKey);
+  return requestJson(connection, `/admin/users/${encodeURIComponent(userId)}?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateUserRole(
+  connection: AdminConnection,
+  userId: string,
+  clientKey: string,
+  role: string
+): Promise<{
+  ok: true;
+  user: AdminUserItem;
+}> {
+  return updateUser(connection, userId, clientKey, { role });
 }
 
 export async function sendConversationMessage(
@@ -778,6 +1466,98 @@ export async function fetchTemplatesObservability(
   return requestJson(connection, "/admin/templates");
 }
 
+export async function fetchAdminChatbotFlows(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  count: number;
+  items: AdminChatbotFlowItem[];
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/flows?${params.toString()}`);
+}
+
+export async function fetchAdminChatbotSettings(
+  connection: AdminConnection,
+  clientKey: string
+): Promise<{
+  ok: true;
+  tenantId: string;
+  settings: AdminAutomationSettings;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/settings?${params.toString()}`);
+}
+
+export async function updateAdminChatbotSettings(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: Partial<AdminAutomationSettings>
+): Promise<{
+  ok: true;
+  tenantId: string;
+  fieldsChanged: string[];
+  settings: AdminAutomationSettings;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/settings?${params.toString()}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAdminChatbotFlow(
+  connection: AdminConnection,
+  clientKey: string,
+  payload: {
+    name: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AdminChatbotFlowItem;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(connection, `/admin/chatbot/flows?${params.toString()}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminChatbotFlow(
+  connection: AdminConnection,
+  clientKey: string,
+  flowId: string,
+  payload: {
+    name?: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition?: {
+      start: string;
+      nodes: Record<string, unknown>;
+    };
+  }
+): Promise<{
+  ok: true;
+  flow: AdminChatbotFlowItem;
+}> {
+  const params = new URLSearchParams({ clientKey });
+  return requestJson(
+    connection,
+    `/admin/chatbot/flows/${encodeURIComponent(flowId)}?${params.toString()}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export async function fetchAdminTemplateRequests(
   connection: AdminConnection
 ): Promise<{
@@ -826,6 +1606,51 @@ export async function onboardingExchangeCode(
   return requestJson(
     connection,
     `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/exchange-code`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function onboardingManualBindNumber(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: TenantOnboardingManualBindPayload
+): Promise<{
+  success: true;
+  businessTokenStored: false;
+  phoneNumberId: string | null;
+  wabaId: string | null;
+  businessId: string | null;
+  businessPortfolioId: string | null;
+  phoneMappingAction?: string | null;
+  warning?: string | null;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/manual-bind`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function onboardingRegisterPhoneNumber(
+  connection: AdminConnection,
+  tenantId: string,
+  payload: TenantOnboardingRegisterPhonePayload
+): Promise<{
+  success: true;
+  phoneNumberId: string;
+  displayPhoneNumber?: string | null;
+  registered: boolean;
+  warning?: string | null;
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/onboarding/register-phone`,
     {
       method: "POST",
       body: JSON.stringify(payload),

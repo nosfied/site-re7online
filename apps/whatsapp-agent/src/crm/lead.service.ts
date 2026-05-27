@@ -1,9 +1,15 @@
 import { getPrisma } from "../db.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import {
+  isWhatsAppMultichannelShadowWriteEnabled,
+  safeApplyWhatsAppMultichannelShadow,
+} from "../channels/whatsappMultichannelShadowWrite.js";
+import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 
 export async function ensureLeadForConversation(params: {
   tenantId: string;
   waId: string;
+  phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
 
@@ -13,12 +19,39 @@ export async function ensureLeadForConversation(params: {
       waId: params.waId,
     },
   });
+  await runWhatsAppDualReadShadow({
+    prisma,
+    model: "Lead",
+    ownerId: params.tenantId,
+    waId: params.waId,
+    phoneNumberId: params.phoneNumberId,
+    phase: "before_persist",
+    legacyRecord: existing
+      ? {
+          id: existing.id,
+          ownerId: existing.tenantId,
+          channelAccountId: existing.channelAccountId,
+          externalUserHash: existing.externalUserHash,
+          legacyWaId: existing.legacyWaId,
+        }
+      : null,
+  });
 
   if (existing) {
+    if (isWhatsAppMultichannelShadowWriteEnabled()) {
+      await safeApplyWhatsAppMultichannelShadow({
+        prisma,
+        model: "Lead",
+        recordId: existing.id,
+        clientId: params.tenantId,
+        waId: params.waId,
+        phoneNumberId: params.phoneNumberId,
+      });
+    }
     return existing;
   }
 
-  return prisma.lead.create({
+  const lead = await prisma.lead.create({
     data: {
       tenantId: params.tenantId,
       waId: params.waId,
@@ -27,6 +60,17 @@ export async function ensureLeadForConversation(params: {
       status: "NEW",
     },
   });
+  if (isWhatsAppMultichannelShadowWriteEnabled()) {
+    await safeApplyWhatsAppMultichannelShadow({
+      prisma,
+      model: "Lead",
+      recordId: lead.id,
+      clientId: params.tenantId,
+      waId: params.waId,
+      phoneNumberId: params.phoneNumberId,
+    });
+  }
+  return lead;
 }
 
 export async function upsertLeadFromCapture(params: {
@@ -35,6 +79,8 @@ export async function upsertLeadFromCapture(params: {
   name?: string;
   city?: string;
   service?: string;
+  company?: string;
+  phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
 
@@ -44,9 +90,26 @@ export async function upsertLeadFromCapture(params: {
       waId: params.waId,
     },
   });
+  await runWhatsAppDualReadShadow({
+    prisma,
+    model: "Lead",
+    ownerId: params.tenantId,
+    waId: params.waId,
+    phoneNumberId: params.phoneNumberId,
+    phase: "before_persist",
+    legacyRecord: existing
+      ? {
+          id: existing.id,
+          ownerId: existing.tenantId,
+          channelAccountId: existing.channelAccountId,
+          externalUserHash: existing.externalUserHash,
+          legacyWaId: existing.legacyWaId,
+        }
+      : null,
+  });
 
   if (existing) {
-    return prisma.lead.update({
+    const lead = await prisma.lead.update({
       where: { id: existing.id },
       data: {
         name: params.name ?? existing.name,
@@ -54,12 +117,24 @@ export async function upsertLeadFromCapture(params: {
         waIdCanonical: existing.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
         city: params.city ?? existing.city,
         service: params.service ?? existing.service,
+        company: params.company ?? existing.company,
         status: "QUALIFIED",
       },
     });
+    if (isWhatsAppMultichannelShadowWriteEnabled()) {
+      await safeApplyWhatsAppMultichannelShadow({
+        prisma,
+        model: "Lead",
+        recordId: lead.id,
+        clientId: params.tenantId,
+        waId: params.waId,
+        phoneNumberId: params.phoneNumberId,
+      });
+    }
+    return lead;
   }
 
-  return prisma.lead.create({
+  const lead = await prisma.lead.create({
     data: {
       tenantId: params.tenantId,
       waId: params.waId,
@@ -68,6 +143,18 @@ export async function upsertLeadFromCapture(params: {
       phone: params.waId,
       city: params.city,
       service: params.service,
+      company: params.company,
     },
   });
+  if (isWhatsAppMultichannelShadowWriteEnabled()) {
+    await safeApplyWhatsAppMultichannelShadow({
+      prisma,
+      model: "Lead",
+      recordId: lead.id,
+      clientId: params.tenantId,
+      waId: params.waId,
+      phoneNumberId: params.phoneNumberId,
+    });
+  }
+  return lead;
 }

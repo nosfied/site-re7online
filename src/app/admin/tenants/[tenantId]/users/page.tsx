@@ -2,22 +2,64 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
+import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
+import { isSelectableDepartment } from "@/lib/departments";
 import {
+  AdminDepartmentItem,
   AdminUserItem,
   createUser,
+  fetchDepartments,
   fetchTenantById,
   fetchUsers,
   formatDateTime,
   resetUserPassword,
+  updateUser,
 } from "@/lib/whatsappAdminApi";
+
+const USER_ROLE_OPTIONS = ["AGENT", "SUPERVISOR", "ADMIN"] as const;
 
 const EMPTY_USER_FORM = {
   name: "",
   email: "",
   password: "",
+  role: "AGENT",
+  departmentId: "",
+  isActive: true,
 };
+
+function InfoBadge({
+  label,
+  tone = "default",
+}: {
+  label: string;
+  tone?: "default" | "success" | "warning";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      : tone === "warning"
+        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+        : "border-white/15 bg-white/5 text-white/80";
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${toneClass}`}>
+      {label}
+    </span>
+  );
+}
+
+function ActionIcon({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <span className="inline-flex h-4 w-4 items-center justify-center text-sm leading-none">
+      {children}
+    </span>
+  );
+}
 
 export default function TenantUsersPage() {
   const params = useParams<{ tenantId: string }>();
@@ -32,6 +74,7 @@ export default function TenantUsersPage() {
   }, [params]);
   const [clientKey, setClientKey] = useState(searchParams.get("clientKey")?.trim() ?? "");
   const [users, setUsers] = useState<AdminUserItem[]>([]);
+  const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -43,10 +86,37 @@ export default function TenantUsersPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [userDrafts, setUserDrafts] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        email: string;
+        role: string;
+        departmentId: string;
+        isActive: boolean;
+      }
+    >
+  >({});
 
   const loadUsers = async (activeClientKey: string) => {
     const response = await fetchUsers(connection, activeClientKey);
     setUsers(response.items);
+    setUserDrafts(
+      Object.fromEntries(
+        response.items.map((item) => [
+          item.id,
+          {
+            name: item.name,
+            email: item.email,
+            role: String(item.role || "AGENT").toUpperCase(),
+            departmentId: item.departmentId ?? "",
+            isActive: item.isActive ?? true,
+          },
+        ])
+      )
+    );
   };
 
   useEffect(() => {
@@ -73,13 +143,32 @@ export default function TenantUsersPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchUsers(connection, clientKey)
-      .then((response) => {
-        if (!cancelled) setUsers(response.items);
+    Promise.all([
+      fetchUsers(connection, clientKey),
+      fetchDepartments(connection, clientKey, { includeInactive: true }),
+    ])
+      .then(([usersResponse, departmentsResponse]) => {
+        if (cancelled) return;
+        setUsers(usersResponse.items);
+        setDepartments(departmentsResponse.items);
+        setUserDrafts(
+          Object.fromEntries(
+            usersResponse.items.map((item) => [
+              item.id,
+              {
+                name: item.name,
+                email: item.email,
+                role: String(item.role || "AGENT").toUpperCase(),
+                departmentId: item.departmentId ?? "",
+                isActive: item.isActive ?? true,
+              },
+            ])
+          )
+        );
       })
       .catch((err: { message?: string }) => {
         if (!cancelled) {
-          setError(err.message || "Falha ao carregar usuarios.");
+          setError(err.message || "Falha ao carregar usuarios e setores.");
         }
       })
       .finally(() => {
@@ -89,6 +178,28 @@ export default function TenantUsersPage() {
       cancelled = true;
     };
   }, [clientKey, connection]);
+
+  const departmentNameById = useMemo(
+    () => Object.fromEntries(departments.map((item) => [item.id, item.name])),
+    [departments]
+  );
+  const selectableDepartments = useMemo(
+    () => departments.filter(isSelectableDepartment),
+    [departments]
+  );
+
+  const isDepartmentRequired = (role: string) => role === "AGENT" || role === "SUPERVISOR";
+
+  const toastHandlers = usePausableFeedbackAutoDismiss(
+    Boolean(userSuccess || actionSuccess || actionError || userError || error),
+    () => {
+      setUserSuccess(null);
+      setActionSuccess(null);
+      setActionError(null);
+      setUserError(null);
+      setError(null);
+    }
+  );
 
   const handleCreateUser = async () => {
     if (!clientKey) return;
@@ -102,6 +213,10 @@ export default function TenantUsersPage() {
       setUserError("Informe um email valido.");
       return;
     }
+    if (isDepartmentRequired(userForm.role) && !userForm.departmentId) {
+      setUserError("Selecione um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
     setCreatingUser(true);
     setUserError(null);
     setUserSuccess(null);
@@ -112,7 +227,9 @@ export default function TenantUsersPage() {
         name: userForm.name.trim(),
         email: emailUsed,
         password: userForm.password,
-        role: "AGENT",
+        role: userForm.role,
+        departmentId: userForm.departmentId || null,
+        isActive: userForm.isActive,
       });
       setUserForm(EMPTY_USER_FORM);
       await loadUsers(clientKey);
@@ -120,15 +237,88 @@ export default function TenantUsersPage() {
     } catch (err) {
       const typed = err as { message?: string; status?: number };
       const message = typed.message || "Nao foi possivel criar o usuario.";
-      if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
+      if (/user_limit_exceeded/i.test(message)) {
+        setUserError("Limite de usuarios ativos contratado para este tenant foi atingido.");
+      } else if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
         setUserError("Ja existe um usuario com esse email.");
       } else if (/weak_password/i.test(message)) {
         setUserError("Senha deve ter pelo menos 6 caracteres.");
+      } else if (/invalid_role/i.test(message)) {
+        setUserError("Selecione um role valido.");
+      } else if (/department_required/i.test(message)) {
+        setUserError("Selecione um setor para AGENT ou SUPERVISOR.");
+      } else if (/department_not_found/i.test(message)) {
+        setUserError("Setor invalido para este tenant.");
       } else {
         setUserError(message);
       }
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleUpdateUser = async (item: AdminUserItem) => {
+    if (!clientKey) return;
+    const draft = userDrafts[item.id];
+    if (!draft) return;
+    const nextRole = String(draft.role ?? item.role).trim().toUpperCase();
+    if (!USER_ROLE_OPTIONS.includes(nextRole as (typeof USER_ROLE_OPTIONS)[number])) {
+      setActionError("Selecione um role valido.");
+      return;
+    }
+    if (!draft.name.trim() || !draft.email.trim()) {
+      setActionError("Nome e email sao obrigatorios.");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(draft.email.trim().toLowerCase())) {
+      setActionError("Informe um email valido.");
+      return;
+    }
+    if (isDepartmentRequired(nextRole) && !draft.departmentId) {
+      setActionError("Selecione um setor para AGENT ou SUPERVISOR.");
+      return;
+    }
+    setSavingUserId(item.id);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const response = await updateUser(connection, item.id, clientKey, {
+        name: draft.name.trim(),
+        email: draft.email.trim().toLowerCase(),
+        role: nextRole,
+        departmentId: draft.departmentId || null,
+        isActive: draft.isActive,
+      });
+      setUsers((current) =>
+        current.map((user) => (user.id === item.id ? response.user : user))
+      );
+      setUserDrafts((current) => ({
+        ...current,
+        [item.id]: {
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role,
+          departmentId: response.user.departmentId ?? "",
+          isActive: response.user.isActive ?? true,
+        },
+      }));
+      setActionSuccess("Usuario atualizado com sucesso.");
+    } catch (err) {
+      const typed = err as { message?: string; status?: number };
+      const message = typed.message || "Nao foi possivel atualizar o usuario.";
+      if (/user_limit_exceeded/i.test(message)) {
+        setActionError("Limite de usuarios ativos contratado para este tenant foi atingido.");
+      } else if (/user_already_exists|unique/i.test(message) || typed.status === 409) {
+        setActionError("Ja existe um usuario com esse email.");
+      } else if (/department_required/i.test(message)) {
+        setActionError("Selecione um setor para AGENT ou SUPERVISOR.");
+      } else if (/department_not_found/i.test(message)) {
+        setActionError("Setor invalido para este tenant.");
+      } else {
+        setActionError(message);
+      }
+    } finally {
+      setSavingUserId(null);
     }
   };
 
@@ -162,6 +352,8 @@ export default function TenantUsersPage() {
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
+      <FeedbackToast message={userSuccess ?? actionSuccess} {...toastHandlers} />
+      <FeedbackToast message={actionError ?? userError ?? error} variant="error" {...toastHandlers} />
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -224,6 +416,50 @@ export default function TenantUsersPage() {
                 onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
               />
             </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Perfil</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.role}
+                onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value }))}
+              >
+                {USER_ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Setor</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.departmentId}
+                onChange={(event) =>
+                  setUserForm((current) => ({ ...current, departmentId: event.target.value }))
+                }
+              >
+                <option value="">-</option>
+                {selectableDepartments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Status</span>
+              <select
+                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                value={userForm.isActive ? "true" : "false"}
+                onChange={(event) =>
+                  setUserForm((current) => ({ ...current, isActive: event.target.value === "true" }))
+                }
+              >
+                <option value="true">Ativo</option>
+                <option value="false">Inativo</option>
+              </select>
+            </label>
           </div>
           {userError ? (
             <p className="mt-3 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -254,101 +490,254 @@ export default function TenantUsersPage() {
           </p>
         ) : null}
 
-        <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <section className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-4 py-3 text-sm text-white/70">
+            Edite os dados na linha do usuario e clique em <span className="font-semibold text-white">Salvar</span>.
+          </div>
           {actionError ? (
             <p className="m-4 rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
               {actionError}
             </p>
           ) : null}
-          {actionSuccess ? (
-            <p className="m-4 rounded-md border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
-              {actionSuccess}
-            </p>
-          ) : null}
-          <table className="w-full min-w-[680px] text-sm">
-            <thead className="bg-white/10 text-left">
-              <tr>
-                <th className="px-3 py-2">Nome</th>
-                <th className="px-3 py-2">Email</th>
-                <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2">Criado em</th>
-                <th className="px-3 py-2">Acoes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((item) => (
-                <Fragment key={item.id}>
-                <tr key={item.id} className="border-t border-white/10">
-                  <td className="px-3 py-2">{item.name}</td>
-                  <td className="px-3 py-2">{item.email}</td>
-                  <td className="px-3 py-2">{item.role}</td>
-                  <td className="px-3 py-2">{formatDateTime(item.createdAt)}</td>
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      disabled={resettingUserId === item.id}
-                      onClick={() => {
-                        setActionError(null);
-                        setActionSuccess(null);
-                        setResetUserId((current) => (current === item.id ? null : item.id));
-                        setResetPassword("");
-                      }}
-                      className="rounded-md border border-white/20 px-3 py-1 text-xs hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {resettingUserId === item.id ? "Resetando..." : "Resetar senha"}
-                    </button>
-                  </td>
-                </tr>
-                {resetUserId === item.id ? (
-                  <tr className="border-t border-white/10 bg-white/[0.03]">
-                    <td colSpan={5} className="px-3 py-3">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                        <label className="grid flex-1 gap-1 text-sm">
-                          <span className="text-white/70">Nova senha</span>
-                          <input
-                            type="password"
-                            className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                            value={resetPassword}
-                            onChange={(event) => setResetPassword(event.target.value)}
-                          />
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={resettingUserId === item.id}
-                            onClick={() => handleResetPassword(item.id)}
-                            className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {resettingUserId === item.id ? "Salvando..." : "Confirmar reset"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={resettingUserId === item.id}
-                            onClick={() => {
-                              setResetUserId(null);
-                              setResetPassword("");
-                              setActionError(null);
-                            }}
-                            className="rounded-md border border-white/20 px-4 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
+          <div className="grid gap-3 p-4">
+            {users.map((item, index) => (
+              <Fragment key={item.id}>
+                <article
+                  className={`rounded-xl border p-4 ${
+                    index % 2 === 0
+                      ? "border-white/10 bg-re7-navy/35"
+                      : "border-white/15 bg-white/[0.075]"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{item.name}</h3>
+                        <p className="text-sm text-white/60">{item.email}</p>
                       </div>
-                    </td>
-                  </tr>
+                      <div className="flex flex-wrap gap-2">
+                        <InfoBadge label={item.role} />
+                        <InfoBadge
+                          label={item.departmentId ? departmentNameById[item.departmentId] ?? item.departmentId : "Sem setor"}
+                          tone={item.departmentId ? "default" : "warning"}
+                        />
+                        <InfoBadge
+                          label={(item.isActive ?? true) ? "Ativo" : "Inativo"}
+                          tone={(item.isActive ?? true) ? "success" : "warning"}
+                        />
+                      </div>
+                      <p className="text-xs text-white/45">Criado em {formatDateTime(item.createdAt)}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={savingUserId === item.id}
+                        onClick={() => handleUpdateUser(item)}
+                        className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ActionIcon>💾</ActionIcon>
+                        <span>{savingUserId === item.id ? "Salvando..." : "Salvar"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={resettingUserId === item.id}
+                        onClick={() => {
+                          setActionError(null);
+                          setActionSuccess(null);
+                          setResetUserId((current) => (current === item.id ? null : item.id));
+                          setResetPassword("");
+                        }}
+                        className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ActionIcon>🔑</ActionIcon>
+                        <span>{resettingUserId === item.id ? "Resetando..." : "Senha"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Nome</span>
+                      <input
+                        aria-label={`Nome do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.name ?? item.name}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              name: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Email</span>
+                      <input
+                        aria-label={`Email do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.email ?? item.email}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              email: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Perfil</span>
+                      <select
+                        aria-label={`Perfil do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.role ?? item.role}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              role: event.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        {USER_ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Setor</span>
+                      <select
+                        aria-label={`Setor do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={userDrafts[item.id]?.departmentId ?? item.departmentId ?? ""}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              departmentId: event.target.value,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="">-</option>
+                        {selectableDepartments.map((department) => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-white/65">Status</span>
+                      <select
+                        aria-label={`Status do usuario ${item.name}`}
+                        className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                        value={(userDrafts[item.id]?.isActive ?? item.isActive ?? true) ? "true" : "false"}
+                        onChange={(event) =>
+                          setUserDrafts((current) => ({
+                            ...current,
+                            [item.id]: {
+                              ...(current[item.id] ?? {
+                                name: item.name,
+                                email: item.email,
+                                role: item.role,
+                                departmentId: item.departmentId ?? "",
+                                isActive: item.isActive ?? true,
+                              }),
+                              isActive: event.target.value === "true",
+                            },
+                          }))
+                        }
+                      >
+                        <option value="true">Ativo</option>
+                        <option value="false">Inativo</option>
+                      </select>
+                    </label>
+                  </div>
+                </article>
+
+                {resetUserId === item.id ? (
+                  <div className="mt-[-4px] rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                      <label className="grid flex-1 gap-1 text-sm">
+                        <span className="text-white/70">Nova senha</span>
+                        <input
+                          type="password"
+                          className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                          value={resetPassword}
+                          onChange={(event) => setResetPassword(event.target.value)}
+                        />
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={resettingUserId === item.id}
+                          onClick={() => handleResetPassword(item.id)}
+                          className="inline-flex items-center gap-2 rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <ActionIcon>✅</ActionIcon>
+                          <span>{resettingUserId === item.id ? "Salvando..." : "Confirmar"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resettingUserId === item.id}
+                          onClick={() => {
+                            setResetUserId(null);
+                            setResetPassword("");
+                            setActionError(null);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-md border border-white/20 px-4 py-2 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <ActionIcon>✕</ActionIcon>
+                          <span>Cancelar</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 ) : null}
-                </Fragment>
-              ))}
-              {users.length === 0 && !loading ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-white/70">
-                    Nenhum usuario encontrado.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </Fragment>
+            ))}
+            {users.length === 0 && !loading ? (
+              <p className="rounded-md border border-white/10 bg-white/[0.03] px-4 py-6 text-center text-white/70">
+                Nenhum usuario encontrado.
+              </p>
+            ) : null}
+          </div>
         </section>
       </div>
     </div>

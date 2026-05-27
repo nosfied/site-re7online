@@ -137,6 +137,102 @@ async function fetchMetaGraphJson(params: {
   return payload;
 }
 
+async function postMetaGraphJson(params: {
+  path: string;
+  accessToken: string;
+  body: Record<string, unknown>;
+}): Promise<MetaGraphPayload> {
+  const url = `https://graph.facebook.com/${env.WHATSAPP_API_VERSION}/${params.path}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+    body: JSON.stringify(params.body),
+  });
+
+  const rawText = await response.text();
+  let payload: MetaGraphPayload;
+  try {
+    payload = JSON.parse(rawText) as MetaGraphPayload;
+  } catch {
+    throw new MetaOnboardingExchangeError(
+      "Meta returned non-JSON payload during phone registration",
+      response.status,
+      rawText.slice(0, 1000)
+    );
+  }
+
+  if (!response.ok) {
+    throw new MetaOnboardingExchangeError(
+      "Meta phone registration failed",
+      response.status,
+      JSON.stringify(payload).slice(0, 1000)
+    );
+  }
+
+  return payload;
+}
+
+export async function registerMetaPhoneNumber(params: {
+  phoneNumberId: string;
+  accessToken: string;
+  pin: string;
+}): Promise<{ success: boolean; rawPayload: MetaGraphPayload }> {
+  const phoneNumberId = params.phoneNumberId.trim();
+  const accessToken = params.accessToken.trim();
+  const pin = params.pin.trim();
+  if (!phoneNumberId) {
+    throw new MetaOnboardingExchangeError("Phone number id is required", 400);
+  }
+  if (!accessToken) {
+    throw new MetaOnboardingExchangeError("Access token is required", 400);
+  }
+  if (!/^\d{6}$/.test(pin)) {
+    throw new MetaOnboardingExchangeError("Registration PIN must have 6 digits", 400);
+  }
+
+  const payload = await postMetaGraphJson({
+    path: `${encodeURIComponent(phoneNumberId)}/register`,
+    accessToken,
+    body: {
+      messaging_product: "whatsapp",
+      pin,
+    },
+  });
+
+  return {
+    success: payload.success === true || payload.success === "true",
+    rawPayload: payload,
+  };
+}
+
+export async function subscribeMetaWabaToApp(params: {
+  wabaId: string;
+  accessToken: string;
+}): Promise<{ success: boolean; rawPayload: MetaGraphPayload }> {
+  const wabaId = params.wabaId.trim();
+  const accessToken = params.accessToken.trim();
+  if (!wabaId) {
+    throw new MetaOnboardingExchangeError("WABA id is required", 400);
+  }
+  if (!accessToken) {
+    throw new MetaOnboardingExchangeError("Access token is required", 400);
+  }
+
+  const payload = await postMetaGraphJson({
+    path: `${encodeURIComponent(wabaId)}/subscribed_apps`,
+    accessToken,
+    body: {},
+  });
+
+  return {
+    success: payload.success === true || payload.success === "true",
+    rawPayload: payload,
+  };
+}
+
 export async function enrichMetaOnboardingResult(
   params: EnrichOnboardingParams
 ): Promise<{

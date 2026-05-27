@@ -24,7 +24,7 @@ export default function Hero() {
         />
       </div>
 
-      <Container className="relative pb-10 pt-10 md:pb-16 md:pt-12">
+      <Container className="relative pb-10 pt-8 md:pb-16 md:pt-12">
         <div className="relative z-10 w-full max-w-5xl">
           <div className="hidden md:block h-64" />
 
@@ -34,7 +34,7 @@ export default function Hero() {
               Comunicação • Marketing • Tecnologia
             </p>
 
-            <p className="mt-20 text-base text-white/90 md:mt-4 md:text-lg md:text-re7-gray/90 text-balance max-w-xl">
+            <p className="mt-24 max-w-xl text-base text-white/90 text-balance sm:mt-20 md:mt-4 md:text-lg md:text-re7-gray/90">
               Comunicação, marketing e tecnologia para negócios que querem crescer
               com estratégia.
             </p>
@@ -56,7 +56,7 @@ export default function Hero() {
               </span>
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3 sm:justify-end md:mt-0 md:justify-end">
+            <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap sm:items-center sm:justify-end md:mt-0 md:justify-end">
               <Button href="#diagnostico" variant="primary" className="w-full sm:w-auto">
                 Solicitar diagnóstico
               </Button>

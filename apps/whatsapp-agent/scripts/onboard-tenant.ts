@@ -348,13 +348,14 @@ async function main() {
     }
 
     if (options.firstUserName && options.firstUserEmail) {
-      const existingUser = await prisma.user.findFirst({
+      const existingUser = await prisma.user.findUnique({
         where: {
-          clientId: client.id,
           email: options.firstUserEmail,
         },
       });
-      if (!existingUser) {
+      if (existingUser && existingUser.clientId !== client.id) {
+        throw new Error(`user_email_already_in_use:${options.firstUserEmail}`);
+      } else if (!existingUser) {
         const createdUser = await prisma.user.create({
           data: {
             clientId: client.id,

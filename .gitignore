@@ -22,7 +22,9 @@
 
 # misc
 .DS_Store
+.codex
 *.pem
+apps/whatsapp-agent/.data/
 
 # debug
 npm-debug.log*

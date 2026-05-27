@@ -1,4 +1,4 @@
-import { HandoffStatus } from "@prisma/client";
+import { ConversationOperationalStatus, HandoffStatus } from "@prisma/client";
 import { env } from "../config/env.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
@@ -10,6 +10,7 @@ import {
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
 } from "../utils/waid.js";
+import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js";
 
 type ShadowCompareFields = {
   conversationKey?: string | null;
@@ -39,11 +40,17 @@ type ShadowCompareFields = {
   lastHandoffDemoScheduledAt?: string | null;
   flow?: string | null;
   flowStep?: number | null;
+  chatbotNodeId?: string | null;
+  chatbotActive?: boolean | null;
   answersJson?: string | null;
   mode?: string | null;
   assignedUserId?: string | null;
   assignedTo?: string | null;
   assignedAt?: string | null;
+  departmentId?: string | null;
+  queueId?: string | null;
+  status?: ConversationOperationalStatus | null;
+  closedAt?: string | null;
 };
 
 function toIso(value?: string | null) {
@@ -82,10 +89,46 @@ function getJsonFieldValue(view: ShadowCompareFields, field: string) {
   return (view as Record<string, unknown>)[field] ?? null;
 }
 
+function maskWaId(value?: string | null) {
+  if (!value) return null;
+  const suffix = value.slice(-4);
+  return suffix ? `***${suffix}` : "***";
+}
+
+function maskConversationKey(clientKey: string, waId: string) {
+  return `${clientKey}:${maskWaId(waId) ?? "***"}`;
+}
+
+function isSyntheticChannelWaId(value: string) {
+  return /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(value.trim());
+}
+
+function isValidConversationKeyForState(state: ConversationState, clientKey: string, waId: string) {
+  const conversationKey = state.conversationKey ?? "";
+  const expectedLegacyKey = makeConversationKey(clientKey, state.waId || waId);
+  if (conversationKey === expectedLegacyKey) {
+    return true;
+  }
+
+  const stateWaId = String(state.waId || waId).trim().toLowerCase();
+  if (!isSyntheticChannelWaId(stateWaId)) {
+    return false;
+  }
+
+  const [channel, externalUserHash] = stateWaId.split(":");
+  const keyPrefix = `${clientKey}:${channel}:`;
+  return (
+    Boolean(channel && externalUserHash) &&
+    conversationKey.startsWith(keyPrefix) &&
+    conversationKey.endsWith(`:${externalUserHash}`)
+  );
+}
+
 function getMostRecentJsonTimestamp(state: ConversationState | null) {
   if (!state) return null;
   const timestamps = [
     state.assignedAt,
+    state.closedAt,
     state.lastHandoffDemoScheduledAt,
     state.lastDemoScheduledAt,
     state.lastDemoRequestedAt,
@@ -186,11 +229,17 @@ function mapStateToShadow(state: ConversationState): ShadowCompareFields {
     lastHandoffDemoScheduledAt: toIso(state.lastHandoffDemoScheduledAt),
     flow: state.flow ?? null,
     flowStep: state.flowStep ?? null,
+    chatbotNodeId: state.chatbotNodeId ?? null,
+    chatbotActive: state.chatbotActive ?? false,
     answersJson: stableJson(state.answers ?? null),
     mode: state.mode ?? null,
     assignedUserId: state.assignedUserId ?? null,
     assignedTo: state.assignedTo ?? null,
     assignedAt: toIso(state.assignedAt),
+    departmentId: state.departmentId ?? null,
+    queueId: state.queueId ?? null,
+    status: toConversationOperationalStatus(state.status),
+    closedAt: toIso(state.closedAt),
   };
 }
 
@@ -222,11 +271,17 @@ function mapDbToShadow(db: {
   lastHandoffDemoScheduledAt: Date | null;
   flow: string | null;
   flowStep: number | null;
+  chatbotNodeId: string | null;
+  chatbotActive: boolean;
   answers: unknown;
   mode: string | null;
   assignedUserId: string | null;
   assignedTo: string | null;
   assignedAt: Date | null;
+  departmentId: string | null;
+  queueId: string | null;
+  status: ConversationOperationalStatus | null;
+  closedAt: Date | null;
 }): ShadowCompareFields {
   return {
     conversationKey: db.conversationKey ?? null,
@@ -268,11 +323,17 @@ function mapDbToShadow(db: {
       : null,
     flow: db.flow ?? null,
     flowStep: db.flowStep ?? null,
+    chatbotNodeId: db.chatbotNodeId ?? null,
+    chatbotActive: db.chatbotActive,
     answersJson: stableJson(db.answers),
     mode: db.mode ?? null,
     assignedUserId: db.assignedUserId ?? null,
     assignedTo: db.assignedTo ?? null,
     assignedAt: db.assignedAt ? db.assignedAt.toISOString() : null,
+    departmentId: db.departmentId ?? null,
+    queueId: db.queueId ?? null,
+    status: db.status ?? null,
+    closedAt: db.closedAt ? db.closedAt.toISOString() : null,
   };
 }
 
@@ -293,8 +354,24 @@ function toHandoffStatus(value?: string | null): HandoffStatus {
   return HandoffStatus.NONE;
 }
 
+function toConversationOperationalStatus(value?: string | null): ConversationOperationalStatus | null {
+  switch ((value ?? "").toUpperCase()) {
+    case "WAITING":
+      return ConversationOperationalStatus.WAITING;
+    case "IN_PROGRESS":
+      return ConversationOperationalStatus.IN_PROGRESS;
+    case "WAITING_USER":
+      return ConversationOperationalStatus.WAITING_USER;
+    case "CLOSED":
+      return ConversationOperationalStatus.CLOSED;
+    default:
+      return null;
+  }
+}
+
 type DualWriteOptions = {
   readSource?: "json" | "hybrid" | "postgres";
+  jsonWriteEnabled?: boolean;
 };
 
 export function createDualWriteStorage(
@@ -305,6 +382,12 @@ export function createDualWriteStorage(
   const cachedClientIds = new Map<string, string>();
   const readMismatchCounts = new Map<string, number>();
   const readSource = options.readSource ?? "json";
+  const jsonWriteEnabled = options.jsonWriteEnabled ?? env.CONV_STATE_JSON_WRITE_ENABLED;
+  const shouldWriteShadow =
+    env.CONV_STATE_DUAL_WRITE ||
+    env.STORAGE_MODE === "hybrid" ||
+    env.STORAGE_MODE === "postgres" ||
+    readSource === "postgres";
 
   function validateConversationState(
     state: ConversationState | null,
@@ -326,7 +409,7 @@ export function createDualWriteStorage(
     if (!state.handoff || !["none", "pending", "active"].includes(state.handoff.status)) {
       return { ok: false, reason: "invalid_handoff" };
     }
-    if (state.conversationKey !== makeConversationKey(clientKey, state.waId || waId)) {
+    if (!isValidConversationKeyForState(state, clientKey, waId)) {
       return { ok: false, reason: "invalid_conversation_key" };
     }
     return { ok: true, state };
@@ -344,7 +427,11 @@ export function createDualWriteStorage(
   }
 
   function normalizeFlow(value?: string | null): ConversationState["flow"] {
-    return value === "quote_site" ? "quote_site" : undefined;
+    if (value === "quote_site") return "quote_site";
+    if (typeof value === "string" && value.startsWith("chatbot:")) {
+      return value as ConversationState["flow"];
+    }
+    return undefined;
   }
 
   function mapDbToConversationState(params: {
@@ -380,11 +467,17 @@ export function createDualWriteStorage(
       lastHandoffDemoScheduledAt: Date | null;
       flow: string | null;
       flowStep: number | null;
+      chatbotNodeId: string | null;
+      chatbotActive: boolean;
       answers: unknown;
       mode: string | null;
       assignedUserId: string | null;
       assignedTo: string | null;
       assignedAt: Date | null;
+      departmentId: string | null;
+      queueId: string | null;
+      status: ConversationOperationalStatus | null;
+      closedAt: Date | null;
     };
   }): ConversationState {
     const answers =
@@ -433,11 +526,17 @@ export function createDualWriteStorage(
         params.db.lastHandoffDemoScheduledAt?.toISOString() ?? undefined,
       flow: normalizeFlow(params.db.flow),
       flowStep: params.db.flowStep ?? undefined,
+      chatbotNodeId: params.db.chatbotNodeId ?? undefined,
+      chatbotActive: params.db.chatbotActive ?? false,
       answers,
       mode: normalizeMode(params.db.mode),
       assignedUserId: params.db.assignedUserId ?? null,
       assignedTo: params.db.assignedTo ?? null,
       assignedAt: params.db.assignedAt?.toISOString() ?? null,
+      departmentId: params.db.departmentId ?? null,
+      queueId: params.db.queueId ?? null,
+      status: params.db.status ?? null,
+      closedAt: params.db.closedAt?.toISOString() ?? null,
     };
   }
 
@@ -510,16 +609,22 @@ export function createDualWriteStorage(
     if (!clientId) return null;
     const safeClientKey = clientKey || env.CLIENT_KEY || env.CLIENT_ID || "default";
     const lookup = buildWaIdLookup(waId);
+    const exactRaw = waId.trim();
+    const variants = Array.from(new Set([lookup.raw, lookup.canonical, exactRaw].filter(Boolean)));
     const rows = await prisma.conversationRuntimeState.findMany({
       where: {
         clientId,
-        OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
+        OR: [{ waIdCanonical: { in: variants } }, { waId: { in: variants } }],
       },
       select: {
+        id: true,
         updatedAt: true,
         waId: true,
         waIdCanonical: true,
         conversationKey: true,
+        channelAccountId: true,
+        externalUserHash: true,
+        legacyWaId: true,
         firstSeenAt: true,
         windowIsOpen: true,
         windowExpiresAt: true,
@@ -546,11 +651,17 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: true,
         flow: true,
         flowStep: true,
+        chatbotNodeId: true,
+        chatbotActive: true,
         answers: true,
         mode: true,
         assignedUserId: true,
         assignedTo: true,
         assignedAt: true,
+        departmentId: true,
+        queueId: true,
+        status: true,
+        closedAt: true,
       },
     });
     const [db] = rows.sort((left, right) => compareConversationLookupPriority(left, right));
@@ -565,6 +676,23 @@ export function createDualWriteStorage(
         source: "runtime_shadow",
       });
     }
+    await runWhatsAppDualReadShadow({
+      prisma,
+      model: "ConversationRuntimeState",
+      ownerId: clientId,
+      waId: lookup.raw,
+      phoneNumberId: db?.channelAccountId ?? env.WHATSAPP_PHONE_NUMBER_ID,
+      phase: "before_persist",
+      legacyRecord: db
+        ? {
+            id: db.id,
+            ownerId: clientId,
+            channelAccountId: db.channelAccountId,
+            externalUserHash: db.externalUserHash,
+            legacyWaId: db.legacyWaId,
+          }
+        : null,
+    });
     return db
       ? {
           clientId,
@@ -648,21 +776,56 @@ export function createDualWriteStorage(
     });
   }
 
-  function logJsonFallback(params: {
+  function logPostgresReadMissing(params: {
+    clientId?: string | null;
     clientKey: string;
     waId: string;
     reason: string;
-    error?: string;
   }) {
     logger.warn({
-      event: "state.read.fallback_json",
+      event: "state.postgres.read_missing",
+      clientId: params.clientId ?? null,
       clientKey: params.clientKey,
-      waId: params.waId,
-      conversationKey: makeConversationKey(params.clientKey, params.waId),
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
       reason: params.reason,
       readSource,
-      fallbackTo: "json",
+    });
+  }
+
+  function logPostgresReadFailed(params: {
+    clientId?: string | null;
+    clientKey: string;
+    waId: string;
+    reason: string;
+    error: string;
+  }) {
+    logger.warn({
+      event: "state.postgres.read_failed",
+      clientId: params.clientId ?? null,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
+      reason: params.reason,
+      readSource,
       error: params.error,
+    });
+  }
+
+  function logJsonWriteSkipped(params: {
+    clientId?: string | null;
+    clientKey: string;
+    waId: string;
+    operation: "upsertConversation" | "updateConversationWindow" | "deleteConversation";
+  }) {
+    logger.info({
+      event: "state.json.write_skipped",
+      clientId: params.clientId ?? null,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waId),
+      conversationKey: maskConversationKey(params.clientKey, params.waId),
+      operation: params.operation,
+      reason: "json_write_disabled",
     });
   }
 
@@ -706,11 +869,17 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: toDate(state.lastHandoffDemoScheduledAt),
         flow: state.flow ?? null,
         flowStep: state.flowStep ?? null,
+        chatbotNodeId: state.chatbotNodeId ?? null,
+        chatbotActive: state.chatbotActive ?? false,
         answers: state.answers ?? undefined,
         mode: state.mode ?? null,
         assignedUserId: state.assignedUserId ?? null,
         assignedTo: state.assignedTo ?? null,
         assignedAt: toDate(state.assignedAt),
+        departmentId: state.departmentId ?? null,
+        queueId: state.queueId ?? null,
+        status: toConversationOperationalStatus(state.status),
+        closedAt: toDate(state.closedAt),
       },
       update: {
         conversationKey: state.conversationKey ?? null,
@@ -741,11 +910,17 @@ export function createDualWriteStorage(
         lastHandoffDemoScheduledAt: toDate(state.lastHandoffDemoScheduledAt),
         flow: state.flow ?? null,
         flowStep: state.flowStep ?? null,
+        chatbotNodeId: state.chatbotNodeId ?? null,
+        chatbotActive: state.chatbotActive ?? false,
         answers: state.answers ?? undefined,
         mode: state.mode ?? null,
         assignedUserId: state.assignedUserId ?? null,
         assignedTo: state.assignedTo ?? null,
         assignedAt: toDate(state.assignedAt),
+        departmentId: state.departmentId ?? null,
+        queueId: state.queueId ?? null,
+        status: toConversationOperationalStatus(state.status),
+        closedAt: toDate(state.closedAt),
         version: { increment: 1 },
       },
     });
@@ -757,7 +932,7 @@ export function createDualWriteStorage(
   }
 
   async function writeShadowSafe(state: ConversationState) {
-    if (!env.CONV_STATE_DUAL_WRITE) return;
+    if (!shouldWriteShadow) return;
     try {
       await writeShadow(state);
     } catch (error) {
@@ -794,10 +969,10 @@ export function createDualWriteStorage(
         return primary.getConversation(waId, clientKey);
       }
 
-      const primaryPromise = primary.getConversation(waId, clientKey);
       const shadowPromise = readShadowState(waId, clientKey);
 
       if (readSource === "hybrid") {
+        const primaryPromise = primary.getConversation(waId, clientKey);
         const [jsonResult, shadowResult] = await Promise.allSettled([
           primaryPromise,
           shadowPromise,
@@ -816,41 +991,29 @@ export function createDualWriteStorage(
           });
         } else {
           logShadowReadMismatch(jsonResult.value, waId, clientKey, shadowResult.value);
+          if (!jsonResult.value && isSyntheticChannelWaId(waId)) {
+            return shadowResult.value?.state ?? null;
+          }
         }
         return jsonResult.value;
       }
 
-      const [shadowResult, jsonResult] = await Promise.allSettled([shadowPromise, primaryPromise]);
-
-      if (jsonResult.status === "rejected") {
-        if (shadowResult.status === "rejected") {
-          throw shadowResult.reason;
-        }
-        const shadowValidation = validateConversationState(
-          shadowResult.value?.state ?? null,
-          clientKey,
-          waId
-        );
-        if (shadowValidation.ok) {
-          return shadowValidation.state;
-        }
-        throw jsonResult.reason;
-      }
-
-      if (shadowResult.status === "rejected") {
-        logJsonFallback({
+      let shadowResult: Awaited<ReturnType<typeof readShadowState>>;
+      try {
+        shadowResult = await shadowPromise;
+      } catch (error) {
+        logPostgresReadFailed({
+          clientId: null,
           clientKey,
           waId,
           reason: "postgres_read_error",
-          error: (shadowResult.reason as Error).message,
+          error: (error as Error).message,
         });
-        return jsonResult.value;
+        throw error;
       }
 
-      logShadowReadMismatch(jsonResult.value, waId, clientKey, shadowResult.value);
-
       const shadowValidation = validateConversationState(
-        shadowResult.value?.state ?? null,
+        shadowResult?.state ?? null,
         clientKey,
         waId
       );
@@ -858,36 +1021,85 @@ export function createDualWriteStorage(
         return shadowValidation.state;
       }
 
-      if (shadowValidation.reason === "not_found" && !jsonResult.value) {
+      if (shadowValidation.reason === "not_found") {
+        logPostgresReadMissing({
+          clientId: shadowResult?.clientId ?? null,
+          clientKey,
+          waId,
+          reason: "postgres_not_found",
+        });
         return null;
       }
 
-      logJsonFallback({
+      const errorMessage = `postgres_conversation_state_invalid:${shadowValidation.reason}`;
+      logPostgresReadFailed({
+        clientId: shadowResult?.clientId ?? null,
         clientKey,
         waId,
-        reason:
-          shadowValidation.reason === "not_found"
-            ? "postgres_not_found_with_json_state"
-            : "postgres_invalid_state",
-        error: shadowValidation.error,
+        reason: "postgres_invalid_state",
+        error: shadowValidation.error ?? errorMessage,
       });
-      return jsonResult.value;
+      throw new Error(errorMessage);
     },
     async upsertConversation(state: ConversationState) {
-      await primary.upsertConversation(state);
+      if (jsonWriteEnabled) {
+        await primary.upsertConversation(state);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey: state.clientKey ?? "default",
+          waId: state.waId,
+          operation: "upsertConversation",
+        });
+      }
       await writeShadowSafe(state);
     },
     async updateConversationWindow(waId: string, lastInboundAt: string, clientKey = "default") {
-      const updated = await primary.updateConversationWindow(
-        waId,
-        lastInboundAt,
-        clientKey
-      );
+      let updated: ConversationState;
+      if (jsonWriteEnabled) {
+        updated = await primary.updateConversationWindow(waId, lastInboundAt, clientKey);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey,
+          waId,
+          operation: "updateConversationWindow",
+        });
+        const shadowResult = await readShadowState(waId, clientKey);
+        const shadowValidation = validateConversationState(
+          shadowResult?.state ?? null,
+          clientKey,
+          waId
+        );
+        if (!shadowValidation.ok) {
+          throw new Error(`conversation_state_not_found:${shadowValidation.reason}`);
+        }
+        const inboundTime = Number.isNaN(Date.parse(lastInboundAt))
+          ? Date.now()
+          : Date.parse(lastInboundAt);
+        updated = {
+          ...shadowValidation.state,
+          lastInboundAt,
+          window: {
+            isOpen: true,
+            expiresAt: new Date(inboundTime + 24 * 60 * 60 * 1000).toISOString(),
+          },
+        };
+      }
       await writeShadowSafe(updated);
       return updated;
     },
     async deleteConversation(waId: string, clientKey = "default") {
-      await primary.deleteConversation(waId, clientKey);
+      if (jsonWriteEnabled) {
+        await primary.deleteConversation(waId, clientKey);
+      } else {
+        logJsonWriteSkipped({
+          clientId: null,
+          clientKey,
+          waId,
+          operation: "deleteConversation",
+        });
+      }
       const clientId = await getClientId(clientKey, "delete");
       if (!clientId) return;
       try {

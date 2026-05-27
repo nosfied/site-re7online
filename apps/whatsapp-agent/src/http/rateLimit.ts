@@ -3,10 +3,11 @@ import { IncomingMessage } from "node:http";
 const WINDOW_MS = 60_000;
 const LIMIT_WEBHOOK = 120;
 const LIMIT_ADMIN = 60;
+const LIMIT_AUTH = 12;
 const CLEANUP_INTERVAL_OPS = 200;
 const MAX_BUCKETS = 10_000;
 
-type BucketClass = "admin" | "webhook";
+type BucketClass = "admin" | "webhook" | "auth";
 
 type Bucket = {
   count: number;
@@ -33,10 +34,14 @@ function isLocalIp(ip: string) {
 function getBucketClass(pathname: string): BucketClass | null {
   if (pathname.startsWith("/admin/")) return "admin";
   if (pathname.startsWith("/webhook")) return "webhook";
+  if (pathname === "/auth/login" || pathname === "/auth/forgot-password" || pathname === "/auth/reset-password") {
+    return "auth";
+  }
   return null;
 }
 
 function getLimit(bucketClass: BucketClass) {
+  if (bucketClass === "auth") return LIMIT_AUTH;
   return bucketClass === "admin" ? LIMIT_ADMIN : LIMIT_WEBHOOK;
 }
 

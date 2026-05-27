@@ -8,6 +8,8 @@ import {
   createUser,
   fetchTenantById,
   onboardingExchangeCode,
+  onboardingManualBindNumber,
+  onboardingRegisterPhoneNumber,
   TenantConfigResponse,
 } from "@/lib/whatsappAdminApi";
 import {
@@ -147,8 +149,12 @@ export default function TenantOnboardingPage() {
   const [code, setCode] = useState("");
   const [wabaId, setWabaId] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [displayPhoneNumber, setDisplayPhoneNumber] = useState("");
   const [businessId, setBusinessId] = useState("");
   const [businessPortfolioId, setBusinessPortfolioId] = useState("");
+  const [reconnectMode, setReconnectMode] = useState(false);
+  const [registrationPin, setRegistrationPin] = useState("");
+  const [registeringPhone, setRegisteringPhone] = useState(false);
   const [rawPayload, setRawPayload] = useState<unknown>(null);
   const [resultSnapshot, setResultSnapshot] = useState<{
     phoneNumberId: string | null;
@@ -187,14 +193,18 @@ export default function TenantOnboardingPage() {
   const applyCapturedData = useCallback((input: unknown) => {
     const extracted = extractEmbeddedSignupData(input);
     if (extracted.code) setCode(extracted.code);
-    if (extracted.wabaId) setWabaId((current) => current || extracted.wabaId);
-    if (extracted.phoneNumberId) setPhoneNumberId((current) => current || extracted.phoneNumberId);
-    if (extracted.businessId) setBusinessId((current) => current || extracted.businessId);
+    if (extracted.wabaId) setWabaId((current) => (reconnectMode ? extracted.wabaId : current || extracted.wabaId));
+    if (extracted.phoneNumberId) {
+      setPhoneNumberId((current) => (reconnectMode ? extracted.phoneNumberId : current || extracted.phoneNumberId));
+    }
+    if (extracted.businessId) setBusinessId((current) => (reconnectMode ? extracted.businessId : current || extracted.businessId));
     if (extracted.businessPortfolioId) {
-      setBusinessPortfolioId((current) => current || extracted.businessPortfolioId);
+      setBusinessPortfolioId((current) =>
+        reconnectMode ? extracted.businessPortfolioId : current || extracted.businessPortfolioId
+      );
     }
     if (input != null) setRawPayload(input);
-  }, []);
+  }, [reconnectMode]);
 
   const refreshLocationState = useCallback(
     (source: EmbeddedSignupCaptureEntry["source"]) => {
@@ -229,6 +239,7 @@ export default function TenantOnboardingPage() {
         if (cancelled) return;
         setTenantSnapshot(response);
         setPhoneNumberId((current) => current || response.tenant.metaPhoneNumberId || "");
+        setDisplayPhoneNumber((current) => current || response.tenant.displayPhoneNumber || "");
       })
       .catch((error: { status?: number; message?: string }) => {
         if (cancelled) return;
@@ -360,6 +371,51 @@ export default function TenantOnboardingPage() {
     }
   };
 
+  const handleStartReconnect = () => {
+    const currentPhoneNumberId =
+      resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || phoneNumberId;
+    const confirmed = window.confirm(
+      [
+        "Alterar numero e refazer a conexao Meta?",
+        "",
+        currentPhoneNumberId
+          ? `Numero atual: ${currentPhoneNumberId}`
+          : "Nao ha numero atual carregado.",
+        "",
+        "A acao limpa os campos capturados nesta tela para evitar reenviar o numero antigo. Nada sera salvo ate processar a nova conexao ou vincular manualmente.",
+      ].join("\n")
+    );
+    if (!confirmed) return;
+    setReconnectMode(true);
+    setCode("");
+    setWabaId("");
+    setPhoneNumberId("");
+    setDisplayPhoneNumber("");
+    setBusinessId("");
+    setBusinessPortfolioId("");
+    setRawPayload(null);
+    setResultSnapshot(null);
+    setEntries([]);
+    setStatus("idle");
+    setErrorMessage(null);
+    setSuccessMessage("Modo de troca ativado. Inicie a conexao Meta ou informe o novo phoneNumberId manualmente.");
+  };
+
+  const handleCancelReconnect = () => {
+    setReconnectMode(false);
+    setCode("");
+    setRawPayload(null);
+    setResultSnapshot(null);
+    setPhoneNumberId(tenantSnapshot?.tenant.metaPhoneNumberId || "");
+    setDisplayPhoneNumber(tenantSnapshot?.tenant.displayPhoneNumber || "");
+    setWabaId("");
+    setBusinessId("");
+    setBusinessPortfolioId("");
+    setStatus("idle");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  };
+
   const handleCreateUser = async () => {
     if (!tenantId) return;
     if (!userForm.name.trim() || !userForm.email.trim() || !userForm.password.trim()) {
@@ -421,6 +477,7 @@ export default function TenantOnboardingPage() {
     try {
       const response = await onboardingExchangeCode(connection, tenantId, {
         code: code.trim(),
+        replaceExistingMetaIdentity: reconnectMode,
         embeddedSignup: {
           wabaId: wabaId.trim() || null,
           phoneNumberId: phoneNumberId.trim() || null,
@@ -434,6 +491,20 @@ export default function TenantOnboardingPage() {
       if (response.wabaId) setWabaId(response.wabaId);
       if (response.businessId) setBusinessId(response.businessId);
       if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+      if (response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                },
+              }
+            : current
+        );
+      }
+      setReconnectMode(false);
       setStatus("success");
       setSuccessMessage(
         response.warning ||
@@ -451,6 +522,133 @@ export default function TenantOnboardingPage() {
     }
   };
 
+  const handleManualBind = async () => {
+    if (!tenantId) return;
+    if (!connection.baseUrl || !connection.adminToken) {
+      setStatus("error");
+      setErrorMessage("Configure a conexao admin antes de vincular.");
+      return;
+    }
+    if (!phoneNumberId.trim()) {
+      setStatus("error");
+      setErrorMessage("Informe o phoneNumberId antes de vincular manualmente.");
+      return;
+    }
+
+    setProcessing(true);
+    setStatus("processing");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await onboardingManualBindNumber(connection, tenantId, {
+        phoneNumberId: phoneNumberId.trim(),
+        displayPhoneNumber: displayPhoneNumber.trim() || null,
+        wabaId: wabaId.trim() || null,
+        businessId: businessId.trim() || null,
+        businessPortfolioId: businessPortfolioId.trim() || null,
+        replaceExistingMetaIdentity: reconnectMode,
+        raw: rawPayload ?? null,
+      });
+      setResultSnapshot(response);
+      if (response.phoneNumberId) setPhoneNumberId(response.phoneNumberId);
+      if (response.wabaId) setWabaId(response.wabaId);
+      if (response.businessId) setBusinessId(response.businessId);
+      if (response.businessPortfolioId) setBusinessPortfolioId(response.businessPortfolioId);
+      if (response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                },
+              }
+            : current
+        );
+      }
+      setReconnectMode(false);
+      setStatus("success");
+      setSuccessMessage(response.warning || "Numero conectado vinculado ao tenant com sucesso.");
+    } catch (error) {
+      const typed = error as { message?: string; status?: number };
+      setStatus("error");
+      setErrorMessage(
+        typed.message ||
+          (typed.status
+            ? `Falha ao vincular numero conectado (${typed.status}).`
+            : "Falha ao vincular numero conectado.")
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRegisterPhoneNumber = async () => {
+    if (!tenantId) return;
+    if (!connection.baseUrl || !connection.adminToken) {
+      setStatus("error");
+      setErrorMessage("Configure a conexao admin antes de registrar o numero.");
+      return;
+    }
+    if (!phoneNumberId.trim()) {
+      setStatus("error");
+      setErrorMessage("Informe o phoneNumberId antes de registrar o numero.");
+      return;
+    }
+    if (!/^\d{6}$/.test(registrationPin.trim())) {
+      setStatus("error");
+      setErrorMessage("Informe o PIN de registro com 6 digitos.");
+      return;
+    }
+
+    setRegisteringPhone(true);
+    setStatus("processing");
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await onboardingRegisterPhoneNumber(connection, tenantId, {
+        phoneNumberId: phoneNumberId.trim(),
+        pin: registrationPin.trim(),
+      });
+      setStatus("success");
+      setRegistrationPin("");
+      if (response.displayPhoneNumber) setDisplayPhoneNumber(response.displayPhoneNumber);
+      if (response.displayPhoneNumber || response.phoneNumberId) {
+        setTenantSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                tenant: {
+                  ...current.tenant,
+                  metaPhoneNumberId: response.phoneNumberId || current.tenant.metaPhoneNumberId,
+                  displayPhoneNumber:
+                    response.displayPhoneNumber || current.tenant.displayPhoneNumber,
+                },
+              }
+            : current
+        );
+      }
+      setSuccessMessage(
+        response.warning ||
+          `Numero ${response.phoneNumberId} registrado na Cloud API com sucesso.`
+      );
+    } catch (error) {
+      const typed = error as { message?: string; status?: number };
+      setStatus("error");
+      setErrorMessage(
+        typed.message ||
+          (typed.status
+            ? `Falha ao registrar numero na Cloud API (${typed.status}).`
+            : "Falha ao registrar numero na Cloud API.")
+      );
+    } finally {
+      setRegisteringPhone(false);
+    }
+  };
+
   const rawPayloadJson = useMemo(
     () => (rawPayload == null ? "-" : JSON.stringify(sanitizeDebugValue(rawPayload), null, 2)),
     [rawPayload]
@@ -459,6 +657,12 @@ export default function TenantOnboardingPage() {
     () => JSON.stringify(sanitizeDebugValue(entries), null, 2),
     [entries]
   );
+  const effectivePhoneNumberId =
+    resultSnapshot?.phoneNumberId || phoneNumberId.trim() || tenantSnapshot?.tenant.metaPhoneNumberId || "";
+  const hasEffectivePhoneLink =
+    Boolean(effectivePhoneNumberId) &&
+    phoneNumberId.trim() === effectivePhoneNumberId &&
+    !reconnectMode;
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -521,7 +725,7 @@ export default function TenantOnboardingPage() {
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
               <p className="text-xs uppercase tracking-wide text-white/60">phoneNumberId</p>
               <p className="mt-2 break-all font-mono text-sm">
-                {resultSnapshot?.phoneNumberId || tenantSnapshot?.tenant.metaPhoneNumberId || "-"}
+                {effectivePhoneNumberId || "-"}
               </p>
             </div>
             <div className="rounded-lg border border-white/10 bg-re7-navy/40 p-3">
@@ -530,6 +734,45 @@ export default function TenantOnboardingPage() {
                 {tenantSnapshot?.client?.status || (tenantSnapshot?.tenant.metaPhoneNumberId ? "CONNECTED" : "PENDING")}
               </p>
             </div>
+          </div>
+          <div className="theme-soft-warning-panel mt-4 rounded-lg border p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-current">
+                  Alterar numero conectado
+                </p>
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-current opacity-80">
+                  Use esta acao quando o tenant foi conectado com o numero errado ou quando precisa refazer
+                  o Embedded Signup. Ela limpa os campos da tela para evitar reaproveitar o phoneNumberId antigo.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {reconnectMode ? (
+                  <button
+                    type="button"
+                    onClick={handleCancelReconnect}
+                    disabled={processing || starting}
+                    className="rounded-md border border-current/25 px-3 py-2 text-sm font-semibold text-current hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancelar troca
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleStartReconnect}
+                  disabled={processing || starting}
+                  className="rounded-md border border-current/25 bg-black/10 px-3 py-2 text-sm font-semibold text-current hover:bg-black/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Alterar numero / refazer conexao
+                </button>
+              </div>
+            </div>
+            {reconnectMode ? (
+              <p className="mt-3 rounded-md border border-current/20 bg-black/10 px-3 py-2 text-xs font-medium text-current">
+                Modo de troca ativo: capture uma nova conexao Meta ou informe o novo phoneNumberId e use
+                "Vincular numero conectado". Nada sera salvo ate processar.
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -548,6 +791,11 @@ export default function TenantOnboardingPage() {
                 <span className="font-semibold text-white">Passo 2: Processar conexao</span> -
                 envia o code ao backend e persiste o TenantMetaConfig do tenant.
               </p>
+              <p>
+                <span className="font-semibold text-white">Numero ja conectado</span> -
+                quando a WABA ja esta no portfolio da operacao, informe o phoneNumberId
+                e use o vinculo manual sem novo Embedded Signup.
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -556,7 +804,7 @@ export default function TenantOnboardingPage() {
                 disabled={!sdkReady || starting}
                 className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {starting ? "Abrindo..." : "Iniciar conexao"}
+                {starting ? "Abrindo..." : reconnectMode ? "Iniciar nova conexao" : "Iniciar conexao"}
               </button>
               <button
                 type="button"
@@ -565,6 +813,18 @@ export default function TenantOnboardingPage() {
                 className="rounded-md border border-white/20 px-4 py-2 text-sm text-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {processing ? "Processando..." : "Processar conexao"}
+              </button>
+              <button
+                type="button"
+                onClick={handleManualBind}
+                disabled={processing || !phoneNumberId.trim()}
+                className="rounded-md border border-emerald-300/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {processing
+                  ? "Vinculando..."
+                  : hasEffectivePhoneLink
+                    ? "Atualizar vinculo do numero"
+                    : "Vincular numero conectado"}
               </button>
               <span
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -598,14 +858,32 @@ export default function TenantOnboardingPage() {
                   value={phoneNumberId}
                   onChange={(event) => setPhoneNumberId(event.target.value)}
                 />
+                {reconnectMode ? (
+                  <span className="text-xs text-amber-200">
+                    Informe o novo phoneNumberId ou aguarde a captura da nova conexao Meta.
+                  </span>
+                ) : null}
               </label>
               <label className="grid min-w-0 gap-1 text-sm">
-                <span className="text-white/70">WABA ID (manual opcional)</span>
+                <span className="text-white/70">Telefone exibido</span>
+                <input
+                  className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={displayPhoneNumber}
+                  onChange={(event) => setDisplayPhoneNumber(event.target.value)}
+                  placeholder="55 84 9459-6848"
+                />
+              </label>
+              <label className="grid min-w-0 gap-1 text-sm">
+                <span className="text-white/70">WABA ID do tenant</span>
                 <input
                   className="min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                   value={wabaId}
                   onChange={(event) => setWabaId(event.target.value)}
+                  placeholder="Ex.: 1733840571328720"
                 />
+                <span className="text-xs text-white/50">
+                  Use este campo quando o numero ja estiver conectado em uma WABA conhecida.
+                </span>
               </label>
               <label className="grid min-w-0 gap-1 text-sm">
                 <span className="text-white/70">Business ID</span>
@@ -623,6 +901,41 @@ export default function TenantOnboardingPage() {
                   onChange={(event) => setBusinessPortfolioId(event.target.value)}
                 />
               </label>
+            </div>
+
+            <div className="theme-surface-strong rounded-lg border border-sky-300/25 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="grid min-w-[180px] max-w-[220px] gap-1 text-sm">
+                  <span className="theme-text font-semibold">PIN de registro Cloud API</span>
+                  <input
+                    inputMode="numeric"
+                    maxLength={6}
+                    className="theme-select rounded-md px-3 py-2 outline-none"
+                    value={registrationPin}
+                    onChange={(event) =>
+                      setRegistrationPin(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="6 digitos"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleRegisterPhoneNumber}
+                  disabled={
+                    registeringPhone ||
+                    !phoneNumberId.trim() ||
+                    !/^\d{6}$/.test(registrationPin.trim())
+                  }
+                  className="rounded-md border border-sky-300/45 bg-re7-sky px-4 py-2 text-sm font-semibold text-[#06132a] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {registeringPhone ? "Registrando..." : "Registrar numero na Cloud API"}
+                </button>
+              </div>
+              <p className="theme-muted mt-2 text-xs leading-relaxed">
+                Use quando a Meta exibir que o numero precisa ser registrado. Este PIN e o codigo de
+                verificacao em duas etapas da Cloud API, nao o codigo SMS de posse do numero. Ele nao e salvo;
+                e enviado apenas para a API de registro do phoneNumberId configurado neste tenant.
+              </p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-4">

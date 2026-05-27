@@ -1,0 +1,5 @@
+{
+  "id": "generated-evaluation-dataset",
+  "description": "Generated reviewed evaluation dataset. Cases must be anonymized and manually approved.",
+  "cases": []
+}

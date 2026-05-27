@@ -16,6 +16,7 @@ export type Env = {
   WHATSAPP_OUT_OF_WINDOW_TEMPLATE: string;
   WHATSAPP_DEDUP_WINDOW_SECONDS: number;
   META_APP_SECRET: string;
+  META_INSTAGRAM_APP_SECRET: string;
   OPENAI_API_KEY: string;
   WHATSAPP_AI_ENABLED: boolean;
   WHATSAPP_AI_MODEL: string;
@@ -23,6 +24,13 @@ export type Env = {
   WHATSAPP_AI_TEMPERATURE: number;
   WHATSAPP_AI_SYSTEM_PROMPT: string;
   WHATSAPP_AI_TIMEOUT_MS: number;
+  AI_ASSISTANT_ENABLED: boolean;
+  FLOW_INTENT_CLASSIFIER_ENABLED: boolean;
+  FOLLOWUP_ENABLED: boolean;
+  FOLLOWUP_DRY_RUN: boolean;
+  FOLLOWUP_DEFAULT_DELAY_MINUTES: number;
+  FOLLOWUP_MAX_PER_CONVERSATION: number;
+  FOLLOWUP_MIN_INTERVAL_MINUTES: number;
   DISABLE_DEBUG_COMMANDS: boolean;
   OUTBOUND_TEMPLATE_FALLBACK: boolean;
   OUTBOUND_TEMPLATE_DEFAULT_NAME: string;
@@ -42,8 +50,21 @@ export type Env = {
   CONV_STATE_DUAL_WRITE: boolean;
   CONV_STATE_SHADOW_COMPARE: boolean;
   CONV_STATE_DB_WRITE_STRICT: boolean;
+  CONV_STATE_JSON_WRITE_ENABLED: boolean;
   CONV_STATE_READ_SOURCE: "json" | "hybrid" | "postgres";
   CONV_STATE_READ_SOURCE_SET: boolean;
+  MULTICHANNEL_SHADOW_WRITE: boolean;
+  MULTICHANNEL_SHADOW_STRICT: boolean;
+  MULTICHANNEL_DUAL_READ: boolean;
+  WEB_PUSH_VAPID_PUBLIC_KEY: string;
+  WEB_PUSH_VAPID_PRIVATE_KEY: string;
+  WEB_PUSH_SUBJECT: string;
+  PASSWORD_RESET_BASE_URL: string;
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_USER: string;
+  SMTP_PASS: string;
+  SMTP_FROM: string;
   STORAGE_MODE: "json" | "hybrid" | "postgres";
   STORAGE_MODE_SET: boolean;
   CLIENT_KEY: string;
@@ -115,6 +136,7 @@ export function getEnv(): Env {
     86400
   );
   const META_APP_SECRET = process.env.META_APP_SECRET ?? "";
+  const META_INSTAGRAM_APP_SECRET = process.env.META_INSTAGRAM_APP_SECRET ?? "";
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
   const WHATSAPP_AI_ENABLED = (process.env.WHATSAPP_AI_ENABLED ?? "false") === "true";
   const WHATSAPP_AI_MODEL = process.env.WHATSAPP_AI_MODEL ?? "gpt-4.1-mini";
@@ -127,6 +149,23 @@ export function getEnv(): Env {
   );
   const WHATSAPP_AI_SYSTEM_PROMPT = process.env.WHATSAPP_AI_SYSTEM_PROMPT ?? "";
   const WHATSAPP_AI_TIMEOUT_MS = toNumber(process.env.WHATSAPP_AI_TIMEOUT_MS, 8000);
+  const AI_ASSISTANT_ENABLED = (process.env.AI_ASSISTANT_ENABLED ?? "false") === "true";
+  const FLOW_INTENT_CLASSIFIER_ENABLED =
+    (process.env.FLOW_INTENT_CLASSIFIER_ENABLED ?? "false") === "true";
+  const FOLLOWUP_ENABLED = (process.env.FOLLOWUP_ENABLED ?? "false") === "true";
+  const FOLLOWUP_DRY_RUN = (process.env.FOLLOWUP_DRY_RUN ?? "true") !== "false";
+  const FOLLOWUP_DEFAULT_DELAY_MINUTES = toNumber(
+    process.env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
+    30
+  );
+  const FOLLOWUP_MAX_PER_CONVERSATION = toNumber(
+    process.env.FOLLOWUP_MAX_PER_CONVERSATION,
+    1
+  );
+  const FOLLOWUP_MIN_INTERVAL_MINUTES = toNumber(
+    process.env.FOLLOWUP_MIN_INTERVAL_MINUTES,
+    60
+  );
   const DISABLE_DEBUG_COMMANDS =
     (process.env.DISABLE_DEBUG_COMMANDS ?? "true") === "true";
   const OUTBOUND_TEMPLATE_FALLBACK =
@@ -170,12 +209,29 @@ export function getEnv(): Env {
     (process.env.CONV_STATE_SHADOW_COMPARE ?? "false") === "true";
   const CONV_STATE_DB_WRITE_STRICT =
     (process.env.CONV_STATE_DB_WRITE_STRICT ?? "false") === "true";
+  const CONV_STATE_JSON_WRITE_ENABLED =
+    (process.env.CONV_STATE_JSON_WRITE_ENABLED ?? "true") !== "false";
   const CONV_STATE_READ_SOURCE_SET = Boolean(
     process.env.CONV_STATE_READ_SOURCE?.trim()
   );
   const CONV_STATE_READ_SOURCE = toConversationReadSource(
     process.env.CONV_STATE_READ_SOURCE
   );
+  const MULTICHANNEL_SHADOW_WRITE =
+    (process.env.MULTICHANNEL_SHADOW_WRITE ?? "false") === "true";
+  const MULTICHANNEL_SHADOW_STRICT =
+    (process.env.MULTICHANNEL_SHADOW_STRICT ?? "false") === "true";
+  const MULTICHANNEL_DUAL_READ =
+    (process.env.MULTICHANNEL_DUAL_READ ?? "false") === "true";
+  const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "";
+  const WEB_PUSH_VAPID_PRIVATE_KEY = process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? "";
+  const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT ?? "mailto:suporte@re7online.com";
+  const PASSWORD_RESET_BASE_URL = process.env.PASSWORD_RESET_BASE_URL ?? "";
+  const SMTP_HOST = process.env.SMTP_HOST ?? "";
+  const SMTP_PORT = toNumber(process.env.SMTP_PORT, 587);
+  const SMTP_USER = process.env.SMTP_USER ?? "";
+  const SMTP_PASS = process.env.SMTP_PASS ?? "";
+  const SMTP_FROM = process.env.SMTP_FROM ?? "";
   const STORAGE_MODE_SET = Boolean(process.env.STORAGE_MODE?.trim());
   const STORAGE_MODE = toStorageMode(process.env.STORAGE_MODE);
   const CLIENT_KEY = process.env.CLIENT_KEY ?? "";
@@ -229,6 +285,7 @@ export function getEnv(): Env {
     WHATSAPP_OUT_OF_WINDOW_TEMPLATE,
     WHATSAPP_DEDUP_WINDOW_SECONDS,
     META_APP_SECRET,
+    META_INSTAGRAM_APP_SECRET,
     OPENAI_API_KEY,
     WHATSAPP_AI_ENABLED,
     WHATSAPP_AI_MODEL,
@@ -236,6 +293,13 @@ export function getEnv(): Env {
     WHATSAPP_AI_TEMPERATURE,
     WHATSAPP_AI_SYSTEM_PROMPT,
     WHATSAPP_AI_TIMEOUT_MS,
+    AI_ASSISTANT_ENABLED,
+    FLOW_INTENT_CLASSIFIER_ENABLED,
+    FOLLOWUP_ENABLED,
+    FOLLOWUP_DRY_RUN,
+    FOLLOWUP_DEFAULT_DELAY_MINUTES,
+    FOLLOWUP_MAX_PER_CONVERSATION,
+    FOLLOWUP_MIN_INTERVAL_MINUTES,
     DISABLE_DEBUG_COMMANDS,
     OUTBOUND_TEMPLATE_FALLBACK,
     OUTBOUND_TEMPLATE_DEFAULT_NAME,
@@ -255,8 +319,21 @@ export function getEnv(): Env {
     CONV_STATE_DUAL_WRITE,
     CONV_STATE_SHADOW_COMPARE,
     CONV_STATE_DB_WRITE_STRICT,
+    CONV_STATE_JSON_WRITE_ENABLED,
     CONV_STATE_READ_SOURCE,
     CONV_STATE_READ_SOURCE_SET,
+    MULTICHANNEL_SHADOW_WRITE,
+    MULTICHANNEL_SHADOW_STRICT,
+    MULTICHANNEL_DUAL_READ,
+    WEB_PUSH_VAPID_PUBLIC_KEY,
+    WEB_PUSH_VAPID_PRIVATE_KEY,
+    WEB_PUSH_SUBJECT,
+    PASSWORD_RESET_BASE_URL,
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_PASS,
+    SMTP_FROM,
     STORAGE_MODE,
     STORAGE_MODE_SET,
     CLIENT_KEY,

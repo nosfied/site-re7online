@@ -32,6 +32,52 @@ Eficiência operacional interna + uso real do produto.
 
 ---
 
+## RISCOS E PENDÊNCIAS ATUAIS — 2026-05-03
+
+### Contact Timeline / Histórico do contato
+
+Status:
+
+- implementado como view derivada, sem tabela nova
+- endpoint `/app/conversation/:waId/timeline` em produção
+- acesso pelo inbox na coluna CRM
+
+Riscos conhecidos:
+
+- cursor atual usa apenas `createdAt`; em volume alto com muitos registros no mesmo milissegundo, pode haver borda rara de paginação. Evoluir para cursor composto `createdAt + id`.
+- timeline agrega `InboundMessage`, `OutboundMessage`, `Event` e `LeadNote` em memória por lote. Está limitado, mas deve ser revisado se tenants tiverem alto volume histórico.
+- eventos são exibidos sem `payloadJson` bruto por segurança; caso a operação peça detalhes ricos, criar normalizador por tipo de evento, não expor payload integral.
+- `Contact` existe, mas o CRM operacional ainda usa `Lead`. Evitar criar nova entidade ou duplicar histórico até consolidar o modelo pessoa/contato.
+- `Contact` não possui `waIdCanonical`; se ele virar entidade principal, avaliar migration específica.
+- LGPD: timeline respeita `deletedAt`/`historyVisibleAfter`; manter testes sempre que alterar anonimização, retenção ou reentrada.
+
+Pendências recomendadas:
+
+- adicionar cursor composto `createdAt + id` na timeline.
+- criar testes de endpoint para: mensagens, eventos, notas, paginação, escopo por setor e corte LGPD.
+- avaliar se histórico deve ter busca por termo em fase futura.
+- avaliar tela dedicada de contato apenas após uso real validar necessidade.
+
+### Runtime / Operação
+
+Status:
+
+- produção em `STORAGE_MODE=hybrid`
+- leitura operacional em `CONV_STATE_READ_SOURCE=postgres`
+- JSON permanece como fallback/compatibilidade
+
+Riscos conhecidos:
+
+- manter rotina `state:validate` documentada após alterações em handoff, claim, transfer, release, retenção e reentrada.
+- qualquer novo write operacional precisa atualizar Postgres e manter compatibilidade com o fallback JSON enquanto a transição não for encerrada.
+
+Pendências recomendadas:
+
+- definir critério para encerrar escrita JSON ou mantê-la como fallback permanente.
+- incluir validação de runtime no checklist de deploy quando houver mudança operacional.
+
+---
+
 ## SPRINT 26 — ONBOARDING INTERNO ASSISTIDO
 
 Status:
@@ -172,6 +218,7 @@ ANTES de:
 
 - validação onboarding assistido
 - validação real do onboarding (novo cliente)
+- relatorios por atendente com historico persistido em Postgres para producao em `STORAGE_MODE=json`
 - padronização tenantId vs clientId
 - limpeza de `.data/default`
 - revisão do tenant `cliente-demo`
@@ -193,3 +240,4 @@ ANTES de:
 - NÃO implementar recursos não oficiais de WhatsApp
 - manter foco 100% na API oficial da Meta
 - manter arquitetura simples e evolutiva
+- Sprint 42.1: separar superfícies /admin (plataforma) vs /app (cliente), migrando users, departments e reports para /app com requireClientAuth e auditoria por userId real

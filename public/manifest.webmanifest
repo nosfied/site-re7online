@@ -1,0 +1,27 @@
+{
+  "name": "Converta",
+  "short_name": "Converta",
+  "description": "Inbox omnichannel do Converta.",
+  "id": "/app",
+  "start_url": "/app/inbox",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#06132a",
+  "theme_color": "#06132a",
+  "orientation": "portrait",
+  "categories": ["business", "productivity", "communication"],
+  "icons": [
+    {
+      "src": "/converta-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/converta-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

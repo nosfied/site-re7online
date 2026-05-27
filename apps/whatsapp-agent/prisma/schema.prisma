@@ -39,12 +39,21 @@ enum HandoffStatus {
   ACTIVE
 }
 
+enum ConversationOperationalStatus {
+  WAITING
+  IN_PROGRESS
+  WAITING_USER
+  CLOSED
+}
+
 model Client {
   id         String          @id @default(uuid())
   clientKey  String          @unique
   name       String
   status     ClientStatus    @default(ACTIVE)
   adminToken String?
+  features   Json?
+  profile    String?
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
@@ -57,26 +66,102 @@ model Client {
   leads         Lead[]
   leadNotes     LeadNote[]
   users         User[]
+  authSessions  AppAuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  pushSubscriptions PushSubscription[]
   runtimeStates ConversationRuntimeState[]
+  departments   Department[]
+  queues        Queue[]
   campaigns     Campaign[]
   templates     Template[]
   templateRequests TemplateRequest[]
+  slaConfig      SLAConfig?
+  retentionConfig RetentionConfig?
+  conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
+  chatbotFlows  ChatbotFlow[]
+  channelIdentities ContactChannelIdentity[]
 }
 
 model User {
   id        String   @id @default(cuid())
   clientId  String   @db.Uuid
+  departmentId String?
   name      String
-  email     String
+  email     String   @unique
   passwordHash String?
   role      String   @default("AGENT")
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  authSessions AppAuthSession[]
+  passwordResetTokens PasswordResetToken[]
+  pushSubscriptions PushSubscription[]
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
+  @@index([clientId, departmentId])
+}
+
+model AppAuthSession {
+  id           String   @id @default(cuid())
+  clientId     String   @db.Uuid
+  userId       String
+  userAgent    String?
+  ipHash       String?
+  createdAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  revokeReason String?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, revokedAt])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  userId          String
+  tokenHash       String   @unique
+  requestedIpHash String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime
+  usedAt          DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model PushSubscription {
+  id          String   @id @default(cuid())
+  clientId    String   @db.Uuid
+  userId      String
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  userAgent   String?
+  deviceLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  revokedAt   DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, revokedAt])
+  @@index([clientId, revokedAt])
+  @@index([updatedAt])
 }
 
 model WaPhoneNumber {
@@ -90,37 +175,69 @@ model WaPhoneNumber {
 }
 
 model Contact {
-  id        String   @id @default(uuid())
-  clientId  String
-  waId      String
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  clientId           String
+  waId               String
+  name               String?
+  channel            String?
+  provider           String?
+  channelAccountId   String?
+  externalUserHash   String?
+  externalUserRef    String?
+  legacyWaId         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id])
+  channelIdentities ContactChannelIdentity[]
 
   @@unique([clientId, waId])
+  @@index([clientId, channel, provider, channelAccountId])
 }
 
 model Conversation {
   id               String   @id @default(uuid())
   clientId         String
+  departmentId     String?
   waId             String
   waIdCanonical    String?
   phoneNumberId    String?
+  channel          String?
+  provider         String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  legacyWaId       String?
   windowIsOpen     Boolean  @default(true)
   windowExpiresAt  DateTime?
+  firstAssignedAt  DateTime?
+  firstResponseAt  DateTime?
+  lastResponseAt   DateTime?
+  closedAt         DateTime?
   lastInboundAt    DateTime?
   lastOutboundAt   DateTime?
+  deletedAt        DateTime?
+  anonymizedAt     DateTime?
+  historyVisibleAfter DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  client   Client    @relation(fields: [clientId], references: [id])
+  client   Client                 @relation(fields: [clientId], references: [id])
+  department Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   messages Message[]
+  metrics  ConversationMetrics?
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, channel, updatedAt])
+  @@index([clientId, channel, closedAt])
+  @@index([clientId, channel, deletedAt])
+  @@index([clientId, closedAt])
+  @@index([clientId, deletedAt])
+  @@index([clientId, departmentId])
+  @@index([clientId, firstAssignedAt])
 }
 
 model Message {
@@ -153,6 +270,13 @@ model InboundMessage {
   waId          String
   waIdCanonical String?
   messageId     String
+  channel       String?
+  provider      String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  externalMessageId String?
+  legacyWaId    String?
   type          MessageType
   bodyText      String?
   allowlistHit  Boolean
@@ -164,6 +288,8 @@ model InboundMessage {
 
   @@index([requestId])
   @@index([clientId, waIdCanonical, createdAt])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash, createdAt])
+  @@index([clientId, channel, externalMessageId])
   @@unique([clientId, messageId])
 }
 
@@ -174,6 +300,13 @@ model OutboundMessage {
   waId          String
   waIdCanonical String?
   messageId     String?
+  channel       String?
+  provider      String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  externalMessageId String?
+  legacyWaId    String?
   type          MessageType
   status        MessageStatus
   bodyText      String?
@@ -190,6 +323,9 @@ model OutboundMessage {
   @@index([requestId])
   @@index([messageId])
   @@index([clientId, waIdCanonical, createdAt])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash, createdAt])
+  @@index([clientId, channel, externalMessageId])
+  @@index([clientId, channel, status, createdAt])
   @@unique([clientId, messageId])
 }
 
@@ -214,12 +350,27 @@ model Event {
   @@unique([clientId, eventName, requestId])
 }
 
+model RetentionConfig {
+  id            String   @id @default(cuid())
+  clientId      String   @unique @db.Uuid
+  retentionDays Int      @default(90)
+  createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
 model ConversationRuntimeState {
   id                  String        @id @default(uuid())
   clientId            String        @db.Uuid
   waId                String
   waIdCanonical       String?
   conversationKey     String?
+  channel             String?
+  provider            String?
+  channelAccountId    String?
+  externalUserHash    String?
+  externalUserRef     String?
+  legacyWaId          String?
   firstSeenAt         DateTime?
   windowIsOpen        Boolean       @default(true)
   windowExpiresAt     DateTime?
@@ -246,20 +397,142 @@ model ConversationRuntimeState {
   lastHandoffDemoScheduledAt  DateTime?
   flow                String?
   flowStep            Int?
+  chatbotNodeId       String?
+  chatbotActive       Boolean       @default(false)
   answers             Json?
   mode                String?
   assignedUserId      String?
   assignedTo          String?
   assignedAt          DateTime?
+  departmentId        String?
+  queueId             String?
+  status              ConversationOperationalStatus?
+  closedAt            DateTime?
   version             Int           @default(0)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
   client Client @relation(fields: [clientId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  queue Queue? @relation(fields: [queueId], references: [id], onDelete: SetNull)
+  assignments ConversationAssignment[]
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
   @@index([clientId, waIdCanonical])
+  @@index([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, channel, status])
+  @@index([clientId, channel, assignedUserId, status])
+  @@index([clientId, channel, queueId, status])
+  @@index([clientId, status])
+  @@index([clientId, assignedUserId, status])
+  @@index([clientId, queueId, status])
+}
+
+model ContactChannelIdentity {
+  id               String   @id @default(cuid())
+  clientId         String   @db.Uuid
+  contactId        String?  @db.Uuid
+  channel          String
+  provider         String
+  channelAccountId String
+  externalUserHash String
+  externalUserRef  String?
+  legacyWaId       String?
+  displayName      String?
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  leads   Lead[]
+
+  @@unique([clientId, channel, provider, channelAccountId, externalUserHash])
+  @@index([clientId, contactId])
+  @@index([clientId, channel, provider, channelAccountId])
+  @@index([clientId, lastSeenAt])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String
+  clientId  String   @db.Uuid
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  users  User[]
+  conversations Conversation[]
+  queues Queue[]
+  runtimeStates ConversationRuntimeState[]
+
+  @@unique([clientId, name])
+  @@unique([clientId, slug])
+  @@index([clientId, createdAt])
+}
+
+model Queue {
+  id           String   @id @default(cuid())
+  name         String
+  departmentId String
+  clientId     String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  runtimeStates ConversationRuntimeState[]
+
+  @@unique([clientId, departmentId, name])
+  @@index([clientId, createdAt])
+  @@index([departmentId, createdAt])
+}
+
+model ConversationAssignment {
+  id             String   @id @default(cuid())
+  conversationId String
+  fromUserId     String?
+  toUserId       String?
+  assignedAt     DateTime @default(now())
+
+  conversation ConversationRuntimeState @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, assignedAt])
+}
+
+model ConversationMetrics {
+  id                   String   @id @default(cuid())
+  conversationId       String   @unique // 1:1 seguro para upsert por conversa
+  clientId             String
+  firstResponseTimeSec Int?
+  totalResponseTimeSec Int?
+  responseCount        Int      @default(0)
+  avgResponseTimeSec   Int?
+  resolutionTimeSec    Int?
+  totalMessages        Int      @default(0)
+  totalAgentMessages   Int      @default(0)
+  startedAt            DateTime // primeiro inbound da conversa
+  closedAt             DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, startedAt])
+  @@index([clientId, closedAt])
+}
+
+model SLAConfig {
+  id                     String   @id @default(cuid())
+  clientId               String   @unique
+  firstResponseLimitSec  Int
+  resolutionTimeLimitSec Int
+  createdAt              DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
 
 model Campaign {
@@ -332,21 +605,34 @@ model Lead {
 
   waId      String
   waIdCanonical String?
+  channel   String?
+  provider  String?
+  channelAccountId String?
+  externalUserHash String?
+  externalUserRef  String?
+  legacyWaId String?
+  contactChannelIdentityId String?
 
   name      String?
   phone     String?
   city      String?
   service   String?
+  email     String?
+  company   String?
 
   status    String   @default("NEW")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   notes     LeadNote[]
+  contactChannelIdentity ContactChannelIdentity? @relation(fields: [contactChannelIdentityId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, waId])
   @@index([tenantId, createdAt])
   @@index([tenantId, waIdCanonical])
+  @@index([tenantId, channel, provider, channelAccountId, externalUserHash])
+  @@index([tenantId, channel, createdAt])
+  @@index([tenantId, contactChannelIdentityId])
 }
 
 model LeadNote {
@@ -379,4 +665,20 @@ model TenantMetaConfig {
 
   @@index([phoneNumberId])
   @@index([wabaId])
+}
+
+model ChatbotFlow {
+  id         String   @id @default(cuid())
+  clientId   String   @db.Uuid
+  name       String
+  isActive   Boolean  @default(false)
+  entryPoint Boolean  @default(false)
+  definition Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([clientId, isActive, entryPoint])
 }

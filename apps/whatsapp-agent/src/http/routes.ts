@@ -1,16 +1,37 @@
 import { IncomingMessage, ServerResponse } from "node:http";
 import crypto from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { createReadStream } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { Readable } from "node:stream";
+import { ConversationOperationalStatus, MessageStatus, MessageType, Prisma } from "@prisma/client";
 import { healthRoute } from "./health.route.js";
+import { normalizeQualificationSchema } from "../agent/qualification.js";
 import { verifyWebhook, receiveWebhook } from "../whatsapp/webhook.controller.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { env, normalizeWaId } from "../config/env.js";
 import { validateMetaSignature } from "../whatsapp/webhook.signature.js";
 import { logger } from "../logger/logger.js";
 import { getPrisma } from "../db.js";
-import { getTenants, saveTenants } from "../config/tenantConfig.js";
+import {
+  getAiAssistantConfigurationStatus,
+  getTenants,
+  isAiAssistantConfigured,
+  normalizeCrmBusinessStatuses,
+  normalizeHandoffLeadNotificationRecipients,
+  normalizeTenantMediaHandoffPolicy,
+  saveTenants,
+  type AiAssistantIntentCatalogItem,
+} from "../config/tenantConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
-import { sendTextMessage } from "../whatsapp/whatsapp.client.js";
+import {
+  fetchMediaContent,
+  sendMediaMessage,
+  sendTextMessage,
+  uploadMedia,
+  type SendMediaKind,
+} from "../whatsapp/whatsapp.client.js";
+import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
@@ -26,22 +47,135 @@ import {
   enrichMetaOnboardingResult,
   exchangeEmbeddedSignupCode,
   MetaOnboardingExchangeError,
+  registerMetaPhoneNumber,
+  subscribeMetaWabaToApp,
 } from "../meta/onboarding.service.js";
 import {
   submitTemplateToMeta,
   MetaTemplateServiceError,
   MetaTemplateValidationError,
   syncTemplateStatus,
+  validateTemplateForMeta,
 } from "../meta/template.service.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
-import { requireClientAuth } from "../auth/clientAuthMiddleware.js";
+import {
+  normalizeUserRole,
+  requireClientAuth,
+  setValidatedClientAuth,
+} from "../auth/clientAuthMiddleware.js";
+import {
+  buildSessionExpiredMessage,
+  createExclusiveAppSession,
+  requestPasswordReset,
+  resetPasswordWithToken,
+  revokeAppSession,
+  validateAppSessionFromRequest,
+} from "../auth/appSessionService.js";
+import {
+  recordConversationAgentOutboundMetrics,
+  recordConversationClosedMetrics,
+} from "../metrics/conversationMetrics.js";
+import {
+  getClientProfile,
+  getFeatures,
+  hasFeature,
+  type ClientFeatureKey,
+  type ClientProfile,
+} from "../features/clientFeatures.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
   normalizeWaIdDigits,
 } from "../utils/waid.js";
+import { normalizeDepartmentSlug } from "../utils/departmentSlug.js";
+import {
+  DEFAULT_OPERATIONAL_QUEUE_NAME,
+  ensureDefaultOperationalDepartmentAndQueue,
+  resolveOperationalDepartmentId,
+} from "../bootstrap/defaultOperationalDepartment.js";
+import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
+import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
+import {
+  AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+  AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
+  AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
+  AI_ASSISTANT_MAX_INPUT_CHARS,
+  AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
+} from "../agent/controlledAssistant.js";
+import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
+import {
+  getInboxReadState,
+  markInboxConversationRead,
+  markInboxConversationUnread,
+} from "../inbox/readStateStore.js";
+import { publishRealtimeEvent } from "../realtime/hub.js";
+import {
+  getPushStatus,
+  getWebPushPublicKey,
+  isWebPushConfigured,
+  revokePushSubscription,
+  updatePushPresence,
+  upsertPushSubscription,
+} from "../push/webPushService.js";
+import {
+  executePrivacyRetention,
+  findPrivacyConversationTarget,
+  getOrCreateRetentionConfig,
+  normalizeRetentionDays,
+} from "../privacy/privacyRetentionService.js";
+import {
+  canSendMessengerOutbound,
+  normalizeTenantChannelAccountsForTenant,
+  redactTenantChannelAccounts,
+} from "../channels/tenantChannelAccount.js";
+import {
+  clearDryRunSessions,
+  getDryRunSessionStats,
+  listDryRunSessions,
+} from "../channels/channelDryRunSessions.js";
+import {
+  clearObservedChannelEvents,
+  getObservedChannelEventStats,
+  listObservedChannelEvents,
+} from "../channels/observedChannelEvents.js";
+import { buildChannelRuntimeReadinessReports } from "../channels/channelRuntimeReadiness.js";
+import { buildChannelRuntimePreflight } from "../channels/channelRuntimePreflight.js";
+import {
+  handlePassiveMetaWebhookChallenge,
+  handlePassiveMetaWebhookPost,
+  verifyPassiveMetaWebhookSignature,
+} from "./metaWebhookPassive.js";
+import { INSTAGRAM_OUTBOUND_DISABLED_MESSAGE } from "../channels/instagramInboundPersistence.js";
+import { MESSENGER_OUTBOUND_DISABLED_MESSAGE } from "../channels/messengerInboundPersistence.js";
+import {
+  decryptMessengerExternalUserRef,
+  logMessengerOutbound,
+  persistMessengerOutboundMessage,
+  resolveMessengerOutboundGate,
+  sendMessengerTextMessage,
+} from "../channels/messengerOutbound.js";
+import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
+
+const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
+  NOT: [
+    { name: "Atendimento" },
+    { slug: "atendimento" },
+    { name: { startsWith: "Departamento legado" } },
+    { slug: { startsWith: "departamento-legado" } },
+  ],
+};
+
+const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
+
+function normalizeConversationRouteId(input: string) {
+  const raw = input.trim();
+  if (/^(messenger|instagram):[a-f0-9]{16,64}$/i.test(raw)) {
+    return raw.toLowerCase();
+  }
+  return normalizeWaId(raw);
+}
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
@@ -60,6 +194,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname.startsWith("/auth/")) {
+    const rate = checkRateLimit(req, pathname);
+    if (rate.limited) {
+      logger.warn({
+        event: "rate.limit.hit",
+        ip: rate.ip,
+        path: pathname,
+        requestId,
+        limit: rate.limit,
+        class: rate.bucketClass,
+        windowMs: rate.windowMs,
+      });
+      res.setHeader("Retry-After", String(rate.retryAfterSec));
+      json(res, 429, { ok: false, error: "rate_limited", retryAfterSec: rate.retryAfterSec });
+      return;
+    }
+  }
+
   if (req.method === "POST" && pathname === "/auth/login") {
     const prisma = getPrisma();
     try {
@@ -72,9 +224,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const users = await prisma.user.findMany({
+      const user = await prisma.user.findUnique({
         where: { email },
-        take: 2,
         select: {
           id: true,
           clientId: true,
@@ -82,39 +233,75 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           email: true,
           role: true,
           passwordHash: true,
+          isActive: true,
+          departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
           client: {
             select: {
               status: true,
+              features: true,
+              profile: true,
             },
           },
         },
       });
 
-      if (users.length === 0) {
+      if (!user) {
+        logger.info({ event: "auth.login.failed", reason: "invalid_credentials", requestId });
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
-      if (users.length > 1) {
-        json(res, 409, { error: "ambiguous_login" });
-        return;
-      }
-
-      const user = users[0];
       if (user.client.status !== "ACTIVE") {
+        logger.info({ event: "auth.login.failed", reason: "client_inactive", clientId: user.clientId, userId: user.id, requestId });
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!user.isActive) {
+        logger.info({
+          event: "auth.login.inactive_user_blocked",
+          userId: user.id,
+          clientId: user.clientId,
+          email: user.email,
+          requestId,
+        });
+        json(res, 403, {
+          error: "user_inactive",
+          message: "Usuario inativo. Fale com o administrador da conta.",
+        });
+        return;
+      }
       if (!verifyPassword(password, user.passwordHash)) {
+        logger.info({ event: "auth.login.failed", reason: "invalid_credentials", clientId: user.clientId, userId: user.id, requestId });
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
 
-      const token = issueClientAuthToken({
-        id: user.id,
+      const session = await createExclusiveAppSession({
         clientId: user.clientId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
+        userId: user.id,
+        req,
+      });
+      const token = issueClientAuthToken(
+        {
+          id: user.id,
+          clientId: user.clientId,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        session.id
+      );
+
+      logger.info({
+        event: "auth.login.success",
+        clientId: user.clientId,
+        userId: user.id,
+        sessionId: session.id,
+        requestId,
       });
 
       json(res, 200, {
@@ -125,7 +312,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name: user.name,
           email: user.email,
           clientId: user.clientId,
+          departmentId: user.departmentId,
+          departmentName: user.department?.name ?? null,
         },
+        features: getFeatures(user.client),
+        profile: getClientProfile(user.client),
       });
     } catch (error) {
       logger.error({
@@ -138,13 +329,570 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/auth/forgot-password") {
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      await requestPasswordReset({
+        email: String(body.email ?? ""),
+        req,
+      });
+      json(res, 200, {
+        ok: true,
+        message: "Se existir uma conta para este email, enviaremos instrucoes de recuperacao.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.password_reset.request.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 200, {
+        ok: true,
+        message: "Se existir uma conta para este email, enviaremos instrucoes de recuperacao.",
+      });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/reset-password") {
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const token = String(body.token ?? "").trim();
+      const password = String(body.password ?? "");
+      if (!token || !password) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const result = await resetPasswordWithToken({ token, password });
+      if (!result.ok) {
+        const status = result.reason === "weak_password" ? 400 : 401;
+        json(res, status, {
+          error: result.reason,
+          message:
+            result.reason === "weak_password"
+              ? "A senha deve ter pelo menos 8 caracteres."
+              : "Link de recuperacao invalido ou expirado.",
+        });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        message: "Senha alterada com sucesso. Faca login novamente.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.password_reset.complete.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/logout") {
+    const validation = await validateAppSessionFromRequest(req);
+    if (validation.ok) {
+      await revokeAppSession({
+        clientId: validation.auth.clientId,
+        userId: validation.auth.userId,
+        sessionId: validation.auth.sessionId ?? "",
+        reason: "logout",
+      });
+      const body = await readJsonBody(req, res).catch(() => null);
+      const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
+      if (endpoint) {
+        await revokePushSubscription({
+          clientId: validation.auth.clientId,
+          userId: validation.auth.userId,
+          endpoint,
+        });
+      }
+    }
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  if (pathname.startsWith("/app/")) {
+    const validation = await validateAppSessionFromRequest(req);
+    if (!validation.ok) {
+      json(res, 401, {
+        error: validation.reason,
+        message: buildSessionExpiredMessage(validation.reason),
+      });
+      return;
+    }
+    setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (
+    req.method === "GET" &&
+    (pathname === "/app/privacy/retention" || pathname === "/app/privacy")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode gerenciar privacidade." });
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const retention = await getOrCreateRetentionConfig(prisma, client.id);
+      json(res, 200, { ok: true, retentionDays: retention.retentionDays, createdAt: retention.createdAt });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.get.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/tenant") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await prisma.client.findFirst({
+        where: {
+          id: clientAuth.clientId,
+          status: "ACTIVE",
+        },
+        include: {
+          metaConfig: true,
+          phoneNumbers: {
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const phone = client.phoneNumbers[0] ?? null;
+      const tenants = await getTenants();
+      const tenantConfig = tenants[client.clientKey];
+      const metaDisplayPhone = extractTenantDisplayPhoneFromRawPayload(client.metaConfig?.rawPayload);
+      const phoneDisplay =
+        tenantConfig?.displayPhoneNumber?.trim() ||
+        metaDisplayPhone ||
+        phone?.display ||
+        phone?.phoneNumberId ||
+        null;
+      json(res, 200, {
+        ok: true,
+        tenant: {
+          id: client.id,
+          name: tenantConfig?.name || client.name,
+          phoneNumberId: client.metaConfig?.phoneNumberId ?? phone?.phoneNumberId ?? null,
+          phoneDisplay,
+          features: getFeatures(client),
+          profile: getClientProfile(client),
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.tenant.get.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/push/status") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const status = await getPushStatus({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+      });
+      json(res, 200, {
+        ok: true,
+        supported: true,
+        configured: status.configured,
+        publicKey: status.publicKey,
+        subscribed: status.subscribed,
+        subscriptions: status.subscriptions,
+      });
+    } catch (error) {
+      logger.error({
+        event: "push.status.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/push/subscribe") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isWebPushConfigured()) {
+      json(res, 409, {
+        error: "push_not_configured",
+        message: "Web Push ainda nao esta configurado neste ambiente.",
+      });
+      return;
+    }
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await upsertPushSubscription({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        subscription: body.subscription ?? body,
+        userAgent: req.headers["user-agent"] ?? null,
+        deviceLabel: typeof body.deviceLabel === "string" ? body.deviceLabel : null,
+      });
+      if (!result.ok) {
+        json(res, result.reason === "invalid_subscription" ? 400 : 409, {
+          error: result.reason,
+        });
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        subscription: result.subscription,
+        publicKey: getWebPushPublicKey(),
+      });
+    } catch (error) {
+      logger.error({
+        event: "push.subscribe.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "DELETE" && pathname === "/app/push/subscribe") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res).catch(() => null);
+      const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
+      const result = await revokePushSubscription({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        endpoint,
+      });
+      json(res, 200, { ok: true, revoked: result.revoked });
+    } catch (error) {
+      logger.error({
+        event: "push.unsubscribe.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/push/presence") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+      const result = updatePushPresence({
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        endpoint,
+        visible: body.visible === true,
+        focused: body.focused === true,
+      });
+      if (!result.ok) {
+        json(res, 400, { error: result.reason });
+        return;
+      }
+      json(res, 200, { ok: true });
+    } catch (error) {
+      logger.error({
+        event: "push.presence.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/inbox/events") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const eventName = String(body.event ?? "").trim();
+      if (!isAllowedInboxUxEvent(eventName)) {
+        json(res, 400, { error: "invalid_event" });
+        return;
+      }
+      const payload = sanitizeInboxUxEventPayload(body.payload);
+      const timestamp = new Date().toISOString();
+      logger.info({
+        event: eventName,
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+        ...payload,
+      });
+      try {
+        await prisma.event.create({
+          data: {
+            clientId: clientAuth.clientId,
+            requestId: `${requestId}:${eventName}`,
+            eventName,
+            payloadJson: {
+              action: eventName,
+              clientId: clientAuth.clientId,
+              userId: clientAuth.userId,
+              timestamp,
+              ...payload,
+            },
+          },
+        });
+      } catch (error) {
+        logger.warn({
+          event: "inbox.ux_event.audit_failed",
+          clientId: clientAuth.clientId,
+          userId: clientAuth.userId,
+          requestId,
+          eventName,
+          message: (error as Error).message,
+        });
+      }
+      json(res, 200, { ok: true });
+    } catch (error) {
+      logger.error({
+        event: "app.inbox.events.error",
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/privacy/retention") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode gerenciar privacidade." });
+      return;
+    }
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const retentionDays = normalizeRetentionDays((body as { retentionDays?: unknown }).retentionDays);
+      if (!retentionDays) {
+        json(res, 400, { error: "bad_request", message: "Informe dias de retencao entre 1 e 3650." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const retention = await prisma.retentionConfig.upsert({
+        where: { clientId: client.id },
+        update: { retentionDays },
+        create: { clientId: client.id, retentionDays },
+      });
+      json(res, 200, { ok: true, retentionDays: retention.retentionDays, createdAt: retention.createdAt });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.update.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/privacy/retention/execute") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar retencao." });
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const result = await executePrivacyRetention({
+        prisma,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        actorId: clientAuth.userId,
+        requestId,
+        action: "retention",
+        reason: "manual_retention",
+      });
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error({ event: "privacy.retention.execute.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    (req.method === "DELETE" || req.method === "POST") &&
+    /^\/app\/conversations\/[^/]+(?:\/anonymize)?$/.test(pathname)
+  ) {
+    const isAnonymize = req.method === "POST" && pathname.endsWith("/anonymize");
+    const isDelete = req.method === "DELETE" && !pathname.endsWith("/anonymize");
+    if (!isAnonymize && !isDelete) {
+      json(res, 405, { error: "method_not_allowed" });
+      return;
+    }
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN pode executar acoes LGPD." });
+      return;
+    }
+    try {
+      const parts = pathname.split("/");
+      const rawConversationId = decodeURIComponent(parts[3] ?? "").trim();
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const target = await findPrivacyConversationTarget(prisma, client.id, rawConversationId);
+      if (!target) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      if (isDelete) {
+        const result = await executePrivacyRetention({
+          prisma,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          actorId: clientAuth.userId,
+          requestId,
+          action: "conversation_delete",
+          rawConversationId,
+          reason: "manual_delete",
+        });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      const result = await executePrivacyRetention({
+        prisma,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        actorId: clientAuth.userId,
+        requestId,
+        action: "conversation_anonymize",
+        rawConversationId,
+        reason: "manual_anonymize",
+      });
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error({ event: "privacy.conversation_action.error", requestId, message: (error as Error).message });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/dashboard/overview") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view the operational dashboard.")
+        );
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "dashboard",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, buildEmptyDashboardOverview());
+        return;
+      }
+      const overview = await buildAppDashboardOverview(prisma, {
+        clientId: client.id,
+        departmentId: departmentAccess.requiresDepartmentScope
+          ? departmentAccess.departmentId
+          : String(query.departmentId ?? "").trim() || null,
+        assignedUserId: String(query.assignedUserId ?? "").trim() || null,
+        status: normalizeConversationStatusFilter(query.status),
+      });
+      json(res, 200, overview);
+    } catch (error) {
+      logger.error({
+        event: "app.dashboard.overview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/conversations") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const limitRaw = Number(query.limit ?? 100);
-      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+      const limitRaw = Number(query.limit ?? 30);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 30;
+      const cursor = decodeConversationListCursor(String(query.cursor ?? "").trim());
+      const statusFilter = normalizeConversationStatusFilter(query.status);
+      const departmentIdFilter = String(query.departmentId ?? "").trim() || null;
+      const assignedUserIdFilter = String(query.assignedUserId ?? "").trim() || null;
+      const unassignedFilter = String(query.unassigned ?? "").trim() === "true";
+      const searchFilter = String(query.search ?? "").trim();
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, { error: "client_not_found" });
@@ -154,11 +902,44 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, {
+          ok: true,
+          count: 0,
+          items: [],
+          conversations: [],
+          filterCounts: buildEmptyConversationFilterCounts(),
+          nextCursor: null,
+          readState: {
+            lastReadAtByConversationKey: {},
+            manuallyUnreadByConversationKey: {},
+          },
+        });
+        return;
+      }
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
+        userId: clientAuth.userId,
         limit,
+        cursor,
+        filters: {
+          status: statusFilter,
+          channel: normalizeConversationChannelFilter(query.channel),
+          departmentId: departmentAccess.requiresDepartmentScope
+            ? departmentAccess.departmentId
+            : departmentIdFilter,
+          assignedUserId: assignedUserIdFilter,
+          unassigned: unassignedFilter,
+          search: searchFilter,
+        },
         includeAssignedUserName: true,
+        profile: getClientProfile(client),
       });
       json(res, 200, result);
     } catch (error) {
@@ -200,6 +981,73 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+
+      if (autoSubmit) {
+        try {
+          validateTemplateForMeta({
+            name,
+            content,
+            category,
+            language: "pt_BR",
+            ...(body.variables !== undefined ? { variables: body.variables } : {}),
+          });
+        } catch (error) {
+          if (error instanceof MetaTemplateValidationError) {
+            json(res, 400, {
+              error: "validation_error",
+              message: mapTemplateValidationMessage(error.message),
+              details: error.message,
+            });
+            return;
+          }
+          throw error;
+        }
+      }
+
+      const existingTemplateByName = await prisma.template.findFirst({
+        where: {
+          clientId: client.id,
+          name: {
+            equals: name,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          rejectionReason: true,
+        },
+      });
+      const canReuseFailedTemplate = isRetryableLocalTemplateFailure(
+        existingTemplateByName?.status,
+        existingTemplateByName?.rejectionReason
+      );
+
+      if (existingTemplateByName && canReuseFailedTemplate) {
+        await prisma.$transaction([
+          prisma.template.delete({
+            where: { id: existingTemplateByName.id },
+          }),
+          prisma.templateRequest.deleteMany({
+            where: {
+              clientId: client.id,
+              name: {
+                equals: name,
+                mode: "insensitive",
+              },
+              status: { in: ["pending", "submitting"] },
+            },
+          }),
+        ]);
+      }
 
       const existingPendingRequest = await prisma.templateRequest.findFirst({
         where: {
@@ -232,22 +1080,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const existingTemplateByName = await prisma.template.findFirst({
-        where: {
-          clientId: client.id,
-          name: {
-            equals: name,
-            mode: "insensitive",
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-        },
-      });
-
-      if (existingTemplateByName) {
+      if (existingTemplateByName && !canReuseFailedTemplate) {
         const isPendingLike = isTemplatePendingLike(existingTemplateByName.status);
         logger.warn({
           event: isPendingLike
@@ -581,6 +1414,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
 
       const items = await prisma.templateRequest.findMany({
         where: { clientId: client.id },
@@ -628,6 +1468,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
 
       const items = await prisma.template.findMany({
         where: {
@@ -699,6 +1546,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
 
       const existingTemplate = await prisma.template.findUnique({
         where: { id: templateId },
@@ -813,6 +1667,160 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (pathname === "/meta/webhook") {
+    if (req.method === "GET") {
+      handlePassiveMetaWebhookChallenge(query, res, requestId);
+      return;
+    }
+
+    if (req.method === "POST") {
+      readRawBody(req, (rawBody) => {
+        const signature = verifyPassiveMetaWebhookSignature(
+          rawBody,
+          req.headers["x-hub-signature-256"],
+          requestId
+        );
+        if (!signature.ok) {
+          json(res, signature.statusCode, {
+            error: signature.statusCode === 503 ? "configuration_error" : "forbidden",
+            message: "Meta webhook signature rejected.",
+          });
+          return;
+        }
+
+        let payload: unknown = null;
+        try {
+          payload = JSON.parse(rawBody.toString("utf8"));
+        } catch (error) {
+          logger.warn({
+            event: "meta.webhook.error",
+            route: "/meta/webhook",
+            requestId,
+            reason: "invalid_json",
+            message: (error as Error).message,
+          });
+          json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
+          return;
+        }
+
+        json(res, 200, { ok: true });
+        setImmediate(() => {
+          handlePassiveMetaWebhookPost(payload, requestId).catch((error) => {
+            logger.error({
+              event: "meta.webhook.error",
+              route: "/meta/webhook",
+              requestId,
+              reason: (error as Error).message,
+            });
+          });
+        });
+      }).catch((error: Error) => {
+        logger.error({
+          event: "meta.webhook.error",
+          route: "/meta/webhook",
+          requestId,
+          reason: "read_error",
+          message: error.message,
+        });
+        json(res, 400, { error: "invalid_body", message: "Invalid request body." });
+      });
+      return;
+    }
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.split("/")[4] === "timeline"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const limitRaw = Number(query.limit ?? 50);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 100) : 50;
+      const cursor = decodeContactTimelineCursor(String(query.cursor ?? "").trim());
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_timeline_department_check",
+      });
+      if (!resolvedConversation.winner) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/timeline",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+
+      const result = await buildContactTimelinePayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId,
+        limit,
+        cursor,
+        requestId,
+        source: "app_conversation_timeline",
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.timeline.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (
     req.method === "GET" &&
     pathname.startsWith("/app/conversation/") &&
@@ -822,13 +1830,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
       }
       const orderRaw = String(query.order ?? "asc").trim().toLowerCase();
       const order = orderRaw === "desc" ? "desc" : "asc";
+      const afterRaw = String(query.after ?? "").trim();
+      const after =
+        afterRaw && Number.isFinite(Date.parse(afterRaw)) ? new Date(afterRaw) : null;
       const limitRaw = Number(query.limit ?? 200);
       const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
       const includeRaw = String(query.includeRaw ?? "false") === "true";
@@ -841,12 +1852,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_detail_department_check",
+      });
+      if (!resolvedConversation.winner) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
 
       const result = await buildConversationDetailPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
         waId,
         order,
+        after,
         limit,
         includeRaw,
         includeAssignedUserName: true,
@@ -869,13 +1925,274 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.split("/")[4] === "read-state"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const unread = body.unread === true;
+      const activityAt = String(body.activityAt ?? "").trim();
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_read_state",
+      });
+      const conversationKey = resolvedConversation.resolvedWaIdCanonical;
+      const nextState = unread
+        ? await markInboxConversationUnread({
+            clientId: client.id,
+            userId: clientAuth.userId,
+            conversationKey,
+          })
+        : await markInboxConversationRead({
+            clientId: client.id,
+            userId: clientAuth.userId,
+            conversationKey,
+            activityAt: activityAt || new Date().toISOString(),
+          });
+      json(res, 200, { ok: true, readState: nextState });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.read_state.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 7 &&
+    pathname.split("/")[4] === "messages" &&
+    pathname.split("/")[6] === "media"
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const messageId = decodeURIComponent(pathname.split("/")[5] ?? "").trim();
+      if (!waId || !messageId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_media_department_check",
+      });
+      const scopedConversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
+        await ensureDefaultDepartmentAndQueue(prisma, client.id)
+      );
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/messages/:messageId/media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: scopedConversation?.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+
+      const conversationWhere = {
+        clientId: client.id,
+        messageId,
+        type: { in: ["IMAGE", "AUDIO", "VIDEO", "DOCUMENT"] as MessageType[] },
+        OR: [
+          { waIdCanonical: resolvedConversation.resolvedWaIdCanonical },
+          { waId: { in: Array.from(new Set([waId, ...resolvedConversation.matchedWaIds])) } },
+        ],
+      };
+      const [inbound, outbound] = await Promise.all([
+        prisma.inboundMessage.findFirst({
+          where: conversationWhere,
+          select: {
+            messageId: true,
+            rawPayload: true,
+          },
+        }),
+        prisma.outboundMessage.findFirst({
+          where: conversationWhere,
+          select: {
+            messageId: true,
+            rawPayload: true,
+          },
+        }),
+      ]);
+
+      const mediaMessage = inbound ?? outbound;
+      if (!mediaMessage) {
+        json(res, 404, { error: "media_not_found" });
+        return;
+      }
+
+      const mediaId = extractRawMediaId(mediaMessage.rawPayload);
+      const localMedia = await resolveStoredOutboundMedia(mediaMessage.rawPayload);
+      if (localMedia) {
+        const fileName = sanitizeDownloadFileName(localMedia.fileName) || `${messageId}`;
+        const headers: Record<string, string> = {
+          "Content-Type": localMedia.mimeType || "application/octet-stream",
+          "Cache-Control": "private, max-age=31536000, immutable",
+          "Content-Disposition": `inline; filename="${fileName}"`,
+          "Content-Length": String(localMedia.size),
+        };
+        res.writeHead(200, headers);
+        createReadStream(localMedia.absolutePath)
+          .on("error", (error) => {
+            logger.error({
+              event: "app.conversation.media.local_stream_error",
+              requestId,
+              clientId: client.id,
+              messageId,
+              message: (error as Error).message,
+            });
+            if (!res.writableEnded) {
+              res.destroy(error as Error);
+            }
+          })
+          .pipe(res);
+        return;
+      }
+
+      if (!mediaId) {
+        json(res, 404, { error: "media_not_found" });
+        return;
+      }
+
+      const credentials = await resolveTenantOutboundCredentials({
+        clientId: client.id,
+        clientKey: client.clientKey,
+      });
+      if (!credentials) {
+        json(res, 503, { error: "tenant_outbound_credentials_missing" });
+        return;
+      }
+
+      const media = await fetchMediaContent(mediaId, {
+        accessToken: credentials.accessToken,
+      });
+      if (!media.ok) {
+        if (media.status === 404) {
+          json(res, 404, { error: "media_not_found" });
+          return;
+        }
+        logger.error({
+          event: "app.conversation.media.fetch_failed",
+          requestId,
+          clientId: client.id,
+          messageId,
+          status: media.status ?? null,
+          errorBody: media.errorBody ?? null,
+        });
+        json(res, 502, { error: "media_fetch_failed" });
+        return;
+      }
+
+      const contentType = media.contentType || "application/octet-stream";
+      const fileName = sanitizeDownloadFileName(media.fileName) || `${messageId}`;
+      const headers: Record<string, string> = {
+        "Content-Type": contentType,
+        "Cache-Control": "private, no-store",
+        "Content-Disposition": `inline; filename="${fileName}"`,
+      };
+      if (media.contentLength) {
+        headers["Content-Length"] = media.contentLength;
+      }
+      res.writeHead(200, headers);
+
+      if (!media.response.body) {
+        res.end();
+        return;
+      }
+
+      Readable.fromWeb(media.response.body as never)
+        .on("error", (error) => {
+          logger.error({
+            event: "app.conversation.media.stream_error",
+            requestId,
+            clientId: client.id,
+            messageId,
+            message: (error as Error).message,
+          });
+          if (!res.writableEnded) {
+            res.destroy(error as Error);
+          }
+        })
+        .pipe(res);
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.media.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/send")
   ) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -905,33 +2222,128 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_send",
       });
-      const result = await adminSendMessage({
-        waId: resolvedConversation.resolvedWaId,
-        text,
-        clientKey: client.clientKey,
-        clientId: client.id,
-        requestId,
-      });
-      if (!result.ok) {
-        json(res, result.statusCode, { error: result.error });
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      if (isConversationOutboundBlocked(resolvedConversation.winner)) {
+        json(res, 409, {
+          error: "channel_outbound_not_enabled",
+          message:
+            resolvedChannel === "instagram"
+              ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
+              : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+        });
         return;
       }
-      const conversation = await runtimeStorage.getConversation(
+      const currentConversation = await runtimeStorage.getConversation(
         resolvedConversation.resolvedWaId,
         client.clientKey
       );
+      if (!currentConversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, {
+          error: "conversation_not_assigned",
+          message: "Assuma a conversa antes de responder manualmente.",
+        });
+        return;
+      }
+      const result =
+        resolvedChannel === "messenger"
+          ? await adminSendMessengerMessage({
+              waId: resolvedConversation.resolvedWaId,
+              text,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+              source: resolvedConversation.winner ?? undefined,
+            })
+          : await adminSendMessage({
+              waId: resolvedConversation.resolvedWaId,
+              text,
+              clientKey: client.clientKey,
+              clientId: client.id,
+              requestId,
+            });
+      if (!result.ok) {
+        if (result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
+          json(res, result.statusCode, { error: result.errorPayload });
+          return;
+        }
+        json(res, result.statusCode, {
+          error: result.error,
+          message: "message" in result ? result.message : undefined,
+        });
+        return;
+      }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const conversation = await ensureConversationOperationalState(prisma, {
+        clientId: client.id,
+        defaults,
+        conversation: {
+          ...currentConversation,
+          mode: "HUMAN" as const,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+          lastOutboundAt: result.createdAt,
+          lastOutboundMessageId: result.messageId,
+        },
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation,
+      });
       json(res, 200, {
-        ok: true,
-        waId: conversation?.waId ?? resolvedConversation.resolvedWaId,
-        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
-        mode: conversation?.mode ?? "BOT",
-        assignedUserId: conversation?.assignedUserId ?? null,
-        assignedTo: conversation?.assignedTo ?? null,
-        assignedUserName:
-          conversation?.assignedUserId
-            ? await findAssignedUserName(prisma, client.id, conversation.assignedUserId)
-            : null,
-        assignedAt: conversation?.assignedAt ?? null,
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
+        channelOutboundEnabled: getConversationChannelOutboundEnabled(
+          (await getTenants())[client.clientKey],
+          resolvedConversation.winner ?? undefined
+        ),
         message: {
           messageId: result.messageId,
           status: result.status,
@@ -950,11 +2362,52 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
-  if (req.method === "GET" && pathname === "/app/users") {
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/send-media")
+  ) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+
+      const body = await readMultipartBody(req, res);
+      if (!body) return;
+      if (!body.file || body.file.content.length <= 0) {
+        json(res, 400, {
+          error: {
+            code: "bad_request",
+            message: "Selecione um arquivo valido para enviar.",
+          },
+        });
+        return;
+      }
+      if (body.file.content.length > MAX_MEDIA_UPLOAD_BYTES) {
+        json(res, 400, {
+          error: {
+            code: "file_too_large",
+            message: "Arquivo excede o limite permitido de 10 MB.",
+          },
+        });
+        return;
+      }
+      if (!isAllowedOutboundMediaMimeType(body.file.mimeType)) {
+        json(res, 400, {
+          error: {
+            code: "unsupported_media_type",
+            message: "Tipo de arquivo ainda nao suportado no inbox.",
+          },
+        });
+        return;
+      }
+
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, { error: "client_not_found" });
@@ -964,12 +2417,239 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
-      const users = await prisma.user.findMany({
-        where: { clientId: client.id },
-        orderBy: [{ createdAt: "desc" }],
-        select: { id: true, name: true, email: true, role: true, createdAt: true },
+
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_send_media",
       });
-      json(res, 200, { ok: true, count: users.length, items: users });
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      if (isConversationOutboundBlocked(resolvedConversation.winner) || resolvedChannel === "messenger") {
+        json(res, 409, {
+          error: "channel_outbound_not_enabled",
+          message:
+            resolvedChannel === "instagram"
+              ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
+              : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+        });
+        return;
+      }
+      const currentConversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!currentConversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-media",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, {
+          error: "conversation_not_assigned",
+          message: "Assuma a conversa antes de responder manualmente.",
+        });
+        return;
+      }
+
+      const result = await adminSendMediaMessage({
+        waId: resolvedConversation.resolvedWaId,
+        clientKey: client.clientKey,
+        clientId: client.id,
+        requestId,
+        mimeType: body.file.mimeType,
+        fileName: body.file.fileName,
+        caption: body.caption,
+        content: body.file.content,
+      });
+      if (!result.ok) {
+        if (result.error === "window_closed" && result.errorPayload) {
+          json(res, result.statusCode, { error: result.errorPayload });
+          return;
+        }
+        if (result.error === "unsupported_media_type") {
+          json(res, result.statusCode, {
+            error: {
+              code: "unsupported_media_type",
+              message: "Tipo de arquivo ainda nao suportado no inbox.",
+            },
+          });
+          return;
+        }
+        if (result.error === "media_upload_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "media_upload_failed",
+              message: "Nao foi possivel enviar o arquivo para a Meta.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
+            },
+          });
+          return;
+        }
+        if (result.error === "media_send_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "media_send_failed",
+              message: "A Meta recusou o envio desta midia.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
+            },
+          });
+          return;
+        }
+        if (result.error === "audio_transcode_failed") {
+          json(res, result.statusCode, {
+            error: {
+              code: "audio_transcode_failed",
+              message: "Nao foi possivel normalizar o audio gravado para envio.",
+              details: summarizeMetaErrorMessage(result.errorDetails || ""),
+            },
+          });
+          return;
+        }
+        json(res, result.statusCode, { error: result.error });
+        return;
+      }
+
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const conversation = await ensureConversationOperationalState(prisma, {
+        clientId: client.id,
+        defaults,
+        conversation: {
+          ...currentConversation,
+          mode: "HUMAN" as const,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        },
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        message: {
+          messageId: result.messageId,
+          status: result.status,
+          metaMessageId: result.metaMessageId,
+          createdAt: result.createdAt,
+          type: result.mediaType,
+          bodyText: result.bodyText,
+          media: result.media,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.send_media.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/users") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 200, { ok: true, count: 0, items: [] });
+        return;
+      }
+      const users = await prisma.user.findMany({
+        where: {
+          clientId: client.id,
+          isActive: true,
+        },
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        count: users.length,
+        items: users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          departmentName: user.department?.name ?? null,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
+        })),
+      });
     } catch (error) {
       logger.error({
         event: "app.users.list.error",
@@ -981,17 +2661,1383 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/app/users") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: client.id,
+        body,
+        requireName: true,
+        requireEmail: true,
+        requireRole: false,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+        email: parsed.data.email,
+      });
+      if (!emailAvailability.ok) {
+        json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
+        return;
+      }
+      if (
+        departmentAccess.requiresDepartmentScope &&
+        (parsed.data.departmentId ?? null) !== departmentAccess.departmentId
+      ) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Supervisor can only manage users from the same department.")
+        );
+        return;
+      }
+      const password = typeof body.password === "string" ? body.password : "";
+      if (password && password.length < 6) {
+        json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
+        return;
+      }
+      if ((parsed.data.isActive ?? true) === true) {
+        const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+        });
+        if (!activeLimit.ok) {
+          json(
+            res,
+            409,
+            httpError(
+              "user_limit_exceeded",
+              `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+            )
+          );
+          return;
+        }
+      }
+      const user = await prisma.user.create({
+        data: {
+          clientId: client.id,
+          name: parsed.data.name as string,
+          email: parsed.data.email as string,
+          ...(parsed.data.role ? { role: parsed.data.role } : {}),
+          ...(Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+            ? { departmentId: parsed.data.departmentId }
+            : {}),
+          ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "user.created",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        targetUserId: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        isActive: user.isActive,
+      });
+      if (user.departmentId) {
+        logger.info({
+          event: "user.department.assigned",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          targetUserId: user.id,
+          departmentId: user.departmentId,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        });
+      }
+      json(res, 200, { ok: true, user });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(res, 409, httpError("user_already_exists", "User email already exists"));
+        return;
+      }
+      logger.error({
+        event: "app.users.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (
-    req.method === "POST" &&
-    pathname.startsWith("/app/conversation/") &&
-    pathname.split("/").length === 5 &&
-    pathname.endsWith("/claim")
+    req.method === "PUT" &&
+    pathname.startsWith("/app/users/") &&
+    pathname.split("/").length === 4
   ) {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage users."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        json(res, 403, httpError("forbidden", "Supervisor requires a department."));
+        return;
+      }
+      const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!userId) {
+        json(res, 400, httpError("bad_request", "User id is required"));
+        return;
+      }
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          clientId: client.id,
+          ...(departmentAccess.requiresDepartmentScope
+            ? { departmentId: departmentAccess.departmentId }
+            : {}),
+        },
+        select: { id: true, departmentId: true, role: true, isActive: true },
+      });
+      if (!existingUser) {
+        json(res, 404, httpError("user_not_found", "User not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: client.id,
+        body,
+        requireName: false,
+        requireEmail: false,
+        requireRole: false,
+        currentRole: existingUser.role,
+        currentDepartmentId: existingUser.departmentId,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+        email: parsed.data.email,
+        exceptUserId: existingUser.id,
+      });
+      if (!emailAvailability.ok) {
+        json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
+        return;
+      }
+      if (Object.keys(parsed.data).length === 0) {
+        json(
+          res,
+          400,
+          httpError(
+            "bad_request",
+            "Provide at least one of name, email, role, departmentId or isActive"
+          )
+        );
+        return;
+      }
+      const nextDepartmentId =
+        Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+          ? (parsed.data.departmentId ?? null)
+          : existingUser.departmentId ?? null;
+      if (
+        departmentAccess.requiresDepartmentScope &&
+        nextDepartmentId !== departmentAccess.departmentId
+      ) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Supervisor can only manage users from the same department.")
+        );
+        return;
+      }
+      if (parsed.data.isActive === true && existingUser.isActive === false) {
+        const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+        });
+        if (!activeLimit.ok) {
+          json(
+            res,
+            409,
+            httpError(
+              "user_limit_exceeded",
+              `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+            )
+          );
+          return;
+        }
+      }
+      const user = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: parsed.data,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "user.updated",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        targetUserId: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId,
+        isActive: user.isActive,
+      });
+      if (existingUser.departmentId !== user.departmentId && user.departmentId) {
+        logger.info({
+          event: "user.department.assigned",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          targetUserId: user.id,
+          departmentId: user.departmentId,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        });
+      }
+      json(res, 200, { ok: true, user });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(res, 409, httpError("user_already_exists", "User email already exists"));
+        return;
+      }
+      logger.error({
+        event: "app.users.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/departments") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can manage departments.")
+        );
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "departments",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const includeInactive =
+        clientAuth.role === "ADMIN" && parsedUrl.searchParams.get("includeInactive") === "true";
+      const departments = await prisma.department.findMany({
+        where: {
+          clientId: client.id,
+          ...(includeInactive ? {} : { isActive: true }),
+          ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        count: departments.length,
+        items: departments,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.departments.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/departments") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
+        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "departments",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = parseDepartmentUpsertPayload(body);
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      const existingBySlug = await prisma.department.findFirst({
+        where: {
+          clientId: client.id,
+          slug: parsed.data.slug,
+        },
+        select: { id: true },
+      });
+      if (existingBySlug) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      const department = await prisma.department.create({
+        data: {
+          clientId: client.id,
+          name: parsed.data.name as string,
+          slug: parsed.data.slug as string,
+          ...(typeof parsed.data.isActive === "boolean"
+            ? { isActive: parsed.data.isActive }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "department.created",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        departmentId: department.id,
+        isActive: department.isActive,
+      });
+      json(res, 200, { ok: true, department });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      logger.error({
+        event: "app.departments.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "PUT" &&
+    pathname.startsWith("/app/departments/") &&
+    pathname.split("/").length === 4
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role) || clientAuth.role === "SUPERVISOR") {
+        json(res, 403, httpError("forbidden", "Only admin can manage departments."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "departments",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!departmentId) {
+        json(res, 400, httpError("bad_request", "Department id is required"));
+        return;
+      }
+      const existing = await prisma.department.findFirst({
+        where: {
+          id: departmentId,
+          clientId: client.id,
+        },
+        select: { id: true, name: true, slug: true, isActive: true },
+      });
+      if (!existing) {
+        json(res, 404, httpError("department_not_found", "Department not found"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const parsed = parseDepartmentUpsertPayload(body, {
+        requireName: false,
+        currentName: existing.name,
+      });
+      if (!parsed.ok) {
+        json(res, parsed.status, httpError(parsed.code, parsed.message));
+        return;
+      }
+      if (Object.keys(parsed.data).length === 0) {
+        json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+        return;
+      }
+      if (parsed.data.slug && parsed.data.slug !== existing.slug) {
+        const conflictingDepartment = await prisma.department.findFirst({
+          where: {
+            clientId: client.id,
+            slug: parsed.data.slug,
+            NOT: { id: existing.id },
+          },
+          select: { id: true },
+        });
+        if (conflictingDepartment) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
+      }
+      const department = await prisma.department.update({
+        where: { id: existing.id },
+        data: {
+          ...(parsed.data.name ? { name: parsed.data.name } : {}),
+          ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
+          ...(typeof parsed.data.isActive === "boolean"
+            ? { isActive: parsed.data.isActive }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+      logger.info({
+        event: "department.updated",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        departmentId: department.id,
+        isActive: department.isActive,
+      });
+      if (
+        typeof parsed.data.isActive === "boolean" &&
+        existing.isActive !== department.isActive
+      ) {
+        logger.info({
+          event: "department.toggled",
+          requestId,
+          clientId: client.id,
+          userId: clientAuth.userId,
+          departmentId: department.id,
+          isActive: department.isActive,
+        });
+      }
+      json(res, 200, { ok: true, department });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        json(
+          res,
+          409,
+          httpError("department_slug_conflict", "Department slug already exists for this tenant")
+        );
+        return;
+      }
+      logger.error({
+        event: "app.departments.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/chatbot/flows") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage chatbot flows."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const items = await prisma.chatbotFlow.findMany({
+        where: { clientId: client.id },
+        orderBy: [{ entryPoint: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          isActive: true,
+          entryPoint: true,
+          definition: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      json(res, 200, { ok: true, count: items.length, items });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.flows.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/chatbot/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view chatbot settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
+      const aiConfigured = aiConfigurationStatus.ready;
+      const chatbotLocked = Boolean(tenant.disableChatbot);
+      const aiLocked = Boolean(tenant.disableAiFallback);
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: {
+          disableAutoReply: tenant.disableAutoReply ?? false,
+          disableChatbot: Boolean(tenant.disableChatbot),
+          disableAiFallback: Boolean(tenant.disableAiFallback),
+          disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+          aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
+          aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
+          aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
+          aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+          aiQualification: tenant.aiQualification,
+          handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
+          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+            tenant.handoffLeadNotificationRecipients
+          ),
+          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+          aiAssistantConfigurationStatus: aiConfigurationStatus,
+          aiConfigured,
+          chatbotLocked,
+          flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+          aiLocked,
+          aiAssistantLocked:
+            !env.AI_ASSISTANT_ENABLED ||
+            !env.WHATSAPP_AI_ENABLED ||
+            tenant.disableAiFallback === true ||
+            !aiConfigured,
+          intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/chatbot/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update chatbot settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "chatbot",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const data = body as Record<string, unknown>;
+      const allowedKeys = new Set([
+        "handoffLeadNotificationEnabled",
+        "handoffLeadNotificationRecipients",
+      ]);
+      const unsupportedKeys = Object.keys(data).filter((key) => !allowedKeys.has(key));
+      if (unsupportedKeys.length > 0) {
+        logger.warn({
+          event: "app.chatbot.settings.update.denied",
+          requestId,
+          clientId: clientAuth.clientId,
+          userId: clientAuth.userId,
+          reason: "managed_by_internal_admin",
+          unsupportedKeys,
+        });
+        json(
+          res,
+          403,
+          httpError("managed_by_internal_admin", "Automacoes principais sao gerenciadas no console interno.")
+        );
+        return;
+      }
+      const patch: Record<string, unknown> = {};
+      if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
+        if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
+          json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
+          return;
+        }
+        patch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
+        if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
+          json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
+          return;
+        }
+        patch.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
+          data.handoffLeadNotificationRecipients
+        );
+      }
+      if (Object.keys(patch).length === 0) {
+        json(res, 400, httpError("bad_request", "Provide notification settings to update"));
+        return;
+      }
+      const saved = await saveTenantPatch(client.clientKey, patch);
+      logger.info({
+        event: "app.chatbot.handoff_notification_settings.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        fieldsChanged: saved.fieldsChanged,
+        recipientCount: normalizeHandoffLeadNotificationRecipients(
+          saved.tenant.handoffLeadNotificationRecipients
+        ).length,
+      });
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(saved.tenant);
+      const aiConfigured = aiConfigurationStatus.ready;
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        fieldsChanged: saved.fieldsChanged,
+        settings: {
+          disableAutoReply: saved.tenant.disableAutoReply ?? false,
+          disableChatbot: Boolean(saved.tenant.disableChatbot),
+          disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+          disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
+          aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
+          aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
+          aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
+          aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+          aiQualification: saved.tenant.aiQualification,
+          handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
+          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+            saved.tenant.handoffLeadNotificationRecipients
+          ),
+          aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+          aiAssistantConfigurationStatus: aiConfigurationStatus,
+          aiConfigured,
+          chatbotLocked: Boolean(saved.tenant.disableChatbot),
+          flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
+          aiLocked: Boolean(saved.tenant.disableAiFallback),
+          aiAssistantLocked:
+            !env.AI_ASSISTANT_ENABLED ||
+            !env.WHATSAPP_AI_ENABLED ||
+            saved.tenant.disableAiFallback === true ||
+            !aiConfigured,
+          intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.chatbot.settings.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/crm/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view CRM settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const counts = await prisma.lead.groupBy({
+        by: ["status"],
+        where: { tenantId: client.id },
+        _count: { _all: true },
+      });
+      const leadCountsByStatus = Object.fromEntries(
+        counts.map((item) => [item.status, item._count._all])
+      );
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: {
+          crmBusinessStatuses: statuses,
+        },
+        leadCountsByStatus,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/app/crm/settings") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can update CRM settings."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const data = body as Record<string, unknown>;
+      if (!Object.prototype.hasOwnProperty.call(data, "crmBusinessStatuses")) {
+        json(res, 400, httpError("bad_request", "crmBusinessStatuses is required"));
+        return;
+      }
+      if (!Array.isArray(data.crmBusinessStatuses)) {
+        json(res, 400, httpError("bad_request", "crmBusinessStatuses must be an array"));
+        return;
+      }
+      const statuses = normalizeCrmBusinessStatuses(data.crmBusinessStatuses);
+      const saved = await saveTenantPatch(client.clientKey, {
+        crmBusinessStatuses: statuses,
+      });
+      logger.info({
+        event: "app.crm.settings.updated",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        statusCount: statuses.length,
+        fieldsChanged: saved.fieldsChanged,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        fieldsChanged: saved.fieldsChanged,
+        settings: {
+          crmBusinessStatuses: normalizeCrmBusinessStatuses(saved.tenant.crmBusinessStatuses),
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.settings.update.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/crm/campaign-recipients") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can export CRM recipients."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const configuredStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const allowedStatuses = new Set(
+        configuredStatuses
+          .filter((item) => item.isActive && item.campaignEligible)
+          .map((item) => item.id)
+      );
+      const requestedStatuses = String(query.statuses ?? "")
+        .split(",")
+        .map((item) => item.trim().toUpperCase())
+        .filter((item) => allowedStatuses.has(item));
+      if (requestedStatuses.length === 0) {
+        json(res, 400, httpError("bad_request", "Select at least one campaign eligible status."));
+        return;
+      }
+      const limit = Math.min(
+        5000,
+        Math.max(1, Number.isFinite(Number(query.limit)) ? Math.floor(Number(query.limit)) : 1000)
+      );
+      const leads = await prisma.lead.findMany({
+        where: {
+          tenantId: client.id,
+          status: { in: requestedStatuses },
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          waId: true,
+          waIdCanonical: true,
+          status: true,
+          updatedAt: true,
+        },
+      });
+      const seen = new Set<string>();
+      const items = leads
+        .map((lead) => {
+          const phone = String(lead.phone ?? lead.waIdCanonical ?? lead.waId ?? "").replace(/\D/g, "");
+          if (!phone || seen.has(phone)) return null;
+          seen.add(phone);
+          return {
+            leadId: lead.id,
+            name: lead.name,
+            phone,
+            status: lead.status,
+            updatedAt: lead.updatedAt.toISOString(),
+          };
+        })
+        .filter(Boolean);
+      logger.info({
+        event: "app.crm.campaign_recipients.prepared",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        userId: clientAuth.userId,
+        statuses: requestedStatuses,
+        count: items.length,
+      });
+      json(res, 200, {
+        ok: true,
+        statuses: requestedStatuses,
+        count: items.length,
+        items,
+        numbers: items.map((item) => item?.phone).filter(Boolean),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.campaign_recipients.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/chatbot/flows") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    logger.warn({
+      event: "app.chatbot.flows.create.denied",
+      requestId,
+      clientId: clientAuth.clientId,
+      userId: clientAuth.userId,
+      reason: "managed_by_internal_admin",
+    });
+    json(
+      res,
+      403,
+      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
+    );
+    return;
+  }
+
+  if (
+    req.method === "PUT" &&
+    pathname.startsWith("/app/chatbot/flows/") &&
+    pathname.split("/").length === 5
+  ) {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    logger.warn({
+      event: "app.chatbot.flows.update.denied",
+      requestId,
+      clientId: clientAuth.clientId,
+      userId: clientAuth.userId,
+      reason: "managed_by_internal_admin",
+    });
+    json(
+      res,
+      403,
+      httpError("managed_by_internal_admin", "Flows do chatbot sao gerenciados no console interno.")
+    );
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/conversations") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view reports.")
+        );
+        return;
+      }
+      const range = parseConversationReportRange(query.range);
+      if (!range) {
+        json(res, 400, httpError("invalid_range", "Invalid range"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId =
+        clientAuth.role === "SUPERVISOR"
+          ? departmentAccess.departmentId ?? ""
+          : typeof query.departmentId === "string"
+            ? query.departmentId.trim()
+            : "";
+      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
+        json(res, 200, {
+          ok: true,
+          range: range.key,
+          userId: requestedUserId || null,
+          departmentId: null,
+          totalConversations: 0,
+          avgFirstResponseTimeSec: null,
+          avgResolutionTimeSec: null,
+          slaBreaches: 0,
+          byAgent: [],
+          byDepartment: [],
+        });
+        return;
+      }
+      const reportData = await loadConversationReportData(prisma, {
+        clientId: client.id,
+        since: range.since,
+        requestedDepartmentId: requestedDepartmentId || null,
+      });
+      if (!reportData.ok) {
+        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        return;
+      }
+      const filteredMetrics = requestedUserId
+        ? reportData.metrics.filter(
+            (item) =>
+              reportData.stateByWaId
+                .get(item.conversation.waId)
+                ?.assignedUserIds.includes(requestedUserId)
+          )
+        : reportData.metrics;
+      json(
+        res,
+        200,
+        buildConversationReportSummary({
+          rangeKey: range.key,
+          requestedUserId: requestedUserId || null,
+          requestedDepartmentId: requestedDepartmentId || null,
+          filteredMetrics,
+          stateByWaId: reportData.stateByWaId,
+          slaConfig: reportData.slaConfig,
+          departmentNameById: reportData.departmentNameById,
+        })
+      );
+      logger.info({
+        event: "app.reports.conversations.viewed",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: requestedDepartmentId || null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.conversations.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/reports/conversations/export") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(
+          res,
+          403,
+          httpError("forbidden", "Only supervisor or admin can view reports.")
+        );
+        return;
+      }
+      const range = parseConversationReportRange(query.range);
+      if (!range) {
+        json(res, 400, httpError("invalid_range", "Invalid range"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "reports",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+      const requestedDepartmentId =
+        clientAuth.role === "SUPERVISOR"
+          ? departmentAccess.departmentId ?? ""
+          : typeof query.departmentId === "string"
+            ? query.departmentId.trim()
+            : "";
+      if (clientAuth.role === "SUPERVISOR" && !requestedDepartmentId) {
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
+        });
+        res.end(
+          [
+            [
+              "conversationId",
+              "waId",
+              "departmentId",
+              "departmentName",
+              "assignedUserId",
+              "status",
+              "firstResponseTimeSec",
+              "resolutionTimeSec",
+              "createdAt",
+              "closedAt",
+            ].join(","),
+          ].join("\n")
+        );
+        return;
+      }
+      const reportData = await loadConversationReportData(prisma, {
+        clientId: client.id,
+        since: range.since,
+        requestedDepartmentId: requestedDepartmentId || null,
+        includeClosedAt: true,
+      });
+      if (!reportData.ok) {
+        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        return;
+      }
+      const filteredMetrics = requestedUserId
+        ? reportData.metrics.filter(
+            (item) =>
+              reportData.stateByWaId
+                .get(item.conversation.waId)
+                ?.assignedUserIds.includes(requestedUserId)
+          )
+        : reportData.metrics;
+      res.writeHead(200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
+      });
+      res.end(
+        buildConversationReportCsv({
+          metrics: filteredMetrics,
+          stateByWaId: reportData.stateByWaId,
+          departmentNameById: reportData.departmentNameById,
+        })
+      );
+      logger.info({
+        event: "app.reports.conversations.exported",
+        requestId,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+        departmentId: requestedDepartmentId || null,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.reports.conversations_export.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    (pathname.endsWith("/claim") || pathname.endsWith("/assign"))
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1020,40 +4066,163 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const operationalConversation = materializeConversationOperationalState(conversation, defaults) ?? conversation;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: operationalConversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: operationalConversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
       const body = await readJsonBody(req, res);
       if (!body) return;
       const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+      if (
+        requestedUserId &&
+        requestedUserId !== clientAuth.userId &&
+        !canManageAnyConversation(clientAuth.role)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "assign_other_user_without_privilege",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, { error: "forbidden", message: "Voce so pode assumir para si." });
+        return;
+      }
+      if (
+        conversation.assignedUserId &&
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/claim",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, {
+          error: "conversation_already_assigned",
+          message: "A conversa ja esta atribuida a outro atendente.",
+        });
+        return;
+      }
       const assignedUser = requestedUserId
         ? await prisma.user.findFirst({
-            where: { id: requestedUserId, clientId: client.id },
-            select: { id: true, name: true },
+            where: { id: requestedUserId, clientId: client.id, isActive: true },
+            select: { id: true, name: true, departmentId: true },
           })
         : null;
       if (requestedUserId && !assignedUser) {
         json(res, 404, { error: "user_not_found" });
         return;
       }
+      const routing = await resolveAssignmentRouting(prisma, {
+        clientId: client.id,
+        assignedUserDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
+        fallbackDepartmentId: operationalConversation.departmentId ?? null,
+      });
+      const assignedAt = new Date().toISOString();
       const nextState = {
-        ...conversation,
+        ...operationalConversation,
         mode: "HUMAN" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          activatedAt: assignedAt,
+        },
         assignedUserId: assignedUser?.id ?? clientAuth.userId,
         assignedTo: assignedUser ? `user:${assignedUser.id}` : `user:${clientAuth.userId}`,
-        assignedAt: new Date().toISOString(),
+        assignedAt,
+        departmentId: routing.departmentId,
+        queueId: routing.queueId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
-      json(res, 200, {
-        ok: true,
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: nextState.mode,
+        departmentId: routing.departmentId,
+      });
+      await recordConversationAssignment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: nextState.assignedUserId ?? null,
+        assignedAt,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.assigned",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: nextState.assignedUserId ?? null,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: nextState.status,
+        },
+      });
+      logger.info({
+        event: "conversation.assigned",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
         assignedUserId: nextState.assignedUserId,
-        assignedTo: nextState.assignedTo,
+        fromUserId: conversation.assignedUserId ?? null,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
         assignedUserName:
           assignedUser?.name ??
           (nextState.assignedUserId
             ? await findAssignedUserName(prisma, client.id, nextState.assignedUserId)
             : null),
-        assignedAt: nextState.assignedAt,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
       logger.error({
@@ -1076,7 +4245,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1105,27 +4274,854 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/release",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/release",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode liberar conversas atribuidas a voce.",
+        });
+        return;
+      }
       const nextState = {
         ...conversation,
         mode: "BOT" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "none" as const,
+          releasedAt: new Date().toISOString(),
+        },
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        status: null,
+        closedAt: null,
       };
       await runtimeStorage.upsertConversation(nextState);
-      json(res, 200, {
-        ok: true,
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
         waId: nextState.waId,
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-        mode: nextState.mode,
-        assignedUserId: nextState.assignedUserId,
-        assignedTo: nextState.assignedTo,
+        departmentId: null,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.released",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromMode: conversation.mode ?? null,
+          toMode: nextState.mode,
+          fromStatus: conversation.status ?? null,
+          toStatus: nextState.status ?? null,
+          fromDepartmentId: conversation.departmentId ?? null,
+          toDepartmentId: nextState.departmentId ?? null,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+        },
+      });
+      logger.info({
+        event: "conversation.released",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
         assignedUserName: null,
-        assignedAt: nextState.assignedAt,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
       });
     } catch (error) {
       logger.error({
         event: "app.conversation.release.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/release-to-general")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_release_to_general",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/release-to-general",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/release-to-general",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode liberar conversas atribuidas a voce.",
+        });
+        return;
+      }
+
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const releasedAt = new Date().toISOString();
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        handoff: {
+          ...conversation.handoff,
+          status: "active" as const,
+          releasedAt,
+        },
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: defaults.department.id,
+        queueId: defaults.queue.id,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: defaults.department.id,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.released_to_general",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromMode: conversation.mode ?? null,
+          toMode: nextState.mode,
+          fromStatus: conversation.status ?? null,
+          toStatus: nextState.status ?? null,
+          fromDepartmentId: conversation.departmentId ?? null,
+          toDepartmentId: defaults.department.id,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+        },
+      });
+      logger.info({
+        event: "conversation.released_to_general",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        departmentId: defaults.department.id,
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus: "active",
+        assignedUserId: nextState.assignedUserId ?? null,
+        departmentId: defaults.department.id,
+        updatedAt: releasedAt,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: null,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.release_to_general.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/transfer")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const toUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+      if (!toUserId) {
+        json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const assignedUser = await prisma.user.findFirst({
+        where: { id: toUserId, clientId: client.id, isActive: true },
+        select: { id: true, name: true, departmentId: true },
+      });
+      if (!assignedUser) {
+        json(res, 404, { error: "user_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_transfer",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const hasDepartmentAccess = hasConversationDepartmentAccess({
+        role: clientAuth.role,
+        userDepartmentId: departmentAccess.departmentId,
+        conversationDepartmentId: conversation.departmentId ?? null,
+      });
+      const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
+      if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !isAdminRole(clientAuth.role) &&
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode transferir conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const routing = await resolveAssignmentRouting(prisma, {
+        clientId: client.id,
+        assignedUserDepartmentId: assignedUser.departmentId,
+        fallbackDepartmentId: conversation.departmentId ?? null,
+      });
+      const assignedAt = new Date().toISOString();
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        assignedUserId: assignedUser.id,
+        assignedTo: `user:${assignedUser.id}`,
+        assignedAt,
+        departmentId: routing.departmentId,
+        queueId: routing.queueId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: routing.departmentId,
+      });
+      await recordConversationAssignment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: assignedUser.id,
+        assignedAt,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.transferred",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: nextState.status,
+        },
+      });
+      logger.info({
+        event: "conversation.transferred",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        fromUserId: conversation.assignedUserId ?? null,
+        toUserId: assignedUser.id,
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus:
+          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+            ? nextState.handoff.status
+            : "active",
+        assignedUserId: nextState.assignedUserId ?? null,
+        departmentId: routing.departmentId,
+        updatedAt: assignedAt,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: assignedUser.name,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.transfer.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/transfer-department")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const nextDepartmentId =
+        typeof body.departmentId === "string" ? body.departmentId.trim() : "";
+      if (!nextDepartmentId) {
+        json(res, 400, {
+          error: "bad_request",
+          message: "Informe o setor de destino.",
+        });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const department = await prisma.department.findFirst({
+        where: {
+          id: nextDepartmentId,
+          clientId: client.id,
+          isActive: true,
+          ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+        },
+        select: { id: true, name: true },
+      });
+      if (!department) {
+        json(res, 404, { error: "department_not_found" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_transfer_department",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      const hasDepartmentAccess = hasConversationDepartmentAccess({
+        role: clientAuth.role,
+        userDepartmentId: departmentAccess.departmentId,
+        conversationDepartmentId: conversation.departmentId ?? null,
+      });
+      const isCurrentAssignedOwner = conversation.assignedUserId === clientAuth.userId;
+      if (!hasDepartmentAccess && !isCurrentAssignedOwner) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer-department",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !isAdminRole(clientAuth.role) &&
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/transfer-department",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode mover conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const queue = await ensureQueueForDepartment(prisma, {
+        clientId: client.id,
+        departmentId: department.id,
+      });
+      const previousDepartmentId = conversation.departmentId ?? null;
+      const nextState = {
+        ...conversation,
+        mode: "HUMAN" as const,
+        departmentId: department.id,
+        queueId: queue.id,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        status: ConversationOperationalStatus.WAITING,
+        closedAt: null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      await persistConversationDepartment(prisma, {
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        departmentId: department.id,
+      });
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.department.transferred",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromDepartmentId: previousDepartmentId,
+          toDepartmentId: department.id,
+          fromAssignedUserId: conversation.assignedUserId ?? null,
+          toAssignedUserId: nextState.assignedUserId ?? null,
+          status: nextState.status,
+          queueId: queue.id,
+        },
+      });
+      logger.info({
+        event: "conversation.department.transferred",
+        requestId,
+        clientId: client.id,
+        conversationId: nextState.waId,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        fromDepartmentId: previousDepartmentId,
+        toDepartmentId: department.id,
+        userId: clientAuth.userId,
+      });
+      publishRealtimeEvent({
+        type: "conversation.handoff.updated",
+        clientId: client.id,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        mode: "HUMAN",
+        handoffStatus:
+          nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+            ? nextState.handoff.status
+            : "active",
+        assignedUserId: null,
+        departmentId: department.id,
+        updatedAt: new Date().toISOString(),
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+        assignedUserName: null,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.transfer_department.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/status")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const nextStatus = normalizeConversationOperationalStatus(
+        typeof body.status === "string" ? body.status.trim() : ""
+      );
+      if (!nextStatus || !CONVERSATION_OPERATIONAL_STATUS_VALUES.includes(nextStatus)) {
+        json(res, 400, { error: "bad_request", message: "Status operacional invalido." });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_status",
+      });
+      const conversation = await runtimeStorage.getConversation(
+        resolvedConversation.resolvedWaId,
+        client.clientKey
+      );
+      if (!conversation) {
+        json(res, 404, { error: "conversation_not_found" });
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: conversation.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: {
+            code: "forbidden",
+            message: "Conversa fora do seu departamento.",
+          },
+        });
+        return;
+      }
+      if (
+        !canManageOwnedConversation(clientAuth.role, conversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode atualizar status de conversas atribuidas a voce.",
+        });
+        return;
+      }
+      const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+      const nextState = {
+        ...conversation,
+        mode:
+          nextStatus === ConversationOperationalStatus.CLOSED
+            ? (conversation.mode ?? "HUMAN")
+            : "HUMAN" as const,
+        departmentId: conversation.departmentId ?? defaults.department.id,
+        queueId: conversation.queueId ?? defaults.queue.id,
+        status: nextStatus,
+        closedAt:
+          nextStatus === ConversationOperationalStatus.CLOSED
+            ? new Date().toISOString()
+            : null,
+      };
+      await runtimeStorage.upsertConversation(nextState);
+      if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
+        await recordConversationClosedMetrics({
+          prisma,
+          clientId: client.id,
+          waId: nextState.waId,
+          closedAt: new Date(nextState.closedAt),
+          assignedUserId: nextState.assignedUserId ?? null,
+          requestId,
+        });
+      }
+      await recordConversationAuditEvent(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        eventName: "conversation.status_changed",
+        actorUserId: clientAuth.userId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        conversationId: nextState.conversationKey ?? nextState.waId,
+        payload: {
+          fromStatus: conversation.status ?? null,
+          toStatus: nextStatus,
+          closedAt: nextState.closedAt ?? null,
+          assignedUserId: nextState.assignedUserId ?? null,
+          departmentId: nextState.departmentId ?? null,
+          queueId: nextState.queueId ?? null,
+          mode: nextState.mode ?? null,
+          handoffStatus: nextState.handoff?.status ?? null,
+        },
+      });
+      logger.info({
+        event: "conversation.status_changed",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: nextState.waIdCanonical ?? nextState.waId,
+        status: nextStatus,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextState,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? nextState.waId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.status.error",
         message: (error as Error).message,
         requestId,
       });
@@ -1160,18 +5156,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+      const email = typeof body.email === "string" ? body.email.trim().slice(0, 160) : undefined;
+      const company = typeof body.company === "string" ? body.company.trim().slice(0, 160) : undefined;
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!existing) {
         json(res, 404, { error: "lead_not_found" });
         return;
       }
+      if (!(await canManageLead(prisma, client, clientAuth, existing, requestId, "app_lead_update"))) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: existing.waIdCanonical ?? existing.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode editar leads de conversas atribuidas a voce.",
+        });
+        return;
+      }
       const lead = await prisma.lead.update({
         where: { id: leadId },
-        data: { name: name || null },
-        select: { id: true, name: true, updatedAt: true },
+        data: {
+          name: name || null,
+          ...(email !== undefined ? { email: email || null } : {}),
+          ...(company !== undefined ? { company: company || null } : {}),
+        },
+        select: { id: true, name: true, email: true, company: true, updatedAt: true },
       });
       json(res, 200, { ok: true, lead });
     } catch (error) {
@@ -1212,17 +5231,46 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const status = String(body.status ?? "").trim().toUpperCase();
-      const allowed = new Set(["NEW", "QUALIFIED", "WAITING_ATTENDANT", "IN_ATTENDANCE", "CLOSED"]);
+      const allowed = new Set([
+        "NEW",
+        "QUALIFIED",
+        "WAITING_ATTENDANT",
+        "IN_ATTENDANCE",
+        "CLOSED",
+        "OPEN",
+        "WON",
+        "LOST",
+        "FOLLOW_UP",
+        "NO_RESPONSE",
+        "NURTURE",
+      ]);
       if (!allowed.has(status)) {
         json(res, 400, { error: "bad_request" });
         return;
       }
       const existing = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!existing) {
         json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      if (!(await canManageLead(prisma, client, clientAuth, existing, requestId, "app_lead_status"))) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id/status",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: existing.waIdCanonical ?? existing.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode alterar o status de leads de conversas atribuidas a voce.",
+        });
         return;
       }
       const lead = await prisma.lead.update({
@@ -1268,10 +5316,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
-        select: { id: true },
+        select: { id: true, waId: true, waIdCanonical: true },
       });
       if (!lead) {
         json(res, 404, { error: "lead_not_found" });
+        return;
+      }
+      if (
+        !(await canManageLead(prisma, client, clientAuth, lead, requestId, "app_lead_notes_create"))
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/lead/:id/notes",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: "not_owner",
+          leadId,
+          waId: lead.waIdCanonical ?? lead.waId,
+        });
+        json(res, 403, {
+          error: "forbidden",
+          message: "Voce so pode adicionar notas em leads de conversas atribuidas a voce.",
+        });
         return;
       }
       const body = await readJsonBody(req, res);
@@ -1362,6 +5429,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const result = await buildCampaignListPayload(prisma, {
         clientId: client.id,
         limit,
@@ -1401,6 +5475,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const result = await buildCampaignDetailPayload(prisma, {
         clientId: client.id,
         campaignId,
@@ -1445,6 +5526,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const cancelled = await cancelScopedCampaign(prisma, {
         clientId: client.id,
         campaignId,
@@ -1522,6 +5610,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
       const waIds = dedupeCampaignRecipients(rawWaIds, {
         source: "app_campaign_create",
         clientId: client.id,
@@ -1689,13 +5784,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const users = await prisma.user.findMany({
           where: { clientId: client.id },
           orderBy: [{ createdAt: "desc" }],
-          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
         });
         json(res, 200, { ok: true, count: users.length, items: users });
       } catch (error) {
@@ -1704,7 +5807,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -1715,40 +5818,104 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!clientKey) return;
         const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
         if (!client) {
-          json(res, 404, { error: "client_not_found" });
+          json(res, 404, httpError("client_not_found", "Client not found"));
           return;
         }
         const body = await readJsonBody(req, res);
         if (!body) return;
-        const name = String(body.name ?? "").trim();
-        const email = String(body.email ?? "").trim().toLowerCase();
-        const password = typeof body.password === "string" ? body.password : "";
-        const role = String(body.role ?? "AGENT").trim().toUpperCase();
-        if (!name || !email) {
-          json(res, 400, { error: "bad_request" });
+        const parsed = await parseAdminUserUpsertPayload(prisma, {
+          clientId: client.id,
+          body,
+          requireName: true,
+          requireEmail: true,
+          requireRole: false,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
           return;
         }
-        if (password && password.length < 6) {
-          json(res, 400, { error: "weak_password" });
+        const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+          email: parsed.data.email,
+        });
+        if (!emailAvailability.ok) {
+          json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
           return;
+        }
+        const { data } = parsed;
+        const password = typeof body.password === "string" ? body.password : "";
+        if (password && password.length < 6) {
+          json(res, 400, httpError("weak_password", "Password must be at least 6 characters"));
+          return;
+        }
+        if ((data.isActive ?? true) === true) {
+          const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+            clientId: client.id,
+            clientKey,
+            requestId,
+          });
+          if (!activeLimit.ok) {
+            json(
+              res,
+              409,
+              httpError(
+                "user_limit_exceeded",
+                `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+              )
+            );
+            return;
+          }
         }
         const user = await prisma.user.create({
           data: {
             clientId: client.id,
-            name,
-            email,
+            name: data.name as string,
+            email: data.email as string,
+            ...(data.role ? { role: data.role } : {}),
+            ...(Object.prototype.hasOwnProperty.call(data, "departmentId")
+              ? { departmentId: data.departmentId }
+              : {}),
+            ...(typeof data.isActive === "boolean" ? { isActive: data.isActive } : {}),
             ...(password ? { passwordHash: hashPassword(password) } : {}),
-            role,
           },
-          select: { id: true, name: true, email: true, role: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
         });
+        logger.info({
+          event: "user.created",
+          requestId,
+          clientId: client.id,
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          isActive: user.isActive,
+        });
+        if (user.departmentId) {
+          logger.info({
+            event: "user.department.assigned",
+            requestId,
+            clientId: client.id,
+            userId: user.id,
+            departmentId: user.departmentId,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+          });
+        }
         json(res, 200, { ok: true, user });
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
           error.code === "P2002"
         ) {
-          json(res, 409, { error: "user_already_exists" });
+          json(res, 409, httpError("user_already_exists", "User email already exists"));
           return;
         }
         logger.error({
@@ -1756,7 +5923,142 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message: (error as Error).message,
           requestId,
         });
-        json(res, 500, { error: "server_error" });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      (req.method === "PATCH" || req.method === "PUT") &&
+      pathname.startsWith("/admin/users/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const userId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!userId) {
+          json(res, 400, httpError("bad_request", "User id is required"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const existingUser = await prisma.user.findFirst({
+          where: { id: userId, clientId: client.id },
+          select: { id: true, departmentId: true, role: true, isActive: true },
+        });
+        if (!existingUser) {
+          json(res, 404, httpError("user_not_found", "User not found"));
+          return;
+        }
+        const parsed = await parseAdminUserUpsertPayload(prisma, {
+          clientId: client.id,
+          body,
+          requireName: false,
+          requireEmail: false,
+          requireRole: false,
+          currentRole: existingUser.role,
+          currentDepartmentId: existingUser.departmentId,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const emailAvailability = await assertGlobalUserEmailAvailable(prisma, {
+          email: parsed.data.email,
+          exceptUserId: existingUser.id,
+        });
+        if (!emailAvailability.ok) {
+          json(res, emailAvailability.status, httpError(emailAvailability.code, emailAvailability.message));
+          return;
+        }
+        if (Object.keys(parsed.data).length === 0) {
+          json(
+            res,
+            400,
+            httpError(
+              "bad_request",
+              "Provide at least one of name, email, role, departmentId or isActive"
+            )
+          );
+          return;
+        }
+        if (parsed.data.isActive === true && existingUser.isActive === false) {
+          const activeLimit = await assertTenantActiveUserLimitAvailable(prisma, {
+            clientId: client.id,
+            clientKey,
+            requestId,
+          });
+          if (!activeLimit.ok) {
+            json(
+              res,
+              409,
+              httpError(
+                "user_limit_exceeded",
+                `Limite de usuarios ativos atingido (${activeLimit.maxActiveAppUsers}).`
+              )
+            );
+            return;
+          }
+        }
+        const user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: parsed.data,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            departmentId: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        logger.info({
+          event: "user.updated",
+          requestId,
+          clientId: client.id,
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId,
+          isActive: user.isActive,
+        });
+        if (existingUser.departmentId !== user.departmentId && user.departmentId) {
+          logger.info({
+            event: "user.department.assigned",
+            requestId,
+            clientId: client.id,
+            userId: user.id,
+            departmentId: user.departmentId,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+          });
+        }
+        json(res, 200, { ok: true, user });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(res, 409, httpError("user_already_exists", "User email already exists"));
+          return;
+        }
+        logger.error({
+          event: "admin.users.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -1821,12 +6123,1526 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/reports/conversations") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const range = parseConversationReportRange(query.range);
+        if (!range) {
+          json(res, 400, httpError("invalid_range", "Invalid range"));
+          return;
+        }
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const requestedDepartmentId =
+          typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+        if (requestedDepartmentId) {
+          const department = await prisma.department.findFirst({
+            where: {
+              id: requestedDepartmentId,
+              clientId: client.id,
+            },
+            select: { id: true },
+          });
+          if (!department) {
+            json(res, 404, httpError("department_not_found", "Department not found"));
+            return;
+          }
+        }
+        const metrics = await prisma.conversationMetrics.findMany({
+          where: {
+            clientId: client.id,
+            startedAt: { gte: range.since },
+            ...(requestedDepartmentId
+              ? {
+                  conversation: {
+                    departmentId: requestedDepartmentId,
+                  },
+                }
+              : {}),
+          },
+          select: {
+            conversationId: true,
+            firstResponseTimeSec: true,
+            totalResponseTimeSec: true,
+            responseCount: true,
+            avgResponseTimeSec: true,
+            resolutionTimeSec: true,
+            conversation: {
+              select: {
+                waId: true,
+                departmentId: true,
+              },
+            },
+          },
+        });
+        const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+        const runtimeStates = waIds.length
+          ? await prisma.conversationRuntimeState.findMany({
+              where: {
+                clientId: client.id,
+                waId: { in: waIds },
+              },
+              select: {
+                waId: true,
+                assignedUserId: true,
+                assignments: {
+                  select: {
+                    toUserId: true,
+                  },
+                },
+              },
+            })
+          : [];
+        const slaConfig = await prisma.sLAConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            firstResponseLimitSec: true,
+            resolutionTimeLimitSec: true,
+          },
+        });
+        const departmentIds = Array.from(
+          new Set(
+            metrics
+              .map((item) => item.conversation.departmentId ?? null)
+              .filter((value): value is string => typeof value === "string" && value.length > 0)
+          )
+        );
+        const departments = departmentIds.length
+          ? await prisma.department.findMany({
+              where: {
+                clientId: client.id,
+                id: { in: departmentIds },
+              },
+              select: {
+                id: true,
+                name: true,
+              },
+            })
+          : [];
+        const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
+        const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
+        const filteredMetrics = requestedUserId
+          ? metrics.filter(
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserIds.includes(requestedUserId)
+            )
+          : metrics;
+        const totalConversations = filteredMetrics.length;
+        const firstResponseValues = filteredMetrics
+          .map((item) => item.firstResponseTimeSec)
+          .filter((value): value is number => typeof value === "number");
+        const resolutionValues = filteredMetrics
+          .map((item) => item.resolutionTimeSec)
+          .filter((value): value is number => typeof value === "number");
+        const avgFirstResponseTimeSec =
+          firstResponseValues.length > 0
+            ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+            : null;
+        const avgResolutionTimeSec =
+          resolutionValues.length > 0
+            ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+            : null;
+        const firstResponseLimitSec =
+          slaConfig && slaConfig.firstResponseLimitSec > 0 ? slaConfig.firstResponseLimitSec : null;
+        const resolutionTimeLimitSec =
+          slaConfig && slaConfig.resolutionTimeLimitSec > 0 ? slaConfig.resolutionTimeLimitSec : null;
+        const slaBreaches = filteredMetrics.reduce((count, item) => {
+          const firstResponseBreached =
+            firstResponseLimitSec !== null &&
+            item.firstResponseTimeSec !== null &&
+            item.firstResponseTimeSec > firstResponseLimitSec;
+          const resolutionBreached =
+            resolutionTimeLimitSec !== null &&
+            item.resolutionTimeSec !== null &&
+            item.resolutionTimeSec > resolutionTimeLimitSec;
+          return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+        }, 0);
+
+        const byAgentMap = new Map<
+          string,
+          { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
+        >();
+        for (const item of filteredMetrics) {
+          const assignedUserIds = stateByWaId.get(item.conversation.waId)?.assignedUserIds ?? [];
+          for (const assignedUserId of assignedUserIds) {
+            const current = byAgentMap.get(assignedUserId) ?? {
+              userId: assignedUserId,
+              conversations: 0,
+              totalResponseTimeSec: 0,
+              responseCount: 0,
+            };
+            current.conversations += 1;
+            current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+            current.responseCount += item.responseCount ?? 0;
+            byAgentMap.set(assignedUserId, current);
+          }
+        }
+        const byDepartmentMap = new Map<
+          string,
+          {
+            departmentId: string | null;
+            departmentName: string | null;
+            conversations: number;
+            totalResponseTimeSec: number;
+            responseCount: number;
+          }
+        >();
+        for (const item of filteredMetrics) {
+          const departmentId = item.conversation.departmentId ?? null;
+          const key = departmentId ?? "__none__";
+          const current = byDepartmentMap.get(key) ?? {
+            departmentId,
+            departmentName: departmentId ? departmentNameById.get(departmentId) ?? null : null,
+            conversations: 0,
+            totalResponseTimeSec: 0,
+            responseCount: 0,
+          };
+          current.conversations += 1;
+          current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+          current.responseCount += item.responseCount ?? 0;
+          byDepartmentMap.set(key, current);
+        }
+
+        json(res, 200, {
+          ok: true,
+          range: range.key,
+          userId: requestedUserId || null,
+          departmentId: requestedDepartmentId || null,
+          totalConversations,
+          avgFirstResponseTimeSec,
+          avgResolutionTimeSec,
+          slaBreaches,
+          byAgent: Array.from(byAgentMap.values()).map((item) => ({
+            userId: item.userId,
+            conversations: item.conversations,
+            avgResponseTimeSec:
+              item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+          })),
+          byDepartment: Array.from(byDepartmentMap.values()).map((item) => ({
+            departmentId: item.departmentId,
+            departmentName: item.departmentName,
+            conversations: item.conversations,
+            avgResponseTimeSec:
+              item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+          })),
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.reports.conversations.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/reports/conversations/export") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const range = parseConversationReportRange(query.range);
+        if (!range) {
+          json(res, 400, httpError("invalid_range", "Invalid range"));
+          return;
+        }
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const requestedUserId = typeof query.userId === "string" ? query.userId.trim() : "";
+        const requestedDepartmentId =
+          typeof query.departmentId === "string" ? query.departmentId.trim() : "";
+        if (requestedDepartmentId) {
+          const department = await prisma.department.findFirst({
+            where: {
+              id: requestedDepartmentId,
+              clientId: client.id,
+            },
+            select: { id: true },
+          });
+          if (!department) {
+            json(res, 404, httpError("department_not_found", "Department not found"));
+            return;
+          }
+        }
+        const metrics = await prisma.conversationMetrics.findMany({
+          where: {
+            clientId: client.id,
+            startedAt: { gte: range.since },
+            ...(requestedDepartmentId
+              ? {
+                  conversation: {
+                    departmentId: requestedDepartmentId,
+                  },
+                }
+              : {}),
+          },
+          orderBy: { startedAt: "desc" },
+          select: {
+            conversationId: true,
+            firstResponseTimeSec: true,
+            resolutionTimeSec: true,
+            startedAt: true,
+            closedAt: true,
+            conversation: {
+              select: {
+                waId: true,
+                departmentId: true,
+              },
+            },
+          },
+        });
+        const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+        const runtimeStates = waIds.length
+          ? await prisma.conversationRuntimeState.findMany({
+              where: {
+                clientId: client.id,
+                waId: { in: waIds },
+              },
+              select: {
+                waId: true,
+                assignedUserId: true,
+                status: true,
+                assignments: {
+                  select: {
+                    toUserId: true,
+                  },
+                },
+              },
+            })
+          : [];
+        const departmentIds = Array.from(
+          new Set(
+            metrics
+              .map((item) => item.conversation.departmentId ?? null)
+              .filter((value): value is string => typeof value === "string" && value.length > 0)
+          )
+        );
+        const departments = departmentIds.length
+          ? await prisma.department.findMany({
+              where: {
+                clientId: client.id,
+                id: { in: departmentIds },
+              },
+              select: {
+                id: true,
+                name: true,
+              },
+            })
+          : [];
+        const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
+        const stateByWaId = buildReportRuntimeStateMap(runtimeStates);
+        const filteredMetrics = requestedUserId
+          ? metrics.filter(
+              (item) => stateByWaId.get(item.conversation.waId)?.assignedUserIds.includes(requestedUserId)
+            )
+          : metrics;
+        const lines = [
+          [
+            "conversationId",
+            "waId",
+            "departmentId",
+            "departmentName",
+            "assignedUserId",
+            "status",
+            "firstResponseTimeSec",
+            "resolutionTimeSec",
+            "createdAt",
+            "closedAt",
+          ].join(","),
+          ...filteredMetrics.map((item) => {
+            const runtimeState = stateByWaId.get(item.conversation.waId);
+            const departmentId = item.conversation.departmentId ?? null;
+            return [
+              csvCell(item.conversationId),
+              csvCell(item.conversation.waId),
+              csvCell(departmentId),
+              csvCell(departmentId ? departmentNameById.get(departmentId) ?? null : null),
+              csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
+              csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
+              csvCell(item.firstResponseTimeSec),
+              csvCell(item.resolutionTimeSec),
+              csvCell(item.startedAt.toISOString()),
+              csvCell(item.closedAt ? item.closedAt.toISOString() : null),
+            ].join(",");
+          }),
+        ];
+        res.writeHead(200, {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=\"conversation-report-${clientKey}-${range.key}.csv\"`,
+        });
+        res.end(lines.join("\n"));
+      } catch (error) {
+        logger.error({
+          event: "admin.reports.conversations_export.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/departments") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const includeInactive = parsedUrl.searchParams.get("includeInactive") === "true";
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const departments = await prisma.department.findMany({
+          where: {
+            clientId: client.id,
+            ...(includeInactive ? {} : { isActive: true }),
+            ...LEGACY_OPERATIONAL_DEPARTMENT_FILTER,
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          count: departments.length,
+          items: departments,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.departments.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/departments") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          json(res, 400, httpError("bad_request", "Department name is required"));
+          return;
+        }
+        const slug = normalizeDepartmentSlug(name);
+        const existingBySlug = await prisma.department.findFirst({
+          where: {
+            clientId: client.id,
+            slug,
+          },
+          select: { id: true },
+        });
+        if (existingBySlug) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
+        const department = await prisma.department.create({
+          data: {
+            clientId: client.id,
+            name,
+            slug,
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        logger.info({
+          event: "department.created",
+          requestId,
+          clientId: client.id,
+          departmentId: department.id,
+          isActive: department.isActive,
+        });
+        json(res, 200, { ok: true, department });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
+        logger.error({
+          event: "admin.departments.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "PATCH" &&
+      pathname.startsWith("/admin/departments/") &&
+      pathname.split("/").length === 4
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const departmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!departmentId) {
+          json(res, 400, httpError("bad_request", "Department id is required"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const hasName = typeof body.name === "string";
+        const hasActive = typeof body.isActive === "boolean";
+        if (!hasName && !hasActive) {
+          json(res, 400, httpError("bad_request", "Provide name and/or isActive"));
+          return;
+        }
+        const name = hasName ? String(body.name ?? "").trim() : undefined;
+        if (hasName && !name) {
+          json(res, 400, httpError("bad_request", "Department name is required"));
+          return;
+        }
+        const existing = await prisma.department.findFirst({
+          where: {
+            id: departmentId,
+            clientId: client.id,
+          },
+          select: { id: true, isActive: true, slug: true },
+        });
+        if (!existing) {
+          json(res, 404, httpError("department_not_found", "Department not found"));
+          return;
+        }
+        const slug = hasName ? normalizeDepartmentSlug(name as string) : existing.slug;
+        if (hasName && slug !== existing.slug) {
+          const conflictingDepartment = await prisma.department.findFirst({
+            where: {
+              clientId: client.id,
+              slug,
+              NOT: { id: existing.id },
+            },
+            select: { id: true },
+          });
+          if (conflictingDepartment) {
+            json(
+              res,
+              409,
+              httpError("department_slug_conflict", "Department slug already exists for this tenant")
+            );
+            return;
+          }
+        }
+        const department = await prisma.department.update({
+          where: { id: existing.id },
+          data: {
+            ...(hasName ? { name } : {}),
+            ...(hasName ? { slug } : {}),
+            ...(hasActive ? { isActive: Boolean(body.isActive) } : {}),
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+        if (hasActive && existing.isActive !== department.isActive) {
+          logger.info({
+            event: "department.toggled",
+            requestId,
+            clientId: client.id,
+            departmentId: department.id,
+            isActive: department.isActive,
+          });
+        }
+        json(res, 200, { ok: true, department });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          json(
+            res,
+            409,
+            httpError("department_slug_conflict", "Department slug already exists for this tenant")
+          );
+          return;
+        }
+        logger.error({
+          event: "admin.departments.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/departments/") &&
+      pathname.split("/").length === 5 &&
+      pathname.split("/")[4] === "consolidate"
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const sourceDepartmentId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!sourceDepartmentId) {
+          json(res, 400, httpError("bad_request", "Department id is required"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const targetDepartmentId =
+          typeof body.targetDepartmentId === "string" ? body.targetDepartmentId.trim() : "";
+        if (!targetDepartmentId) {
+          json(res, 400, httpError("bad_request", "targetDepartmentId is required"));
+          return;
+        }
+        if (sourceDepartmentId === targetDepartmentId) {
+          json(
+            res,
+            400,
+            httpError("bad_request", "Source and target departments must be different")
+          );
+          return;
+        }
+        const [sourceDepartment, targetDepartment] = await Promise.all([
+          prisma.department.findFirst({
+            where: {
+              id: sourceDepartmentId,
+              clientId: client.id,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+            },
+          }),
+          prisma.department.findFirst({
+            where: {
+              id: targetDepartmentId,
+              clientId: client.id,
+            },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+            },
+          }),
+        ]);
+        if (!sourceDepartment) {
+          json(res, 404, httpError("department_not_found", "Department not found"));
+          return;
+        }
+        if (!targetDepartment) {
+          json(
+            res,
+            404,
+            httpError("target_department_not_found", "Target department not found")
+          );
+          return;
+        }
+        if (!targetDepartment.isActive) {
+          json(
+            res,
+            409,
+            httpError("target_department_inactive", "Target department must be active")
+          );
+          return;
+        }
+        logger.info({
+          event: "department.consolidation.started",
+          requestId,
+          clientId: client.id,
+          sourceDepartmentId: sourceDepartment.id,
+          targetDepartmentId: targetDepartment.id,
+        });
+        const consolidation = await prisma.$transaction(async (tx) => {
+          const [sourceQueues, targetQueues] = await Promise.all([
+            tx.queue.findMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              select: { id: true, name: true },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            }),
+            tx.queue.findMany({
+              where: {
+                clientId: client.id,
+                departmentId: targetDepartment.id,
+              },
+              select: { id: true, name: true },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            }),
+          ]);
+
+          const targetQueueByName = new Map(
+            targetQueues.map((queue) => [queue.name.toLocaleLowerCase("pt-BR"), queue])
+          );
+          let queuesMoved = 0;
+          let queuesMerged = 0;
+          let runtimeStatesRequeued = 0;
+
+          for (const sourceQueue of sourceQueues) {
+            const targetQueue = targetQueueByName.get(
+              sourceQueue.name.toLocaleLowerCase("pt-BR")
+            );
+            if (targetQueue) {
+              const reassigned = await tx.conversationRuntimeState.updateMany({
+                where: {
+                  clientId: client.id,
+                  queueId: sourceQueue.id,
+                },
+                data: {
+                  queueId: targetQueue.id,
+                  departmentId: targetDepartment.id,
+                },
+              });
+              runtimeStatesRequeued += reassigned.count;
+              queuesMerged += 1;
+              continue;
+            }
+
+            await tx.queue.update({
+              where: { id: sourceQueue.id },
+              data: { departmentId: targetDepartment.id },
+            });
+            targetQueueByName.set(sourceQueue.name.toLocaleLowerCase("pt-BR"), sourceQueue);
+            queuesMoved += 1;
+          }
+
+          const [users, conversations, runtimeStates] = await Promise.all([
+            tx.user.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+            tx.conversation.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+            tx.conversationRuntimeState.updateMany({
+              where: {
+                clientId: client.id,
+                departmentId: sourceDepartment.id,
+              },
+              data: { departmentId: targetDepartment.id },
+            }),
+          ]);
+
+          const updatedSourceDepartment = await tx.department.update({
+            where: { id: sourceDepartment.id },
+            data: { isActive: false },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              createdAt: true,
+            },
+          });
+
+          const refreshedTargetDepartment = await tx.department.findUniqueOrThrow({
+            where: { id: targetDepartment.id },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              isActive: true,
+              createdAt: true,
+            },
+          });
+
+          return {
+            sourceDepartment: updatedSourceDepartment,
+            targetDepartment: refreshedTargetDepartment,
+            counts: {
+              usersMoved: users.count,
+              conversationsMoved: conversations.count,
+              runtimeStatesMoved: runtimeStates.count,
+              queuesMoved,
+              queuesMerged,
+              runtimeStatesRequeued,
+            },
+          };
+        });
+
+        logger.info({
+          event: "department.consolidation.completed",
+          requestId,
+          clientId: client.id,
+          sourceDepartmentId: sourceDepartment.id,
+          targetDepartmentId: targetDepartment.id,
+          ...consolidation.counts,
+        });
+        json(res, 200, {
+          ok: true,
+          sourceDepartment: consolidation.sourceDepartment,
+          targetDepartment: consolidation.targetDepartment,
+          counts: consolidation.counts,
+        });
+      } catch (error) {
+        logger.error({
+          event: "department.consolidation.failed",
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/chatbot/flows") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const items = await prisma.chatbotFlow.findMany({
+          where: { clientId: client.id },
+          orderBy: [{ entryPoint: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            isActive: true,
+            entryPoint: true,
+            definition: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+        json(res, 200, { ok: true, count: items.length, items });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/chatbot/settings") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const tenants = await getTenants();
+        const tenant = tenants[clientKey];
+        if (!tenant) {
+          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          tenantId: clientKey,
+          settings: {
+            disableAutoReply: tenant.disableAutoReply ?? false,
+            disableChatbot: Boolean(tenant.disableChatbot),
+            disableAiFallback: Boolean(tenant.disableAiFallback),
+            disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+            disableLegacyFlows: tenant.disableLegacyFlows !== false,
+            disableChatbotFlowEditing: Boolean(tenant.disableChatbotFlowEditing),
+            aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+            aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
+            aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+            aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+            aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
+            aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
+            aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
+            aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+            aiQualification: tenant.aiQualification,
+            handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
+            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+              tenant.handoffLeadNotificationRecipients
+            ),
+            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
+            aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
+            aiBusinessContext: tenant.aiBusinessContext ?? "",
+            aiConfigured: isAiAssistantConfigured(tenant),
+            chatbotLocked: false,
+            flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+            aiLocked: false,
+            aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
+            intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+            followUpEnabled: tenant.followUpEnabled === true,
+            followUpDelayMinutes: tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
+            followUpMaxCount: tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
+            followUpUseTemplate: tenant.followUpUseTemplate === true,
+            followUpTemplateName: tenant.followUpTemplateName ?? "",
+            followUpTemplateLang:
+              tenant.followUpTemplateLang ?? tenant.defaultLanguage ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.settings.get.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "PUT" && pathname === "/admin/chatbot/settings") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const data = body as Record<string, unknown>;
+        const keys = [
+          "disableChatbot",
+          "disableAiFallback",
+          "disableIntentClassifier",
+          "disableLegacyFlows",
+          "disableChatbotFlowEditing",
+        ] as const;
+        const payload: Record<string, boolean> = {};
+        for (const key of keys) {
+          if (Object.prototype.hasOwnProperty.call(data, key)) {
+            if (typeof data[key] !== "boolean") {
+              json(res, 400, httpError("bad_request", `${key} must be boolean`));
+              return;
+            }
+            payload[key] = data[key] as boolean;
+          }
+        }
+        const followUpPatch: Record<string, unknown> = {};
+        if (Object.prototype.hasOwnProperty.call(data, "followUpEnabled")) {
+          if (typeof data.followUpEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "followUpEnabled must be boolean"));
+            return;
+          }
+          followUpPatch.followUpEnabled = data.followUpEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpUseTemplate")) {
+          if (typeof data.followUpUseTemplate !== "boolean") {
+            json(res, 400, httpError("bad_request", "followUpUseTemplate must be boolean"));
+            return;
+          }
+          followUpPatch.followUpUseTemplate = data.followUpUseTemplate;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpDelayMinutes")) {
+          if (
+            typeof data.followUpDelayMinutes !== "number" ||
+            !Number.isFinite(data.followUpDelayMinutes) ||
+            data.followUpDelayMinutes < 1
+          ) {
+            json(res, 400, httpError("bad_request", "followUpDelayMinutes must be a positive number"));
+            return;
+          }
+          followUpPatch.followUpDelayMinutes = Math.floor(data.followUpDelayMinutes);
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpMaxCount")) {
+          if (
+            typeof data.followUpMaxCount !== "number" ||
+            !Number.isInteger(data.followUpMaxCount) ||
+            data.followUpMaxCount < 0
+          ) {
+            json(res, 400, httpError("bad_request", "followUpMaxCount must be a non-negative integer"));
+            return;
+          }
+          followUpPatch.followUpMaxCount = data.followUpMaxCount;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateName")) {
+          if (typeof data.followUpTemplateName !== "string") {
+            json(res, 400, httpError("bad_request", "followUpTemplateName must be string"));
+            return;
+          }
+          const templateName = data.followUpTemplateName.trim();
+          if (templateName && !/^[a-z0-9_]+$/.test(templateName)) {
+            json(res, 400, httpError("bad_request", "followUpTemplateName must use lowercase letters, numbers and underscore"));
+            return;
+          }
+          followUpPatch.followUpTemplateName = templateName || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateLang")) {
+          if (typeof data.followUpTemplateLang !== "string") {
+            json(res, 400, httpError("bad_request", "followUpTemplateLang must be string"));
+            return;
+          }
+          const templateLang = data.followUpTemplateLang.trim();
+          if (templateLang && !/^[a-z]{2}_[A-Z]{2}$/.test(templateLang)) {
+            json(res, 400, httpError("bad_request", "followUpTemplateLang must use format pt_BR"));
+            return;
+          }
+          followUpPatch.followUpTemplateLang = templateLang || undefined;
+        }
+        const aiAssistantPatch: Record<string, unknown> = {};
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
+          if (typeof data.aiAssistantEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "aiAssistantEnabled must be boolean"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantEnabled = data.aiAssistantEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackToHandoff")) {
+          if (typeof data.aiAssistantFallbackToHandoff !== "boolean") {
+            json(res, 400, httpError("bad_request", "aiAssistantFallbackToHandoff must be boolean"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantFallbackToHandoff = data.aiAssistantFallbackToHandoff;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantMaxReplies")) {
+          if (
+            typeof data.aiAssistantMaxReplies !== "number" ||
+            !Number.isInteger(data.aiAssistantMaxReplies) ||
+            data.aiAssistantMaxReplies < 0
+          ) {
+            json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile")) {
+          if (
+            data.aiAssistantProfile !== "business" &&
+            data.aiAssistantProfile !== "government" &&
+            data.aiAssistantProfile !== "legal_previdenciario"
+          ) {
+            json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantProfile = data.aiAssistantProfile;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSystemPrompt")) {
+          if (typeof data.aiAssistantSystemPrompt !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantSystemPrompt must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantAllowedTopics);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantAllowedTopics must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantAllowedTopics = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSecondaryTopics")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantSecondaryTopics);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantSecondaryTopics must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantSecondaryTopics = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantBlockedTerms must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantBlockedTerms = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffKeywords")) {
+          const terms = normalizeAiAssistantTermList(data.aiAssistantHandoffKeywords);
+          if (!terms) {
+            json(res, 400, httpError("bad_request", "aiAssistantHandoffKeywords must be an array of strings"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantHandoffKeywords = terms;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackMessage")) {
+          if (typeof data.aiAssistantFallbackMessage !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantFallbackMessage must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantFallbackMessage =
+            data.aiAssistantFallbackMessage.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantGreetingMessage")) {
+          if (typeof data.aiAssistantGreetingMessage !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantGreetingMessage must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantGreetingMessage =
+            data.aiAssistantGreetingMessage.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffPrompt")) {
+          if (typeof data.aiAssistantHandoffPrompt !== "string") {
+            json(res, 400, httpError("bad_request", "aiAssistantHandoffPrompt must be string"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantHandoffPrompt =
+            data.aiAssistantHandoffPrompt.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiAssistantIntentCatalog")) {
+          const catalog = normalizeAiAssistantIntentCatalog(data.aiAssistantIntentCatalog);
+          if (!catalog) {
+            json(res, 400, httpError("bad_request", "aiAssistantIntentCatalog must be an array of intent objects"));
+            return;
+          }
+          aiAssistantPatch.aiAssistantIntentCatalog = catalog;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiQualification")) {
+          if (data.aiQualification === null || data.aiQualification === undefined) {
+            aiAssistantPatch.aiQualification = undefined;
+          } else {
+            const qualification = normalizeQualificationSchema(data.aiQualification);
+            if (!qualification) {
+              json(res, 400, httpError("bad_request", "aiQualification must be a valid qualification schema"));
+              return;
+            }
+            aiAssistantPatch.aiQualification = qualification;
+          }
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
+          if (typeof data.aiBusinessContext !== "string") {
+            json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
+            return;
+          }
+          aiAssistantPatch.aiBusinessContext = data.aiBusinessContext.trim() || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
+          if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
+            json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
+            return;
+          }
+          aiAssistantPatch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
+          if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
+            json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
+            return;
+          }
+          aiAssistantPatch.handoffLeadNotificationRecipients =
+            normalizeHandoffLeadNotificationRecipients(data.handoffLeadNotificationRecipients);
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
+          aiAssistantPatch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
+        }
+        if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
+          if (typeof data.disableAiFallback !== "boolean") {
+            json(res, 400, httpError("bad_request", "disableAiFallback must be boolean"));
+            return;
+          }
+          aiAssistantPatch.disableAiFallback = data.disableAiFallback;
+        }
+        const presetApplied =
+          typeof data.aiAssistantPresetApplied === "string"
+            ? data.aiAssistantPresetApplied.trim().slice(0, 40)
+            : null;
+        if (
+          Object.keys(payload).length === 0 &&
+          Object.keys(followUpPatch).length === 0 &&
+          Object.keys(aiAssistantPatch).length === 0
+        ) {
+          json(
+            res,
+            400,
+            httpError(
+              "bad_request",
+              "Provide at least one of disableChatbot, disableAiFallback or disableIntentClassifier"
+            )
+          );
+          return;
+        }
+        const tenants = await getTenants();
+        const tenant = tenants[clientKey];
+        if (!tenant) {
+          json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+          return;
+        }
+        const proposedTenant = {
+          ...tenant,
+          ...payload,
+          ...followUpPatch,
+          ...aiAssistantPatch,
+        };
+        const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
+        if (aiAssistantPatch.aiAssistantEnabled === true && !proposedAiStatus.ready) {
+          logger.warn({
+            event: "ai.assistant.config_incomplete",
+            requestId,
+            clientId: client.id,
+            clientKey,
+            missing: proposedAiStatus.missing,
+            warnings: proposedAiStatus.warnings,
+            score: proposedAiStatus.score,
+            reason: "activation_blocked",
+          });
+          json(
+            res,
+            409,
+            httpError(
+              "ai_assistant_config_incomplete",
+              `IA supervisionada ainda não está pronta: ${proposedAiStatus.missing.join(", ")}`
+            )
+          );
+          return;
+        }
+        if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
+          json(
+            res,
+            409,
+            httpError(
+              "intent_classifier_globally_disabled",
+              "Classificacao por mensagem livre esta desativada no ambiente."
+            )
+          );
+          return;
+        }
+        const saved = await saveTenantPatch(clientKey, {
+          ...(payload.disableChatbot !== undefined
+            ? { disableChatbot: payload.disableChatbot }
+            : {}),
+          ...(payload.disableAiFallback !== undefined
+            ? { disableAiFallback: payload.disableAiFallback }
+            : {}),
+          ...(payload.disableIntentClassifier !== undefined
+            ? { disableIntentClassifier: payload.disableIntentClassifier }
+            : {}),
+          ...(payload.disableLegacyFlows !== undefined
+            ? { disableLegacyFlows: payload.disableLegacyFlows }
+            : {}),
+          ...(payload.disableChatbotFlowEditing !== undefined
+            ? { disableChatbotFlowEditing: payload.disableChatbotFlowEditing }
+            : {}),
+          ...followUpPatch,
+          ...aiAssistantPatch,
+        });
+        logger.info({
+          event: "admin.chatbot.settings.updated",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          fieldsChanged: saved.fieldsChanged,
+        });
+        const savedAiStatus = getAiAssistantConfigurationStatus(saved.tenant);
+        logger.info({
+          event: savedAiStatus.ready ? "ai.assistant.config_ready" : "ai.assistant.config_incomplete",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          missing: savedAiStatus.missing,
+          warnings: savedAiStatus.warnings,
+          score: savedAiStatus.score,
+        });
+        if (presetApplied) {
+          logger.info({
+            event: "ai.assistant.preset_applied",
+            requestId,
+            clientId: client.id,
+            clientKey,
+            preset: presetApplied,
+            score: savedAiStatus.score,
+          });
+        }
+        json(res, 200, {
+          ok: true,
+          tenantId: clientKey,
+          fieldsChanged: saved.fieldsChanged,
+          settings: {
+            disableAutoReply: Boolean(saved.tenant.disableAutoReply),
+            disableChatbot: Boolean(saved.tenant.disableChatbot),
+            disableAiFallback: Boolean(saved.tenant.disableAiFallback),
+            disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
+            disableLegacyFlows: saved.tenant.disableLegacyFlows !== false,
+            disableChatbotFlowEditing: Boolean(saved.tenant.disableChatbotFlowEditing),
+            aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
+            aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
+            aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
+            aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
+            aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
+            aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
+            aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
+            aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
+            aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
+            aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
+            aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
+            aiQualification: saved.tenant.aiQualification,
+            handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
+            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
+              saved.tenant.handoffLeadNotificationRecipients
+            ),
+            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
+            aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
+            aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
+            aiConfigured: isAiAssistantConfigured(saved.tenant),
+            chatbotLocked: false,
+            flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
+            aiLocked: false,
+            aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
+            intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+            followUpEnabled: saved.tenant.followUpEnabled === true,
+            followUpDelayMinutes: saved.tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
+            followUpMaxCount: saved.tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
+            followUpUseTemplate: saved.tenant.followUpUseTemplate === true,
+            followUpTemplateName: saved.tenant.followUpTemplateName ?? "",
+            followUpTemplateLang:
+              saved.tenant.followUpTemplateLang ??
+              saved.tenant.defaultLanguage ??
+              env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.settings.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/chatbot/flows") {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const parsed = parseChatbotFlowUpsertPayload(body, {
+          requireName: true,
+          requireDefinition: true,
+        });
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const flow = await prisma.$transaction(async (tx) => {
+          if (parsed.data.entryPoint === true) {
+            await tx.chatbotFlow.updateMany({
+              where: { clientId: client.id },
+              data: { entryPoint: false },
+            });
+          }
+          return tx.chatbotFlow.create({
+            data: {
+              clientId: client.id,
+              name: parsed.data.name as string,
+              isActive: parsed.data.isActive ?? false,
+              entryPoint: parsed.data.entryPoint ?? false,
+              definition: parsed.data.definition as Prisma.InputJsonValue,
+            },
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              isActive: true,
+              entryPoint: true,
+              definition: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+        });
+        logger.info({
+          event: "admin.chatbot.flow.created",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          flowId: flow.id,
+          isActive: flow.isActive,
+          entryPoint: flow.entryPoint,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.create.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "PUT" &&
+      pathname.startsWith("/admin/chatbot/flows/") &&
+      pathname.split("/").length === 5
+    ) {
+      try {
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({ where: { clientKey }, select: { id: true } });
+        if (!client) {
+          json(res, 404, httpError("client_not_found", "Client not found"));
+          return;
+        }
+        const flowId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!flowId) {
+          json(res, 400, httpError("bad_request", "Flow id is required"));
+          return;
+        }
+        const existing = await prisma.chatbotFlow.findFirst({
+          where: { id: flowId, clientId: client.id },
+          select: { id: true },
+        });
+        if (!existing) {
+          json(res, 404, httpError("chatbot_flow_not_found", "Chatbot flow not found"));
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const parsed = parseChatbotFlowUpsertPayload(body);
+        if (!parsed.ok) {
+          json(res, parsed.status, httpError(parsed.code, parsed.message));
+          return;
+        }
+        const flow = await prisma.$transaction(async (tx) => {
+          if (parsed.data.entryPoint === true) {
+            await tx.chatbotFlow.updateMany({
+              where: {
+                clientId: client.id,
+                id: { not: flowId },
+              },
+              data: { entryPoint: false },
+            });
+          }
+          return tx.chatbotFlow.update({
+            where: { id: flowId },
+            data: {
+              ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+              ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+              ...(parsed.data.entryPoint !== undefined
+                ? { entryPoint: parsed.data.entryPoint }
+                : {}),
+              ...(parsed.data.definition !== undefined
+                ? { definition: parsed.data.definition as Prisma.InputJsonValue }
+                : {}),
+            },
+            select: {
+              id: true,
+              clientId: true,
+              name: true,
+              isActive: true,
+              entryPoint: true,
+              definition: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+        });
+        logger.info({
+          event: "admin.chatbot.flow.updated",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          flowId: flow.id,
+          isActive: flow.isActive,
+          entryPoint: flow.entryPoint,
+        });
+        json(res, 200, { ok: true, flow });
+      } catch (error) {
+        logger.error({
+          event: "admin.chatbot.flows.update.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
     if (
       req.method === "GET" &&
       pathname.startsWith("/admin/conversations/") &&
       pathname.split("/").length === 4
     ) {
-      const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1897,7 +7713,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/reset")
     ) {
       const parts = pathname.split("/");
-      const waId = normalizeWaId(decodeURIComponent(parts[3] ?? ""));
+      const waId = normalizeConversationRouteId(decodeURIComponent(parts[3] ?? ""));
       if (!waId) {
         json(res, 400, { error: "bad_request" });
         return;
@@ -1957,7 +7773,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const body = await readJsonBody(req, res);
       if (!body) return;
-      const waId = normalizeWaId(String(body.waId ?? "").trim());
+      const waId = normalizeConversationRouteId(String(body.waId ?? "").trim());
       const clientKey = String(body.clientKey ?? "default").trim() || "default";
       if (!waId) {
         json(res, 400, { ok: false, error: "bad_request" });
@@ -1993,6 +7809,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           clientKey,
           limit,
+          cursor: null,
+          filters: {
+            status: null,
+            channel: normalizeConversationChannelFilter(query.channel),
+            departmentId: null,
+            assignedUserId: null,
+            unassigned: false,
+            search: "",
+          },
           includeAssignedUserName: true,
         });
         json(res, 200, result);
@@ -2009,12 +7834,485 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (
       req.method === "POST" &&
-      pathname.startsWith("/admin/conversation/") &&
-      pathname.split("/").length === 5 &&
-      pathname.endsWith("/claim")
+      /^\/admin\/conversations\/[^/]+\/assign$/.test(pathname)
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, {
+            error: {
+              code: "bad_request",
+              message: "Informe uma conversa valida.",
+            },
+          });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+        if (!requestedUserId) {
+          json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+          return;
+        }
+        const assignedUser = await prisma.user.findFirst({
+          where: { id: requestedUserId, client: { clientKey }, isActive: true },
+          select: { id: true, name: true, departmentId: true },
+        });
+        if (!assignedUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_assign",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser.departmentId,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
+        const assignedAt = new Date().toISOString();
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
+          assignedUserId: assignedUser.id,
+          assignedTo: `user:${assignedUser.id}`,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: routing.departmentId,
+        });
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.assigned",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          assignedUserId: assignedUser.id,
+          fromUserId: conversation.assignedUserId ?? null,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: assignedUser.name,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.assign.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/transfer$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : "";
+        if (!requestedUserId) {
+          json(res, 400, { error: "bad_request", message: "Informe o usuario de destino." });
+          return;
+        }
+        const assignedUser = await prisma.user.findFirst({
+          where: { id: requestedUserId, client: { clientKey }, isActive: true },
+          select: { id: true, name: true, departmentId: true },
+        });
+        if (!assignedUser) {
+          json(res, 404, { error: "user_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_transfer",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser.departmentId,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
+        const assignedAt = new Date().toISOString();
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
+          assignedUserId: assignedUser.id,
+          assignedTo: `user:${assignedUser.id}`,
+          assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: routing.departmentId,
+        });
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.transferred",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          fromUserId: conversation.assignedUserId ?? null,
+          toUserId: assignedUser.id,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: assignedUser.name,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.transfer.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/transfer-department$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const nextDepartmentId =
+          typeof body.departmentId === "string" ? body.departmentId.trim() : "";
+        if (!nextDepartmentId) {
+          json(res, 400, {
+            error: {
+              code: "bad_request",
+              message: "Informe o departmentId de destino.",
+            },
+          });
+          return;
+        }
+        const department = await prisma.department.findFirst({
+          where: {
+            id: nextDepartmentId,
+            clientId: client.id,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        });
+        if (!department) {
+          json(res, 404, { error: "department_not_found" });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_transfer_department",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+
+        const previousDepartmentId = conversation.departmentId ?? null;
+        const queue = await ensureQueueForDepartment(prisma, {
+          clientId: client.id,
+          departmentId: department.id,
+        });
+        const nextState = {
+          ...conversation,
+          mode: "HUMAN" as const,
+          departmentId: department.id,
+          queueId: queue.id,
+          assignedUserId: null,
+          assignedTo: null,
+          assignedAt: null,
+          status: ConversationOperationalStatus.WAITING,
+          closedAt: null,
+        };
+
+        await runtimeStorage.upsertConversation(nextState);
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          departmentId: department.id,
+        });
+
+        logger.info({
+          event: "conversation.department.transferred",
+          clientId: client.id,
+          conversationId: nextState.waId,
+          waId: nextState.waId,
+          fromDepartmentId: previousDepartmentId,
+          toDepartmentId: department.id,
+          userId: resolveAssignedTo(adminAuth),
+          requestId,
+        });
+        publishRealtimeEvent({
+          type: "conversation.handoff.updated",
+          clientId: client.id,
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          mode: "HUMAN",
+          handoffStatus:
+            nextState.handoff.status === "pending" || nextState.handoff.status === "active"
+              ? nextState.handoff.status
+              : "active",
+          assignedUserId: nextState.assignedUserId ?? null,
+          departmentId: department.id,
+          updatedAt: new Date().toISOString(),
+        });
+
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+          assignedUserName: null,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.transfer_department.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      /^\/admin\/conversations\/[^/]+\/status$/.test(pathname)
+    ) {
+      try {
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        if (!waId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const clientKey = await getScopedClientKey();
+        if (!clientKey) return;
+        const client = await prisma.client.findUnique({
+          where: { clientKey },
+          select: { id: true },
+        });
+        if (!client) {
+          json(res, 404, { error: "client_not_found" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const nextStatus = normalizeConversationOperationalStatus(
+          typeof body.status === "string" ? body.status.trim() : ""
+        );
+        if (!nextStatus || !CONVERSATION_OPERATIONAL_STATUS_VALUES.includes(nextStatus)) {
+          json(res, 400, { error: "bad_request", message: "Status operacional invalido." });
+          return;
+        }
+        const resolvedConversation = await resolveConversationTarget(prisma, {
+          clientId: client.id,
+          clientKey,
+          rawWaId: waId,
+          requestId,
+          source: "admin_conversations_status",
+        });
+        const conversation = await runtimeStorage.getConversation(
+          resolvedConversation.resolvedWaId,
+          clientKey
+        );
+        if (!conversation) {
+          json(res, 404, { error: "conversation_not_found" });
+          return;
+        }
+        const defaults = await ensureDefaultDepartmentAndQueue(prisma, client.id);
+        const nextState = {
+          ...conversation,
+          mode:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? (conversation.mode ?? "HUMAN")
+              : "HUMAN" as const,
+          departmentId: conversation.departmentId ?? defaults.department.id,
+          queueId: conversation.queueId ?? defaults.queue.id,
+          status: nextStatus,
+          closedAt:
+            nextStatus === ConversationOperationalStatus.CLOSED
+              ? new Date().toISOString()
+              : null,
+        };
+        await runtimeStorage.upsertConversation(nextState);
+        if (nextStatus === ConversationOperationalStatus.CLOSED && nextState.closedAt) {
+          await recordConversationClosedMetrics({
+            prisma,
+            clientId: client.id,
+            waId: nextState.waId,
+            closedAt: new Date(nextState.closedAt),
+            assignedUserId: nextState.assignedUserId ?? null,
+            requestId,
+          });
+        }
+        logger.info({
+          event: "conversation.status_changed",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+          status: nextStatus,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.conversations.status.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/conversation/") &&
+      pathname.split("/").length === 5 &&
+      (pathname.endsWith("/claim") || pathname.endsWith("/assign"))
+    ) {
+      try {
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -2050,31 +8348,69 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           typeof query.userId === "string" ? query.userId.trim() : "";
         const assignedUser = requestedUserId
           ? await prisma.user.findFirst({
-              where: { id: requestedUserId, client: { clientKey } },
-              select: { id: true, name: true },
+              where: { id: requestedUserId, client: { clientKey }, isActive: true },
+              select: { id: true, name: true, departmentId: true },
             })
           : null;
         if (requestedUserId && !assignedUser) {
           json(res, 404, { error: "user_not_found" });
           return;
         }
+        const routing = await resolveAssignmentRouting(prisma, {
+          clientId: client.id,
+          assignedUserDepartmentId: assignedUser?.departmentId ?? null,
+          fallbackDepartmentId: conversation.departmentId ?? null,
+        });
+        const previousAssignedUserId = conversation.assignedUserId ?? null;
         const nextState = {
           ...conversation,
           mode: "HUMAN" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "active" as const,
+            activatedAt: assignedAt,
+          },
           assignedUserId: assignedUser?.id ?? null,
           assignedTo: assignedUser ? `user:${assignedUser.id}` : assignedTo,
           assignedAt,
+          departmentId: routing.departmentId,
+          queueId: routing.queueId,
+          status: ConversationOperationalStatus.IN_PROGRESS,
+          closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
-        json(res, 200, {
-          ok: true,
+        await persistConversationDepartment(prisma, {
+          clientId: client.id,
           waId: nextState.waId,
           waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-          mode: nextState.mode,
+          departmentId: routing.departmentId,
+        });
+        await recordConversationAssignment(prisma, {
+          clientId: client.id,
+          waId: nextState.waId,
+          fromUserId: previousAssignedUserId,
+          toUserId: nextState.assignedUserId ?? null,
+          assignedAt,
+        });
+        logger.info({
+          event: "conversation.assigned",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
           assignedUserId: nextState.assignedUserId,
-          assignedTo: nextState.assignedTo,
+          fromUserId: previousAssignedUserId,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
           assignedUserName: assignedUser?.name ?? null,
-          assignedAt: nextState.assignedAt,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         });
       } catch (error) {
         logger.error({
@@ -2094,7 +8430,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/release")
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -2127,20 +8463,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const nextState = {
           ...conversation,
           mode: "BOT" as const,
+          handoff: {
+            ...conversation.handoff,
+            status: "none" as const,
+            releasedAt: new Date().toISOString(),
+          },
           assignedUserId: null,
           assignedTo: null,
           assignedAt: null,
+          status: ConversationOperationalStatus.WAITING,
+          closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
-        json(res, 200, {
-          ok: true,
-          waId: nextState.waId,
-          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
-          mode: nextState.mode,
-          assignedUserId: nextState.assignedUserId,
-          assignedTo: nextState.assignedTo,
+        logger.info({
+          event: "conversation.released",
+          requestId,
+          clientId: client.id,
+          clientKey,
+          waId: nextState.waIdCanonical ?? nextState.waId,
+        });
+        const payload = await buildConversationActionPayload(prisma, {
+          clientId: client.id,
+          clientKey,
+          conversation: nextState,
           assignedUserName: null,
-          assignedAt: nextState.assignedAt,
+        });
+        json(res, 200, {
+          ...payload,
+          waId: payload.waId ?? nextState.waId,
+          waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         });
       } catch (error) {
         logger.error({
@@ -2160,7 +8511,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.endsWith("/send")
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -2196,6 +8547,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
         if (!result.ok) {
+          if (result.error === "window_closed" && result.errorPayload) {
+            json(res, result.statusCode, { error: result.errorPayload });
+            return;
+          }
           json(res, result.statusCode, { error: result.error });
           return;
         }
@@ -2243,7 +8598,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       pathname.split("/").length === 4
     ) {
       try {
-        const waId = normalizeWaId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+        const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
         if (!waId) {
           json(res, 400, { error: "bad_request" });
           return;
@@ -2265,6 +8620,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientKey,
           waId,
           order,
+          after: null,
           limit,
           includeRaw,
           includeAssignedUserName: true,
@@ -2463,22 +8819,200 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           id: true,
           name: true,
           clientKey: true,
+          profile: true,
           createdAt: true,
           updatedAt: true,
         },
       });
-      json(res, 200, { items: clients });
+      json(res, 200, {
+        items: clients.map((client) => ({
+          ...client,
+          profile: getClientProfile(client),
+        })),
+      });
       return;
     }
 
     if (req.method === "GET" && pathname === "/admin/tenants") {
       if (requireSuperadmin()) return;
       const tenants = await getTenants();
+      const redactedTenants = Object.fromEntries(
+        Object.entries(tenants).map(([key, tenant]) => [
+          key,
+          {
+            ...tenant,
+            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          },
+        ])
+      );
       json(res, 200, {
         ok: true,
-        count: Object.keys(tenants).length,
+        count: Object.keys(redactedTenants).length,
+        tenants: redactedTenants,
+        items: Object.values(redactedTenants),
+      });
+      return;
+    }
+
+    if (pathname === "/admin/channel-events/observed") {
+      if (requireSuperadmin()) return;
+
+      if (req.method === "GET") {
+        const limit = Number(query.limit ?? 100);
+        const events = listObservedChannelEvents({
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+          tenantKey: query.tenantKey,
+          resolution: query.resolution,
+          limit: Number.isFinite(limit) ? limit : 100,
+        });
+        json(res, 200, {
+          ok: true,
+          count: events.length,
+          stats: getObservedChannelEventStats(),
+          events,
+        });
+        return;
+      }
+
+      if (req.method === "DELETE") {
+        const cleared = clearObservedChannelEvents();
+        logger.info({
+          event: "admin.channel_events.observed.cleared",
+          count: cleared,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          cleared,
+          stats: getObservedChannelEventStats(),
+        });
+        return;
+      }
+    }
+
+    if (pathname === "/admin/channel-events/dry-run-sessions") {
+      if (requireSuperadmin()) return;
+
+      if (req.method === "GET") {
+        const limit = Number(query.limit ?? 100);
+        const sessions = listDryRunSessions({
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+          tenantKey: query.tenantKey,
+          limit: Number.isFinite(limit) ? limit : 100,
+        });
+        json(res, 200, {
+          ok: true,
+          count: sessions.length,
+          stats: getDryRunSessionStats(),
+          sessions,
+        });
+        return;
+      }
+
+      if (req.method === "DELETE") {
+        const cleared = clearDryRunSessions();
+        logger.info({
+          event: "admin.channel_events.dry_run_sessions.cleared",
+          count: cleared,
+          requestId,
+        });
+        json(res, 200, {
+          ok: true,
+          cleared,
+          stats: getDryRunSessionStats(),
+        });
+        return;
+      }
+    }
+
+    if (req.method === "GET" && pathname === "/admin/channel-runtime-readiness") {
+      if (requireSuperadmin()) return;
+      const tenants = await getTenants();
+      const reports = buildChannelRuntimeReadinessReports({
         tenants,
-        items: Object.values(tenants),
+        observedEvents: listObservedChannelEvents({ limit: 500 }),
+        dryRunSessions: listDryRunSessions({ limit: 500 }),
+        filter: {
+          tenantKey: typeof query.tenant === "string" ? query.tenant : undefined,
+          channel:
+            query.channel === "whatsapp" || query.channel === "instagram" || query.channel === "messenger"
+              ? query.channel
+              : undefined,
+          provider: query.provider === "meta" ? "meta" : undefined,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        count: reports.length,
+        reports,
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/channel-runtime-preflight") {
+      if (requireSuperadmin()) return;
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+
+      const tenantKey = typeof body.tenantKey === "string" ? body.tenantKey.trim() : "";
+      const channel = body.channel;
+      const provider = body.provider;
+      const channelAccountId = typeof body.channelAccountId === "string" ? body.channelAccountId.trim() : "";
+      const mode = body.mode;
+      if (
+        !tenantKey ||
+        (channel !== "whatsapp" && channel !== "instagram" && channel !== "messenger") ||
+        provider !== "meta" ||
+        !channelAccountId
+      ) {
+        json(res, 400, httpError("bad_request", "tenantKey, channel, provider and channelAccountId are required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantKey];
+      const account = tenant?.channelAccounts?.find(
+        (item) =>
+          item.tenantKey === tenantKey &&
+          item.channel === channel &&
+          item.provider === provider &&
+          item.channelAccountId === channelAccountId
+      );
+      const readinessReports = buildChannelRuntimeReadinessReports({
+        tenants,
+        observedEvents: listObservedChannelEvents({ limit: 500 }),
+        dryRunSessions: listDryRunSessions({ limit: 500 }),
+        filter: {
+          tenantKey,
+          channel,
+          provider,
+        },
+      });
+      const readiness = readinessReports.find(
+        (report) => report.tenantKey === tenantKey && report.channelAccountId === channelAccountId
+      );
+      const preflight = buildChannelRuntimePreflight({
+        tenantKey,
+        channel,
+        provider,
+        channelAccountId,
+        account,
+        mode: mode === "observe_only" || mode === "runtime_candidate" ? mode : "dry_run",
+        signatureConfigured: Boolean(process.env.META_APP_SECRET),
+        readinessBlockers: readiness?.readiness.blockers,
+      });
+
+      json(res, 200, {
+        ok: preflight.ok,
+        preflight,
       });
       return;
     }
@@ -2736,6 +9270,81 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/channel-accounts")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      if (req.method === "GET") {
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+        });
+        return;
+      }
+
+      if (req.method === "PUT") {
+        const body = await readJsonBody(req, res);
+        if (body === null) return;
+        const rawAccounts = Array.isArray(body)
+          ? body
+          : body && typeof body === "object" && !Array.isArray(body)
+            ? (body as Record<string, unknown>).channelAccounts
+            : undefined;
+        if (!Array.isArray(rawAccounts)) {
+          json(res, 400, httpError("bad_request", "channelAccounts must be an array"));
+          return;
+        }
+
+        try {
+          const channelAccounts =
+            normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, tenant.channelAccounts) ?? [];
+          const saved = await saveTenantPatch(tenantId, { channelAccounts });
+          logger.info({
+            event: "admin.tenant.channel_accounts.updated",
+            tenantId,
+            authSource: authToken.source,
+            accountCount: saved.tenant.channelAccounts?.length ?? 0,
+            fieldsChanged: saved.fieldsChanged,
+            backupPath: saved.backupPath,
+            requestId,
+          });
+          json(res, 200, {
+            ok: true,
+            tenantId,
+            backupPath: saved.backupPath,
+            fieldsChanged: saved.fieldsChanged,
+            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+          });
+        } catch (error) {
+          logger.warn({
+            event: "admin.tenant.channel_accounts.update.rejected",
+            tenantId,
+            authSource: authToken.source,
+            message: (error as Error).message,
+            requestId,
+          });
+          json(res, 400, httpError("invalid_channel_accounts", (error as Error).message));
+        }
+        return;
+      }
+    }
+
+    if (
       req.method === "GET" &&
       pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 4
@@ -2754,9 +9363,37 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const client = await prisma.client.findUnique({
         where: { clientKey: tenantId },
-        select: { id: true, clientKey: true, status: true },
+        include: {
+          metaConfig: true,
+          phoneNumbers: {
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
       });
-      json(res, 200, { ok: true, tenantId, tenant, client });
+      const phone = client?.phoneNumbers[0] ?? null;
+      const tenantWithDisplayPhone = {
+        ...tenant,
+        channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+        displayPhoneNumber:
+          tenant.displayPhoneNumber?.trim() ||
+          extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+          phone?.display ||
+          undefined,
+      };
+      json(res, 200, {
+        ok: true,
+        tenantId,
+        tenant: tenantWithDisplayPhone,
+        client: client
+          ? {
+              id: client.id,
+              clientKey: client.clientKey,
+              status: client.status,
+              profile: getClientProfile(client),
+            }
+          : null,
+      });
       return;
     }
 
@@ -2777,8 +9414,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           count: Object.keys(saved.tenants).length,
           backupPath: saved.backupPath,
-          tenants: saved.tenants,
-          items: Object.values(saved.tenants),
+          tenants: Object.fromEntries(
+            Object.entries(saved.tenants).map(([key, tenant]) => [
+              key,
+              {
+                ...tenant,
+                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+              },
+            ])
+          ),
+          items: Object.values(saved.tenants).map((tenant) => ({
+            ...tenant,
+            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          })),
         });
       } catch (error) {
         logger.warn({
@@ -2789,6 +9437,70 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           requestId,
         });
         json(res, 400, { error: "invalid_tenants_config", message: (error as Error).message });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 5 &&
+      pathname.endsWith("/bootstrap")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      const body = await readJsonBody(req, res);
+      if (body === null) return;
+
+      try {
+        const result = await bootstrapTenantDefaults(prisma, {
+          clientId: client.id,
+          clientKey: client.clientKey,
+          requestId,
+          initialUser:
+            body && typeof body === "object" && !Array.isArray(body)
+              ? (body as Record<string, unknown>).initialUser ?? null
+              : null,
+        });
+
+        json(res, 200, {
+          ok: true,
+          tenantId,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          seed: result.seed,
+          initialUser: result.initialUser,
+          departmentCount: result.departments.length,
+          firstDepartmentId: result.departments[0]?.id ?? null,
+        });
+      } catch (error) {
+        const typed = error as Error & { status?: number; code?: string };
+        if (typed.status && typed.code) {
+          json(res, typed.status, httpError(typed.code, typed.message));
+          return;
+        }
+        json(res, 500, httpError("server_error", "Server error"));
       }
       return;
     }
@@ -2816,6 +9528,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         body.embeddedSignup && typeof body.embeddedSignup === "object"
           ? (body.embeddedSignup as Record<string, unknown>)
           : null;
+      const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
 
       const tenants = await getTenants();
       const tenant = tenants[tenantId];
@@ -2841,6 +9554,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
 
       try {
+        const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            businessId: true,
+            businessPortfolioId: true,
+            wabaId: true,
+            phoneNumberId: true,
+          },
+        });
         const exchange = await exchangeEmbeddedSignupCode({ code });
         const manualBusinessId = normalizeOptionalString(embeddedSignupInput?.businessId);
         const manualBusinessPortfolioId = normalizeOptionalString(
@@ -2852,7 +9574,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           exchange.phoneNumberId;
         const enriched =
           exchange.businessToken &&
-          (!exchange.wabaId || !exchange.businessId || !exchange.businessPortfolioId) &&
           candidatePhoneNumberId
             ? await enrichMetaOnboardingResult({
                 businessToken: exchange.businessToken,
@@ -2889,14 +9610,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               }
             : null,
         };
+        const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload(rawPayload);
+        const phoneNumberChanged =
+          Boolean(previousMetaConfig?.phoneNumberId) &&
+          Boolean(finalPhoneNumberId) &&
+          previousMetaConfig?.phoneNumberId !== finalPhoneNumberId;
+        const shouldClearPreviousMetaIdentity =
+          !finalWabaId && (phoneNumberChanged || replaceExistingMetaIdentity);
+        const onboardingWarnings = buildOnboardingConnectionWarnings({
+          businessTokenStored: Boolean(exchange.businessToken),
+          finalWabaId,
+          phoneNumberChanged,
+          replaceExistingMetaIdentity,
+          rawPayload,
+        });
 
         await prisma.tenantMetaConfig.upsert({
           where: { clientId: client.id },
           update: {
             businessToken: exchange.businessToken ?? undefined,
-            businessId: finalBusinessId ?? undefined,
-            businessPortfolioId: finalBusinessPortfolioId ?? undefined,
-            wabaId: finalWabaId ?? undefined,
+            businessId: finalBusinessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            businessPortfolioId:
+              finalBusinessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            wabaId: finalWabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
             phoneNumberId: finalPhoneNumberId ?? undefined,
             rawPayload: rawPayload as Prisma.InputJsonValue,
           },
@@ -2920,12 +9656,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const syncResult = await syncTenantPhoneNumberMapping({
             clientId: client.id,
             phoneNumberId: finalPhoneNumberId,
+            displayPhoneNumber,
           });
           phoneMappingAction = syncResult.action;
           tenantUpdate = await saveTenantPatch(tenantId, {
             metaPhoneNumberId: finalPhoneNumberId,
+            ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
           });
         }
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId: finalWabaId,
+          businessToken: exchange.businessToken,
+        });
 
         logger.info({
           event: "onboarding.exchange.success",
@@ -2940,6 +9685,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           partialMetaConfig: Boolean(exchange.businessToken) && !finalWabaId,
           phoneMappingAction,
           fieldsChanged: tenantUpdate?.fieldsChanged ?? [],
+          wabaSubscription,
         });
 
         json(res, 200, {
@@ -2950,8 +9696,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           businessId: finalBusinessId,
           businessPortfolioId: finalBusinessPortfolioId,
           warning:
-            Boolean(exchange.businessToken) && !finalWabaId
-              ? "Conexao parcial: token salvo, mas WABA ID nao foi resolvido automaticamente. Informe o WABA ID para habilitar templates self-service."
+            [...onboardingWarnings, ...buildWabaSubscriptionWarnings(wabaSubscription)].length > 0
+              ? [...onboardingWarnings, ...buildWabaSubscriptionWarnings(wabaSubscription)].join(" ")
               : null,
         });
       } catch (error) {
@@ -2992,6 +9738,370 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     }
 
     if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/onboarding/register-phone")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const pin = String(body.pin ?? "").trim();
+      if (!/^\d{6}$/.test(pin)) {
+        json(res, 400, httpError("invalid_pin", "Registration PIN must have 6 digits"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
+        where: { clientId: client.id },
+        select: {
+          businessToken: true,
+          phoneNumberId: true,
+          wabaId: true,
+          rawPayload: true,
+        },
+      });
+      const configuredPhoneNumberId =
+        normalizeOptionalString(tenantMetaConfig?.phoneNumberId) ??
+        normalizeOptionalString(tenant.metaPhoneNumberId);
+      const requestedPhoneNumberId =
+        normalizeOptionalString(body.phoneNumberId) ?? configuredPhoneNumberId;
+      if (!requestedPhoneNumberId) {
+        json(res, 409, httpError("missing_phone_number_id", "No phone number id configured"));
+        return;
+      }
+      if (configuredPhoneNumberId && requestedPhoneNumberId !== configuredPhoneNumberId) {
+        json(
+          res,
+          409,
+          httpError(
+            "phone_number_mismatch",
+            "Requested phone number does not match the tenant configured phone number"
+          )
+        );
+        return;
+      }
+      const businessToken = normalizeOptionalString(tenantMetaConfig?.businessToken);
+      if (!businessToken) {
+        json(
+          res,
+          409,
+          httpError(
+            "missing_business_token",
+            "Tenant does not have a stored Meta business token for phone registration"
+          )
+        );
+        return;
+      }
+
+      try {
+        const registration = await registerMetaPhoneNumber({
+          phoneNumberId: requestedPhoneNumberId,
+          accessToken: businessToken,
+          pin,
+        });
+        const enriched = await enrichMetaOnboardingResult({
+          businessToken,
+          wabaId: normalizeOptionalString(tenantMetaConfig?.wabaId),
+          phoneNumberId: requestedPhoneNumberId,
+        });
+        const displayPhoneNumber = extractTenantDisplayPhoneFromRawPayload({
+          enrich: enriched.rawPayload,
+        });
+        if (displayPhoneNumber) {
+          await syncTenantPhoneNumberMapping({
+            clientId: client.id,
+            phoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+          await saveTenantPatch(tenantId, {
+            metaPhoneNumberId: requestedPhoneNumberId,
+            displayPhoneNumber,
+          });
+        }
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId: normalizeOptionalString(tenantMetaConfig?.wabaId),
+          businessToken,
+        });
+        const previousRawPayload =
+          tenantMetaConfig?.rawPayload &&
+          typeof tenantMetaConfig.rawPayload === "object" &&
+          !Array.isArray(tenantMetaConfig.rawPayload)
+            ? (tenantMetaConfig.rawPayload as Record<string, unknown>)
+            : {};
+
+        await prisma.tenantMetaConfig.update({
+          where: { clientId: client.id },
+          data: {
+            rawPayload: {
+              ...previousRawPayload,
+              phoneRegistration: {
+                success: registration.success,
+                registeredAt: new Date().toISOString(),
+                phoneNumberId: requestedPhoneNumberId,
+                rawPayload: registration.rawPayload,
+              },
+              phoneRegistrationEnrich: enriched.rawPayload,
+              wabaSubscription,
+            } as Prisma.InputJsonValue,
+          },
+        });
+
+        logger.info({
+          event: "onboarding.phone_registration.success",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          phoneNumberId: requestedPhoneNumberId,
+          displayPhoneNumber,
+          success: registration.success,
+          wabaSubscription,
+        });
+
+        json(res, 200, {
+          success: true,
+          phoneNumberId: requestedPhoneNumberId,
+          displayPhoneNumber,
+          registered: registration.success,
+          warning:
+            [
+              registration.success
+                ? null
+                : "Meta aceitou a requisicao, mas nao retornou success=true. Confira o painel Meta.",
+              ...buildWabaSubscriptionWarnings(wabaSubscription),
+            ]
+              .filter(Boolean)
+              .join(" ") || null,
+        });
+      } catch (error) {
+        logger.error({
+          event: "onboarding.phone_registration.failed",
+          tenantId,
+          requestId,
+          phoneNumberId: requestedPhoneNumberId,
+          status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+          errorBody:
+            error instanceof MetaOnboardingExchangeError
+              ? error.errorBody?.slice(0, 1000) ?? null
+              : null,
+          message: (error as Error).message,
+        });
+        if (error instanceof MetaOnboardingExchangeError && error.status && error.status < 500) {
+          json(
+            res,
+            409,
+            httpError(
+              "meta_phone_registration_failed",
+              "Meta rejected phone registration. Check the two-step verification PIN and phone number status.",
+              {
+                status: error.status ?? null,
+                errorBody: error.errorBody ?? null,
+              }
+            )
+          );
+          return;
+        }
+        json(res, 502, httpError("meta_phone_registration_failed", "Meta phone registration failed"));
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/tenants/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/onboarding/manual-bind")
+    ) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+
+      const phoneNumberId = normalizeOptionalString(body.phoneNumberId);
+      if (!phoneNumberId) {
+        json(res, 400, httpError("bad_request", "phoneNumberId is required"));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const tenant = tenants[tenantId];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+
+      try {
+        const previousMetaConfig = await prisma.tenantMetaConfig.findUnique({
+          where: { clientId: client.id },
+          select: {
+            businessId: true,
+            businessPortfolioId: true,
+            wabaId: true,
+            phoneNumberId: true,
+            businessToken: true,
+          },
+        });
+        const replaceExistingMetaIdentity = body.replaceExistingMetaIdentity === true;
+        const businessToken = normalizeOptionalString(previousMetaConfig?.businessToken);
+        let displayPhoneNumber = normalizeOptionalString(body.displayPhoneNumber);
+        const businessId = normalizeOptionalString(body.businessId);
+        const businessPortfolioId = normalizeOptionalString(body.businessPortfolioId);
+        const wabaId = normalizeOptionalString(body.wabaId);
+        const enriched =
+          businessToken && phoneNumberId && !displayPhoneNumber
+            ? await enrichMetaOnboardingResult({
+                businessToken,
+                businessId,
+                businessPortfolioId,
+                wabaId,
+                phoneNumberId,
+              })
+            : null;
+        displayPhoneNumber =
+          displayPhoneNumber ??
+          (enriched ? extractTenantDisplayPhoneFromRawPayload({ enrich: enriched.rawPayload }) : null);
+        const phoneNumberChanged =
+          Boolean(previousMetaConfig?.phoneNumberId) &&
+          previousMetaConfig?.phoneNumberId !== phoneNumberId;
+        const shouldClearPreviousMetaIdentity =
+          !wabaId && (phoneNumberChanged || replaceExistingMetaIdentity);
+        const rawPayload = {
+          source: "manual_bind_connected_number",
+          phoneNumberId,
+          displayPhoneNumber,
+          businessId,
+          businessPortfolioId,
+          wabaId,
+          raw:
+            body.raw && typeof body.raw === "object" && !Array.isArray(body.raw)
+              ? body.raw
+              : null,
+        };
+
+        await prisma.tenantMetaConfig.upsert({
+          where: { clientId: client.id },
+          update: {
+            businessId: businessId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            businessPortfolioId:
+              businessPortfolioId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            wabaId: wabaId ?? (shouldClearPreviousMetaIdentity ? null : undefined),
+            phoneNumberId,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+          create: {
+            clientId: client.id,
+            businessId: businessId ?? undefined,
+            businessPortfolioId: businessPortfolioId ?? undefined,
+            wabaId: wabaId ?? undefined,
+            phoneNumberId,
+            rawPayload: rawPayload as Prisma.InputJsonValue,
+          },
+        });
+
+        const syncResult = await syncTenantPhoneNumberMapping({
+          clientId: client.id,
+          phoneNumberId,
+          displayPhoneNumber,
+        });
+        const tenantUpdate = await saveTenantPatch(tenantId, {
+          metaPhoneNumberId: phoneNumberId,
+          ...(displayPhoneNumber ? { displayPhoneNumber } : {}),
+        });
+        const wabaSubscription = await trySubscribeMetaWabaToApp({
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          wabaId,
+          businessToken,
+        });
+
+        logger.info({
+          event: "onboarding.manual_bind.success",
+          tenantId,
+          clientKey: client.clientKey,
+          requestId,
+          phoneNumberId,
+          wabaId,
+          businessId,
+          businessPortfolioId,
+          phoneMappingAction: syncResult.action,
+          fieldsChanged: tenantUpdate.fieldsChanged,
+          wabaSubscription,
+        });
+
+        json(res, 200, {
+          success: true,
+          businessTokenStored: false,
+          phoneNumberId,
+          wabaId,
+          businessId,
+          businessPortfolioId,
+          phoneMappingAction: syncResult.action,
+          warning:
+            [
+              "Numero vinculado manualmente. O envio usara o token global se este numero pertencer ao portfolio/token da operacao.",
+              shouldClearPreviousMetaIdentity
+                ? "Reconexao sem WABA ID: WABA/business antigos foram limpos para evitar falso conectado. Se o painel Meta ainda mostrar pendente, conclua a conexao no Meta e reprocesse o onboarding."
+                : null,
+              ...buildWabaSubscriptionWarnings(wabaSubscription),
+            ]
+              .filter(Boolean)
+              .join(" "),
+        });
+      } catch (error) {
+        logger.error({
+          event: "onboarding.manual_bind.failed",
+          tenantId,
+          requestId,
+          message: (error as Error).message,
+        });
+        if ((error as Error).message.includes("already mapped")) {
+          json(res, 409, httpError("phone_number_conflict", (error as Error).message));
+          return;
+        }
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+
+    if (
       req.method === "PUT" &&
       pathname.startsWith("/admin/tenants/") &&
       pathname.split("/").length === 4
@@ -3005,12 +10115,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       try {
-        const saved = await saveTenantPatch(tenantId, body as Record<string, unknown>);
+        const rawBody = body as Record<string, unknown>;
+        const requestedProfile =
+          "profile" in rawBody ? parseClientProfile(rawBody.profile) : undefined;
+        const { profile: _profile, ...tenantPatch } = rawBody;
+        const saved = await saveTenantPatch(tenantId, tenantPatch);
+        const clientFieldsChanged: string[] = [];
+        if (requestedProfile) {
+          const client = await prisma.client.findUnique({
+            where: { clientKey: tenantId },
+            select: { id: true, clientKey: true, profile: true },
+          });
+          if (client && getClientProfile(client) !== requestedProfile) {
+            await prisma.client.update({
+              where: { id: client.id },
+              data: { profile: requestedProfile },
+            });
+            clientFieldsChanged.push("client.profile");
+          }
+        }
+        const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
+        if (phoneNumberId) {
+          const client = await prisma.client.findUnique({ where: { clientKey: tenantId } });
+          if (client) {
+            await syncTenantPhoneNumberMapping({
+              clientId: client.id,
+              phoneNumberId,
+              displayPhoneNumber: normalizeOptionalString(saved.tenant.displayPhoneNumber),
+            });
+          }
+        }
         logger.info({
           event: "admin.tenant.update",
           tenantId,
           authSource: authToken.source,
-          fieldsChanged: saved.fieldsChanged,
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
           backupPath: saved.backupPath,
           requestId,
         });
@@ -3018,8 +10157,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           tenantId,
           backupPath: saved.backupPath,
-          fieldsChanged: saved.fieldsChanged,
-          tenant: saved.tenant,
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
+          tenant: {
+            ...saved.tenant,
+            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+          },
         });
       } catch (error) {
         logger.warn({
@@ -3042,6 +10184,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const clientKey = String(body.clientKey ?? "").trim();
       const name = String(body.name ?? "").trim();
       const phoneNumberId = String(body.phone_number_id ?? "").trim();
+      const profile = parseClientProfile(body.profile);
       if (!clientKey || !name || !phoneNumberId) {
         json(res, 400, { error: "invalid_body" });
         return;
@@ -3055,7 +10198,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         if (!client) {
           client = await prisma.client.create({
-            data: { clientKey, name },
+            data: { clientKey, name, profile },
             include: { phoneNumbers: true },
           });
           created = true;
@@ -3091,8 +10234,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           where: { id: client.id },
           include: { phoneNumbers: true },
         });
+        if (updatedClient) {
+          await bootstrapTenantDefaults(prisma, {
+            clientId: updatedClient.id,
+            clientKey: updatedClient.clientKey,
+            requestId,
+            initialUser:
+              body && typeof body === "object" && !Array.isArray(body)
+                ? (body as Record<string, unknown>).initialUser ?? null
+                : null,
+          });
+        }
         const status = created || createdPhone ? 201 : 200;
-        json(res, status, updatedClient);
+        json(
+          res,
+          status,
+          updatedClient
+            ? {
+                ...updatedClient,
+                profile: getClientProfile(updatedClient),
+              }
+            : updatedClient
+        );
         return;
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -3115,7 +10278,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             include: { phoneNumbers: true },
           });
           if (existingClient) {
-            json(res, 200, existingClient);
+            json(res, 200, {
+              ...existingClient,
+              profile: getClientProfile(existingClient),
+            });
             return;
           }
         }
@@ -3240,6 +10406,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 },
                 select: {
                   waId: true,
+                  messageId: true,
                   templateName: true,
                   status: true,
                   errorBody: true,
@@ -3249,7 +10416,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : [];
         const campaignMetaMap = new Map<string, CampaignMetaSummary>();
         for (const outbound of outboundMessages) {
-          const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+          const outboundCampaignId = resolveOutboundCampaignId(outbound);
           if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
           const nextItem = buildCampaignMetaStatusItem(outbound);
           const current = campaignMetaMap.get(outboundCampaignId) ?? {
@@ -4159,6 +11326,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             name: l.name,
             city: l.city,
             service: l.service,
+            email: l.email,
+            company: l.company,
             status: l.status,
             createdAt: l.createdAt,
           })),
@@ -4395,28 +11564,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           process.env.NODE_ENV === "production" && env.META_APP_SECRET.length > 0;
 
         if (requireSignature) {
-          if (!signatureHeader) {
-            logger.warn({
-              event: "webhook.signature.missing",
-              route: "/webhook",
-              method: "POST",
-              requestId,
-            });
-            res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden", reason: "signature_missing" }));
-            return;
-          }
           const signature = validateMetaSignature(rawBody, signatureHeader, env.META_APP_SECRET);
           if (!signature.ok) {
-            logger.warn({
-              event: "webhook.signature.invalid",
-              route: "/webhook",
-              method: "POST",
-              requestId,
-              reason: signature.reason,
+            logNoisyWarn(
+              `webhook.signature.invalid:${signature.reason}:${req.socket.remoteAddress ?? "unknown"}`,
+              {
+                event: "webhook.signature.invalid",
+                clientId: null,
+                conversationId: null,
+                userId: null,
+                route: "/webhook",
+                method: "POST",
+                requestId,
+                reason: signature.reason,
+                ip: getRequestIp(req),
+                userAgent: getUserAgent(req),
+              }
+            );
+            json(res, 403, {
+              error: "forbidden",
+              message: "Webhook signature rejected.",
             });
-            res.writeHead(403, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "forbidden", reason: "signature_invalid" }));
             return;
           }
           logger.info({
@@ -4441,13 +11609,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         } catch (error) {
           logger.warn({
             event: "webhook.invalid",
+            clientId: null,
+            conversationId: null,
+            userId: null,
             route: "/webhook",
             method: "POST",
             requestId,
             error: (error as Error).message,
           });
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "invalid_json" }));
+          json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
           return;
         }
 
@@ -4475,13 +11645,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }).catch((error: Error) => {
         logger.error({
           event: "webhook.read_error",
+          clientId: null,
+          conversationId: null,
+          userId: null,
           route: "/webhook",
           method: "POST",
           requestId,
           error: error.message,
         });
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "invalid_body" }));
+        json(res, 400, { error: "invalid_body", message: "Invalid request body." });
       });
       return;
     }
@@ -4585,6 +11757,25 @@ function isTemplatePendingLike(status: string | null | undefined) {
   return normalized === "pending" || normalized === "submitting";
 }
 
+function isRetryableLocalTemplateFailure(
+  status: string | null | undefined,
+  rejectionReason: string | null | undefined
+) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  const normalizedReason = String(rejectionReason || "").trim().toLowerCase();
+  if (normalizedStatus !== "failed") return false;
+  return (
+    normalizedReason === "template_name_required" ||
+    normalizedReason === "template_name_invalid" ||
+    normalizedReason === "template_category_invalid" ||
+    normalizedReason === "template_language_required" ||
+    normalizedReason === "template_language_invalid" ||
+    normalizedReason === "template_content_required" ||
+    normalizedReason === "template_content_too_long" ||
+    normalizedReason === "template_variables_invalid"
+  );
+}
+
 function isTimeoutLikeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
   return /timeout|timed out|abort|network|fetch failed|econnreset|etimedout|und_err/i.test(
@@ -4606,12 +11797,351 @@ function readRawBody(req: IncomingMessage, onEnd: (rawBody: Buffer) => void) {
   });
 }
 
+function getRequestIp(req: IncomingMessage) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+  }
+  return req.socket.remoteAddress || null;
+}
+
+function getUserAgent(req: IncomingMessage) {
+  const userAgent = req.headers["user-agent"];
+  return typeof userAgent === "string" && userAgent.trim() ? userAgent.trim() : null;
+}
+
 function parseQuery(parsed: URL) {
   const query: Record<string, string> = {};
   for (const [key, value] of parsed.searchParams.entries()) {
     query[key] = value;
   }
   return query;
+}
+
+function parseConversationReportRange(rawValue: string | undefined) {
+  switch (String(rawValue ?? "").trim()) {
+    case "1d":
+      return { key: "1d" as const, since: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+    case "30d":
+      return { key: "30d" as const, since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) };
+    case "7d":
+    case "":
+      return { key: "7d" as const, since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+    default:
+      return null;
+  }
+}
+
+function buildReportRuntimeStateMap(
+  runtimeStates: Array<{
+    waId: string;
+    assignedUserId: string | null;
+    status?: string | null;
+    assignments?: Array<{ toUserId: string | null }>;
+  }>
+) {
+  return new Map(
+    runtimeStates.map((item) => {
+      const assignedUserIds = Array.from(
+        new Set(
+          [
+            item.assignedUserId ?? null,
+            ...(item.assignments?.map((assignment) => assignment.toUserId ?? null) ?? []),
+          ].filter((value): value is string => typeof value === "string" && value.length > 0)
+        )
+      );
+      return [
+        item.waId,
+        {
+          assignedUserId: item.assignedUserId ?? null,
+          assignedUserIds,
+          status: item.status ?? null,
+        },
+      ] as const;
+    })
+  );
+}
+
+function csvCell(value: string | number | null | undefined) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (!/[",\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, "\"\"")}"`;
+}
+
+async function loadConversationReportData(
+  prisma: ReturnType<typeof getPrisma>,
+  options: {
+    clientId: string;
+    since: Date;
+    requestedDepartmentId: string | null;
+    includeClosedAt?: boolean;
+  }
+) {
+  if (options.requestedDepartmentId) {
+    const department = await prisma.department.findFirst({
+      where: {
+        id: options.requestedDepartmentId,
+        clientId: options.clientId,
+      },
+      select: { id: true },
+    });
+    if (!department) {
+      return { ok: false as const, status: 404 as const, code: "department_not_found" as const };
+    }
+  }
+  const metrics = await prisma.conversationMetrics.findMany({
+    where: {
+      clientId: options.clientId,
+      startedAt: { gte: options.since },
+      ...(options.requestedDepartmentId
+        ? {
+            conversation: {
+              departmentId: options.requestedDepartmentId,
+            },
+          }
+        : {}),
+    },
+    ...(options.includeClosedAt ? { orderBy: { startedAt: "desc" as const } } : {}),
+    select: {
+      conversationId: true,
+      firstResponseTimeSec: true,
+      totalResponseTimeSec: true,
+      responseCount: true,
+      avgResponseTimeSec: true,
+      resolutionTimeSec: true,
+      startedAt: true,
+      ...(options.includeClosedAt ? { closedAt: true } : {}),
+      conversation: {
+        select: {
+          waId: true,
+          departmentId: true,
+        },
+      },
+    },
+  });
+  const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+  const runtimeStates = waIds.length
+    ? await prisma.conversationRuntimeState.findMany({
+        where: {
+          clientId: options.clientId,
+          waId: { in: waIds },
+        },
+        select: {
+          waId: true,
+          assignedUserId: true,
+          status: true,
+          assignments: {
+            select: {
+              toUserId: true,
+            },
+          },
+        },
+      })
+    : [];
+  const slaConfig = await prisma.sLAConfig.findUnique({
+    where: { clientId: options.clientId },
+    select: {
+      firstResponseLimitSec: true,
+      resolutionTimeLimitSec: true,
+    },
+  });
+  const departmentIds = Array.from(
+    new Set(
+      metrics
+        .map((item) => item.conversation.departmentId ?? null)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    )
+  );
+  const departments = departmentIds.length
+    ? await prisma.department.findMany({
+        where: {
+          clientId: options.clientId,
+          id: { in: departmentIds },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      })
+    : [];
+  return {
+    ok: true as const,
+    metrics,
+    stateByWaId: buildReportRuntimeStateMap(runtimeStates),
+    slaConfig,
+    departmentNameById: new Map(departments.map((item) => [item.id, item.name])),
+  };
+}
+
+function buildConversationReportSummary(options: {
+  rangeKey: "1d" | "7d" | "30d";
+  requestedUserId: string | null;
+  requestedDepartmentId: string | null;
+  filteredMetrics: Array<{
+    conversationId: string;
+    firstResponseTimeSec: number | null;
+    totalResponseTimeSec: number | null;
+    responseCount: number | null;
+    avgResponseTimeSec: number | null;
+    resolutionTimeSec: number | null;
+    conversation: {
+      waId: string;
+      departmentId: string | null;
+    };
+  }>;
+  stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  slaConfig: { firstResponseLimitSec: number; resolutionTimeLimitSec: number } | null;
+  departmentNameById: Map<string, string>;
+}) {
+  const totalConversations = options.filteredMetrics.length;
+  const firstResponseValues = options.filteredMetrics
+    .map((item) => item.firstResponseTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const resolutionValues = options.filteredMetrics
+    .map((item) => item.resolutionTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const avgFirstResponseTimeSec =
+    firstResponseValues.length > 0
+      ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+      : null;
+  const avgResolutionTimeSec =
+    resolutionValues.length > 0
+      ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+      : null;
+  const firstResponseLimitSec =
+    options.slaConfig && options.slaConfig.firstResponseLimitSec > 0
+      ? options.slaConfig.firstResponseLimitSec
+      : null;
+  const resolutionTimeLimitSec =
+    options.slaConfig && options.slaConfig.resolutionTimeLimitSec > 0
+      ? options.slaConfig.resolutionTimeLimitSec
+      : null;
+  const slaBreaches = options.filteredMetrics.reduce((count, item) => {
+    const firstResponseBreached =
+      firstResponseLimitSec !== null &&
+      item.firstResponseTimeSec !== null &&
+      item.firstResponseTimeSec > firstResponseLimitSec;
+    const resolutionBreached =
+      resolutionTimeLimitSec !== null &&
+      item.resolutionTimeSec !== null &&
+      item.resolutionTimeSec > resolutionTimeLimitSec;
+    return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+  }, 0);
+  const byAgentMap = new Map<
+    string,
+    { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
+  >();
+  for (const item of options.filteredMetrics) {
+    const assignedUserIds = options.stateByWaId.get(item.conversation.waId)?.assignedUserIds ?? [];
+    for (const assignedUserId of assignedUserIds) {
+      const current = byAgentMap.get(assignedUserId) ?? {
+        userId: assignedUserId,
+        conversations: 0,
+        totalResponseTimeSec: 0,
+        responseCount: 0,
+      };
+      current.conversations += 1;
+      current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+      current.responseCount += item.responseCount ?? 0;
+      byAgentMap.set(assignedUserId, current);
+    }
+  }
+  const byDepartmentMap = new Map<
+    string,
+    {
+      departmentId: string | null;
+      departmentName: string | null;
+      conversations: number;
+      totalResponseTimeSec: number;
+      responseCount: number;
+    }
+  >();
+  for (const item of options.filteredMetrics) {
+    const departmentId = item.conversation.departmentId ?? null;
+    const key = departmentId ?? "__none__";
+    const current = byDepartmentMap.get(key) ?? {
+      departmentId,
+      departmentName: departmentId ? options.departmentNameById.get(departmentId) ?? null : null,
+      conversations: 0,
+      totalResponseTimeSec: 0,
+      responseCount: 0,
+    };
+    current.conversations += 1;
+    current.totalResponseTimeSec += item.totalResponseTimeSec ?? 0;
+    current.responseCount += item.responseCount ?? 0;
+    byDepartmentMap.set(key, current);
+  }
+  return {
+    ok: true,
+    range: options.rangeKey,
+    userId: options.requestedUserId,
+    departmentId: options.requestedDepartmentId,
+    totalConversations,
+    avgFirstResponseTimeSec,
+    avgResolutionTimeSec,
+    slaBreaches,
+    byAgent: Array.from(byAgentMap.values()).map((item) => ({
+      userId: item.userId,
+      conversations: item.conversations,
+      avgResponseTimeSec:
+        item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+    })),
+    byDepartment: Array.from(byDepartmentMap.values()).map((item) => ({
+      departmentId: item.departmentId,
+      departmentName: item.departmentName,
+      conversations: item.conversations,
+      avgResponseTimeSec:
+        item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
+    })),
+  };
+}
+
+function buildConversationReportCsv(options: {
+  metrics: Array<{
+    conversationId: string;
+    firstResponseTimeSec: number | null;
+    resolutionTimeSec: number | null;
+    startedAt: Date;
+    closedAt?: Date | null;
+    conversation: {
+      waId: string;
+      departmentId: string | null;
+    };
+  }>;
+  stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>;
+  departmentNameById: Map<string, string>;
+}) {
+  return [
+    [
+      "conversationId",
+      "waId",
+      "departmentId",
+      "departmentName",
+      "assignedUserId",
+      "status",
+      "firstResponseTimeSec",
+      "resolutionTimeSec",
+      "createdAt",
+      "closedAt",
+    ].join(","),
+    ...options.metrics.map((item) => {
+      const runtimeState = options.stateByWaId.get(item.conversation.waId);
+      const departmentId = item.conversation.departmentId ?? null;
+      return [
+        csvCell(item.conversationId),
+        csvCell(item.conversation.waId),
+        csvCell(departmentId),
+        csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
+        csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
+        csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
+        csvCell(item.firstResponseTimeSec),
+        csvCell(item.resolutionTimeSec),
+        csvCell(item.startedAt.toISOString()),
+        csvCell(item.closedAt ? item.closedAt.toISOString() : null),
+      ].join(",");
+    }),
+  ].join("\n");
 }
 
 function getRequestedClientKey(req: IncomingMessage, query: Record<string, string>) {
@@ -4621,6 +12151,83 @@ function getRequestedClientKey(req: IncomingMessage, query: Record<string, strin
   }
   const queryClientKey = String(query.clientKey ?? "").trim();
   return queryClientKey || null;
+}
+
+function normalizeAiAssistantTermList(input: unknown) {
+  if (!Array.isArray(input)) return null;
+  if (input.some((term) => typeof term !== "string")) return null;
+  const terms = input
+    .map((term) => term.trim())
+    .filter((term): term is string => Boolean(term))
+    .slice(0, 80);
+  return [...new Set(terms)];
+}
+
+function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] | null {
+  if (!Array.isArray(input)) return null;
+  const normalized: AiAssistantIntentCatalogItem[] = [];
+  const seen = new Set<string>();
+  for (const rawItem of input.slice(0, 60)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) return null;
+    const item = rawItem as Record<string, unknown>;
+    const key = typeof item.key === "string" ? item.key.trim().toLowerCase() : "";
+    if (!key || !/^[a-z0-9_:-]{2,80}$/.test(key) || seen.has(key)) return null;
+    seen.add(key);
+    const topics = normalizeAiAssistantTermList(item.topics ?? []);
+    const tags = normalizeAiAssistantTermList(item.tags ?? []);
+    if (!topics || !tags) return null;
+    const title = typeof item.title === "string" ? item.title.trim().slice(0, 120) : "";
+    const response = typeof item.response === "string" ? item.response.trim().slice(0, 900) : "";
+    const nextQuestion =
+      typeof item.nextQuestion === "string" ? item.nextQuestion.trim().slice(0, 240) : "";
+    if (item.response !== undefined && typeof item.response !== "string") return null;
+    if (item.nextQuestion !== undefined && typeof item.nextQuestion !== "string") return null;
+    if (item.title !== undefined && typeof item.title !== "string") return null;
+    if (
+      item.leadTemp !== undefined &&
+      item.leadTemp !== "quente" &&
+      item.leadTemp !== "morno" &&
+      item.leadTemp !== "frio"
+    ) {
+      return null;
+    }
+    if (
+      item.priority !== undefined &&
+      item.priority !== "alta" &&
+      item.priority !== "media" &&
+      item.priority !== "baixa"
+    ) {
+      return null;
+    }
+    if (item.handoff !== undefined && typeof item.handoff !== "boolean") return null;
+    normalized.push({
+      key,
+      ...(title ? { title } : {}),
+      topics,
+      ...(response ? { response } : {}),
+      ...(nextQuestion ? { nextQuestion } : {}),
+      ...(item.leadTemp === "quente" || item.leadTemp === "morno" || item.leadTemp === "frio"
+        ? { leadTemp: item.leadTemp }
+        : {}),
+      ...(item.priority === "alta" || item.priority === "media" || item.priority === "baixa"
+        ? { priority: item.priority }
+        : {}),
+      ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      tags: tags.filter((tag) => /^[a-z0-9_:-]{2,80}$/.test(tag.toLowerCase())),
+    });
+  }
+  return normalized;
+}
+
+function getAiAssistantGlobalSafetyConfig() {
+  return {
+    questionStarters: AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
+    topicTerms: AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
+    blockedTerms: AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
+    handoffTerms: AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
+    maxInputChars: AI_ASSISTANT_MAX_INPUT_CHARS,
+    personalDataBlocked: true,
+  };
 }
 
 function diffTenantFields(
@@ -4648,11 +12255,83 @@ function diffTenantFields(
   compareField("id");
   compareField("name");
   compareField("metaPhoneNumberId");
+  compareField("displayPhoneNumber");
+  compareField("companyLegalName");
+  compareField("companyTradeName");
+  compareField("companyTaxId");
+  compareField("companyStateRegistration");
+  compareField("companyMunicipalRegistration");
+  compareField("companyWebsite");
+  compareField("companyIndustry");
+  compareField("companyAddressStreet");
+  compareField("companyAddressNumber");
+  compareField("companyAddressComplement");
+  compareField("companyAddressDistrict");
+  compareField("companyAddressCity");
+  compareField("companyAddressState");
+  compareField("companyAddressZip");
+  compareField("companyAddressCountry");
+  compareField("legalRepresentativeName");
+  compareField("legalRepresentativeCpf");
+  compareField("legalRepresentativeEmail");
+  compareField("legalRepresentativePhone");
+  compareField("billingContactName");
+  compareField("billingContactEmail");
+  compareField("billingContactPhone");
+  compareField("billingEmail");
+  compareField("financialContactName");
+  compareField("financialContactEmail");
+  compareField("financialContactPhone");
+  compareField("technicalContactName");
+  compareField("technicalContactEmail");
+  compareField("technicalContactPhone");
+  compareField("contractPlanName");
+  compareField("contractStartDate");
+  compareField("contractEndDate");
+  compareField("contractBillingDay");
+  compareField("contractPaymentMethod");
+  compareField("contractNotes");
+  compareField("maxActiveAppUsers");
   compareField("allowlist");
   compareField("handoffAttendantWaid");
   compareField("defaultLanguage");
   compareField("planName");
   compareField("messagesLimit");
+  compareField("disableAutoReply");
+  compareField("disableChatbot");
+  compareField("appDisableChatbot");
+  compareField("disableChatbotFlowEditing");
+  compareField("disableLegacyFlows");
+  compareField("disableAiFallback");
+  compareField("appDisableAiFallback");
+  compareField("disableIntentClassifier");
+  compareField("appDisableIntentClassifier");
+  compareField("followUpEnabled");
+  compareField("followUpDelayMinutes");
+  compareField("followUpMaxCount");
+  compareField("followUpUseTemplate");
+  compareField("followUpTemplateName");
+  compareField("followUpTemplateLang");
+  compareField("handoffLeadNotificationEnabled");
+  compareField("handoffLeadNotificationRecipients");
+  compareField("mediaHandoffPolicy");
+  compareField("aiAssistantEnabled");
+  compareField("aiAssistantMaxReplies");
+  compareField("aiAssistantProfile");
+  compareField("aiAssistantSystemPrompt");
+  compareField("aiAssistantFallbackToHandoff");
+  compareField("aiAssistantAllowedTopics");
+  compareField("aiAssistantSecondaryTopics");
+  compareField("aiAssistantBlockedTerms");
+  compareField("aiAssistantHandoffKeywords");
+  compareField("aiAssistantGreetingMessage");
+  compareField("aiAssistantFallbackMessage");
+  compareField("aiAssistantHandoffPrompt");
+  compareField("aiAssistantIntentCatalog");
+  compareField("aiQualification");
+  compareField("channelAccounts");
+  compareField("crmBusinessStatuses");
+  compareField("aiBusinessContext");
   compareField("quotaMonthlyConversations");
   compareField("quotaWarnAtPct");
   compareField("quotaBlockedReplyText");
@@ -4690,8 +12369,10 @@ async function saveTenantPatch(tenantId: string, body: Record<string, unknown>) 
 async function syncTenantPhoneNumberMapping(params: {
   clientId: string;
   phoneNumberId: string;
+  displayPhoneNumber?: string | null;
 }) {
   const prisma = getPrisma();
+  const display = params.displayPhoneNumber?.trim() || params.phoneNumberId;
   const existingPhone = await prisma.waPhoneNumber.findUnique({
     where: { phoneNumberId: params.phoneNumberId },
     include: {
@@ -4706,7 +12387,7 @@ async function syncTenantPhoneNumberMapping(params: {
       data: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
-        display: params.phoneNumberId,
+        display,
       },
     });
     return { action: "created" as const };
@@ -4720,7 +12401,7 @@ async function syncTenantPhoneNumberMapping(params: {
 
   await prisma.waPhoneNumber.update({
     where: { phoneNumberId: params.phoneNumberId },
-    data: { display: params.phoneNumberId },
+    data: { display },
   });
   return { action: "existing" as const };
 }
@@ -4731,9 +12412,721 @@ function normalizeOptionalString(value: unknown) {
   return trimmed || null;
 }
 
+function parseClientProfile(value: unknown): ClientProfile {
+  return value === "government" ? "government" : "business";
+}
+
+function extractTenantDisplayPhoneFromRawPayload(rawPayload: unknown): string | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const payload = rawPayload as Record<string, unknown>;
+  const enrich = payload.enrich;
+  if (enrich && typeof enrich === "object" && !Array.isArray(enrich)) {
+    const displayPhone = extractTenantDisplayPhoneFromRawPayload(enrich);
+    if (displayPhone) return displayPhone;
+  }
+  const phoneNumber = payload.phoneNumber;
+  if (phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)) {
+    const displayPhone = normalizeOptionalString(
+      (phoneNumber as Record<string, unknown>).display_phone_number
+    );
+    if (displayPhone) return displayPhone;
+  }
+  return normalizeOptionalString(payload.display_phone_number);
+}
+
+function extractMetaPhoneNumberPayload(rawPayload: unknown): Record<string, unknown> | null {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const payload = rawPayload as Record<string, unknown>;
+  const enrich = payload.enrich;
+  if (enrich && typeof enrich === "object" && !Array.isArray(enrich)) {
+    const nested = extractMetaPhoneNumberPayload(enrich);
+    if (nested) return nested;
+  }
+  const phoneNumber = payload.phoneNumber;
+  return phoneNumber && typeof phoneNumber === "object" && !Array.isArray(phoneNumber)
+    ? (phoneNumber as Record<string, unknown>)
+    : null;
+}
+
+function buildOnboardingConnectionWarnings(params: {
+  businessTokenStored: boolean;
+  finalWabaId: string | null | undefined;
+  phoneNumberChanged: boolean;
+  replaceExistingMetaIdentity: boolean;
+  rawPayload: unknown;
+}) {
+  const warnings: string[] = [];
+  if (params.businessTokenStored && !params.finalWabaId) {
+    warnings.push(
+      "Conexao parcial: token e phoneNumberId salvos, mas a WABA ID nao foi resolvida automaticamente. Se o painel Meta ainda mostrar pendente, conclua a conexao no Meta e reprocesse o onboarding."
+    );
+  }
+  if ((params.phoneNumberChanged || params.replaceExistingMetaIdentity) && !params.finalWabaId) {
+    warnings.push(
+      "Reconexao sem WABA ID: WABA/business antigos foram limpos da configuracao local para evitar falso conectado."
+    );
+  }
+
+  const phonePayload = extractMetaPhoneNumberPayload(params.rawPayload);
+  const codeVerificationStatus = normalizeOptionalString(phonePayload?.code_verification_status);
+  const nameStatus =
+    normalizeOptionalString(phonePayload?.name_status) ??
+    normalizeOptionalString(phonePayload?.new_name_status);
+  if (codeVerificationStatus && codeVerificationStatus !== "VERIFIED") {
+    warnings.push(`Meta reportou code_verification_status=${codeVerificationStatus}.`);
+  }
+  if (nameStatus && !["APPROVED", "AVAILABLE_WITHOUT_REVIEW"].includes(nameStatus)) {
+    warnings.push(`Meta reportou name_status=${nameStatus}.`);
+  }
+
+  return warnings;
+}
+
+type WabaSubscriptionStatus =
+  | { attempted: false; reason: "missing_waba_or_token" }
+  | { attempted: true; ok: true; success: boolean }
+  | { attempted: true; ok: false; status: number | null; message: string };
+
+async function trySubscribeMetaWabaToApp(params: {
+  tenantId: string;
+  clientKey: string;
+  requestId: string;
+  wabaId: string | null | undefined;
+  businessToken: string | null | undefined;
+}): Promise<WabaSubscriptionStatus> {
+  const wabaId = normalizeOptionalString(params.wabaId);
+  const businessToken = normalizeOptionalString(params.businessToken);
+  if (!wabaId || !businessToken) {
+    return { attempted: false, reason: "missing_waba_or_token" };
+  }
+
+  try {
+    const subscription = await subscribeMetaWabaToApp({
+      wabaId,
+      accessToken: businessToken,
+    });
+    logger.info({
+      event: "onboarding.waba_subscription.success",
+      tenantId: params.tenantId,
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      wabaId,
+      success: subscription.success,
+    });
+    return { attempted: true, ok: true, success: subscription.success };
+  } catch (error) {
+    logger.warn({
+      event: "onboarding.waba_subscription.failed",
+      tenantId: params.tenantId,
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      wabaId,
+      status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+      message: (error as Error).message,
+    });
+    return {
+      attempted: true,
+      ok: false,
+      status: error instanceof MetaOnboardingExchangeError ? error.status ?? null : null,
+      message: (error as Error).message,
+    };
+  }
+}
+
+function buildWabaSubscriptionWarnings(status: WabaSubscriptionStatus): string[] {
+  if (!status.attempted || status.ok) return [];
+  return [
+    "A WABA foi salva, mas a inscricao do app para webhooks falhou. Mensagens inbound podem nao chegar ao inbox ate reinscrever o app na WABA.",
+  ];
+}
+
 function json(res: ServerResponse, status: number, payload: unknown) {
   res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(payload));
+  res.end(JSON.stringify(normalizeJsonPayload(status, payload)));
+}
+
+function defaultErrorMessage(code: string, status: number) {
+  switch (code) {
+    case "bad_request":
+    case "invalid_json":
+    case "invalid_body":
+    case "invalid_role":
+    case "department_required":
+      return "Bad request.";
+    case "unauthorized":
+    case "invalid_credentials":
+      return "Unauthorized.";
+    case "forbidden":
+    case "client_inactive":
+      return "Forbidden.";
+    case "not_found":
+    case "client_not_found":
+    case "conversation_not_found":
+    case "lead_not_found":
+    case "user_not_found":
+    case "department_not_found":
+      return "Not found.";
+    case "weak_password":
+      return "Password is too weak.";
+    case "user_already_exists":
+      return "Conflict.";
+    case "server_error":
+    case "internal_error":
+      return "Internal server error.";
+    default:
+      return status >= 500 ? "Internal server error." : `Request failed (${status}).`;
+  }
+}
+
+async function parseAdminUserUpsertPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  options: {
+    clientId: string;
+    body: unknown;
+    requireName: boolean;
+    requireEmail: boolean;
+    requireRole: boolean;
+    currentRole?: string | null;
+    currentDepartmentId?: string | null;
+  }
+): Promise<
+  | {
+      ok: true;
+      data: {
+        name?: string;
+        email?: string;
+        role?: string;
+        departmentId?: string | null;
+        isActive?: boolean;
+      };
+    }
+  | { ok: false; status: 400 | 404; code: string; message: string }
+> {
+  const body =
+    options.body && typeof options.body === "object" && !Array.isArray(options.body)
+      ? (options.body as Record<string, unknown>)
+      : {};
+  const data: {
+    name?: string;
+    email?: string;
+    role?: string;
+    departmentId?: string | null;
+    isActive?: boolean;
+  } = {};
+
+  if ("name" in body || options.requireName) {
+    const name = String(body.name ?? "").trim();
+    if (!name) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "User name is required",
+      };
+    }
+    data.name = name;
+  }
+
+  if ("email" in body || options.requireEmail) {
+    const email = String(body.email ?? "").trim().toLowerCase();
+    if (!email) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "User email is required",
+      };
+    }
+    data.email = email;
+  }
+
+  const role =
+    "role" in body || options.requireRole
+      ? String(body.role ?? "AGENT").trim().toUpperCase()
+      : "";
+  const allowedRoles = new Set(["AGENT", "SUPERVISOR", "ADMIN"]);
+  if (role) {
+    if (!allowedRoles.has(role)) {
+      return {
+        ok: false,
+        status: 400,
+        code: "invalid_role",
+        message: "Role must be AGENT, SUPERVISOR or ADMIN",
+      };
+    }
+    data.role = role;
+  }
+
+  const hasDepartment = "departmentId" in body;
+  const rawDepartmentId =
+    hasDepartment && body.departmentId != null ? String(body.departmentId).trim() : "";
+  if (hasDepartment) {
+    if (!rawDepartmentId) {
+      data.departmentId = null;
+    } else {
+      const department = await prisma.department.findFirst({
+        where: {
+          id: rawDepartmentId,
+          clientId: options.clientId,
+        },
+        select: { id: true },
+      });
+      if (!department) {
+        return {
+          ok: false,
+          status: 404,
+          code: "department_not_found",
+          message: "Department not found for this tenant",
+        };
+      }
+      data.departmentId = department.id;
+    }
+  }
+
+  const effectiveRole =
+    data.role ?? String(options.currentRole ?? "").trim().toUpperCase() ?? "";
+  const effectiveDepartmentId = hasDepartment
+    ? (data.departmentId ?? null)
+    : options.currentDepartmentId ?? undefined;
+  if (
+    (effectiveRole === "AGENT" || effectiveRole === "SUPERVISOR") &&
+    !effectiveDepartmentId
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      code: "department_required",
+      message: "departmentId is required for AGENT and SUPERVISOR",
+    };
+  }
+
+  if ("isActive" in body) {
+    if (typeof body.isActive !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "isActive must be a boolean",
+      };
+    }
+    data.isActive = body.isActive;
+  }
+
+  return { ok: true, data };
+}
+
+async function assertGlobalUserEmailAvailable(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    email?: string;
+    exceptUserId?: string;
+  }
+): Promise<{ ok: true } | { ok: false; status: 409; code: string; message: string }> {
+  const email = params.email?.trim().toLowerCase();
+  if (!email) return { ok: true };
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+  if (!existing || existing.id === params.exceptUserId) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    status: 409,
+    code: "user_email_already_in_use",
+    message: "Este e-mail ja esta vinculado a outro usuario.",
+  };
+}
+
+function parseDepartmentUpsertPayload(
+  body: unknown,
+  options?: { requireName?: boolean; currentName?: string | null }
+):
+  | {
+      ok: true;
+      data: {
+        name?: string;
+        slug?: string;
+        isActive?: boolean;
+      };
+    }
+  | { ok: false; status: 400; code: string; message: string } {
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const data: {
+    name?: string;
+    slug?: string;
+    isActive?: boolean;
+  } = {};
+
+  if ("name" in payload || options?.requireName) {
+    const name = String(payload.name ?? "").trim();
+    if (!name) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "Department name is required",
+      };
+    }
+    data.name = name;
+    data.slug = normalizeDepartmentSlug(name);
+  } else if (options?.currentName) {
+    data.name = undefined;
+    data.slug = undefined;
+  }
+
+  if ("isActive" in payload) {
+    if (typeof payload.isActive !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "isActive must be a boolean",
+      };
+    }
+    data.isActive = payload.isActive;
+  }
+
+  return { ok: true, data };
+}
+
+function parseChatbotFlowUpsertPayload(
+  body: unknown,
+  options?: {
+    requireName?: boolean;
+    requireDefinition?: boolean;
+  }
+):
+  | {
+      ok: true;
+      data: {
+        name?: string;
+        isActive?: boolean;
+        entryPoint?: boolean;
+        definition?: Prisma.JsonValue;
+      };
+    }
+  | { ok: false; status: 400; code: string; message: string } {
+  const payload =
+    body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+  const data: {
+    name?: string;
+    isActive?: boolean;
+    entryPoint?: boolean;
+    definition?: Prisma.JsonValue;
+  } = {};
+
+  if ("name" in payload || options?.requireName) {
+    const name = String(payload.name ?? "").trim();
+    if (!name) {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "Flow name is required",
+      };
+    }
+    data.name = name;
+  }
+
+  if ("isActive" in payload) {
+    if (typeof payload.isActive !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "isActive must be a boolean",
+      };
+    }
+    data.isActive = payload.isActive;
+  }
+
+  if ("entryPoint" in payload) {
+    if (typeof payload.entryPoint !== "boolean") {
+      return {
+        ok: false,
+        status: 400,
+        code: "bad_request",
+        message: "entryPoint must be a boolean",
+      };
+    }
+    data.entryPoint = payload.entryPoint;
+  }
+
+  if ("definition" in payload) {
+    const validated = validateChatbotFlowDefinition(payload.definition);
+    if (!validated.ok) {
+      return {
+        ok: false,
+        status: 400,
+        code: validated.code,
+        message: validated.message,
+      };
+    }
+    data.definition = validated.definition as Prisma.JsonValue;
+  } else if (options?.requireDefinition) {
+    return {
+      ok: false,
+      status: 400,
+      code: "bad_request",
+      message: "definition is required",
+    };
+  }
+
+  return { ok: true, data };
+}
+
+async function bootstrapTenantDefaults(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    initialUser?: unknown;
+  }
+) {
+  logger.info({
+    event: "tenant.bootstrap.started",
+    requestId: params.requestId,
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    hasInitialUser: Boolean(params.initialUser),
+  });
+
+  try {
+    const seeded = await ensureDefaultDepartments(prisma, {
+      clientId: params.clientId,
+    });
+
+    const activeDepartments = await prisma.department.findMany({
+      where: {
+        clientId: params.clientId,
+        isActive: true,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+      },
+    });
+
+    if (activeDepartments.length === 0) {
+      throw new Error("tenant bootstrap failed to ensure at least one active department");
+    }
+
+    let userSummary:
+      | {
+          action: "created" | "updated";
+          id: string;
+          email: string;
+          role: string;
+          departmentId: string | null;
+          isActive: boolean;
+        }
+      | null = null;
+
+    if (params.initialUser && typeof params.initialUser === "object" && !Array.isArray(params.initialUser)) {
+      const body = params.initialUser as Record<string, unknown>;
+      const parsed = await parseAdminUserUpsertPayload(prisma, {
+        clientId: params.clientId,
+        body,
+        requireName: true,
+        requireEmail: true,
+        requireRole: false,
+      });
+      if (!parsed.ok) {
+        const error = new Error(parsed.message) as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = parsed.status;
+        error.code = parsed.code;
+        throw error;
+      }
+
+      const password = typeof body.password === "string" ? body.password : "";
+      if (password && password.length < 6) {
+        const error = new Error("Password must be at least 6 characters") as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = 400;
+        error.code = "weak_password";
+        throw error;
+      }
+
+      const email = String(parsed.data.email ?? "").trim().toLowerCase();
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, clientId: true },
+      });
+      if (existingUser && existingUser.clientId !== params.clientId) {
+        const error = new Error("Este e-mail ja esta vinculado a outro usuario.") as Error & {
+          status?: number;
+          code?: string;
+        };
+        error.status = 409;
+        error.code = "user_email_already_in_use";
+        throw error;
+      }
+
+      const user = await prisma.user.upsert({
+        where: {
+          email,
+        },
+        update: {
+          ...parsed.data,
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        create: {
+          clientId: params.clientId,
+          name: parsed.data.name as string,
+          email,
+          role: parsed.data.role ?? "AGENT",
+          departmentId:
+            Object.prototype.hasOwnProperty.call(parsed.data, "departmentId")
+              ? (parsed.data.departmentId ?? null)
+              : null,
+          isActive: typeof parsed.data.isActive === "boolean" ? parsed.data.isActive : true,
+          ...(password ? { passwordHash: hashPassword(password) } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          departmentId: true,
+          isActive: true,
+        },
+      });
+
+      userSummary = {
+        action: existingUser ? "updated" : "created",
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        departmentId: user.departmentId ?? null,
+        isActive: user.isActive,
+      };
+    }
+
+    logger.info({
+      event: "tenant.bootstrap.completed",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      createdDepartments: seeded.created,
+      reactivatedDepartments: seeded.reactivated,
+      unchangedDepartments: seeded.unchanged,
+      activeDepartmentCount: activeDepartments.length,
+      initialUserAction: userSummary?.action ?? null,
+      userId: userSummary?.id ?? null,
+      email: userSummary?.email ?? null,
+      role: userSummary?.role ?? null,
+      departmentId: userSummary?.departmentId ?? null,
+      isActive: userSummary?.isActive ?? null,
+    });
+
+    return {
+      ok: true as const,
+      seed: {
+        created: seeded.created,
+        reactivated: seeded.reactivated,
+        unchanged: seeded.unchanged,
+        total: seeded.total,
+      },
+      departments: activeDepartments,
+      initialUser: userSummary,
+    };
+  } catch (error) {
+    logger.error({
+      event: "tenant.bootstrap.failed",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      message: (error as Error).message,
+      code:
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: unknown }).code ?? "")
+          : null,
+    });
+    throw error;
+  }
+}
+
+function normalizeJsonPayload(status: number, payload: unknown) {
+  if (
+    status < 400 ||
+    !payload ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
+    return payload;
+  }
+
+  const typed = payload as Record<string, unknown>;
+  if (
+    typed.error &&
+    typeof typed.error === "object" &&
+    !Array.isArray(typed.error) &&
+    typeof (typed.error as Record<string, unknown>).code === "string" &&
+    typeof (typed.error as Record<string, unknown>).message === "string"
+  ) {
+    return payload;
+  }
+
+  if (typeof typed.error === "string") {
+    const code = typed.error;
+    const message =
+      typeof typed.message === "string" && typed.message.trim()
+        ? typed.message
+        : defaultErrorMessage(code, status);
+    return {
+      error: { code, message },
+      ...(typeof typed.details === "string" && typed.details.trim()
+        ? { details: typed.details }
+        : {}),
+    };
+  }
+
+  if (typeof typed.code === "string" && typeof typed.message === "string") {
+    return {
+      error: {
+        code: typed.code,
+        message: typed.message,
+      },
+      ...(typeof typed.details === "string" && typed.details.trim()
+        ? { details: typed.details }
+        : {}),
+    };
+  }
+
+  return payload;
+}
+
+function logNoisyWarn(key: string, data: Record<string, unknown>, windowMs = 60_000) {
+  const now = Date.now();
+  const state = noisyLogState.get(key);
+  if (!state || now - state.lastLoggedAt >= windowMs) {
+    logger.warn({
+      ...data,
+      suppressedCount: state?.suppressedCount ?? 0,
+    });
+    noisyLogState.set(key, { lastLoggedAt: now, suppressedCount: 0 });
+    return;
+  }
+  state.suppressedCount += 1;
+  noisyLogState.set(key, state);
 }
 
 function maskWaId(waId: string) {
@@ -4852,6 +13245,20 @@ function extractCampaignIdFromRawPayload(rawPayload: unknown) {
   return typeof typed?.campaignId === "string" ? typed.campaignId : null;
 }
 
+function extractCampaignIdFromMessageId(messageId: string | null | undefined) {
+  const value = typeof messageId === "string" ? messageId.trim() : "";
+  if (!value.startsWith("campaign.")) return null;
+  const suffix = value.slice("campaign.".length);
+  const separatorIndex = suffix.lastIndexOf(".");
+  if (separatorIndex <= 0) return null;
+  const campaignId = suffix.slice(0, separatorIndex);
+  return campaignId || null;
+}
+
+function resolveOutboundCampaignId(item: { messageId?: string | null; rawPayload: unknown }) {
+  return extractCampaignIdFromRawPayload(item.rawPayload) ?? extractCampaignIdFromMessageId(item.messageId);
+}
+
 function extractTemplateParamsFromComponents(components: unknown): string[] {
   if (!Array.isArray(components)) return [];
   const firstBody = components.find((item) => {
@@ -4928,6 +13335,7 @@ function stringifyCampaignError(value: unknown) {
 
 function buildCampaignMetaStatusItem(item: {
   waId: string;
+  messageId?: string | null;
   templateName: string | null;
   status: string;
   errorBody: string | null;
@@ -4949,6 +13357,37 @@ function buildCampaignMetaStatusItem(item: {
       stringifyCampaignError(metaStatus.errorData) ||
       stringifyCampaignError(metaStatus.errors),
   };
+}
+
+function buildCampaignSeedFallbackStatusItems(
+  campaign: {
+    sentCount: number;
+    blockedCount: number;
+    status: string;
+    templateName: string;
+  },
+  seed: CampaignDraftSeed
+): CampaignMetaStatus[] {
+  const sentLimit = Math.max(campaign.sentCount || 0, 0);
+  const blockedLimit = sentLimit + Math.max(campaign.blockedCount || 0, 0);
+  return seed.recipients.map((waId, index) => {
+    const wasSent = index < sentLimit;
+    const wasBlockedOrFailed = !wasSent && index < blockedLimit;
+    return {
+      waId,
+      templateName: seed.templateName || campaign.templateName,
+      status: wasSent ? "sent" : "failed",
+      pricingCategory: null,
+      pricingBillable: null,
+      pricingModel: null,
+      conversationId: null,
+      error: wasSent
+        ? "Status Meta detalhado indisponivel; exibido a partir do historico da campanha."
+        : wasBlockedOrFailed
+          ? "Envio bloqueado ou falhou; status Meta detalhado indisponivel."
+          : "Envio individual nao encontrado no historico preservado.",
+    };
+  });
 }
 
 function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMetaSummary {
@@ -4984,6 +13423,8 @@ type ScopedClientRecord = {
   id: string;
   clientKey: string;
   status: "ACTIVE" | "INACTIVE";
+  features: unknown;
+  profile: string | null;
 };
 
 async function getScopedClientById(
@@ -4992,8 +13433,53 @@ async function getScopedClientById(
 ): Promise<ScopedClientRecord | null> {
   return prisma.client.findUnique({
     where: { id: clientId },
-    select: { id: true, clientKey: true, status: true },
+    select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
+}
+
+function getTenantMaxActiveAppUsers(clientKey: string, tenants: Awaited<ReturnType<typeof getTenants>>) {
+  const configuredLimit = tenants[clientKey]?.maxActiveAppUsers;
+  if (
+    typeof configuredLimit === "number" &&
+    Number.isInteger(configuredLimit) &&
+    configuredLimit >= 0
+  ) {
+    return configuredLimit;
+  }
+  return 5;
+}
+
+async function assertTenantActiveUserLimitAvailable(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+  }
+): Promise<
+  | { ok: true; maxActiveAppUsers: number; activeUsers: number }
+  | { ok: false; maxActiveAppUsers: number; activeUsers: number }
+> {
+  const tenants = await getTenants();
+  const maxActiveAppUsers = getTenantMaxActiveAppUsers(params.clientKey, tenants);
+  const activeUsers = await prisma.user.count({
+    where: {
+      clientId: params.clientId,
+      isActive: true,
+    },
+  });
+  const ok = activeUsers < maxActiveAppUsers;
+  if (!ok) {
+    logger.warn({
+      event: "tenant.user_limit.exceeded",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      activeUsers,
+      maxActiveAppUsers,
+    });
+  }
+  return { ok, activeUsers, maxActiveAppUsers };
 }
 
 async function resolveCampaignTemplateInput(
@@ -5055,10 +13541,850 @@ async function findAssignedUserName(
   return user?.name ?? null;
 }
 
+async function ensureQueueForDepartment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentId: string;
+  }
+) {
+  return prisma.queue.upsert({
+    where: {
+      clientId_departmentId_name: {
+        clientId: params.clientId,
+        departmentId: params.departmentId,
+        name: DEFAULT_OPERATIONAL_QUEUE_NAME,
+      },
+    },
+    update: {},
+    create: {
+      clientId: params.clientId,
+      departmentId: params.departmentId,
+      name: DEFAULT_OPERATIONAL_QUEUE_NAME,
+    },
+    select: { id: true, name: true, departmentId: true },
+  });
+}
+
+async function resolveAssignmentRouting(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    assignedUserDepartmentId?: string | null;
+    fallbackDepartmentId?: string | null;
+  }
+) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const departmentId =
+    (await resolveOperationalDepartmentId(
+      prisma,
+      params.clientId,
+      params.assignedUserDepartmentId ?? params.fallbackDepartmentId ?? defaults.department.id
+    )) ?? defaults.department.id;
+  const queue =
+    departmentId === defaults.department.id
+      ? defaults.queue
+      : await ensureQueueForDepartment(prisma, {
+          clientId: params.clientId,
+          departmentId,
+        });
+  return { departmentId, queueId: queue.id };
+}
+
+const CONVERSATION_OPERATIONAL_STATUS_VALUES = [
+  ConversationOperationalStatus.WAITING,
+  ConversationOperationalStatus.IN_PROGRESS,
+  ConversationOperationalStatus.WAITING_USER,
+  ConversationOperationalStatus.CLOSED,
+] as const;
+
+function normalizeConversationOperationalStatus(
+  value?: string | ConversationOperationalStatus | null
+): ConversationOperationalStatus | null {
+  switch (String(value ?? "").toUpperCase()) {
+    case "WAITING":
+      return ConversationOperationalStatus.WAITING;
+    case "IN_PROGRESS":
+      return ConversationOperationalStatus.IN_PROGRESS;
+    case "WAITING_USER":
+      return ConversationOperationalStatus.WAITING_USER;
+    case "CLOSED":
+      return ConversationOperationalStatus.CLOSED;
+    default:
+      return null;
+  }
+}
+
+function sanitizeDownloadFileName(input: string | null | undefined) {
+  const value = String(input ?? "").trim();
+  if (!value) return null;
+  return value.replace(/[^\w.\- ]+/g, "_");
+}
+
+const outboundMediaRoot = path.resolve(process.cwd(), ".data", "media", "outbound");
+
+function sanitizeStorageSegment(input: string) {
+  return input.replace(/[^\w.-]+/g, "_").slice(0, 160) || crypto.randomUUID();
+}
+
+function getRawMediaPayload(rawPayload: unknown) {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
+  const root = rawPayload as Record<string, unknown>;
+  const media = root.media;
+  if (media && typeof media === "object" && !Array.isArray(media)) {
+    return media as Record<string, unknown>;
+  }
+  return root;
+}
+
+async function storeOutboundMediaFile(params: {
+  clientId: string;
+  messageId: string;
+  content: Buffer;
+  mimeType: string;
+  fileName?: string | null;
+}) {
+  const safeClientId = sanitizeStorageSegment(params.clientId);
+  const safeMessageId = sanitizeStorageSegment(params.messageId);
+  const safeFileName =
+    sanitizeDownloadFileName(params.fileName) ||
+    `${safeMessageId}.${params.mimeType.includes("ogg") ? "ogg" : "bin"}`;
+  const directory = path.join(outboundMediaRoot, safeClientId);
+  await fs.mkdir(directory, { recursive: true });
+  const absolutePath = path.join(directory, `${safeMessageId}-${safeFileName}`);
+  await fs.writeFile(absolutePath, params.content);
+  return {
+    localPath: path.relative(process.cwd(), absolutePath),
+    size: params.content.length,
+  };
+}
+
+async function resolveStoredOutboundMedia(rawPayload: unknown) {
+  const media = getRawMediaPayload(rawPayload);
+  const localPath = typeof media?.localPath === "string" ? media.localPath : null;
+  if (!localPath) return null;
+
+  const absolutePath = path.resolve(process.cwd(), localPath);
+  const relativeToRoot = path.relative(outboundMediaRoot, absolutePath);
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) return null;
+
+  try {
+    const stats = await fs.stat(absolutePath);
+    if (!stats.isFile()) return null;
+    return {
+      absolutePath,
+      size: stats.size,
+      mimeType:
+        typeof media?.mimeType === "string" && media.mimeType.trim()
+          ? media.mimeType.trim()
+          : "application/octet-stream",
+      fileName: typeof media?.fileName === "string" ? media.fileName : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildConversationMessageDownloadPath(waId: string, messageId: string) {
+  return `/app/conversation/${encodeURIComponent(waId)}/messages/${encodeURIComponent(messageId)}/media`;
+}
+
+function isChatbotDisabledForTenant(tenant?: {
+  disableChatbot?: boolean;
+  appDisableChatbot?: boolean;
+} | null) {
+  return tenant?.disableChatbot === true;
+}
+
+function isAiFallbackDisabledForTenant(tenant?: {
+  disableAiFallback?: boolean;
+  appDisableAiFallback?: boolean;
+  aiBusinessContext?: string;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
+} | null) {
+  const aiConfigured = isAiAssistantConfigured(tenant);
+  if (!aiConfigured) return true;
+  return tenant?.disableAiFallback === true;
+}
+
+function isIntentClassifierDisabledForTenant(tenant?: {
+  disableIntentClassifier?: boolean;
+  appDisableIntentClassifier?: boolean;
+} | null) {
+  if (!env.FLOW_INTENT_CLASSIFIER_ENABLED) return true;
+  return tenant?.disableIntentClassifier === true;
+}
+
+async function enforceAppFeature(
+  prisma: ReturnType<typeof getPrisma>,
+  res: ServerResponse,
+  params: {
+    client: { id: string; features?: unknown; profile?: unknown };
+    userId: string;
+    feature: ClientFeatureKey;
+    endpoint: string;
+    requestId: string;
+  }
+) {
+  if (hasFeature(params.client, params.feature)) return true;
+  const timestamp = new Date().toISOString();
+  logger.warn({
+    event: "feature.denied",
+    clientId: params.client.id,
+    userId: params.userId,
+    feature: params.feature,
+    route: params.endpoint,
+    timestamp,
+    requestId: params.requestId,
+  });
+  try {
+    await prisma.event.create({
+      data: {
+        clientId: params.client.id,
+        requestId: `${params.requestId}:feature.denied:${params.feature}`,
+        eventName: "feature.denied",
+        payloadJson: {
+          userId: params.userId,
+          clientId: params.client.id,
+          feature: params.feature,
+          route: params.endpoint,
+          timestamp,
+          action: "feature.denied",
+        },
+      },
+    });
+  } catch (error) {
+    logger.warn({
+      event: "feature.denied.audit_failed",
+      clientId: params.client.id,
+      userId: params.userId,
+      feature: params.feature,
+      route: params.endpoint,
+      requestId: params.requestId,
+      message: (error as Error).message,
+    });
+  }
+  json(res, 403, {
+    error: {
+      code: "feature_not_enabled",
+      message: `Feature '${params.feature}' is not enabled for this tenant`,
+    },
+    feature: params.feature,
+  });
+  return false;
+}
+
+function isConversationInHumanFlow(conversation: {
+  mode?: string | null;
+  handoff?: { status?: string | null };
+  assignedUserId?: string | null;
+  assignedAt?: string | null;
+}) {
+  return (
+    conversation.mode === "HUMAN" ||
+    conversation.handoff?.status === "active" ||
+    conversation.handoff?.status === "pending" ||
+    Boolean(conversation.assignedUserId) ||
+    Boolean(conversation.assignedAt)
+  );
+}
+
+function deriveConversationOperationalStatus(conversation: {
+  mode?: string | null;
+  handoff?: { status?: string | null };
+  assignedUserId?: string | null;
+  assignedAt?: string | null;
+}) {
+  if (!isConversationInHumanFlow(conversation)) return null;
+  return conversation.assignedUserId
+    ? ConversationOperationalStatus.IN_PROGRESS
+    : ConversationOperationalStatus.WAITING;
+}
+
+async function ensureDefaultDepartmentAndQueue(
+  prisma: ReturnType<typeof getPrisma>,
+  clientId: string
+) {
+  return ensureDefaultOperationalDepartmentAndQueue(prisma, clientId);
+}
+
+async function ensureConversationOperationalState(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>;
+    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+  }
+) {
+  const normalizedDepartmentId = params.conversation
+    ? await resolveOperationalDepartmentId(
+        prisma,
+        params.clientId,
+        params.conversation.departmentId ?? null
+      )
+    : null;
+  const normalizedConversation =
+    params.conversation && normalizedDepartmentId !== (params.conversation.departmentId ?? null)
+      ? {
+          ...params.conversation,
+          departmentId: normalizedDepartmentId,
+        }
+      : params.conversation;
+  const conversation = materializeConversationOperationalState(normalizedConversation, params.defaults);
+  if (!conversation) return null;
+  const original = params.conversation;
+  const shouldPersist =
+    (original?.departmentId ?? null) !== (conversation.departmentId ?? null) ||
+    (original?.queueId ?? null) !== (conversation.queueId ?? null) ||
+    (normalizeConversationOperationalStatus(original?.status) ?? null) !==
+      (normalizeConversationOperationalStatus(conversation.status) ?? null) ||
+    (original?.closedAt ?? null) !== (conversation.closedAt ?? null);
+  if (!shouldPersist) return conversation;
+  await runtimeStorage.upsertConversation(conversation);
+  return conversation;
+}
+
+function materializeConversationOperationalState(
+  conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>,
+  defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>
+) {
+  if (!conversation) return null;
+  if (!isConversationInHumanFlow(conversation)) {
+    return conversation;
+  }
+  const explicitStatus = normalizeConversationOperationalStatus(conversation.status);
+  const derivedStatus = explicitStatus
+    ? null
+    : deriveConversationOperationalStatus(conversation);
+  const resolvedStatus = explicitStatus ?? derivedStatus ?? null;
+  const normalizedStatus =
+    conversation.assignedUserId && resolvedStatus === ConversationOperationalStatus.WAITING
+      ? ConversationOperationalStatus.IN_PROGRESS
+      : resolvedStatus;
+  return {
+    ...conversation,
+    departmentId: conversation.departmentId ?? defaults.department.id,
+    queueId: conversation.queueId ?? defaults.queue.id,
+    status: normalizedStatus,
+    closedAt:
+      normalizedStatus === ConversationOperationalStatus.CLOSED
+        ? conversation.closedAt ?? new Date().toISOString()
+        : null,
+  };
+}
+
+async function recordConversationAssignment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waId: string;
+    fromUserId?: string | null;
+    toUserId?: string | null;
+    assignedAt: string;
+  }
+) {
+  if (!params.toUserId) return;
+  const runtimeState = await prisma.conversationRuntimeState.findUnique({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    select: { id: true },
+  });
+  if (!runtimeState) {
+    logNoisyWarn(`conversation.assignment.skipped:${params.clientId}:${params.waId}`, {
+      event: "conversation.assignment.skipped",
+      clientId: params.clientId,
+      conversationId: null,
+      userId: params.toUserId ?? params.fromUserId ?? null,
+      requestId: logger.getContext().requestId ?? null,
+      waId: params.waId,
+      storageMode: env.STORAGE_MODE,
+      readSource: env.CONV_STATE_READ_SOURCE,
+      reason: "runtime_state_not_found_shadow_row_missing",
+    });
+    return;
+  }
+  await prisma.conversationAssignment.create({
+    data: {
+      conversationId: runtimeState.id,
+      fromUserId: params.fromUserId ?? null,
+      toUserId: params.toUserId,
+      assignedAt: new Date(params.assignedAt),
+    },
+  });
+}
+
+async function recordConversationAuditEvent(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    eventName:
+      | "conversation.assigned"
+      | "conversation.transferred"
+      | "conversation.department.transferred"
+      | "conversation.released"
+      | "conversation.released_to_general"
+      | "conversation.status_changed";
+    actorUserId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    conversationId?: string | null;
+    payload?: Record<string, unknown>;
+  }
+) {
+  const timestamp = new Date().toISOString();
+  const eventRequestId = `${params.requestId}:${params.eventName}`;
+  try {
+    await prisma.event.create({
+      data: {
+        clientId: params.clientId,
+        conversationId: params.conversationId ?? null,
+        waId: params.waId,
+        waIdCanonical: params.waIdCanonical ?? null,
+        requestId: eventRequestId,
+        eventName: params.eventName,
+        payloadJson: {
+          action: params.eventName,
+          userId: params.actorUserId,
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          conversationId: params.conversationId ?? null,
+          waId: params.waId,
+          waIdCanonical: params.waIdCanonical ?? null,
+          timestamp,
+          ...(params.payload ?? {}),
+        },
+      },
+    });
+  } catch (error) {
+    logger.warn({
+      event: "conversation.audit_event_failed",
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      userId: params.actorUserId,
+      eventName: params.eventName,
+      requestId: eventRequestId,
+      message: (error as Error).message,
+    });
+  }
+}
+
+async function persistConversationDepartment(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    departmentId: string | null;
+  }
+) {
+  await prisma.conversation.upsert({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    update: {
+      departmentId: params.departmentId,
+      waIdCanonical: params.waIdCanonical ?? undefined,
+    },
+    create: {
+      clientId: params.clientId,
+      waId: params.waId,
+      waIdCanonical: params.waIdCanonical ?? undefined,
+      departmentId: params.departmentId,
+    },
+  });
+}
+
+async function loadConversationOperationalLookups(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    states: Array<
+      | {
+          departmentId?: string | null;
+          queueId?: string | null;
+        }
+      | null
+      | undefined
+    >;
+    defaults: Awaited<ReturnType<typeof ensureDefaultDepartmentAndQueue>>;
+  }
+) {
+  const departmentIds = Array.from(
+    new Set(
+      params.states
+        .map((item) => item?.departmentId ?? null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const queueIds = Array.from(
+    new Set(
+      params.states
+        .map((item) => item?.queueId ?? null)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const [departments, queues] = await Promise.all([
+    departmentIds.length > 0
+      ? prisma.department.findMany({
+          where: { clientId: params.clientId, id: { in: departmentIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    queueIds.length > 0
+      ? prisma.queue.findMany({
+          where: { clientId: params.clientId, id: { in: queueIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const departmentById = new Map(departments.map((item) => [item.id, item.name]));
+  const queueById = new Map(queues.map((item) => [item.id, item.name]));
+  departmentById.set(params.defaults.department.id, params.defaults.department.name);
+  queueById.set(params.defaults.queue.id, params.defaults.queue.name);
+  return { departmentById, queueById };
+}
+
+function isAgentRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "AGENT";
+}
+
+function isSupervisorRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "SUPERVISOR";
+}
+
+function isAdminRole(role: string | null | undefined) {
+  return normalizeUserRole(role) === "ADMIN";
+}
+
+function canManageAnyConversation(role: string | null | undefined) {
+  return isSupervisorRole(role) || isAdminRole(role);
+}
+
+function canManageOwnedConversation(
+  role: string | null | undefined,
+  assignedUserId: string | null | undefined,
+  currentUserId: string
+) {
+  if (canManageAnyConversation(role)) return true;
+  if (!assignedUserId) return false;
+  return assignedUserId === currentUserId;
+}
+
+async function loadAppDepartmentAccess(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    userId: string;
+    role: string;
+  }
+) {
+  if (isAdminRole(params.role)) {
+    return { requiresDepartmentScope: false, departmentId: null as string | null };
+  }
+  if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) {
+    return { requiresDepartmentScope: false, departmentId: null as string | null };
+  }
+  const user = await prisma.user.findFirst({
+    where: { id: params.userId, clientId: params.clientId },
+    select: { departmentId: true },
+  });
+  return {
+    requiresDepartmentScope: true,
+    departmentId: user?.departmentId ?? null,
+  };
+}
+
+function hasConversationDepartmentAccess(params: {
+  role: string;
+  userDepartmentId: string | null;
+  conversationDepartmentId: string | null | undefined;
+}) {
+  if (isAdminRole(params.role)) return true;
+  if (!isAgentRole(params.role) && !isSupervisorRole(params.role)) return true;
+  if (!params.userDepartmentId) return false;
+  return params.userDepartmentId === (params.conversationDepartmentId ?? null);
+}
+
+function logAppDepartmentDenied(params: {
+  requestId: string;
+  userId: string;
+  clientId: string;
+  departmentId: string | null;
+  conversationDepartmentId: string | null | undefined;
+  waId?: string | null;
+  route: string;
+}) {
+  logger.warn({
+    event: "rbac.department.denied",
+    requestId: params.requestId,
+    userId: params.userId,
+    clientId: params.clientId,
+    departmentId: params.departmentId,
+    conversationDepartmentId: params.conversationDepartmentId ?? null,
+    waId: params.waId ?? null,
+    route: params.route,
+  });
+}
+
+async function canManageLead(
+  prisma: ReturnType<typeof getPrisma>,
+  client: { id: string; clientKey: string },
+  clientAuth: { userId: string; role: string },
+  lead: { waId: string; waIdCanonical?: string | null },
+  requestId: string,
+  source: string
+) {
+  if (!isAgentRole(clientAuth.role)) return true;
+  const resolvedConversation = await resolveConversationTarget(prisma, {
+    clientId: client.id,
+    clientKey: client.clientKey,
+    rawWaId: lead.waIdCanonical ?? lead.waId,
+    requestId,
+    source,
+  });
+  const conversation = await runtimeStorage.getConversation(
+    resolvedConversation.resolvedWaId,
+    client.clientKey
+  );
+  return canManageOwnedConversation(
+    clientAuth.role,
+    conversation?.assignedUserId ?? null,
+    clientAuth.userId
+  );
+}
+
+function logAppRbacDenied(params: {
+  requestId: string;
+  route: string;
+  userId: string;
+  clientId: string;
+  role: string;
+  reason: string;
+  waId?: string | null;
+  leadId?: string | null;
+}) {
+  logger.warn({
+    event: "rbac.denied",
+    scope: "app",
+    requestId: params.requestId,
+    route: params.route,
+    userId: params.userId,
+    clientId: params.clientId,
+    role: normalizeUserRole(params.role),
+    reason: params.reason,
+    waId: params.waId ?? null,
+    leadId: params.leadId ?? null,
+  });
+}
+
+function serializeConversationOperationalFields(params: {
+  conversation: {
+    mode?: string | null;
+    handoff?: { status?: string | null } | null;
+    assignedUserId?: string | null;
+    assignedTo?: string | null;
+    assignedAt?: string | null;
+    departmentId?: string | null;
+    queueId?: string | null;
+    status?: string | ConversationOperationalStatus | null;
+    closedAt?: string | null;
+    lastInboundAt?: string | null;
+    lastOutboundAt?: string | null;
+    answers?: {
+      flowContext?: Record<string, unknown> | null;
+      flowTags?: string[] | null;
+    } | null;
+  } | null;
+  assignedUserName: string | null;
+  departmentName: string | null;
+  queueName: string | null;
+}) {
+  const conversation = params.conversation;
+  const flowContext = sanitizeInboxFlowContext(conversation?.answers?.flowContext ?? null);
+  const assignedUserId = conversation?.assignedUserId ?? null;
+  const normalizedStatus = normalizeConversationOperationalStatus(conversation?.status);
+  const status =
+    assignedUserId && normalizedStatus === ConversationOperationalStatus.WAITING
+      ? ConversationOperationalStatus.IN_PROGRESS
+      : normalizedStatus;
+  return {
+    mode: conversation?.mode === "HUMAN" ? "HUMAN" : "BOT",
+    handoffStatus: conversation?.handoff?.status ?? "none",
+    assignedUserId,
+    assignedTo: conversation?.assignedTo ?? null,
+    assignedUserName: params.assignedUserName,
+    assignedAt: conversation?.assignedAt ?? null,
+    departmentId: conversation?.departmentId ?? null,
+    departmentName: params.departmentName,
+    queueId: conversation?.queueId ?? null,
+    queueName: params.queueName,
+    status,
+    closedAt: conversation?.closedAt ?? null,
+    lastInboundAt: conversation?.lastInboundAt ?? null,
+    lastOutboundAt: conversation?.lastOutboundAt ?? null,
+    isUnassigned: !conversation?.assignedUserId,
+    flowContext,
+    flowTags: sanitizeInboxFlowTags(conversation?.answers?.flowTags ?? null),
+  };
+}
+
+const INBOX_UX_EVENT_NAMES = [
+  "inbox.priority.rendered",
+  "inbox.sorted",
+  "inbox.suggestion.used",
+] as const;
+
+function isAllowedInboxUxEvent(value: string): value is (typeof INBOX_UX_EVENT_NAMES)[number] {
+  return (INBOX_UX_EVENT_NAMES as readonly string[]).includes(value);
+}
+
+function sanitizeInboxUxEventPayload(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const key of ["conversationKey", "leadId", "leadTemp", "topPriority"] as const) {
+    const item = source[key];
+    if (typeof item === "string") {
+      result[key] = item.slice(0, 180);
+    } else if (item === null) {
+      result[key] = null;
+    }
+  }
+  const count = source.count;
+  if (typeof count === "number" && Number.isFinite(count)) {
+    result.count = Math.max(0, Math.min(Math.floor(count), 1000));
+  }
+  return result;
+}
+
+const INBOX_FLOW_CONTEXT_KEYS = [
+  "area",
+  "servico",
+  "situacao",
+  "prioridade",
+  "lead_temp",
+  "intent",
+  "origem_intencao",
+] as const;
+
+function sanitizeInboxFlowContext(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const key of INBOX_FLOW_CONTEXT_KEYS) {
+    const item = source[key];
+    if (
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "number" ||
+      typeof item === "boolean"
+    ) {
+      result[key] = item;
+    }
+  }
+  return result;
+}
+
+function sanitizeInboxFlowTags(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 20)
+    )
+  );
+}
+
+async function buildConversationActionPayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    conversation: Awaited<ReturnType<typeof runtimeStorage.getConversation>>;
+    assignedUserName?: string | null;
+  }
+) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const conversation = materializeConversationOperationalState(params.conversation, defaults);
+  const assignedUserName =
+    params.assignedUserName ??
+    (conversation?.assignedUserId
+      ? await findAssignedUserName(prisma, params.clientId, conversation.assignedUserId)
+      : null);
+  const departmentName =
+    conversation?.departmentId === defaults.department.id || !conversation?.departmentId
+      ? defaults.department.name
+      : (
+          await prisma.department.findFirst({
+            where: { clientId: params.clientId, id: conversation.departmentId },
+            select: { name: true },
+          })
+        )?.name ?? null;
+  const queueName =
+    conversation?.queueId === defaults.queue.id || !conversation?.queueId
+      ? defaults.queue.name
+      : (
+          await prisma.queue.findFirst({
+            where: { clientId: params.clientId, id: conversation.queueId },
+            select: { name: true },
+          })
+        )?.name ?? null;
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+  const channelSource = conversation?.waId
+    ? await prisma.conversation.findFirst({
+        where: {
+          clientId: params.clientId,
+          OR: [
+            { waId: conversation.waId },
+            ...(conversation.waIdCanonical ? [{ waIdCanonical: conversation.waIdCanonical }] : []),
+          ],
+        },
+        select: { channel: true, provider: true, channelAccountId: true },
+      })
+    : null;
+
+  return {
+    ok: true,
+    waId: conversation?.waId ?? null,
+    waIdCanonical: conversation?.waIdCanonical ?? null,
+    ...serializeInboxChannelFields(channelSource ?? undefined),
+    channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, channelSource),
+    ...serializeConversationOperationalFields({
+      conversation,
+      assignedUserName,
+      departmentName,
+      queueName,
+    }),
+  };
+}
+
 function buildScopedWaIdWhere(rawWaId: string) {
   const lookup = buildWaIdLookup(rawWaId);
+  const exactRaw = rawWaId.trim();
+  const variants = Array.from(new Set([...lookup.variants, exactRaw].filter(Boolean)));
   return {
-    OR: [{ waIdCanonical: lookup.canonical }, { waId: lookup.raw }],
+    OR: [{ waIdCanonical: { in: variants } }, { waId: { in: variants } }],
   };
 }
 
@@ -5076,18 +14402,31 @@ async function resolveConversationTarget(
     source: string;
   }
 ) {
+  const exactRawWaId = params.rawWaId.trim();
+  const syntheticRawWaId = /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(exactRawWaId)
+    ? exactRawWaId.toLowerCase()
+    : null;
   const lookup = buildWaIdLookup(params.rawWaId);
   const matches = await prisma.conversation.findMany({
     where: {
       clientId: params.clientId,
-      ...buildScopedWaIdWhere(lookup.raw),
+      deletedAt: null,
+      anonymizedAt: null,
+      ...(syntheticRawWaId ? { waId: syntheticRawWaId } : buildScopedWaIdWhere(lookup.raw)),
     },
     select: {
       waId: true,
       waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
+      id: true,
+      departmentId: true,
+      createdAt: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      historyVisibleAfter: true,
     },
   });
   const sortedMatches = matches.sort((left, right) => compareConversationLookupPriority(left, right));
@@ -5159,31 +14498,747 @@ function dedupeCampaignRecipients(
   return Array.from(canonicalToRaw.values());
 }
 
+type ConversationListCursor = {
+  updatedAt: string;
+  conversationIdentity: string;
+};
+
+type ContactTimelineCursor = {
+  createdAt: string;
+};
+
+function buildEmptyDashboardOverview() {
+  return {
+    ok: true,
+    kpis: {
+      active: 0,
+      waiting: 0,
+      waitingUser: 0,
+      closedToday: 0,
+      avgFirstResponseTimeSec: null,
+      avgResolutionTimeSec: null,
+      slaBreaches: 0,
+      totalConversations: 0,
+    },
+    queue: [],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function startOfCurrentDay() {
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function getLatestDate(...values: Array<Date | null | undefined>) {
+  const dates = values.filter((value): value is Date => value instanceof Date);
+  if (dates.length === 0) return null;
+  return dates.reduce((latest, current) => (current.getTime() > latest.getTime() ? current : latest));
+}
+
+function resolveDashboardOperationalStatus(state: {
+  status: ConversationOperationalStatus | null;
+  mode: string | null;
+  assignedUserId: string | null;
+}) {
+  if (state.status) return state.status;
+  if (state.mode === "HUMAN") {
+    return state.assignedUserId ? ConversationOperationalStatus.IN_PROGRESS : ConversationOperationalStatus.WAITING;
+  }
+  return null;
+}
+
+async function buildAppDashboardOverview(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    departmentId: string | null;
+    assignedUserId: string | null;
+    status: ConversationOperationalStatus | null;
+  }
+) {
+  const dashboardStatuses = [
+    ConversationOperationalStatus.WAITING,
+    ConversationOperationalStatus.IN_PROGRESS,
+    ConversationOperationalStatus.WAITING_USER,
+    ConversationOperationalStatus.CLOSED,
+  ];
+  const runtimeStates = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      status: params.status ?? { in: dashboardStatuses },
+      ...(params.departmentId ? { departmentId: params.departmentId } : {}),
+      ...(params.assignedUserId ? { assignedUserId: params.assignedUserId } : {}),
+    },
+    select: {
+      waId: true,
+      waIdCanonical: true,
+      mode: true,
+      handoffStatus: true,
+      handoffRequestedAt: true,
+      handoffActivatedAt: true,
+      assignedUserId: true,
+      assignedAt: true,
+      departmentId: true,
+      queueId: true,
+      status: true,
+      closedAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      updatedAt: true,
+    },
+  });
+  if (runtimeStates.length === 0) return buildEmptyDashboardOverview();
+
+  const waIds = Array.from(new Set(runtimeStates.map((item) => item.waId)));
+  const canonicalWaIds = Array.from(
+    new Set(runtimeStates.map((item) => item.waIdCanonical ?? item.waId))
+  );
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      clientId: params.clientId,
+      deletedAt: null,
+      OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+    },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      departmentId: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      updatedAt: true,
+    },
+  });
+  if (conversations.length === 0) return buildEmptyDashboardOverview();
+
+  const conversationIds = conversations.map((item) => item.id);
+  const [metrics, slaConfig, leads] = await Promise.all([
+    prisma.conversationMetrics.findMany({
+      where: {
+        clientId: params.clientId,
+        conversationId: { in: conversationIds },
+      },
+      select: {
+        conversationId: true,
+        firstResponseTimeSec: true,
+        resolutionTimeSec: true,
+      },
+    }),
+    prisma.sLAConfig.findUnique({
+      where: { clientId: params.clientId },
+      select: {
+        firstResponseLimitSec: true,
+        resolutionTimeLimitSec: true,
+      },
+    }),
+    prisma.lead.findMany({
+      where: {
+        tenantId: params.clientId,
+        OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+      },
+      select: {
+        waId: true,
+        waIdCanonical: true,
+        name: true,
+        phone: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const runtimeByWaId = new Map<string, (typeof runtimeStates)[number]>();
+  for (const state of runtimeStates) {
+    runtimeByWaId.set(getWaIdGroupKey(state.waId, state.waIdCanonical), state);
+  }
+  const leadByWaId = new Map<string, (typeof leads)[number]>();
+  for (const lead of leads) {
+    const key = getWaIdGroupKey(lead.waId, lead.waIdCanonical);
+    const current = leadByWaId.get(key);
+    if (!current || lead.updatedAt.getTime() > current.updatedAt.getTime()) {
+      leadByWaId.set(key, lead);
+    }
+  }
+  const operationalItems = conversations
+    .map((conversation) => {
+      const key = getWaIdGroupKey(conversation.waId, conversation.waIdCanonical);
+      const state = runtimeByWaId.get(key);
+      const status = state
+        ? resolveDashboardOperationalStatus(state)
+        : null;
+      const departmentId = state?.departmentId ?? conversation.departmentId ?? null;
+      const assignedUserId = state?.assignedUserId ?? null;
+      const lastInteractionAt = getLatestDate(
+        state?.lastInboundAt,
+        state?.lastOutboundAt,
+        conversation.lastInboundAt,
+        conversation.lastOutboundAt,
+        state?.updatedAt,
+        conversation.updatedAt
+      );
+      const waitingSince =
+        state?.handoffRequestedAt ??
+        state?.handoffActivatedAt ??
+        state?.updatedAt ??
+        conversation.lastInboundAt ??
+        conversation.updatedAt;
+      return {
+        conversation,
+        state,
+        key,
+        status,
+        departmentId,
+        assignedUserId,
+        lastInteractionAt,
+        waitingSince,
+      };
+    })
+    .filter((item) => item.status !== null)
+    .filter((item) => !params.departmentId || item.departmentId === params.departmentId)
+    .filter((item) => !params.assignedUserId || item.assignedUserId === params.assignedUserId)
+    .filter((item) => !params.status || item.status === params.status);
+
+  const operationalIds = new Set(operationalItems.map((item) => item.conversation.id));
+  const scopedMetrics = metrics.filter((metric) => operationalIds.has(metric.conversationId));
+  const firstResponseValues = metrics
+    .filter((metric) => operationalIds.has(metric.conversationId))
+    .map((metric) => metric.firstResponseTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const resolutionValues = metrics
+    .filter((metric) => operationalIds.has(metric.conversationId))
+    .map((metric) => metric.resolutionTimeSec)
+    .filter((value): value is number => typeof value === "number");
+  const firstResponseLimitSec =
+    slaConfig && slaConfig.firstResponseLimitSec > 0 ? slaConfig.firstResponseLimitSec : null;
+  const resolutionTimeLimitSec =
+    slaConfig && slaConfig.resolutionTimeLimitSec > 0 ? slaConfig.resolutionTimeLimitSec : null;
+  const slaBreaches = scopedMetrics.reduce((count, metric) => {
+    const firstResponseBreached =
+      firstResponseLimitSec !== null &&
+      metric.firstResponseTimeSec !== null &&
+      metric.firstResponseTimeSec > firstResponseLimitSec;
+    const resolutionBreached =
+      resolutionTimeLimitSec !== null &&
+      metric.resolutionTimeSec !== null &&
+      metric.resolutionTimeSec > resolutionTimeLimitSec;
+    return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
+  }, 0);
+
+  const departmentIds = Array.from(
+    new Set(operationalItems.map((item) => item.departmentId).filter((value): value is string => Boolean(value)))
+  );
+  const assignedUserIds = Array.from(
+    new Set(operationalItems.map((item) => item.assignedUserId).filter((value): value is string => Boolean(value)))
+  );
+  const [departments, users] = await Promise.all([
+    departmentIds.length
+      ? prisma.department.findMany({
+          where: { clientId: params.clientId, id: { in: departmentIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    assignedUserIds.length
+      ? prisma.user.findMany({
+          where: { clientId: params.clientId, id: { in: assignedUserIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
+  const userNameById = new Map(users.map((item) => [item.id, item.name]));
+
+  // Uses the server timezone for now; this can be moved to a tenant/business timezone later.
+  const startOfDay = startOfCurrentDay();
+  const queue = operationalItems
+    .filter((item) => item.status === ConversationOperationalStatus.WAITING)
+    .sort((left, right) => left.waitingSince.getTime() - right.waitingSince.getTime())
+    .slice(0, 50)
+    .map((item) => {
+      const lead = leadByWaId.get(item.key);
+      return {
+        id: item.conversation.id,
+        waId: item.conversation.waId,
+        displayName: lead?.name ?? lead?.phone ?? null,
+        status: item.status,
+        departmentId: item.departmentId,
+        departmentName: item.departmentId ? departmentNameById.get(item.departmentId) ?? null : null,
+        assignedUserId: item.assignedUserId,
+        assignedUserName: item.assignedUserId ? userNameById.get(item.assignedUserId) ?? null : null,
+        lastInteractionAt: item.lastInteractionAt ? item.lastInteractionAt.toISOString() : null,
+        waitingSince: item.waitingSince ? item.waitingSince.toISOString() : null,
+      };
+    });
+
+  return {
+    ok: true,
+    kpis: {
+      active: operationalItems.filter((item) => item.status === ConversationOperationalStatus.IN_PROGRESS).length,
+      waiting: operationalItems.filter((item) => item.status === ConversationOperationalStatus.WAITING).length,
+      waitingUser: operationalItems.filter((item) => item.status === ConversationOperationalStatus.WAITING_USER).length,
+      closedToday: operationalItems.filter(
+        (item) =>
+          item.status === ConversationOperationalStatus.CLOSED &&
+          item.state?.closedAt &&
+          item.state.closedAt >= startOfDay
+      ).length,
+      avgFirstResponseTimeSec:
+        firstResponseValues.length > 0
+          ? Math.round(firstResponseValues.reduce((sum, value) => sum + value, 0) / firstResponseValues.length)
+          : null,
+      avgResolutionTimeSec:
+        resolutionValues.length > 0
+          ? Math.round(resolutionValues.reduce((sum, value) => sum + value, 0) / resolutionValues.length)
+          : null,
+      slaBreaches,
+      totalConversations: operationalItems.length,
+    },
+    queue,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+type ConversationListFilters = {
+  status: ConversationOperationalStatus | null;
+  channel: "whatsapp" | "messenger" | "instagram" | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+  unassigned: boolean;
+  search: string;
+};
+
+function decodeConversationListCursor(raw: string): ConversationListCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<ConversationListCursor>;
+    if (!parsed.updatedAt || !parsed.conversationIdentity || !Number.isFinite(Date.parse(parsed.updatedAt))) {
+      return null;
+    }
+    return {
+      updatedAt: parsed.updatedAt,
+      conversationIdentity: parsed.conversationIdentity,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function encodeConversationListCursor(cursor: ConversationListCursor) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeContactTimelineCursor(raw: string): ContactTimelineCursor | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as Partial<ContactTimelineCursor>;
+    if (!parsed.createdAt || !Number.isFinite(Date.parse(parsed.createdAt))) {
+      return null;
+    }
+    return { createdAt: parsed.createdAt };
+  } catch {
+    return null;
+  }
+}
+
+function encodeContactTimelineCursor(cursor: ContactTimelineCursor) {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function getTimelineMessageTitle(direction: "INBOUND" | "OUTBOUND", type: MessageType) {
+  const prefix = direction === "INBOUND" ? "recebida" : "enviada";
+  switch (type) {
+    case "IMAGE":
+      return `Imagem ${prefix}`;
+    case "AUDIO":
+      return `Audio ${prefix}`;
+    case "VIDEO":
+      return `Video ${prefix}`;
+    case "DOCUMENT":
+      return `Documento ${prefix}`;
+    case "TEMPLATE":
+      return `Template ${prefix}`;
+    case "TEXT":
+      return `Mensagem ${prefix}`;
+    default:
+      return `Interacao ${prefix}`;
+  }
+}
+
+function getTimelineEventTitle(eventName: string) {
+  switch (eventName) {
+    case "conversation.assigned":
+      return "Atendimento assumido";
+    case "conversation.transferred":
+      return "Atendimento transferido";
+    case "conversation.department.transferred":
+      return "Setor alterado";
+    case "conversation.handoff.updated":
+      return "Entrada na fila humana";
+    case "conversation.released":
+      return "Liberado para automacao";
+    case "conversation.released_to_general":
+      return "Liberado para Atendimento Geral";
+    case "conversation.status_changed":
+      return "Status alterado";
+    case "conversation.deleted":
+      return "Conversa removida da operacao";
+    case "conversation.anonymized":
+      return "Dados anonimizados";
+    case "conversation.reactivated_after_retention":
+      return "Conversa reativada";
+    case "lead.capture.requested":
+      return "Cadastro solicitado";
+    case "lead.captured":
+      return "Cadastro capturado";
+    case "lead.demo_requested":
+      return "Demo solicitada";
+    case "lead.demo_scheduled":
+      return "Demo agendada";
+    case "message.status.updated":
+      return "Status da mensagem atualizado";
+    default:
+      return eventName.replace(/\./g, " ");
+  }
+}
+
+const CONTACT_TIMELINE_VISIBLE_EVENT_NAMES = [
+  "conversation.assigned",
+  "conversation.transferred",
+  "conversation.department.transferred",
+  "conversation.handoff.updated",
+  "conversation.released",
+  "conversation.released_to_general",
+  "conversation.status_changed",
+] as const;
+
+function getTimelineMessageBody(type: MessageType, bodyText?: string | null, templateName?: string | null) {
+  if (bodyText?.trim()) return bodyText;
+  if (templateName?.trim()) return `Template: ${templateName}`;
+  switch (type) {
+    case "IMAGE":
+      return "Imagem";
+    case "AUDIO":
+      return "Audio";
+    case "VIDEO":
+      return "Video";
+    case "DOCUMENT":
+      return "Documento";
+    default:
+      return null;
+  }
+}
+
+function normalizeConversationStatusFilter(value: unknown): ConversationOperationalStatus | null {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized === ConversationOperationalStatus.WAITING ||
+    normalized === ConversationOperationalStatus.IN_PROGRESS ||
+    normalized === ConversationOperationalStatus.WAITING_USER ||
+    normalized === ConversationOperationalStatus.CLOSED
+    ? normalized
+    : null;
+}
+
+function normalizeConversationChannelFilter(value: unknown): ConversationListFilters["channel"] {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram"
+    ? normalized
+    : null;
+}
+
+function serializeInboxChannelFields(source?: {
+  channel?: string | null;
+  provider?: string | null;
+  channelAccountId?: string | null;
+}) {
+  const channel = source?.channel?.trim().toLowerCase() || "whatsapp";
+  const provider = source?.provider?.trim().toLowerCase() || (channel === "whatsapp" ? "meta" : null);
+  return {
+    channel,
+    provider,
+    channelAccountId: source?.channelAccountId ?? null,
+  };
+}
+
+function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
+  const channel = serializeInboxChannelFields(source ?? undefined).channel;
+  return channel === "instagram";
+}
+
+function findTenantChannelAccountForConversation(
+  tenant: { channelAccounts?: TenantChannelAccount[] } | undefined,
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null
+) {
+  const channelFields = serializeInboxChannelFields(source ?? undefined);
+  const accounts = tenant?.channelAccounts ?? [];
+  return accounts.find(
+    (account) =>
+      account.channel === channelFields.channel &&
+      account.provider === channelFields.provider &&
+      account.channelAccountId === channelFields.channelAccountId
+  );
+}
+
+function getConversationChannelOutboundEnabled(
+  tenant: { channelAccounts?: TenantChannelAccount[] } | undefined,
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null
+) {
+  const channelFields = serializeInboxChannelFields(source ?? undefined);
+  if (channelFields.channel === "whatsapp") return true;
+  if (channelFields.channel !== "messenger") return false;
+  return canSendMessengerOutbound(findTenantChannelAccountForConversation(tenant, source));
+}
+
+function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
+  return item.waIdCanonical || item.waId;
+}
+
+function isAfterConversationListCursor(
+  item: { updatedAt: Date; waId: string; waIdCanonical: string },
+  cursor: ConversationListCursor | null
+) {
+  if (!cursor) return true;
+  const itemTimestamp = item.updatedAt.getTime();
+  const cursorTimestamp = Date.parse(cursor.updatedAt);
+  if (!Number.isFinite(cursorTimestamp)) return true;
+  if (itemTimestamp < cursorTimestamp) return true;
+  if (itemTimestamp > cursorTimestamp) return false;
+  return getConversationListCursorIdentity(item) > cursor.conversationIdentity;
+}
+
+function compareConversationListOrder(
+  left: { updatedAt: Date; waId: string; waIdCanonical: string },
+  right: { updatedAt: Date; waId: string; waIdCanonical: string }
+) {
+  const updatedDiff = right.updatedAt.getTime() - left.updatedAt.getTime();
+  if (updatedDiff !== 0) return updatedDiff;
+  return getConversationListCursorIdentity(left).localeCompare(getConversationListCursorIdentity(right));
+}
+
+function conversationMatchesListFilters(item: {
+  lastMessage: { bodyText: string | null } | null;
+  leadName: string | null;
+  leadPhone: string | null;
+  waId: string;
+  channel?: string | null;
+  status: ConversationOperationalStatus | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+}, filters: ConversationListFilters) {
+  if (filters.status && item.status !== filters.status) return false;
+  if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
+  if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
+  if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
+  if (filters.unassigned && item.assignedUserId) return false;
+  if (filters.search) {
+    const haystack = [item.leadName, item.leadPhone, item.waId, item.lastMessage?.bodyText]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(filters.search.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function conversationListItemIsInHumanFlow(item: {
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId: string | null;
+  assignedAt: string | null;
+}) {
+  return (
+    item.mode === "HUMAN" ||
+    item.handoffStatus === "active" ||
+    item.handoffStatus === "pending" ||
+    Boolean(item.assignedUserId) ||
+    Boolean(item.assignedAt)
+  );
+}
+
+function getInboxPriorityScore(item: { flowContext?: Record<string, unknown> | null }) {
+  const leadTemp = String(item.flowContext?.lead_temp ?? "").trim().toLowerCase();
+  if (leadTemp === "quente") return 3;
+  if (leadTemp === "morno") return 2;
+  if (leadTemp === "frio") return 1;
+  return 0;
+}
+
+function getInboxWaitingTimestamp(item: {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}) {
+  const raw = item.lastInboundAt ?? item.lastOutboundAt ?? item.updatedAt;
+  const timestamp = raw instanceof Date ? raw.getTime() : Date.parse(String(raw));
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
+}
+
+function getInboxActivityTimestamp(item: {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}) {
+  const timestamps = [item.lastInboundAt, item.lastOutboundAt, item.updatedAt]
+    .map((value) => (value instanceof Date ? value.getTime() : Date.parse(String(value ?? ""))))
+    .filter((timestamp) => Number.isFinite(timestamp));
+  return timestamps.length > 0 ? Math.max(...timestamps) : Number.NEGATIVE_INFINITY;
+}
+
+function sortConversationItemsByPriorityAndWait<T extends {
+  flowContext?: Record<string, unknown> | null;
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const priorityDiff = getInboxPriorityScore(right) - getInboxPriorityScore(left);
+    if (priorityDiff !== 0) return priorityDiff;
+    const waitDiff = getInboxWaitingTimestamp(left) - getInboxWaitingTimestamp(right);
+    if (waitDiff !== 0) return waitDiff;
+    return String(left.updatedAt).localeCompare(String(right.updatedAt));
+  });
+}
+
+function sortConversationItemsByRecent<T extends {
+  lastInboundAt?: string | null;
+  lastOutboundAt?: string | null;
+  updatedAt: Date | string;
+}>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const leftTimestamp = getInboxActivityTimestamp(left);
+    const rightTimestamp = getInboxActivityTimestamp(right);
+    if (leftTimestamp !== rightTimestamp) return rightTimestamp - leftTimestamp;
+    return String(right.updatedAt).localeCompare(String(left.updatedAt));
+  });
+}
+
+function buildConversationFilterCounts(
+  items: Array<{
+    lastMessage: { bodyText: string | null } | null;
+    leadName: string | null;
+    leadPhone: string | null;
+    waId: string;
+    channel?: string | null;
+    status: ConversationOperationalStatus | null;
+    departmentId: string | null;
+    assignedUserId: string | null;
+  }>,
+  filters: ConversationListFilters,
+  currentUserId?: string | null
+) {
+  const baseFilters = {
+    ...filters,
+    status: null,
+    assignedUserId: null,
+    unassigned: false,
+  };
+  const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters));
+  const counts = {
+    ALL: baseItems.length,
+    WAITING: 0,
+    IN_PROGRESS: 0,
+    WAITING_USER: 0,
+    CLOSED: 0,
+    MINE: 0,
+    UNASSIGNED: 0,
+  };
+  for (const item of baseItems) {
+    if (item.status && Object.prototype.hasOwnProperty.call(counts, item.status)) {
+      counts[item.status] += 1;
+    }
+    if (currentUserId && item.assignedUserId === currentUserId) {
+      counts.MINE += 1;
+    }
+    if (!item.assignedUserId) {
+      counts.UNASSIGNED += 1;
+    }
+  }
+  return counts;
+}
+
+function buildEmptyConversationFilterCounts() {
+  return {
+    ALL: 0,
+    WAITING: 0,
+    IN_PROGRESS: 0,
+    WAITING_USER: 0,
+    CLOSED: 0,
+    MINE: 0,
+    UNASSIGNED: 0,
+  };
+}
+
 async function buildConversationListPayload(
   prisma: ReturnType<typeof getPrisma>,
   params: {
     clientId: string;
     clientKey: string;
+    userId?: string;
     limit: number;
+    cursor: ConversationListCursor | null;
+    filters: ConversationListFilters;
     includeAssignedUserName: boolean;
+    profile?: string | null;
   }
 ) {
-  const conversationFetchLimit = Math.min(params.limit * 3, 600);
-  const messageFetchLimit = Math.min(params.limit * 6, 1200);
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
+  const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
+  const conversationWhere: Prisma.ConversationWhereInput = {
+    clientId: params.clientId,
+    deletedAt: null,
+    anonymizedAt: null,
+    lastInboundAt: { not: null },
+    ...(params.cursor
+      ? {
+          OR: [
+            { updatedAt: { lt: new Date(params.cursor.updatedAt) } },
+            {
+              updatedAt: new Date(params.cursor.updatedAt),
+              waIdCanonical: { gt: params.cursor.conversationIdentity },
+            },
+            {
+              updatedAt: new Date(params.cursor.updatedAt),
+              waIdCanonical: null,
+              waId: { gt: params.cursor.conversationIdentity },
+            },
+          ],
+        }
+      : {}),
+  };
   const conversations = await prisma.conversation.findMany({
-    where: { clientId: params.clientId },
-    orderBy: { updatedAt: "desc" },
+    where: conversationWhere,
+    orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
     take: conversationFetchLimit,
     select: {
       waId: true,
       waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
+      departmentId: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
+      historyVisibleAfter: true,
     },
   });
   if (conversations.length === 0) {
-    return { ok: true, count: 0, items: [] };
+    const readState = params.userId
+      ? await getInboxReadState(params.clientId, params.userId)
+      : {
+          lastReadAtByConversationKey: {},
+          manuallyUnreadByConversationKey: {},
+        };
+    return {
+      ok: true,
+      count: 0,
+      items: [],
+      conversations: [],
+      filterCounts: buildEmptyConversationFilterCounts(),
+      nextCursor: null,
+      readState,
+    };
   }
 
   const groupedConversations = new Map<
@@ -5191,9 +15246,14 @@ async function buildConversationListPayload(
     {
       waId: string;
       waIdCanonical: string;
+      channel: string | null;
+      provider: string | null;
+      channelAccountId: string | null;
+      departmentId: string | null;
       updatedAt: Date;
       lastInboundAt: Date | null;
       lastOutboundAt: Date | null;
+      historyVisibleAfter: Date | null;
     }
   >();
   for (const conversation of conversations) {
@@ -5203,17 +15263,35 @@ async function buildConversationListPayload(
       groupedConversations.set(key, {
         waId: conversation.waId,
         waIdCanonical: key,
+        channel: conversation.channel,
+        provider: conversation.provider,
+        channelAccountId: conversation.channelAccountId,
+        departmentId: conversation.departmentId,
         updatedAt: conversation.updatedAt,
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
+        historyVisibleAfter: conversation.historyVisibleAfter,
       });
     }
   }
-  const winners = Array.from(groupedConversations.values())
-    .sort((left, right) => compareConversationLookupPriority(left, right))
-    .slice(0, params.limit);
+  const cursorFilteredConversations = Array.from(groupedConversations.values())
+    .sort(compareConversationListOrder)
+    .filter((item) => isAfterConversationListCursor(item, params.cursor));
+  const winners = cursorFilteredConversations;
   const waIds = Array.from(new Set(winners.map((item) => item.waId)));
   const canonicalWaIds = Array.from(new Set(winners.map((item) => item.waIdCanonical)));
+  const historyVisibleAfterByWaId = new Map(
+    winners.map((item) => [item.waIdCanonical, item.historyVisibleAfter])
+  );
+  const isVisibleInCurrentOperation = (
+    key: string,
+    createdAt: Date | string | null | undefined
+  ) => {
+    const cutoff = historyVisibleAfterByWaId.get(key);
+    if (!cutoff || !createdAt) return true;
+    const createdAtMs = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+    return Number.isFinite(createdAtMs) && createdAtMs > cutoff.getTime();
+  };
 
   const [leads, inbound, outbound] = await Promise.all([
     prisma.lead.findMany({
@@ -5229,6 +15307,8 @@ async function buildConversationListPayload(
         phone: true,
         city: true,
         service: true,
+        email: true,
+        company: true,
         status: true,
         updatedAt: true,
         createdAt: true,
@@ -5244,6 +15324,7 @@ async function buildConversationListPayload(
       select: {
         waId: true,
         waIdCanonical: true,
+        messageId: true,
         type: true,
         bodyText: true,
         createdAt: true,
@@ -5259,6 +15340,7 @@ async function buildConversationListPayload(
       select: {
         waId: true,
         waIdCanonical: true,
+        messageId: true,
         type: true,
         status: true,
         bodyText: true,
@@ -5269,10 +15351,16 @@ async function buildConversationListPayload(
     }),
   ]);
   const runtimeConversations = await Promise.all(
-    winners.map(async (item) => ({
-      waIdCanonical: item.waIdCanonical,
-      conversation: await runtimeStorage.getConversation(item.waId, params.clientKey),
-    }))
+    winners.map(async (item) => {
+      const conversation = materializeConversationOperationalState(
+        await runtimeStorage.getConversation(item.waId, params.clientKey),
+        defaults
+      );
+      return {
+        waIdCanonical: item.waIdCanonical,
+        conversation,
+      };
+    })
   );
   const runtimeByWaId = new Map(
     runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
@@ -5294,6 +15382,43 @@ async function buildConversationListPayload(
         })
       : [];
   const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
+  const operationalLookups = await loadConversationOperationalLookups(prisma, {
+    clientId: params.clientId,
+    states: runtimeConversations.map((item) => item.conversation),
+    defaults,
+  });
+  const readState = params.userId
+    ? await getInboxReadState(params.clientId, params.userId)
+    : {
+        lastReadAtByConversationKey: {},
+        manuallyUnreadByConversationKey: {},
+      };
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+
+  const unreadInboundCountByWaId = new Map<string, number>();
+  for (const conversation of winners) {
+    const key = conversation.waIdCanonical;
+    const identityKeys = Array.from(new Set([key, conversation.waId].filter(Boolean)));
+    const latestReadAt = identityKeys
+      .map((identity) => Date.parse(readState.lastReadAtByConversationKey[identity] ?? ""))
+      .filter((timestamp) => Number.isFinite(timestamp))
+      .reduce<number | null>(
+        (latest, timestamp) => (latest === null ? timestamp : Math.max(latest, timestamp)),
+        null
+      );
+    const manualUnread = identityKeys.some((identity) => readState.manuallyUnreadByConversationKey[identity]);
+    let unreadCount = 0;
+    for (const message of inbound) {
+      if (getWaIdGroupKey(message.waId, message.waIdCanonical) !== key) continue;
+      if (!isVisibleInCurrentOperation(key, message.createdAt)) continue;
+      const createdAt = message.createdAt.getTime();
+      if (latestReadAt === null || createdAt > latestReadAt) {
+        unreadCount += 1;
+      }
+    }
+    unreadInboundCountByWaId.set(key, manualUnread ? Math.max(unreadCount, 1) : unreadCount);
+  }
 
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
@@ -5320,6 +15445,7 @@ async function buildConversationListPayload(
   const latestInboundByWaId = new Map<string, (typeof inbound)[number]>();
   for (const item of inbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestInboundByWaId.has(key)) {
       latestInboundByWaId.set(key, item);
     }
@@ -5327,17 +15453,31 @@ async function buildConversationListPayload(
   const latestOutboundByWaId = new Map<string, (typeof outbound)[number]>();
   for (const item of outbound) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+    if (!isVisibleInCurrentOperation(key, item.createdAt)) continue;
     if (!latestOutboundByWaId.has(key)) {
       latestOutboundByWaId.set(key, item);
     }
   }
 
-  const items = winners.map((conversation) => {
+  const allItems = winners.map((conversation) => {
     const key = conversation.waIdCanonical;
     const lead = leadByWaId.get(key);
     const latestInbound = latestInboundByWaId.get(key);
     const latestOutbound = latestOutboundByWaId.get(key);
     const runtimeState = runtimeByWaId.get(key);
+    const operationalFields = serializeConversationOperationalFields({
+      conversation: runtimeState ?? null,
+      assignedUserName:
+        params.includeAssignedUserName && runtimeState?.assignedUserId
+          ? assignedUserById.get(runtimeState.assignedUserId) ?? null
+          : null,
+      departmentName: runtimeState?.departmentId
+        ? operationalLookups.departmentById.get(runtimeState.departmentId) ?? null
+        : null,
+      queueName: runtimeState?.queueId
+        ? operationalLookups.queueById.get(runtimeState.queueId) ?? null
+        : null,
+    });
     const inboundAt = latestInbound?.createdAt?.getTime() ?? -1;
     const outboundAt = latestOutbound?.createdAt?.getTime() ?? -1;
     const lastMessage =
@@ -5347,6 +15487,7 @@ async function buildConversationListPayload(
               direction: "INBOUND",
               type: latestInbound.type,
               status: "RECEIVED",
+              messageId: latestInbound.messageId,
               bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
               templateName: null,
               createdAt: latestInbound.createdAt,
@@ -5360,6 +15501,7 @@ async function buildConversationListPayload(
                 extractMetaStatus(latestOutbound.rawPayload).lastStatus,
                 latestOutbound.status
               ),
+              messageId: latestOutbound.messageId,
               bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
               templateName: latestOutbound.templateName ?? null,
               createdAt: latestOutbound.createdAt,
@@ -5369,6 +15511,8 @@ async function buildConversationListPayload(
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
+      ...serializeInboxChannelFields(conversation),
+      channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, conversation),
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -5376,22 +15520,51 @@ async function buildConversationListPayload(
       leadPhone: lead?.phone ?? null,
       leadCity: lead?.city ?? null,
       leadService: lead?.service ?? null,
-      mode: runtimeState?.mode ?? "BOT",
-      assignedUserId: runtimeState?.assignedUserId ?? null,
-      assignedTo: runtimeState?.assignedTo ?? null,
-      assignedUserName:
-        params.includeAssignedUserName && runtimeState?.assignedUserId
-          ? assignedUserById.get(runtimeState.assignedUserId) ?? null
-          : null,
-      assignedAt: runtimeState?.assignedAt ?? null,
+      leadEmail: lead?.email ?? null,
+      leadCompany: lead?.company ?? null,
+      ...operationalFields,
+      departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
+      unreadCount: unreadInboundCountByWaId.get(key) ?? 0,
       updatedAt: conversation.updatedAt,
     };
   });
+  const filteredItems = sortConversationItemsByRecent(
+    allItems.filter(
+      (item) =>
+        conversationListItemIsInHumanFlow(item) &&
+        conversationMatchesListFilters(item, params.filters)
+    )
+  );
+  const filterCounts = buildConversationFilterCounts(
+    allItems.filter(conversationListItemIsInHumanFlow),
+    params.filters,
+    params.userId ?? null
+  );
+  const items = filteredItems.slice(0, params.limit);
+  const nextCursorSource =
+    filteredItems.length > params.limit
+      ? items[items.length - 1]
+      : cursorFilteredConversations.length >= conversationFetchLimit
+        ? cursorFilteredConversations[cursorFilteredConversations.length - 1]
+        : null;
+  const nextCursor = nextCursorSource
+    ? encodeConversationListCursor({
+        updatedAt:
+          nextCursorSource.updatedAt instanceof Date
+            ? nextCursorSource.updatedAt.toISOString()
+            : String(nextCursorSource.updatedAt),
+        conversationIdentity: getConversationListCursorIdentity(nextCursorSource),
+      })
+    : null;
 
   return {
     ok: true,
     count: items.length,
     items,
+    conversations: items,
+    filterCounts,
+    nextCursor,
+    readState,
   };
 }
 
@@ -5402,6 +15575,7 @@ async function buildConversationDetailPayload(
     clientKey: string;
     waId: string;
     order: "asc" | "desc";
+    after: Date | null;
     limit: number;
     includeRaw: boolean;
     includeAssignedUserName: boolean;
@@ -5409,6 +15583,7 @@ async function buildConversationDetailPayload(
     source: string;
   }
 ) {
+  const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
   const resolved = await resolveConversationTarget(prisma, {
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -5416,7 +15591,30 @@ async function buildConversationDetailPayload(
     requestId: params.requestId,
     source: params.source,
   });
-  const conversation = await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey);
+  const conversation = resolved.winner
+    ? materializeConversationOperationalState(
+        await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
+        defaults
+      )
+    : null;
+  const detailWaIds = Array.from(
+    new Set(
+      [
+        ...buildWaIdLookup(params.waId).variants,
+        params.waId,
+        resolved.resolvedWaId,
+        resolved.resolvedWaIdCanonical,
+        ...resolved.matchedWaIds,
+      ].filter(Boolean)
+    )
+  );
+  const historyVisibleAfter = resolved.winner?.historyVisibleAfter ?? null;
+  const messageCreatedAfter =
+    params.after && historyVisibleAfter
+      ? params.after > historyVisibleAfter
+        ? params.after
+        : historyVisibleAfter
+      : params.after ?? historyVisibleAfter;
   const assignedUser =
     params.includeAssignedUserName && conversation?.assignedUserId
       ? await prisma.user.findFirst({
@@ -5429,10 +15627,8 @@ async function buildConversationDetailPayload(
     prisma.inboundMessage.findMany({
       where: {
         clientId: params.clientId,
-        OR: [
-          { waIdCanonical: resolved.resolvedWaIdCanonical },
-          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
-        ],
+        ...(messageCreatedAfter ? { createdAt: { gt: messageCreatedAfter } } : {}),
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
       },
       orderBy: { createdAt: params.order },
       take: params.limit,
@@ -5442,16 +15638,14 @@ async function buildConversationDetailPayload(
         type: true,
         requestId: true,
         bodyText: true,
-        rawPayload: params.includeRaw,
+        rawPayload: true,
       },
     }),
     prisma.outboundMessage.findMany({
       where: {
         clientId: params.clientId,
-        OR: [
-          { waIdCanonical: resolved.resolvedWaIdCanonical },
-          { waId: { in: Array.from(new Set([params.waId, ...resolved.matchedWaIds])) } },
-        ],
+        ...(messageCreatedAfter ? { createdAt: { gt: messageCreatedAfter } } : {}),
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
       },
       orderBy: { createdAt: params.order },
       take: params.limit,
@@ -5470,6 +15664,11 @@ async function buildConversationDetailPayload(
       },
     }),
   ]);
+  const operationalLookups = await loadConversationOperationalLookups(prisma, {
+    clientId: params.clientId,
+    states: [conversation],
+    defaults,
+  });
 
   const items = [
     ...inbound.map((item) => ({
@@ -5477,7 +15676,14 @@ async function buildConversationDetailPayload(
       type: item.type,
       status: "RECEIVED",
       intent: null,
-      bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+      bodyText: item.bodyText ?? null,
+      media: buildInboxMessageMedia({
+        type: item.type,
+        rawPayload: item.rawPayload,
+        downloadUrl: item.messageId
+          ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
+          : undefined,
+      }),
       templateName: null,
       templateLang: null,
       requestId: item.requestId,
@@ -5494,7 +15700,14 @@ async function buildConversationDetailPayload(
         type: item.type,
         status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
         intent: null,
-        bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+        bodyText: item.bodyText ?? null,
+        media: buildInboxMessageMedia({
+          type: item.type,
+          rawPayload: item.rawPayload,
+          downloadUrl: item.messageId
+            ? buildConversationMessageDownloadPath(resolved.resolvedWaId, item.messageId)
+            : undefined,
+        }),
         templateName: item.templateName,
         templateLang: item.templateLang,
         requestId: item.requestId,
@@ -5526,13 +15739,261 @@ async function buildConversationDetailPayload(
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
-    mode: conversation?.mode ?? "BOT",
-    assignedUserId: conversation?.assignedUserId ?? null,
-    assignedTo: conversation?.assignedTo ?? null,
-    assignedUserName: assignedUser?.name ?? null,
-    assignedAt: conversation?.assignedAt ?? null,
+    ...serializeInboxChannelFields(resolved.winner ?? undefined),
+    channelOutboundEnabled: getConversationChannelOutboundEnabled(
+      (await getTenants())[params.clientKey],
+      resolved.winner ?? undefined
+    ),
+    ...serializeConversationOperationalFields({
+      conversation,
+      assignedUserName: assignedUser?.name ?? null,
+      departmentName: conversation?.departmentId
+        ? operationalLookups.departmentById.get(conversation.departmentId) ?? null
+        : null,
+      queueName: conversation?.queueId
+        ? operationalLookups.queueById.get(conversation.queueId) ?? null
+        : null,
+    }),
     count: items.length,
     items,
+  };
+}
+
+async function buildContactTimelinePayload(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    waId: string;
+    limit: number;
+    cursor: ContactTimelineCursor | null;
+    requestId: string;
+    source: string;
+  }
+) {
+  const resolved = await resolveConversationTarget(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    rawWaId: params.waId,
+    requestId: params.requestId,
+    source: params.source,
+  });
+  const detailWaIds = Array.from(
+    new Set(
+      [
+        ...buildWaIdLookup(params.waId).variants,
+        params.waId,
+        resolved.resolvedWaId,
+        resolved.resolvedWaIdCanonical,
+        ...resolved.matchedWaIds,
+      ].filter(Boolean)
+    )
+  );
+  const createdBefore = params.cursor ? new Date(params.cursor.createdAt) : null;
+  const historyVisibleAfter = resolved.winner?.historyVisibleAfter ?? null;
+  const currentOperationStartedAt = resolved.winner?.createdAt ?? null;
+  const visibleAfter =
+    historyVisibleAfter && currentOperationStartedAt
+      ? historyVisibleAfter > currentOperationStartedAt
+        ? historyVisibleAfter
+        : currentOperationStartedAt
+      : historyVisibleAfter ?? currentOperationStartedAt;
+  const createdAtFilter: Prisma.DateTimeFilter = {
+    ...(createdBefore ? { lt: createdBefore } : {}),
+    ...(visibleAfter ? { gt: visibleAfter } : {}),
+  };
+  const hasCreatedAtFilter = Boolean(createdBefore || visibleAfter);
+  const baseCreatedAtWhere = hasCreatedAtFilter ? { createdAt: createdAtFilter } : {};
+  const take = Math.min(params.limit + 1, 101);
+
+  const matchingLeads = await prisma.lead.findMany({
+    where: {
+      tenantId: params.clientId,
+      OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      name: true,
+      phone: true,
+      city: true,
+      service: true,
+      email: true,
+      company: true,
+      status: true,
+      updatedAt: true,
+      createdAt: true,
+    },
+  });
+  const leadIds = matchingLeads.map((item) => item.id);
+  const lead = matchingLeads[0] ?? null;
+
+  const [contact, inbound, outbound, events, notes] = await Promise.all([
+    prisma.contact.findFirst({
+      where: {
+        clientId: params.clientId,
+        waId: { in: detailWaIds },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, waId: true, name: true, updatedAt: true, createdAt: true },
+    }),
+    prisma.inboundMessage.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+        ...baseCreatedAtWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        waId: true,
+        waIdCanonical: true,
+        messageId: true,
+        type: true,
+        bodyText: true,
+        createdAt: true,
+      },
+    }),
+    prisma.outboundMessage.findMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waIdCanonical: { in: detailWaIds } }, { waId: { in: detailWaIds } }],
+        ...baseCreatedAtWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        waId: true,
+        waIdCanonical: true,
+        messageId: true,
+        metaMessageId: true,
+        type: true,
+        status: true,
+        bodyText: true,
+        templateName: true,
+        createdAt: true,
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        clientId: params.clientId,
+        ...baseCreatedAtWhere,
+        eventName: { in: [...CONTACT_TIMELINE_VISIBLE_EVENT_NAMES] },
+        OR: [
+          ...(resolved.winner?.id ? [{ conversationId: resolved.winner.id }] : []),
+          { waIdCanonical: { in: detailWaIds } },
+          { waId: { in: detailWaIds } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        eventName: true,
+        messageId: true,
+        requestId: true,
+        createdAt: true,
+      },
+    }),
+    leadIds.length
+      ? prisma.leadNote.findMany({
+          where: {
+            tenantId: params.clientId,
+            leadId: { in: leadIds },
+            ...baseCreatedAtWhere,
+          },
+          orderBy: { createdAt: "desc" },
+          take,
+          select: {
+            id: true,
+            leadId: true,
+            body: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const items = [
+    ...inbound.map((item) => ({
+      id: `inbound:${item.id}`,
+      kind: "message",
+      direction: "INBOUND",
+      title: getTimelineMessageTitle("INBOUND", item.type),
+      body: getTimelineMessageBody(item.type, item.bodyText),
+      createdAt: item.createdAt,
+      metadata: {
+        type: item.type,
+        messageId: item.messageId,
+      },
+    })),
+    ...outbound.map((item) => ({
+      id: `outbound:${item.id}`,
+      kind: "message",
+      direction: "OUTBOUND",
+      title: getTimelineMessageTitle("OUTBOUND", item.type),
+      body: getTimelineMessageBody(item.type, item.bodyText, item.templateName),
+      createdAt: item.createdAt,
+      metadata: {
+        type: item.type,
+        status: item.status,
+        messageId: item.messageId,
+        metaMessageId: item.metaMessageId,
+      },
+    })),
+    ...events.map((item) => ({
+      id: `event:${item.id}`,
+      kind: "event",
+      eventName: item.eventName,
+      title: getTimelineEventTitle(item.eventName),
+      body: null,
+      createdAt: item.createdAt,
+      metadata: {
+        messageId: item.messageId,
+        requestId: item.requestId,
+      },
+    })),
+    ...notes.map((item) => ({
+      id: `note:${item.id}`,
+      kind: "note",
+      title: "Nota CRM",
+      body: item.body,
+      createdAt: item.createdAt,
+      metadata: {
+        leadId: item.leadId,
+      },
+    })),
+  ]
+    .sort((left, right) => {
+      const diff = right.createdAt.getTime() - left.createdAt.getTime();
+      if (diff !== 0) return diff;
+      return left.id.localeCompare(right.id);
+    });
+  const pageItems = items.slice(0, params.limit);
+  const nextCursorSource = items.length > params.limit ? pageItems[pageItems.length - 1] : null;
+
+  return {
+    ok: true,
+    contact: {
+      waId: resolved.resolvedWaId,
+      waIdCanonical: resolved.resolvedWaIdCanonical,
+      name: lead?.name ?? contact?.name ?? null,
+      phone: lead?.phone ?? resolved.resolvedWaId,
+      leadId: lead?.id ?? null,
+      leadStatus: lead?.status ?? null,
+      contactId: contact?.id ?? null,
+    },
+    items: pageItems.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    nextCursor: nextCursorSource
+      ? encodeContactTimelineCursor({ createdAt: nextCursorSource.createdAt.toISOString() })
+      : null,
   };
 }
 
@@ -5556,6 +16017,7 @@ async function buildCampaignListPayload(
           },
           select: {
             waId: true,
+            messageId: true,
             templateName: true,
             status: true,
             errorBody: true,
@@ -5565,7 +16027,7 @@ async function buildCampaignListPayload(
       : [];
   const campaignMetaMap = new Map<string, CampaignMetaSummary>();
   for (const outbound of outboundMessages) {
-    const outboundCampaignId = extractCampaignIdFromRawPayload(outbound.rawPayload);
+    const outboundCampaignId = resolveOutboundCampaignId(outbound);
     if (!outboundCampaignId || !campaignIds.has(outboundCampaignId)) continue;
     const nextItem = buildCampaignMetaStatusItem(outbound);
     const current = campaignMetaMap.get(outboundCampaignId) ?? {
@@ -5621,6 +16083,7 @@ async function buildCampaignDetailPayload(
     orderBy: { createdAt: "asc" },
     select: {
       waId: true,
+      messageId: true,
       templateName: true,
       status: true,
       errorBody: true,
@@ -5628,7 +16091,7 @@ async function buildCampaignDetailPayload(
     },
   });
   const messagesMetaStatus = outboundMessages
-    .filter((item) => extractCampaignIdFromRawPayload(item.rawPayload) === campaign.id)
+    .filter((item) => resolveOutboundCampaignId(item) === campaign.id)
     .map(buildCampaignMetaStatusItem);
   const draftSeed = await buildCampaignDraftSeed(prisma, {
     clientId: params.clientId,
@@ -5637,12 +16100,16 @@ async function buildCampaignDetailPayload(
     templateName: campaign.templateName,
     outboundMessages,
   });
+  const visibleMessagesMetaStatus =
+    messagesMetaStatus.length > 0
+      ? messagesMetaStatus
+      : buildCampaignSeedFallbackStatusItems(campaign, draftSeed);
   return {
     ok: true,
     campaign: {
       ...serializeCampaign(campaign),
-      metaSummary: summarizeCampaignMetaStatuses(messagesMetaStatus),
-      messagesMetaStatus,
+      metaSummary: summarizeCampaignMetaStatuses(visibleMessagesMetaStatus),
+      messagesMetaStatus: visibleMessagesMetaStatus,
       draftSeed,
     },
   };
@@ -5732,6 +16199,7 @@ async function buildCampaignDraftSeed(
     templateName: string;
     outboundMessages: Array<{
       waId: string;
+      messageId?: string | null;
       templateName: string | null;
       status: string;
       errorBody: string | null;
@@ -5754,7 +16222,7 @@ async function buildCampaignDraftSeed(
   }
 
   const matchingOutbound = params.outboundMessages.filter(
-    (item) => extractCampaignIdFromRawPayload(item.rawPayload) === params.campaignId
+    (item) => resolveOutboundCampaignId(item) === params.campaignId
   );
   const recipients = Array.from(new Set(matchingOutbound.map((item) => item.waId).filter(Boolean)));
   const rawPayloadWithComponents = matchingOutbound.find((item) => {
@@ -5825,16 +16293,143 @@ async function readJsonBody(req: IncomingMessage, res: ServerResponse) {
         const parsed = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
         resolve(parsed);
       } catch {
-        res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "invalid_json" }));
+        json(res, 400, { error: "invalid_json", message: "Invalid JSON payload." });
         resolve(null);
       }
     }).catch(() => {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "invalid_body" }));
+      json(res, 400, { error: "invalid_body", message: "Invalid request body." });
       resolve(null);
     });
   });
+}
+
+type ParsedMultipartBody = {
+  caption: string | null;
+  file:
+    | {
+        fileName: string | null;
+        mimeType: string;
+        content: Buffer;
+      }
+    | null;
+};
+
+const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+async function readMultipartBody(req: IncomingMessage, res: ServerResponse) {
+  const contentType = String(req.headers["content-type"] ?? "");
+  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+  const boundary = (boundaryMatch?.[1] ?? boundaryMatch?.[2] ?? "").trim();
+  if (!boundary) {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
+
+  try {
+    const request = new Request("http://localhost/upload", {
+      method: req.method ?? "POST",
+      headers: req.headers as HeadersInit,
+      body: Readable.toWeb(req) as BodyInit,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    const formData = await request.formData();
+    const captionValue = formData.get("caption");
+    const fileValue = formData.get("file");
+
+    let file: ParsedMultipartBody["file"] = null;
+    if (fileValue instanceof File) {
+      file = {
+        fileName: fileValue.name.trim() || null,
+        mimeType: fileValue.type.trim() || "application/octet-stream",
+        content: Buffer.from(await fileValue.arrayBuffer()),
+      };
+    }
+
+    return {
+      caption: typeof captionValue === "string" && captionValue.trim() ? captionValue.trim() : null,
+      file,
+    };
+  } catch {
+    json(res, 400, { error: "invalid_body", message: "Payload multipart invalido." });
+    return null;
+  }
+}
+
+function detectOutboundMediaKind(mimeType: string, fileName?: string | null): SendMediaKind | null {
+  const normalizedMime = mimeType.trim().toLowerCase();
+  if (normalizedMime.startsWith("image/")) return "image";
+  if (normalizedMime.startsWith("audio/")) return "audio";
+  if (normalizedMime.startsWith("video/")) return "video";
+  if (normalizedMime) return "document";
+
+  const extension = String(fileName ?? "")
+    .trim()
+    .toLowerCase()
+    .split(".")
+    .pop();
+  if (extension && ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) return "image";
+  if (extension && ["mp3", "ogg", "wav", "m4a", "aac"].includes(extension)) return "audio";
+  if (extension && ["mp4", "mov", "avi", "webm"].includes(extension)) return "video";
+  if (extension) return "document";
+  return null;
+}
+
+function resolveFinalUploadMimeType(mediaKind: SendMediaKind, mimeType: string | null | undefined) {
+  const normalizedMimeType = String(mimeType ?? "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMimeType) return normalizedMimeType;
+  if (mediaKind === "audio") return "audio/ogg";
+  if (mediaKind === "image") return "image/jpeg";
+  if (mediaKind === "video") return "video/mp4";
+  return "application/octet-stream";
+}
+
+function isAllowedOutboundMediaMimeType(mimeType: unknown) {
+  if (typeof mimeType !== "string") return false;
+  const normalizedMime = mimeType.trim().toLowerCase();
+  if (!normalizedMime) return false;
+  return (
+    normalizedMime.startsWith("image/") ||
+    normalizedMime.startsWith("audio/") ||
+    normalizedMime.startsWith("video/") ||
+    normalizedMime === "application/pdf" ||
+    normalizedMime === "text/plain" ||
+    normalizedMime === "application/msword" ||
+    normalizedMime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
+function formatElapsedSince(timestampIso?: string, nowMs = Date.now()) {
+  if (!timestampIso) return null;
+  const timestampMs = Date.parse(timestampIso);
+  if (!Number.isFinite(timestampMs) || timestampMs >= nowMs) {
+    return null;
+  }
+  const diffMs = nowMs - timestampMs;
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 60) {
+    return `${diffMinutes} minuto${diffMinutes === 1 ? "" : "s"}`;
+  }
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours} hora${diffHours === 1 ? "" : "s"}`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} dia${diffDays === 1 ? "" : "s"}`;
+}
+
+function buildWindowClosedError(expiresAt?: string) {
+  const elapsed = formatElapsedSince(expiresAt);
+  return {
+    code: "window_closed",
+    message: elapsed
+      ? `Janela fechada ha cerca de ${elapsed}. Envie primeiro um template aprovado pela Meta em Campanhas para reabrir a conversa.`
+      : "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta em Campanhas para reabrir a conversa.",
+    details:
+      "Sem resposta recente do cliente, texto livre fica bloqueado fora da janela de 24 horas. Envie um template aprovado em Campanhas e aguarde o retorno desse numero para a janela reabrir.",
+  };
 }
 
 async function adminSendMessage(params: {
@@ -5851,7 +16446,7 @@ async function adminSendMessage(params: {
       metaMessageId: string | null;
       createdAt: string;
     }
-  | { ok: false; statusCode: number; error: string }
+  | { ok: false; statusCode: number; error: string; errorPayload?: { code: string; message: string; details: string } }
 > {
   if (!env.outboundEnabled) {
     return { ok: false, statusCode: 503, error: "outbound_disabled" };
@@ -5859,7 +16454,12 @@ async function adminSendMessage(params: {
   const nowMs = Date.now();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation && !isWindowOpen(conversation, nowMs)) {
-    return { ok: false, statusCode: 409, error: "window_closed" };
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "window_closed",
+      errorPayload: buildWindowClosedError(conversation.window.expiresAt),
+    };
   }
   const usageGate = await checkUsageGate({
     clientId: params.clientId,
@@ -5897,7 +16497,7 @@ async function adminSendMessage(params: {
   const phoneNumberId =
     credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
 
-  await persistOutboundMessage({
+  const outboundInserted = await persistOutboundMessage({
     clientId: params.clientId,
     phoneNumberId,
     waId: params.waId,
@@ -5919,6 +16519,20 @@ async function adminSendMessage(params: {
     await runtimeStorage.upsertConversation({
       ...conversation,
       lastOutboundAt: createdAt,
+      status:
+        conversation.assignedUserId && conversation.status === ConversationOperationalStatus.WAITING
+          ? ConversationOperationalStatus.IN_PROGRESS
+          : conversation.status,
+    });
+    await recordConversationAgentOutboundMetrics({
+      prisma: getPrisma(),
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: new Date(createdAt),
+      wasInserted: outboundInserted && sendResult.ok,
+      assignedAt: conversation.assignedAt ?? null,
+      assignedUserId: conversation.assignedUserId ?? null,
+      requestId: params.requestId,
     });
   }
 
@@ -5938,5 +16552,469 @@ async function adminSendMessage(params: {
     messageId,
     metaMessageId: sendResult.messageId ?? null,
     createdAt,
+  };
+}
+
+async function adminSendMessengerMessage(params: {
+  waId: string;
+  text: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  source: {
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
+  };
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+    }
+  | { ok: false; statusCode: number; error: string; message?: string }
+> {
+  const channel = serializeInboxChannelFields(params.source).channel;
+  if (channel !== "messenger") {
+    return { ok: false, statusCode: 409, error: "channel_outbound_not_enabled" };
+  }
+
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+  const account = findTenantChannelAccountForConversation(tenant, params.source);
+  if (account && account.tenantKey !== params.clientKey) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "tenant_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  const gate = resolveMessengerOutboundGate(account);
+  if (!gate.allowed) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: gate.reason,
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  if (!account) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+
+  const prisma = getPrisma();
+  const runtimeState = await prisma.conversationRuntimeState.findFirst({
+    where: {
+      clientId: params.clientId,
+      waId: params.waId,
+      channel: "messenger",
+      channelAccountId: account?.channelAccountId,
+    },
+    select: {
+      id: true,
+      waIdCanonical: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      externalUserRef: true,
+      assignedAt: true,
+      assignedUserId: true,
+    },
+  });
+  if (runtimeState && runtimeState.channelAccountId !== account.channelAccountId) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "channel_account_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: MESSENGER_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  const recipientPsid = decryptMessengerExternalUserRef(runtimeState?.externalUserRef);
+  if (!runtimeState?.externalUserHash || !recipientPsid) {
+    logMessengerOutbound({
+      event: "messenger.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "recipient_unavailable",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "messenger_recipient_unavailable",
+      message: "Nao ha referencia segura do contato Messenger para envio. Aguarde uma nova mensagem do cliente.",
+    };
+  }
+
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
+  }
+
+  const sendResult = await sendMessengerTextMessage({
+    pageAccessToken: gate.token,
+    recipientPsid,
+    text: params.text,
+  });
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const messageId = `admin.messenger.send.${params.requestId}`;
+  const createdAt = new Date();
+  const metaMessageId = sendResult.ok ? sendResult.messageId : null;
+  await persistMessengerOutboundMessage({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical: runtimeState.waIdCanonical ?? params.waId,
+    channelAccountId: account.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    externalUserRef: runtimeState.externalUserRef,
+    messageId,
+    status,
+    text: params.text,
+    requestId: params.requestId,
+    metaMessageId,
+    errorBody: sendResult.ok ? null : sendResult.errorBody,
+  });
+
+  await Promise.all([
+    prisma.conversation.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "messenger",
+        channelAccountId: account.channelAccountId,
+      },
+      data: { lastOutboundAt: createdAt },
+    }),
+    prisma.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "messenger",
+        channelAccountId: account.channelAccountId,
+      },
+      data: {
+        lastOutboundAt: createdAt,
+        lastOutboundMessageId: messageId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+      },
+    }),
+  ]);
+
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  if (conversation) {
+    await runtimeStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt.toISOString(),
+      lastOutboundMessageId: messageId,
+      status:
+        conversation.assignedUserId && conversation.status === ConversationOperationalStatus.WAITING
+          ? ConversationOperationalStatus.IN_PROGRESS
+          : conversation.status,
+    });
+  }
+  await recordConversationAgentOutboundMetrics({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    occurredAt: createdAt,
+    wasInserted: sendResult.ok,
+    assignedAt: runtimeState.assignedAt?.toISOString() ?? null,
+    assignedUserId: runtimeState.assignedUserId ?? null,
+    requestId: params.requestId,
+  });
+
+  logMessengerOutbound({
+    event: sendResult.ok ? "messenger.outbound.sent" : "messenger.outbound.failed",
+    tenantKey: params.clientKey,
+    channelAccountId: runtimeState.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    requestId: params.requestId,
+    status: sendResult.status,
+  });
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId,
+    createdAt: createdAt.toISOString(),
+  };
+}
+
+async function adminSendMediaMessage(params: {
+  waId: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  mimeType: string;
+  fileName?: string | null;
+  caption?: string | null;
+  content: Buffer;
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+      mediaType: "IMAGE" | "DOCUMENT" | "AUDIO" | "VIDEO";
+      bodyText: string | null;
+      media: {
+        kind: "image" | "document" | "audio" | "video";
+        mimeType: string;
+        fileName: string | null;
+        caption: string | null;
+        hasDownload: boolean;
+        downloadUrl: string;
+      };
+    }
+  | {
+      ok: false;
+      statusCode: number;
+      error: string;
+      errorPayload?: { code: string; message: string; details: string };
+      errorDetails?: string | null;
+    }
+> {
+  if (!env.outboundEnabled) {
+    return { ok: false, statusCode: 503, error: "outbound_disabled" };
+  }
+  const nowMs = Date.now();
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  if (conversation && !isWindowOpen(conversation, nowMs)) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "window_closed",
+      errorPayload: buildWindowClosedError(conversation.window.expiresAt),
+    };
+  }
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
+  }
+
+  const credentials = await resolveTenantOutboundCredentials({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+  });
+  if (!credentials) {
+    logger.error({
+      event: "admin.conversation.send_media.credentials_missing",
+      waId: maskWaId(params.waId),
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+    });
+    return { ok: false, statusCode: 503, error: "tenant_outbound_credentials_missing" };
+  }
+
+  const mediaKind = detectOutboundMediaKind(params.mimeType, params.fileName);
+  if (!mediaKind) {
+    return { ok: false, statusCode: 400, error: "unsupported_media_type" };
+  }
+
+  let uploadContent = params.content;
+  let uploadMimeType = resolveFinalUploadMimeType(mediaKind, params.mimeType);
+  let uploadFileName = params.fileName ?? null;
+
+  if (mediaKind === "audio") {
+    const transcoded = await transcodeAudioToOggOpus({
+      inputBuffer: params.content,
+      inputMimeType: params.mimeType,
+      fileName: params.fileName,
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+    });
+    if (!transcoded.ok) {
+      return {
+        ok: false,
+        statusCode: 502,
+        error: "audio_transcode_failed",
+        errorDetails: transcoded.details ?? transcoded.error,
+      };
+    }
+    uploadContent = transcoded.buffer;
+    uploadMimeType = resolveFinalUploadMimeType(mediaKind, transcoded.mimeType);
+    uploadFileName = transcoded.fileName;
+  }
+
+  const uploaded = await uploadMedia(
+    new Blob([new Uint8Array(uploadContent)], { type: uploadMimeType }),
+    uploadMimeType,
+    {
+      accessToken: credentials.accessToken,
+      phoneNumberId: credentials.phoneNumberId,
+    },
+    uploadFileName
+  );
+  if (!uploaded.ok) {
+    logger.error({
+      event: "admin.conversation.send_media.upload_failed",
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      waId: maskWaId(params.waId),
+      status: uploaded.status ?? null,
+      errorBody: uploaded.errorBody ?? null,
+    });
+    return {
+      ok: false,
+      statusCode: uploaded.status ?? 502,
+      error: "media_upload_failed",
+      errorDetails: uploaded.errorBody ?? null,
+    };
+  }
+
+  const sendResult = await sendMediaMessage({
+    to: params.waId,
+    kind: mediaKind,
+    mediaId: uploaded.mediaId,
+    caption: params.caption,
+    fileName: uploadFileName,
+    credentials,
+  });
+  const status = sendResult.ok ? "SENT" : "FAILED";
+  const messageId = `admin.send_media.${params.requestId}`;
+  const createdAt = new Date().toISOString();
+  const tenants = await getTenants();
+  const phoneNumberId =
+    credentials.phoneNumberId || tenants[params.clientKey]?.metaPhoneNumberId || undefined;
+
+  const prismaType =
+    mediaKind === "image"
+      ? "IMAGE"
+      : mediaKind === "audio"
+        ? "AUDIO"
+        : mediaKind === "video"
+          ? "VIDEO"
+          : "DOCUMENT";
+
+  const storedMedia = await storeOutboundMediaFile({
+    clientId: params.clientId,
+    messageId,
+    content: uploadContent,
+    mimeType: uploadMimeType,
+    fileName: uploadFileName,
+  }).catch((error) => {
+    logger.error({
+      event: "admin.conversation.send_media.local_store_failed",
+      clientKey: params.clientKey,
+      requestId: params.requestId,
+      waId: maskWaId(params.waId),
+      message: (error as Error).message,
+    });
+    return null;
+  });
+
+  const outboundInserted = await persistOutboundMessage({
+    clientId: params.clientId,
+    phoneNumberId,
+    waId: params.waId,
+    messageId,
+    type: prismaType,
+    status,
+    bodyText: params.caption ?? null,
+    requestId: params.requestId,
+    metaMessageId: sendResult.messageId ?? null,
+    errorBody: sendResult.errorBody ?? null,
+    rawPayload: {
+      type: mediaKind,
+      media: {
+        mediaId: uploaded.mediaId,
+        mimeType: uploadMimeType,
+        fileName: uploadFileName,
+        caption: params.caption ?? null,
+        localPath: storedMedia?.localPath ?? null,
+        localSize: storedMedia?.size ?? null,
+      },
+      source: "admin_inbox_media",
+      status: sendResult.status ?? null,
+      errorBody: sendResult.errorBody ?? null,
+    },
+  });
+
+  if (conversation) {
+    await runtimeStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt,
+    });
+    await recordConversationAgentOutboundMetrics({
+      prisma: getPrisma(),
+      clientId: params.clientId,
+      waId: params.waId,
+      occurredAt: new Date(createdAt),
+      wasInserted: outboundInserted && sendResult.ok,
+      assignedAt: conversation.assignedAt ?? null,
+      assignedUserId: conversation.assignedUserId ?? null,
+      requestId: params.requestId,
+    });
+  }
+
+  if (!sendResult.ok) {
+    return {
+      ok: false,
+      statusCode: sendResult.status ?? 502,
+      error: "media_send_failed",
+      errorDetails: sendResult.errorBody ?? null,
+    };
+  }
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId: sendResult.messageId ?? null,
+    createdAt,
+    mediaType: prismaType,
+    bodyText: params.caption ?? null,
+    media: {
+      kind: mediaKind,
+      mimeType: uploadMimeType,
+      fileName: uploadFileName,
+      caption: params.caption ?? null,
+      hasDownload: true,
+      downloadUrl: buildConversationMessageDownloadPath(params.waId, messageId),
+    },
   };
 }

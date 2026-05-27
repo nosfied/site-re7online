@@ -20,7 +20,17 @@ Use este formulario como checklist oficial de coleta de dados antes da configura
 - Numero ja esta ativo em operacao? (sim/nao)
 - Numero ja esta conectado a outro provedor? (sim/nao)
 - Phone Number ID (se ja disponivel)
+- WABA ID correta do numero
+- Business Manager/Portfolio dono da WABA
+- Business Manager/Portfolio que recebeu compartilhamento do ativo, se houver
 - Nome de exibicao aprovado no WhatsApp Business
+- Telefone exibido pela Meta (`display_phone_number`)
+- Status no WhatsApp Manager:
+  - conectado/pendente
+  - `code_verification_status`
+  - `account_mode`
+  - `quality_rating`
+- Numero foi transferido entre WABAs/BMs recentemente? (sim/nao)
 - Lista inicial de numeros para allowlist de teste
 - Janela operacional desejada para testes e go-live
 
@@ -32,8 +42,35 @@ Use este formulario como checklist oficial de coleta de dados antes da configura
 - Nome do app Meta
 - Confirmacao de que a Re7 possui acesso administrativo ao app / WABA
 - Confirmacao de que webhook e credenciais podem ser configurados pela Re7
+- Confirmacao de que o app esta inscrito na WABA (`/<WABA_ID>/subscribed_apps`)
+- Confirmacao de que o campo `messages` esta inscrito no webhook WhatsApp
+- Confirmacao de que o token atual enxerga o `phoneNumberId` correto
 - Responsavel tecnico do cliente para aprovar templates e configuracoes
 - Templates aprovados necessarios no go-live (ex.: handoff manual, pricing)
+
+## Registro Cloud API
+
+Preencher quando a Meta mostrar que o numero esta pendente de registro:
+
+- O numero exige registro via API `/register`? (sim/nao)
+- PIN de verificacao em duas etapas da Cloud API esta disponivel? (sim/nao)
+- Responsavel autorizado a informar o PIN no console interno
+- Data/hora da tentativa de registro
+- Resultado:
+  - registrado com sucesso
+  - rejeitado pela Meta
+  - pendente de propagacao/transferencia
+- Observacao: o codigo SMS de posse do numero e diferente do PIN da API
+  `/register`.
+
+## Validacao tecnica obrigatoria
+
+- Health do backend OK
+- Tenant mostra `phoneNumberId`, WABA ID e telefone exibido corretos
+- WABA inscrita no app Meta do Converta
+- Mensagem WhatsApp real recebida no inbox do tenant correto
+- Nenhum log `webhook.message.discarded` por `missing_phone_number_id`
+- Outbound/template de teste validado quando fizer parte do go-live
 
 ## Atendimento
 
@@ -45,6 +82,35 @@ Use este formulario como checklist oficial de coleta de dados antes da configura
 - Template de handoff manual aprovado
 - Regras comerciais que o bot deve respeitar (ex.: nao enviar proposta sem briefing, nao confirmar agendamento sem atendente)
 - Criterios de go-live aprovados pelo cliente
+
+## Automacao + IA
+
+Antes de ativar IA conversacional, preencher o playbook completo:
+
+- [Playbook de Parametrizacao: Automacao + IA por Tenant](./automation-ai-tenant-playbook.md)
+
+Coletar e aprovar:
+
+- modelo de uso desejado: fluxo estruturado, IA controlada, hibrido, humano assistido ou CRM/campanhas;
+- estado desejado de Fluxo configuravel;
+- estado desejado de Classificacao de intencao;
+- estado desejado de Base de IA;
+- estado desejado de IA controlada;
+- maximo de respostas da IA por conversa;
+- contexto de negocio da IA;
+- instrucao adicional aprovada;
+- temas permitidos;
+- temas secundarios;
+- termos bloqueados;
+- palavras-chave de handoff;
+- mensagem de boas-vindas;
+- mensagem fallback;
+- prompt de handoff;
+- catalogo de intencoes;
+- criterios de CRM;
+- situacoes do negocio;
+- follow-up;
+- notificacao interna de novo lead.
 
 ## Confirmacao final
 

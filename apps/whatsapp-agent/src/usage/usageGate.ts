@@ -6,7 +6,7 @@ import { logger } from "../logger/logger.js";
 export type UsageGateParams = {
   clientId: string;
   clientKey: string;
-  messageType: "text" | "template";
+  messageType: "text" | "template" | "media";
   requestId?: string;
   waId?: string;
 };

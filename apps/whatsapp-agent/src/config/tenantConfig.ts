@@ -2,29 +2,208 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { env } from "./env.js";
 import { logger } from "../logger/logger.js";
+import {
+  normalizeQualificationSchema,
+  type AiQualificationSchema,
+} from "../agent/qualification.js";
+import { normalizeTenantChannelAccountsForTenant } from "../channels/tenantChannelAccount.js";
+import type { Channel } from "../channels/channel.types.js";
+import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
+
+export type MediaHandoffBehavior = "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
+
+export type TenantMediaHandoffPolicy = {
+  enabled: boolean;
+  channels: Channel[];
+  behavior: MediaHandoffBehavior;
+  customerNoticeText: string;
+  attendantSummaryText: string;
+};
+
+const ALL_CHANNELS: Channel[] = ["whatsapp", "messenger", "instagram"];
+
+export const DEFAULT_MEDIA_HANDOFF_CUSTOMER_NOTICE =
+  "Recebemos sua mensagem. Vou encaminhar para uma pessoa da equipe verificar e te atender melhor.";
+
+export const DEFAULT_MEDIA_HANDOFF_ATTENDANT_SUMMARY = "Midia recebida: sim";
+
+export const DEFAULT_MEDIA_HANDOFF_POLICY: TenantMediaHandoffPolicy = {
+  enabled: true,
+  channels: [...ALL_CHANNELS],
+  behavior: "notify_and_reply",
+  customerNoticeText: DEFAULT_MEDIA_HANDOFF_CUSTOMER_NOTICE,
+  attendantSummaryText: DEFAULT_MEDIA_HANDOFF_ATTENDANT_SUMMARY,
+};
 
 export type TenantConfig = {
   id: string;
   name: string;
   metaPhoneNumberId: string;
+  displayPhoneNumber?: string;
+  companyLegalName?: string;
+  companyTradeName?: string;
+  companyTaxId?: string;
+  companyStateRegistration?: string;
+  companyMunicipalRegistration?: string;
+  companyWebsite?: string;
+  companyIndustry?: string;
+  companyAddressStreet?: string;
+  companyAddressNumber?: string;
+  companyAddressComplement?: string;
+  companyAddressDistrict?: string;
+  companyAddressCity?: string;
+  companyAddressState?: string;
+  companyAddressZip?: string;
+  companyAddressCountry?: string;
+  legalRepresentativeName?: string;
+  legalRepresentativeCpf?: string;
+  legalRepresentativeEmail?: string;
+  legalRepresentativePhone?: string;
+  billingContactName?: string;
+  billingContactEmail?: string;
+  billingContactPhone?: string;
+  billingEmail?: string;
+  financialContactName?: string;
+  financialContactEmail?: string;
+  financialContactPhone?: string;
+  technicalContactName?: string;
+  technicalContactEmail?: string;
+  technicalContactPhone?: string;
+  contractPlanName?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
+  contractBillingDay?: number;
+  contractPaymentMethod?: string;
+  contractNotes?: string;
+  maxActiveAppUsers?: number;
   allowlist: string[];
   handoffAttendantWaid: string;
   defaultLanguage: string;
   disableAutoReply?: boolean;
+  disableChatbot?: boolean;
+  appDisableChatbot?: boolean;
+  disableChatbotFlowEditing?: boolean;
+  disableLegacyFlows?: boolean;
+  disableAiFallback?: boolean;
+  appDisableAiFallback?: boolean;
+  disableIntentClassifier?: boolean;
+  appDisableIntentClassifier?: boolean;
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  followUpMaxCount?: number;
+  followUpUseTemplate?: boolean;
+  followUpTemplateName?: string;
+  followUpTemplateLang?: string;
+  handoffLeadNotificationEnabled?: boolean;
+  handoffLeadNotificationRecipients?: HandoffLeadNotificationRecipient[];
+  mediaHandoffPolicy?: TenantMediaHandoffPolicy;
+  aiAssistantEnabled?: boolean;
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: "business" | "government" | "legal_previdenciario";
+  aiAssistantSystemPrompt?: string;
+  aiAssistantFallbackToHandoff?: boolean;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
+  aiAssistantHandoffKeywords?: string[];
+  aiAssistantGreetingMessage?: string;
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
+  aiAssistantIntentCatalog?: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
+  channelAccounts?: TenantChannelAccount[];
+  crmBusinessStatuses?: CrmBusinessStatusConfig[];
+  aiBusinessContext?: string;
   planName?: string;
   messagesLimit?: number;
   quotaMonthlyConversations?: number;
   quotaWarnAtPct?: number;
   quotaBlockedReplyText?: string;
   quotaExcludeWaIds?: string[];
-  templates: {
-    manualHandoff: string;
+  templates?: {
+    manualHandoff?: string;
   };
+};
+
+export type AiAssistantIntentCatalogItem = {
+  key: string;
+  title?: string;
+  topics?: string[];
+  response?: string;
+  nextQuestion?: string;
+  leadTemp?: "quente" | "morno" | "frio";
+  priority?: "alta" | "media" | "baixa";
+  handoff?: boolean;
+  preQualification?: boolean;
+  tags?: string[];
+};
+
+export type CrmBusinessStatusConfig = {
+  id: string;
+  label: string;
+  isActive: boolean;
+  campaignEligible: boolean;
+  description?: string;
+};
+
+export type HandoffLeadNotificationRecipient = {
+  id: string;
+  waId: string;
+  label?: string;
+  isActive: boolean;
 };
 
 export type TenantConfigMap = Record<string, TenantConfig>;
 
 let cachedTenants: TenantConfigMap | null = null;
+
+export function isAiAssistantConfigured(tenant?: Pick<
+  TenantConfig,
+  | "aiBusinessContext"
+  | "aiAssistantAllowedTopics"
+  | "aiAssistantSecondaryTopics"
+  | "aiAssistantFallbackMessage"
+  | "aiAssistantHandoffPrompt"
+> | null) {
+  return getAiAssistantConfigurationStatus(tenant).ready;
+}
+
+export type AiAssistantConfigurationStatus = {
+  ready: boolean;
+  missing: string[];
+  warnings: string[];
+  score: number;
+};
+
+export function getAiAssistantConfigurationStatus(tenant?: Pick<
+  TenantConfig,
+  | "aiBusinessContext"
+  | "aiAssistantAllowedTopics"
+  | "aiAssistantSecondaryTopics"
+  | "aiAssistantFallbackMessage"
+  | "aiAssistantHandoffPrompt"
+  | "aiAssistantBlockedTerms"
+  | "aiAssistantHandoffKeywords"
+  | "aiAssistantSystemPrompt"
+> | null): AiAssistantConfigurationStatus {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  if (!tenant?.aiBusinessContext?.trim()) missing.push("aiBusinessContext");
+  if (!tenant?.aiAssistantAllowedTopics?.some((term) => term.trim())) missing.push("aiAssistantAllowedTopics");
+  if (!tenant?.aiAssistantFallbackMessage?.trim()) missing.push("aiAssistantFallbackMessage");
+  if (!tenant?.aiAssistantHandoffPrompt?.trim()) missing.push("aiAssistantHandoffPrompt");
+  if (!tenant?.aiAssistantBlockedTerms?.some((term) => term.trim())) warnings.push("aiAssistantBlockedTerms");
+  if (!tenant?.aiAssistantHandoffKeywords?.some((term) => term.trim())) warnings.push("aiAssistantHandoffKeywords");
+  if (!tenant?.aiAssistantSystemPrompt?.trim()) warnings.push("aiAssistantSystemPrompt");
+  const requiredScore = 4 - missing.length;
+  const recommendedScore = 3 - warnings.length;
+  return {
+    ready: missing.length === 0,
+    missing,
+    warnings,
+    score: Math.max(0, Math.round(((requiredScore + recommendedScore * 0.5) / 5.5) * 100)),
+  };
+}
 
 function getTenantsPath() {
   return path.join(process.cwd(), ".data", "tenants.json");
@@ -47,6 +226,8 @@ function buildDefaultTenant(): TenantConfigMap {
     allowlist: env.WHATSAPP_ALLOWLIST ?? [],
     handoffAttendantWaid: env.HANDOFF_ATTENDANT_WAID ?? "",
     defaultLanguage: env.OUTBOUND_TEMPLATE_DEFAULT_LANG ?? "pt_BR",
+    disableLegacyFlows: true,
+    appDisableIntentClassifier: false,
     templates: {
       manualHandoff: env.HANDOFF_TEMPLATE_NAME || "re7_atendente_manual_v1",
     },
@@ -74,7 +255,7 @@ async function loadTenantsFromFile(): Promise<TenantConfigMap | null> {
   }
 }
 
-function normalizeTenantConfigMap(input: unknown): unknown {
+function normalizeTenantConfigMap(input: unknown, existingTenants?: TenantConfigMap): unknown {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return input;
   }
@@ -87,9 +268,79 @@ function normalizeTenantConfigMap(input: unknown): unknown {
       continue;
     }
     const tenant = value as Record<string, unknown>;
+    const existingTenant = existingTenants?.[key];
     const nextTenant: Record<string, unknown> = { ...tenant };
-    if (tenant.disableAutoReply === undefined && (key === "justa-advocacia" || tenant.id === "justa-advocacia")) {
-      nextTenant.disableAutoReply = true;
+    if (nextTenant.disableLegacyFlows === undefined) {
+      nextTenant.disableLegacyFlows = true;
+    }
+    if (nextTenant.appDisableChatbot === undefined) {
+      nextTenant.appDisableChatbot = false;
+    }
+    if (nextTenant.appDisableAiFallback === undefined) {
+      nextTenant.appDisableAiFallback = false;
+    }
+    if (nextTenant.appDisableIntentClassifier === undefined) {
+      nextTenant.appDisableIntentClassifier = false;
+    }
+    if (nextTenant.followUpEnabled === undefined) {
+      nextTenant.followUpEnabled = false;
+    }
+    if (nextTenant.followUpDelayMinutes === undefined) {
+      nextTenant.followUpDelayMinutes = env.FOLLOWUP_DEFAULT_DELAY_MINUTES;
+    }
+    if (nextTenant.followUpMaxCount === undefined) {
+      nextTenant.followUpMaxCount = env.FOLLOWUP_MAX_PER_CONVERSATION;
+    }
+    if (nextTenant.followUpUseTemplate === undefined) {
+      nextTenant.followUpUseTemplate = false;
+    }
+    if (nextTenant.handoffLeadNotificationEnabled === undefined) {
+      nextTenant.handoffLeadNotificationEnabled = false;
+    }
+    nextTenant.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
+      tenant.handoffLeadNotificationRecipients
+    );
+    nextTenant.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(
+      tenant.mediaHandoffPolicy
+    );
+    if (nextTenant.aiAssistantEnabled === undefined) {
+      nextTenant.aiAssistantEnabled = false;
+    }
+    if (nextTenant.aiAssistantMaxReplies === undefined) {
+      nextTenant.aiAssistantMaxReplies = 2;
+    }
+    nextTenant.aiAssistantAllowedTopics = Array.isArray(tenant.aiAssistantAllowedTopics)
+      ? tenant.aiAssistantAllowedTopics
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
+    nextTenant.aiAssistantSecondaryTopics = Array.isArray(tenant.aiAssistantSecondaryTopics)
+      ? tenant.aiAssistantSecondaryTopics
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
+    nextTenant.aiAssistantBlockedTerms = Array.isArray(tenant.aiAssistantBlockedTerms)
+      ? tenant.aiAssistantBlockedTerms
+          .map((term) => (typeof term === "string" ? term.trim() : ""))
+          .filter(Boolean)
+      : [];
+    nextTenant.aiAssistantIntentCatalog = normalizeAiAssistantIntentCatalog(
+      tenant.aiAssistantIntentCatalog
+    );
+    if (tenant.aiQualification !== undefined) {
+      nextTenant.aiQualification = normalizeQualificationSchema(tenant.aiQualification);
+    }
+    if (tenant.channelAccounts !== undefined) {
+      const tenantKey = typeof tenant.id === "string" && tenant.id.trim() ? tenant.id : key;
+      nextTenant.channelAccounts = normalizeTenantChannelAccountsForTenant(
+        tenant.channelAccounts,
+        tenantKey,
+        existingTenant?.channelAccounts
+      );
+    }
+    nextTenant.crmBusinessStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+    if (nextTenant.maxActiveAppUsers === undefined) {
+      nextTenant.maxActiveAppUsers = 5;
     }
     if (Array.isArray(tenant.quotaExcludeWaIds)) {
       nextTenant.quotaExcludeWaIds = tenant.quotaExcludeWaIds.map((waId) =>
@@ -99,6 +350,238 @@ function normalizeTenantConfigMap(input: unknown): unknown {
     normalized[key] = nextTenant;
   }
   return normalized;
+}
+
+export const DEFAULT_CRM_BUSINESS_STATUSES: CrmBusinessStatusConfig[] = [
+  {
+    id: "NEW",
+    label: "Novo",
+    isActive: true,
+    campaignEligible: false,
+    description: "Lead recem-criado ou ainda sem qualificacao.",
+  },
+  {
+    id: "QUALIFIED",
+    label: "Qualificado",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead com interesse ou perfil identificado.",
+  },
+  {
+    id: "OPEN",
+    label: "Em aberto",
+    isActive: true,
+    campaignEligible: true,
+    description: "Negocio em andamento, ainda sem fechamento.",
+  },
+  {
+    id: "FOLLOW_UP",
+    label: "Follow-up",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead aguardando nova tentativa ou acompanhamento.",
+  },
+  {
+    id: "WON",
+    label: "Fechado",
+    isActive: true,
+    campaignEligible: false,
+    description: "Negocio fechado com sucesso.",
+  },
+  {
+    id: "LOST",
+    label: "Nao fechado",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead que nao fechou e pode ser trabalhado futuramente.",
+  },
+  {
+    id: "NO_RESPONSE",
+    label: "Sem resposta",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead sem retorno recente.",
+  },
+  {
+    id: "NURTURE",
+    label: "Nutrir",
+    isActive: true,
+    campaignEligible: true,
+    description: "Lead para relacionamento e campanhas futuras.",
+  },
+];
+
+function normalizeCrmStatusId(input: unknown) {
+  if (typeof input !== "string") return "";
+  return input
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+export function normalizeCrmBusinessStatuses(input: unknown): CrmBusinessStatusConfig[] {
+  if (!Array.isArray(input)) return [...DEFAULT_CRM_BUSINESS_STATUSES];
+  const seen = new Set<string>();
+  const items: CrmBusinessStatusConfig[] = [];
+  for (const rawItem of input.slice(0, 40)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+    const item = rawItem as Record<string, unknown>;
+    const label = typeof item.label === "string" ? item.label.trim().slice(0, 80) : "";
+    const id = normalizeCrmStatusId(item.id) || normalizeCrmStatusId(label);
+    if (!id || !/^[A-Z0-9_]{2,40}$/.test(id) || seen.has(id) || !label) continue;
+    seen.add(id);
+    const description =
+      typeof item.description === "string" ? item.description.trim().slice(0, 180) : "";
+    items.push({
+      id,
+      label,
+      isActive: item.isActive !== false,
+      campaignEligible: item.campaignEligible === true,
+      ...(description ? { description } : {}),
+    });
+  }
+  return items.length ? items : [...DEFAULT_CRM_BUSINESS_STATUSES];
+}
+
+export function normalizeHandoffLeadNotificationRecipients(
+  input: unknown
+): HandoffLeadNotificationRecipient[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const recipients: HandoffLeadNotificationRecipient[] = [];
+  for (const raw of input.slice(0, 20)) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const item = raw as Record<string, unknown>;
+    const waId =
+      typeof item.waId === "string"
+        ? item.waId.replace(/\D/g, "")
+        : typeof item.phone === "string"
+        ? item.phone.replace(/\D/g, "")
+        : "";
+    if (!/^\d{8,20}$/.test(waId) || seen.has(waId)) continue;
+    seen.add(waId);
+    const rawId = typeof item.id === "string" ? item.id.trim() : "";
+    const id = rawId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || `wa_${waId}`;
+    const label =
+      typeof item.label === "string" && item.label.trim()
+        ? item.label.trim().slice(0, 80)
+        : undefined;
+    recipients.push({
+      id,
+      waId,
+      label,
+      isActive: item.isActive !== false,
+    });
+  }
+  return recipients;
+}
+
+function normalizeMediaHandoffChannels(input: unknown): Channel[] {
+  if (!Array.isArray(input)) return [...DEFAULT_MEDIA_HANDOFF_POLICY.channels];
+  const seen = new Set<Channel>();
+  for (const raw of input) {
+    if (raw === "whatsapp" || raw === "messenger" || raw === "instagram") {
+      seen.add(raw);
+    }
+  }
+  return seen.size ? [...seen] : [...DEFAULT_MEDIA_HANDOFF_POLICY.channels];
+}
+
+function normalizeMediaHandoffText(input: unknown, fallback: string, maxLength: number) {
+  return typeof input === "string" && input.trim()
+    ? input.trim().replace(/\s+/g, " ").slice(0, maxLength)
+    : fallback;
+}
+
+export function normalizeTenantMediaHandoffPolicy(
+  input: unknown
+): TenantMediaHandoffPolicy {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ...DEFAULT_MEDIA_HANDOFF_POLICY, channels: [...DEFAULT_MEDIA_HANDOFF_POLICY.channels] };
+  }
+  const raw = input as Record<string, unknown>;
+  const behavior: MediaHandoffBehavior =
+    raw.behavior === "notify_only" ||
+    raw.behavior === "reply_only" ||
+    raw.behavior === "ignore" ||
+    raw.behavior === "notify_and_reply"
+      ? raw.behavior
+      : DEFAULT_MEDIA_HANDOFF_POLICY.behavior;
+  return {
+    enabled: raw.enabled !== false,
+    channels: normalizeMediaHandoffChannels(raw.channels),
+    behavior,
+    customerNoticeText: normalizeMediaHandoffText(
+      raw.customerNoticeText,
+      DEFAULT_MEDIA_HANDOFF_POLICY.customerNoticeText,
+      500
+    ),
+    attendantSummaryText: normalizeMediaHandoffText(
+      raw.attendantSummaryText,
+      DEFAULT_MEDIA_HANDOFF_POLICY.attendantSummaryText,
+      180
+    ),
+  };
+}
+
+function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
+  if (!Array.isArray(input)) return [];
+  const items: AiAssistantIntentCatalogItem[] = [];
+  const seen = new Set<string>();
+  for (const rawItem of input.slice(0, 60)) {
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+    const item = rawItem as Record<string, unknown>;
+    const key = typeof item.key === "string" ? item.key.trim().toLowerCase() : "";
+    if (!key || !/^[a-z0-9_:-]{2,80}$/.test(key) || seen.has(key)) continue;
+    seen.add(key);
+    const topics = Array.isArray(item.topics)
+      ? [
+          ...new Set(
+            item.topics
+              .map((term) => (typeof term === "string" ? term.trim() : ""))
+              .filter(Boolean)
+              .slice(0, 40)
+          ),
+        ]
+      : [];
+    const tags = Array.isArray(item.tags)
+      ? [
+          ...new Set(
+            item.tags
+              .map((tag) => (typeof tag === "string" ? tag.trim().toLowerCase() : ""))
+              .filter((tag) => /^[a-z0-9_:-]{2,80}$/.test(tag))
+              .slice(0, 20)
+          ),
+        ]
+      : [];
+    items.push({
+      key,
+      ...(typeof item.title === "string" && item.title.trim()
+        ? { title: item.title.trim().slice(0, 120) }
+        : {}),
+      topics,
+      ...(typeof item.response === "string" && item.response.trim()
+        ? { response: item.response.trim().slice(0, 900) }
+        : {}),
+      ...(typeof item.nextQuestion === "string" && item.nextQuestion.trim()
+        ? { nextQuestion: item.nextQuestion.trim().slice(0, 240) }
+        : {}),
+      ...(item.leadTemp === "quente" || item.leadTemp === "morno" || item.leadTemp === "frio"
+        ? { leadTemp: item.leadTemp }
+        : {}),
+      ...(item.priority === "alta" || item.priority === "media" || item.priority === "baixa"
+        ? { priority: item.priority }
+        : {}),
+      ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      ...(typeof item.preQualification === "boolean" ? { preQualification: item.preQualification } : {}),
+      tags,
+    });
+  }
+  return items;
 }
 
 function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap {
@@ -126,6 +609,67 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     if (typeof tenant.metaPhoneNumberId !== "string") {
       throw new Error(`invalid_tenant_phone:${key}`);
     }
+    if (tenant.displayPhoneNumber !== undefined && typeof tenant.displayPhoneNumber !== "string") {
+      throw new Error(`invalid_tenant_display_phone:${key}`);
+    }
+    const optionalStringFields = [
+      "companyLegalName",
+      "companyTradeName",
+      "companyTaxId",
+      "companyStateRegistration",
+      "companyMunicipalRegistration",
+      "companyWebsite",
+      "companyIndustry",
+      "companyAddressStreet",
+      "companyAddressNumber",
+      "companyAddressComplement",
+      "companyAddressDistrict",
+      "companyAddressCity",
+      "companyAddressState",
+      "companyAddressZip",
+      "companyAddressCountry",
+      "legalRepresentativeName",
+      "legalRepresentativeCpf",
+      "legalRepresentativeEmail",
+      "legalRepresentativePhone",
+      "billingContactName",
+      "billingContactEmail",
+      "billingContactPhone",
+      "billingEmail",
+      "financialContactName",
+      "financialContactEmail",
+      "financialContactPhone",
+      "technicalContactName",
+      "technicalContactEmail",
+      "technicalContactPhone",
+      "contractPlanName",
+      "contractStartDate",
+      "contractEndDate",
+      "contractPaymentMethod",
+      "contractNotes",
+    ];
+    for (const field of optionalStringFields) {
+      if (tenant[field] !== undefined && typeof tenant[field] !== "string") {
+        throw new Error(`invalid_tenant_${field}:${key}`);
+      }
+    }
+    if (
+      tenant.maxActiveAppUsers !== undefined &&
+      (typeof tenant.maxActiveAppUsers !== "number" ||
+        !Number.isInteger(tenant.maxActiveAppUsers) ||
+        tenant.maxActiveAppUsers < 0)
+    ) {
+      throw new Error(`invalid_tenant_max_active_app_users:${key}`);
+    }
+    if (
+      tenant.contractBillingDay !== undefined &&
+      (typeof tenant.contractBillingDay !== "number" ||
+        !Number.isInteger(tenant.contractBillingDay) ||
+        tenant.contractBillingDay < 1 ||
+        tenant.contractBillingDay > 31)
+    ) {
+      throw new Error(`invalid_tenant_contract_billing_day:${key}`);
+    }
     if (!Array.isArray(tenant.allowlist) || tenant.allowlist.some((item) => typeof item !== "string")) {
       throw new Error(`invalid_tenant_allowlist:${key}`);
     }
@@ -137,6 +681,259 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
     }
     if (tenant.disableAutoReply !== undefined && typeof tenant.disableAutoReply !== "boolean") {
       throw new Error(`invalid_tenant_disable_auto_reply:${key}`);
+    }
+    if (tenant.disableChatbot !== undefined && typeof tenant.disableChatbot !== "boolean") {
+      throw new Error(`invalid_tenant_disable_chatbot:${key}`);
+    }
+    if (tenant.appDisableChatbot !== undefined && typeof tenant.appDisableChatbot !== "boolean") {
+      throw new Error(`invalid_tenant_app_disable_chatbot:${key}`);
+    }
+    if (
+      tenant.disableChatbotFlowEditing !== undefined &&
+      typeof tenant.disableChatbotFlowEditing !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_disable_chatbot_flow_editing:${key}`);
+    }
+    if (tenant.disableLegacyFlows !== undefined && typeof tenant.disableLegacyFlows !== "boolean") {
+      throw new Error(`invalid_tenant_disable_legacy_flows:${key}`);
+    }
+    if (tenant.disableAiFallback !== undefined && typeof tenant.disableAiFallback !== "boolean") {
+      throw new Error(`invalid_tenant_disable_ai_fallback:${key}`);
+    }
+    if (tenant.appDisableAiFallback !== undefined && typeof tenant.appDisableAiFallback !== "boolean") {
+      throw new Error(`invalid_tenant_app_disable_ai_fallback:${key}`);
+    }
+    if (
+      tenant.disableIntentClassifier !== undefined &&
+      typeof tenant.disableIntentClassifier !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_disable_intent_classifier:${key}`);
+    }
+    if (
+      tenant.appDisableIntentClassifier !== undefined &&
+      typeof tenant.appDisableIntentClassifier !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_app_disable_intent_classifier:${key}`);
+    }
+    if (tenant.followUpEnabled !== undefined && typeof tenant.followUpEnabled !== "boolean") {
+      throw new Error(`invalid_tenant_follow_up_enabled:${key}`);
+    }
+    if (
+      tenant.followUpDelayMinutes !== undefined &&
+      (typeof tenant.followUpDelayMinutes !== "number" ||
+        !Number.isFinite(tenant.followUpDelayMinutes) ||
+        tenant.followUpDelayMinutes < 1)
+    ) {
+      throw new Error(`invalid_tenant_follow_up_delay_minutes:${key}`);
+    }
+    if (
+      tenant.followUpMaxCount !== undefined &&
+      (typeof tenant.followUpMaxCount !== "number" ||
+        !Number.isInteger(tenant.followUpMaxCount) ||
+        tenant.followUpMaxCount < 0)
+    ) {
+      throw new Error(`invalid_tenant_follow_up_max_count:${key}`);
+    }
+    if (tenant.followUpUseTemplate !== undefined && typeof tenant.followUpUseTemplate !== "boolean") {
+      throw new Error(`invalid_tenant_follow_up_use_template:${key}`);
+    }
+    if (
+      tenant.followUpTemplateName !== undefined &&
+      (typeof tenant.followUpTemplateName !== "string" || !tenant.followUpTemplateName.trim())
+    ) {
+      throw new Error(`invalid_tenant_follow_up_template_name:${key}`);
+    }
+    if (
+      tenant.followUpTemplateLang !== undefined &&
+      (typeof tenant.followUpTemplateLang !== "string" || !tenant.followUpTemplateLang.trim())
+    ) {
+      throw new Error(`invalid_tenant_follow_up_template_lang:${key}`);
+    }
+    if (
+      tenant.handoffLeadNotificationEnabled !== undefined &&
+      typeof tenant.handoffLeadNotificationEnabled !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_handoff_lead_notification_enabled:${key}`);
+    }
+    if (
+      tenant.handoffLeadNotificationRecipients !== undefined &&
+      (!Array.isArray(tenant.handoffLeadNotificationRecipients) ||
+        tenant.handoffLeadNotificationRecipients.some(
+          (recipient) =>
+            !recipient ||
+            typeof recipient !== "object" ||
+            Array.isArray(recipient) ||
+            typeof (recipient as HandoffLeadNotificationRecipient).id !== "string" ||
+            !(recipient as HandoffLeadNotificationRecipient).id.trim() ||
+            typeof (recipient as HandoffLeadNotificationRecipient).waId !== "string" ||
+            !/^\d{8,20}$/.test((recipient as HandoffLeadNotificationRecipient).waId) ||
+            ((recipient as HandoffLeadNotificationRecipient).label !== undefined &&
+              typeof (recipient as HandoffLeadNotificationRecipient).label !== "string") ||
+            typeof (recipient as HandoffLeadNotificationRecipient).isActive !== "boolean"
+        ))
+    ) {
+      throw new Error(`invalid_tenant_handoff_lead_notification_recipients:${key}`);
+    }
+    if (tenant.mediaHandoffPolicy !== undefined) {
+      if (!tenant.mediaHandoffPolicy || typeof tenant.mediaHandoffPolicy !== "object" || Array.isArray(tenant.mediaHandoffPolicy)) {
+        throw new Error(`invalid_tenant_media_handoff_policy:${key}`);
+      }
+      const policy = tenant.mediaHandoffPolicy as Partial<TenantMediaHandoffPolicy>;
+      if (typeof policy.enabled !== "boolean") {
+        throw new Error(`invalid_tenant_media_handoff_policy_enabled:${key}`);
+      }
+      if (!Array.isArray(policy.channels) || policy.channels.some((channel) => channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram")) {
+        throw new Error(`invalid_tenant_media_handoff_policy_channels:${key}`);
+      }
+      if (
+        policy.behavior !== "notify_and_reply" &&
+        policy.behavior !== "notify_only" &&
+        policy.behavior !== "reply_only" &&
+        policy.behavior !== "ignore"
+      ) {
+        throw new Error(`invalid_tenant_media_handoff_policy_behavior:${key}`);
+      }
+      if (typeof policy.customerNoticeText !== "string" || !policy.customerNoticeText.trim()) {
+        throw new Error(`invalid_tenant_media_handoff_policy_customer_notice:${key}`);
+      }
+      if (typeof policy.attendantSummaryText !== "string" || !policy.attendantSummaryText.trim()) {
+        throw new Error(`invalid_tenant_media_handoff_policy_attendant_summary:${key}`);
+      }
+    }
+    if (tenant.aiAssistantEnabled !== undefined && typeof tenant.aiAssistantEnabled !== "boolean") {
+      throw new Error(`invalid_tenant_ai_assistant_enabled:${key}`);
+    }
+    if (
+      tenant.aiAssistantMaxReplies !== undefined &&
+      (typeof tenant.aiAssistantMaxReplies !== "number" ||
+        !Number.isInteger(tenant.aiAssistantMaxReplies) ||
+        tenant.aiAssistantMaxReplies < 0)
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_max_replies:${key}`);
+    }
+    if (
+      tenant.aiAssistantProfile !== undefined &&
+      tenant.aiAssistantProfile !== "business" &&
+      tenant.aiAssistantProfile !== "government" &&
+      tenant.aiAssistantProfile !== "legal_previdenciario"
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_profile:${key}`);
+    }
+    if (
+      tenant.aiAssistantSystemPrompt !== undefined &&
+      (typeof tenant.aiAssistantSystemPrompt !== "string" || !tenant.aiAssistantSystemPrompt.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_system_prompt:${key}`);
+    }
+    if (
+      tenant.aiAssistantFallbackToHandoff !== undefined &&
+      typeof tenant.aiAssistantFallbackToHandoff !== "boolean"
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_fallback_to_handoff:${key}`);
+    }
+    if (
+      tenant.aiAssistantAllowedTopics !== undefined &&
+      (!Array.isArray(tenant.aiAssistantAllowedTopics) ||
+        tenant.aiAssistantAllowedTopics.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_allowed_topics:${key}`);
+    }
+    if (
+      tenant.aiAssistantSecondaryTopics !== undefined &&
+      (!Array.isArray(tenant.aiAssistantSecondaryTopics) ||
+        tenant.aiAssistantSecondaryTopics.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_secondary_topics:${key}`);
+    }
+    if (
+      tenant.aiAssistantBlockedTerms !== undefined &&
+      (!Array.isArray(tenant.aiAssistantBlockedTerms) ||
+        tenant.aiAssistantBlockedTerms.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_blocked_terms:${key}`);
+    }
+    if (
+      tenant.aiAssistantHandoffKeywords !== undefined &&
+      (!Array.isArray(tenant.aiAssistantHandoffKeywords) ||
+        tenant.aiAssistantHandoffKeywords.some((term) => typeof term !== "string"))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_handoff_keywords:${key}`);
+    }
+    if (
+      tenant.aiAssistantGreetingMessage !== undefined &&
+      (typeof tenant.aiAssistantGreetingMessage !== "string" ||
+        !tenant.aiAssistantGreetingMessage.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_greeting_message:${key}`);
+    }
+    if (
+      tenant.aiAssistantFallbackMessage !== undefined &&
+      (typeof tenant.aiAssistantFallbackMessage !== "string" ||
+        !tenant.aiAssistantFallbackMessage.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_fallback_message:${key}`);
+    }
+    if (
+      tenant.aiAssistantHandoffPrompt !== undefined &&
+      (typeof tenant.aiAssistantHandoffPrompt !== "string" ||
+        !tenant.aiAssistantHandoffPrompt.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_handoff_prompt:${key}`);
+    }
+    if (
+      tenant.aiAssistantIntentCatalog !== undefined &&
+      (!Array.isArray(tenant.aiAssistantIntentCatalog) ||
+        tenant.aiAssistantIntentCatalog.some(
+          (item) =>
+            !item ||
+            typeof item !== "object" ||
+            Array.isArray(item) ||
+            typeof (item as AiAssistantIntentCatalogItem).key !== "string" ||
+            !/^[a-z0-9_:-]{2,80}$/.test((item as AiAssistantIntentCatalogItem).key) ||
+            ((item as AiAssistantIntentCatalogItem).topics !== undefined &&
+              (!Array.isArray((item as AiAssistantIntentCatalogItem).topics) ||
+                (item as AiAssistantIntentCatalogItem).topics?.some((term) => typeof term !== "string"))) ||
+            ((item as AiAssistantIntentCatalogItem).tags !== undefined &&
+              (!Array.isArray((item as AiAssistantIntentCatalogItem).tags) ||
+                (item as AiAssistantIntentCatalogItem).tags?.some((tag) => typeof tag !== "string")))
+        ))
+    ) {
+      throw new Error(`invalid_tenant_ai_assistant_intent_catalog:${key}`);
+    }
+    if (
+      tenant.aiQualification !== undefined &&
+      normalizeQualificationSchema(tenant.aiQualification) === undefined
+    ) {
+      throw new Error(`invalid_tenant_ai_qualification:${key}`);
+    }
+    if (
+      tenant.channelAccounts !== undefined &&
+      (!Array.isArray(tenant.channelAccounts) ||
+        tenant.channelAccounts.some(
+          (account) =>
+            !account ||
+            typeof account !== "object" ||
+            Array.isArray(account) ||
+            typeof (account as TenantChannelAccount).id !== "string" ||
+            !(account as TenantChannelAccount).id.trim() ||
+            typeof (account as TenantChannelAccount).tenantKey !== "string" ||
+            !(account as TenantChannelAccount).tenantKey.trim() ||
+            typeof (account as TenantChannelAccount).channelAccountId !== "string" ||
+            !(account as TenantChannelAccount).channelAccountId.trim() ||
+            ((account as TenantChannelAccount).channel !== "whatsapp" &&
+              (account as TenantChannelAccount).channel !== "instagram" &&
+              (account as TenantChannelAccount).channel !== "messenger") ||
+            (account as TenantChannelAccount).provider !== "meta" ||
+            typeof (account as TenantChannelAccount).enabled !== "boolean"
+        ))
+    ) {
+      throw new Error(`invalid_tenant_channel_accounts:${key}`);
+    }
+    if (
+      tenant.aiBusinessContext !== undefined &&
+      (typeof tenant.aiBusinessContext !== "string" || !tenant.aiBusinessContext.trim())
+    ) {
+      throw new Error(`invalid_tenant_ai_business_context:${key}`);
     }
     if (
       tenant.planName !== undefined &&
@@ -186,10 +983,13 @@ function assertTenantConfigMap(input: unknown): asserts input is TenantConfigMap
       throw new Error(`invalid_tenant_quota_exclude_waids:${key}`);
     }
     const templates = tenant.templates as Record<string, unknown> | undefined;
-    if (!templates || typeof templates !== "object" || Array.isArray(templates)) {
+    if (templates !== undefined && (!templates || typeof templates !== "object" || Array.isArray(templates))) {
       throw new Error(`invalid_tenant_templates:${key}`);
     }
-    if (typeof templates.manualHandoff !== "string" || !templates.manualHandoff.trim()) {
+    if (
+      templates?.manualHandoff !== undefined &&
+      (typeof templates.manualHandoff !== "string" || !templates.manualHandoff.trim())
+    ) {
       throw new Error(`invalid_tenant_manual_handoff:${key}`);
     }
   }
@@ -245,13 +1045,15 @@ export async function getDefaultTenant() {
 }
 
 export async function saveTenants(nextTenants: unknown) {
-  const normalizedTenants = normalizeTenantConfigMap(nextTenants);
-  assertTenantConfigMap(normalizedTenants);
   await ensureTenantsDir();
   const tenantsPath = getTenantsPath();
   const backupPath = getBackupPath();
+  let existingTenants: TenantConfigMap | undefined;
   try {
     const current = await fs.readFile(tenantsPath, "utf-8");
+    const currentTenants = normalizeTenantConfigMap(JSON.parse(current));
+    assertTenantConfigMap(currentTenants);
+    existingTenants = currentTenants;
     await fs.writeFile(backupPath, current, "utf-8");
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -260,6 +1062,8 @@ export async function saveTenants(nextTenants: unknown) {
     }
   }
 
+  const normalizedTenants = normalizeTenantConfigMap(nextTenants, existingTenants);
+  assertTenantConfigMap(normalizedTenants);
   const payload = JSON.stringify(normalizedTenants, null, 2);
   const tempPath = `${tenantsPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tempPath, payload, "utf-8");

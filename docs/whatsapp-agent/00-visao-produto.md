@@ -1,11 +1,34 @@
-# Fase 0 — Visão de Produto (Agente Re7)
+# Visão de Produto — Converta / WhatsApp Agent
 
 ## Proposta do produto
-O **Agente Re7** é um agente de WhatsApp para atendimento e geração de demanda usando a Meta Cloud API.  
-Ele deve funcionar tanto para **uso interno** da Re7Online quanto como **produto de revenda** para clientes (white‑label opcional no futuro).
+O **Converta** é a plataforma SaaS da Re7Online/Reset Online para atendimento
+digital via WhatsApp oficial da Meta.
+
+O produto nasceu como **Agente Re7 / WhatsApp Agent** para uso interno e revenda,
+mas hoje cobre uma operação SaaS mais ampla: CRM conversacional, atendimento
+humano, chatbot, campanhas, templates, inbox, governança por cliente, relatórios,
+SLA e operação multi-tenant.
+
+## Focos estratégicos
+
+O produto atende dois focos simultâneos:
+
+1. **Mercado privado**
+   - empresas atendidas pela Re7/Reset
+   - campanhas e atendimento via WhatsApp oficial
+   - substituição de listas manuais e atendimento disperso
+   - cobrança SaaS, setup e custos Meta
+
+2. **Mercado público/licitações**
+   - atendimento institucional por WhatsApp oficial
+   - multi-secretarias/departamentos
+   - RBAC, SLA, relatórios e governança
+   - POC/demonstração com aderência a editais
+
+Nenhum dos dois focos deve ser descartado em decisões de produto.
 
 ## Objetivos e intenções principais
-O agente deve priorizar intenções claras, com fluxos curtos e foco em conversão/eficiência:
+O Converta deve priorizar fluxos claros, auditáveis e operáveis:
 
 1) **Vendas**  
    - qualificação rápida  
@@ -26,6 +49,18 @@ O agente deve priorizar intenções claras, com fluxos curtos e foco em convers�
    - emissão/segunda via  
    - encaminhamento para atendente  
 
+5) **Governança operacional**
+   - usuários por tenant
+   - departamentos e filas
+   - relatórios e SLA
+   - auditoria por usuário real no `/app`
+
+6) **Campanhas e templates**
+   - envio por template aprovado
+   - observabilidade de status Meta
+   - dedupe e execução assíncrona
+   - reutilização de campanhas
+
 ## Regras de handoff (gatilhos)
 O bot deve transferir para humano (handoff) quando:
 
@@ -38,7 +73,21 @@ O bot deve transferir para humano (handoff) quando:
 
 ## Produto e monetização (resumo)
 - **Interno**: reduz tempo operacional e aumenta conversão.  
-- **Revenda**: mensalidade + setup + templates aprovados.  
+- **Privado/SaaS**: mensalidade + setup + templates aprovados + custos Meta.
+- **Público/licitações**: POC, operação institucional, SLA, relatórios e governança.
 
-## Resultado esperado na Fase 0
-Definição clara de **uso**, **escopo**, **intenção** e **gatilhos de handoff** para orientar o MVP técnico.
+## Superfícies do produto
+
+- `/admin`: console interno da Re7/Reset para tenants, onboarding, Embedded Signup,
+  suporte e observabilidade global.
+- `/app`: portal do cliente para inbox, campanhas, templates, usuários,
+  departamentos, relatórios e chatbot.
+
+Novas funcionalidades de cliente devem ser entregues no `/app`, com autenticação
+por usuário real e escopo por `clientId`/`departmentId` quando aplicável.
+
+## Estado atual
+
+O produto já superou a Fase 0. O estado real inclui multi-tenant, Postgres/Prisma,
+WhatsApp Cloud API oficial, campanhas, templates, inbox, handoff humano, mídia,
+áudio com transcode, RBAC, departamentos, relatórios, SLA e chatbot configurável.

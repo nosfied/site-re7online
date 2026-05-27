@@ -1,230 +1,399 @@
 # RUNBOOK OPERACIONAL — WhatsApp Agent
 
-## 1) Visao geral
-Runbook operacional consolidado do `apps/whatsapp-agent` para deploy, validacao e operacao em producao.
+## Objetivo
+Padronizar o fluxo manual-controlado do `apps/whatsapp-agent` no modelo atual:
 
-Fontes usadas neste documento:
-- `apps/whatsapp-agent/scripts/deploy-vps.sh`
-- `apps/whatsapp-agent/scripts/validate-agent.sh`
-- `apps/whatsapp-agent/scripts/smoke-admin.sh`
-- `apps/whatsapp-agent/scripts/prod-status.sh`
-- `apps/whatsapp-agent/scripts/onboard-tenant.ts`
-- `apps/whatsapp-agent/README.md`
+`LOCAL -> VALIDACAO LOCAL -> COMMIT/PUSH -> VPS -> VALIDACAO POS-DEPLOY`
+
+Este runbook reflete o estado real atual do projeto:
+- ambiente local funcional para backend, frontend e banco
+- validacao real no `/app/login` e `/app/inbox`
+- deploy manual na VPS
+- rastreabilidade minima por branch, commit, horario e resultado
+
+Runbooks complementares:
 - `docs/onboarding.md`
-- `docs/saas/go-live-checklist.md`
 - `docs/saas/runbook-re7.md`
+- `docs/whatsapp-agent/05-env-and-smoke-test.md`
+- `docs/whatsapp-agent/ops/DEPLOY_VPS_PM2.md`
 
-## 2) Arquitetura resumida
-Pipeline operacional atual (webhook):
-1. `runFlowExecutor(...)` (pre-demo)
-2. `runMidDemoFlowExecutor(...)` (mid-demo)
-3. `runPostDemoFlowExecutor(...)` (post-demo/lead)
-4. `decideOutboundPolicy(...)` (policy/outbound)
+## Principios operacionais
+- Producao nao deve mais ser usada como ambiente principal de descoberta de bug.
+- Todo patch deve passar por validacao local real antes da VPS.
+- O deploy continua manual, mas deve ser rastreavel.
+- Nao ha obrigatoriedade de PR formal ou CI/CD complexo neste momento.
+- O commit exato que foi validado localmente deve ser o mesmo commit levado para a VPS.
 
-Evidencia: `apps/whatsapp-agent/src/whatsapp/webhook.controller.ts`.
+## Fluxo padrao
+1. Desenvolver e validar localmente.
+2. Rodar build local.
+3. Registrar o commit.
+4. Fazer `push` da branch de trabalho.
+5. Atualizar a VPS manualmente.
+6. Validar health e fluxo funcional minimo na VPS.
+7. Registrar o deploy.
 
-## 3) Pre-requisitos
-- Repositorio em `/opt/re7online/site-re7online`
-- Node + npm instalados
-- PM2 instalado e processos `re7-whatsapp-agent` e `re7-admin-front` ativos
-- `.env` configurado em `apps/whatsapp-agent/.env`
-- Banco acessivel (`DATABASE_URL`)
+## Pre-requisitos locais
+- Repositorio local clonado
+- PostgreSQL local funcional
+- `.env` local configurado em `apps/whatsapp-agent/.env`
+- backend local funcional
+- frontend local funcional
 
-## 4) Deploy padrao
-Comando canonico (script versionado):
+Portas atuais de referencia:
+- backend local: `http://127.0.0.1:3002`
+- frontend local: `http://localhost:3000`
 
+## Fluxo local
+
+### 1) Backend local
 ```bash
-cd /opt/re7online/site-re7online/apps/whatsapp-agent
-bash scripts/deploy-vps.sh
-```
-
-O script executa:
-1. `git pull --ff-only` (na raiz)
-2. `npm ci --include=dev`
-3. `npm run db:deploy`
-4. `npm run build`
-5. `pm2 reload "${PM2_ID:-0}" --update-env` (ou start fallback)
-6. `pm2 flush`
-7. health check em `http://127.0.0.1:${PORT:-3001}/health`
-
-## 4.1) Deploy do frontend admin
-
-O frontend admin roda na raiz do repo e e servido pelo processo PM2 `re7-admin-front`.
-
-Comando canonico:
-
-```bash
-cd /opt/re7online/site-re7online
-npm ci
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/apps/whatsapp-agent
+npm ci --include=dev
+npm run db:generate
 npm run build
-pm2 restart re7-admin-front
+npm run dev
 ```
 
-Checks minimos:
+### 2) Frontend local
+Em outro terminal:
 
 ```bash
-pm2 list
-curl -I http://127.0.0.1:3000
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site
+PORT=3000 NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL=http://127.0.0.1:3002 npm run dev
 ```
 
-## 5) Gate obrigatorio pre-deploy
-Script oficial:
+### 3) Validacao funcional local minima
+Validar no navegador:
+- `http://localhost:3000/app/login`
+- `http://localhost:3000/app/inbox`
 
+Checklist local minimo:
+- login no `/app/login`
+- inbox carregando
+- fluxo do patch sendo validado localmente
+- quando aplicavel, confirmar no banco o estado persistido
+- quando o patch afetar realtime/inbox:
+  - confirmar WebSocket `101 Switching Protocols` em `/agent-api/app/realtime`
+    ou `/app/realtime`
+  - validar ponto verde, som principal, som suave e fallback por polling
+  - validar que trocar conversa nao recarrega nem desloca a lista lateral
+
+Exemplo ja validado no estado atual:
+- Sprint 37 validada localmente
+- `CLOSED` persistindo com `closedAt` confirmado no banco
+
+### 4) Build local final
 ```bash
-bash apps/whatsapp-agent/scripts/validate-agent.sh
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site/apps/whatsapp-agent
+npm run build
+
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site
+npm run build
 ```
 
-Ordem interna do gate:
-1. build (`npm --prefix apps/whatsapp-agent run build`)
-2. `quote-site-smoke.sh`
-3. `e2e-demo.sh`
-4. `e2e-lead-pricing.sh`
-
-## 6) Variaveis necessarias do gate
-Obrigatorias:
-
+### 5) Commit e push
 ```bash
-export WAID_DEMO=<waid_homologado_demo>
-export WAID_LEAD=<waid_homologado_lead>
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site
+git status
+git add <arquivos>
+git commit -m "<mensagem>"
+git push origin flow-executor-quote-hardening
+git rev-parse --short HEAD
 ```
 
-Opcionais:
+Branch de trabalho atual:
+- `flow-executor-quote-hardening`
+
+### Deploy com commit fixo (recomendado)
+Depois do `push` local, capture o commit exato validado:
 
 ```bash
-export TENANT=re7online
-export RANGE=1h
+cd /home/deifson-oliveira/DEIFSON/re7online-site/re7online-site
+git rev-parse HEAD
+git rev-parse --short HEAD
 ```
 
-Regras do gate:
-- Falha se `WAID_DEMO` ou `WAID_LEAD` nao forem definidos.
-- Falha se `WAID_DEMO == WAID_LEAD`.
-
-## 7) Checks pos-deploy
-Checks minimos:
+Na VPS, prefira deployar o commit exato:
 
 ```bash
-# health publico (readiness operacional)
-curl -sS http://127.0.0.1:3001/health
-
-# status operacional
-cd /opt/re7online/site-re7online/apps/whatsapp-agent
-bash scripts/prod-status.sh
-
-# smoke admin
-bash scripts/smoke-admin.sh <WAID>
-
-# gate completo (quando aplicavel)
 cd /opt/re7online/site-re7online
-bash apps/whatsapp-agent/scripts/validate-agent.sh
+git fetch origin
+git checkout <commit_hash>
+git rev-parse --short HEAD
 ```
 
-## 8) Diagnostico rapido
-1. PM2
+Uso recomendado:
+- branch continua sendo a referencia de trabalho
+- commit exato passa a ser a referencia de deploy
+- isso evita subir codigo diferente do que foi validado localmente
 
+## Fluxo de deploy sem migration
+
+### 1) Atualizar codigo na VPS
+```bash
+cd /opt/re7online/site-re7online
+git fetch origin
+git checkout flow-executor-quote-hardening
+git pull --ff-only origin flow-executor-quote-hardening
+git rev-parse --short HEAD
+```
+
+### 2) Reinstalar dependencias e rebuildar
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm ci --include=dev
+npm run db:generate
+npm run build
+```
+
+### 3) Reiniciar o processo
+```bash
+pm2 restart re7-whatsapp-agent --update-env
+```
+
+### 4) Validar rapidamente
+```bash
+curl -sS http://127.0.0.1:3001/health
+pm2 status
+lsof -i :3001
+pm2 logs re7-whatsapp-agent --lines 50
+```
+
+## Fluxo de deploy com migration
+Use este fluxo quando o patch incluir migration Prisma nova.
+
+### 1) Atualizar codigo na VPS
+```bash
+cd /opt/re7online/site-re7online
+git fetch origin
+git checkout flow-executor-quote-hardening
+git pull --ff-only origin flow-executor-quote-hardening
+git rev-parse --short HEAD
+```
+
+### 2) Reinstalar dependencias, generate e migration
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm ci --include=dev
+npm run db:generate
+pg_dump -U wa_agent whatsapp_agent > backup_$(date +%F_%H%M).sql
+npm run db:deploy
+npm run build
+```
+
+### Backup antes de migration (obrigatorio em producao)
+Antes de rodar `db:deploy`, gerar backup do banco:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+pg_dump -U wa_agent whatsapp_agent > backup_$(date +%F_%H%M).sql
+```
+
+Objetivo:
+- ter um ponto de recuperacao minimo antes de migration
+- aumentar a seguranca operacional sem burocracia extra
+
+### 3) Reiniciar o processo
+```bash
+pm2 restart re7-whatsapp-agent --update-env
+```
+
+### 4) Validar rapidamente
+```bash
+curl -sS http://127.0.0.1:3001/health
+pm2 status
+lsof -i :3001
+pm2 logs re7-whatsapp-agent --lines 50
+```
+
+## Checklist pre-deploy
+- patch validado localmente
+- `/app/login` validado localmente
+- `/app/inbox` validado localmente quando o patch afetar atendimento
+- backend local buildando
+- frontend local buildando quando houver alteracao em `src/`
+- commit criado
+- commit enviado para `origin`
+- commit identificado (`git rev-parse --short HEAD`)
+- definido se o patch tem migration ou nao
+
+## Checklist pos-deploy
+- `curl -sS http://127.0.0.1:3001/health`
+- `pm2 logs re7-whatsapp-agent --lines 50`
+- processo `re7-whatsapp-agent` ativo no PM2
+- porta `3001` ativa
+- sem processo duplicado escutando a mesma porta
+- commit da VPS confere com o commit validado localmente
+- smoke funcional minimo do patch em producao
+
+Checks adicionais uteis:
 ```bash
 pm2 status
-pm2 logs re7-whatsapp-agent --lines 200
-```
-
-2. Health e admin health
-
-```bash
-curl -sS http://127.0.0.1:3001/health
 curl -sS http://127.0.0.1:3001/admin/health -H "X-Admin-Token: $ADMIN_TOKEN"
+lsof -i :3001
 ```
 
-3. Metricas/messages tenant-scoped
+Quando o patch afetar realtime/inbox, validar tambem no navegador:
+- `/app/inbox` abre sem erro;
+- socket aparece como `101 Switching Protocols`;
+- inbound em conversa nao ativa atualiza lista, ponto verde e som principal;
+- inbound na conversa aberta atualiza timeline e toca som suave;
+- polling continua atualizando estado se o socket cair.
 
-```bash
-curl -sS "http://127.0.0.1:3001/admin/metrics?range=1h&clientKey=re7online" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
+## Retencao de midia local
 
-curl -sS "http://127.0.0.1:3001/admin/messages?waId=<WAID>&limit=20&clientKey=re7online" \
-  -H "X-Admin-Token: $ADMIN_TOKEN"
-```
+Midias outbound enviadas pelo `/app/inbox` sao cacheadas localmente em
+`apps/whatsapp-agent/.data/media/outbound/` para permitir reabertura,
+download e reproducao futura sem depender apenas da URL temporaria da Meta.
 
-4. Diagnostico DB Docker (sem `psql` local)
-
-Quando `psql` nao estiver instalado na VPS, use o container Postgres da stack:
+Limpeza manual:
 
 ```bash
 cd /opt/re7online/site-re7online/apps/whatsapp-agent
-
-docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c '\d "User"'
-
-docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
-"SELECT column_name, data_type
- FROM information_schema.columns
- WHERE table_name='User' AND column_name='clientId';"
-
-docker exec -i wa-agent-postgres psql -U wa_agent -d whatsapp_agent -c \
-"SELECT conname, pg_get_constraintdef(oid)
- FROM pg_constraint
- WHERE conrelid='\"User\"'::regclass;"
+MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup
 ```
 
-Resultado esperado:
-- `clientId` com tipo `uuid`
-- FK `User_clientId_fkey` apontando para `"Client"("id")`
+Cron recomendado:
 
-## 9) Rollback
-Rollback minimo e seguro:
-1. voltar para commit/tag anterior na VPS
-2. rebuild
-3. reload do processo
-4. revalidar `/health` e smoke admin
+```cron
+0 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && MEDIA_LOCAL_RETENTION_DAYS=7 npm run media:cleanup >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log 2>&1
+```
+
+Na VPS `converta.re7online.com`, essa entrada ja foi instalada no crontab do usuario
+`deploy` em 2026-04-28, no commit `dbfcbd5`.
+
+Verificacao:
+
+```bash
+crontab -l | grep media:cleanup
+tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/media-cleanup.log
+```
+
+Reativar somente se a VPS/usuario `deploy` forem recriados, se o crontab for
+removido, ou se a pasta de producao mudar.
+
+Detalhes: `docs/whatsapp-agent/ops/MEDIA_RETENTION.md`.
+
+## Retencao LGPD automatica
+
+A retencao LGPD remove conversas antigas da operacao por soft delete e
+anonimizacao, conforme `RetentionConfig.retentionDays` de cada tenant. A rotina
+nao deve apagar fisicamente mensagens, eventos, metricas, leads ou contacts.
+
+Execucao manual global, para todos os tenants existentes no banco no momento da
+execucao:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run retention:run
+```
+
+Execucao manual limitada a um tenant especifico, quando necessario:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run retention:run -- --client-key justa-advocacia
+```
+
+Cron global instalado na VPS `converta.re7online.com`, no usuario `deploy`, em
+2026-05-02. Ele roda para todos os tenants existentes no momento da execucao:
+
+```cron
+30 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run retention:run >> /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log 2>&1
+```
+
+Verificacao:
+
+```bash
+crontab -l | grep retention
+tail -n 50 /opt/re7online/site-re7online/apps/whatsapp-agent/.data/logs/retention-global.log
+```
+
+Reativar somente se a VPS/usuario `deploy` forem recriados, se o crontab for
+removido, ou se a pasta de producao mudar. Para novos tenants, nao e necessario
+criar nova linha de cron: a execucao global ja inclui todos os tenants com
+`RetentionConfig` no banco, criando configuracao default de 90 dias quando ela
+ainda nao existir.
+
+Antes de usar retencao curta em producao, validar `RetentionConfig.retentionDays`
+na tela `/app/settings/privacy`. Valores baixos, como 1 a 7 dias, podem retirar
+conversas ativas da operacao.
+
+## Registro minimo do deploy
+Registrar preferencialmente em:
+- `docs/DEPLOY_LOG.md`
+
+Registrar no minimo:
+
+- branch:
+- commit:
+- horario:
+- houve migration? `sim` / `nao`
+- quem executou:
+- validacao local: `ok` / `falhou`
+- validacao pos-deploy: `ok` / `falhou`
+- observacoes:
 
 Exemplo:
 
+```md
+Deploy WhatsApp Agent
+- branch: flow-executor-quote-hardening
+- commit: abc1234
+- horario: 2026-04-12 14:35 BRT
+- migration: nao
+- validacao local: ok (/app/login, /app/inbox)
+- validacao pos-deploy: ok (/health, smoke do patch)
+- observacoes: sem erro no PM2
+```
+
+## Rollback
+Rollback minimo operacional:
+1. identificar o commit anterior estavel
+2. fazer checkout desse commit na VPS
+3. reinstalar dependencias
+4. rodar `db:generate`
+5. rebuildar
+6. reiniciar PM2
+7. validar `/health`
+
+Comandos:
 ```bash
 cd /opt/re7online/site-re7online
 git log --oneline -n 10
-# git checkout <commit_anterior>
+git checkout <commit_anterior>
 
-cd apps/whatsapp-agent
-npm ci --include=dev
-npm run db:deploy
-npm run build
-pm2 reload 0 --update-env
-curl -sS http://127.0.0.1:3001/health
-```
-
-## 10) Onboarding de tenant
-Fluxo recomendado via script:
-
-```bash
 cd /opt/re7online/site-re7online/apps/whatsapp-agent
-./scripts/onboard-tenant.ts \
-  --tenant <tenantId> \
-  --name "<Nome Cliente>" \
-  --client-key <clientKey> \
-  --allowlist <waid1,waid2> \
-  --handoff-attendant-waid <waid_atendente> \
-  --manual-handoff-template <template_aprovado> \
-  --first-user-name "<Nome Operador>" \
-  --first-user-email <operador@cliente.com> \
-  --first-user-role AGENT
+npm ci --include=dev
+npm run db:generate
+npm run build
+pm2 restart re7-whatsapp-agent --update-env
+curl -sS http://127.0.0.1:3001/health
+pm2 logs re7-whatsapp-agent --lines 50
 ```
 
-O script usa `ADMIN_TOKEN` e `DATABASE_URL` do `.env`, atualiza tenant config + client no DB e pode criar o primeiro usuario do tenant.
+Observacao:
+- rollback de codigo nao reverte automaticamente migration destrutiva
+- se o patch tiver migration sensivel, avaliar impacto antes do deploy
 
-## 11) WAIDs homologados
-Padrao operacional do gate:
-- `WAID_DEMO`: waId homologado para cenario demo E2E
-- `WAID_LEAD`: waId homologado para cenario lead E2E
+## Observacoes praticas
+- Compare link pode continuar sendo usado para revisao rapida, mas nao substitui o registro do commit exato deployado.
+- O repositorio da VPS continua em:
+  - `/opt/re7online/site-re7online`
+- O backend principal continua em:
+  - `/opt/re7online/site-re7online/apps/whatsapp-agent`
+- Processo PM2 de producao:
+  - `re7-whatsapp-agent`
+- Health real da VPS:
+  - `http://127.0.0.1:3001/health`
 
-Observacoes com evidencia no repo:
-- O gate exige ambos e exige que sejam distintos (`validate-agent.sh`).
-- Exemplos recorrentes de operacao/smoke usam `558494786787` em scripts/docs.
-- O waId de atendente no exemplo de producao aparece como `5584999049614` no README.
-
-## 12) Evidencias minimas de go-live
-Antes de liberar tenant:
-- Tenant configurado e acessivel via admin
-- Mapeamento `WaPhoneNumber -> Client` estavel apos reload
-- `tenant.resolved` correto nos inbounds
-- Policy B validada no tenant correto
-- Evidencia forte em `/admin/messages` (outbound esperado com `requestId`/`metaMessageId`)
-- Sem contaminacao de estado entre tenants
-
-Referencia: `docs/saas/go-live-checklist.md`.
+## Resumo operacional
+- descubra bug localmente
+- corrija localmente
+- valide localmente
+- build local
+- commit + push
+- deploy manual na VPS
+- valide `/health` e o fluxo afetado
+- registre branch, commit, horario e resultado

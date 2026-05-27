@@ -1,9 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { AppSession, loadAppSession, loginAppUser, saveAppSession } from "@/lib/appClientApi";
+import ThemeSelector from "@/components/ThemeSelector";
+import {
+  AppSession,
+  clearAppSession,
+  loadAppSession,
+  loginAppUser,
+  saveAppSession,
+} from "@/lib/appClientApi";
 
 export default function AppLoginPage() {
   const router = useRouter();
@@ -12,12 +20,23 @@ export default function AppLoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const existing = loadAppSession();
-    if (existing?.token) {
-      router.replace("/app/inbox");
-      return;
+    let fallbackTimer: number | null = null;
+    try {
+      const existing = loadAppSession();
+      if (existing?.token) {
+        router.replace("/app/inbox");
+        fallbackTimer = window.setTimeout(() => {
+          setCheckingSession(false);
+        }, 800);
+        return () => {
+          if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+        };
+      }
+    } catch {
+      clearAppSession();
     }
     setCheckingSession(false);
   }, [router]);
@@ -38,53 +57,76 @@ export default function AppLoginPage() {
         baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
         token: response.token,
         user: response.user,
+        features: response.features,
+        profile: response.profile,
       };
       saveAppSession(session);
       router.replace("/app/inbox");
     } catch (err) {
       const typed = err as { message?: string };
-      setError(typed.message || "Falha ao autenticar.");
+      setError(typed.message || "Nao foi possivel entrar. Verifique sua conexao e tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-re7-navy px-4 py-8 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20">
-        <div className="mb-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-re7-sky">Re7Online</p>
-          <h1 className="mt-2 text-3xl font-bold">Area do cliente</h1>
-          <p className="mt-2 text-sm text-white/70">
-            Entre com o usuario do seu atendimento para acessar inbox e campanhas.
-          </p>
+    <main className="theme-bg flex min-h-[100dvh] w-full max-w-full overflow-x-hidden px-3 pb-[calc(0.75rem+var(--safe-bottom))] pt-[calc(0.75rem+var(--safe-top))] sm:min-h-screen sm:items-center sm:justify-center sm:px-4 sm:py-8">
+      <div className="theme-surface mx-auto w-full max-w-[calc(100dvw-1.5rem)] rounded-xl border p-3 shadow-2xl shadow-black/10 sm:max-w-md sm:rounded-2xl sm:p-6">
+        <div className="mb-2 flex justify-end sm:mb-4">
+          <ThemeSelector />
+        </div>
+        <div className="mb-3 flex justify-center sm:mb-6">
+          <Image
+            src="/images/converta-logo-light.png"
+            alt="Converta"
+            width={240}
+            height={88}
+            priority
+            className="theme-logo-light h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
+          />
+          <Image
+            src="/images/converta-logo-dark-20260526.png"
+            alt="Converta"
+            width={240}
+            height={88}
+            priority
+            className="theme-logo-dark h-auto w-full max-w-[168px] object-contain sm:max-w-[220px]"
+          />
         </div>
 
-        {checkingSession ? <p className="text-sm text-white/70">Verificando sessao...</p> : null}
+        {checkingSession ? <p className="theme-muted text-sm">Verificando acesso...</p> : null}
 
         {!checkingSession ? (
-          <form className="grid gap-4" onSubmit={handleSubmit}>
+          <form className="grid gap-3 sm:gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Email</span>
+              <span className="theme-muted">Email</span>
               <input
                 type="email"
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                className="theme-select w-full min-w-0 rounded-md px-3 py-2 outline-none focus:border-re7-sky"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="operador@cliente.com"
                 autoComplete="email"
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-white/70">Senha</span>
-              <input
-                type="password"
-                className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="********"
-                autoComplete="current-password"
-              />
+              <span className="theme-muted">Senha</span>
+              <div className="theme-select flex items-center rounded-md focus-within:border-re7-sky">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  className="w-full min-w-0 bg-transparent px-3 py-2 outline-none"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="shrink-0 px-3 text-xs font-semibold text-re7-sky hover:brightness-110"
+                >
+                  {showPassword ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
             </label>
             {error ? (
               <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -101,9 +143,9 @@ export default function AppLoginPage() {
           </form>
         ) : null}
 
-        <div className="mt-6 text-xs text-white/50">
-          <Link href="/" className="hover:text-white">
-            Voltar para o site
+        <div className="theme-soft mt-4 text-center text-xs sm:mt-6">
+          <Link href="/app/forgot-password" className="hover:text-re7-sky">
+            Recuperar senha
           </Link>
         </div>
       </div>

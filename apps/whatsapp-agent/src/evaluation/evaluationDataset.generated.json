@@ -1,0 +1,82 @@
+{
+  "id": "generated-evaluation-dataset",
+  "description": "Generated reviewed evaluation dataset. Cases must be anonymized and manually approved.",
+  "cases": [
+    {
+      "id": "tendencia-mossoro-localizacao-a",
+      "tenantKey": "tendencia-modas",
+      "description": "Location question must be answered with Tendencia Mossoro address before handoff.",
+      "turns": [
+        {
+          "inbound": "Olá, Gostaria de saber se tem meu tamanho disponível?"
+        },
+        {
+          "inbound": "Bom diaa essa loja é em Mossoró?",
+          "expected": {
+            "shouldAvoidFallback": true,
+            "expectedHandoff": true,
+            "expectedOutputContains": [
+              "Mossoró/RN",
+              "Bairro Aeroporto",
+              "Rua Felipe Camarão"
+            ]
+          }
+        }
+      ],
+      "source": {
+        "type": "conversation_export",
+        "anonymized": true,
+        "sourceTenantKey": "tendencia-modas",
+        "sourceConversationRef": "mossoro-location-a",
+        "exportedAt": "2026-05-26T18:57:52.606Z"
+      },
+      "reviewedBy": "deifson",
+      "reviewedAt": "2026-05-26T19:30:00.000Z",
+      "reviewNotes": "Cliente perguntou se a loja fica em Mossoro/RN. A IA deve responder a localizacao antes de encaminhar para humano."
+    },
+    {
+      "id": "tendencia-mossoro-localizacao-b",
+      "tenantKey": "tendencia-modas",
+      "description": "Location question during product qualification must be answered with Tendencia Mossoro address before handoff.",
+      "turns": [
+        {
+          "inbound": "Oi"
+        },
+        {
+          "inbound": "Boa tarde"
+        },
+        {
+          "inbound": "Varejo"
+        },
+        {
+          "inbound": "Gostaria de conjunto ou macacão G"
+        },
+        {
+          "inbound": "Cores neutras"
+        },
+        {
+          "inbound": "Fica em Mossoró?",
+          "expected": {
+            "shouldAvoidFallback": true,
+            "expectedHandoff": true,
+            "expectedOutputContains": [
+              "Mossoró/RN",
+              "Bairro Aeroporto",
+              "Rua Felipe Camarão"
+            ]
+          }
+        }
+      ],
+      "source": {
+        "type": "conversation_export",
+        "anonymized": true,
+        "sourceTenantKey": "tendencia-modas",
+        "sourceConversationRef": "mossoro-location-b",
+        "exportedAt": "2026-05-26T18:57:53.935Z"
+      },
+      "reviewedBy": "deifson",
+      "reviewedAt": "2026-05-26T19:30:00.000Z",
+      "reviewNotes": "Cliente em atendimento de varejo perguntou se fica em Mossoro. A IA deve responder a localizacao antes de continuar ou encaminhar."
+    }
+  ]
+}

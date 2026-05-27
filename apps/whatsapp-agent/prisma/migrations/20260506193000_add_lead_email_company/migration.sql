@@ -1,0 +1,2 @@
+ALTER TABLE "Lead" ADD COLUMN "email" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "company" TEXT;

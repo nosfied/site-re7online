@@ -68,6 +68,7 @@ export default function TenantsSummaryPage() {
     name: "",
     clientKey: "",
     phoneNumberId: "",
+    profile: "business" as "business" | "government",
   });
 
   useEffect(() => {
@@ -158,6 +159,7 @@ export default function TenantsSummaryPage() {
         name,
         clientKey,
         phoneNumberId,
+        profile: createForm.profile,
       });
 
       try {
@@ -165,12 +167,15 @@ export default function TenantsSummaryPage() {
           id: clientKey,
           name,
           metaPhoneNumberId: phoneNumberId,
+          maxActiveAppUsers: 5,
           allowlist: [],
           handoffAttendantWaid: "",
           defaultLanguage: "pt_BR",
-          templates: {
-            manualHandoff: "",
-          },
+          disableChatbot: true,
+          appDisableChatbot: false,
+          disableLegacyFlows: true,
+          disableAiFallback: true,
+          appDisableIntentClassifier: false,
         });
       } catch {
         setCreatedTenant({ tenantId: clientKey, clientKey });
@@ -181,7 +186,7 @@ export default function TenantsSummaryPage() {
       await reloadSummary();
       setCreateSuccess("Tenant criado com sucesso. Prossiga para o onboarding.");
       setCreatedTenant({ tenantId: clientKey, clientKey });
-      setCreateForm({ name: "", clientKey: "", phoneNumberId: "" });
+      setCreateForm({ name: "", clientKey: "", phoneNumberId: "", profile: "business" });
       setShowCreateForm(false);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
@@ -243,7 +248,7 @@ export default function TenantsSummaryPage() {
           </div>
 
           {showCreateForm ? (
-            <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-re7-navy/40 p-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-re7-navy/40 p-4 md:grid-cols-4">
               <label className="grid gap-1 text-sm">
                 <span className="text-white/70">Nome do cliente</span>
                 <input
@@ -286,7 +291,26 @@ export default function TenantsSummaryPage() {
                   placeholder="1052978311228316"
                 />
               </label>
-              <div className="md:col-span-3 flex flex-wrap items-center gap-3">
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Perfil do portal</span>
+                <select
+                  className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={createForm.profile}
+                  onChange={(event) =>
+                    setCreateForm((current) => ({
+                      ...current,
+                      profile: event.target.value === "government" ? "government" : "business",
+                    }))
+                  }
+                >
+                  <option value="business">Empresa privada</option>
+                  <option value="government">Governo / edital</option>
+                </select>
+                <span className="text-xs text-white/50">
+                  Define apenas a experiencia visual inicial do /app.
+                </span>
+              </label>
+              <div className="md:col-span-4 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={handleCreateTenant}
@@ -399,7 +423,7 @@ export default function TenantsSummaryPage() {
         ) : null}
 
         <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
-          <table className="w-full min-w-[1320px] text-sm">
+          <table className="w-full min-w-[1120px] text-sm">
             <thead className="bg-white/10 text-left">
               <tr>
                 <th className="px-3 py-2">Tenant</th>
@@ -415,12 +439,12 @@ export default function TenantsSummaryPage() {
                 <th className="px-3 py-2">Outbound text</th>
                 <th className="px-3 py-2">Outbound tpl</th>
                 <th className="px-3 py-2">Outbound failed</th>
-                <th className="px-3 py-2">Acoes</th>
+                <th className="px-3 py-2 text-right">Acoes</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => (
-                <tr key={item.tenantId} className="border-t border-white/10">
+                <tr key={item.tenantId} className="border-t border-white/10 hover:bg-white/[0.03]">
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-1">
                       <span className="font-medium">{item.name}</span>
@@ -477,39 +501,13 @@ export default function TenantsSummaryPage() {
                   <td className="px-3 py-2">{item.counts.outbound.sent_text}</td>
                   <td className="px-3 py-2">{item.counts.outbound.sent_template}</td>
                   <td className="px-3 py-2">{item.counts.outbound.failed}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Abrir
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/onboarding`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Onboarding
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/campaigns`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Campanhas
-                      </Link>
-                      <Link
-                        href={`/admin/templates/manage?tenantId=${encodeURIComponent(item.tenantId)}&clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Templates
-                      </Link>
-                      <Link
-                        href={`/admin/tenants/${encodeURIComponent(item.tenantId)}/users?clientKey=${encodeURIComponent(item.clientKey)}`}
-                        className="rounded-md border border-white/20 px-2 py-1 text-xs hover:bg-white/10"
-                      >
-                        Usuarios
-                      </Link>
-                    </div>
+                  <td className="px-3 py-2 text-right">
+                    <Link
+                      href={`/admin/tenants/${encodeURIComponent(item.tenantId)}`}
+                      className="inline-flex rounded-md border border-white/20 px-3 py-1.5 text-xs font-medium hover:bg-white/10"
+                    >
+                      Abrir
+                    </Link>
                   </td>
                 </tr>
               ))}

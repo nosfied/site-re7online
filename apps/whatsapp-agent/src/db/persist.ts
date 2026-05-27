@@ -1,6 +1,31 @@
 import { Prisma, MessageStatus, MessageType } from "@prisma/client";
+import {
+  getDefaultOperationalDepartment,
+  resolveOperationalDepartmentId,
+} from "../bootstrap/defaultOperationalDepartment.js";
 import { getPrisma } from "../db.js";
+import { logger } from "../logger/logger.js";
+import { runtimeStorage } from "../storage/runtimeStorage.js";
+import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import {
+  isWhatsAppMultichannelShadowWriteEnabled,
+  safeApplyWhatsAppMultichannelShadow,
+} from "../channels/whatsappMultichannelShadowWrite.js";
+
+function maskWaIdForLog(value: string) {
+  const raw = String(value ?? "").trim();
+  if (raw.length <= 4) return "***";
+  return `***${raw.slice(-4)}`;
+}
+
+export async function getDefaultDepartment(
+  clientId: string,
+  prisma = getPrisma()
+) {
+  if (!clientId) return null;
+  return getDefaultOperationalDepartment(prisma, clientId);
+}
 
 export async function persistInboundMessage(params: {
   clientId: string;
@@ -14,10 +39,20 @@ export async function persistInboundMessage(params: {
   requestId?: string;
   rawPayload?: Prisma.InputJsonValue;
 }) {
-  if (!params.clientId) return;
+  if (!params.clientId) return false;
   try {
     const prisma = getPrisma();
-    await prisma.inboundMessage.create({
+    const existing = await prisma.inboundMessage.findUnique({
+      where: {
+        clientId_messageId: {
+          clientId: params.clientId,
+          messageId: params.messageId,
+        },
+      },
+      select: { id: true },
+    });
+    if (existing) return false;
+    const created = await prisma.inboundMessage.create({
       data: {
         clientId: params.clientId,
         phoneNumberId: params.phoneNumberId,
@@ -30,10 +65,22 @@ export async function persistInboundMessage(params: {
         requestId: params.requestId,
         rawPayload: params.rawPayload,
       },
+      select: { id: true },
     });
+    if (isWhatsAppMultichannelShadowWriteEnabled()) {
+      await safeApplyWhatsAppMultichannelShadow({
+        prisma,
+        model: "InboundMessage",
+        recordId: created.id,
+        clientId: params.clientId,
+        waId: params.waId,
+        phoneNumberId: params.phoneNumberId,
+      });
+    }
+    return true;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") return;
+      if (error.code === "P2002") return false;
     }
     throw error;
   }
@@ -44,6 +91,7 @@ export async function persistConversationWindow(params: {
   waId: string;
   waIdCanonical?: string | null;
   phoneNumberId?: string;
+  departmentId?: string | null;
   windowIsOpen: boolean;
   windowExpiresAt?: Date | null;
   lastInboundAt?: Date | null;
@@ -51,7 +99,35 @@ export async function persistConversationWindow(params: {
 }) {
   if (!params.clientId) return;
   const prisma = getPrisma();
-  await prisma.conversation.upsert({
+  const waIdCanonical = params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId);
+  const existing = await prisma.conversation.findUnique({
+    where: {
+      clientId_waId: {
+        clientId: params.clientId,
+        waId: params.waId,
+      },
+    },
+    select: {
+      id: true,
+      departmentId: true,
+      deletedAt: true,
+    },
+  });
+  const isInboundAfterSoftDelete = Boolean(existing?.deletedAt && params.lastInboundAt);
+  const existingDepartmentId = existing?.deletedAt ? null : existing?.departmentId ?? null;
+  const requestedDepartmentId = existing?.deletedAt
+    ? params.departmentId ?? null
+    : params.departmentId ?? existingDepartmentId;
+  const shouldLeaveInboundUnassigned = Boolean(params.lastInboundAt && !requestedDepartmentId);
+  const resolvedDepartmentId = isInboundAfterSoftDelete || shouldLeaveInboundUnassigned
+    ? null
+    : await resolveOperationalDepartmentId(
+        prisma,
+        params.clientId,
+        requestedDepartmentId
+      );
+  const shouldRewriteDepartment = existingDepartmentId !== resolvedDepartmentId;
+  const conversation = await prisma.conversation.upsert({
     where: {
       clientId_waId: {
         clientId: params.clientId,
@@ -59,24 +135,168 @@ export async function persistConversationWindow(params: {
       },
     },
     update: {
-      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+      waIdCanonical,
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
       lastOutboundAt: params.lastOutboundAt ?? undefined,
+      ...(existing?.deletedAt && params.lastInboundAt
+        ? {
+            deletedAt: null,
+            closedAt: null,
+            historyVisibleAfter: null,
+          }
+        : {}),
+      departmentId: isInboundAfterSoftDelete
+        ? null
+        : shouldRewriteDepartment
+          ? resolvedDepartmentId
+          : undefined,
     },
     create: {
       clientId: params.clientId,
       waId: params.waId,
-      waIdCanonical: params.waIdCanonical ?? canonicalizeBrazilWaId(params.waId),
+      waIdCanonical,
       phoneNumberId: params.phoneNumberId,
       windowIsOpen: params.windowIsOpen,
       windowExpiresAt: params.windowExpiresAt ?? undefined,
       lastInboundAt: params.lastInboundAt ?? undefined,
       lastOutboundAt: params.lastOutboundAt ?? undefined,
+      departmentId: resolvedDepartmentId ?? undefined,
     },
+    select: { id: true },
   });
+  if (isWhatsAppMultichannelShadowWriteEnabled()) {
+    await safeApplyWhatsAppMultichannelShadow({
+      prisma,
+      model: "Conversation",
+      recordId: conversation.id,
+      clientId: params.clientId,
+      waId: params.waId,
+      phoneNumberId: params.phoneNumberId,
+    });
+  }
+  if (isInboundAfterSoftDelete && existing && params.lastInboundAt) {
+    const client = await prisma.client.findUnique({
+      where: { id: params.clientId },
+      select: { clientKey: true },
+    });
+    if (client?.clientKey) {
+      const lastInboundAtIso = params.lastInboundAt.toISOString();
+      const currentRuntime = await runtimeStorage.getConversation(params.waId, client.clientKey);
+      await runtimeStorage.upsertConversation({
+        ...(currentRuntime ?? {
+          clientKey: client.clientKey,
+          conversationKey: makeConversationKey(client.clientKey, params.waId),
+          waId: params.waId,
+          waIdCanonical,
+          firstSeenAt: lastInboundAtIso,
+          lastInboundAt: lastInboundAtIso,
+          window: {
+            isOpen: params.windowIsOpen,
+            expiresAt: params.windowExpiresAt?.toISOString(),
+          },
+          intent: "unknown",
+          handoff: { status: "none" },
+        }),
+        clientKey: client.clientKey,
+        conversationKey:
+          currentRuntime?.conversationKey ?? makeConversationKey(client.clientKey, params.waId),
+        waId: currentRuntime?.waId ?? params.waId,
+        waIdCanonical: currentRuntime?.waIdCanonical ?? waIdCanonical,
+        lastInboundAt: lastInboundAtIso,
+        window: {
+          isOpen: params.windowIsOpen,
+          expiresAt: params.windowExpiresAt?.toISOString() ?? currentRuntime?.window.expiresAt,
+        },
+        mode: "BOT",
+        handoff: { status: "none" },
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        status: null,
+        closedAt: null,
+        flow: undefined,
+        flowStep: undefined,
+        chatbotNodeId: undefined,
+        chatbotActive: false,
+        answers: {},
+      });
+    }
+    await prisma.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.clientId,
+        OR: [{ waId: params.waId }, { waIdCanonical }],
+      },
+      data: {
+        mode: "BOT",
+        handoffStatus: "NONE",
+        handoffRequestedAt: null,
+        handoffActivatedAt: null,
+        handoffReleasedAt: null,
+        assignedUserId: null,
+        assignedTo: null,
+        assignedAt: null,
+        departmentId: null,
+        queueId: null,
+        status: null,
+        closedAt: null,
+        flow: null,
+        flowStep: null,
+        chatbotNodeId: null,
+        chatbotActive: false,
+        answers: {},
+      },
+    });
+    const payload = {
+      userId: "system",
+      clientId: params.clientId,
+      conversationId: existing.id,
+      timestamp: new Date().toISOString(),
+      action: "conversation.reactivated_after_retention",
+      details: {
+        reason: "inbound_after_soft_delete",
+        waId: maskWaIdForLog(params.waId),
+      },
+    };
+    try {
+      await prisma.event.create({
+        data: {
+          clientId: params.clientId,
+          conversationId: existing.id,
+          waId: params.waId,
+          waIdCanonical,
+          requestId: `reactivation:${existing.id}:${params.lastInboundAt.toISOString()}`,
+          eventName: "conversation.reactivated_after_retention",
+          payloadJson: payload,
+        },
+      });
+    } catch (error) {
+      if (
+        !(
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        )
+      ) {
+        logger.warn({
+          event: "conversation.reactivated_after_retention.audit_failed",
+          clientId: params.clientId,
+          conversationId: existing.id,
+          message: (error as Error).message,
+        });
+      }
+    }
+    logger.info({
+      event: "conversation.reactivated_after_retention",
+      clientId: params.clientId,
+      waId: maskWaIdForLog(params.waId),
+      conversationId: existing.id,
+      reason: "inbound_after_soft_delete",
+    });
+  }
 }
 
 export async function persistOutboundMessage(params: {
@@ -95,7 +315,7 @@ export async function persistOutboundMessage(params: {
   errorBody?: string | null;
   rawPayload?: Prisma.InputJsonValue;
 }) {
-  if (!params.clientId) return;
+  if (!params.clientId) return false;
   try {
     const prisma = getPrisma();
     const data = {
@@ -115,22 +335,67 @@ export async function persistOutboundMessage(params: {
       rawPayload: params.rawPayload,
     };
     if (params.messageId) {
-      await prisma.outboundMessage.upsert({
+      const existing = await prisma.outboundMessage.findUnique({
         where: {
           clientId_messageId: {
             clientId: params.clientId,
             messageId: params.messageId,
           },
         },
-        update: data,
-        create: data,
+        select: { id: true },
       });
+      if (existing) {
+        const updated = await prisma.outboundMessage.update({
+          where: {
+            clientId_messageId: {
+              clientId: params.clientId,
+              messageId: params.messageId,
+            },
+          },
+          data,
+          select: { id: true },
+        });
+        if (isWhatsAppMultichannelShadowWriteEnabled()) {
+          await safeApplyWhatsAppMultichannelShadow({
+            prisma,
+            model: "OutboundMessage",
+            recordId: updated.id,
+            clientId: params.clientId,
+            waId: params.waId,
+            phoneNumberId: params.phoneNumberId,
+          });
+        }
+        return false;
+      }
+      const created = await prisma.outboundMessage.create({ data, select: { id: true } });
+      if (isWhatsAppMultichannelShadowWriteEnabled()) {
+        await safeApplyWhatsAppMultichannelShadow({
+          prisma,
+          model: "OutboundMessage",
+          recordId: created.id,
+          clientId: params.clientId,
+          waId: params.waId,
+          phoneNumberId: params.phoneNumberId,
+        });
+      }
+      return true;
     } else {
-      await prisma.outboundMessage.create({ data });
+      const created = await prisma.outboundMessage.create({ data, select: { id: true } });
+      if (isWhatsAppMultichannelShadowWriteEnabled()) {
+        await safeApplyWhatsAppMultichannelShadow({
+          prisma,
+          model: "OutboundMessage",
+          recordId: created.id,
+          clientId: params.clientId,
+          waId: params.waId,
+          phoneNumberId: params.phoneNumberId,
+        });
+      }
+      return true;
     }
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") return;
+      if (error.code === "P2002") return false;
     }
     throw error;
   }

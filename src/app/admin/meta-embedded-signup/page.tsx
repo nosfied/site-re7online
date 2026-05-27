@@ -218,7 +218,7 @@ export default function MetaEmbeddedSignupDebugPage() {
                 className="rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
                 value={runtimeUrl}
                 onChange={(event) => setRuntimeUrl(event.target.value)}
-                placeholder="https://admin.re7online.com/admin/meta-embedded-signup"
+                placeholder="https://converta.re7online.com/admin/meta-embedded-signup"
               />
             </label>
             <div className="flex flex-wrap items-center gap-3">
