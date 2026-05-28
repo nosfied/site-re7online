@@ -276,7 +276,6 @@ export function canUserReceiveTargetedNotification(
   target: { assignedUserId?: string | null; departmentId?: string | null },
   user: { id?: string | null; role?: string | null; departmentId?: string | null; departmentName?: string | null }
 ) {
-  if (String(user.role ?? "").trim().toUpperCase() === "ADMIN") return true;
   const assignedUserId = String(target.assignedUserId ?? "").trim();
   if (assignedUserId) {
     return String(user.id ?? "").trim() === assignedUserId;
