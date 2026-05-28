@@ -1721,6 +1721,7 @@ export default function AppInboxPage() {
     if (pushAutoEnableAttemptedRef.current) return;
     if (pushUiStatus !== "ready") return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (window.localStorage.getItem(INBOX_PUSH_DISABLED_STORAGE_KEY) === "1") return;
     if (Notification.permission !== "granted") return;
     pushAutoEnableAttemptedRef.current = true;
     void handleEnablePush();
@@ -1736,14 +1737,15 @@ export default function AppInboxPage() {
       requestAppNotificationAudioUnlock();
     }
 
-    if (!isMobileViewport) {
+    if (nextSoundEnabled && pushUiStatus === "ready" && !pushBusy) {
+      void handleEnablePush();
       return;
     }
 
-    if (pushUiStatus === "ready" && !pushBusy) {
-      void handleEnablePush();
+    if (!nextSoundEnabled && pushUiStatus === "enabled" && !pushBusy) {
+      void handleDisablePush();
     }
-  }, [handleEnablePush, isMobileViewport, pushBusy, pushUiStatus, soundEnabled]);
+  }, [handleDisablePush, handleEnablePush, pushBusy, pushUiStatus, soundEnabled]);
 
   useEffect(
     () => () => {
