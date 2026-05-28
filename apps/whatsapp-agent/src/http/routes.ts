@@ -584,14 +584,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
     try {
-      const body = await readJsonBody(req, res).catch(() => null);
-      const endpoint = body && typeof body.endpoint === "string" ? body.endpoint : null;
-      const result = await revokePushSubscription({
+      logger.info({
+        event: "push.unsubscribe.ignored",
         clientId: clientAuth.clientId,
         userId: clientAuth.userId,
-        endpoint,
       });
-      json(res, 200, { ok: true, revoked: result.revoked });
+      json(res, 200, { ok: true, revoked: 0 });
     } catch (error) {
       logger.error({
         event: "push.unsubscribe.error",
