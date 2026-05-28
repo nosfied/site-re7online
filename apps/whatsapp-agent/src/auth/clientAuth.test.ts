@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-test("client auth token includes session id and expires in 12 hours", async () => {
+test("client auth token includes session id and a permanent expiration marker", async () => {
   process.env.APP_AUTH_SECRET = "test-secret";
-  const { CLIENT_AUTH_TOKEN_TTL_SECONDS, issueClientAuthToken, verifyClientAuthToken } =
+  const { CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS, issueClientAuthToken, verifyClientAuthToken } =
     await import("./clientAuth.js");
-  const before = Math.floor(Date.now() / 1000);
   const token = issueClientAuthToken(
     {
       id: "user-1",
@@ -20,8 +19,7 @@ test("client auth token includes session id and expires in 12 hours", async () =
   assert.ok(payload);
   assert.equal(payload.sub, "user-1");
   assert.equal(payload.sid, "session-1");
-  assert.equal(payload.exp - payload.iat, CLIENT_AUTH_TOKEN_TTL_SECONDS);
-  assert.ok(payload.exp <= before + CLIENT_AUTH_TOKEN_TTL_SECONDS + 2);
+  assert.equal(payload.exp, CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS);
 });
 
 test("client auth token rejects legacy payload without session id", async () => {

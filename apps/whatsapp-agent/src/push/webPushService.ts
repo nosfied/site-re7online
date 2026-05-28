@@ -300,7 +300,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
         authSessions: {
           some: {
             revokedAt: null,
-            expiresAt: { gt: new Date() },
           },
         },
         ...userWhere,

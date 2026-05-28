@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { env } from "../config/env.js";
 
 const TOKEN_VERSION = 1;
-export const CLIENT_AUTH_TOKEN_TTL_SECONDS = 60 * 60 * 12;
+export const CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS = 253402300799;
 
 type ClientAuthTokenPayload = {
   sub: string;
@@ -81,7 +81,7 @@ export function issueClientAuthToken(user: ClientAuthUser, sessionId: string) {
     role: user.role,
     sid: sessionId,
     iat: now,
-    exp: now + CLIENT_AUTH_TOKEN_TTL_SECONDS,
+    exp: CLIENT_AUTH_TOKEN_EXPIRES_AT_SECONDS,
     typ: "client-auth",
     ver: TOKEN_VERSION,
   };
@@ -130,8 +130,6 @@ export function verifyClientAuthTokenDetailed(token: string): ClientAuthTokenVer
     ) {
       return { ok: false, reason: "invalid_payload" };
     }
-    const now = Math.floor(Date.now() / 1000);
-    if (!payload.exp || payload.exp <= now) return { ok: false, reason: "token_expired" };
     return { ok: true, payload };
   } catch {
     return { ok: false, reason: "invalid_payload" };

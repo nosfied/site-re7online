@@ -8,7 +8,7 @@ import { logger } from "../logger/logger.js";
 import { hashPassword, verifyClientAuthTokenDetailed } from "./clientAuth.js";
 import { normalizeUserRole, type ClientAuthContext } from "./clientAuthMiddleware.js";
 
-export const APP_AUTH_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+export const APP_AUTH_SESSION_EXPIRES_AT = new Date("9999-12-31T23:59:59.999Z");
 export const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export type AppSessionRejectReason =
@@ -93,7 +93,6 @@ export async function createExclusiveAppSession(params: {
 }) {
   const prisma = getPrisma();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + APP_AUTH_SESSION_TTL_MS);
   const userAgent = String(params.req.headers["user-agent"] ?? "").slice(0, 500) || null;
   const ipHash = hashSensitiveValue(getRequestIp(params.req));
   const result = await prisma.$transaction(async (tx) => {
@@ -120,7 +119,7 @@ export async function createExclusiveAppSession(params: {
         userId: params.userId,
         userAgent,
         ipHash,
-        expiresAt,
+        expiresAt: APP_AUTH_SESSION_EXPIRES_AT,
       },
       select: {
         id: true,
@@ -189,19 +188,6 @@ export async function validateAppSessionFromRequest(
     };
   }
   const now = new Date();
-  if (session.expiresAt <= now) {
-    await getPrisma().appAuthSession.updateMany({
-      where: { id: session.id, revokedAt: null },
-      data: { revokedAt: now, revokeReason: "expired" },
-    });
-    logger.info({
-      event: "auth.session.expired",
-      clientId: payload.clientId,
-      userId: payload.sub,
-      sessionId: session.id,
-    });
-    return { ok: false, reason: "session_expired" };
-  }
   if (!session.user.isActive || session.user.client.status !== "ACTIVE") {
     return { ok: false, reason: "session_revoked" };
   }
