@@ -18,22 +18,7 @@ self.addEventListener("push", (event) => {
   const increment = Number.isFinite(Number(data.unreadIncrement)) ? Math.max(1, Number(data.unreadIncrement)) : 1;
 
   event.waitUntil(
-    Promise.all([
-      self.clients.matchAll({ type: "window", includeUncontrolled: true }),
-      self.registration.getNotifications({ tag }),
-    ]).then(([clients, notifications]) => {
-      const hasVisibleAppClient = clients.some((client) => {
-        try {
-          const url = new URL(client.url);
-          return url.pathname.startsWith("/app") && client.visibilityState === "visible" && client.focused === true;
-        } catch {
-          return false;
-        }
-      });
-      if (hasVisibleAppClient) {
-        return undefined;
-      }
-
+    self.registration.getNotifications({ tag }).then((notifications) => {
       const previousTotal = notifications.reduce((highest, notification) => {
         const total = Number(notification.data?.unreadTotal ?? 0);
         return Number.isFinite(total) && total > highest ? total : highest;

@@ -1647,7 +1647,16 @@ export default function AppInboxPage() {
       const registration = await navigator.serviceWorker.register("/sw.js");
       await registration.update().catch(() => undefined);
       const subscription = await registration.pushManager.getSubscription();
-      setPushUiStatus(subscription || status.subscribed ? "enabled" : "ready");
+      if (subscription && !status.subscribed && Notification.permission === "granted") {
+        await subscribeAppPush(
+          session,
+          subscription.toJSON(),
+          isIosLikeDevice() ? "iOS PWA" : "PWA"
+        );
+        setPushUiStatus("enabled");
+        return;
+      }
+      setPushUiStatus(subscription && status.subscribed ? "enabled" : "ready");
     } catch {
       setPushUiStatus("error");
     }
@@ -2395,10 +2404,16 @@ export default function AppInboxPage() {
         const latestInboundConversationKey = latestInboundItem
           ? getConversationIdentity(latestInboundItem)
           : null;
-        if (
-          latestInboundItem &&
-          latestInboundConversationKey !== selectedConversationKey
-        ) {
+        if (latestInboundItem && latestInboundConversationKey) {
+          if (
+            canUserReceiveTargetedNotification(latestInboundItem, activeSession.user) &&
+            (latestInboundConversationKey !== selectedConversationKey || !isAppForegroundFocused())
+          ) {
+            markConversationIdentitiesAsUnread(
+              getConversationIdentityCandidates(latestInboundItem),
+              latestInboundItem.waId
+            );
+          }
           buildConversationNotificationRequest(latestInboundItem);
         }
       }
