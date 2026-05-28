@@ -112,6 +112,11 @@ function isStandalonePwa() {
   );
 }
 
+function isAppForegroundFocused() {
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
 function getMediaCacheKey(messageId: string | null, mediaKind?: string | null) {
   if (!messageId) return null;
   return `${messageId}:${mediaKind ?? "unknown"}`;
@@ -1721,8 +1726,11 @@ export default function AppInboxPage() {
       return;
     }
 
-    const notificationsEnabled = soundEnabled || pushUiStatus === "enabled";
-    if (notificationsEnabled) {
+    const mobileFullyEnabled =
+      soundEnabled &&
+      (pushUiStatus === "enabled" ||
+        ["denied", "unsupported", "needs_install", "not_configured", "error"].includes(pushUiStatus));
+    if (mobileFullyEnabled) {
       setSoundEnabled(false);
       if (
         isMobileViewport &&
@@ -1737,8 +1745,10 @@ export default function AppInboxPage() {
       return;
     }
 
-    setSoundEnabled(true);
-    requestAppNotificationAudioUnlock();
+    if (!soundEnabled) {
+      setSoundEnabled(true);
+      requestAppNotificationAudioUnlock();
+    }
     if (pushUiStatus === "ready") {
       void handleEnablePush();
       return;
@@ -2217,7 +2227,7 @@ export default function AppInboxPage() {
       });
       setMessagesConversationKey(conversationKey);
       shouldScrollToBottomRef.current = shouldStickToBottom;
-      if (message.direction === "INBOUND" && document.visibilityState !== "visible") {
+      if (message.direction === "INBOUND" && !isAppForegroundFocused()) {
         markConversationIdentitiesAsUnread([conversationKey, event.waId, event.waIdCanonical], event.waId);
       }
       return;
@@ -2420,7 +2430,7 @@ export default function AppInboxPage() {
       return;
     }
 
-    if (document.visibilityState !== "visible") return;
+    if (!isAppForegroundFocused()) return;
     const waitingForUnreadAnchor =
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const activeConversation = sortedItems.find(
@@ -2569,7 +2579,7 @@ export default function AppInboxPage() {
       (responseItems.length > 0
         ? responseItems[responseItems.length - 1]?.createdAt
         : latestKnownAt) ?? null;
-    if (document.visibilityState === "visible") {
+    if (isAppForegroundFocused()) {
       markConversationIdentitiesAsRead(
         [responseConversationKey, response.waId, response.waIdCanonical, waId],
         latestActivityAt,
@@ -3213,7 +3223,7 @@ export default function AppInboxPage() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible" || !selectedConversation) return;
+      if (!isAppForegroundFocused() || !selectedConversation) return;
       markConversationIdentitiesAsRead(
         getConversationIdentityCandidates(selectedConversation),
         getConversationActivityAt(selectedConversation),

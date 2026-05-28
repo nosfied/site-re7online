@@ -122,7 +122,7 @@ export function shouldSuppressPushForForegroundSubscription(params: {
   const presence = pushPresenceByEndpoint.get(params.endpoint);
   if (!presence) return false;
   if (presence.clientId !== params.clientId || presence.userId !== params.userId) return false;
-  if (!presence.visible) return false;
+  if (!presence.visible || !presence.focused) return false;
   return nowMs - presence.updatedAtMs <= PUSH_PRESENCE_TTL_MS;
 }
 
