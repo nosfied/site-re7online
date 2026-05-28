@@ -258,15 +258,14 @@ export default function AppRealtimeBridge() {
     if (typeof window === "undefined") return;
     const handleUserGesture = () => {
       if (!isSoundEnabled()) return;
+      if (hasPrimedAudioRef.current) return;
       primeNotificationAudio();
     };
     window.addEventListener("pointerdown", handleUserGesture, { passive: true });
     window.addEventListener("touchstart", handleUserGesture, { passive: true });
-    window.addEventListener("keydown", handleUserGesture);
     return () => {
       window.removeEventListener("pointerdown", handleUserGesture);
       window.removeEventListener("touchstart", handleUserGesture);
-      window.removeEventListener("keydown", handleUserGesture);
     };
   }, [primeNotificationAudio]);
 
