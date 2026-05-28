@@ -1737,21 +1737,11 @@ export default function AppInboxPage() {
       return;
     }
 
-    const mobileFullyEnabled =
-      soundEnabled &&
-      (pushUiStatus === "enabled" ||
-        ["denied", "unsupported", "needs_install", "not_configured", "error"].includes(pushUiStatus));
-    if (mobileFullyEnabled) {
-      setSoundEnabled(false);
-      if (
-        isMobileViewport &&
-        !["checking", "denied", "unsupported", "needs_install", "not_configured", "error"].includes(pushUiStatus)
-      ) {
-        void handleDisablePush();
-        return;
-      }
-      if (pushUiStatus === "enabled") {
-        void handleDisablePush();
+    if (pushUiStatus === "enabled") {
+      const nextSoundEnabled = !soundEnabled;
+      setSoundEnabled(nextSoundEnabled);
+      if (nextSoundEnabled) {
+        requestAppNotificationAudioUnlock();
       }
       return;
     }
@@ -1773,7 +1763,7 @@ export default function AppInboxPage() {
     if (pushUiStatus === "not_configured") {
       return;
     }
-  }, [handleDisablePush, handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
+  }, [handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
 
   useEffect(
     () => () => {
@@ -4013,7 +4003,11 @@ export default function AppInboxPage() {
   const notificationToggleActive = isMobileViewport ? soundEnabled || pushUiStatus === "enabled" : soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
-      ? "Desativar notificações e som"
+      ? pushUiStatus === "enabled"
+        ? soundEnabled
+          ? "Desativar som local"
+          : "Ativar som local"
+        : "Desativar som"
       : "Desativar som"
     : isMobileViewport
       ? pushUiStatus === "denied"
