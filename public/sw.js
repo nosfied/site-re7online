@@ -22,7 +22,7 @@ self.addEventListener("push", (event) => {
       const hasVisibleAppClient = clients.some((client) => {
         try {
           const url = new URL(client.url);
-          return url.pathname.startsWith("/app") && client.visibilityState === "visible";
+          return url.pathname.startsWith("/app") && client.visibilityState === "visible" && client.focused === true;
         } catch {
           return false;
         }

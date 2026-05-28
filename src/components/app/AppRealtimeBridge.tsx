@@ -72,10 +72,10 @@ export default function AppRealtimeBridge() {
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
-      baseAudio.pause();
-      baseAudio.volume = sound === "active" ? 0.42 : 0.95;
-      baseAudio.currentTime = 0;
-      void baseAudio
+      const audio = new window.Audio(baseAudio.currentSrc || baseAudio.src);
+      audio.preload = "auto";
+      audio.volume = sound === "active" ? 0.42 : 0.95;
+      void audio
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
