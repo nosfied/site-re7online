@@ -20,6 +20,7 @@ const recentPushKeyOrder: string[] = [];
 const MAX_RECENT_PUSH_KEYS = 1000;
 const PUSH_PRESENCE_TTL_MS = 12_000;
 const SYSTEM_NOTIFICATION_TAG = "converta-inbox-notifications";
+const PUSH_TTL_SECONDS = 12 * 60 * 60;
 
 type PushPresence = {
   clientId: string;
@@ -247,14 +248,23 @@ function buildPushPayload(event: Extract<InboxRealtimeEvent, { type: "message.cr
   const url = conversationIdentity
     ? `/app/inbox?push=1&conversation=${encodeURIComponent(conversationIdentity)}`
     : "/app/inbox?push=1";
+  const messagePreview = buildMessagePreview(event.message.bodyText);
   return JSON.stringify({
     title: "Converta",
-    body: "Voce tem novas mensagens aguardando atendimento.",
+    body: messagePreview ?? "Voce recebeu uma nova mensagem.",
     url,
     channel: null,
     tag: SYSTEM_NOTIFICATION_TAG,
     unreadIncrement: 1,
   });
+}
+
+function buildMessagePreview(value?: string | null) {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return null;
+  return normalized.length > 96 ? `${normalized.slice(0, 93)}...` : normalized;
 }
 
 async function revokeDeadEndpoint(endpoint: string, statusCode?: number) {
@@ -342,7 +352,12 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
             auth: subscription.auth,
           },
         },
-        payload
+        payload,
+        {
+          TTL: PUSH_TTL_SECONDS,
+          urgency: "high",
+          topic: SYSTEM_NOTIFICATION_TAG,
+        }
       );
       sent += 1;
       logger.info({

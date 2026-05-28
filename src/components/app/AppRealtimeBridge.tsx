@@ -82,10 +82,12 @@ export default function AppRealtimeBridge() {
           syncAudioState(true);
         })
         .catch(() => {
+          hasPrimedAudioRef.current = false;
           syncAudioState(false);
           // Browser autoplay policy can block audio after reload until the next user gesture.
         });
     } catch {
+      hasPrimedAudioRef.current = false;
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
   }, [syncAudioState]);
@@ -110,14 +112,17 @@ export default function AppRealtimeBridge() {
           })
           .catch(() => {
             audio.volume = previousVolume || 0.95;
+            hasPrimedAudioRef.current = false;
             syncAudioState(false);
           });
       } catch {
         audio.volume = 0.95;
+        hasPrimedAudioRef.current = false;
         syncAudioState(false);
       }
     }
     if (!attemptedAudio) {
+      hasPrimedAudioRef.current = false;
       syncAudioState(false);
     }
   }, [syncAudioState]);

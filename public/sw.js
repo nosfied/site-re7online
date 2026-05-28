@@ -37,9 +37,12 @@ self.addEventListener("push", (event) => {
       }, 0);
       const unreadTotal = previousTotal + increment;
       const title = typeof data.title === "string" ? data.title : "Converta";
+      const previewBody = typeof data.body === "string" ? data.body.trim() : "";
       const body =
-        unreadTotal === 1
-          ? "1 nova mensagem aguardando atendimento."
+        unreadTotal === 1 && previewBody
+          ? previewBody
+          : unreadTotal === 1
+            ? "1 nova mensagem aguardando atendimento."
           : `${unreadTotal} novas mensagens aguardando atendimento.`;
       const options = {
         body,
@@ -52,6 +55,7 @@ self.addEventListener("push", (event) => {
         badge: "/converta-favicon.png?v=converta-dark",
         renotify: true,
         silent: false,
+        vibrate: [180, 80, 180],
         timestamp: Date.now(),
       };
 
