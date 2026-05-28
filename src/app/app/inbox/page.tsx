@@ -1753,14 +1753,10 @@ export default function AppInboxPage() {
       void handleEnablePush();
       return;
     }
-    if (pushUiStatus === "denied") {
-      return;
-    }
-    if (pushUiStatus === "needs_install") {
-      return;
-    }
-    if (pushUiStatus === "not_configured") {
-      return;
+    const nextSoundEnabled = !soundEnabled;
+    setSoundEnabled(nextSoundEnabled);
+    if (nextSoundEnabled) {
+      requestAppNotificationAudioUnlock();
     }
   }, [handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
 

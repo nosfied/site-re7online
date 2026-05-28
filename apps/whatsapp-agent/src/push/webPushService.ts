@@ -297,11 +297,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
       revokedAt: null,
       user: {
         isActive: true,
-        authSessions: {
-          some: {
-            revokedAt: null,
-          },
-        },
         ...userWhere,
       },
     },

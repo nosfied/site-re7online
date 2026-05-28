@@ -107,12 +107,6 @@ export async function createExclusiveAppSession(params: {
         revokeReason: "replaced_by_new_login",
       },
     });
-    await revokeUserPushSubscriptions({
-      clientId: params.clientId,
-      userId: params.userId,
-      reason: "replaced_by_new_login",
-      tx,
-    });
     const session = await tx.appAuthSession.create({
       data: {
         clientId: params.clientId,
