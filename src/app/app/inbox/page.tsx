@@ -1727,38 +1727,23 @@ export default function AppInboxPage() {
   }, [handleEnablePush, isMobileViewport, pushUiStatus]);
 
   const handleNotificationToggle = useCallback(() => {
-    if (!isMobileViewport) {
-      const nextSoundEnabled = !soundEnabled;
-      setSoundEnabled(nextSoundEnabled);
-      if (nextSoundEnabled) {
-        requestAppNotificationAudioUnlock();
-      }
-      return;
-    }
-
-    if (pushUiStatus === "enabled") {
-      const nextSoundEnabled = !soundEnabled;
-      setSoundEnabled(nextSoundEnabled);
-      if (nextSoundEnabled) {
-        requestAppNotificationAudioUnlock();
-      }
-      return;
-    }
-
-    if (!soundEnabled) {
-      setSoundEnabled(true);
-      requestAppNotificationAudioUnlock();
-    }
-    if (pushUiStatus === "ready") {
-      void handleEnablePush();
-      return;
-    }
     const nextSoundEnabled = !soundEnabled;
     setSoundEnabled(nextSoundEnabled);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(INBOX_SOUND_ENABLED_STORAGE_KEY, nextSoundEnabled ? "1" : "0");
+    }
     if (nextSoundEnabled) {
       requestAppNotificationAudioUnlock();
     }
-  }, [handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
+
+    if (!isMobileViewport) {
+      return;
+    }
+
+    if (pushUiStatus === "ready" && !pushBusy) {
+      void handleEnablePush();
+    }
+  }, [handleEnablePush, isMobileViewport, pushBusy, pushUiStatus, soundEnabled]);
 
   useEffect(
     () => () => {
@@ -4145,13 +4130,12 @@ export default function AppInboxPage() {
                 <button
                   type="button"
                   onClick={handleNotificationToggle}
-                  disabled={pushBusy}
                   title={notificationToggleTitle}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition ${
                     notificationToggleActive
                       ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/20"
                       : "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                  }`}
                 >
                   {notificationToggleActive ? "🔔" : "🔕"}
                 </button>

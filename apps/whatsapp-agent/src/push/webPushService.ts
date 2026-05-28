@@ -286,7 +286,7 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
 
   const prisma = getPrisma();
   const userWhere = event.assignedUserId
-    ? { id: event.assignedUserId }
+    ? { OR: [{ id: event.assignedUserId }, { role: "ADMIN" }] }
     : event.departmentId
       ? { OR: [{ role: "ADMIN" }, { departmentId: event.departmentId }] }
       : {};
