@@ -72,10 +72,10 @@ export default function AppRealtimeBridge() {
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
-      const audio = new window.Audio(baseAudio.currentSrc || baseAudio.src);
-      audio.preload = "auto";
-      audio.volume = sound === "active" ? 0.42 : 0.95;
-      void audio
+      baseAudio.pause();
+      baseAudio.volume = sound === "active" ? 0.42 : 0.95;
+      baseAudio.currentTime = 0;
+      void baseAudio
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
@@ -154,8 +154,17 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
+    const appIsFocused = document.hasFocus();
     const soundEnabled = isSoundEnabled();
-    if (soundEnabled && appIsVisible) {
+    if (!appIsVisible || !appIsFocused) {
+      notificationQueueRef.current = 0;
+      if (notificationTimerRef.current !== null) {
+        window.clearTimeout(notificationTimerRef.current);
+        notificationTimerRef.current = null;
+      }
+      return;
+    }
+    if (soundEnabled) {
       if (request.sound === "active") {
         playNotificationSound("active");
       } else {
