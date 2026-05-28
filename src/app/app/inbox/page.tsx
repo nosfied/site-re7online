@@ -1428,6 +1428,7 @@ export default function AppInboxPage() {
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
   const pushAutoEnableAttemptedRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
@@ -1608,6 +1609,27 @@ export default function AppInboxPage() {
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const update = () => {
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const keyboardGap = window.innerHeight - viewportHeight;
+      setIsMobileKeyboardOpen(isMobile && keyboardGap > 140);
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
   }, []);
 
   useEffect(() => {
@@ -4457,7 +4479,7 @@ export default function AppInboxPage() {
         </aside>
 
         <div className={`relative min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-[#eadfcd] ${selectedConversationKey ? "flex" : "max-md:hidden md:flex"}`}>
-          <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-30 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5">
+          <header className={`min-h-16 shrink-0 items-center justify-between gap-3 border-b border-black/8 px-4 py-3 max-[1440px]:min-h-14 max-[1440px]:px-3 max-[1440px]:py-2 max-[1280px]:gap-2 max-md:sticky max-md:top-0 max-md:z-30 max-md:min-h-14 max-md:bg-[#efe6d7]/95 max-md:backdrop-blur [@media(max-height:760px)]:min-h-12 [@media(max-height:760px)]:py-1.5 ${isMobileKeyboardOpen ? "hidden md:flex" : "flex"}`}>
             <button
               type="button"
               onClick={clearSelectedConversation}
@@ -4680,7 +4702,7 @@ export default function AppInboxPage() {
             </div>
           </header>
 
-          <div className="border-b border-black/8 bg-[#efe6d7] px-3 py-2 max-[1366px]:px-2 max-[1366px]:py-1.5 max-md:px-2 max-md:py-2 [@media(max-height:760px)]:py-1">
+          <div className={`border-b border-black/8 bg-[#efe6d7] px-3 py-2 max-[1366px]:px-2 max-[1366px]:py-1.5 max-md:px-2 max-md:py-2 [@media(max-height:760px)]:py-1 ${isMobileKeyboardOpen ? "hidden md:block" : "block"}`}>
             <div className="grid grid-cols-[168px_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2 max-[1366px]:grid-cols-[140px_minmax(0,1fr)_minmax(0,1fr)] max-[1366px]:gap-1.5 max-md:grid-cols-1">
               <div className="rounded-2xl border border-[#dccfbe] bg-white/55 px-2 py-2 max-[1366px]:rounded-xl max-[1366px]:px-1.5 max-[1366px]:py-1.5 [@media(max-height:760px)]:py-1">
                 <select
@@ -4777,7 +4799,7 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          <div ref={timelineRef} className="wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:py-3 max-md:scroll-pb-40 [@media(max-height:760px)]:py-2">
+          <div ref={timelineRef} className={`wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:py-3 [@media(max-height:760px)]:py-2 ${isMobileKeyboardOpen ? "max-md:scroll-pb-24" : "max-md:scroll-pb-40"}`}>
             {!selectedConversationWaId ? (
               <div className="flex h-full min-h-[260px] items-center justify-center">
                 <div className="max-w-sm rounded-2xl border border-black/8 bg-white/50 px-6 py-5 text-center shadow-sm">
@@ -4889,7 +4911,7 @@ export default function AppInboxPage() {
             </div>
           </div>
           {selectedConversationKey && showJumpToLatest ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] flex justify-center px-4 max-md:bottom-[calc(7.5rem+env(safe-area-inset-bottom))]">
+            <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] flex justify-center px-4 ${isMobileKeyboardOpen ? "max-md:bottom-[4.75rem]" : "max-md:bottom-[calc(7.5rem+env(safe-area-inset-bottom))]"}`}>
               <button
                 type="button"
                 onClick={handleJumpToLatest}
@@ -4900,7 +4922,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className="sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pb-[calc(1.6rem+env(safe-area-inset-bottom))] max-md:pt-2 [@media(max-height:760px)]:pt-1.5">
+          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+env(safe-area-inset-bottom))]"}`}>
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">

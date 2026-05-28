@@ -147,26 +147,9 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
-  const showBrowserNotification = useCallback((request: AppNotificationRequest, silent = true) => {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
-    try {
-      new Notification(request.title, {
-        body: request.body,
-        tag: request.key,
-        silent,
-      });
-    } catch {
-      // Notification support varies by browser/profile; internal updates continue.
-    }
-  }, []);
-
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
     const soundEnabled = isSoundEnabled();
-    if (request.notifyBrowser && !appIsVisible) {
-      showBrowserNotification(request, true);
-    }
     if (soundEnabled && appIsVisible) {
       if (request.sound === "active") {
         playNotificationSound("active");
@@ -174,7 +157,7 @@ export default function AppRealtimeBridge() {
         enqueueNotification();
       }
     }
-  }, [enqueueNotification, playNotificationSound, showBrowserNotification]);
+  }, [enqueueNotification, playNotificationSound]);
 
   const handleInboundNotification = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.created" }>,
@@ -268,6 +251,22 @@ export default function AppRealtimeBridge() {
 
     return () => {
       window.removeEventListener(APP_AUDIO_UNLOCK_EVENT_NAME, primeNotificationAudio);
+    };
+  }, [primeNotificationAudio]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleUserGesture = () => {
+      if (!isSoundEnabled()) return;
+      primeNotificationAudio();
+    };
+    window.addEventListener("pointerdown", handleUserGesture, { passive: true });
+    window.addEventListener("touchstart", handleUserGesture, { passive: true });
+    window.addEventListener("keydown", handleUserGesture);
+    return () => {
+      window.removeEventListener("pointerdown", handleUserGesture);
+      window.removeEventListener("touchstart", handleUserGesture);
+      window.removeEventListener("keydown", handleUserGesture);
     };
   }, [primeNotificationAudio]);
 

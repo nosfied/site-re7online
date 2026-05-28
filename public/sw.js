@@ -55,6 +55,9 @@ self.addEventListener("push", (event) => {
         timestamp: Date.now(),
       };
 
+      for (const notification of notifications) {
+        notification.close();
+      }
       return self.registration.showNotification(title, options);
     })
   );
