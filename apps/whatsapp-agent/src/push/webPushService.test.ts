@@ -105,7 +105,7 @@ test("hidden or expired presence does not suppress push", () => {
   );
 });
 
-test("visible but unfocused presence does not suppress push", () => {
+test("visible presence suppresses push even when focus is unreliable", () => {
   const endpoint = "https://push.example.test/ios-background-stale-visible";
   updatePushPresence({
     clientId: "client-1",
@@ -123,6 +123,6 @@ test("visible but unfocused presence does not suppress push", () => {
       endpoint,
       nowMs: 301_000,
     }),
-    false
+    true
   );
 });

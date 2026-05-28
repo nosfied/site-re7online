@@ -3980,13 +3980,11 @@ export default function AppInboxPage() {
     return <main className="min-h-screen bg-re7-navy" />;
   }
 
-  const notificationToggleActive = isMobileViewport ? soundEnabled || pushUiStatus === "enabled" : soundEnabled;
+  const notificationToggleActive = soundEnabled;
   const notificationToggleTitle = notificationToggleActive
     ? isMobileViewport
       ? pushUiStatus === "enabled"
-        ? soundEnabled
-          ? "Desativar som local"
-          : "Ativar som local"
+        ? "Desativar som local"
         : "Desativar som"
       : "Desativar som"
     : isMobileViewport
