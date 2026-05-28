@@ -18,7 +18,6 @@ import {
 import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/appClientApi";
 
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
-const NOTIFICATION_MAX_QUEUE = 10;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const PUSH_PRESENCE_INTERVAL_MS = 8_000;
 
@@ -44,6 +43,13 @@ async function getCurrentPushEndpoint() {
   return subscription?.endpoint ?? null;
 }
 
+function notifyServiceWorkerAppForeground() {
+  if (typeof navigator === "undefined" || typeof document === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+  if (document.visibilityState !== "visible") return;
+  navigator.serviceWorker.controller?.postMessage({ type: "converta.app_foreground" });
+}
+
 export default function AppRealtimeBridge() {
   const pathname = usePathname();
   const clientRef = useRef<AppRealtimeClient | null>(null);
@@ -51,7 +57,6 @@ export default function AppRealtimeBridge() {
   const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasPrimedAudioRef = useRef(false);
-  const notificationQueueRef = useRef(0);
   const notificationTimerRef = useRef<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -133,21 +138,17 @@ export default function AppRealtimeBridge() {
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
-    if (notificationQueueRef.current <= 0) {
-      notificationTimerRef.current = null;
-      return;
-    }
-    notificationQueueRef.current -= 1;
     playNotificationSound("primary");
     notificationTimerRef.current = window.setTimeout(
-      processNotificationQueue,
+      () => {
+        notificationTimerRef.current = null;
+      },
       NOTIFICATION_SOUND_INTERVAL_MS
     );
   }, [playNotificationSound]);
 
   const enqueueNotification = useCallback(() => {
     if (typeof window === "undefined") return;
-    notificationQueueRef.current = Math.min(NOTIFICATION_MAX_QUEUE, notificationQueueRef.current + 1);
     if (notificationTimerRef.current !== null) return;
     processNotificationQueue();
   }, [processNotificationQueue]);
@@ -157,7 +158,6 @@ export default function AppRealtimeBridge() {
     const appIsFocused = document.hasFocus();
     const soundEnabled = isSoundEnabled();
     if (!appIsVisible || !appIsFocused) {
-      notificationQueueRef.current = 0;
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
@@ -289,7 +289,6 @@ export default function AppRealtimeBridge() {
         window.clearTimeout(notificationTimerRef.current);
       }
       notificationTimerRef.current = null;
-      notificationQueueRef.current = 0;
       clientRef.current?.close();
       clientRef.current = null;
       sessionKeyRef.current = null;
@@ -346,6 +345,7 @@ export default function AppRealtimeBridge() {
 
     const sendPresence = async (force = false) => {
       if (cancelled) return;
+      notifyServiceWorkerAppForeground();
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
       const visible = document.visibilityState === "visible";

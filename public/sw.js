@@ -1,3 +1,6 @@
+const APP_FOREGROUND_TTL_MS = 15_000;
+let lastAppForegroundAt = 0;
+
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -19,15 +22,7 @@ self.addEventListener("push", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const hasVisibleAppClient = clients.some((client) => {
-        try {
-          const url = new URL(client.url);
-          return url.pathname.startsWith("/app") && client.visibilityState === "visible" && client.focused === true;
-        } catch {
-          return false;
-        }
-      });
-      if (hasVisibleAppClient) return undefined;
+      if (Date.now() - lastAppForegroundAt <= APP_FOREGROUND_TTL_MS) return undefined;
       return self.registration.getNotifications({ tag });
     }).then((notifications) => {
       if (!notifications) return undefined;
@@ -65,6 +60,11 @@ self.addEventListener("push", (event) => {
       return self.registration.showNotification(title, options);
     })
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "converta.app_foreground") return;
+  lastAppForegroundAt = Date.now();
 });
 
 self.addEventListener("notificationclick", (event) => {
