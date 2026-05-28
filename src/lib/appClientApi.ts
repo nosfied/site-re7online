@@ -1449,7 +1449,8 @@ export function unsubscribeAppPush(
 export function updateAppPushPresence(
   session: AppSession,
   endpoint: string,
-  presence: { visible: boolean; focused: boolean }
+  presence: { visible: boolean; focused: boolean },
+  options?: { keepalive?: boolean }
 ): Promise<{ ok: true }> {
   return requestAppJson(session, "/app/push/presence", {
     method: "POST",
@@ -1458,6 +1459,7 @@ export function updateAppPushPresence(
       visible: presence.visible,
       focused: presence.focused,
     }),
+    keepalive: options?.keepalive === true,
     timeoutMs: 3000,
   });
 }

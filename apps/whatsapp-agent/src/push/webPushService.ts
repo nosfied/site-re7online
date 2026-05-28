@@ -18,7 +18,7 @@ export type BrowserPushSubscriptionInput = {
 const recentPushKeys = new Set<string>();
 const recentPushKeyOrder: string[] = [];
 const MAX_RECENT_PUSH_KEYS = 1000;
-const PUSH_PRESENCE_TTL_MS = 60_000;
+const PUSH_PRESENCE_TTL_MS = 12_000;
 const SYSTEM_NOTIFICATION_TAG = "converta-inbox-notifications";
 
 type PushPresence = {

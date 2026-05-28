@@ -99,7 +99,7 @@ test("hidden or expired presence does not suppress push", () => {
       clientId: "client-1",
       userId: "user-1",
       endpoint,
-      nowMs: 270_001,
+      nowMs: 212_001,
     }),
     false
   );

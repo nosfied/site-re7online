@@ -20,7 +20,7 @@ import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/ap
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const NOTIFICATION_MAX_QUEUE = 10;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
-const PUSH_PRESENCE_INTERVAL_MS = 25_000;
+const PUSH_PRESENCE_INTERVAL_MS = 8_000;
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
@@ -39,7 +39,7 @@ function getSessionKey(session: AppSession | null) {
 
 async function getCurrentPushEndpoint() {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
-  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+  const registration = await navigator.serviceWorker.getRegistration("/");
   const subscription = await registration?.pushManager.getSubscription();
   return subscription?.endpoint ?? null;
 }
@@ -72,10 +72,10 @@ export default function AppRealtimeBridge() {
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
-      const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
-      nextAudio.volume = sound === "active" ? 0.42 : 0.95;
-      nextAudio.currentTime = 0;
-      void nextAudio
+      baseAudio.pause();
+      baseAudio.volume = sound === "active" ? 0.42 : 0.95;
+      baseAudio.currentTime = 0;
+      void baseAudio
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
@@ -343,7 +343,8 @@ export default function AppRealtimeBridge() {
       if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
       lastSentKey = key;
       lastSentAt = now;
-      await updateAppPushPresence(session, endpoint, { visible, focused }).catch(() => undefined);
+      await updateAppPushPresence(session, endpoint, { visible, focused }, { keepalive: !visible || !focused })
+        .catch(() => undefined);
     };
 
     const handlePresenceChange = () => {

@@ -1478,7 +1478,7 @@ export default function AppInboxPage() {
     if (!session) return;
     void (async () => {
       try {
-        const registration = await navigator.serviceWorker?.getRegistration("/sw.js");
+        const registration = await navigator.serviceWorker?.getRegistration("/");
         const subscription = await registration?.pushManager.getSubscription();
         const endpoint = subscription?.endpoint ?? null;
         if (subscription) {
@@ -1645,6 +1645,7 @@ export default function AppInboxPage() {
         return;
       }
       const registration = await navigator.serviceWorker.register("/sw.js");
+      await registration.update().catch(() => undefined);
       const subscription = await registration.pushManager.getSubscription();
       setPushUiStatus(subscription || status.subscribed ? "enabled" : "ready");
     } catch {
@@ -1667,6 +1668,7 @@ export default function AppInboxPage() {
         return;
       }
       const registration = await navigator.serviceWorker.register("/sw.js");
+      await registration.update().catch(() => undefined);
       const existing = await registration.pushManager.getSubscription();
       const subscription =
         existing ??
@@ -1689,7 +1691,7 @@ export default function AppInboxPage() {
     setPushBusy(true);
     try {
       window.localStorage.setItem(INBOX_PUSH_DISABLED_STORAGE_KEY, "1");
-      const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+      const registration = await navigator.serviceWorker.getRegistration("/");
       const subscription = await registration?.pushManager.getSubscription();
       const endpoint = subscription?.endpoint ?? null;
       if (subscription) {
