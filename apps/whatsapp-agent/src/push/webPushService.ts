@@ -356,7 +356,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
         {
           TTL: PUSH_TTL_SECONDS,
           urgency: "high",
-          topic: SYSTEM_NOTIFICATION_TAG,
         }
       );
       sent += 1;
