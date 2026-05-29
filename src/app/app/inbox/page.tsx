@@ -1742,12 +1742,13 @@ export default function AppInboxPage() {
     if (!isMobileViewport) return;
     if (pushAutoEnableAttemptedRef.current) return;
     if (pushUiStatus !== "ready") return;
+    if (!soundEnabled) return;
     if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (window.localStorage.getItem(INBOX_PUSH_DISABLED_STORAGE_KEY) === "1") return;
     if (Notification.permission !== "granted") return;
     pushAutoEnableAttemptedRef.current = true;
+    window.localStorage.removeItem(INBOX_PUSH_DISABLED_STORAGE_KEY);
     void handleEnablePush();
-  }, [handleEnablePush, isMobileViewport, pushUiStatus]);
+  }, [handleEnablePush, isMobileViewport, pushUiStatus, soundEnabled]);
 
   const handleNotificationToggle = useCallback(() => {
     const nextSoundEnabled = !soundEnabled;
