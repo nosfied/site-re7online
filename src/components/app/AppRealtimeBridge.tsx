@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
@@ -24,11 +24,6 @@ const PUSH_PRESENCE_INTERVAL_MS = 4_000;
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
-}
-
-function getNotificationPermissionState() {
-  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
-  return Notification.permission;
 }
 
 function getSessionKey(session: AppSession | null) {
@@ -64,14 +59,8 @@ export default function AppRealtimeBridge() {
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationTimerRef = useRef<number | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState("unsupported");
-  const [dismissedActivationPrompt, setDismissedActivationPrompt] = useState(false);
 
   const syncAudioState = useCallback((unlocked: boolean) => {
-    setAudioUnlocked(unlocked);
-    setNotificationPermission(getNotificationPermissionState());
     dispatchAppAudioState({
       unlocked,
       soundEnabled: isSoundEnabled(),
@@ -137,10 +126,6 @@ export default function AppRealtimeBridge() {
       syncAudioState(false);
     }
   }, [syncAudioState]);
-
-  const dismissAlertActivation = useCallback(() => {
-    setDismissedActivationPrompt(true);
-  }, []);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -240,11 +225,6 @@ export default function AppRealtimeBridge() {
       handleHandoffNotification(event, session);
     }
   }, [handleHandoffNotification, handleInboundNotification]);
-
-  useEffect(() => {
-    setMounted(true);
-    setNotificationPermission(getNotificationPermissionState());
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -399,34 +379,5 @@ export default function AppRealtimeBridge() {
     };
   }, [pathname]);
 
-  const currentPathname = pathname ?? "";
-  const shouldShowAlertActivation =
-    mounted &&
-    !dismissedActivationPrompt &&
-    currentPathname.startsWith("/app/inbox");
-
-  if (!shouldShowAlertActivation) return null;
-
-  return (
-    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[10000] w-[min(92vw,380px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
-      <div className="flex items-center gap-3">
-        <span className="min-w-0">
-          <span className="block font-semibold">Controle de notificacoes</span>
-          <span className="block text-slate-900/75">
-            O sininho do inbox controla o som local e as notificacoes nativas deste aparelho. No iPhone,
-            notificacoes em segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
-          </span>
-        </span>
-      </div>
-      <div className="mt-2 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={dismissAlertActivation}
-          className="rounded-md bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
-        >
-          Entendi
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 }

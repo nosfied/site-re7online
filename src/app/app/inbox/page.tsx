@@ -1429,6 +1429,7 @@ export default function AppInboxPage() {
   const [pushBusy, setPushBusy] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
+  const [showNotificationControlInfo, setShowNotificationControlInfo] = useState(true);
   const pushAutoEnableAttemptedRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [unreadSeparatorIndex, setUnreadSeparatorIndex] = useState<number | null>(null);
@@ -4175,6 +4176,24 @@ export default function AppInboxPage() {
                 </button>
               </div>
             </div>
+            {showNotificationControlInfo ? (
+              <div className="mt-3 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-[11px] leading-relaxed text-amber-50 shadow-sm max-[1440px]:mt-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0">
+                    <span className="font-semibold text-amber-100">Sininho:</span>{" "}
+                    controla o som local e as notificacoes nativas deste aparelho. No iPhone, notificacoes em
+                    segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationControlInfo(false)}
+                    className="shrink-0 rounded-md border border-amber-200/30 px-2 py-0.5 text-[10px] font-semibold text-amber-50 transition hover:bg-amber-200/15"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
               {isAdminUser ? (
                 <select
