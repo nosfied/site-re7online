@@ -4041,6 +4041,24 @@ export default function AppInboxPage() {
         onFocus={() => setPauseErrorToast(true)}
         onBlur={() => setPauseErrorToast(false)}
       />
+      {showNotificationControlInfo ? (
+        <div className="fixed left-1/2 top-[calc(0.75rem+var(--safe-top))] z-[12000] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300/70 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]">
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0">
+              <span className="font-bold">Sininho:</span>{" "}
+              controla o som local e as notificacoes nativas deste aparelho. No iPhone, notificacoes em segundo
+              plano exigem o Converta instalado na tela inicial e permissao liberada.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowNotificationControlInfo(false)}
+              className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      ) : null}
       {showContactTimeline ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
           <section className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -4176,24 +4194,6 @@ export default function AppInboxPage() {
                 </button>
               </div>
             </div>
-            {showNotificationControlInfo ? (
-              <div className="mt-3 rounded-xl border border-amber-300/40 bg-amber-400/15 px-3 py-2 text-[11px] leading-relaxed text-amber-50 shadow-sm max-[1440px]:mt-2">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0">
-                    <span className="font-semibold text-amber-100">Sininho:</span>{" "}
-                    controla o som local e as notificacoes nativas deste aparelho. No iPhone, notificacoes em
-                    segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowNotificationControlInfo(false)}
-                    className="shrink-0 rounded-md border border-amber-200/30 px-2 py-0.5 text-[10px] font-semibold text-amber-50 transition hover:bg-amber-200/15"
-                  >
-                    OK
-                  </button>
-                </div>
-              </div>
-            ) : null}
             <div className="mt-3 space-y-2 max-[1440px]:mt-2 max-[1440px]:space-y-1.5">
               {isAdminUser ? (
                 <select
