@@ -1,5 +1,6 @@
 const APP_FOREGROUND_TTL_MS = 15_000;
 let lastAppForegroundAt = 0;
+let notificationTagFlip = 0;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -17,20 +18,25 @@ self.addEventListener("push", (event) => {
     data = {};
   }
 
-  const tag = typeof data.tag === "string" ? data.tag : "converta-inbox-notifications";
+  const baseTag = typeof data.tag === "string" ? data.tag : "converta-inbox-notifications";
   const increment = Number.isFinite(Number(data.unreadIncrement)) ? Math.max(1, Number(data.unreadIncrement)) : 1;
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       if (Date.now() - lastAppForegroundAt <= APP_FOREGROUND_TTL_MS) return undefined;
-      return self.registration.getNotifications({ tag });
+      return self.registration.getNotifications();
     }).then((notifications) => {
       if (!notifications) return undefined;
-      const previousTotal = notifications.reduce((highest, notification) => {
+      const previousNotifications = notifications.filter((notification) =>
+        String(notification.tag || "").startsWith(baseTag)
+      );
+      const previousTotal = previousNotifications.reduce((highest, notification) => {
         const total = Number(notification.data?.unreadTotal ?? 0);
         return Number.isFinite(total) && total > highest ? total : highest;
       }, 0);
       const unreadTotal = previousTotal + increment;
+      notificationTagFlip = (notificationTagFlip + 1) % 2;
+      const tag = `${baseTag}-${notificationTagFlip}`;
       const title = typeof data.title === "string" ? data.title : "Converta";
       const previewBody = typeof data.body === "string" ? data.body.trim() : "";
       const body =
@@ -54,7 +60,7 @@ self.addEventListener("push", (event) => {
         timestamp: Date.now(),
       };
 
-      for (const notification of notifications) {
+      for (const notification of previousNotifications) {
         notification.close();
       }
       return self.registration.showNotification(title, options);
