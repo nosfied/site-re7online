@@ -50,6 +50,12 @@ function notifyServiceWorkerAppForeground() {
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_foreground" });
 }
 
+function notifyServiceWorkerAppBackground() {
+  if (typeof navigator === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.controller?.postMessage({ type: "converta.app_background" });
+}
+
 export default function AppRealtimeBridge() {
   const pathname = usePathname();
   const clientRef = useRef<AppRealtimeClient | null>(null);
@@ -345,7 +351,11 @@ export default function AppRealtimeBridge() {
 
     const sendPresence = async (force = false) => {
       if (cancelled) return;
-      notifyServiceWorkerAppForeground();
+      if (document.visibilityState === "visible") {
+        notifyServiceWorkerAppForeground();
+      } else {
+        notifyServiceWorkerAppBackground();
+      }
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
       const visible = document.visibilityState === "visible";
@@ -360,6 +370,9 @@ export default function AppRealtimeBridge() {
     };
 
     const handlePresenceChange = () => {
+      if (document.visibilityState !== "visible") {
+        notifyServiceWorkerAppBackground();
+      }
       void sendPresence(true);
     };
     const interval = window.setInterval(() => {

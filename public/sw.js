@@ -69,8 +69,13 @@ self.addEventListener("push", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type !== "converta.app_foreground") return;
-  lastAppForegroundAt = Date.now();
+  if (event.data?.type === "converta.app_foreground") {
+    lastAppForegroundAt = Date.now();
+    return;
+  }
+  if (event.data?.type === "converta.app_background") {
+    lastAppForegroundAt = 0;
+  }
 });
 
 self.addEventListener("notificationclick", (event) => {
