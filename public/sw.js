@@ -1,6 +1,11 @@
-const APP_FOREGROUND_TTL_MS = 15_000;
+const APP_FOREGROUND_TTL_MS = 6_000;
 let lastAppForegroundAt = 0;
 let notificationTagFlip = 0;
+
+function isIosLikeWorker() {
+  const userAgent = self.navigator?.userAgent || "";
+  return /iPhone|iPad|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent));
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -20,10 +25,11 @@ self.addEventListener("push", (event) => {
 
   const baseTag = typeof data.tag === "string" ? data.tag : "converta-inbox-notifications";
   const increment = Number.isFinite(Number(data.unreadIncrement)) ? Math.max(1, Number(data.unreadIncrement)) : 1;
+  const iosLike = isIosLikeWorker();
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      if (Date.now() - lastAppForegroundAt <= APP_FOREGROUND_TTL_MS) return undefined;
+      if (!iosLike && Date.now() - lastAppForegroundAt <= APP_FOREGROUND_TTL_MS) return undefined;
       return self.registration.getNotifications();
     }).then((notifications) => {
       if (!notifications) return undefined;
@@ -36,7 +42,7 @@ self.addEventListener("push", (event) => {
       }, 0);
       const unreadTotal = previousTotal + increment;
       notificationTagFlip = (notificationTagFlip + 1) % 2;
-      const tag = `${baseTag}-${notificationTagFlip}`;
+      const tag = iosLike ? `${baseTag}-ios-${Date.now()}` : `${baseTag}-${notificationTagFlip}`;
       const title = typeof data.title === "string" ? data.title : "Converta";
       const previewBody = typeof data.body === "string" ? data.body.trim() : "";
       const body =
@@ -54,11 +60,13 @@ self.addEventListener("push", (event) => {
         },
         icon: "/converta-favicon.png?v=converta-dark",
         badge: "/converta-favicon.png?v=converta-dark",
-        renotify: true,
         silent: false,
-        vibrate: [180, 80, 180],
         timestamp: Date.now(),
       };
+      if (!iosLike) {
+        options.renotify = true;
+        options.vibrate = [180, 80, 180];
+      }
 
       for (const notification of previousNotifications) {
         notification.close();

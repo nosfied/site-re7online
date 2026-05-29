@@ -19,7 +19,7 @@ import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/ap
 
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
-const PUSH_PRESENCE_INTERVAL_MS = 8_000;
+const PUSH_PRESENCE_INTERVAL_MS = 4_000;
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
@@ -403,20 +403,18 @@ export default function AppRealtimeBridge() {
   const shouldShowAlertActivation =
     mounted &&
     !dismissedActivationPrompt &&
-    currentPathname.startsWith("/app") &&
-    currentPathname !== "/app/login" &&
-    isSoundEnabled() &&
-    (!audioUnlocked || notificationPermission === "default");
+    currentPathname.startsWith("/app/inbox");
 
   if (!shouldShowAlertActivation) return null;
 
   return (
-    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[10000] hidden w-[min(92vw,340px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur md:block">
+    <div className="fixed left-1/2 top-[calc(1rem+var(--safe-top))] z-[10000] w-[min(92vw,380px)] -translate-x-1/2 rounded-xl border border-amber-700 bg-amber-500 p-3 text-left text-xs text-slate-950 shadow-[0_18px_52px_rgba(0,0,0,0.2)] backdrop-blur">
       <div className="flex items-center gap-3">
         <span className="min-w-0">
-          <span className="block font-semibold">Restaurar som das notificacoes</span>
+          <span className="block font-semibold">Controle de notificacoes</span>
           <span className="block text-slate-900/75">
-            Apos atualizar a pagina, clique duas vezes no sininho do inbox para restaurar os alertas sonoros.
+            O sininho do inbox controla o som local e as notificacoes nativas deste aparelho. No iPhone,
+            notificacoes em segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
           </span>
         </span>
       </div>
