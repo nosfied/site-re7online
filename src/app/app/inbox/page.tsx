@@ -1597,6 +1597,11 @@ export default function AppInboxPage() {
   }, []);
 
   useEffect(() => {
+    if (!session) return;
+    setShowNotificationControlInfo(true);
+  }, [session?.token]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY);
     setSoundEnabled(stored === "1");
@@ -4042,7 +4047,7 @@ export default function AppInboxPage() {
         onBlur={() => setPauseErrorToast(false)}
       />
       {showNotificationControlInfo ? (
-        <div className="fixed left-1/2 top-[calc(0.75rem+var(--safe-top))] z-[12000] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300/70 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]">
+        <div className="fixed left-1/2 top-[calc(0.75rem+var(--safe-top,0px))] z-[12000] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300/70 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]">
           <div className="flex items-start justify-between gap-3">
             <p className="min-w-0">
               <span className="font-bold">Sininho:</span>{" "}

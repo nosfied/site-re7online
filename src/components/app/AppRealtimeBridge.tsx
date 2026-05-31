@@ -146,9 +146,8 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
-    const appIsFocused = document.hasFocus();
     const soundEnabled = isSoundEnabled();
-    if (!appIsVisible || !appIsFocused) {
+    if (!appIsVisible) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
