@@ -26,6 +26,12 @@ function isMobileLikeDevice() {
   return window.matchMedia("(max-width: 767px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
 }
 
+function isAppActiveForNotificationSuppression() {
+  if (typeof document === "undefined") return true;
+  if (document.visibilityState !== "visible") return false;
+  return isMobileLikeDevice() || document.hasFocus();
+}
+
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
@@ -388,15 +394,16 @@ export default function AppRealtimeBridge() {
 
     const sendPresence = async (force = false) => {
       if (cancelled) return;
-      if (document.visibilityState === "visible") {
+      const activeForNotificationSuppression = isAppActiveForNotificationSuppression();
+      if (activeForNotificationSuppression) {
         notifyServiceWorkerAppForeground();
       } else {
         notifyServiceWorkerAppBackground();
       }
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
-      const visible = document.visibilityState === "visible";
       const focused = document.hasFocus();
+      const visible = activeForNotificationSuppression;
       const now = Date.now();
       const key = `${endpoint}:${visible ? "1" : "0"}:${focused ? "1" : "0"}`;
       if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
