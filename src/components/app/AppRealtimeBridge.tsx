@@ -62,6 +62,12 @@ function notifyServiceWorkerAppBackground() {
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_background" });
 }
 
+type NotificationDebugWindow = Window &
+  typeof globalThis & {
+    __convertaNotificationState?: () => Record<string, unknown>;
+    __convertaTestNotificationSound?: (sound?: AppNotificationRequest["sound"]) => Promise<Record<string, unknown>>;
+  };
+
 export default function AppRealtimeBridge() {
   const pathname = usePathname();
   const [showNotificationNotice, setShowNotificationNotice] = useState(false);
@@ -281,6 +287,67 @@ export default function AppRealtimeBridge() {
     return () => {
       primaryAudioRef.current = null;
       activeAudioRef.current = null;
+    };
+  }, [syncAudioState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const debugWindow = window as NotificationDebugWindow;
+    const getAudioState = () => ({
+      soundEnabled: isSoundEnabled(),
+      debugEnabled: isNotificationDebugEnabled(),
+      visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
+      focused: typeof document === "undefined" ? true : document.hasFocus(),
+      hasPrimedAudio: hasPrimedAudioRef.current,
+      primaryAudioReady: Boolean(primaryAudioRef.current),
+      activeAudioReady: Boolean(activeAudioRef.current),
+      primaryReadyState: primaryAudioRef.current?.readyState ?? null,
+      activeReadyState: activeAudioRef.current?.readyState ?? null,
+    });
+    const testNotificationSound = async (sound: AppNotificationRequest["sound"] = "primary") => {
+      window.localStorage.setItem(NOTIFICATION_DEBUG_STORAGE_KEY, "1");
+      const audio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
+      const before = getAudioState();
+      if (!audio) {
+        const result = { ok: false, reason: "audio_not_ready", sound, before };
+        debugNotification("manual_test", result);
+        return result;
+      }
+      try {
+        audio.pause();
+        audio.volume = sound === "active" ? 0.42 : 0.95;
+        audio.currentTime = 0;
+        await audio.play();
+        hasPrimedAudioRef.current = true;
+        syncAudioState(true);
+        const result = { ok: true, sound, before, after: getAudioState() };
+        debugNotification("manual_test", result);
+        return result;
+      } catch (error) {
+        hasPrimedAudioRef.current = false;
+        syncAudioState(false);
+        const result = {
+          ok: false,
+          reason: "play_blocked",
+          sound,
+          errorName: error instanceof Error ? error.name : "unknown",
+          before,
+          after: getAudioState(),
+        };
+        debugNotification("manual_test", result);
+        return result;
+      }
+    };
+    debugWindow.__convertaNotificationState = getAudioState;
+    debugWindow.__convertaTestNotificationSound = testNotificationSound;
+    debugNotification("bridge_ready", getAudioState());
+    return () => {
+      if (debugWindow.__convertaNotificationState === getAudioState) {
+        delete debugWindow.__convertaNotificationState;
+      }
+      if (debugWindow.__convertaTestNotificationSound === testNotificationSound) {
+        delete debugWindow.__convertaTestNotificationSound;
+      }
     };
   }, [syncAudioState]);
 
