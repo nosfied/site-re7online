@@ -1596,47 +1596,6 @@ export default function AppInboxPage() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
-    const elementId = "converta-notification-control-notice";
-    document.getElementById(elementId)?.remove();
-    const notice = document.createElement("div");
-    notice.id = elementId;
-    Object.assign(notice.style, {
-      position: "fixed",
-      left: "50%",
-      top: "calc(12px + env(safe-area-inset-top, 0px))",
-      zIndex: "2147483647",
-      width: "min(92vw, 420px)",
-      transform: "translateX(-50%)",
-      border: "1px solid rgba(252, 211, 77, 0.9)",
-      borderRadius: "16px",
-      background: "#fbbf24",
-      color: "#0f172a",
-      boxShadow: "0 20px 60px rgba(15,23,42,0.28)",
-      boxSizing: "border-box",
-      padding: "12px 16px",
-      fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      fontSize: "12px",
-      lineHeight: "1.45",
-      textAlign: "left",
-    });
-    notice.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-        <p style="margin:0;min-width:0;">
-          <span style="font-weight:800;">Sininho:</span>
-          controla o som local e as notificacoes nativas deste aparelho. No iPhone, notificacoes em segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
-        </p>
-        <button type="button" style="flex-shrink:0;border:0;border-radius:8px;background:#0f172a;color:#fff;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">OK</button>
-      </div>
-    `;
-    notice.querySelector("button")?.addEventListener("click", () => notice.remove(), { once: true });
-    document.body.appendChild(notice);
-    return () => {
-      notice.remove();
-    };
-  }, [session?.token]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY);
     setSoundEnabled(stored === "1");

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addAppNotificationListener,
   APP_AUDIO_UNLOCK_EVENT_NAME,
@@ -64,6 +64,7 @@ function notifyServiceWorkerAppBackground() {
 
 export default function AppRealtimeBridge() {
   const pathname = usePathname();
+  const [showNotificationNotice, setShowNotificationNotice] = useState(false);
   const clientRef = useRef<AppRealtimeClient | null>(null);
   const sessionKeyRef = useRef<string | null>(null);
   const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -120,6 +121,7 @@ export default function AppRealtimeBridge() {
 
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
     if (!isSoundEnabled() || typeof window === "undefined") return;
+    void resumeAudioContext();
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
       if (!baseAudio) return;
@@ -138,6 +140,15 @@ export default function AppRealtimeBridge() {
             syncAudioState(true);
             return;
           }
+          void resumeAudioContext().then((audioContextReady) => {
+            if (audioContextReady && playFallbackTone(sound)) {
+              hasPrimedAudioRef.current = true;
+              syncAudioState(true);
+              return;
+            }
+            hasPrimedAudioRef.current = false;
+            syncAudioState(false);
+          });
           hasPrimedAudioRef.current = false;
           syncAudioState(false);
           // Browser autoplay policy can block audio after reload until the next user gesture.
@@ -151,7 +162,7 @@ export default function AppRealtimeBridge() {
       hasPrimedAudioRef.current = false;
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
-  }, [playFallbackTone, syncAudioState]);
+  }, [playFallbackTone, resumeAudioContext, syncAudioState]);
 
   const primeNotificationAudio = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -206,34 +217,8 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
-  const showDesktopBrowserNotification = useCallback((request: AppNotificationRequest) => {
-    if (typeof window === "undefined" || isMobileLikeDevice()) return;
-    if (!("Notification" in window)) return;
-    if (Notification.permission !== "granted") return;
-    const notificationOptions = {
-      body: request.body,
-      tag: `desktop-${request.key}`,
-      renotify: true,
-      silent: false,
-    };
-    try {
-      if ("serviceWorker" in navigator) {
-        void navigator.serviceWorker.ready
-          .then((registration) => registration.showNotification(request.title, notificationOptions))
-          .catch(() => {
-            new Notification(request.title, notificationOptions);
-          });
-        return;
-      }
-      new Notification(request.title, notificationOptions);
-    } catch {
-      // Browser notification support varies by OS/profile; local audio still runs.
-    }
-  }, []);
-
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
-    const appIsFocused = document.hasFocus();
     const mobileLike = isMobileLikeDevice();
     const soundEnabled = isSoundEnabled();
     if (!appIsVisible && mobileLike) {
@@ -243,9 +228,6 @@ export default function AppRealtimeBridge() {
       }
       return;
     }
-    if (!mobileLike && (!appIsVisible || !appIsFocused)) {
-      showDesktopBrowserNotification(request);
-    }
     if (soundEnabled) {
       if (request.sound === "active") {
         playNotificationSound("active");
@@ -253,7 +235,7 @@ export default function AppRealtimeBridge() {
         enqueueNotification();
       }
     }
-  }, [enqueueNotification, playNotificationSound, showDesktopBrowserNotification]);
+  }, [enqueueNotification, playNotificationSound]);
 
   const handleInboundNotification = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.created" }>,
@@ -411,6 +393,15 @@ export default function AppRealtimeBridge() {
   }, [handleRealtimeEvent, pathname]);
 
   useEffect(() => {
+    const currentPathname = pathname ?? "";
+    if (!currentPathname.startsWith("/app/inbox")) {
+      setShowNotificationNotice(false);
+      return;
+    }
+    setShowNotificationNotice(Boolean(loadAppSession()));
+  }, [pathname]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
     const currentPathname = pathname ?? "";
     if (!currentPathname.startsWith("/app") || currentPathname === "/app/login") return;
@@ -473,5 +464,28 @@ export default function AppRealtimeBridge() {
     };
   }, [pathname]);
 
-  return null;
+  if (!showNotificationNotice) return null;
+
+  return (
+    <div
+      className="fixed left-1/2 top-[calc(12px+env(safe-area-inset-top,0px))] z-[2147483647] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0">
+          <span className="font-extrabold">Sininho:</span> controla o som local e as notificacoes nativas deste
+          aparelho. No iPhone, notificacoes em segundo plano exigem o Converta instalado na tela inicial e permissao
+          liberada.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowNotificationNotice(false)}
+          className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-extrabold text-white"
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
 }
