@@ -19,22 +19,22 @@ import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/ap
 
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
+const NOTIFICATION_DEBUG_STORAGE_KEY = "converta_notification_debug";
 const PUSH_PRESENCE_INTERVAL_MS = 4_000;
-
-function isMobileLikeDevice() {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(max-width: 767px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-}
-
-function isAppActiveForNotificationSuppression() {
-  if (typeof document === "undefined") return true;
-  if (document.visibilityState !== "visible") return false;
-  return isMobileLikeDevice() || document.hasFocus();
-}
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
+}
+
+function isNotificationDebugEnabled() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(NOTIFICATION_DEBUG_STORAGE_KEY) === "1";
+}
+
+function debugNotification(event: string, details: Record<string, unknown> = {}) {
+  if (!isNotificationDebugEnabled()) return;
+  console.info(JSON.stringify({ event: `notification.${event}`, ...details }));
 }
 
 function getSessionKey(session: AppSession | null) {
@@ -69,7 +69,6 @@ export default function AppRealtimeBridge() {
   const sessionKeyRef = useRef<string | null>(null);
   const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationTimerRef = useRef<number | null>(null);
 
@@ -80,51 +79,17 @@ export default function AppRealtimeBridge() {
     });
   }, []);
 
-  const ensureAudioContext = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    if (audioContextRef.current) return audioContextRef.current;
-    const AudioContextConstructor =
-      window.AudioContext ??
-      (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    audioContextRef.current = new AudioContextConstructor();
-    return audioContextRef.current;
-  }, []);
-
-  const resumeAudioContext = useCallback(async () => {
-    const context = ensureAudioContext();
-    if (!context) return false;
-    if (context.state === "suspended") {
-      await context.resume().catch(() => undefined);
-    }
-    return context.state === "running";
-  }, [ensureAudioContext]);
-
-  const playFallbackTone = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
-    const context = audioContextRef.current;
-    if (!context || context.state !== "running") return false;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const startedAt = context.currentTime;
-    const volume = sound === "active" ? 0.045 : 0.08;
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(sound === "active" ? 720 : 880, startedAt);
-    gain.gain.setValueAtTime(0.0001, startedAt);
-    gain.gain.exponentialRampToValueAtTime(volume, startedAt + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.18);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(startedAt);
-    oscillator.stop(startedAt + 0.2);
-    return true;
-  }, []);
-
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
-    if (!isSoundEnabled() || typeof window === "undefined") return;
-    void resumeAudioContext();
+    if (!isSoundEnabled() || typeof window === "undefined") {
+      debugNotification("sound_skipped", { reason: "disabled_or_no_window", sound });
+      return;
+    }
     try {
       const baseAudio = sound === "active" ? activeAudioRef.current : primaryAudioRef.current;
-      if (!baseAudio) return;
+      if (!baseAudio) {
+        debugNotification("sound_skipped", { reason: "audio_not_ready", sound });
+        return;
+      }
       baseAudio.pause();
       baseAudio.volume = sound === "active" ? 0.42 : 0.95;
       baseAudio.currentTime = 0;
@@ -133,40 +98,26 @@ export default function AppRealtimeBridge() {
         .then(() => {
           hasPrimedAudioRef.current = true;
           syncAudioState(true);
+          debugNotification("sound_played", { sound });
         })
-        .catch(() => {
-          if (playFallbackTone(sound)) {
-            hasPrimedAudioRef.current = true;
-            syncAudioState(true);
-            return;
-          }
-          void resumeAudioContext().then((audioContextReady) => {
-            if (audioContextReady && playFallbackTone(sound)) {
-              hasPrimedAudioRef.current = true;
-              syncAudioState(true);
-              return;
-            }
-            hasPrimedAudioRef.current = false;
-            syncAudioState(false);
-          });
+        .catch((error) => {
           hasPrimedAudioRef.current = false;
           syncAudioState(false);
+          debugNotification("sound_blocked", {
+            sound,
+            errorName: error instanceof Error ? error.name : "unknown",
+          });
           // Browser autoplay policy can block audio after reload until the next user gesture.
         });
     } catch {
-      if (playFallbackTone(sound)) {
-        hasPrimedAudioRef.current = true;
-        syncAudioState(true);
-        return;
-      }
       hasPrimedAudioRef.current = false;
+      debugNotification("sound_failed", { sound });
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
-  }, [playFallbackTone, resumeAudioContext, syncAudioState]);
+  }, [syncAudioState]);
 
   const primeNotificationAudio = useCallback(() => {
     if (typeof window === "undefined") return;
-    void resumeAudioContext();
     let attemptedAudio = false;
     for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
       if (!audio) continue;
@@ -182,23 +133,29 @@ export default function AppRealtimeBridge() {
             audio.volume = previousVolume || 0.95;
             hasPrimedAudioRef.current = true;
             syncAudioState(true);
+            debugNotification("audio_unlocked");
           })
-          .catch(() => {
+          .catch((error) => {
             audio.volume = previousVolume || 0.95;
             hasPrimedAudioRef.current = false;
             syncAudioState(false);
+            debugNotification("audio_unlock_failed", {
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
           });
       } catch {
         audio.volume = 0.95;
         hasPrimedAudioRef.current = false;
         syncAudioState(false);
+        debugNotification("audio_unlock_failed", { errorName: "exception" });
       }
     }
     if (!attemptedAudio) {
       hasPrimedAudioRef.current = false;
       syncAudioState(false);
+      debugNotification("audio_unlock_failed", { errorName: "audio_not_ready" });
     }
-  }, [resumeAudioContext, syncAudioState]);
+  }, [syncAudioState]);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -219,13 +176,20 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
-    const mobileLike = isMobileLikeDevice();
     const soundEnabled = isSoundEnabled();
-    if (!appIsVisible && mobileLike) {
+    debugNotification("request_received", {
+      visible: appIsVisible,
+      focused: document.hasFocus(),
+      soundEnabled,
+      sound: request.sound,
+      notifyBrowser: request.notifyBrowser,
+    });
+    if (!appIsVisible) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
       }
+      debugNotification("request_skipped", { reason: "hidden", sound: request.sound });
       return;
     }
     if (soundEnabled) {
@@ -289,6 +253,12 @@ export default function AppRealtimeBridge() {
     if (event.clientId !== session.user.clientId) return;
 
     dispatchAppRealtimeEvent(event);
+    debugNotification("realtime_event", {
+      type: event.type,
+      direction: event.type === "message.created" ? event.message.direction : undefined,
+      visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
+      focused: typeof document === "undefined" ? true : document.hasFocus(),
+    });
 
     if (event.type === "message.created") {
       handleInboundNotification(event, session);
@@ -334,13 +304,11 @@ export default function AppRealtimeBridge() {
       if (hasPrimedAudioRef.current) return;
       primeNotificationAudio();
     };
-    window.addEventListener("pointerdown", handleUserGesture, { capture: true, passive: true });
-    window.addEventListener("touchstart", handleUserGesture, { capture: true, passive: true });
-    window.addEventListener("keydown", handleUserGesture, { capture: true });
+    window.addEventListener("pointerdown", handleUserGesture, { passive: true });
+    window.addEventListener("touchstart", handleUserGesture, { passive: true });
     return () => {
-      window.removeEventListener("pointerdown", handleUserGesture, { capture: true });
-      window.removeEventListener("touchstart", handleUserGesture, { capture: true });
-      window.removeEventListener("keydown", handleUserGesture, { capture: true });
+      window.removeEventListener("pointerdown", handleUserGesture);
+      window.removeEventListener("touchstart", handleUserGesture);
     };
   }, [primeNotificationAudio]);
 
@@ -415,8 +383,8 @@ export default function AppRealtimeBridge() {
 
     const sendPresence = async (force = false) => {
       if (cancelled) return;
-      const activeForNotificationSuppression = isAppActiveForNotificationSuppression();
-      if (activeForNotificationSuppression) {
+      const visible = document.visibilityState === "visible";
+      if (visible) {
         notifyServiceWorkerAppForeground();
       } else {
         notifyServiceWorkerAppBackground();
@@ -424,7 +392,6 @@ export default function AppRealtimeBridge() {
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
       const focused = document.hasFocus();
-      const visible = activeForNotificationSuppression;
       const now = Date.now();
       const key = `${endpoint}:${visible ? "1" : "0"}:${focused ? "1" : "0"}`;
       if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
