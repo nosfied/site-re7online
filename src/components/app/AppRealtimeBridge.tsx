@@ -468,7 +468,8 @@ export default function AppRealtimeBridge() {
 
   return (
     <div
-      className="fixed left-1/2 top-[calc(12px+env(safe-area-inset-top,0px))] z-[2147483647] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      className="fixed left-1/2 z-[2147483647] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      style={{ top: "calc(12px + env(safe-area-inset-top, 0px))" }}
       role="status"
       aria-live="polite"
     >
@@ -480,7 +481,10 @@ export default function AppRealtimeBridge() {
         </p>
         <button
           type="button"
-          onClick={() => setShowNotificationNotice(false)}
+          onClick={() => {
+            primeNotificationAudio();
+            setShowNotificationNotice(false);
+          }}
           className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-extrabold text-white"
         >
           OK
