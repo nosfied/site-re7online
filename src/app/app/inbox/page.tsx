@@ -1601,15 +1601,32 @@ export default function AppInboxPage() {
     document.getElementById(elementId)?.remove();
     const notice = document.createElement("div");
     notice.id = elementId;
-    notice.className =
-      "fixed left-1/2 top-[calc(0.75rem+env(safe-area-inset-top,0px))] z-[2147483647] w-[min(92vw,420px)] -translate-x-1/2 rounded-2xl border border-amber-300/70 bg-amber-400 px-4 py-3 text-left text-xs leading-relaxed text-slate-950 shadow-[0_20px_60px_rgba(15,23,42,0.28)]";
+    Object.assign(notice.style, {
+      position: "fixed",
+      left: "50%",
+      top: "calc(12px + env(safe-area-inset-top, 0px))",
+      zIndex: "2147483647",
+      width: "min(92vw, 420px)",
+      transform: "translateX(-50%)",
+      border: "1px solid rgba(252, 211, 77, 0.9)",
+      borderRadius: "16px",
+      background: "#fbbf24",
+      color: "#0f172a",
+      boxShadow: "0 20px 60px rgba(15,23,42,0.28)",
+      boxSizing: "border-box",
+      padding: "12px 16px",
+      fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      fontSize: "12px",
+      lineHeight: "1.45",
+      textAlign: "left",
+    });
     notice.innerHTML = `
-      <div class="flex items-start justify-between gap-3">
-        <p class="min-w-0">
-          <span class="font-bold">Sininho:</span>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <p style="margin:0;min-width:0;">
+          <span style="font-weight:800;">Sininho:</span>
           controla o som local e as notificacoes nativas deste aparelho. No iPhone, notificacoes em segundo plano exigem o Converta instalado na tela inicial e permissao liberada.
         </p>
-        <button type="button" class="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800">OK</button>
+        <button type="button" style="flex-shrink:0;border:0;border-radius:8px;background:#0f172a;color:#fff;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer;">OK</button>
       </div>
     `;
     notice.querySelector("button")?.addEventListener("click", () => notice.remove(), { once: true });

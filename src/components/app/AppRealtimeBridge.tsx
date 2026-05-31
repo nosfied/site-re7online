@@ -208,14 +208,24 @@ export default function AppRealtimeBridge() {
 
   const showDesktopBrowserNotification = useCallback((request: AppNotificationRequest) => {
     if (typeof window === "undefined" || isMobileLikeDevice()) return;
-    if (!request.notifyBrowser || !("Notification" in window)) return;
+    if (!("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
+    const notificationOptions = {
+      body: request.body,
+      tag: `desktop-${request.key}`,
+      renotify: true,
+      silent: false,
+    };
     try {
-      new Notification(request.title, {
-        body: request.body,
-        tag: request.key,
-        silent: false,
-      });
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker.ready
+          .then((registration) => registration.showNotification(request.title, notificationOptions))
+          .catch(() => {
+            new Notification(request.title, notificationOptions);
+          });
+        return;
+      }
+      new Notification(request.title, notificationOptions);
     } catch {
       // Browser notification support varies by OS/profile; local audio still runs.
     }
