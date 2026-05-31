@@ -62,6 +62,7 @@ export default function AppRealtimeBridge() {
   const sessionKeyRef = useRef<string | null>(null);
   const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationTimerRef = useRef<number | null>(null);
 
@@ -70,6 +71,45 @@ export default function AppRealtimeBridge() {
       unlocked,
       soundEnabled: isSoundEnabled(),
     });
+  }, []);
+
+  const ensureAudioContext = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    if (audioContextRef.current) return audioContextRef.current;
+    const AudioContextConstructor =
+      window.AudioContext ??
+      (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    audioContextRef.current = new AudioContextConstructor();
+    return audioContextRef.current;
+  }, []);
+
+  const resumeAudioContext = useCallback(async () => {
+    const context = ensureAudioContext();
+    if (!context) return false;
+    if (context.state === "suspended") {
+      await context.resume().catch(() => undefined);
+    }
+    return context.state === "running";
+  }, [ensureAudioContext]);
+
+  const playFallbackTone = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
+    const context = audioContextRef.current;
+    if (!context || context.state !== "running") return false;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startedAt = context.currentTime;
+    const volume = sound === "active" ? 0.045 : 0.08;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(sound === "active" ? 720 : 880, startedAt);
+    gain.gain.setValueAtTime(0.0001, startedAt);
+    gain.gain.exponentialRampToValueAtTime(volume, startedAt + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.18);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startedAt);
+    oscillator.stop(startedAt + 0.2);
+    return true;
   }, []);
 
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
@@ -87,18 +127,29 @@ export default function AppRealtimeBridge() {
           syncAudioState(true);
         })
         .catch(() => {
+          if (playFallbackTone(sound)) {
+            hasPrimedAudioRef.current = true;
+            syncAudioState(true);
+            return;
+          }
           hasPrimedAudioRef.current = false;
           syncAudioState(false);
           // Browser autoplay policy can block audio after reload until the next user gesture.
         });
     } catch {
+      if (playFallbackTone(sound)) {
+        hasPrimedAudioRef.current = true;
+        syncAudioState(true);
+        return;
+      }
       hasPrimedAudioRef.current = false;
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
-  }, [syncAudioState]);
+  }, [playFallbackTone, syncAudioState]);
 
   const primeNotificationAudio = useCallback(() => {
     if (typeof window === "undefined") return;
+    void resumeAudioContext();
     let attemptedAudio = false;
     for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
       if (!audio) continue;
@@ -130,7 +181,7 @@ export default function AppRealtimeBridge() {
       hasPrimedAudioRef.current = false;
       syncAudioState(false);
     }
-  }, [syncAudioState]);
+  }, [resumeAudioContext, syncAudioState]);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -265,11 +316,13 @@ export default function AppRealtimeBridge() {
       if (hasPrimedAudioRef.current) return;
       primeNotificationAudio();
     };
-    window.addEventListener("pointerdown", handleUserGesture, { passive: true });
-    window.addEventListener("touchstart", handleUserGesture, { passive: true });
+    window.addEventListener("pointerdown", handleUserGesture, { capture: true, passive: true });
+    window.addEventListener("touchstart", handleUserGesture, { capture: true, passive: true });
+    window.addEventListener("keydown", handleUserGesture, { capture: true });
     return () => {
-      window.removeEventListener("pointerdown", handleUserGesture);
-      window.removeEventListener("touchstart", handleUserGesture);
+      window.removeEventListener("pointerdown", handleUserGesture, { capture: true });
+      window.removeEventListener("touchstart", handleUserGesture, { capture: true });
+      window.removeEventListener("keydown", handleUserGesture, { capture: true });
     };
   }, [primeNotificationAudio]);
 
