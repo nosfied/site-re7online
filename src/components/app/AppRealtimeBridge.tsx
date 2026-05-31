@@ -206,15 +206,35 @@ export default function AppRealtimeBridge() {
     processNotificationQueue();
   }, [processNotificationQueue]);
 
+  const showDesktopBrowserNotification = useCallback((request: AppNotificationRequest) => {
+    if (typeof window === "undefined" || isMobileLikeDevice()) return;
+    if (!request.notifyBrowser || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+    try {
+      new Notification(request.title, {
+        body: request.body,
+        tag: request.key,
+        silent: false,
+      });
+    } catch {
+      // Browser notification support varies by OS/profile; local audio still runs.
+    }
+  }, []);
+
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
+    const appIsFocused = document.hasFocus();
+    const mobileLike = isMobileLikeDevice();
     const soundEnabled = isSoundEnabled();
-    if (!appIsVisible && isMobileLikeDevice()) {
+    if (!appIsVisible && mobileLike) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
       }
       return;
+    }
+    if (!mobileLike && (!appIsVisible || !appIsFocused)) {
+      showDesktopBrowserNotification(request);
     }
     if (soundEnabled) {
       if (request.sound === "active") {
@@ -223,7 +243,7 @@ export default function AppRealtimeBridge() {
         enqueueNotification();
       }
     }
-  }, [enqueueNotification, playNotificationSound]);
+  }, [enqueueNotification, playNotificationSound, showDesktopBrowserNotification]);
 
   const handleInboundNotification = useCallback((
     event: Extract<AppRealtimeEvent, { type: "message.created" }>,
