@@ -21,6 +21,11 @@ const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const PUSH_PRESENCE_INTERVAL_MS = 4_000;
 
+function isMobileLikeDevice() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 767px)").matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem(INBOX_SOUND_ENABLED_STORAGE_KEY) === "1";
@@ -147,7 +152,7 @@ export default function AppRealtimeBridge() {
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
     const soundEnabled = isSoundEnabled();
-    if (!appIsVisible) {
+    if (!appIsVisible && isMobileLikeDevice()) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
