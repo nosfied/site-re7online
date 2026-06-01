@@ -62,6 +62,21 @@ function notifyServiceWorkerAppBackground() {
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_background" });
 }
 
+function isMobileLikeRuntime() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const hasTouch = navigator.maxTouchPoints > 1;
+  const iosLike = /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && hasTouch);
+  const androidLike = /Android/i.test(userAgent);
+  const narrowViewport = window.matchMedia("(max-width: 767px)").matches;
+  return iosLike || androidLike || (hasTouch && narrowViewport);
+}
+
+function shouldPlayLocalSoundWhenHidden() {
+  return !isMobileLikeRuntime();
+}
+
 type NotificationDebugWindow = Window &
   typeof globalThis & {
     __convertaNotificationState?: () => Record<string, unknown>;
@@ -77,6 +92,7 @@ export default function AppRealtimeBridge() {
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationTimerRef = useRef<number | null>(null);
+  const dismissedNotificationNoticeRef = useRef(false);
 
   const syncAudioState = useCallback((unlocked: boolean) => {
     dispatchAppAudioState({
@@ -182,15 +198,17 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
+    const allowHiddenLocalSound = !appIsVisible && shouldPlayLocalSoundWhenHidden();
     const soundEnabled = isSoundEnabled();
     debugNotification("request_received", {
       visible: appIsVisible,
       focused: document.hasFocus(),
+      allowHiddenLocalSound,
       soundEnabled,
       sound: request.sound,
       notifyBrowser: request.notifyBrowser,
     });
-    if (!appIsVisible) {
+    if (!appIsVisible && !allowHiddenLocalSound) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
@@ -298,6 +316,8 @@ export default function AppRealtimeBridge() {
       debugEnabled: isNotificationDebugEnabled(),
       visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
       focused: typeof document === "undefined" ? true : document.hasFocus(),
+      mobileLike: isMobileLikeRuntime(),
+      hiddenLocalSound: shouldPlayLocalSoundWhenHidden(),
       hasPrimedAudio: hasPrimedAudioRef.current,
       primaryAudioReady: Boolean(primaryAudioRef.current),
       activeAudioReady: Boolean(activeAudioRef.current),
@@ -433,7 +453,23 @@ export default function AppRealtimeBridge() {
       setShowNotificationNotice(false);
       return;
     }
-    setShowNotificationNotice(Boolean(loadAppSession()));
+
+    let cancelled = false;
+    const timers: number[] = [];
+    const updateNotice = () => {
+      if (cancelled || dismissedNotificationNoticeRef.current) return;
+      setShowNotificationNotice(Boolean(loadAppSession()));
+    };
+
+    updateNotice();
+    for (const delay of [250, 750, 1500]) {
+      timers.push(window.setTimeout(updateNotice, delay));
+    }
+
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -516,6 +552,7 @@ export default function AppRealtimeBridge() {
         <button
           type="button"
           onClick={() => {
+            dismissedNotificationNoticeRef.current = true;
             primeNotificationAudio();
             setShowNotificationNotice(false);
           }}
