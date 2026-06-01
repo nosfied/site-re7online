@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import ThemeSelector from "@/components/ThemeSelector";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
@@ -105,7 +105,14 @@ function isIosLikeDevice() {
 
 function getMobileViewportState() {
   if (typeof window === "undefined") {
-    return { isMobile: false, isIos: false, keyboardOpen: false, visualViewportHeight: 0, visualViewportOffsetTop: 0 };
+    return {
+      isMobile: false,
+      isIos: false,
+      keyboardOpen: false,
+      visualViewportHeight: 0,
+      visualViewportOffsetTop: 0,
+      keyboardGap: 0,
+    };
   }
   const visualViewport = window.visualViewport;
   const visualViewportHeight = visualViewport?.height ?? window.innerHeight;
@@ -117,6 +124,7 @@ function getMobileViewportState() {
     keyboardOpen: keyboardGap > 140,
     visualViewportHeight,
     visualViewportOffsetTop,
+    keyboardGap,
   };
 }
 
@@ -1461,9 +1469,10 @@ export default function AppInboxPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const conversationListRef = useRef<HTMLDivElement | null>(null);
-  const conversationListGestureRef = useRef<{ x: number; y: number; scrollTop: number; at: number } | null>(null);
   const conversationListLastScrollAtRef = useRef(0);
   const conversationListLastTouchOpenAtRef = useRef(0);
+  const conversationListSuppressClickUntilRef = useRef(0);
+  const conversationListTouchRef = useRef<{ x: number; y: number; scrollTop: number; moved: boolean } | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
@@ -1639,6 +1648,10 @@ export default function AppInboxPage() {
       const keyboardOpen = state.isMobile && state.keyboardOpen;
       setIsMobileKeyboardOpen(keyboardOpen);
       document.documentElement.dataset.mobileKeyboardOpen = keyboardOpen ? "true" : "false";
+      document.documentElement.style.setProperty(
+        "--mobile-keyboard-gap",
+        state.isIos && keyboardOpen ? `${Math.round(state.keyboardGap)}px` : "0px"
+      );
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
@@ -1647,6 +1660,7 @@ export default function AppInboxPage() {
     window.addEventListener("orientationchange", update);
     return () => {
       document.documentElement.dataset.mobileKeyboardOpen = "false";
+      document.documentElement.style.setProperty("--mobile-keyboard-gap", "0px");
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
@@ -1938,20 +1952,21 @@ export default function AppInboxPage() {
     const applyViewport = () => {
       const nextState = getMobileViewportState();
       if (!nextState.isMobile) return;
-      if (nextState.isIos && !nextState.keyboardOpen) {
+      document.documentElement.style.setProperty(
+        "--mobile-keyboard-gap",
+        nextState.isIos && nextState.keyboardOpen ? `${Math.round(nextState.keyboardGap)}px` : "0px"
+      );
+      if (nextState.isIos) {
         document.documentElement.style.setProperty("--app-viewport-height", "100dvh");
-        document.documentElement.dataset.mobileKeyboardOpen = "false";
       } else {
         const viewportHeight = Math.round(
-          nextState.isIos
-            ? nextState.visualViewportHeight
-            : nextState.visualViewportHeight + nextState.visualViewportOffsetTop
+          nextState.visualViewportHeight + nextState.visualViewportOffsetTop
         );
         if (viewportHeight > 0) {
           document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
         }
-        document.documentElement.dataset.mobileKeyboardOpen = nextState.keyboardOpen ? "true" : "false";
       }
+      document.documentElement.dataset.mobileKeyboardOpen = nextState.keyboardOpen ? "true" : "false";
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     };
     applyViewport();
@@ -3012,18 +3027,36 @@ export default function AppInboxPage() {
     stabilizeMobileConversationViewport();
   }, [readState, session?.user, stabilizeMobileConversationViewport]);
 
-  const shouldOpenConversationFromGesture = useCallback((event: PointerEvent<HTMLButtonElement>) => {
-    const start = conversationListGestureRef.current;
-    conversationListGestureRef.current = null;
-    if (event.pointerType !== "touch") return true;
-    if (!start) return false;
-    if (Date.now() - conversationListLastScrollAtRef.current < 180) return false;
+  const handleConversationTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches.item(0);
+    conversationListTouchRef.current = touch
+      ? {
+          x: touch.clientX,
+          y: touch.clientY,
+          scrollTop: conversationListRef.current?.scrollTop ?? 0,
+          moved: false,
+        }
+      : null;
+  }, []);
 
-    const deltaX = Math.abs(event.clientX - start.x);
-    const deltaY = Math.abs(event.clientY - start.y);
+  const handleConversationTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
+    const start = conversationListTouchRef.current;
+    const touch = event.touches.item(0);
+    if (!start || !touch) return;
+    const deltaX = Math.abs(touch.clientX - start.x);
+    const deltaY = Math.abs(touch.clientY - start.y);
     const scrollDelta = Math.abs((conversationListRef.current?.scrollTop ?? start.scrollTop) - start.scrollTop);
+    if (deltaX > 4 || deltaY > 4 || scrollDelta > 1) {
+      start.moved = true;
+      conversationListSuppressClickUntilRef.current = Date.now() + 900;
+    }
+  }, []);
 
-    return deltaX <= 4 && deltaY <= 4 && scrollDelta <= 1;
+  const shouldSuppressConversationOpen = useCallback(() => {
+    return (
+      Date.now() < conversationListSuppressClickUntilRef.current ||
+      Date.now() - conversationListLastScrollAtRef.current < 220
+    );
   }, []);
 
   useEffect(() => {
@@ -4394,6 +4427,7 @@ export default function AppInboxPage() {
             className="min-h-0 flex-1 select-none overflow-y-auto overflow-anchor-none touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
             onScroll={() => {
               conversationListLastScrollAtRef.current = Date.now();
+              conversationListSuppressClickUntilRef.current = Date.now() + 900;
             }}
           >
             {loadingConversations ? (
@@ -4434,25 +4468,20 @@ export default function AppInboxPage() {
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
               return (
-                <button
+                <div
                   key={conversationIdentity}
-                  type="button"
-                  onPointerDown={(event) => {
-                    if (event.pointerType !== "touch") return;
-                    conversationListGestureRef.current = {
-                      x: event.clientX,
-                      y: event.clientY,
-                      scrollTop: conversationListRef.current?.scrollTop ?? 0,
-                      at: Date.now(),
-                    };
-                  }}
-                  onPointerUp={(event) => {
-                    if (event.pointerType !== "touch") return;
-                    if (!shouldOpenConversationFromGesture(event)) {
-                      conversationListLastTouchOpenAtRef.current = Date.now();
-                      event.preventDefault();
+                  role="button"
+                  tabIndex={0}
+                  onTouchStart={handleConversationTouchStart}
+                  onTouchMove={handleConversationTouchMove}
+                  onTouchEnd={(event) => {
+                    const start = conversationListTouchRef.current;
+                    conversationListTouchRef.current = null;
+                    if (!start || start.moved || shouldSuppressConversationOpen()) {
+                      conversationListSuppressClickUntilRef.current = Date.now() + 900;
                       return;
                     }
+                    event.preventDefault();
                     conversationListLastTouchOpenAtRef.current = Date.now();
                     openConversationItem(item);
                   }}
@@ -4461,16 +4490,22 @@ export default function AppInboxPage() {
                       event.preventDefault();
                       return;
                     }
-                    if (Date.now() - conversationListLastScrollAtRef.current < 180) {
+                    if (shouldSuppressConversationOpen()) {
                       event.preventDefault();
                       return;
                     }
                     openConversationItem(item);
                   }}
-                  onTouchCancel={() => {
-                    conversationListGestureRef.current = null;
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    openConversationItem(item);
                   }}
-                  className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] active:bg-transparent max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
+                  onTouchCancel={() => {
+                    conversationListTouchRef.current = null;
+                    conversationListSuppressClickUntilRef.current = Date.now() + 900;
+                  }}
+                  className={`min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] focus-visible:ring-2 focus-visible:ring-re7-sky/70 max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
@@ -4526,7 +4561,7 @@ export default function AppInboxPage() {
                   <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isActive ? "text-white/88" : "text-white/68"}`}>
                     {getConversationPreviewText(item)}
                   </p>
-                </button>
+                </div>
               );
             })}
             {conversationNextCursor ? (
@@ -4988,7 +5023,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
+          <div className={`ios-keyboard-composer sticky bottom-0 z-20 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">

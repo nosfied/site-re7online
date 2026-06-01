@@ -7,6 +7,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-bottom-effective: var(--safe-bottom);
+  --mobile-keyboard-gap: 0px;
   --app-viewport-height: 100dvh;
   --app-bg: #06132a;
   --app-bg-soft: #0b1830;
@@ -101,6 +102,11 @@ html {
 
   html[data-ios-like="true"][data-mobile-keyboard-open="true"] {
     --safe-bottom-effective: 0px;
+  }
+
+  html[data-ios-like="true"][data-mobile-keyboard-open="true"] .ios-keyboard-composer {
+    transform: translate3d(0, calc(-1 * var(--mobile-keyboard-gap, 0px)), 0);
+    will-change: transform;
   }
 }
 
