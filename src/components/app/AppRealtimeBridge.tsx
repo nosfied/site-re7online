@@ -196,15 +196,17 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
+    const allowHiddenDesktopSound = !appIsVisible && !isMobileLikeRuntime();
     const soundEnabled = isSoundEnabled();
     debugNotification("request_received", {
       visible: appIsVisible,
       focused: document.hasFocus(),
+      allowHiddenDesktopSound,
       soundEnabled,
       sound: request.sound,
       notifyBrowser: request.notifyBrowser,
     });
-    if (!appIsVisible) {
+    if (!appIsVisible && !allowHiddenDesktopSound) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
@@ -313,7 +315,7 @@ export default function AppRealtimeBridge() {
       visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
       focused: typeof document === "undefined" ? true : document.hasFocus(),
       mobileLike: isMobileLikeRuntime(),
-      hiddenLocalSound: false,
+      hiddenLocalSound: !isMobileLikeRuntime(),
       hasPrimedAudio: hasPrimedAudioRef.current,
       primaryAudioReady: Boolean(primaryAudioRef.current),
       activeAudioReady: Boolean(activeAudioRef.current),
