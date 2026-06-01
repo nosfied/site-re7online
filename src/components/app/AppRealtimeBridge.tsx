@@ -84,6 +84,13 @@ function isMobileLikeRuntime() {
   return iosLike || androidLike || (hasTouch && narrowViewport);
 }
 
+function isIosLikeRuntime() {
+  if (typeof navigator === "undefined") return false;
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 type NotificationDebugWindow = Window &
   typeof globalThis & {
     __convertaNotificationState?: () => Record<string, unknown>;
@@ -97,6 +104,7 @@ export default function AppRealtimeBridge() {
   const sessionKeyRef = useRef<string | null>(null);
   const primaryAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const iosAudioContextRef = useRef<AudioContext | null>(null);
   const hasPrimedAudioRef = useRef(false);
   const notificationTimerRef = useRef<number | null>(null);
   const dismissedNotificationNoticeRef = useRef(false);
@@ -108,9 +116,53 @@ export default function AppRealtimeBridge() {
     });
   }, []);
 
+  const ensureIosAudioContext = useCallback(async () => {
+    if (typeof window === "undefined") return null;
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    const context = iosAudioContextRef.current ?? new AudioContextCtor();
+    iosAudioContextRef.current = context;
+    if (context.state === "suspended") {
+      await context.resume();
+    }
+    hasPrimedAudioRef.current = context.state === "running";
+    syncAudioState(hasPrimedAudioRef.current);
+    return context;
+  }, [syncAudioState]);
+
+  const playIosNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
+    const context = iosAudioContextRef.current;
+    if (!context || context.state !== "running") {
+      debugNotification("sound_skipped", { reason: "ios_audio_context_not_ready", sound });
+      return false;
+    }
+    try {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const now = context.currentTime;
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(sound === "active" ? 720 : 880, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(sound === "active" ? 0.11 : 0.16, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.18);
+      debugNotification("sound_played", { sound, engine: "ios_web_audio" });
+      return true;
+    } catch {
+      debugNotification("sound_failed", { sound, engine: "ios_web_audio" });
+      return false;
+    }
+  }, []);
+
   const playNotificationSound = useCallback((sound: AppNotificationRequest["sound"] = "primary") => {
     if (!isSoundEnabled() || typeof window === "undefined") {
       debugNotification("sound_skipped", { reason: "disabled_or_no_window", sound });
+      return;
+    }
+    if (isIosLikeRuntime() && playIosNotificationSound(sound)) {
       return;
     }
     try {
@@ -143,10 +195,28 @@ export default function AppRealtimeBridge() {
       debugNotification("sound_failed", { sound });
       // Browser autoplay policy can block audio; REST/polling still updates state.
     }
-  }, [syncAudioState]);
+  }, [playIosNotificationSound, syncAudioState]);
 
   const primeNotificationAudio = useCallback(() => {
     if (typeof window === "undefined") return;
+    if (isIosLikeRuntime()) {
+      void ensureIosAudioContext()
+        .then((context) => {
+          debugNotification(context?.state === "running" ? "audio_unlocked" : "audio_unlock_failed", {
+            engine: "ios_web_audio",
+            state: context?.state ?? "unavailable",
+          });
+        })
+        .catch((error) => {
+          hasPrimedAudioRef.current = false;
+          syncAudioState(false);
+          debugNotification("audio_unlock_failed", {
+            engine: "ios_web_audio",
+            errorName: error instanceof Error ? error.name : "unknown",
+          });
+        });
+      return;
+    }
     let attemptedAudio = false;
     for (const audio of [primaryAudioRef.current, activeAudioRef.current]) {
       if (!audio) continue;
@@ -184,7 +254,7 @@ export default function AppRealtimeBridge() {
       syncAudioState(false);
       debugNotification("audio_unlock_failed", { errorName: "audio_not_ready" });
     }
-  }, [syncAudioState]);
+  }, [ensureIosAudioContext, syncAudioState]);
 
   const processNotificationQueue = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -326,8 +396,10 @@ export default function AppRealtimeBridge() {
       focused: typeof document === "undefined" ? true : document.hasFocus(),
       active: isAppOperationallyActive(),
       mobileLike: isMobileLikeRuntime(),
+      iosLike: isIosLikeRuntime(),
       hiddenLocalSound: false,
       hasPrimedAudio: hasPrimedAudioRef.current,
+      iosAudioState: iosAudioContextRef.current?.state ?? null,
       primaryAudioReady: Boolean(primaryAudioRef.current),
       activeAudioReady: Boolean(activeAudioRef.current),
       primaryReadyState: primaryAudioRef.current?.readyState ?? null,
