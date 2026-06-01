@@ -84,14 +84,6 @@ function isMobileLikeRuntime() {
   return iosLike || androidLike || (hasTouch && narrowViewport);
 }
 
-function isIosLikeRuntime() {
-  if (typeof navigator === "undefined") return false;
-  const userAgent = navigator.userAgent || "";
-  const platform = navigator.platform || "";
-  const hasTouch = navigator.maxTouchPoints > 1;
-  return /iPad|iPhone|iPod/i.test(userAgent) || (platform === "MacIntel" && hasTouch);
-}
-
 type NotificationDebugWindow = Window &
   typeof globalThis & {
     __convertaNotificationState?: () => Record<string, unknown>;
@@ -127,9 +119,7 @@ export default function AppRealtimeBridge() {
         debugNotification("sound_skipped", { reason: "audio_not_ready", sound });
         return;
       }
-      const nextAudio = isIosLikeRuntime() ? baseAudio : (baseAudio.cloneNode(true) as HTMLAudioElement);
-      nextAudio.pause();
-      nextAudio.muted = false;
+      const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
       nextAudio.volume = sound === "active" ? 0.42 : 0.95;
       nextAudio.currentTime = 0;
       void nextAudio
@@ -163,22 +153,18 @@ export default function AppRealtimeBridge() {
       attemptedAudio = true;
       try {
         const previousVolume = audio.volume;
-        const previousMuted = audio.muted;
-        audio.muted = true;
         audio.volume = 0;
         const playAttempt = audio.play();
         void playAttempt
           .then(() => {
             audio.pause();
             audio.currentTime = 0;
-            audio.muted = previousMuted;
             audio.volume = previousVolume || 0.95;
             hasPrimedAudioRef.current = true;
             syncAudioState(true);
             debugNotification("audio_unlocked");
           })
           .catch((error) => {
-            audio.muted = previousMuted;
             audio.volume = previousVolume || 0.95;
             hasPrimedAudioRef.current = false;
             syncAudioState(false);
@@ -577,6 +563,7 @@ export default function AppRealtimeBridge() {
           type="button"
           onClick={() => {
             dismissedNotificationNoticeRef.current = true;
+            primeNotificationAudio();
             setShowNotificationNotice(false);
           }}
           className="shrink-0 rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-extrabold text-white"
