@@ -395,6 +395,8 @@ export default function AppRealtimeBridge() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const handleUserGesture = () => {
+      const currentPathname = window.location.pathname;
+      if (!currentPathname.startsWith("/app") || currentPathname === "/app/login") return;
       if (!isSoundEnabled()) return;
       if (hasPrimedAudioRef.current) return;
       primeNotificationAudio();

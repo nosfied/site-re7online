@@ -103,6 +103,23 @@ function isIosLikeDevice() {
   return /iPad|iPhone|iPod/i.test(ua) || (platform === "MacIntel" && touchPoints > 1);
 }
 
+function getMobileViewportState() {
+  if (typeof window === "undefined") {
+    return { isMobile: false, isIos: false, keyboardOpen: false, visualViewportHeight: 0, visualViewportOffsetTop: 0 };
+  }
+  const visualViewport = window.visualViewport;
+  const visualViewportHeight = visualViewport?.height ?? window.innerHeight;
+  const visualViewportOffsetTop = visualViewport?.offsetTop ?? 0;
+  const keyboardGap = Math.max(0, window.innerHeight - visualViewportHeight - visualViewportOffsetTop);
+  return {
+    isMobile: window.matchMedia("(max-width: 767px)").matches,
+    isIos: isIosLikeDevice(),
+    keyboardOpen: keyboardGap > 140,
+    visualViewportHeight,
+    visualViewportOffsetTop,
+  };
+}
+
 function isStandalonePwa() {
   if (typeof window === "undefined") return false;
   const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
@@ -1617,10 +1634,10 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const update = () => {
-      const isMobile = window.matchMedia("(max-width: 767px)").matches;
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      const keyboardGap = window.innerHeight - viewportHeight;
-      setIsMobileKeyboardOpen(isMobile && keyboardGap > 140);
+      const state = getMobileViewportState();
+      const keyboardOpen = state.isMobile && state.keyboardOpen;
+      setIsMobileKeyboardOpen(keyboardOpen);
+      document.documentElement.dataset.mobileKeyboardOpen = keyboardOpen ? "true" : "false";
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
@@ -1628,6 +1645,7 @@ export default function AppInboxPage() {
     window.addEventListener("resize", update);
     window.addEventListener("orientationchange", update);
     return () => {
+      document.documentElement.dataset.mobileKeyboardOpen = "false";
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
@@ -1914,11 +1932,20 @@ export default function AppInboxPage() {
 
   const stabilizeMobileConversationViewport = useCallback(() => {
     if (typeof window === "undefined") return;
-    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    const state = getMobileViewportState();
+    if (!state.isMobile) return;
     const applyViewport = () => {
-      const viewportHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
-      if (viewportHeight > 0) {
-        document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+      const nextState = getMobileViewportState();
+      if (!nextState.isMobile) return;
+      if (nextState.isIos && !nextState.keyboardOpen) {
+        document.documentElement.style.setProperty("--app-viewport-height", "100dvh");
+        document.documentElement.dataset.mobileKeyboardOpen = "false";
+      } else {
+        const viewportHeight = Math.round(nextState.visualViewportHeight + nextState.visualViewportOffsetTop);
+        if (viewportHeight > 0) {
+          document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
+        }
+        document.documentElement.dataset.mobileKeyboardOpen = nextState.keyboardOpen ? "true" : "false";
       }
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     };
@@ -4915,7 +4942,7 @@ export default function AppInboxPage() {
             </div>
           </div>
           {selectedConversationKey && showJumpToLatest ? (
-            <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] flex justify-center px-4 ${isMobileKeyboardOpen ? "max-md:bottom-[4.75rem]" : "max-md:bottom-[calc(7.5rem+env(safe-area-inset-bottom))]"}`}>
+            <div className={`pointer-events-none absolute inset-x-0 bottom-[calc(6.25rem+var(--safe-bottom-effective))] flex justify-center px-4 ${isMobileKeyboardOpen ? "max-md:bottom-[4.75rem]" : "max-md:bottom-[calc(7.5rem+var(--safe-bottom-effective))]"}`}>
               <button
                 type="button"
                 onClick={handleJumpToLatest}
@@ -4926,7 +4953,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+env(safe-area-inset-bottom))]"}`}>
+          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">

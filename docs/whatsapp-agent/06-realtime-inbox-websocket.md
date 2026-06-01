@@ -178,6 +178,24 @@ Observacao de navegador:
 - browsers podem limitar ou suspender JavaScript em abas ocultas/background;
 - notificacoes visuais e ponto verde continuam funcionando;
 - nao tentar burlar autoplay policy ou tocar audio local com a tela bloqueada.
+- no iPhone/iOS, nao inicializar audio na tela de login; o desbloqueio de audio
+  deve ocorrer somente em area autenticada do app, apos gesto do usuario.
+
+### iPhone, teclado e safe-area
+
+O inbox mobile usa `visualViewport` para ajustar a altura operacional do app,
+mas iOS/WebKit tem comportamento proprio quando o teclado abre:
+
+- o teclado pode reduzir o visual viewport sem alterar o layout viewport;
+- `env(safe-area-inset-bottom)` pode continuar positivo mesmo com o teclado
+  aberto, criando uma faixa vazia acima do teclado;
+- por isso, enquanto o teclado mobile esta aberto no iOS, o app zera o
+  `--safe-bottom-effective`;
+- ao fechar o teclado no iOS, a altura do app volta para `100dvh` para evitar
+  que uma altura reduzida fique presa no PWA.
+
+Nao trocar essa regra por `100vh` global nem aplicar a correcao de iOS no
+Android: o Android ja usa o comportamento padrao de resize do viewport.
 
 ## Read-state e primeira nao lida
 
