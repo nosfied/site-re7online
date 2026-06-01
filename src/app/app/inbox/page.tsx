@@ -3013,7 +3013,7 @@ export default function AppInboxPage() {
     if (!start) return;
     const deltaX = Math.abs(event.clientX - start.x);
     const deltaY = Math.abs(event.clientY - start.y);
-    if (deltaX > 8 || deltaY > 8 || conversationListTouchMovedRef.current || Date.now() < conversationListIgnoreClickUntilRef.current) {
+    if (deltaX > 4 || deltaY > 4 || conversationListTouchMovedRef.current || Date.now() < conversationListIgnoreClickUntilRef.current) {
       conversationListIgnoreClickUntilRef.current = Date.now() + 700;
       return;
     }
@@ -4386,6 +4386,10 @@ export default function AppInboxPage() {
           <div
             ref={conversationListRef}
             className="min-h-0 flex-1 select-none overflow-y-auto overflow-anchor-none touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
+            onScroll={() => {
+              conversationListTouchMovedRef.current = true;
+              conversationListIgnoreClickUntilRef.current = Date.now() + 700;
+            }}
             onTouchStart={(event) => {
               const touch = event.touches.item(0);
               conversationListTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
@@ -4397,7 +4401,7 @@ export default function AppInboxPage() {
               if (!start || !touch) return;
               const deltaX = Math.abs(touch.clientX - start.x);
               const deltaY = Math.abs(touch.clientY - start.y);
-              if (deltaX > 8 || deltaY > 8) {
+              if (deltaX > 4 || deltaY > 4) {
                 conversationListTouchMovedRef.current = true;
                 conversationListIgnoreClickUntilRef.current = Date.now() + 700;
               }
@@ -4453,6 +4457,16 @@ export default function AppInboxPage() {
                   tabIndex={0}
                   onPointerDown={(event) => {
                     conversationListPointerStartRef.current = { x: event.clientX, y: event.clientY };
+                  }}
+                  onPointerMove={(event) => {
+                    const start = conversationListPointerStartRef.current;
+                    if (!start) return;
+                    const deltaX = Math.abs(event.clientX - start.x);
+                    const deltaY = Math.abs(event.clientY - start.y);
+                    if (deltaX > 4 || deltaY > 4) {
+                      conversationListTouchMovedRef.current = true;
+                      conversationListIgnoreClickUntilRef.current = Date.now() + 700;
+                    }
                   }}
                   onPointerUp={(event) => handleConversationRowPointerUp(item, event)}
                   onKeyDown={(event) => {
@@ -4985,7 +4999,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2 max-md:[html[data-ios-like='true']_&]:fixed max-md:[html[data-ios-like='true']_&]:inset-x-0 max-md:[html[data-ios-like='true']_&]:bottom-0 max-md:[html[data-ios-like='true']_&]:z-40" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
+          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-1" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
