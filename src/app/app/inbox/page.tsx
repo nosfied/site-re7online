@@ -78,6 +78,7 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
+const INBOX_UX_DEBUG_STORAGE_KEY = "converta_inbox_ux_debug";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
 const mediaBlobCache = new Map<string, Blob>();
@@ -207,7 +208,9 @@ function logInboxUxEvent(
   event: "inbox.priority.rendered" | "inbox.sorted" | "inbox.suggestion.used",
   payload: Record<string, unknown>
 ) {
-  console.info(JSON.stringify({ event, ...payload }));
+  if (typeof window !== "undefined" && window.localStorage.getItem(INBOX_UX_DEBUG_STORAGE_KEY) === "1") {
+    console.info(JSON.stringify({ event, ...payload }));
+  }
   if (!session) return;
   void logAppInboxEvent(session, event, payload).catch(() => {
     // UI logging must never affect inbox usage.

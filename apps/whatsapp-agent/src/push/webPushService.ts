@@ -123,6 +123,9 @@ export function shouldSuppressPushForForegroundSubscription(params: {
   const presence = pushPresenceByEndpoint.get(params.endpoint);
   if (!presence) return false;
   if (presence.clientId !== params.clientId || presence.userId !== params.userId) return false;
+  // Frontend sends visible=true only while the page can handle websocket + local sound.
+  // Focus is intentionally not used for suppression because desktop browsers can report
+  // focused=false while the visible inbox is still expected to beep locally.
   if (!presence.visible) return false;
   return nowMs - presence.updatedAtMs <= PUSH_PRESENCE_TTL_MS;
 }

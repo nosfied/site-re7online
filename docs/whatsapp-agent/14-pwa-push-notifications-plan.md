@@ -21,8 +21,12 @@ Converta PWA e registra a implementacao inicial da Sprint 66O.
 ## Estado atual apos 66O
 
 - O inbox usa websocket/realtime enquanto a aplicacao esta aberta.
-- O som local segue desativado por padrao porque depende de gesto do usuario e
-  nao cobre tela travada/background de forma confiavel.
+- O sininho controla som local e subscription push do dispositivo quando
+  suportado.
+- O som local depende de gesto do usuario e so e confiavel em foreground
+  (`document.visibilityState === "visible"`).
+- O app nao tenta tocar som local em background/tela travada; nesses estados, a
+  responsabilidade e do Web Push nativo.
 - Web Push foi implementado com Service Worker, VAPID, subscription persistida
   por tenant/usuario e disparo backend em mensagem inbound.
 - Se VAPID nao estiver configurado, a aplicacao continua funcionando sem push e
@@ -107,6 +111,40 @@ O payload e redigido:
 
 Nao inclui texto da mensagem, waId, PSID, IG user id, telefone, token ou raw.
 
+### Presenca foreground/background
+
+A presenca do app e enviada pelo frontend para `/app/push/presence` por
+subscription/device.
+
+Contrato atual:
+
+- `visible=true`: a pagina esta em foreground operacional e deve receber
+  websocket + som local;
+- `visible=false`: a pagina esta em background/oculta e deve receber Web Push se
+  elegivel;
+- `focused` e enviado para diagnostico, mas nao deve ser usado sozinho para
+  decidir som local ou supressao de push;
+- em desktop/notebook, o browser pode reportar `focused=false` quando outra
+  janela esta ativa, mesmo com o inbox visivel; o som local deve continuar
+  tocando;
+- em mobile/PWA, focus tambem e instavel; o critério confiavel para a fronteira
+  principal e `visibilityState`.
+
+Regra anti-duplicidade:
+
+- frontend visivel toca som local e envia presenca `visible=true`;
+- backend suprime push somente para subscriptions com `visible=true` recente;
+- frontend hidden envia `visible=false`; backend pode enviar push;
+- service worker ignora push recebido logo apos mensagem `converta.app_foreground`
+  para evitar duplicidade residual em Android/desktop.
+
+Nao reintroduzir:
+
+- bloqueio de som por `document.hasFocus()`;
+- tentativa de tocar audio local quando `visibilityState !== "visible"`;
+- polling agressivo em background;
+- payload push com PII.
+
 ## Objetivo futuro
 
 Enviar notificacoes push para operadores quando uma conversa elegivel receber
@@ -150,7 +188,7 @@ O envio deve reutilizar a mesma politica de elegibilidade ja usada no realtime:
 - usuario pode ver o setor;
 - conversa atribuida ao usuario ou ao setor correto;
 - nao notificar o proprio autor de outbound;
-- nao duplicar notificacao para conversa aberta em foco.
+- nao duplicar notificacao para app visivel/foreground.
 
 ## Deduplicacao
 

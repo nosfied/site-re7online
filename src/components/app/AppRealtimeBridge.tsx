@@ -53,6 +53,10 @@ async function getCurrentPushEndpoint() {
 
 function isAppOperationallyActive() {
   if (typeof document === "undefined") return true;
+  // Notification contract:
+  // - visible page: app is foreground for local sound, even if another desktop window has focus;
+  // - hidden/background page: no local JS sound, native Web Push is responsible.
+  // Do not add document.hasFocus() here; Chrome can report focused=false while the inbox is visible.
   return document.visibilityState === "visible";
 }
 

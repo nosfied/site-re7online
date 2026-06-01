@@ -140,6 +140,31 @@ Regras atuais:
 - conversa ativa nao recebe ponto verde/unread;
 - conversa nao ativa ou ausencia de conversa selecionada recebe ponto verde/unread.
 
+### Contrato de som local vs push nativo
+
+Este contrato evita regressao entre desktop/notebook e mobile:
+
+- se `document.visibilityState === "visible"`, o app e considerado em foreground
+  para som local, mesmo que `document.hasFocus()` seja `false`;
+- isso cobre desktop/notebook com o inbox visivel e outra janela em foco;
+- nao usar `document.hasFocus()` como bloqueio para tocar som local;
+- se `document.visibilityState !== "visible"`, o app nao deve tentar tocar som
+  local via JavaScript;
+- em background, aba oculta, PWA minimizado ou tela travada, a notificacao deve
+  ser feita via Web Push/Service Worker;
+- no mobile, especialmente iOS/Android, JavaScript, timers e websocket podem ser
+  suspensos em background; nao depender de audio local nesses estados.
+
+Fluxo esperado:
+
+1. WebSocket recebe `message.created`.
+2. `AppRealtimeBridge` avalia se a pagina esta `visible`.
+3. Se estiver `visible`, toca o som local configurado pelo sininho.
+4. Se estiver `hidden`, nao toca audio local; o backend deve enviar Web Push se
+   existir subscription elegivel.
+5. O backend suprime Web Push apenas para subscriptions com presenca `visible`
+   recente.
+
 Sons:
 
 - `public/sounds/inbox-notification.wav`: som principal;
@@ -150,8 +175,9 @@ Observacao de navegador:
 
 - apos `F5`/reload, Chrome e outros navegadores podem bloquear audio programatico
   ate haver interacao real do usuario na pagina atual;
+- browsers podem limitar ou suspender JavaScript em abas ocultas/background;
 - notificacoes visuais e ponto verde continuam funcionando;
-- nao tentar burlar autoplay policy.
+- nao tentar burlar autoplay policy ou tocar audio local com a tela bloqueada.
 
 ## Read-state e primeira nao lida
 
