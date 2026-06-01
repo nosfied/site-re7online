@@ -13,6 +13,8 @@ import {
   saveAppSession,
 } from "@/lib/appClientApi";
 
+const MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY = "converta_mobile_notification_notice_after_login";
+
 export default function AppLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -61,6 +63,9 @@ export default function AppLoginPage() {
         profile: response.profile,
       };
       saveAppSession(session);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY, "1");
+      }
       router.replace("/app/inbox");
     } catch (err) {
       const typed = err as { message?: string };

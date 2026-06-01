@@ -20,6 +20,7 @@ import { loadAppSession, updateAppPushPresence, type AppSession } from "@/lib/ap
 const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const NOTIFICATION_DEBUG_STORAGE_KEY = "converta_notification_debug";
+const MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY = "converta_mobile_notification_notice_after_login";
 const PUSH_PRESENCE_INTERVAL_MS = 4_000;
 const PRIMARY_NOTIFICATION_SOUND_URL = "/sounds/inbox-notification.wav";
 const ACTIVE_NOTIFICATION_SOUND_URL = "/sounds/inbox-active-message.wav";
@@ -458,34 +459,26 @@ export default function AppRealtimeBridge() {
   }, [handleRealtimeEvent, pathname]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const currentPathname = pathname ?? "";
     if (!currentPathname.startsWith("/app/inbox")) {
       setShowNotificationNotice(false);
       return;
     }
-
-    let cancelled = false;
-    const timers: number[] = [];
-    let attempts = 0;
-    const updateNotice = () => {
-      if (cancelled || dismissedNotificationNoticeRef.current) return;
-      const hasSession = Boolean(loadAppSession());
-      setShowNotificationNotice(hasSession);
-      attempts += 1;
-      if (!hasSession && attempts < 20) {
-        timers.push(window.setTimeout(updateNotice, 500));
-      }
-    };
-
-    updateNotice();
-    for (const delay of [250, 750, 1500, 3000]) {
-      timers.push(window.setTimeout(updateNotice, delay));
+    if (dismissedNotificationNoticeRef.current) {
+      setShowNotificationNotice(false);
+      return;
     }
-
-    return () => {
-      cancelled = true;
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
+    const isMobile = isMobileLikeRuntime();
+    const hasLoginNoticeMarker = window.sessionStorage.getItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY) === "1";
+    if (isMobile && !hasLoginNoticeMarker) {
+      setShowNotificationNotice(false);
+      return;
+    }
+    if (hasLoginNoticeMarker) {
+      window.sessionStorage.removeItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY);
+    }
+    setShowNotificationNotice(Boolean(loadAppSession()));
   }, [pathname]);
 
   useEffect(() => {
