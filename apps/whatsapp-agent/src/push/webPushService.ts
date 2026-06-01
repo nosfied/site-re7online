@@ -116,8 +116,6 @@ export function shouldSuppressPushForForegroundSubscription(params: {
   clientId: string;
   userId: string;
   endpoint: string;
-  userAgent?: string | null;
-  deviceLabel?: string | null;
   nowMs?: number;
 }) {
   const nowMs = params.nowMs ?? Date.now();
@@ -126,13 +124,7 @@ export function shouldSuppressPushForForegroundSubscription(params: {
   if (!presence) return false;
   if (presence.clientId !== params.clientId || presence.userId !== params.userId) return false;
   if (!presence.visible) return false;
-  if (!presence.focused && !isMobilePushSubscription(params)) return false;
   return nowMs - presence.updatedAtMs <= PUSH_PRESENCE_TTL_MS;
-}
-
-function isMobilePushSubscription(params: { userAgent?: string | null; deviceLabel?: string | null }) {
-  const fingerprint = `${params.deviceLabel ?? ""} ${params.userAgent ?? ""}`;
-  return /android|iphone|ipad|ipod|mobile|pwa/i.test(fingerprint);
 }
 
 export async function getPushStatus(params: { clientId: string; userId: string }) {
@@ -323,8 +315,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
       p256dh: true,
       auth: true,
       userId: true,
-      userAgent: true,
-      deviceLabel: true,
     },
   });
 
@@ -342,8 +332,6 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
         clientId: event.clientId,
         userId: subscription.userId,
         endpoint: subscription.endpoint,
-        userAgent: subscription.userAgent,
-        deviceLabel: subscription.deviceLabel,
       })
     ) {
       logger.info({

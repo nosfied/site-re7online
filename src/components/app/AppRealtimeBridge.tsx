@@ -53,8 +53,7 @@ async function getCurrentPushEndpoint() {
 
 function isAppOperationallyActive() {
   if (typeof document === "undefined") return true;
-  if (document.visibilityState !== "visible") return false;
-  return document.hasFocus() || isMobileLikeRuntime();
+  return document.visibilityState === "visible";
 }
 
 function notifyServiceWorkerAppForeground() {
@@ -499,7 +498,7 @@ export default function AppRealtimeBridge() {
       if (cancelled) return;
       const visible = document.visibilityState === "visible";
       const focused = document.hasFocus();
-      const active = visible && (focused || isMobileLikeRuntime());
+      const active = visible;
       if (active) {
         notifyServiceWorkerAppForeground();
       } else {
