@@ -105,7 +105,31 @@ test("hidden or expired presence does not suppress push", () => {
   );
 });
 
-test("visible presence suppresses push even when focus is unreliable", () => {
+test("desktop visible but unfocused presence does not suppress push", () => {
+  const endpoint = "https://push.example.test/desktop-visible-unfocused";
+  updatePushPresence({
+    clientId: "client-1",
+    userId: "user-1",
+    endpoint,
+    visible: true,
+    focused: false,
+    nowMs: 300_000,
+  });
+
+  assert.equal(
+    shouldSuppressPushForForegroundSubscription({
+      clientId: "client-1",
+      userId: "user-1",
+      endpoint,
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) Chrome/125",
+      deviceLabel: "Desktop",
+      nowMs: 301_000,
+    }),
+    false
+  );
+});
+
+test("mobile visible presence suppresses push even when focus is unreliable", () => {
   const endpoint = "https://push.example.test/ios-background-stale-visible";
   updatePushPresence({
     clientId: "client-1",
@@ -121,6 +145,8 @@ test("visible presence suppresses push even when focus is unreliable", () => {
       clientId: "client-1",
       userId: "user-1",
       endpoint,
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148",
+      deviceLabel: "iOS PWA",
       nowMs: 301_000,
     }),
     true

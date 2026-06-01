@@ -51,10 +51,15 @@ async function getCurrentPushEndpoint() {
   return subscription?.endpoint ?? null;
 }
 
+function isAppOperationallyActive() {
+  if (typeof document === "undefined") return true;
+  if (document.visibilityState !== "visible") return false;
+  return document.hasFocus() || isMobileLikeRuntime();
+}
+
 function notifyServiceWorkerAppForeground() {
-  if (typeof navigator === "undefined" || typeof document === "undefined") return;
+  if (typeof navigator === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
-  if (document.visibilityState !== "visible") return;
   navigator.serviceWorker.controller?.postMessage({ type: "converta.app_foreground" });
 }
 
@@ -196,22 +201,23 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
-    const allowHiddenDesktopSound = !appIsVisible && !isMobileLikeRuntime();
+    const appIsFocused = document.hasFocus();
+    const appIsActive = isAppOperationallyActive();
     const soundEnabled = isSoundEnabled();
     debugNotification("request_received", {
       visible: appIsVisible,
-      focused: document.hasFocus(),
-      allowHiddenDesktopSound,
+      focused: appIsFocused,
+      active: appIsActive,
       soundEnabled,
       sound: request.sound,
       notifyBrowser: request.notifyBrowser,
     });
-    if (!appIsVisible && !allowHiddenDesktopSound) {
+    if (!appIsActive) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
       }
-      debugNotification("request_skipped", { reason: "hidden", sound: request.sound });
+      debugNotification("request_skipped", { reason: "not_active", sound: request.sound });
       return;
     }
     if (soundEnabled) {
@@ -314,8 +320,9 @@ export default function AppRealtimeBridge() {
       debugEnabled: isNotificationDebugEnabled(),
       visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
       focused: typeof document === "undefined" ? true : document.hasFocus(),
+      active: isAppOperationallyActive(),
       mobileLike: isMobileLikeRuntime(),
-      hiddenLocalSound: !isMobileLikeRuntime(),
+      hiddenLocalSound: false,
       hasPrimedAudio: hasPrimedAudioRef.current,
       primaryAudioReady: Boolean(primaryAudioRef.current),
       activeAudioReady: Boolean(activeAudioRef.current),
@@ -491,14 +498,15 @@ export default function AppRealtimeBridge() {
     const sendPresence = async (force = false) => {
       if (cancelled) return;
       const visible = document.visibilityState === "visible";
-      if (visible) {
+      const focused = document.hasFocus();
+      const active = visible && (focused || isMobileLikeRuntime());
+      if (active) {
         notifyServiceWorkerAppForeground();
       } else {
         notifyServiceWorkerAppBackground();
       }
       const endpoint = await getCurrentPushEndpoint().catch(() => null);
       if (!endpoint || cancelled) return;
-      const focused = document.hasFocus();
       const now = Date.now();
       const key = `${endpoint}:${visible ? "1" : "0"}:${focused ? "1" : "0"}`;
       if (!force && key === lastSentKey && now - lastSentAt < PUSH_PRESENCE_INTERVAL_MS) return;
