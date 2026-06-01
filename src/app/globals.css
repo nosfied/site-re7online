@@ -108,6 +108,14 @@ html {
     transform: translate3d(0, calc(-1 * var(--mobile-keyboard-gap, 0px)), 0);
     will-change: transform;
   }
+
+  html[data-ios-like="true"] .ios-conversation-row,
+  html[data-ios-like="true"] .ios-conversation-row:focus,
+  html[data-ios-like="true"] .ios-conversation-row:focus-visible {
+    outline: none;
+    box-shadow: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @supports (-webkit-touch-callout: none) {

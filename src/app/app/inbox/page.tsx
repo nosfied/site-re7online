@@ -1456,6 +1456,7 @@ export default function AppInboxPage() {
   >("checking");
   const [pushBusy, setPushBusy] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isIosViewport, setIsIosViewport] = useState(false);
   const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
   const pushAutoEnableAttemptedRef = useRef(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -1635,7 +1636,10 @@ export default function AppInboxPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const query = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobileViewport(query.matches);
+    const update = () => {
+      setIsMobileViewport(query.matches);
+      setIsIosViewport(query.matches && isIosLikeDevice());
+    };
     update();
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
@@ -1648,9 +1652,10 @@ export default function AppInboxPage() {
       const keyboardOpen = state.isMobile && state.keyboardOpen;
       setIsMobileKeyboardOpen(keyboardOpen);
       document.documentElement.dataset.mobileKeyboardOpen = keyboardOpen ? "true" : "false";
+      const keyboardLift = Math.max(0, state.keyboardGap - 36);
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
-        state.isIos && keyboardOpen ? `${Math.round(state.keyboardGap)}px` : "0px"
+        state.isIos && keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
       );
     };
     update();
@@ -1952,9 +1957,10 @@ export default function AppInboxPage() {
     const applyViewport = () => {
       const nextState = getMobileViewportState();
       if (!nextState.isMobile) return;
+      const keyboardLift = Math.max(0, nextState.keyboardGap - 36);
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
-        nextState.isIos && nextState.keyboardOpen ? `${Math.round(nextState.keyboardGap)}px` : "0px"
+        nextState.isIos && nextState.keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
       );
       if (nextState.isIos) {
         document.documentElement.style.setProperty("--app-viewport-height", "100dvh");
@@ -4471,7 +4477,7 @@ export default function AppInboxPage() {
                 <div
                   key={conversationIdentity}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={isIosViewport ? -1 : 0}
                   onTouchStart={handleConversationTouchStart}
                   onTouchMove={handleConversationTouchMove}
                   onTouchEnd={(event) => {
@@ -4483,6 +4489,7 @@ export default function AppInboxPage() {
                     }
                     event.preventDefault();
                     conversationListLastTouchOpenAtRef.current = Date.now();
+                    event.currentTarget.blur();
                     openConversationItem(item);
                   }}
                   onClick={(event) => {
@@ -4493,6 +4500,9 @@ export default function AppInboxPage() {
                     if (shouldSuppressConversationOpen()) {
                       event.preventDefault();
                       return;
+                    }
+                    if (isIosViewport) {
+                      event.currentTarget.blur();
                     }
                     openConversationItem(item);
                   }}
@@ -4505,7 +4515,7 @@ export default function AppInboxPage() {
                     conversationListTouchRef.current = null;
                     conversationListSuppressClickUntilRef.current = Date.now() + 900;
                   }}
-                  className={`min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] focus-visible:ring-2 focus-visible:ring-re7-sky/70 max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
+                  className={`ios-conversation-row min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] focus-visible:ring-2 focus-visible:ring-re7-sky/70 max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
