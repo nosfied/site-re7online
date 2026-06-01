@@ -105,8 +105,7 @@ html {
   }
 
   html[data-ios-like="true"][data-mobile-keyboard-open="true"] .ios-keyboard-composer {
-    transform: translate3d(0, calc(-1 * var(--mobile-keyboard-gap, 0px)), 0);
-    will-change: transform;
+    transform: none;
   }
 
   html[data-ios-like="true"] .ios-conversation-row,

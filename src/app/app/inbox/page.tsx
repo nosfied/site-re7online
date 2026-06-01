@@ -128,10 +128,15 @@ function getMobileViewportState() {
   };
 }
 
-function getIosKeyboardLift(keyboardGap: number) {
-  if (typeof window === "undefined") return keyboardGap;
-  const responsiveCorrection = Math.min(88, Math.max(44, window.innerHeight * 0.085));
-  return Math.max(0, keyboardGap - responsiveCorrection);
+function getMobileAppViewportHeight(state = getMobileViewportState()) {
+  if (!state.isMobile) return null;
+  if (state.isIos) {
+    if (!state.keyboardOpen) return "100dvh";
+    const viewportHeight = Math.round(state.visualViewportHeight);
+    return viewportHeight > 0 ? `${viewportHeight}px` : "100dvh";
+  }
+  const viewportHeight = Math.round(state.visualViewportHeight + state.visualViewportOffsetTop);
+  return viewportHeight > 0 ? `${viewportHeight}px` : null;
 }
 
 function isStandalonePwa() {
@@ -1658,10 +1663,13 @@ export default function AppInboxPage() {
       const keyboardOpen = state.isMobile && state.keyboardOpen;
       setIsMobileKeyboardOpen(keyboardOpen);
       document.documentElement.dataset.mobileKeyboardOpen = keyboardOpen ? "true" : "false";
-      const keyboardLift = getIosKeyboardLift(state.keyboardGap);
+      const appViewportHeight = getMobileAppViewportHeight(state);
+      if (appViewportHeight) {
+        document.documentElement.style.setProperty("--app-viewport-height", appViewportHeight);
+      }
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
-        state.isIos && keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
+        "0px"
       );
     };
     update();
@@ -1963,21 +1971,14 @@ export default function AppInboxPage() {
     const applyViewport = () => {
       const nextState = getMobileViewportState();
       if (!nextState.isMobile) return;
-      const keyboardLift = getIosKeyboardLift(nextState.keyboardGap);
+      const appViewportHeight = getMobileAppViewportHeight(nextState);
+      if (appViewportHeight) {
+        document.documentElement.style.setProperty("--app-viewport-height", appViewportHeight);
+      }
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
-        nextState.isIos && nextState.keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
+        "0px"
       );
-      if (nextState.isIos) {
-        document.documentElement.style.setProperty("--app-viewport-height", "100dvh");
-      } else {
-        const viewportHeight = Math.round(
-          nextState.visualViewportHeight + nextState.visualViewportOffsetTop
-        );
-        if (viewportHeight > 0) {
-          document.documentElement.style.setProperty("--app-viewport-height", `${viewportHeight}px`);
-        }
-      }
       document.documentElement.dataset.mobileKeyboardOpen = nextState.keyboardOpen ? "true" : "false";
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     };
