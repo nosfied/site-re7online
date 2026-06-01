@@ -4922,7 +4922,7 @@ export default function AppInboxPage() {
             ) : null}
           </div>
 
-          <div ref={timelineRef} className={`wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:pt-3 [@media(max-height:760px)]:pt-2 ${isMobileKeyboardOpen ? "max-md:pb-2 max-md:scroll-pb-2" : "max-md:pb-40 max-md:scroll-pb-40"}`}>
+          <div ref={timelineRef} className={`wa-chat-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 scroll-pb-28 max-[1366px]:px-3 max-[1366px]:py-3 max-md:px-3 max-md:pt-3 [@media(max-height:760px)]:pt-2 ${isMobileKeyboardOpen ? "max-md:pb-2 max-md:scroll-pb-2" : "max-md:pb-4 max-md:scroll-pb-4"}`}>
             {!selectedConversationWaId ? (
               <div className="flex h-full min-h-[260px] items-center justify-center">
                 <div className="max-w-sm rounded-2xl border border-black/8 bg-white/50 px-6 py-5 text-center shadow-sm">
