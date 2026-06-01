@@ -1463,6 +1463,7 @@ export default function AppInboxPage() {
   const conversationListRef = useRef<HTMLDivElement | null>(null);
   const conversationListTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const conversationListTouchMovedRef = useRef(false);
+  const conversationListIgnoreClickUntilRef = useRef(0);
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
@@ -1953,6 +1954,16 @@ export default function AppInboxPage() {
     window.setTimeout(applyViewport, 80);
     window.setTimeout(applyViewport, 240);
   }, []);
+
+  const handleComposerFocus = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const state = getMobileViewportState();
+    if (state.isMobile && state.isIos) {
+      setIsMobileKeyboardOpen(true);
+      document.documentElement.dataset.mobileKeyboardOpen = "true";
+    }
+    stabilizeMobileConversationViewport();
+  }, [stabilizeMobileConversationViewport]);
 
   const handleJumpToLatest = useCallback(() => {
     stabilizeMobileConversationViewport();
@@ -4374,13 +4385,14 @@ export default function AppInboxPage() {
               const deltaY = Math.abs(touch.clientY - start.y);
               if (deltaX > 8 || deltaY > 8) {
                 conversationListTouchMovedRef.current = true;
+                conversationListIgnoreClickUntilRef.current = Date.now() + 700;
               }
             }}
             onTouchEnd={() => {
               window.setTimeout(() => {
                 conversationListTouchMovedRef.current = false;
                 conversationListTouchStartRef.current = null;
-              }, 160);
+              }, 700);
             }}
           >
             {loadingConversations ? (
@@ -4425,7 +4437,7 @@ export default function AppInboxPage() {
                   key={conversationIdentity}
                   type="button"
                   onClick={(event) => {
-                    if (conversationListTouchMovedRef.current) {
+                    if (conversationListTouchMovedRef.current || Date.now() < conversationListIgnoreClickUntilRef.current) {
                       event.preventDefault();
                       return;
                     }
@@ -4434,6 +4446,7 @@ export default function AppInboxPage() {
                   onTouchCancel={() => {
                     conversationListTouchMovedRef.current = false;
                     conversationListTouchStartRef.current = null;
+                    conversationListIgnoreClickUntilRef.current = Date.now() + 700;
                   }}
                   className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
@@ -5059,8 +5072,12 @@ export default function AppInboxPage() {
                   className="h-20 min-h-20 w-full resize-none rounded-2xl border border-[#d4c7b5] bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#7cbf69] max-[1366px]:h-16 max-[1366px]:min-h-16 max-[1366px]:rounded-xl max-[1366px]:px-3 max-[1366px]:py-2 max-md:h-12 max-md:min-h-12 max-md:px-3 max-md:py-2 [@media(max-height:760px)]:h-14 [@media(max-height:760px)]:min-h-14"
                   value={messageDraft}
                   onChange={(event) => setMessageDraft(event.target.value)}
+                  onFocus={handleComposerFocus}
                   onBlur={stabilizeMobileConversationViewport}
                   onKeyDown={handleComposerKeyDown}
+                  autoCorrect="off"
+                  autoCapitalize="sentences"
+                  spellCheck={false}
                   placeholder={
                     selectedConversation && !selectedConversationSupportsOutbound
                       ? selectedConversationOutboundDisabledMessage
