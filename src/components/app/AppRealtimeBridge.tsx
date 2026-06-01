@@ -21,6 +21,8 @@ const NOTIFICATION_SOUND_INTERVAL_MS = 320;
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const NOTIFICATION_DEBUG_STORAGE_KEY = "converta_notification_debug";
 const PUSH_PRESENCE_INTERVAL_MS = 4_000;
+const PRIMARY_NOTIFICATION_SOUND_URL = "/sounds/inbox-notification.wav";
+const ACTIVE_NOTIFICATION_SOUND_URL = "/sounds/inbox-active-message.wav";
 
 function isSoundEnabled() {
   if (typeof window === "undefined") return false;
@@ -73,10 +75,6 @@ function isMobileLikeRuntime() {
   return iosLike || androidLike || (hasTouch && narrowViewport);
 }
 
-function shouldPlayLocalSoundWhenHidden() {
-  return !isMobileLikeRuntime();
-}
-
 type NotificationDebugWindow = Window &
   typeof globalThis & {
     __convertaNotificationState?: () => Record<string, unknown>;
@@ -112,10 +110,10 @@ export default function AppRealtimeBridge() {
         debugNotification("sound_skipped", { reason: "audio_not_ready", sound });
         return;
       }
-      baseAudio.pause();
-      baseAudio.volume = sound === "active" ? 0.42 : 0.95;
-      baseAudio.currentTime = 0;
-      void baseAudio
+      const nextAudio = baseAudio.cloneNode(true) as HTMLAudioElement;
+      nextAudio.volume = sound === "active" ? 0.42 : 0.95;
+      nextAudio.currentTime = 0;
+      void nextAudio
         .play()
         .then(() => {
           hasPrimedAudioRef.current = true;
@@ -198,17 +196,15 @@ export default function AppRealtimeBridge() {
 
   const handleNotificationRequest = useCallback((request: AppNotificationRequest) => {
     const appIsVisible = document.visibilityState === "visible";
-    const allowHiddenLocalSound = !appIsVisible && shouldPlayLocalSoundWhenHidden();
     const soundEnabled = isSoundEnabled();
     debugNotification("request_received", {
       visible: appIsVisible,
       focused: document.hasFocus(),
-      allowHiddenLocalSound,
       soundEnabled,
       sound: request.sound,
       notifyBrowser: request.notifyBrowser,
     });
-    if (!appIsVisible && !allowHiddenLocalSound) {
+    if (!appIsVisible) {
       if (notificationTimerRef.current !== null) {
         window.clearTimeout(notificationTimerRef.current);
         notificationTimerRef.current = null;
@@ -295,9 +291,9 @@ export default function AppRealtimeBridge() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const primaryAudio = new window.Audio("/sounds/inbox-notification.wav");
+    const primaryAudio = new window.Audio(PRIMARY_NOTIFICATION_SOUND_URL);
     primaryAudio.preload = "auto";
-    const activeAudio = new window.Audio("/sounds/inbox-active-message.wav");
+    const activeAudio = new window.Audio(ACTIVE_NOTIFICATION_SOUND_URL);
     activeAudio.preload = "auto";
     primaryAudioRef.current = primaryAudio;
     activeAudioRef.current = activeAudio;
@@ -317,7 +313,7 @@ export default function AppRealtimeBridge() {
       visible: typeof document === "undefined" ? true : document.visibilityState === "visible",
       focused: typeof document === "undefined" ? true : document.hasFocus(),
       mobileLike: isMobileLikeRuntime(),
-      hiddenLocalSound: shouldPlayLocalSoundWhenHidden(),
+      hiddenLocalSound: false,
       hasPrimedAudio: hasPrimedAudioRef.current,
       primaryAudioReady: Boolean(primaryAudioRef.current),
       activeAudioReady: Boolean(activeAudioRef.current),
@@ -456,13 +452,19 @@ export default function AppRealtimeBridge() {
 
     let cancelled = false;
     const timers: number[] = [];
+    let attempts = 0;
     const updateNotice = () => {
       if (cancelled || dismissedNotificationNoticeRef.current) return;
-      setShowNotificationNotice(Boolean(loadAppSession()));
+      const hasSession = Boolean(loadAppSession());
+      setShowNotificationNotice(hasSession);
+      attempts += 1;
+      if (!hasSession && attempts < 20) {
+        timers.push(window.setTimeout(updateNotice, 500));
+      }
     };
 
     updateNotice();
-    for (const delay of [250, 750, 1500]) {
+    for (const delay of [250, 750, 1500, 3000]) {
       timers.push(window.setTimeout(updateNotice, delay));
     }
 
