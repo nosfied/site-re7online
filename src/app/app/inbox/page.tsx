@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import AppShell from "@/components/app/AppShell";
 import ThemeSelector from "@/components/ThemeSelector";
 import { FeedbackToast } from "@/components/ui/FeedbackToast";
@@ -1464,6 +1464,7 @@ export default function AppInboxPage() {
   const conversationListTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const conversationListTouchMovedRef = useRef(false);
   const conversationListIgnoreClickUntilRef = useRef(0);
+  const conversationListPointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const shouldScrollToBottomRef = useRef(false);
   const pendingUnreadScrollTargetRef = useRef<PendingUnreadScrollTarget | null>(null);
   const pendingReadAfterHydrationRef = useRef<PendingReadAfterHydration | null>(null);
@@ -3006,6 +3007,19 @@ export default function AppInboxPage() {
     stabilizeMobileConversationViewport();
   }, [readState, session?.user, stabilizeMobileConversationViewport]);
 
+  const handleConversationRowPointerUp = useCallback((item: InboxConversationItem, event: PointerEvent<HTMLDivElement>) => {
+    const start = conversationListPointerStartRef.current;
+    conversationListPointerStartRef.current = null;
+    if (!start) return;
+    const deltaX = Math.abs(event.clientX - start.x);
+    const deltaY = Math.abs(event.clientY - start.y);
+    if (deltaX > 8 || deltaY > 8 || conversationListTouchMovedRef.current || Date.now() < conversationListIgnoreClickUntilRef.current) {
+      conversationListIgnoreClickUntilRef.current = Date.now() + 700;
+      return;
+    }
+    openConversationItem(item);
+  }, [openConversationItem]);
+
   useEffect(() => {
     if (!loadingConversations && selectedConversationKey && !selectedConversation) {
       clearSelectedConversation();
@@ -4433,22 +4447,27 @@ export default function AppInboxPage() {
               const phoneLine = item.waId && item.waId !== label ? item.waId : null;
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
               return (
-                <button
+                <div
                   key={conversationIdentity}
-                  type="button"
-                  onClick={(event) => {
-                    if (conversationListTouchMovedRef.current || Date.now() < conversationListIgnoreClickUntilRef.current) {
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={(event) => {
+                    conversationListPointerStartRef.current = { x: event.clientX, y: event.clientY };
+                  }}
+                  onPointerUp={(event) => handleConversationRowPointerUp(item, event)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      return;
+                      openConversationItem(item);
                     }
-                    openConversationItem(item);
                   }}
                   onTouchCancel={() => {
                     conversationListTouchMovedRef.current = false;
                     conversationListTouchStartRef.current = null;
+                    conversationListPointerStartRef.current = null;
                     conversationListIgnoreClickUntilRef.current = Date.now() + 700;
                   }}
-                  className={`min-h-[76px] w-full select-none border-b px-4 py-3.5 text-left transition touch-pan-y [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
+                  className={`min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
@@ -4504,7 +4523,7 @@ export default function AppInboxPage() {
                   <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isActive ? "text-white/88" : "text-white/68"}`}>
                     {getConversationPreviewText(item)}
                   </p>
-                </button>
+                </div>
               );
             })}
             {conversationNextCursor ? (
@@ -4966,7 +4985,7 @@ export default function AppInboxPage() {
             </div>
           ) : null}
 
-          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
+          <div className={`sticky bottom-0 shrink-0 border-t border-black/8 bg-[#efe6d7] px-4 py-3 max-[1366px]:px-3 max-[1366px]:py-2 max-md:px-2.5 max-md:pt-2 [@media(max-height:760px)]:pt-1.5 ${isMobileKeyboardOpen ? "max-md:pb-2 max-md:[html[data-ios-like='true']_&]:fixed max-md:[html[data-ios-like='true']_&]:inset-x-0 max-md:[html[data-ios-like='true']_&]:bottom-0 max-md:[html[data-ios-like='true']_&]:z-40" : "max-md:pb-[calc(1.6rem+var(--safe-bottom-effective))]"}`}>
             {selectedMediaFile ? (
               <div className="mb-2 flex items-center gap-2">
                 <span className="rounded-full bg-white/70 px-3 py-1 text-sm text-slate-700">
