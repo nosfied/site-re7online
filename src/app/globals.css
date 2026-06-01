@@ -111,10 +111,32 @@ html {
 
   html[data-ios-like="true"] .ios-conversation-row,
   html[data-ios-like="true"] .ios-conversation-row:focus,
-  html[data-ios-like="true"] .ios-conversation-row:focus-visible {
+  html[data-ios-like="true"] .ios-conversation-row:focus-visible,
+  html[data-ios-like="true"] .ios-conversation-row:hover,
+  html[data-ios-like="true"] .ios-conversation-row:active {
     outline: none;
     box-shadow: none;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-ios-like="true"] .theme-inbox .ios-conversation-row.theme-conversation-row-even:hover,
+  html[data-ios-like="true"] .theme-inbox .ios-conversation-row.theme-conversation-row-even:active {
+    background-color: #07142b;
+  }
+
+  html[data-ios-like="true"] .theme-inbox .ios-conversation-row.theme-conversation-row-odd:hover,
+  html[data-ios-like="true"] .theme-inbox .ios-conversation-row.theme-conversation-row-odd:active {
+    background-color: #0d1b33;
+  }
+
+  html[data-ios-like="true"][data-theme="light"] .theme-inbox .ios-conversation-row.theme-conversation-row-even:hover,
+  html[data-ios-like="true"][data-theme="light"] .theme-inbox .ios-conversation-row.theme-conversation-row-even:active {
+    background-color: #fbfdff;
+  }
+
+  html[data-ios-like="true"][data-theme="light"] .theme-inbox .ios-conversation-row.theme-conversation-row-odd:hover,
+  html[data-ios-like="true"][data-theme="light"] .theme-inbox .ios-conversation-row.theme-conversation-row-odd:active {
+    background-color: #edf4fb;
   }
 }
 
