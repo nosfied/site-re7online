@@ -128,6 +128,12 @@ function getMobileViewportState() {
   };
 }
 
+function getIosKeyboardLift(keyboardGap: number) {
+  if (typeof window === "undefined") return keyboardGap;
+  const responsiveCorrection = Math.min(88, Math.max(44, window.innerHeight * 0.085));
+  return Math.max(0, keyboardGap - responsiveCorrection);
+}
+
 function isStandalonePwa() {
   if (typeof window === "undefined") return false;
   const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
@@ -1652,7 +1658,7 @@ export default function AppInboxPage() {
       const keyboardOpen = state.isMobile && state.keyboardOpen;
       setIsMobileKeyboardOpen(keyboardOpen);
       document.documentElement.dataset.mobileKeyboardOpen = keyboardOpen ? "true" : "false";
-      const keyboardLift = Math.max(0, state.keyboardGap - 36);
+      const keyboardLift = getIosKeyboardLift(state.keyboardGap);
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
         state.isIos && keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
@@ -1957,7 +1963,7 @@ export default function AppInboxPage() {
     const applyViewport = () => {
       const nextState = getMobileViewportState();
       if (!nextState.isMobile) return;
-      const keyboardLift = Math.max(0, nextState.keyboardGap - 36);
+      const keyboardLift = getIosKeyboardLift(nextState.keyboardGap);
       document.documentElement.style.setProperty(
         "--mobile-keyboard-gap",
         nextState.isIos && nextState.keyboardOpen ? `${Math.round(keyboardLift)}px` : "0px"
@@ -4467,6 +4473,7 @@ export default function AppInboxPage() {
             {filteredConversations.map((item, index) => {
               const conversationIdentity = getConversationIdentity(item);
               const isActive = conversationIdentity === selectedConversationKey;
+              const isVisuallyActive = isActive && !isIosViewport;
               const unread = !isActive && isConversationUnreadForUser(item, readState, session?.user);
               const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
               const status = getConversationOperationalStatus(item);
@@ -4516,7 +4523,7 @@ export default function AppInboxPage() {
                     conversationListSuppressClickUntilRef.current = Date.now() + 900;
                   }}
                   className={`ios-conversation-row min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] focus-visible:ring-2 focus-visible:ring-re7-sky/70 max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
-                    isActive
+                    isVisuallyActive
                       ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
                           index % 2 === 0
@@ -4535,7 +4542,7 @@ export default function AppInboxPage() {
                         >
                           <ConversationChannelLogo item={item} className="h-full w-full" />
                         </span>
-                        <p className={`truncate text-sm font-semibold ${isActive || unread ? "text-white" : "text-white/90"}`}>
+                        <p className={`truncate text-sm font-semibold ${isVisuallyActive || unread ? "text-white" : "text-white/90"}`}>
                           {label}
                         </p>
                         {isBusinessTenant && leadTemperatureLabel ? (
@@ -4545,16 +4552,16 @@ export default function AppInboxPage() {
                         ) : null}
                       </div>
                       {phoneLine ? (
-                        <p className={`mt-0.5 text-xs ${isActive ? "text-white/75" : "text-white/55"}`}>
+                        <p className={`mt-0.5 text-xs ${isVisuallyActive ? "text-white/75" : "text-white/55"}`}>
                           {phoneLine}
                         </p>
                       ) : null}
                     </div>
-                    <span className={`shrink-0 whitespace-nowrap text-[11px] max-[1440px]:text-[10px] ${isActive ? "text-white/70" : "text-white/45"}`}>
+                    <span className={`shrink-0 whitespace-nowrap text-[11px] max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/70" : "text-white/45"}`}>
                       {formatDateTime(item.updatedAt)}
                     </span>
                   </div>
-                  <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isActive ? "text-white/78" : "text-white/58"}`}>
+                  <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/78" : "text-white/58"}`}>
                     <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
                       {getConversationStatusLabel(status)}
                     </span>
@@ -4568,7 +4575,7 @@ export default function AppInboxPage() {
                       </span>
                     ) : null}
                   </div>
-                  <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isActive ? "text-white/88" : "text-white/68"}`}>
+                  <p className={`mt-2 line-clamp-2 text-sm leading-5 max-[1440px]:mt-1.5 max-[1440px]:text-xs max-[1440px]:leading-4 ${isVisuallyActive ? "text-white/88" : "text-white/68"}`}>
                     {getConversationPreviewText(item)}
                   </p>
                 </div>
