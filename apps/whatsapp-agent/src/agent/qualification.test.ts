@@ -519,12 +519,12 @@ test("handleQualificationTurn uses configured negative continuation for optional
   assert.equal(result.state?.currentSlot, "duvida");
 });
 
-test("handleQualificationTurn repeats configured enum options for ambiguous positive ack", () => {
+test("handleQualificationTurn repeats current enum question for ambiguous positive ack", () => {
   const schema = {
     enabled: true,
     commercialContinuation: {
       enabled: true,
-      ambiguousEnumReply: "Certo. Escolha catalogo ou valores.",
+      ambiguousEnumReply: "Certo. Você procura peças para uso próprio ou para revender?",
     },
     slots: [
       {
@@ -542,8 +542,64 @@ test("handleQualificationTurn repeats configured enum options for ambiguous posi
     text: "sim",
   });
   assert.equal(result.handled, true);
-  assert.equal(result.replyText, "Certo. Escolha catalogo ou valores.");
+  assert.equal(result.replyText, "Catalogo ou valores?");
   assert.equal(result.state?.slots?.duvida, undefined);
+});
+
+test("handleQualificationTurn does not reuse a first-slot ambiguous reply on later enum slots", () => {
+  const schema = {
+    enabled: true,
+    commercialContinuation: {
+      enabled: true,
+      ambiguousEnumReply: "Certo. Você procura peças para uso próprio ou para revender?",
+    },
+    slots: [
+      {
+        key: "tipo_atendimento",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["uso próprio", "revender"],
+        question: "Você procura peças para uso próprio ou para revender?",
+      },
+      {
+        key: "produto_interesse",
+        required: true,
+        question: "Qual peça, acessório ou estilo você procura primeiro?",
+      },
+      {
+        key: "detalhe_produto",
+        askAfter: ["produto_interesse"],
+        question: "Você procura alguma cor, tamanho ou estilo específico?",
+      },
+      {
+        key: "duvida_principal",
+        type: "enum" as const,
+        askAfter: ["detalhe_produto", "produto_interesse"],
+        allowedValues: ["catálogo", "valores", "disponibilidade", "visita ao showroom"],
+        question: "Você quer confirmar catálogo, valores, disponibilidade ou visita ao showroom?",
+      },
+    ],
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: {
+      ...getInitialQualificationState(schema),
+      slots: {
+        tipo_atendimento: "uso próprio",
+        produto_interesse: "blusa",
+        detalhe_produto: "vermelho",
+      },
+      completedSlots: ["tipo_atendimento", "produto_interesse", "detalhe_produto"],
+      currentSlot: "duvida_principal",
+      missingSlots: ["duvida_principal"],
+      lastQuestion: "Você quer confirmar catálogo, valores, disponibilidade ou visita ao showroom?",
+    },
+    text: "sim",
+  });
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Você quer confirmar catálogo, valores, disponibilidade ou visita ao showroom?");
+  assert.equal(result.state?.currentSlot, "duvida_principal");
+  assert.equal(result.state?.slots?.duvida_principal, undefined);
 });
 
 test("handleQualificationTurn marks handoff_ready from generic handoff expressions without activating handoff", () => {

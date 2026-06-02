@@ -1179,9 +1179,9 @@ export function handleQualificationTurn(params: {
         handled: true,
         state,
         replyText:
-          continuation?.ambiguousEnumReply?.trim() ||
           resolution.safeReply?.trim() ||
           currentSlot.question ||
+          continuation?.ambiguousEnumReply?.trim() ||
           DEFAULT_AMBIGUOUS_ENUM_REPLY,
         logs,
       };
@@ -1376,7 +1376,7 @@ export function handleQualificationTurn(params: {
       lastQuestion: currentSlot.question,
       updatedAt: nowIso,
     };
-    const replyText = continuation.ambiguousEnumReply?.trim() || currentSlot.question || DEFAULT_AMBIGUOUS_ENUM_REPLY;
+    const replyText = currentSlot.question || continuation.ambiguousEnumReply?.trim() || DEFAULT_AMBIGUOUS_ENUM_REPLY;
     logs.push({
       event: "ai.qualification.ask_next",
       payload: { slot: currentSlot.key, reason: "ambiguous_enum_ack" },
