@@ -165,6 +165,18 @@ function seedQualificationNameFromProfile(params: {
   };
 }
 
+function canTreatPersonalDataAsQualificationEmail(params: {
+  schema?: AiQualificationSchema | null;
+  state: ConversationState;
+  text: string;
+}) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(params.text.trim())) return false;
+  const currentSlotKey = params.state.answers?.aiQualification?.currentSlot;
+  if (!currentSlotKey) return false;
+  const currentSlot = params.schema?.slots?.find((slot) => slot.key === currentSlotKey);
+  return currentSlot?.crmMapping?.leadField === "email";
+}
+
 type RequestMeta = {
   requestId: string;
   rawBodyLength: number;
@@ -6162,6 +6174,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           await logAiAssistantEvent("ai.assistant.skipped", { reason: "window_closed" });
         } else {
           const risk = classifyRisk(message.text, assistantTenantContext);
+          const qualificationEmailAllowed =
+            risk === "personal_data" &&
+            canTreatPersonalDataAsQualificationEmail({
+              schema: appliedTenantConfig.aiQualification,
+              state: updatedConversation,
+              text: message.text,
+            });
           const preQualificationTenantIntent = !risk
             ? resolveTenantIntent(message.text, appliedTenantConfig.aiAssistantIntentCatalog, {
                 preferredTopics: [
@@ -6176,7 +6195,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             preQualificationTenantIntent?.preQualification === true;
           let qualificationHandled = false;
           if (
-            !risk &&
+            (!risk || qualificationEmailAllowed) &&
             !shouldBypassQualificationForTenantIntent &&
             appliedTenantConfig.aiQualification?.enabled === true
           ) {

@@ -565,7 +565,16 @@ function isPendingSemanticConfirmationExpired(
 
 function deterministicSlotCapture(slot: AiQualificationSlot, text: string, handoffKeywords: string[] = []) {
   const normalizedText = normalizeComparable(text);
-  if (!normalizedText || containsSensitiveText(text)) {
+  if (!normalizedText) {
+    return { captured: false as const, reason: "invalid_or_sensitive" };
+  }
+  if (isEmailCollectionSlot(slot)) {
+    const email = normalizeLeadEmail(text);
+    return email
+      ? { captured: true as const, value: email }
+      : { captured: false as const, reason: "invalid_email" };
+  }
+  if (containsSensitiveText(text)) {
     return { captured: false as const, reason: "invalid_or_sensitive" };
   }
   if (slot.type !== "boolean" && isOperationalText(text, handoffKeywords)) {
@@ -995,6 +1004,39 @@ export function handleQualificationTurn(params: {
       event: "ai.qualification.slot_captured",
       payload: { slot: currentSlot.key, type: currentSlot.type ?? "text" },
     });
+  } else if (
+    currentSlot.askAfter?.length &&
+    isExplicitNegativeText(params.text) &&
+    continuation?.enabled === true
+  ) {
+    const completedSlots = new Set(state.completedSlots ?? []);
+    completedSlots.add(currentSlot.key);
+    state = {
+      ...state,
+      stage: "collecting",
+      currentSlot: null,
+      completedSlots: [...completedSlots],
+      missingSlots: missingRequiredSlots(schema!, state),
+      lastQuestion: null,
+      updatedAt: nowIso,
+    };
+    const nextSlot = getNextQualificationSlot(schema, state);
+    state = {
+      ...state,
+      currentSlot: nextSlot?.key ?? null,
+      lastQuestion: nextSlot?.question ?? null,
+    };
+    logs.push({
+      event: "ai.qualification.skipped",
+      payload: { reason: "negative_followup_declined", slot: currentSlot.key },
+    });
+    return {
+      enabled: true,
+      handled: true,
+      state,
+      replyText: continuation.negativeReply?.trim() || "Tudo bem. Posso continuar te ajudando por aqui.",
+      logs,
+    };
   } else if (schema?.semanticResolverEnabled === true) {
     logs.push({
       event: "ai.semantic.resolve.started",
@@ -1291,39 +1333,6 @@ export function handleQualificationTurn(params: {
       payload: { slot: currentSlot.key, reason: "ambiguous_enum_ack" },
     });
     return { enabled: true, handled: true, state, replyText, logs };
-  } else if (
-    currentSlot.askAfter?.length &&
-    isExplicitNegativeText(params.text) &&
-    continuation?.enabled === true
-  ) {
-    const completedSlots = new Set(state.completedSlots ?? []);
-    completedSlots.add(currentSlot.key);
-    state = {
-      ...state,
-      stage: "collecting",
-      currentSlot: null,
-      completedSlots: [...completedSlots],
-      missingSlots: missingRequiredSlots(schema!, state),
-      lastQuestion: null,
-      updatedAt: nowIso,
-    };
-    const nextSlot = getNextQualificationSlot(schema, state);
-    state = {
-      ...state,
-      currentSlot: nextSlot?.key ?? null,
-      lastQuestion: nextSlot?.question ?? null,
-    };
-    logs.push({
-      event: "ai.qualification.skipped",
-      payload: { reason: "negative_followup_declined", slot: currentSlot.key },
-    });
-    return {
-      enabled: true,
-      handled: true,
-      state,
-      replyText: continuation.negativeReply?.trim() || "Tudo bem. Posso continuar te ajudando por aqui.",
-      logs,
-    };
   } else if (!state.lastQuestion || state.lastQuestion !== currentSlot.question) {
     state = {
       ...state,
@@ -1553,10 +1562,11 @@ export function buildHumanizedQualificationSummary(params: {
   };
 }
 
-function isSafeCrmSlotValue(value: unknown): value is string | number | boolean | null {
+function isSafeCrmSlotValue(slot: AiQualificationSlot | undefined, value: unknown): value is string | number | boolean | null {
   if (value === null || typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value !== "string") return false;
+  if (slot && isEmailCollectionSlot(slot)) return Boolean(normalizeLeadEmail(value));
   const text = normalizeDisplayString(value, 160);
   return Boolean(text) && !containsSensitiveText(text);
 }
@@ -1565,6 +1575,10 @@ function normalizeLeadEmail(value: unknown) {
   const email = normalizeDisplayString(value, 160).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return "";
   return email;
+}
+
+function isEmailCollectionSlot(slot: AiQualificationSlot) {
+  return slot.crmMapping?.leadField === "email";
 }
 
 function normalizeLeadName(value: unknown) {
@@ -1642,10 +1656,10 @@ export function buildQualificationCrmArtifacts(params: {
 
   for (const [key, rawValue] of Object.entries(state.slots)) {
     const normalizedKey = normalizeToken(key, 60);
-    if (!normalizedKey || SENSITIVE_KEYS.has(normalizedKey) || !isSafeCrmSlotValue(rawValue)) {
+    const slot = slotByKey.get(normalizedKey);
+    if (!normalizedKey || SENSITIVE_KEYS.has(normalizedKey) || !slot || !isSafeCrmSlotValue(slot, rawValue)) {
       continue;
     }
-    const slot = slotByKey.get(normalizedKey);
     if (!slot || !completedSlots.has(normalizedKey)) continue;
     const displayValue = formatSlotValueForSummary(rawValue);
     if (!displayValue) continue;

@@ -585,6 +585,85 @@ test("buildQualificationCrmArtifacts maps lead name and email safely", () => {
   });
 });
 
+test("handleQualificationTurn captures configured email slot without privacy fallback", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [
+      {
+        key: "produto",
+        question: "Qual produto?",
+        required: true,
+        crmMapping: { leadField: "service" },
+      },
+      {
+        key: "email",
+        question: "Qual e-mail podemos anotar?",
+        askAfter: ["produto"],
+        crmMapping: { flowContextKey: "email", leadField: "email" },
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "vestido",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "CLIENTE@EXAMPLE.COM",
+  });
+  const artifacts = buildQualificationCrmArtifacts({
+    state: result.state,
+    schema,
+  });
+
+  assert.equal(result.handled, false);
+  assert.equal(result.state?.slots?.email, "cliente@example.com");
+  assert.deepEqual(artifacts.leadPatch, { service: "vestido", email: "cliente@example.com" });
+});
+
+test("handleQualificationTurn treats negative optional email reply as declined before semantic confirmation", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
+    commercialContinuation: {
+      enabled: true,
+      negativeReply: "Tudo bem. Posso continuar te ajudando por aqui.",
+    },
+    slots: [
+      {
+        key: "produto",
+        question: "Qual produto?",
+        required: true,
+      },
+      {
+        key: "email",
+        question: "Qual e-mail podemos anotar?",
+        askAfter: ["produto"],
+        crmMapping: { flowContextKey: "email", leadField: "email" },
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "vestido",
+  });
+  const declined = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "não",
+  });
+
+  assert.equal(declined.handled, true);
+  assert.equal(declined.state?.pendingSemanticConfirmation, undefined);
+  assert.equal(declined.state?.completedSlots?.includes("email"), true);
+  assert.equal(declined.replyText, "Tudo bem. Posso continuar te ajudando por aqui.");
+});
+
 test("buildQualificationCrmArtifacts ignores invalid lead email mapping", () => {
   const artifacts = buildQualificationCrmArtifacts({
     state: {
