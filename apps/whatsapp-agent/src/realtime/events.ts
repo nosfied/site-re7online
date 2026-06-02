@@ -47,4 +47,11 @@ export type InboxRealtimeEvent =
       assignedUserId?: string | null;
       departmentId?: string | null;
       updatedAt: string;
+      reason?: "released_to_general" | null;
+      notificationMessage?: {
+        messageId: string | null;
+        type: string;
+        bodyText: string | null;
+        createdAt: string;
+      } | null;
     };

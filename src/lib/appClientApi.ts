@@ -474,6 +474,10 @@ async function requestAppJson<T>(
       }
     }
     if (res.status === 403) error.message = "Sem permissao (403).";
+    if (res.status === 413) {
+      error.message = "Arquivo muito grande para envio. Tente uma imagem menor ou compacte o documento.";
+      error.errorCode = error.errorCode || "payload_too_large";
+    }
     if (errorCode === "feature_disabled" || errorCode === "feature_not_enabled") {
       error.message = "Este modulo nao esta disponivel para este perfil.";
     }
@@ -940,6 +944,7 @@ export async function sendAppConversationMedia(
   return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-media`, {
     method: "POST",
     body: formData,
+    timeoutMs: 30000,
   });
 }
 

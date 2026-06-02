@@ -238,7 +238,18 @@ export async function revokePushSubscription(params: {
   return { revoked: result.count };
 }
 
-function buildPushDedupeKey(event: Extract<InboxRealtimeEvent, { type: "message.created" }>) {
+function buildPushDedupeKey(
+  event: Extract<InboxRealtimeEvent, { type: "message.created" | "conversation.handoff.updated" }>
+) {
+  if (event.type === "conversation.handoff.updated") {
+    return [
+      event.clientId,
+      event.waIdCanonical ?? event.waId,
+      "handoff",
+      event.reason ?? event.handoffStatus,
+      event.updatedAt,
+    ].join(":");
+  }
   return [
     event.clientId,
     event.waIdCanonical ?? event.waId,
@@ -246,15 +257,24 @@ function buildPushDedupeKey(event: Extract<InboxRealtimeEvent, { type: "message.
   ].join(":");
 }
 
-function buildPushPayload(event: Extract<InboxRealtimeEvent, { type: "message.created" }>) {
+function buildPushPayload(
+  event: Extract<InboxRealtimeEvent, { type: "message.created" | "conversation.handoff.updated" }>
+) {
   const conversationIdentity = event.waIdCanonical ?? event.waId;
   const url = conversationIdentity
     ? `/app/inbox?push=1&conversation=${encodeURIComponent(conversationIdentity)}`
     : "/app/inbox?push=1";
-  const messagePreview = buildMessagePreview(event.message.bodyText);
+  const messagePreview =
+    event.type === "message.created"
+      ? buildMessagePreview(event.message.bodyText)
+      : buildMessagePreview(event.notificationMessage?.bodyText);
   return JSON.stringify({
     title: "Converta",
-    body: messagePreview ?? "Voce recebeu uma nova mensagem.",
+    body:
+      messagePreview ??
+      (event.type === "conversation.handoff.updated"
+        ? "Uma conversa voltou para Atendimento Geral."
+        : "Voce recebeu uma nova mensagem."),
     url,
     channel: null,
     tag: SYSTEM_NOTIFICATION_TAG,
@@ -285,8 +305,9 @@ async function revokeDeadEndpoint(endpoint: string, statusCode?: number) {
 }
 
 export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent) {
-  if (event.type !== "message.created") return;
-  if (event.message.direction !== "INBOUND") return;
+  if (event.type !== "message.created" && event.type !== "conversation.handoff.updated") return;
+  if (event.type === "message.created" && event.message.direction !== "INBOUND") return;
+  if (event.type === "conversation.handoff.updated" && event.reason !== "released_to_general") return;
   if (!configureWebPush()) {
     logger.info({ event: "push.skipped", reason: "vapid_not_configured", clientId: event.clientId });
     return;

@@ -109,6 +109,7 @@ import {
   getInboxReadState,
   markInboxConversationRead,
   markInboxConversationUnread,
+  markInboxConversationUnreadFromActivity,
 } from "../inbox/readStateStore.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
@@ -4505,6 +4506,70 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         departmentId: defaults.department.id,
       });
+      const releaseConversationKeys = Array.from(
+        new Set(
+          [
+            nextState.waId,
+            nextState.waIdCanonical,
+            resolvedConversation.resolvedWaId,
+            resolvedConversation.resolvedWaIdCanonical,
+            ...resolvedConversation.matchedWaIds,
+          ]
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+        )
+      );
+      const latestInboundForRelease = await prisma.inboundMessage.findFirst({
+        where: {
+          clientId: client.id,
+          OR: [
+            { waId: { in: releaseConversationKeys } },
+            { waIdCanonical: { in: releaseConversationKeys } },
+          ],
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          messageId: true,
+          type: true,
+          bodyText: true,
+          createdAt: true,
+        },
+      });
+      const releaseNotificationActivityAt = latestInboundForRelease?.createdAt.toISOString() ?? releasedAt;
+      const releaseNotificationBody =
+        latestInboundForRelease?.bodyText?.trim() ||
+        (latestInboundForRelease ? getTimelineMessageBody(latestInboundForRelease.type, null, null) : null);
+      const queueUsers = await prisma.user.findMany({
+        where: {
+          clientId: client.id,
+          isActive: true,
+          id: { not: clientAuth.userId },
+          OR: [
+            { role: "ADMIN" },
+            { departmentId: defaults.department.id },
+          ],
+        },
+        select: { id: true },
+      });
+      await Promise.all(
+        queueUsers.map((user) =>
+          markInboxConversationUnreadFromActivity({
+            clientId: client.id,
+            userId: user.id,
+            conversationKeys: releaseConversationKeys,
+            activityAt: releaseNotificationActivityAt,
+          }).catch((error) => {
+            logger.warn({
+              event: "conversation.release_to_general.read_state_failed",
+              clientId: client.id,
+              clientKey: client.clientKey,
+              userId: user.id,
+              requestId,
+              message: (error as Error).message,
+            });
+          })
+        )
+      );
       await recordConversationAuditEvent(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -4543,6 +4608,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: nextState.assignedUserId ?? null,
         departmentId: defaults.department.id,
         updatedAt: releasedAt,
+        reason: "released_to_general",
+        notificationMessage: latestInboundForRelease
+          ? {
+              messageId: latestInboundForRelease.messageId ?? null,
+              type: latestInboundForRelease.type,
+              bodyText: releaseNotificationBody,
+              createdAt: latestInboundForRelease.createdAt.toISOString(),
+            }
+          : null,
       });
       const payload = await buildConversationActionPayload(prisma, {
         clientId: client.id,

@@ -121,3 +121,27 @@ export async function markInboxConversationUnread(params: {
   await writeInboxReadState(params.clientId, params.userId, nextState);
   return nextState;
 }
+
+export async function markInboxConversationUnreadFromActivity(params: {
+  clientId: string;
+  userId: string;
+  conversationKeys: string[];
+  activityAt: string;
+}) {
+  const conversationKeys = Array.from(
+    new Set(params.conversationKeys.map((key) => key.trim()).filter(Boolean))
+  );
+  const current = await getInboxReadState(params.clientId, params.userId);
+  const nextState: InboxReadState = {
+    lastReadAtByConversationKey: {
+      ...current.lastReadAtByConversationKey,
+      ...Object.fromEntries(conversationKeys.map((key) => [key, params.activityAt])),
+    },
+    manuallyUnreadByConversationKey: {
+      ...current.manuallyUnreadByConversationKey,
+      ...Object.fromEntries(conversationKeys.map((key) => [key, true])),
+    },
+  };
+  await writeInboxReadState(params.clientId, params.userId, nextState);
+  return nextState;
+}

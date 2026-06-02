@@ -81,6 +81,8 @@ const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
 const INBOX_UX_DEBUG_STORAGE_KEY = "converta_inbox_ux_debug";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
+const MEDIA_UPLOAD_SOFT_LIMIT_BYTES = 9.2 * 1024 * 1024;
+const IMAGE_UPLOAD_TARGET_BYTES = 7.5 * 1024 * 1024;
 const mediaBlobCache = new Map<string, Blob>();
 const mediaNotFoundCache = new Map<string, number>();
 
@@ -1022,6 +1024,68 @@ function applyStatusUpdateToMessages(
     };
   });
   return didUpdate ? nextItems : items;
+}
+
+function getFileExtension(fileName: string | null | undefined) {
+  const normalized = String(fileName ?? "").trim().toLowerCase();
+  const dotIndex = normalized.lastIndexOf(".");
+  return dotIndex >= 0 ? normalized.slice(dotIndex + 1) : "";
+}
+
+function canAttemptBrowserImageCompression(file: File) {
+  const mimeType = file.type.toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  return ["heic", "heif", "jpg", "jpeg", "png", "webp"].includes(getFileExtension(file.name));
+}
+
+async function loadImageForCompression(file: File) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.decoding = "async";
+    const loaded = new Promise<HTMLImageElement>((resolve, reject) => {
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("image_decode_failed"));
+    });
+    image.src = objectUrl;
+    return await loaded;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+async function prepareMediaFileForUpload(file: File) {
+  if (file.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES) return file;
+  if (!canAttemptBrowserImageCompression(file) || typeof document === "undefined") return file;
+
+  const image = await loadImageForCompression(file);
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const maxSide = 2048;
+  const ratio = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceWidth * ratio));
+  canvas.height = Math.max(1, Math.round(sourceHeight * ratio));
+  const context = canvas.getContext("2d");
+  if (!context) return file;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  for (const quality of [0.82, 0.72, 0.62]) {
+    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+    if (!blob) continue;
+    if (blob.size < file.size && blob.size <= IMAGE_UPLOAD_TARGET_BYTES) {
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
+      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+    }
+  }
+
+  return file;
 }
 
 function getInboundNotificationIdentity(waId: string | null, item: InboxMessageItem) {
@@ -2233,6 +2297,18 @@ export default function AppInboxPage() {
             departmentId: event.departmentId ?? item.departmentId ?? null,
             status: nextAssignedUserId ? ("IN_PROGRESS" as const) : ("WAITING" as const),
             closedAt: null,
+            lastMessage: event.notificationMessage
+              ? {
+                  direction: "INBOUND" as const,
+                  type: event.notificationMessage.type,
+                  status: "RECEIVED",
+                  messageId: event.notificationMessage.messageId,
+                  bodyText: event.notificationMessage.bodyText,
+                  templateName: null,
+                  createdAt: event.notificationMessage.createdAt,
+                }
+              : item.lastMessage,
+            updatedAt: event.updatedAt,
           };
         });
         if (!matchedConversation) {
@@ -3680,10 +3756,16 @@ export default function AppInboxPage() {
       setError(null);
       setErrorDetails(null);
       try {
+        const uploadFile = await prepareMediaFileForUpload(file);
+        if (uploadFile.size > MEDIA_UPLOAD_SOFT_LIMIT_BYTES) {
+          throw Object.assign(new Error("Arquivo muito grande para envio. Tente uma imagem menor ou compacte o documento."), {
+            details: "O limite operacional atual para envio direto pelo inbox e de aproximadamente 9 MB.",
+          });
+        }
         const response = await sendAppConversationMedia(
           session,
           selectedConversationWaId,
-          file,
+          uploadFile,
           caption?.trim() || undefined
         );
         setSelectedMediaFile(null);

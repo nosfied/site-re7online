@@ -334,11 +334,14 @@ export default function AppRealtimeBridge() {
     event: Extract<AppRealtimeEvent, { type: "conversation.handoff.updated" }>,
     session: AppSession
   ) => {
+    const isReleasedToGeneral = event.reason === "released_to_general";
     handleRealtimeNotificationCandidate({
       source: "websocket",
       kind: "handoff",
       conversationIdentity: getConversationIdentityFromRealtimeEvent(event) ?? null,
+      messageId: event.notificationMessage?.messageId ?? null,
       createdAt: event.updatedAt,
+      bodyText: event.notificationMessage?.bodyText ?? null,
       direction: "INBOUND",
       mode: event.mode,
       handoffStatus: event.handoffStatus,
@@ -348,6 +351,12 @@ export default function AppRealtimeBridge() {
       userDepartmentId: session.user.departmentId ?? null,
       userDepartmentName: session.user.departmentName ?? null,
       userRole: session.user.role,
+      title: isReleasedToGeneral ? "Conversa voltou para Atendimento Geral" : undefined,
+      body: event.notificationMessage?.bodyText
+        ? event.notificationMessage.bodyText
+        : isReleasedToGeneral
+          ? "Uma conversa foi devolvida para a fila."
+          : undefined,
     });
   }, []);
 
