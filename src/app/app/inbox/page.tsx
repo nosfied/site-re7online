@@ -4611,7 +4611,7 @@ export default function AppInboxPage() {
                   }}
                   className={`ios-conversation-row min-h-[76px] w-full cursor-pointer select-none border-b px-4 py-3.5 text-left transition touch-pan-y outline-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] focus-visible:ring-2 focus-visible:ring-re7-sky/70 max-[1440px]:min-h-[68px] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 ${
                     isVisuallyActive
-                      ? "border-l-4 border-l-re7-sky border-b-white/10 bg-[#17365f] shadow-[inset_0_0_0_1px_rgba(125,181,255,0.18)]"
+                      ? "theme-conversation-row-active border-l-4 border-l-re7-sky border-b-white/10"
                       : `border-l-4 border-l-transparent border-b-white/10 ${
                           index % 2 === 0
                             ? "theme-conversation-row-even"
