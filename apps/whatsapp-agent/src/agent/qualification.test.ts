@@ -277,6 +277,61 @@ test("handleQualificationTurn captures enum captureHints", () => {
   assert.equal(result.state?.stage, "completed");
 });
 
+test("normalizeQualificationSchema preserves multiline questions", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    slots: [
+      {
+        key: "perfil",
+        type: "enum",
+        required: true,
+        allowedValues: ["uso próprio", "revender"],
+        question:
+          "Olá! Seja bem-vinda à Tendência Multimarcas ✨\n" +
+          "Moda unissex, acessórios e peças atemporais.\n\n" +
+          "Trabalhamos com atacado e varejo.\n" +
+          "Me conta: você procura peças para uso próprio ou para revender?",
+      },
+    ],
+  });
+
+  assert.equal(
+    schema?.slots?.[0]?.question,
+    "Olá! Seja bem-vinda à Tendência Multimarcas ✨\n" +
+      "Moda unissex, acessórios e peças atemporais.\n\n" +
+      "Trabalhamos com atacado e varejo.\n" +
+      "Me conta: você procura peças para uso próprio ou para revender?"
+  );
+});
+
+test("handleQualificationTurn captures enum semantic aliases as canonical values", () => {
+  const schema = {
+    enabled: true,
+    slots: [
+      {
+        key: "perfil",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["uso próprio", "revender"],
+        semanticAliases: {
+          "uso próprio": ["proprio", "próprio", "uso proprio", "pra mim"],
+          revender: ["revenda", "atacado"],
+        },
+        question: "Uso próprio ou revender?",
+      },
+      { key: "produto", required: true, question: "Qual produto?" },
+    ],
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "proprio",
+  });
+
+  assert.equal(result.state?.slots?.perfil, "uso próprio");
+  assert.equal(result.replyText, "Qual produto?");
+});
+
 test("handleQualificationTurn captures useful text and ignores isolated greeting", () => {
   const schema = {
     enabled: true,

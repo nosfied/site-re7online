@@ -145,6 +145,19 @@ function normalizeDisplayString(input: unknown, maxLength: number) {
   return input.trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+function normalizeQuestionString(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return "";
+  return input
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim().replace(/[ \t]+/g, " "))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function normalizeStringList(input: unknown, maxItems: number, maxLength: number) {
   if (!Array.isArray(input)) return [];
   return [
@@ -314,7 +327,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
       if (!rawSlot || typeof rawSlot !== "object" || Array.isArray(rawSlot)) continue;
       const slot = rawSlot as Record<string, unknown>;
       const key = normalizeToken(slot.key, 60);
-      const question = normalizeDisplayString(slot.question, 240);
+      const question = normalizeQuestionString(slot.question, 700);
       if (!key || !question || SENSITIVE_KEYS.has(key) || seen.has(key)) continue;
       seen.add(key);
       const type =
@@ -592,6 +605,14 @@ function deterministicSlotCapture(slot: AiQualificationSlot, text: string, hando
       const allowed = normalizeComparable(allowedValue);
       if (hasTokenMatch(` ${normalizedText} `, allowed)) {
         return { captured: true as const, value: allowedValue };
+      }
+    }
+    for (const [allowedValue, aliases] of Object.entries(slot.semanticAliases ?? {})) {
+      for (const alias of aliases) {
+        const normalizedAlias = normalizeComparable(alias);
+        if (normalizedText === normalizedAlias) {
+          return { captured: true as const, value: allowedValue };
+        }
       }
     }
     for (const hint of slot.captureHints ?? []) {
