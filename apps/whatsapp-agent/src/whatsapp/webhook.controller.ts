@@ -63,6 +63,7 @@ import {
 } from "../agent/controlledAssistant.js";
 import {
   buildQualificationCrmArtifacts,
+  getInitialQualificationState,
   handleQualificationTurn,
   type AiQualificationSchema,
 } from "../agent/qualification.js";
@@ -127,6 +128,42 @@ const conversationVersionByWaId = new Map<string, { version: number; lastInbound
 const DEFAULT_QUOTA_BLOCKED_TEXT =
   "No momento atingimos o limite de atendimentos automáticos do mês.\n" +
   "Para seguir com prioridade, fale com um atendente.";
+
+function seedQualificationNameFromProfile(params: {
+  state: ConversationState;
+  schema?: AiQualificationSchema | null;
+  profileName?: string | null;
+  nowIso: string;
+}) {
+  const profileName = String(params.profileName ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const nameSlot = params.schema?.slots?.find((slot) => slot.crmMapping?.leadField === "name");
+  if (!profileName || !nameSlot) return params.state;
+  const currentQualification =
+    params.state.answers?.aiQualification ?? getInitialQualificationState(params.schema, params.nowIso);
+  if (currentQualification.completedSlots?.includes(nameSlot.key)) return params.state;
+  const completedSlots = Array.from(new Set([...(currentQualification.completedSlots ?? []), nameSlot.key]));
+  return {
+    ...params.state,
+    answers: {
+      ...(params.state.answers ?? {}),
+      flowContext: {
+        ...(params.state.answers?.flowContext ?? {}),
+        [nameSlot.crmMapping?.flowContextKey ?? nameSlot.key]: profileName,
+      },
+      aiQualification: {
+        ...currentQualification,
+        slots: {
+          ...(currentQualification.slots ?? {}),
+          [nameSlot.key]: profileName,
+        },
+        completedSlots,
+        missingSlots: (currentQualification.missingSlots ?? []).filter((slot) => slot !== nameSlot.key),
+        currentSlot: currentQualification.currentSlot === nameSlot.key ? null : currentQualification.currentSlot,
+        updatedAt: params.nowIso,
+      },
+    },
+  };
+}
 
 type RequestMeta = {
   requestId: string;
@@ -6143,12 +6180,19 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             !shouldBypassQualificationForTenantIntent &&
             appliedTenantConfig.aiQualification?.enabled === true
           ) {
+            const qualificationNowIso = new Date().toISOString();
+            updatedConversation = seedQualificationNameFromProfile({
+              state: updatedConversation,
+              schema: appliedTenantConfig.aiQualification,
+              profileName: message.profileName,
+              nowIso: qualificationNowIso,
+            });
             const qualificationResult = handleQualificationTurn({
               schema: appliedTenantConfig.aiQualification,
               state: updatedConversation.answers?.aiQualification,
               text: message.text,
               handoffKeywords: appliedTenantConfig.aiAssistantHandoffKeywords,
-              nowIso: new Date().toISOString(),
+              nowIso: qualificationNowIso,
             });
             for (const entry of qualificationResult.logs) {
               await logAiAssistantEvent(entry.event, entry.payload);
