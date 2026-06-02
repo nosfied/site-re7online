@@ -4,6 +4,10 @@ type IncomingPayload = {
   entry?: Array<{
     changes?: Array<{
       value?: {
+        contacts?: Array<{
+          wa_id?: string;
+          profile?: { name?: string };
+        }>;
         messages?: Array<{
           id?: string;
           from?: string;
@@ -98,9 +102,18 @@ function normalizeMediaPayload(message: IncomingMessagePayload, type: MessageTyp
 }
 
 export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
-  const messages = payload.entry?.[0]?.changes?.[0]?.value?.messages;
+  const value = payload.entry?.[0]?.changes?.[0]?.value;
+  const messages = value?.messages;
   if (!messages || messages.length === 0) {
     return { messages: [], reason: "no_messages" };
+  }
+  const profileNameByWaId = new Map<string, string>();
+  for (const contact of value?.contacts ?? []) {
+    const waId = String(contact.wa_id ?? "").trim();
+    const profileName = String(contact.profile?.name ?? "").replace(/\s+/g, " ").trim();
+    if (waId && profileName) {
+      profileNameByWaId.set(waId, profileName.slice(0, 120));
+    }
   }
 
   const normalized: NormalizedMessage[] = messages.map((message) => {
@@ -113,6 +126,7 @@ export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
     return {
       messageId: message.id ?? "unknown",
       from: message.from ?? "unknown",
+      profileName: profileNameByWaId.get(message.from ?? "") ?? null,
       timestamp,
       type,
       text: message.text?.body ?? null,

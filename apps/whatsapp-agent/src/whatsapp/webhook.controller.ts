@@ -3158,6 +3158,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       await ensureLeadForConversation({
         tenantId: tenantClientId,
         waId: normalizedFrom,
+        name: message.profileName ?? undefined,
         phoneNumberId: phoneNumberId ?? undefined,
       });
     }
@@ -6166,7 +6167,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 answers: updatedConversation.answers,
                 nowIso: new Date().toISOString(),
               });
-              if (qualificationCrm.flowContextPatch || qualificationCrm.flowTagsToAdd?.length) {
+              const hasCrmContextEnrichment =
+                Boolean(qualificationCrm.flowContextPatch) || Boolean(qualificationCrm.flowTagsToAdd?.length);
+              if (hasCrmContextEnrichment) {
                 const currentTags = Array.isArray(updatedConversation.answers?.flowTags)
                   ? updatedConversation.answers.flowTags
                   : [];
@@ -6196,19 +6199,21 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                     fields: qualificationCrm.conflicts,
                   });
                 }
-                if (qualificationCrm.leadPatch) {
-                  await upsertLeadFromCapture({
-                    tenantId: tenantClientId,
-                    waId: message.from,
-                    company: qualificationCrm.leadPatch.company,
-                    service: qualificationCrm.leadPatch.service,
-                    phoneNumberId: phoneNumberId ?? undefined,
-                  });
-                  await logAiAssistantEvent("ai.qualification.lead_enriched", {
-                    fields: Object.keys(qualificationCrm.leadPatch),
-                  });
-                }
-              } else {
+              }
+              if (qualificationCrm.leadPatch) {
+                await upsertLeadFromCapture({
+                  tenantId: tenantClientId,
+                  waId: message.from,
+                  name: qualificationCrm.leadPatch.name,
+                  email: qualificationCrm.leadPatch.email,
+                  company: qualificationCrm.leadPatch.company,
+                  service: qualificationCrm.leadPatch.service,
+                  phoneNumberId: phoneNumberId ?? undefined,
+                });
+                await logAiAssistantEvent("ai.qualification.lead_enriched", {
+                  fields: Object.keys(qualificationCrm.leadPatch),
+                });
+              } else if (!hasCrmContextEnrichment) {
                 await logAiAssistantEvent("ai.qualification.crm_skipped", {
                   reason: qualificationCrm.skippedReason ?? "no_safe_slots",
                 });

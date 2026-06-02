@@ -11,6 +11,7 @@ export type NormalizedMediaPayload = {
 export type NormalizedMessage = {
   messageId: string;
   from: string;
+  profileName?: string | null;
   timestamp: string;
   type: MessageType;
   text: string | null;

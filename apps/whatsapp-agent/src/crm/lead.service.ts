@@ -9,6 +9,7 @@ import { runWhatsAppDualReadShadow } from "../channels/whatsappDualReadShadow.js
 export async function ensureLeadForConversation(params: {
   tenantId: string;
   waId: string;
+  name?: string | null;
   phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
@@ -38,6 +39,12 @@ export async function ensureLeadForConversation(params: {
   });
 
   if (existing) {
+    if (!existing.name && params.name?.trim()) {
+      await prisma.lead.update({
+        where: { id: existing.id },
+        data: { name: params.name.trim().replace(/\s+/g, " ").slice(0, 160) },
+      });
+    }
     if (isWhatsAppMultichannelShadowWriteEnabled()) {
       await safeApplyWhatsAppMultichannelShadow({
         prisma,
@@ -56,6 +63,7 @@ export async function ensureLeadForConversation(params: {
       tenantId: params.tenantId,
       waId: params.waId,
       waIdCanonical: canonicalizeBrazilWaId(params.waId),
+      name: params.name?.trim().replace(/\s+/g, " ").slice(0, 160) || undefined,
       phone: params.waId,
       status: "NEW",
     },
@@ -80,6 +88,7 @@ export async function upsertLeadFromCapture(params: {
   city?: string;
   service?: string;
   company?: string;
+  email?: string;
   phoneNumberId?: string | null;
 }) {
   const prisma = getPrisma();
@@ -118,6 +127,7 @@ export async function upsertLeadFromCapture(params: {
         city: params.city ?? existing.city,
         service: params.service ?? existing.service,
         company: params.company ?? existing.company,
+        email: params.email ?? existing.email,
         status: "QUALIFIED",
       },
     });
@@ -144,6 +154,7 @@ export async function upsertLeadFromCapture(params: {
       city: params.city,
       service: params.service,
       company: params.company,
+      email: params.email,
     },
   });
   if (isWhatsAppMultichannelShadowWriteEnabled()) {

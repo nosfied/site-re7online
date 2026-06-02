@@ -549,6 +549,68 @@ test("buildQualificationCrmArtifacts applies crmMapping rank escalation safely",
   assert.deepEqual(artifacts.leadPatch, { service: "atacado" });
 });
 
+test("buildQualificationCrmArtifacts maps lead name and email safely", () => {
+  const artifacts = buildQualificationCrmArtifacts({
+    state: {
+      stage: "completed",
+      slots: {
+        nome_cliente: "Maria",
+        email_cliente: "MARIA@EXAMPLE.COM",
+      },
+      completedSlots: ["nome_cliente", "email_cliente"],
+      missingSlots: [],
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "nome_cliente",
+          label: "Nome",
+          question: "Como posso te chamar?",
+          crmMapping: { leadField: "name" },
+        },
+        {
+          key: "email_cliente",
+          label: "E-mail",
+          question: "Qual e-mail podemos registrar?",
+          crmMapping: { leadField: "email" },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(artifacts.leadPatch, {
+    name: "Maria",
+    email: "maria@example.com",
+  });
+});
+
+test("buildQualificationCrmArtifacts ignores invalid lead email mapping", () => {
+  const artifacts = buildQualificationCrmArtifacts({
+    state: {
+      stage: "completed",
+      slots: {
+        email_cliente: "não tenho",
+      },
+      completedSlots: ["email_cliente"],
+      missingSlots: [],
+    },
+    schema: {
+      enabled: true,
+      slots: [
+        {
+          key: "email_cliente",
+          label: "E-mail",
+          question: "Qual e-mail podemos registrar?",
+          crmMapping: { leadField: "email" },
+        },
+      ],
+    },
+  });
+
+  assert.equal(artifacts.leadPatch, undefined);
+});
+
 test("buildQualificationCrmArtifacts does not apply crmMapping when value condition does not match", () => {
   const artifacts = buildQualificationCrmArtifacts({
     state: {

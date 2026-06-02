@@ -23,7 +23,7 @@ export type AiQualificationSlot = {
   askAfter?: string[];
   crmMapping?: {
     flowContextKey?: string;
-    leadField?: "company" | "service";
+    leadField?: "company" | "service" | "name" | "email";
     leadTemp?: "frio" | "morno" | "quente";
     priority?: "baixa" | "media" | "alta";
     whenValue?: string[];
@@ -195,7 +195,12 @@ function normalizeCrmMapping(input: unknown): AiQualificationSlot["crmMapping"] 
   const raw = input as Record<string, unknown>;
   const flowContextKey = normalizeToken(raw.flowContextKey, 60);
   const leadField =
-    raw.leadField === "company" || raw.leadField === "service" ? raw.leadField : undefined;
+    raw.leadField === "company" ||
+    raw.leadField === "service" ||
+    raw.leadField === "name" ||
+    raw.leadField === "email"
+      ? raw.leadField
+      : undefined;
   const leadTemp =
     raw.leadTemp === "frio" || raw.leadTemp === "morno" || raw.leadTemp === "quente"
       ? raw.leadTemp
@@ -624,6 +629,8 @@ export type QualificationCrmArtifacts = {
   summaryLines?: string[];
   nextStep?: string | null;
   leadPatch?: {
+    name?: string;
+    email?: string;
     company?: string;
     service?: string;
   };
@@ -1554,6 +1561,18 @@ function isSafeCrmSlotValue(value: unknown): value is string | number | boolean 
   return Boolean(text) && !containsSensitiveText(text);
 }
 
+function normalizeLeadEmail(value: unknown) {
+  const email = normalizeDisplayString(value, 160).toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return "";
+  return email;
+}
+
+function normalizeLeadName(value: unknown) {
+  const name = normalizeDisplayString(value, 120);
+  if (!name || containsSensitiveText(name)) return "";
+  return name;
+}
+
 const LEAD_TEMP_RANK: Record<"frio" | "morno" | "quente", number> = {
   frio: 1,
   morno: 2,
@@ -1645,6 +1664,14 @@ export function buildQualificationCrmArtifacts(params: {
       }
       if (slot.crmMapping.leadField === "service" && typeof rawValue === "string") {
         leadPatch.service = normalizeDisplayString(rawValue, 160);
+      }
+      if (slot.crmMapping.leadField === "name" && typeof rawValue === "string") {
+        const name = normalizeLeadName(rawValue);
+        if (name) leadPatch.name = name;
+      }
+      if (slot.crmMapping.leadField === "email" && typeof rawValue === "string") {
+        const email = normalizeLeadEmail(rawValue);
+        if (email) leadPatch.email = email;
       }
       if (
         slot.crmMapping.leadTemp &&

@@ -43,6 +43,38 @@ test("normalizeWebhook extrai metadados de image", () => {
   });
 });
 
+test("normalizeWebhook extrai nome do perfil WhatsApp quando disponivel", () => {
+  const result = normalizeWebhook({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              contacts: [
+                {
+                  wa_id: "5511999999999",
+                  profile: { name: "Maria Cliente" },
+                },
+              ],
+              messages: [
+                {
+                  id: "wamid.text.1",
+                  from: "5511999999999",
+                  timestamp: "1776816000",
+                  type: "text",
+                  text: { body: "oi" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.messages[0]?.profileName, "Maria Cliente");
+});
+
 test("normalizeWebhook extrai fileName e caption de document", () => {
   const result = normalizeWebhook({
     entry: [
