@@ -675,7 +675,7 @@ html {
 
   :root[data-theme="light"] .theme-inbox .theme-conversation-row-even:hover,
   :root[data-theme="light"] .theme-inbox .theme-conversation-row-odd:hover {
-    background-color: rgba(127, 196, 229, 0.16);
+    background-color: rgba(127, 196, 229, 0.16) !important;
   }
 
   :root[data-theme="light"] .theme-inbox .theme-suggestion-button {
