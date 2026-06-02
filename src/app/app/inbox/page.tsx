@@ -1032,6 +1032,19 @@ function getFileExtension(fileName: string | null | undefined) {
   return dotIndex >= 0 ? normalized.slice(dotIndex + 1) : "";
 }
 
+function isHeicOrHeifImage(file: File) {
+  const mimeType = file.type.toLowerCase();
+  const extension = getFileExtension(file.name);
+  return mimeType.includes("heic") || mimeType.includes("heif") || extension === "heic" || extension === "heif";
+}
+
+function shouldNormalizeImageForMeta(file: File) {
+  const mimeType = file.type.toLowerCase();
+  if (isHeicOrHeifImage(file)) return true;
+  if (!mimeType.startsWith("image/")) return false;
+  return mimeType !== "image/jpeg" && mimeType !== "image/jpg" && mimeType !== "image/png";
+}
+
 function canAttemptBrowserImageCompression(file: File) {
   const mimeType = file.type.toLowerCase();
   if (mimeType.startsWith("image/")) return true;
@@ -1061,10 +1074,23 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) 
 }
 
 async function prepareMediaFileForUpload(file: File) {
-  if (file.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES) return file;
+  const forceJpegNormalization = shouldNormalizeImageForMeta(file);
+  if (file.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES && !forceJpegNormalization) return file;
   if (!canAttemptBrowserImageCompression(file) || typeof document === "undefined") return file;
 
-  const image = await loadImageForCompression(file);
+  let image: HTMLImageElement;
+  try {
+    image = await loadImageForCompression(file);
+  } catch {
+    if (isHeicOrHeifImage(file)) {
+      throw Object.assign(new Error("Nao foi possivel converter esta foto do iPhone para envio."), {
+        details: "Tente selecionar a foto novamente, salvar como JPEG ou enviar pelo app Fotos em modo Mais compativel.",
+      });
+    }
+    throw Object.assign(new Error("Nao foi possivel preparar esta imagem para envio."), {
+      details: "Tente outra imagem ou compacte o arquivo antes de enviar.",
+    });
+  }
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
   const maxSide = 2048;
@@ -1079,6 +1105,10 @@ async function prepareMediaFileForUpload(file: File) {
   for (const quality of [0.82, 0.72, 0.62]) {
     const blob = await canvasToBlob(canvas, "image/jpeg", quality);
     if (!blob) continue;
+    if (forceJpegNormalization && blob.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES) {
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
+      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+    }
     if (blob.size < file.size && blob.size <= IMAGE_UPLOAD_TARGET_BYTES) {
       const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
       return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
