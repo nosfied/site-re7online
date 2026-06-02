@@ -1038,9 +1038,24 @@ function isHeicOrHeifImage(file: File) {
   return mimeType.includes("heic") || mimeType.includes("heif") || extension === "heic" || extension === "heif";
 }
 
+function isLikelyIosDevice() {
+  if (typeof navigator === "undefined") return false;
+  const platform = navigator.platform || "";
+  const userAgent = navigator.userAgent || "";
+  const isiPadOSDesktopMode = platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return /iPhone|iPad|iPod/i.test(userAgent) || isiPadOSDesktopMode;
+}
+
+function isLikelyImageFile(file: File) {
+  const mimeType = file.type.toLowerCase();
+  if (mimeType.startsWith("image/")) return true;
+  return ["heic", "heif", "jpg", "jpeg", "png", "webp", "gif"].includes(getFileExtension(file.name));
+}
+
 function shouldNormalizeImageForMeta(file: File) {
   const mimeType = file.type.toLowerCase();
   if (isHeicOrHeifImage(file)) return true;
+  if (isLikelyIosDevice() && isLikelyImageFile(file)) return true;
   if (!mimeType.startsWith("image/")) return false;
   return mimeType !== "image/jpeg" && mimeType !== "image/jpg" && mimeType !== "image/png";
 }
@@ -1073,6 +1088,10 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) 
   });
 }
 
+function formatFileSizeMb(bytes: number) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 async function prepareMediaFileForUpload(file: File) {
   const forceJpegNormalization = shouldNormalizeImageForMeta(file);
   if (file.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES && !forceJpegNormalization) return file;
@@ -1093,26 +1112,35 @@ async function prepareMediaFileForUpload(file: File) {
   }
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
-  const maxSide = 2048;
-  const ratio = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(sourceWidth * ratio));
-  canvas.height = Math.max(1, Math.round(sourceHeight * ratio));
-  const context = canvas.getContext("2d");
-  if (!context) return file;
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
+  const maxSides = forceJpegNormalization ? [2048, 1600, 1280] : [2048];
+  const qualities = forceJpegNormalization ? [0.82, 0.72, 0.62, 0.52, 0.42] : [0.82, 0.72, 0.62];
+  let smallestBlob: Blob | null = null;
 
-  for (const quality of [0.82, 0.72, 0.62]) {
-    const blob = await canvasToBlob(canvas, "image/jpeg", quality);
-    if (!blob) continue;
-    if (forceJpegNormalization && blob.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES) {
-      const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
-      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  for (const maxSide of maxSides) {
+    const ratio = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * ratio));
+    canvas.height = Math.max(1, Math.round(sourceHeight * ratio));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    for (const quality of qualities) {
+      const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+      if (!blob) continue;
+      if (!smallestBlob || blob.size < smallestBlob.size) smallestBlob = blob;
+      if (forceJpegNormalization && blob.size <= MEDIA_UPLOAD_SOFT_LIMIT_BYTES) {
+        return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+      }
+      if (blob.size < file.size && blob.size <= IMAGE_UPLOAD_TARGET_BYTES) {
+        return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+      }
     }
-    if (blob.size < file.size && blob.size <= IMAGE_UPLOAD_TARGET_BYTES) {
-      const baseName = file.name.replace(/\.[^.]+$/, "") || "imagem";
-      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
-    }
+  }
+
+  if (smallestBlob && smallestBlob.size < file.size) {
+    return new File([smallestBlob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
   }
 
   return file;
@@ -3789,7 +3817,7 @@ export default function AppInboxPage() {
         const uploadFile = await prepareMediaFileForUpload(file);
         if (uploadFile.size > MEDIA_UPLOAD_SOFT_LIMIT_BYTES) {
           throw Object.assign(new Error("Arquivo muito grande para envio. Tente uma imagem menor ou compacte o documento."), {
-            details: "O limite operacional atual para envio direto pelo inbox e de aproximadamente 9 MB.",
+            details: `Limite atual: 9 MB. Arquivo selecionado: ${formatFileSizeMb(file.size)}. Arquivo preparado: ${formatFileSizeMb(uploadFile.size)}.`,
           });
         }
         const response = await sendAppConversationMedia(
