@@ -48,6 +48,7 @@ export type AiQualificationSchema = {
   semanticResolverEnabled?: boolean;
   semanticConfirmationEnabled?: boolean;
   semanticConfirmation?: AiQualificationSemanticConfirmation;
+  staleResetMinutes?: number;
   schemaVersion?: string;
   slots?: AiQualificationSlot[];
   handoffWhen?: string[];
@@ -320,6 +321,11 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
   if (raw.commercialContinuation !== undefined && !commercialContinuation) return undefined;
   const semanticConfirmation = normalizeSemanticConfirmation(raw.semanticConfirmation);
   if (raw.semanticConfirmation !== undefined && !semanticConfirmation) return undefined;
+  let staleResetMinutes: number | undefined;
+  if (raw.staleResetMinutes !== undefined) {
+    if (typeof raw.staleResetMinutes !== "number" || !Number.isFinite(raw.staleResetMinutes)) return undefined;
+    staleResetMinutes = Math.min(1440, Math.max(5, Math.floor(raw.staleResetMinutes)));
+  }
   const slots: AiQualificationSlot[] = [];
   if (Array.isArray(raw.slots)) {
     const seen = new Set<string>();
@@ -373,6 +379,7 @@ export function normalizeQualificationSchema(input: unknown): AiQualificationSch
     ...(typeof raw.schemaVersion === "string" && raw.schemaVersion.trim()
       ? { schemaVersion: normalizeDisplayString(raw.schemaVersion, 40) }
       : {}),
+    ...(typeof staleResetMinutes === "number" ? { staleResetMinutes } : {}),
     ...(slots.length ? { slots } : {}),
     ...(Array.isArray(raw.handoffWhen) ? { handoffWhen: normalizeHandoffWhenList(raw.handoffWhen) } : {}),
     ...(Array.isArray(raw.outcomes)
@@ -576,6 +583,20 @@ function isPendingSemanticConfirmationExpired(
   return nowTime - createdTime > expirationMinutes * 60_000;
 }
 
+function isQualificationStateStale(
+  schema: AiQualificationSchema | undefined,
+  state: AIQualificationState | null | undefined,
+  nowIso: string
+) {
+  const staleResetMinutes = schema?.staleResetMinutes;
+  if (!state?.updatedAt || typeof staleResetMinutes !== "number") return false;
+  if (state.stage !== "idle" && state.stage !== "collecting") return false;
+  const updatedAt = Date.parse(state.updatedAt);
+  const now = Date.parse(nowIso);
+  if (!Number.isFinite(updatedAt) || !Number.isFinite(now)) return true;
+  return now - updatedAt > staleResetMinutes * 60_000;
+}
+
 function deterministicSlotCapture(slot: AiQualificationSlot, text: string, handoffKeywords: string[] = []) {
   const normalizedText = normalizeComparable(text);
   if (!normalizedText) {
@@ -743,7 +764,9 @@ export function handleQualificationTurn(params: {
       logs: [{ event: "ai.qualification.skipped", payload: { reason: "disabled" } }],
     };
   }
-  const hasExistingState = params.state?.enabledSnapshot === true;
+  const nowIso = params.nowIso ?? new Date().toISOString();
+  const staleState = isQualificationStateStale(schema, params.state, nowIso);
+  const hasExistingState = params.state?.enabledSnapshot === true && !staleState;
   if (!hasExistingState && GREETING_ONLY.has(normalizeToken(params.text, 80))) {
     return {
       enabled: true,
@@ -751,8 +774,13 @@ export function handleQualificationTurn(params: {
       logs: [{ event: "ai.qualification.skipped", payload: { reason: "initial_greeting" } }],
     };
   }
-  const nowIso = params.nowIso ?? new Date().toISOString();
   const logs: QualificationTurnLog[] = [];
+  if (staleState) {
+    logs.push({
+      event: "ai.qualification.skipped",
+      payload: { reason: "stale_state_reset", staleResetMinutes: schema?.staleResetMinutes ?? null },
+    });
+  }
   const existingState = hasExistingState ? params.state! : null;
   let state: AIQualificationState = hasExistingState
     ? {

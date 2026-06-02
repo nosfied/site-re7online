@@ -177,6 +177,12 @@ function canTreatPersonalDataAsQualificationEmail(params: {
   return currentSlot?.crmMapping?.leadField === "email";
 }
 
+function hasActiveQualificationStep(state: ConversationState) {
+  const qualification = state.answers?.aiQualification;
+  if (!qualification?.enabledSnapshot || !qualification.currentSlot) return false;
+  return qualification.stage === "idle" || qualification.stage === "collecting";
+}
+
 type RequestMeta = {
   requestId: string;
   rawBodyLength: number;
@@ -6192,7 +6198,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               })
             : null;
           const shouldBypassQualificationForTenantIntent =
-            preQualificationTenantIntent?.preQualification === true;
+            preQualificationTenantIntent?.preQualification === true && !hasActiveQualificationStep(updatedConversation);
           let qualificationHandled = false;
           if (
             (!risk || qualificationEmailAllowed) &&

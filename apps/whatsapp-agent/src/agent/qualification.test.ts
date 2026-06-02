@@ -332,6 +332,49 @@ test("handleQualificationTurn captures enum semantic aliases as canonical values
   assert.equal(result.replyText, "Qual produto?");
 });
 
+test("handleQualificationTurn resets stale collecting state when configured", () => {
+  const schema = {
+    enabled: true,
+    staleResetMinutes: 30,
+    slots: [
+      {
+        key: "perfil",
+        type: "enum" as const,
+        required: true,
+        allowedValues: ["uso próprio", "revender"],
+        semanticAliases: {
+          "uso próprio": ["proprio"],
+          revender: ["revenda"],
+        },
+        question: "Uso próprio ou revender?",
+      },
+      { key: "produto", required: true, question: "Qual produto?" },
+    ],
+  };
+  const staleState = {
+    ...getInitialQualificationState(schema, "2026-06-02T08:00:00.000Z"),
+    stage: "collecting" as const,
+    currentSlot: "produto",
+    slots: { perfil: "revender" },
+    completedSlots: ["perfil"],
+    updatedAt: "2026-06-02T08:00:00.000Z",
+  };
+  const result = handleQualificationTurn({
+    schema,
+    state: staleState,
+    text: "proprio",
+    nowIso: "2026-06-02T09:00:01.000Z",
+  });
+
+  assert.equal(result.state?.slots?.perfil, "uso próprio");
+  assert.equal(result.state?.slots?.produto, undefined);
+  assert.equal(result.replyText, "Qual produto?");
+  assert.equal(
+    result.logs.some((entry) => entry.event === "ai.qualification.skipped" && entry.payload.reason === "stale_state_reset"),
+    true
+  );
+});
+
 test("handleQualificationTurn captures useful text and ignores isolated greeting", () => {
   const schema = {
     enabled: true,
