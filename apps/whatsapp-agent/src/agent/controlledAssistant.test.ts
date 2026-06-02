@@ -520,8 +520,12 @@ test("classifyRisk detects concrete or sensitive requests", () => {
   assert.equal(classifyRisk("quanto vou receber?"), "benefit_amount");
   assert.equal(classifyRisk("meu caso ganha?"), "outcome_prediction");
   assert.equal(classifyRisk("analise meu documento"), "document_analysis");
-  assert.equal(classifyRisk("meu CPF é 123.456.789-00"), "personal_data");
   assert.equal(classifyRisk("como burlar o cadastro?"), "fraud_or_illicit");
+});
+
+test("classifyRisk does not use generic personal-data guardrail", () => {
+  assert.equal(classifyRisk("meu CPF é 123.456.789-00"), null);
+  assert.equal(classifyRisk("meu email é cliente@example.com"), null);
 });
 
 test("classifyRisk does not block educational questions", () => {

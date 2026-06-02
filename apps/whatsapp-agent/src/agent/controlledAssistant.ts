@@ -800,7 +800,6 @@ export function classifyRisk(
   const raw = String(text ?? "").trim();
   if (!raw) return null;
   const normalized = normalizeText(raw);
-  if (containsPersonalData(raw)) return "personal_data";
   if (
     containsAnyTerm(normalized, [
       "fraude",
@@ -1175,9 +1174,6 @@ export function classifyEducationalIntent(
   if (!normalized) return { allowed: false, educational: false, reason: "empty" };
   if (raw.length > AI_ASSISTANT_MAX_INPUT_CHARS) {
     return { allowed: false, educational: false, reason: "too_long" };
-  }
-  if (containsPersonalData(raw)) {
-    return { allowed: false, educational: false, concreteRisk: true, reason: "personal_data" };
   }
   const risk = classifyRisk(raw);
   if (risk) {
