@@ -56,6 +56,8 @@ export type AiQualificationSchema = {
   commercialContinuation?: AiQualificationCommercialContinuation;
 };
 
+export const DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE = "produto enviado por mídia";
+
 const SENSITIVE_KEYS = new Set([
   "cpf",
   "rg",
@@ -446,6 +448,63 @@ export function getInitialQualificationState(
     ...initialState,
     currentSlot: nextSlot?.key ?? null,
     missingSlots: nextSlot ? [nextSlot.key] : [],
+  };
+}
+
+function isMediaQualificationSlot(slot?: AiQualificationSlot | null) {
+  if (!slot || slot.type === "enum" || slot.type === "boolean") return false;
+  if (slot.crmMapping?.leadField === "service") return true;
+  const descriptor = normalizeToken(`${slot.key} ${slot.label ?? ""}`, 120);
+  return /(produto|produto_interesse|interesse|peca|peça|item|modelo|catalogo|catálogo)/.test(descriptor);
+}
+
+export function applyMediaHandoffToQualificationState(params: {
+  schema?: AiQualificationSchema | null;
+  state?: AIQualificationState | null;
+  nowIso?: string;
+  slotValue?: string;
+}) {
+  const schema = normalizeQualificationSchema(params.schema);
+  const state = params.state;
+  const currentSlotKey = normalizeToken(state?.currentSlot, 60);
+  if (!schema?.enabled || !schema.slots?.length || !state || !currentSlotKey) {
+    return { changed: false as const, reason: "missing_active_qualification" };
+  }
+  const currentSlot = schema.slots.find((slot) => slot.key === currentSlotKey);
+  if (!isMediaQualificationSlot(currentSlot)) {
+    return { changed: false as const, reason: "slot_not_media_compatible", slot: currentSlotKey };
+  }
+  const currentValue = state.slots?.[currentSlotKey];
+  if (typeof currentValue === "string" && currentValue.trim()) {
+    return { changed: false as const, reason: "slot_already_filled", slot: currentSlotKey };
+  }
+
+  const nowIso = params.nowIso ?? new Date().toISOString();
+  const slotValue = normalizeDisplayString(
+    params.slotValue ?? DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE,
+    120
+  ) || DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE;
+  const completedSlots = Array.from(new Set([...(state.completedSlots ?? []), currentSlotKey]));
+  const missingSlots = (state.missingSlots ?? []).filter((slot) => slot !== currentSlotKey);
+  const nextState: AIQualificationState = {
+    ...state,
+    stage: "handoff_ready",
+    currentSlot: null,
+    slots: {
+      ...(state.slots ?? {}),
+      [currentSlotKey]: slotValue,
+    },
+    completedSlots,
+    missingSlots,
+    readyForHandoff: true,
+    outcome: state.outcome ?? "pedido_humano",
+    updatedAt: nowIso,
+  };
+  return {
+    changed: true as const,
+    reason: "media_completed_current_slot",
+    slot: currentSlotKey,
+    state: nextState,
   };
 }
 

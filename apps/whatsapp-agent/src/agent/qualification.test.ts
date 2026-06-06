@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE,
+  applyMediaHandoffToQualificationState,
   buildHumanizedQualificationSummary,
   buildQualificationCrmArtifacts,
   getInitialQualificationState,
@@ -252,6 +254,58 @@ test("handleQualificationTurn captures enum allowed values and advances", () => 
   assert.equal(result.replyText, "Qual produto?");
   assert.equal(result.state?.slots?.tipo, "atacado");
   assert.deepEqual(result.state?.completedSlots, ["tipo"]);
+});
+
+test("applyMediaHandoffToQualificationState completes current product slot for handoff", () => {
+  const schema = {
+    enabled: true,
+    slots: [
+      {
+        key: "produto_interesse",
+        label: "Produto de interesse",
+        required: true,
+        question: "Qual peça ou acessório você procura primeiro?",
+        crmMapping: { flowContextKey: "produto_interesse", leadField: "service" as const },
+      },
+    ],
+  };
+  const state = getInitialQualificationState(schema, "2026-06-03T13:50:00.000Z");
+  const result = applyMediaHandoffToQualificationState({
+    schema,
+    state,
+    nowIso: "2026-06-03T13:52:47.000Z",
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(result.state?.stage, "handoff_ready");
+  assert.equal(result.state?.readyForHandoff, true);
+  assert.equal(result.state?.slots?.produto_interesse, DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE);
+  assert.deepEqual(result.state?.completedSlots, ["produto_interesse"]);
+  assert.deepEqual(result.state?.missingSlots, []);
+
+  const artifacts = buildQualificationCrmArtifacts({ state: result.state, schema });
+  assert.equal(artifacts.flowContextPatch?.produto_interesse, DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE);
+  assert.equal(artifacts.leadPatch?.service, DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE);
+});
+
+test("applyMediaHandoffToQualificationState does not complete email slot", () => {
+  const schema = {
+    enabled: true,
+    slots: [
+      {
+        key: "email",
+        label: "E-mail",
+        required: true,
+        question: "Qual e-mail podemos anotar?",
+        crmMapping: { flowContextKey: "email", leadField: "email" as const },
+      },
+    ],
+  };
+  const state = getInitialQualificationState(schema);
+  const result = applyMediaHandoffToQualificationState({ schema, state });
+
+  assert.equal(result.changed, false);
+  assert.equal(result.reason, "slot_not_media_compatible");
 });
 
 test("handleQualificationTurn captures enum captureHints", () => {

@@ -62,6 +62,8 @@ import {
   updateAiMemory,
 } from "../agent/controlledAssistant.js";
 import {
+  DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE,
+  applyMediaHandoffToQualificationState,
   buildQualificationCrmArtifacts,
   getInitialQualificationState,
   handleQualificationTurn,
@@ -1454,6 +1456,93 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       closedAt: null,
     };
   };
+  const enrichQualificationFromInboundMedia = async (
+    state: ConversationState,
+    params: { receivedMedia: boolean; messageId: string; nowIso: string }
+  ) => {
+    if (!params.receivedMedia || !tenantClientId || !appliedTenantConfig?.aiQualification) return state;
+    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig.mediaHandoffPolicy);
+    if (
+      !mediaPolicy.enabled ||
+      !mediaPolicy.channels.includes("whatsapp") ||
+      mediaPolicy.behavior === "ignore"
+    ) {
+      return state;
+    }
+    const mediaQualification = applyMediaHandoffToQualificationState({
+      schema: appliedTenantConfig.aiQualification,
+      state: state.answers?.aiQualification,
+      nowIso: params.nowIso,
+      slotValue: DEFAULT_MEDIA_QUALIFICATION_SLOT_VALUE,
+    });
+    if (!mediaQualification.changed) return state;
+
+    let nextState: ConversationState = {
+      ...state,
+      answers: {
+        ...(state.answers ?? {}),
+        aiQualification: mediaQualification.state,
+      },
+    };
+    const qualificationCrm = buildQualificationCrmArtifacts({
+      state: mediaQualification.state,
+      schema: appliedTenantConfig.aiQualification,
+      answers: nextState.answers,
+      nowIso: params.nowIso,
+    });
+    const currentTags = Array.isArray(nextState.answers?.flowTags)
+      ? nextState.answers.flowTags
+      : [];
+    const nextTags = [...currentTags];
+    for (const tag of qualificationCrm.flowTagsToAdd ?? []) {
+      if (!nextTags.includes(tag)) nextTags.push(tag);
+    }
+    nextState = {
+      ...nextState,
+      answers: {
+        ...(nextState.answers ?? {}),
+        flowContext: {
+          ...(nextState.answers?.flowContext ?? {}),
+          ...(qualificationCrm.flowContextPatch ?? {}),
+        },
+        flowTags: nextTags,
+      },
+    };
+    if (qualificationCrm.leadPatch) {
+      await upsertLeadFromCapture({
+        tenantId: tenantClientId,
+        waId: state.waId,
+        name: qualificationCrm.leadPatch.name,
+        email: qualificationCrm.leadPatch.email,
+        company: qualificationCrm.leadPatch.company,
+        service: qualificationCrm.leadPatch.service,
+        phoneNumberId: phoneNumberId ?? undefined,
+      });
+    }
+    const safePayload = {
+      action: "ai.qualification.media_handoff_enriched",
+      clientId: tenantClientId,
+      clientKey: tenantClientKey,
+      waId: maskNumber(state.waId),
+      messageId: params.messageId,
+      slot: mediaQualification.slot,
+      changedFields: Object.keys(qualificationCrm.flowContextPatch ?? {}),
+      leadFields: Object.keys(qualificationCrm.leadPatch ?? {}),
+      conflicts: qualificationCrm.conflicts ?? [],
+    };
+    logger.info({
+      event: "ai.qualification.media_handoff_enriched",
+      requestId: meta?.requestId,
+      ...safePayload,
+    });
+    await persistEventSafe(
+      "ai.qualification.media_handoff_enriched",
+      safePayload as Prisma.InputJsonValue,
+      state.waId,
+      params.messageId
+    );
+    return nextState;
+  };
   const routeConversationToHumanQueue = async (
     state: ConversationState,
     params: {
@@ -1467,6 +1556,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       guard?: { version: number; lastInboundAt?: string };
     }
   ) => {
+    state = await enrichQualificationFromInboundMedia(state, {
+      receivedMedia: params.receivedMedia,
+      messageId: params.messageId,
+      nowIso: parseWebhookTimestampToDate(params.timestamp).toISOString(),
+    });
     const previousState = state;
     const activatedHandoff = activateHumanHandoff(
       clearChatbotRuntime(state),
