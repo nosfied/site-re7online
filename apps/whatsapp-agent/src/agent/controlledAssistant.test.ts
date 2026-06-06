@@ -534,6 +534,25 @@ test("classifyRisk does not block educational questions", () => {
   assert.equal(classifyRisk("quanto tempo demora?"), null);
 });
 
+test("classifyRisk keeps retail product questions out of legal guardrails", () => {
+  const retailContext = {
+    tenantName: "Tendência Multimarcas",
+    aiBusinessContext: "Varejo de moda, atacado, revenda, roupas e acessórios.",
+    allowedTopics: ["catálogo", "valores", "disponibilidade", "tamanho", "tecido"],
+  };
+  assert.equal(classifyRisk("Essa bermuda branca, é qual tecido?", retailContext), null);
+  assert.equal(classifyRisk("Tem qual tamanho?", retailContext), null);
+  assert.equal(classifyRisk("Qual valor dessa peça?", retailContext), null);
+});
+
+test("classifyRisk still detects CID as document analysis in legal contexts", () => {
+  assert.equal(
+    classifyRisk("meu CID é esse", { aiBusinessContext: "Direito previdenciário" }),
+    "document_analysis"
+  );
+  assert.equal(classifyRisk("tecido leve", { aiBusinessContext: "Direito previdenciário" }), null);
+});
+
 test("buildSafeResponse adapts to legal and generic contexts", () => {
   const legal = buildSafeResponse("legal_specific_case", {
     tenantName: "Justa Advocacia",

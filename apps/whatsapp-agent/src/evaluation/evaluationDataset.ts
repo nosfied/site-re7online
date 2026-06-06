@@ -47,6 +47,31 @@ const tendenciaFixture: TenantConfig = {
       preQualification: true,
       tags: ["intent:showroom_visita", "area:comercial", "service:showroom"],
     },
+    {
+      key: "duvida_produto_comercial",
+      title: "Dúvida comercial sobre produto",
+      topics: [
+        "qual tecido",
+        "que tecido",
+        "é qual tecido",
+        "e qual tecido",
+        "tecido dessa peça",
+        "tecido dessa peca",
+        "qual tamanho",
+        "tem qual tamanho",
+        "tamanho dessa peça",
+        "tamanho dessa peca",
+      ],
+      response:
+        "Essa informação precisa ser confirmada pela equipe conforme a peça e a disponibilidade atual.",
+      nextQuestion:
+        "Posso direcionar você para uma pessoa da equipe confirmar tecido, tamanho ou disponibilidade?",
+      leadTemp: "quente",
+      priority: "alta",
+      handoff: true,
+      preQualification: true,
+      tags: ["intent:duvida_produto_comercial", "area:comercial", "service:produto_interesse"],
+    },
   ],
   aiQualification: {
     enabled: true,
@@ -235,6 +260,22 @@ export const defaultEvaluationDataset: ConversationEvaluationDataset = {
             expectedHandoff: true,
             shouldAvoidTopic: ["quero falar com vendedora"],
             shouldAvoidFallback: true,
+          },
+        },
+      ],
+    },
+    {
+      id: "tendencia-duvida-produto-comercial",
+      tenantKey: "tendencia-modas",
+      description: "Retail product questions about fabric, size or availability must not trigger legal guardrails.",
+      turns: [
+        {
+          inbound: "Essa bermuda branca, é qual tecido?",
+          expected: {
+            expectedHandoff: true,
+            shouldAvoidFallback: true,
+            shouldAvoidTopic: ["documentos", "informações específicas"],
+            expectedOutputContains: ["equipe", "tecido"],
           },
         },
       ],

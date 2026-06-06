@@ -486,6 +486,66 @@ function containsAnyTerm(normalizedText: string, terms: string[]) {
   return terms.some((term) => normalizedText.includes(normalizeText(term)));
 }
 
+function containsAnyWholeTerm(normalizedText: string, terms: string[]) {
+  const padded = ` ${normalizedText} `;
+  return terms.some((term) => {
+    const normalizedTerm = normalizeText(term);
+    if (!normalizedTerm) return false;
+    return padded.includes(` ${normalizedTerm} `);
+  });
+}
+
+function hasAnyContextTerm(context: AssistantTenantContext, terms: string[]) {
+  const contextText = normalizeText(
+    [
+      context.tenantName,
+      context.aiBusinessContext,
+      ...(context.allowedTopics ?? []),
+      ...(context.secondaryTopics ?? []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  return Boolean(contextText) && containsAnyWholeTerm(contextText, terms);
+}
+
+function isCommercialRetailContext(context: AssistantTenantContext) {
+  return hasAnyContextTerm(context, [
+    "varejo",
+    "moda",
+    "loja",
+    "multimarcas",
+    "atacado",
+    "revenda",
+    "comercial",
+    "vendas",
+    "produto",
+    "catalogo",
+    "catálogo",
+    "roupas",
+    "acessorios",
+    "acessórios",
+  ]);
+}
+
+function isLegalOrBenefitContext(context: AssistantTenantContext) {
+  return hasAnyContextTerm(context, [
+    "direito",
+    "juridico",
+    "jurídico",
+    "advocacia",
+    "advogado",
+    "previdenciario",
+    "previdenciário",
+    "inss",
+    "bpc",
+    "loas",
+    "aposentadoria",
+    "beneficio",
+    "benefício",
+  ]);
+}
+
 const TOPIC_STOPWORDS = new Set([
   "a",
   "o",
@@ -701,6 +761,16 @@ function resolveTenantIntentCatalogMatch(
     if (!tokens.length) continue;
     const contentTokens = tokens.filter((token) => !INTENT_CATALOG_GENERIC_TOKENS.has(token));
     if (!contentTokens.length) continue;
+    const isSingleTokenQuestionCandidate =
+      contentTokens.length === 1 &&
+      /\b(qual|quais|que|tem|existe|possui)\b/.test(normalizedTopic);
+    if (
+      isSingleTokenQuestionCandidate &&
+      !normalizedText.includes(normalizedTopic) &&
+      !/\?/.test(raw)
+    ) {
+      continue;
+    }
     const preferredMatched = preferredTokens.length
       ? contentTokens.filter((topicToken) =>
           preferredTokens.some((preferredToken) => intentCatalogTokenMatches(preferredToken, topicToken))
@@ -795,11 +865,14 @@ export function buildTenantIntentOrchestratorOutput(
 
 export function classifyRisk(
   text: string | null | undefined,
-  _context: AssistantTenantContext = {}
+  context: AssistantTenantContext = {}
 ): GuardrailRisk | null {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
   const normalized = normalizeText(raw);
+  const commercialRetailContext = isCommercialRetailContext(context);
+  const legalOrBenefitContext = isLegalOrBenefitContext(context);
+  const shouldApplyLegalGuardrails = !commercialRetailContext || legalOrBenefitContext;
   if (
     containsAnyTerm(normalized, [
       "fraude",
@@ -815,20 +888,22 @@ export function classifyRisk(
     return "fraud_or_illicit";
   }
   if (
-    containsAnyTerm(normalized, [
-      "analise meu documento",
-      "analisar meu documento",
-      "meu documento",
-      "laudo",
-      "diagnostico",
-      "cid",
-      "exame",
-      "atestado",
-    ])
+    shouldApplyLegalGuardrails &&
+    (containsAnyTerm(normalized, [
+        "analise meu documento",
+        "analisar meu documento",
+        "meu documento",
+        "laudo",
+        "diagnostico",
+        "exame",
+        "atestado",
+      ]) ||
+      containsAnyWholeTerm(normalized, ["cid"]))
   ) {
     return "document_analysis";
   }
   if (
+    shouldApplyLegalGuardrails &&
     containsAnyTerm(normalized, [
       "quanto vou receber",
       "valor vou receber",
@@ -841,6 +916,7 @@ export function classifyRisk(
     return "benefit_amount";
   }
   if (
+    shouldApplyLegalGuardrails &&
     containsAnyTerm(normalized, [
       "vou ganhar",
       "caso ganha",
@@ -853,6 +929,7 @@ export function classifyRisk(
     return "outcome_prediction";
   }
   if (
+    shouldApplyLegalGuardrails &&
     containsAnyTerm(normalized, [
       "tenho direito",
       "tenho direto",

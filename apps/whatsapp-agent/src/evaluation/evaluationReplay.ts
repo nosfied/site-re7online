@@ -6,6 +6,7 @@ import {
   buildTenantIntentCatalogReply,
   resolveTenantIntent,
 } from "../agent/controlledAssistant.js";
+import type { ResolvedTenantIntent } from "../agent/controlledAssistant.js";
 import type { TenantConfig } from "../config/tenantConfig.js";
 import { getTenant } from "../config/tenantConfig.js";
 import { combineScores, scoreReplayTurn } from "./evaluationScoring.js";
@@ -57,6 +58,16 @@ function isNegativeConfirmation(text: string) {
 function isHandoffRequest(text: string, tenant: TenantConfig) {
   const normalized = normalizeOperationalText(text);
   return (tenant.aiAssistantHandoffKeywords ?? []).some((term) => containsTerm(normalized, term));
+}
+
+function isUsefulTextForAiContinuation(text: string) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  if (isPositiveConfirmation(text) || isNegativeConfirmation(text)) return false;
+  if (["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite", "ok"].includes(normalized)) {
+    return false;
+  }
+  return normalized.length >= 3;
 }
 
 function buildInitialState(testCase: ConversationEvaluationCase): ReplayConversationState {
@@ -127,6 +138,22 @@ function applyCrmArtifacts(state: ReplayConversationState, tenant: TenantConfig,
   };
 }
 
+function hasActiveQualificationStep(state: ReplayConversationState) {
+  const qualification = state.answers.aiQualification;
+  if (!qualification?.enabledSnapshot) return false;
+  if (!qualification.currentSlot) return false;
+  return qualification.stage === "idle" || qualification.stage === "collecting";
+}
+
+function canBypassQualificationForTenantIntent(
+  intent: ResolvedTenantIntent | null,
+  state: ReplayConversationState
+) {
+  if (intent?.preQualification !== true) return false;
+  if (!hasActiveQualificationStep(state)) return true;
+  return intent.handoff === true;
+}
+
 function runReplayTurn(params: {
   state: ReplayConversationState;
   tenant: TenantConfig;
@@ -164,8 +191,14 @@ function runReplayTurn(params: {
       output = "Tudo bem. Vou continuar por aqui.";
       return { state, output, logs: [] };
     }
-    output = "Só para confirmar: você deseja falar com uma pessoa da equipe?";
-    return { state, output, logs: [] };
+    if (!isUsefulTextForAiContinuation(params.inbound)) {
+      output = "Só para confirmar: você deseja falar com uma pessoa da equipe?";
+      return { state, output, logs: [] };
+    }
+    state = {
+      ...state,
+      answers: { ...state.answers, aiOrchestrator: {} },
+    };
   }
 
   if (!params.tenant.aiQualification?.enabled) {
@@ -177,9 +210,10 @@ function runReplayTurn(params: {
   }
 
   const preQualificationIntent = resolveTenantIntent(params.inbound, params.tenant.aiAssistantIntentCatalog);
-  if (preQualificationIntent?.preQualification === true) {
-    output = buildTenantIntentCatalogReply(preQualificationIntent);
-    if (preQualificationIntent.handoff && output) {
+  if (canBypassQualificationForTenantIntent(preQualificationIntent, state)) {
+    const tenantIntent = preQualificationIntent as ResolvedTenantIntent;
+    output = buildTenantIntentCatalogReply(tenantIntent);
+    if (tenantIntent.handoff && output) {
       state = createHandoffPrompt(state, nowIso);
     }
     return { state, output, logs: [] };

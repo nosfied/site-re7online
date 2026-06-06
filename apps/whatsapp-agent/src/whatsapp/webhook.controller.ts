@@ -59,6 +59,7 @@ import {
   resolveOrchestratorAction,
   resolveContextualContinuationTopic,
   shouldSendHandoffConfirmationPrompt,
+  type ResolvedTenantIntent,
   updateAiMemory,
 } from "../agent/controlledAssistant.js";
 import {
@@ -183,6 +184,15 @@ function hasActiveQualificationStep(state: ConversationState) {
   const qualification = state.answers?.aiQualification;
   if (!qualification?.enabledSnapshot || !qualification.currentSlot) return false;
   return qualification.stage === "idle" || qualification.stage === "collecting";
+}
+
+function canBypassQualificationForTenantIntent(
+  intent: ResolvedTenantIntent | null,
+  state: ConversationState
+) {
+  if (intent?.preQualification !== true) return false;
+  if (!hasActiveQualificationStep(state)) return true;
+  return intent.handoff === true;
 }
 
 type RequestMeta = {
@@ -6292,7 +6302,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               })
             : null;
           const shouldBypassQualificationForTenantIntent =
-            preQualificationTenantIntent?.preQualification === true && !hasActiveQualificationStep(updatedConversation);
+            canBypassQualificationForTenantIntent(preQualificationTenantIntent, updatedConversation);
           let qualificationHandled = false;
           if (
             (!risk || qualificationEmailAllowed) &&
