@@ -832,6 +832,55 @@ test("handleQualificationTurn captures configured email slot without privacy fal
   assert.deepEqual(artifacts.leadPatch, { service: "vestido", email: "cliente@example.com" });
 });
 
+test("handleQualificationTurn does not capture product detail as optional email", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    semanticConfirmationEnabled: true,
+    commercialContinuation: {
+      enabled: true,
+      negativeReply: "Tudo bem. Posso continuar te ajudando por aqui.",
+    },
+    slots: [
+      {
+        key: "produto",
+        question: "Qual produto?",
+        required: true,
+        crmMapping: { leadField: "service" },
+      },
+      {
+        key: "email",
+        question: "Quer deixar seu e-mail para receber novidades?",
+        askAfter: ["produto"],
+        crmMapping: { flowContextKey: "email", leadField: "email" },
+      },
+      {
+        key: "detalhe_produto",
+        question: "Você procura alguma cor, tamanho ou estilo específico?",
+        askAfter: ["produto"],
+      },
+    ],
+  })!;
+  const afterProduct = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "corset",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterProduct.state,
+    text: "Tamanho g",
+  });
+  const artifacts = buildQualificationCrmArtifacts({
+    state: result.state,
+    schema,
+  });
+
+  assert.equal(result.state?.slots?.email, undefined);
+  assert.equal(result.state?.completedSlots?.includes("email"), false);
+  assert.deepEqual(artifacts.leadPatch, { service: "corset" });
+});
+
 test("handleQualificationTurn treats negative optional email reply as declined before semantic confirmation", () => {
   const schema = normalizeQualificationSchema({
     enabled: true,

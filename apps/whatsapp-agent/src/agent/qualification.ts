@@ -515,6 +515,12 @@ export function validateQualificationSlotValue(slot: AiQualificationSlot, value:
   }
   const text = normalizeDisplayString(value, 240);
   if (!text) return { ok: false as const, reason: "empty" };
+  if (isEmailCollectionSlot(slot)) {
+    const email = normalizeLeadEmail(text);
+    return email
+      ? { ok: true as const, value: email }
+      : { ok: false as const, reason: "invalid_email" };
+  }
   if (slot.type === "enum") {
     const allowed = new Set((slot.allowedValues ?? []).map((item) => item.toLowerCase()));
     if (!allowed.has(text.toLowerCase())) {
