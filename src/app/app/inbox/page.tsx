@@ -20,6 +20,7 @@ import {
   AppContactTimelineItem,
   AppSession,
   claimAppConversation,
+  closeAppConversationToGeneral,
   clearAppSession,
   createAppLeadNote,
   fetchAppConversation,
@@ -4109,6 +4110,80 @@ export default function AppInboxPage() {
     }
   };
 
+  const handleCloseConversationToGeneral = async () => {
+    if (!session || !selectedConversationWaId) return;
+    const confirmed = window.confirm(
+      "Finalizar este atendimento e devolver a conversa para a fila como Finalizada?"
+    );
+    if (!confirmed) return;
+    setConversationAction("close-general");
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await closeAppConversationToGeneral(session, selectedConversationWaId);
+      const responseIdentity = response.waIdCanonical ?? response.waId ?? selectedConversationWaId;
+      const stillInUserScope = canSessionAccessConversationDepartment(session, response.departmentId);
+
+      setConversations((prev) => {
+        const nextItems = prev
+          .map((item) => {
+            if (
+              getConversationIdentity(item) !== responseIdentity &&
+              item.waId !== selectedConversationWaId &&
+              item.waIdCanonical !== response.waIdCanonical
+            ) {
+              return item;
+            }
+            return {
+              ...item,
+              waId: response.waId ?? item.waId,
+              waIdCanonical: response.waIdCanonical ?? item.waIdCanonical ?? null,
+              mode: response.mode,
+              handoffStatus: response.handoffStatus ?? item.handoffStatus ?? "none",
+              assignedUserId: response.assignedUserId,
+              assignedTo: response.assignedTo,
+              assignedUserName: response.assignedUserName,
+              assignedAt: response.assignedAt,
+              departmentId: response.departmentId,
+              departmentName: response.departmentName,
+              queueId: response.queueId,
+              queueName: response.queueName,
+              status: response.status,
+              closedAt: response.closedAt,
+              lastInboundAt: response.lastInboundAt,
+              lastOutboundAt: response.lastOutboundAt,
+              isUnassigned: response.isUnassigned,
+            };
+          })
+          .filter((item) => stillInUserScope || getConversationIdentity(item) !== responseIdentity);
+        return dedupeConversationsByIdentity(nextItems, isBusinessTenant);
+      });
+
+      if (!stillInUserScope) {
+        detailRequestSeqRef.current += 1;
+        clearSelectedConversation();
+        setSuccess("Atendimento finalizado, devolvido para a fila e reativado para automação.");
+        void refreshConversationList(session).catch((err) => {
+          if ((err as { status?: number }).status === 401) handleUnauthorized();
+        });
+        return;
+      }
+
+      setSuccess("Atendimento finalizado, devolvido para a fila e reativado para automação.");
+      await refreshConversationList(session);
+      await refreshSelectedTimeline(session, response.waId ?? selectedConversationWaId);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Falha ao finalizar atendimento.");
+    } finally {
+      setConversationAction(null);
+    }
+  };
+
   const handleTransferConversation = async () => {
     if (!session || !selectedConversationWaId || !transferUserId) return;
     setConversationAction("transfer");
@@ -4836,6 +4911,19 @@ export default function AppInboxPage() {
                           ? "Liberando..."
                           : "Liberar para atendimento geral"}
                       </button>
+                      <button
+                        type="button"
+                        className="block w-full px-4 py-3 text-left font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                        onClick={() => {
+                          setShowMoreActions(false);
+                          void handleCloseConversationToGeneral();
+                        }}
+                      >
+                        {conversationAction === "close-general"
+                          ? "Finalizando..."
+                          : "Finalizar atendimento"}
+                      </button>
                     </>
                   ) : (
                     <button
@@ -4915,6 +5003,16 @@ export default function AppInboxPage() {
                     className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-50 text-base text-emerald-900 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
                   >
                     {conversationAction === "release-general" ? "…" : "🎧"}
+                  </button>
+                  <button
+                    type="button"
+                    title="Finalizar atendimento"
+                    aria-label="Finalizar atendimento e devolver para a fila"
+                    disabled={!selectedConversationWaId || Boolean(conversationAction)}
+                    onClick={handleCloseConversationToGeneral}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-50 text-base text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-8 max-[1366px]:w-8 max-md:h-10 max-md:w-10"
+                  >
+                    {conversationAction === "close-general" ? "…" : "🏁"}
                   </button>
                 </>
               ) : (

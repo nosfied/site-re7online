@@ -992,6 +992,15 @@ export async function releaseAppConversationToGeneral(
   });
 }
 
+export async function closeAppConversationToGeneral(
+  session: AppSession,
+  waId: string
+): Promise<AppConversationOperationalPayload> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/close-to-general`, {
+    method: "POST",
+  });
+}
+
 export async function transferAppConversation(
   session: AppSession,
   waId: string,
