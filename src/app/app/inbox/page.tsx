@@ -1326,6 +1326,20 @@ function getConversationOperationalStatus(item: Pick<InboxConversationItem, "sta
   return null;
 }
 
+function isAutomationQueueConversation(
+  item: Pick<InboxConversationItem, "status" | "mode" | "handoffStatus" | "assignedUserId" | "assignedAt"> | null
+) {
+  if (!item) return false;
+  const handoffStatus = item.handoffStatus ?? "none";
+  return (
+    item.mode === "BOT" &&
+    (item.status === "WAITING" || item.status === null) &&
+    handoffStatus === "none" &&
+    !item.assignedUserId &&
+    !item.assignedAt
+  );
+}
+
 function getConversationStatusLabel(status: ConversationOperationalStatus | null) {
   switch (status) {
     case "WAITING":
@@ -1339,6 +1353,13 @@ function getConversationStatusLabel(status: ConversationOperationalStatus | null
     default:
       return "Sem andamento";
   }
+}
+
+function getConversationStatusLabelForItem(
+  item: Pick<InboxConversationItem, "status" | "mode" | "handoffStatus" | "assignedUserId" | "assignedAt">
+) {
+  if (isAutomationQueueConversation(item)) return "Automação";
+  return getConversationStatusLabel(getConversationOperationalStatus(item));
 }
 
 function getConversationModeLabel(
@@ -4783,7 +4804,7 @@ export default function AppInboxPage() {
                   </div>
                   <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/78" : "text-white/58"}`}>
                     <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
-                      {getConversationStatusLabel(status)}
+                      {getConversationStatusLabelForItem(item)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
                     {unread ? (
@@ -4853,7 +4874,7 @@ export default function AppInboxPage() {
                 <p className="mt-0.5 truncate text-sm text-slate-600 max-[1440px]:text-xs">
                   {getConversationModeLabel(selectedConversation)}
                   {" • "}
-                  {getConversationStatusLabel(getConversationOperationalStatus(selectedConversation))}
+                  {getConversationStatusLabelForItem(selectedConversation)}
                   {selectedConversation.assignedUserName
                     ? ` • ${selectedConversation.assignedUserName}`
                     : selectedConversation.assignedTo
