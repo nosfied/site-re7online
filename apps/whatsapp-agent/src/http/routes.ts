@@ -15292,12 +15292,14 @@ function conversationMatchesListFilters(item: {
 }
 
 function conversationListItemIsInHumanFlow(item: {
+  status: ConversationOperationalStatus | null;
   mode?: string | null;
   handoffStatus?: string | null;
   assignedUserId: string | null;
   assignedAt: string | null;
 }) {
   return (
+    item.status === ConversationOperationalStatus.CLOSED ||
     item.mode === "HUMAN" ||
     item.handoffStatus === "active" ||
     item.handoffStatus === "pending" ||
