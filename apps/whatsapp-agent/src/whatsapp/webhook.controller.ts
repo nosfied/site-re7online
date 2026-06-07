@@ -1275,7 +1275,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       assignedTo: null,
       assignedAt: null,
     });
-    await upsertConversationSafe(routedConversation);
+    routedConversation = await upsertConversationSafe(routedConversation);
     await persistConversationSafe({
       waId: routedConversation.waId,
       windowIsOpen: routedConversation.window.isOpen,
@@ -1398,6 +1398,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         requestId: meta?.requestId ?? null,
       });
     }
+    return nextState;
   };
   const persistOutboundConversation = async (
     state: ConversationState,
@@ -1516,6 +1517,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     lastInboundAt?: string | null;
     lastOutboundAt?: string | null;
     departmentId?: string | null;
+    reopenClosed?: boolean;
   }) => {
     try {
       if (!tenantClientId) return;
@@ -1528,6 +1530,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         windowExpiresAt: state.windowExpiresAt ? new Date(state.windowExpiresAt) : null,
         lastInboundAt: state.lastInboundAt ? new Date(state.lastInboundAt) : null,
         lastOutboundAt: state.lastOutboundAt ? new Date(state.lastOutboundAt) : null,
+        reopenClosed: state.reopenClosed === true,
       });
     } catch (error) {
       logger.error({
@@ -3417,7 +3420,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
       }
 
-      await upsertConversationSafe(updatedConversation);
+      updatedConversation = await upsertConversationSafe(updatedConversation);
       logConversationWindow(updatedConversation, meta);
       logConversationIntent(updatedConversation, meta);
       await persistEventSafe(
@@ -3898,7 +3901,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           status: "WAITING",
           closedAt: null,
         });
-        await upsertConversationSafe(updatedConversation);
+        updatedConversation = await upsertConversationSafe(updatedConversation);
         await persistConversationSafe({
           waId: updatedConversation.waId,
           windowIsOpen: updatedConversation.window.isOpen,
@@ -4423,7 +4426,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (getHandoffStatus(updatedConversation) === "active") {
-      await upsertConversationSafe(updatedConversation);
+      updatedConversation = await upsertConversationSafe(updatedConversation);
       await persistConversationSafe({
         waId: updatedConversation.waId,
         windowIsOpen: updatedConversation.window.isOpen,
@@ -4910,7 +4913,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (flowResult.handled) {
       updatedConversation = flowResult.state ?? updatedConversation;
     }
-    await upsertConversationSafe(updatedConversation);
+    updatedConversation = await upsertConversationSafe(updatedConversation);
     logConversationWindow(updatedConversation, meta);
     logConversationIntent(updatedConversation, meta);
     await persistEventSafe(
@@ -5273,7 +5276,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         status: "WAITING",
         closedAt: null,
       });
-      await upsertConversationSafe(updatedConversation);
+      updatedConversation = await upsertConversationSafe(updatedConversation);
       await persistConversationSafe({
         waId: updatedConversation.waId,
         windowIsOpen: updatedConversation.window.isOpen,
@@ -5425,7 +5428,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          await upsertConversationSafe(updatedConversation);
+          updatedConversation = await upsertConversationSafe(updatedConversation);
           if (demoReplyText) {
             await sendOutboundText({
               toE164: message.from,
@@ -5454,7 +5457,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          await upsertConversationSafe(updatedConversation);
+          updatedConversation = await upsertConversationSafe(updatedConversation);
           continue;
         }
       }
@@ -5523,7 +5526,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     }
 
     if (leadUpdated || demoUpdated) {
-      await upsertConversationSafe(updatedConversation);
+      updatedConversation = await upsertConversationSafe(updatedConversation);
     }
 
     const decision = decideOutboundPolicy({
@@ -7280,7 +7283,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 });
               } else {
                 aiOrchestratorNoReply = true;
-                await upsertConversationSafe(updatedConversation);
+                updatedConversation = await upsertConversationSafe(updatedConversation);
               }
             } else {
               await logAiAssistantEvent("ai.orchestrator.rejected", { reason: aiReply.reason });

@@ -96,6 +96,7 @@ export async function persistConversationWindow(params: {
   windowExpiresAt?: Date | null;
   lastInboundAt?: Date | null;
   lastOutboundAt?: Date | null;
+  reopenClosed?: boolean;
 }) {
   if (!params.clientId) return;
   const prisma = getPrisma();
@@ -111,9 +112,15 @@ export async function persistConversationWindow(params: {
       id: true,
       departmentId: true,
       deletedAt: true,
+      closedAt: true,
     },
   });
   const isInboundAfterSoftDelete = Boolean(existing?.deletedAt && params.lastInboundAt);
+  const isInboundAfterClosed = Boolean(
+    existing?.closedAt &&
+      params.lastInboundAt &&
+      params.lastInboundAt.getTime() > existing.closedAt.getTime()
+  );
   const existingDepartmentId = existing?.deletedAt ? null : existing?.departmentId ?? null;
   const requestedDepartmentId = existing?.deletedAt
     ? params.departmentId ?? null
@@ -148,6 +155,7 @@ export async function persistConversationWindow(params: {
             historyVisibleAfter: null,
           }
         : {}),
+      ...(params.reopenClosed || isInboundAfterClosed ? { closedAt: null } : {}),
       departmentId: isInboundAfterSoftDelete
         ? null
         : shouldRewriteDepartment
