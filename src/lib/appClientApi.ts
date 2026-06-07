@@ -805,6 +805,7 @@ export async function fetchAppConversations(
     departmentId?: string | null;
     assignedUserId?: string | null;
     unassigned?: boolean;
+    automation?: boolean;
     search?: string | null;
     channel?: string | null;
   }
@@ -835,6 +836,9 @@ export async function fetchAppConversations(
   }
   if (options?.unassigned) {
     params.set("unassigned", "true");
+  }
+  if (options?.automation) {
+    params.set("automation", "true");
   }
   if (options?.search?.trim()) {
     params.set("search", options.search.trim());

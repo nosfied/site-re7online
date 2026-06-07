@@ -2532,13 +2532,10 @@ export default function AppInboxPage() {
     const search = conversationSearch.trim();
     const status =
       conversationFilter === "WAITING" ||
-      conversationFilter === "AUTOMATION" ||
       conversationFilter === "IN_PROGRESS" ||
       conversationFilter === "WAITING_USER" ||
       conversationFilter === "CLOSED"
-        ? conversationFilter === "AUTOMATION"
-          ? "WAITING"
-          : conversationFilter
+        ? conversationFilter
         : null;
     return {
       limit: CONVERSATION_PAGE_SIZE,
@@ -2547,6 +2544,7 @@ export default function AppInboxPage() {
       departmentId: isAdminUser && departmentFilter !== "ALL" ? departmentFilter : null,
       assignedUserId: conversationFilter === "MINE" ? session?.user.id ?? null : null,
       unassigned: conversationFilter === "UNASSIGNED",
+      automation: conversationFilter === "AUTOMATION",
       search: search || null,
       channel: conversationChannelFilter === "ALL" ? null : conversationChannelFilter,
     };
@@ -2578,7 +2576,7 @@ export default function AppInboxPage() {
       setConversationFilterCounts({
         ALL: Number(response.filterCounts.ALL ?? 0),
         WAITING: Number(response.filterCounts.WAITING ?? 0),
-        AUTOMATION: 0,
+        AUTOMATION: Number(response.filterCounts.AUTOMATION ?? 0),
         IN_PROGRESS: Number(response.filterCounts.IN_PROGRESS ?? 0),
         WAITING_USER: Number(response.filterCounts.WAITING_USER ?? 0),
         CLOSED: Number(response.filterCounts.CLOSED ?? 0),
@@ -3377,19 +3375,6 @@ export default function AppInboxPage() {
     session?.user.id,
     session?.user,
   ]);
-
-  const automationConversationCount = useMemo(
-    () => conversations.filter((item) => isAutomationQueueConversation(item)).length,
-    [conversations]
-  );
-
-  useEffect(() => {
-    setConversationFilterCounts((current) =>
-      current.AUTOMATION === automationConversationCount
-        ? current
-        : { ...current, AUTOMATION: automationConversationCount }
-    );
-  }, [automationConversationCount]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

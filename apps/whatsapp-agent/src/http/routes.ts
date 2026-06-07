@@ -894,6 +894,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const departmentIdFilter = String(query.departmentId ?? "").trim() || null;
       const assignedUserIdFilter = String(query.assignedUserId ?? "").trim() || null;
       const unassignedFilter = String(query.unassigned ?? "").trim() === "true";
+      const automationFilter = String(query.automation ?? "").trim() === "true";
       const searchFilter = String(query.search ?? "").trim();
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
@@ -938,6 +939,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : departmentIdFilter,
           assignedUserId: assignedUserIdFilter,
           unassigned: unassignedFilter,
+          automation: automationFilter,
           search: searchFilter,
         },
         includeAssignedUserName: true,
@@ -8065,6 +8067,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             departmentId: null,
             assignedUserId: null,
             unassigned: false,
+            automation: false,
             search: "",
           },
           includeAssignedUserName: true,
@@ -15055,6 +15058,7 @@ type ConversationListFilters = {
   departmentId: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
+  automation: boolean;
   search: string;
 };
 
@@ -15275,10 +15279,17 @@ function conversationMatchesListFilters(item: {
   waId: string;
   channel?: string | null;
   status: ConversationOperationalStatus | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
   departmentId: string | null;
   assignedUserId: string | null;
+  assignedAt?: string | null;
 }, filters: ConversationListFilters) {
-  if (filters.status && item.status !== filters.status) return false;
+  if (filters.automation) {
+    if (!conversationListItemIsAutomation(item)) return false;
+  } else if (filters.status && item.status !== filters.status) {
+    return false;
+  }
   if (filters.channel && serializeInboxChannelFields(item).channel !== filters.channel) return false;
   if (filters.departmentId && item.departmentId !== filters.departmentId) return false;
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
@@ -15291,6 +15302,22 @@ function conversationMatchesListFilters(item: {
     if (!haystack.includes(filters.search.toLowerCase())) return false;
   }
   return true;
+}
+
+function conversationListItemIsAutomation(item: {
+  status: ConversationOperationalStatus | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId: string | null;
+  assignedAt?: string | null;
+}) {
+  return (
+    item.mode === "BOT" &&
+    (item.status === ConversationOperationalStatus.WAITING || item.status === null) &&
+    (item.handoffStatus === null || item.handoffStatus === undefined || item.handoffStatus === "none") &&
+    !item.assignedUserId &&
+    !item.assignedAt
+  );
 }
 
 function conversationListItemIsInHumanFlow(item: {
@@ -15408,6 +15435,9 @@ function buildConversationFilterCounts(
     status: ConversationOperationalStatus | null;
     departmentId: string | null;
     assignedUserId: string | null;
+    mode?: string | null;
+    handoffStatus?: string | null;
+    assignedAt?: string | null;
   }>,
   filters: ConversationListFilters,
   currentUserId?: string | null
@@ -15417,11 +15447,13 @@ function buildConversationFilterCounts(
     status: null,
     assignedUserId: null,
     unassigned: false,
+    automation: false,
   };
   const baseItems = items.filter((item) => conversationMatchesListFilters(item, baseFilters));
   const counts = {
     ALL: baseItems.length,
     WAITING: 0,
+    AUTOMATION: 0,
     IN_PROGRESS: 0,
     WAITING_USER: 0,
     CLOSED: 0,
@@ -15431,6 +15463,9 @@ function buildConversationFilterCounts(
   for (const item of baseItems) {
     if (item.status && Object.prototype.hasOwnProperty.call(counts, item.status)) {
       counts[item.status] += 1;
+    }
+    if (conversationListItemIsAutomation(item)) {
+      counts.AUTOMATION += 1;
     }
     if (currentUserId && item.assignedUserId === currentUserId) {
       counts.MINE += 1;
@@ -15446,6 +15481,7 @@ function buildEmptyConversationFilterCounts() {
   return {
     ALL: 0,
     WAITING: 0,
+    AUTOMATION: 0,
     IN_PROGRESS: 0,
     WAITING_USER: 0,
     CLOSED: 0,
