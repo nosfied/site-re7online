@@ -6265,7 +6265,9 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
                 tenantIntentReply
               );
               const shouldCreateCatalogHandoffPrompt =
-                (tenantIntent.handoff || isRepeatedTenantIntent) &&
+                (tenantIntent.handoff ||
+                  isRepeatedTenantIntent ||
+                  replyOffersHumanHandoff(tenantIntentReply)) &&
                 appliedTenantConfig.aiAssistantFallbackToHandoff === true &&
                 updatedConversation.handoff.status === "none";
               const effectiveCatalogNextAction = shouldCreateCatalogHandoffPrompt
@@ -7517,6 +7519,24 @@ function normalizeHandoffConfirmationText(text: string | null | undefined) {
     return "accepted" as const;
   }
   return "invalid" as const;
+}
+
+function replyOffersHumanHandoff(text: string | null | undefined) {
+  const normalized = String(text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return false;
+  return [
+    /posso\s+(te\s+)?(encaminhar|direcionar)/,
+    /posso\s+(encaminhar|direcionar)\s+voce/,
+    /(encaminhar|direcionar)\s+(para|pra)\s+(a\s+)?(equipe|pessoa|atendente|consultor|vendedor|vendedora)/,
+    /falar\s+com\s+(uma\s+)?(pessoa|atendente|consultor|vendedor|vendedora)/,
+    /pessoa\s+da\s+equipe/,
+  ].some((pattern) => pattern.test(normalized));
 }
 
 function isUsefulTextForAiContinuation(text: string | null | undefined) {
