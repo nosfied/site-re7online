@@ -1066,7 +1066,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       assignedAt: null,
       departmentId: null,
       queueId: null,
-      status: "WAITING",
+      status: null,
       closedAt: null,
     });
     return {

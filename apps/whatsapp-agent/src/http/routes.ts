@@ -15311,6 +15311,36 @@ function conversationListItemIsInHumanFlow(item: {
   );
 }
 
+function conversationListItemIsVisibleInInbox(item: {
+  status: ConversationOperationalStatus | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId: string | null;
+  assignedAt: string | null;
+  lastMessage?: unknown;
+}) {
+  if (conversationListItemIsInHumanFlow(item)) return true;
+  return (
+    item.mode === "BOT" &&
+    item.status === null &&
+    (item.handoffStatus === null || item.handoffStatus === undefined || item.handoffStatus === "none") &&
+    !item.assignedUserId &&
+    !item.assignedAt &&
+    Boolean(item.lastMessage)
+  );
+}
+
+function conversationListItemShouldCountUnread(item: {
+  status: ConversationOperationalStatus | null;
+  mode?: string | null;
+  handoffStatus?: string | null;
+  assignedUserId: string | null;
+  assignedAt: string | null;
+}) {
+  if (item.status === ConversationOperationalStatus.CLOSED) return false;
+  return conversationListItemIsInHumanFlow(item);
+}
+
 function getInboxPriorityScore(item: { flowContext?: Record<string, unknown> | null }) {
   const leadTemp = String(item.flowContext?.lead_temp ?? "").trim().toLowerCase();
   if (leadTemp === "quente") return 3;
@@ -15780,19 +15810,21 @@ async function buildConversationListPayload(
       leadCompany: lead?.company ?? null,
       ...operationalFields,
       departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
-      unreadCount: unreadInboundCountByWaId.get(key) ?? 0,
+      unreadCount: conversationListItemShouldCountUnread(operationalFields)
+        ? unreadInboundCountByWaId.get(key) ?? 0
+        : 0,
       updatedAt: conversation.updatedAt,
     };
   });
   const filteredItems = sortConversationItemsByRecent(
     allItems.filter(
       (item) =>
-        conversationListItemIsInHumanFlow(item) &&
+        conversationListItemIsVisibleInInbox(item) &&
         conversationMatchesListFilters(item, params.filters)
     )
   );
   const filterCounts = buildConversationFilterCounts(
-    allItems.filter(conversationListItemIsInHumanFlow),
+    allItems.filter(conversationListItemIsVisibleInInbox),
     params.filters,
     params.userId ?? null
   );
