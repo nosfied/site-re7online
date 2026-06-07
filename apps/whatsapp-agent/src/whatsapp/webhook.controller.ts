@@ -182,10 +182,27 @@ function canTreatPersonalDataAsQualificationEmail(params: {
 
 function canBypassQualificationForTenantIntent(
   intent: ResolvedTenantIntent | null,
-  _state: ConversationState
+  state: ConversationState,
+  text?: string | null
 ) {
   if (intent?.preQualification !== true) return false;
-  return true;
+  const currentSlotKey = state.answers?.aiQualification?.currentSlot;
+  if (!currentSlotKey) return true;
+  const normalizedText = String(text ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s?]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalizedText) return false;
+  const explicitQuestion =
+    normalizedText.includes("?") ||
+    /^(onde|qual|como|quando|quanto|tem|fica|posso|pode)\b/.test(normalizedText) ||
+    /\b(onde fica|qual endereco|endereco|localizacao|horario|pagamento|entrega|frete|catalogo|preco|valor|valores|atendente|vendedora|humano)\b/.test(
+      normalizedText
+    );
+  return explicitQuestion;
 }
 
 type RequestMeta = {
@@ -5941,7 +5958,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
               })
             : null;
           const shouldBypassQualificationForTenantIntent =
-            canBypassQualificationForTenantIntent(preQualificationTenantIntent, updatedConversation);
+            canBypassQualificationForTenantIntent(
+              preQualificationTenantIntent,
+              updatedConversation,
+              message.text
+            );
           let qualificationHandled = false;
           if (
             (!risk || qualificationEmailAllowed) &&
