@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   hashEndpoint,
+  isOperationalMessagePushCandidate,
+  isPushSubscriptionCurrentForActiveSession,
   normalizePushSubscriptionInput,
   shouldSuppressPushForForegroundSubscription,
   updatePushPresence,
@@ -124,5 +126,101 @@ test("visible presence suppresses push even when focus is unreliable", () => {
       nowMs: 301_000,
     }),
     true
+  );
+});
+
+test("operational message push skips automated bot-only conversations", () => {
+  assert.equal(
+    isOperationalMessagePushCandidate({
+      type: "message.created",
+      clientId: "client-1",
+      waId: "masked",
+      mode: "BOT",
+      handoffStatus: "none",
+      assignedUserId: null,
+      departmentId: null,
+      message: {
+        direction: "INBOUND",
+        type: "TEXT",
+        status: "RECEIVED",
+        intent: null,
+        bodyText: "ola",
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        messageId: "message-1",
+        metaMessageId: null,
+        errorBody: null,
+        createdAt: new Date().toISOString(),
+      },
+    }),
+    false
+  );
+});
+
+test("operational message push allows assigned and human conversations", () => {
+  const base = {
+    type: "message.created" as const,
+    clientId: "client-1",
+    waId: "masked",
+    message: {
+      direction: "INBOUND" as const,
+      type: "TEXT",
+      status: "RECEIVED" as const,
+      intent: null,
+      bodyText: "ola",
+      templateName: null,
+      templateLang: null,
+      requestId: null,
+      messageId: "message-1",
+      metaMessageId: null,
+      errorBody: null,
+      createdAt: new Date().toISOString(),
+    },
+  };
+
+  assert.equal(
+    isOperationalMessagePushCandidate({
+      ...base,
+      mode: "BOT",
+      handoffStatus: "none",
+      assignedUserId: "user-1",
+      departmentId: null,
+    }),
+    true
+  );
+  assert.equal(
+    isOperationalMessagePushCandidate({
+      ...base,
+      mode: "HUMAN",
+      handoffStatus: "active",
+      assignedUserId: null,
+      departmentId: "department-1",
+    }),
+    true
+  );
+});
+
+test("push subscription must be newer than the active session", () => {
+  assert.equal(
+    isPushSubscriptionCurrentForActiveSession({
+      subscriptionUpdatedAt: new Date("2026-06-05T19:01:39.898Z"),
+      activeSessionCreatedAt: new Date("2026-06-06T12:26:58.910Z"),
+    }),
+    false
+  );
+  assert.equal(
+    isPushSubscriptionCurrentForActiveSession({
+      subscriptionUpdatedAt: new Date("2026-06-06T12:27:02.000Z"),
+      activeSessionCreatedAt: new Date("2026-06-06T12:26:58.910Z"),
+    }),
+    true
+  );
+  assert.equal(
+    isPushSubscriptionCurrentForActiveSession({
+      subscriptionUpdatedAt: new Date("2026-06-06T12:27:02.000Z"),
+      activeSessionCreatedAt: null,
+    }),
+    false
   );
 });

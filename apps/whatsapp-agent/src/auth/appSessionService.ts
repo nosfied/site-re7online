@@ -107,6 +107,12 @@ export async function createExclusiveAppSession(params: {
         revokeReason: "replaced_by_new_login",
       },
     });
+    const push = await revokeUserPushSubscriptions({
+      clientId: params.clientId,
+      userId: params.userId,
+      reason: "replaced_by_new_login",
+      tx,
+    });
     const session = await tx.appAuthSession.create({
       data: {
         clientId: params.clientId,
@@ -120,7 +126,7 @@ export async function createExclusiveAppSession(params: {
         expiresAt: true,
       },
     });
-    return { session, replaced: revoked.count };
+    return { session, replaced: revoked.count, revokedPush: push };
   });
   if (result.replaced > 0) {
     logger.info({
@@ -128,6 +134,7 @@ export async function createExclusiveAppSession(params: {
       clientId: params.clientId,
       userId: params.userId,
       count: result.replaced,
+      revokedPush: result.revokedPush,
     });
   }
   return result.session;

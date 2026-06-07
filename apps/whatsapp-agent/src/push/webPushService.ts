@@ -290,6 +290,35 @@ function buildMessagePreview(value?: string | null) {
   return normalized.length > 96 ? `${normalized.slice(0, 93)}...` : normalized;
 }
 
+export function isOperationalMessagePushCandidate(
+  event: Extract<InboxRealtimeEvent, { type: "message.created" }>
+) {
+  const handoffStatus = event.handoffStatus ?? "none";
+  if (event.assignedUserId) return true;
+  if (event.mode === "HUMAN") return true;
+  if (handoffStatus === "active" || handoffStatus === "pending") return true;
+  if (event.departmentId && event.mode !== "BOT") return true;
+  return false;
+}
+
+function getLatestActiveSessionCreatedAt(subscription: {
+  user?: {
+    authSessions?: Array<{ createdAt: Date }>;
+  } | null;
+}) {
+  return subscription.user?.authSessions?.[0]?.createdAt ?? null;
+}
+
+export function isPushSubscriptionCurrentForActiveSession(params: {
+  subscriptionUpdatedAt: Date;
+  activeSessionCreatedAt?: Date | null;
+}) {
+  return Boolean(
+    params.activeSessionCreatedAt &&
+      params.subscriptionUpdatedAt >= params.activeSessionCreatedAt
+  );
+}
+
 async function revokeDeadEndpoint(endpoint: string, statusCode?: number) {
   const result = await getPrisma().pushSubscription.updateMany({
     where: { endpoint, revokedAt: null },
@@ -308,6 +337,18 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
   if (event.type !== "message.created" && event.type !== "conversation.handoff.updated") return;
   if (event.type === "message.created" && event.message.direction !== "INBOUND") return;
   if (event.type === "conversation.handoff.updated" && event.reason !== "released_to_general") return;
+  if (event.type === "message.created" && !isOperationalMessagePushCandidate(event)) {
+    logger.info({
+      event: "push.skipped",
+      reason: "not_operational_conversation",
+      clientId: event.clientId,
+      mode: event.mode ?? null,
+      handoffStatus: event.handoffStatus ?? null,
+      assignedUserId: event.assignedUserId ?? null,
+      departmentId: event.departmentId ?? null,
+    });
+    return;
+  }
   if (!configureWebPush()) {
     logger.info({ event: "push.skipped", reason: "vapid_not_configured", clientId: event.clientId });
     return;
@@ -339,6 +380,17 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
       p256dh: true,
       auth: true,
       userId: true,
+      updatedAt: true,
+      user: {
+        select: {
+          authSessions: {
+            where: { revokedAt: null },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      },
     },
   });
 
@@ -351,6 +403,22 @@ export async function dispatchWebPushForRealtimeEvent(event: InboxRealtimeEvent)
   let sent = 0;
   let failed = 0;
   for (const subscription of subscriptions) {
+    const activeSessionCreatedAt = getLatestActiveSessionCreatedAt(subscription);
+    if (
+      !isPushSubscriptionCurrentForActiveSession({
+        subscriptionUpdatedAt: subscription.updatedAt,
+        activeSessionCreatedAt,
+      })
+    ) {
+      logger.info({
+        event: "push.skipped",
+        reason: activeSessionCreatedAt ? "subscription_before_active_session" : "no_active_session",
+        clientId: event.clientId,
+        userId: subscription.userId,
+        endpointHash: hashEndpoint(subscription.endpoint),
+      });
+      continue;
+    }
     if (
       shouldSuppressPushForForegroundSubscription({
         clientId: event.clientId,
