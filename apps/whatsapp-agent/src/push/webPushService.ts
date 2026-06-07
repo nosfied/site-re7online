@@ -140,18 +140,37 @@ export async function getPushStatus(params: { clientId: string; userId: string }
       subscriptions: 0,
     };
   }
-  const subscriptions = await getPrisma().pushSubscription.count({
+  const subscriptions = await getPrisma().pushSubscription.findMany({
     where: {
       clientId: params.clientId,
       userId: params.userId,
       revokedAt: null,
     },
+    select: {
+      updatedAt: true,
+      user: {
+        select: {
+          authSessions: {
+            where: { revokedAt: null },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      },
+    },
   });
+  const activeSubscriptions = subscriptions.filter((subscription) =>
+    isPushSubscriptionCurrentForActiveSession({
+      subscriptionUpdatedAt: subscription.updatedAt,
+      activeSessionCreatedAt: getLatestActiveSessionCreatedAt(subscription),
+    })
+  ).length;
   return {
     configured,
     publicKey: getWebPushPublicKey(),
-    subscribed: subscriptions > 0,
-    subscriptions,
+    subscribed: activeSubscriptions > 0,
+    subscriptions: activeSubscriptions,
   };
 }
 
