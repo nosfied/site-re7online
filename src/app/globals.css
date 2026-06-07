@@ -598,6 +598,11 @@ html {
     color: #fde68a;
   }
 
+  .theme-inbox .theme-conversation-status-automation {
+    background-color: rgba(15, 118, 110, 0.46);
+    color: #99f6e4;
+  }
+
   .theme-inbox .theme-conversation-status-progress {
     background-color: rgba(12, 74, 110, 0.52);
     color: #bae6fd;
@@ -663,6 +668,11 @@ html {
   :root[data-theme="light"] .theme-inbox .theme-conversation-status-waiting {
     background-color: #f59e0b;
     color: #111827;
+  }
+
+  :root[data-theme="light"] .theme-inbox .theme-conversation-status-automation {
+    background-color: #0f766e;
+    color: #ffffff;
   }
 
   :root[data-theme="light"] .theme-inbox .theme-conversation-status-progress {

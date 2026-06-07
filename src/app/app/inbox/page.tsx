@@ -634,6 +634,7 @@ const QUICK_EMOJIS = ["😀", "😂", "😍", "❤️", "🙏", "👍", "👋", 
 const CONVERSATION_FILTERS = [
   { value: "ALL", label: "Todas" },
   { value: "WAITING", label: "Na fila" },
+  { value: "AUTOMATION", label: "Automação" },
   { value: "IN_PROGRESS", label: "Em atendimento" },
   { value: "WAITING_USER", label: "Aguardando cliente" },
   { value: "CLOSED", label: "Finalizadas" },
@@ -642,7 +643,7 @@ const CONVERSATION_FILTERS = [
 ] as const;
 
 type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
-const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "MINE", "UNASSIGNED"];
+const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "AUTOMATION", "MINE"];
 const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
   (item) => !PRIMARY_CONVERSATION_FILTERS.includes(item.value)
 );
@@ -1385,6 +1386,13 @@ function getConversationStatusClass(status: ConversationOperationalStatus | null
   }
 }
 
+function getConversationStatusClassForItem(
+  item: Pick<InboxConversationItem, "status" | "mode" | "handoffStatus" | "assignedUserId" | "assignedAt">
+) {
+  if (isAutomationQueueConversation(item)) return "theme-conversation-status-automation";
+  return getConversationStatusClass(getConversationOperationalStatus(item));
+}
+
 function getConversationChannel(item: Pick<InboxConversationItem, "channel"> | null): InboxChannel {
   const channel = String(item?.channel ?? "").trim().toLowerCase();
   if (channel === "messenger" || channel === "instagram") return channel;
@@ -1579,6 +1587,7 @@ export default function AppInboxPage() {
   const [conversationFilterCounts, setConversationFilterCounts] = useState<Record<ConversationFilter, number>>({
     ALL: 0,
     WAITING: 0,
+    AUTOMATION: 0,
     IN_PROGRESS: 0,
     WAITING_USER: 0,
     CLOSED: 0,
@@ -2523,10 +2532,13 @@ export default function AppInboxPage() {
     const search = conversationSearch.trim();
     const status =
       conversationFilter === "WAITING" ||
+      conversationFilter === "AUTOMATION" ||
       conversationFilter === "IN_PROGRESS" ||
       conversationFilter === "WAITING_USER" ||
       conversationFilter === "CLOSED"
-        ? conversationFilter
+        ? conversationFilter === "AUTOMATION"
+          ? "WAITING"
+          : conversationFilter
         : null;
     return {
       limit: CONVERSATION_PAGE_SIZE,
@@ -2566,6 +2578,7 @@ export default function AppInboxPage() {
       setConversationFilterCounts({
         ALL: Number(response.filterCounts.ALL ?? 0),
         WAITING: Number(response.filterCounts.WAITING ?? 0),
+        AUTOMATION: 0,
         IN_PROGRESS: Number(response.filterCounts.IN_PROGRESS ?? 0),
         WAITING_USER: Number(response.filterCounts.WAITING_USER ?? 0),
         CLOSED: Number(response.filterCounts.CLOSED ?? 0),
@@ -2578,6 +2591,7 @@ export default function AppInboxPage() {
       setConversationFilterCounts({
         ALL: 0,
         WAITING: 0,
+        AUTOMATION: 0,
         IN_PROGRESS: 0,
         WAITING_USER: 0,
         CLOSED: 0,
@@ -3336,6 +3350,8 @@ export default function AppInboxPage() {
           break;
       }
       switch (conversationFilter) {
+        case "AUTOMATION":
+          return isAutomationQueueConversation(item);
         case "WAITING":
         case "IN_PROGRESS":
         case "WAITING_USER":
@@ -3361,6 +3377,19 @@ export default function AppInboxPage() {
     session?.user.id,
     session?.user,
   ]);
+
+  const automationConversationCount = useMemo(
+    () => conversations.filter((item) => isAutomationQueueConversation(item)).length,
+    [conversations]
+  );
+
+  useEffect(() => {
+    setConversationFilterCounts((current) =>
+      current.AUTOMATION === automationConversationCount
+        ? current
+        : { ...current, AUTOMATION: automationConversationCount }
+    );
+  }, [automationConversationCount]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -4803,7 +4832,7 @@ export default function AppInboxPage() {
                     </span>
                   </div>
                   <div className={`mt-2 flex min-w-0 items-center gap-2 text-[11px] max-[1440px]:mt-1.5 max-[1440px]:gap-1.5 max-[1440px]:text-[10px] ${isVisuallyActive ? "text-white/78" : "text-white/58"}`}>
-                    <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClass(status)}`}>
+                    <span className={`shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 max-[1440px]:px-1.5 ${getConversationStatusClassForItem(item)}`}>
                       {getConversationStatusLabelForItem(item)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
