@@ -33,6 +33,7 @@ import {
 } from "../whatsapp/whatsapp.client.js";
 import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
+import { clearAutomationRuntimeAnswers } from "../conversation/automationRuntime.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
 import {
@@ -2284,6 +2285,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         assignedUserId: null,
         assignedTo: null,
         assignedAt: null,
+        answers: clearAutomationRuntimeAnswers(conversation.answers ?? {}),
         departmentId: defaults.department.id,
         queueId: defaults.queue.id,
         status: ConversationOperationalStatus.CLOSED,
@@ -15300,6 +15302,7 @@ function conversationListItemIsInHumanFlow(item: {
 }) {
   return (
     item.status === ConversationOperationalStatus.CLOSED ||
+    item.status === ConversationOperationalStatus.WAITING ||
     item.mode === "HUMAN" ||
     item.handoffStatus === "active" ||
     item.handoffStatus === "pending" ||

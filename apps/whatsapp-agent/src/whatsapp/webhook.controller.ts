@@ -32,6 +32,7 @@ import {
   updateOutbound,
   isWindowOpen,
 } from "../conversation/conversation.service.js";
+import { shouldResetClosedConversationForBotReentry } from "../conversation/automationRuntime.js";
 import { createAgentBrain } from "../agent/agent.factory.js";
 import {
   buildHandoffConfirmationPrompt,
@@ -2960,21 +2961,31 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         normalizedFrom,
         message.timestamp
       ));
+    const inboundDate = parseWebhookTimestampToDate(message.timestamp);
+    const shouldResetClosedConversation = shouldResetClosedConversationForBotReentry({
+      status: existingRuntimeForInbound?.status ?? null,
+      closedAt: existingRuntimeForInbound?.closedAt ?? null,
+      inboundAt: inboundDate,
+    });
     const shouldResetForBotReentry =
       Boolean(directConversationForInbound?.deletedAt) ||
-      Boolean(existingRuntimeForInbound && !directConversationForInbound);
+      Boolean(existingRuntimeForInbound && !directConversationForInbound) ||
+      shouldResetClosedConversation;
     if (shouldResetForBotReentry) {
       currentConversation = resetConversationForBotReentry(currentConversation, message.timestamp);
       await storage.upsertConversation(currentConversation);
+      const resetReason = directConversationForInbound?.deletedAt
+        ? "inbound_after_soft_delete"
+        : shouldResetClosedConversation
+          ? "inbound_after_closed_conversation"
+          : "stale_runtime_without_active_conversation";
       logger.info({
         event: "conversation.reentry.reset_to_bot",
         clientId: tenantClientId,
         clientKey: tenantClientKey,
         conversationId: directConversationForInbound?.id ?? null,
         waId: maskNumber(normalizedFrom),
-        reason: directConversationForInbound?.deletedAt
-          ? "inbound_after_soft_delete"
-          : "stale_runtime_without_active_conversation",
+        reason: resetReason,
         requestId: meta?.requestId,
       });
     }

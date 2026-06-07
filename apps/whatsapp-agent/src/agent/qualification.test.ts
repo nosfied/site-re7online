@@ -99,6 +99,52 @@ test("normalizeQualificationSchema discards slot without key or question", () =>
   assert.equal(schema?.slots?.[0]?.key, "produto");
 });
 
+test("handleQualificationTurn starts configured flow on initial greeting", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    slots: [
+      {
+        key: "tipo_atendimento",
+        label: "Tipo de atendimento",
+        type: "enum",
+        required: true,
+        allowedValues: ["uso_proprio", "revender"],
+        question:
+          "Boas-vindas à Tendência Multimarcas ✨\nModa unissex, acessórios e peças atemporais.\n\nMe conta: você procura peças para uso próprio ou para revender?",
+        semanticAliases: {
+          uso_proprio: ["proprio", "uso próprio"],
+          revender: ["revenda", "revender"],
+        },
+      },
+    ],
+  })!;
+
+  const result = handleQualificationTurn({
+    schema,
+    state: null,
+    text: "oi",
+    nowIso: "2026-06-07T17:12:31.000Z",
+  });
+
+  assert.equal(result.enabled, true);
+  assert.equal(result.handled, true);
+  assert.equal(result.state?.currentSlot, "tipo_atendimento");
+  assert.equal(result.state?.completedSlots?.length, 0);
+  assert.equal(result.replyText, schema.slots?.[0]?.question);
+  assert.equal(
+    result.logs.some((entry) => entry.event === "ai.qualification.started"),
+    true
+  );
+  assert.equal(
+    result.logs.some(
+      (entry) =>
+        entry.event === "ai.qualification.skipped" &&
+        entry.payload?.reason === "initial_greeting"
+    ),
+    false
+  );
+});
+
 test("normalizeQualificationSchema blocks sensitive keys", () => {
   const schema = normalizeQualificationSchema({
     enabled: true,
@@ -185,7 +231,7 @@ test("handleQualificationTurn keeps tenants without aiQualification unchanged", 
   assert.equal(result.handled, false);
 });
 
-test("handleQualificationTurn skips isolated initial greeting", () => {
+test("handleQualificationTurn routes isolated initial greeting to first configured slot", () => {
   const result = handleQualificationTurn({
     schema: {
       enabled: true,
@@ -203,8 +249,9 @@ test("handleQualificationTurn skips isolated initial greeting", () => {
     nowIso: "2026-05-12T10:00:00.000Z",
   });
   assert.equal(result.enabled, true);
-  assert.equal(result.handled, false);
-  assert.equal(result.state, undefined);
+  assert.equal(result.handled, true);
+  assert.equal(result.replyText, "Atacado ou varejo?");
+  assert.equal(result.state?.currentSlot, "tipo");
 });
 
 test("handleQualificationTurn starts qualification and asks first slot", () => {

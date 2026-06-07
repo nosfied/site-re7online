@@ -872,13 +872,6 @@ export function handleQualificationTurn(params: {
   const nowIso = params.nowIso ?? new Date().toISOString();
   const staleState = isQualificationStateStale(schema, params.state, nowIso);
   const hasExistingState = params.state?.enabledSnapshot === true && !staleState;
-  if (!hasExistingState && GREETING_ONLY.has(normalizeToken(params.text, 80))) {
-    return {
-      enabled: true,
-      handled: false,
-      logs: [{ event: "ai.qualification.skipped", payload: { reason: "initial_greeting" } }],
-    };
-  }
   const logs: QualificationTurnLog[] = [];
   if (staleState) {
     logs.push({
