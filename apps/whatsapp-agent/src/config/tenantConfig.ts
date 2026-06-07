@@ -532,6 +532,24 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
   if (!Array.isArray(input)) return [];
   const items: AiAssistantIntentCatalogItem[] = [];
   const seen = new Set<string>();
+  const shouldInferPreQualification = (input: {
+    key: string;
+    title?: string;
+    topics: string[];
+    tags: string[];
+  }) => {
+    const haystack = [input.key, input.title ?? "", ...input.topics, ...input.tags]
+      .join(" ")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (/\b(produto|peca|pecas|blusa|vestido|calca|short|conjunto|acessorio|semijoia|bijuteria)\b/.test(haystack)) {
+      return false;
+    }
+    return /\b(showroom|endereco|onde fica|localizacao|horario|pagamento|entrega|frete|catalogo|preco|orcamento|atendente|humano|vendedora)\b/.test(
+      haystack
+    );
+  };
   for (const rawItem of input.slice(0, 60)) {
     if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
     const item = rawItem as Record<string, unknown>;
@@ -558,11 +576,14 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
           ),
         ]
       : [];
+    const title = typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 120) : undefined;
+    const preQualification =
+      typeof item.preQualification === "boolean"
+        ? item.preQualification
+        : shouldInferPreQualification({ key, title, topics, tags });
     items.push({
       key,
-      ...(typeof item.title === "string" && item.title.trim()
-        ? { title: item.title.trim().slice(0, 120) }
-        : {}),
+      ...(title ? { title } : {}),
       topics,
       ...(typeof item.response === "string" && item.response.trim()
         ? { response: item.response.trim().slice(0, 900) }
@@ -577,7 +598,7 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
         ? { priority: item.priority }
         : {}),
       ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
-      ...(typeof item.preQualification === "boolean" ? { preQualification: item.preQualification } : {}),
+      ...(preQualification ? { preQualification } : {}),
       tags,
     });
   }

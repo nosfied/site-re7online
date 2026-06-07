@@ -1348,6 +1348,54 @@ test("handleQualificationTurn lets semantic enum intent win over optional text f
   );
 });
 
+test("handleQualificationTurn rejects operational questions as product slot text", () => {
+  const schema = normalizeQualificationSchema({
+    enabled: true,
+    semanticResolverEnabled: true,
+    slots: [
+      {
+        key: "tipo_atendimento",
+        type: "enum",
+        required: true,
+        allowedValues: ["uso próprio", "revender"],
+        semanticAliases: {
+          "uso próprio": ["proprio", "uso proprio"],
+          revender: ["revenda", "revender"],
+        },
+        question: "Uso próprio ou revender?",
+      },
+      {
+        key: "produto_interesse",
+        question: "Qual peça, acessório ou estilo você procura primeiro?",
+        required: true,
+      },
+    ],
+  })!;
+  const afterType = handleQualificationTurn({
+    schema,
+    state: getInitialQualificationState(schema),
+    text: "proprio",
+  });
+  const result = handleQualificationTurn({
+    schema,
+    state: afterType.state,
+    text: "Onde fica a loja?",
+  });
+
+  assert.equal(result.state?.slots?.produto_interesse, undefined);
+  assert.equal(result.state?.currentSlot, "produto_interesse");
+  assert.equal(result.handled, false);
+  assert.equal(result.replyText, undefined);
+  assert.equal(
+    result.logs.some(
+      (entry) =>
+        entry.event === "ai.qualification.skipped" &&
+        entry.payload.reason === "operational_intent"
+    ),
+    true
+  );
+});
+
 test("handleQualificationTurn creates pending semantic confirmation for intermediate confidence", () => {
   const schema = normalizeQualificationSchema({
     enabled: true,

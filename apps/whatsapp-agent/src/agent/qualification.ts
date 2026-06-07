@@ -100,6 +100,34 @@ const OPERATIONAL_STOP_TERMS = [
   "agora nao",
   "agora não",
 ];
+const OPERATIONAL_QUESTION_TERMS = [
+  "onde fica",
+  "qual endereco",
+  "qual endereço",
+  "endereco",
+  "endereço",
+  "localizacao",
+  "localização",
+  "horario",
+  "horário",
+  "showroom",
+  "visitar",
+  "pagamento",
+  "pix",
+  "cartao",
+  "cartão",
+  "entrega",
+  "frete",
+  "catalogo",
+  "catálogo",
+  "preco",
+  "preço",
+  "valor",
+  "valores",
+  "atendente",
+  "vendedora",
+  "humano",
+];
 const ABUSIVE_TERMS = [
   "va cagar",
   "vá cagar",
@@ -521,6 +549,9 @@ export function validateQualificationSlotValue(slot: AiQualificationSlot, value:
       ? { ok: true as const, value: email }
       : { ok: false as const, reason: "invalid_email" };
   }
+  if (slot.type !== "enum" && (isOperationalText(text) || isOperationalQuestionText(text))) {
+    return { ok: false as const, reason: "operational_intent" };
+  }
   if (slot.type === "enum") {
     const allowed = new Set((slot.allowedValues ?? []).map((item) => item.toLowerCase()));
     if (!allowed.has(text.toLowerCase())) {
@@ -575,6 +606,12 @@ function isOperationalText(text: string, handoffKeywords: string[] = []) {
   if (containsOperationalTerm(normalized, handoffKeywords)) return true;
   if (containsOperationalTerm(normalized, ABUSIVE_TERMS)) return true;
   return containsSensitiveText(text);
+}
+
+function isOperationalQuestionText(text: string) {
+  const normalized = normalizeOperationalText(text);
+  if (!normalized) return false;
+  return containsOperationalTerm(normalized, OPERATIONAL_QUESTION_TERMS);
 }
 
 function isPositiveOnlyText(text: string) {
@@ -677,6 +714,9 @@ function deterministicSlotCapture(slot: AiQualificationSlot, text: string, hando
     return { captured: false as const, reason: "invalid_or_sensitive" };
   }
   if (slot.type !== "boolean" && isOperationalText(text, handoffKeywords)) {
+    return { captured: false as const, reason: "operational_intent" };
+  }
+  if (slot.type !== "enum" && slot.type !== "boolean" && isOperationalQuestionText(text)) {
     return { captured: false as const, reason: "operational_intent" };
   }
   if (slot.type === "boolean") {

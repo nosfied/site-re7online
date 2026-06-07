@@ -180,19 +180,12 @@ function canTreatPersonalDataAsQualificationEmail(params: {
   return currentSlot?.crmMapping?.leadField === "email";
 }
 
-function hasActiveQualificationStep(state: ConversationState) {
-  const qualification = state.answers?.aiQualification;
-  if (!qualification?.enabledSnapshot || !qualification.currentSlot) return false;
-  return qualification.stage === "idle" || qualification.stage === "collecting";
-}
-
 function canBypassQualificationForTenantIntent(
   intent: ResolvedTenantIntent | null,
-  state: ConversationState
+  _state: ConversationState
 ) {
   if (intent?.preQualification !== true) return false;
-  if (!hasActiveQualificationStep(state)) return true;
-  return intent.handoff === true;
+  return true;
 }
 
 type RequestMeta = {
@@ -372,10 +365,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       let tenantAllowlist = (appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST)
         .map((value: string) => normalizeWaId(value))
         .filter(Boolean);
-      let tenantHandoffAttendantWaid =
-        appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
-      let tenantHandoffTemplateName =
-        appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
       let tenantDefaultLanguage =
         appliedTenantConfig?.defaultLanguage ||
         env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
@@ -809,300 +798,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return result;
   };
 
-  const isWindowClosedError = (errorBody?: string, status?: number) => {
-    const message = (errorBody ?? "").toLowerCase();
-    if (status === 470) return true;
-    if (message.includes("window") && message.includes("closed")) return true;
-    if (message.includes("outside") && message.includes("24")) return true;
-    if (message.includes("time window")) return true;
-    return false;
-  };
-
-  const notifyAttendantDemoScheduled = async (params: {
-    attendantWaId: string;
-    leadWaId: string;
-    intent: string;
-    schedule: string;
-    snippet: string;
-    templateName?: string;
-    requestId?: string;
-  }) => {
-    const nowIso = new Date().toISOString();
-    const maskedLead = maskNumber(params.leadWaId);
-    const maskedAttendant = maskNumber(params.attendantWaId);
-    const clientDisplay =
-      tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online";
-    const intentLabel = params.intent !== "unknown" ? params.intent : "Demonstração";
-    const scheduleLabel = params.schedule || "A combinar";
-    const leadLink = `https://wa.me/${params.leadWaId}`;
-    const baseMessageId = `handoff.notify.${params.requestId ?? Date.now()}`;
-    const textBody = [
-      "[DEMO] Lead pediu demonstração",
-      `Cliente: ${clientDisplay}`,
-      `Serviço: ${intentLabel}`,
-      `Quando: ${scheduleLabel}`,
-      `Lead: ${params.leadWaId}`,
-      `Link: ${leadLink}`,
-      `Msg: ${params.snippet}`,
-      `TS: ${nowIso}`,
-    ].join("\n");
-
-    const attendantConversation = await storage.getConversation(
-      params.attendantWaId,
-      tenantClientKey
-    );
-    const windowOpen = attendantConversation
-      ? isWindowOpen(attendantConversation, Date.now())
-      : false;
-    const windowState = windowOpen ? "open" : "closed";
-
-    logger.info({
-      event: "handoff.notify.window_state",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      windowState,
-      requestId: params.requestId,
-    });
-
-    if (windowOpen) {
-      logger.info({
-        event: "handoff.notify.sending",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        notifyType: "text",
-        windowState,
-        chosenChannel: "text",
-        requestId: params.requestId,
-      });
-      const textResult = await sendOutboundText({
-        toE164: params.attendantWaId,
-        waId: params.attendantWaId,
-        intent: "handoff",
-        messageId: `${baseMessageId}.text`,
-        replyText: textBody,
-      });
-      if (textResult.ok) {
-        logger.info({
-          event: "handoff.notify.sent",
-          waId: maskedAttendant,
-          leadWaId: maskedLead,
-          notifyType: "text",
-          requestId: params.requestId,
-        });
-        await persistEventSafe(
-          "lead.handoff_notified",
-          {
-            leadWaId: maskedLead,
-            intent: params.intent,
-            schedule: params.schedule,
-          },
-          params.leadWaId,
-          `${baseMessageId}.text`
-        );
-        return;
-      }
-      if (isWindowClosedError(textResult.errorBody, textResult.status)) {
-        logger.warn({
-          event: "handoff.notify.text_fallback_to_template",
-          waId: maskedAttendant,
-          leadWaId: maskedLead,
-          status: textResult.status,
-          requestId: params.requestId,
-        });
-      } else {
-        logger.error({
-          event: "handoff.notify.failed",
-          waId: maskedAttendant,
-          leadWaId: maskedLead,
-          notifyType: "text",
-          status: textResult.status,
-          requestId: params.requestId,
-        });
-        return;
-      }
-    }
-
-    if (!windowOpen) {
-      logger.info({
-        event: "handoff.notify.window_closed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        requestId: params.requestId,
-      });
-    }
-
-    if (!env.HANDOFF_NOTIFY_FALLBACK_TO_TEMPLATE) {
-      logger.error({
-        event: "handoff.notify.failed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        notifyType: "template",
-        reason: "window_closed",
-        requestId: params.requestId,
-      });
-      return;
-    }
-
-    logger.info({
-      event: "handoff.notify.template.sending",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      windowState,
-      chosenChannel: "template",
-      requestId: params.requestId,
-    });
-
-    const templateName = (params.templateName ?? env.HANDOFF_TEMPLATE_NAME) || "";
-    const templateLang = env.HANDOFF_TEMPLATE_LANG || tenantDefaultLanguage || "";
-    if (!templateName || !templateLang) {
-      logger.error({
-        event: "handoff.notify.template.failed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        reason: "template_missing",
-        requestId: params.requestId,
-      });
-      return;
-    }
-
-    const toParam = (value: string | undefined) => {
-      const text = (value ?? "").trim();
-      return text.length > 0 ? text : "-";
-    };
-
-    const templateParams = [
-      toParam(clientDisplay),
-      toParam(intentLabel),
-      toParam(scheduleLabel),
-      toParam(`Chamar no WhatsApp: ${leadLink}`),
-    ];
-
-    logger.info({
-      event: "handoff.notify.template.params",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      paramsCount: templateParams.length,
-      requestId: params.requestId,
-    });
-
-    const templateResult = await sendTemplate({
-      toE164: params.attendantWaId,
-      waId: params.attendantWaId,
-      intent: "handoff",
-      templateName,
-      lang: templateLang,
-      components: [
-        {
-          type: "body",
-          parameters: templateParams.map((text) => ({
-            type: "text",
-            text,
-          })),
-        },
-      ],
-      isFallback: false,
-      requestId: params.requestId,
-      rid: `${baseMessageId}.template`,
-      messageId: `${baseMessageId}.template`,
-      clientId: tenantClientId,
-      clientKey: tenantClientKey,
-    });
-    await persistOutboundTemplateSafe({
-      waId: params.attendantWaId,
-      messageId: `${baseMessageId}.template`,
-      templateName,
-      templateLang,
-      status: templateResult.ok ? MessageStatus.SENT : MessageStatus.FAILED,
-      errorBody: templateResult.errorBody ?? null,
-      metaMessageId: templateResult.metaMessageId ?? null,
-    });
-    await persistEventSafe(
-      templateResult.ok ? "outbound.template.sent" : "outbound.template.failed",
-      {
-        template: templateName,
-        language: templateLang,
-        status: templateResult.status,
-        errorBody: templateResult.errorBody,
-      },
-      params.attendantWaId,
-      `${baseMessageId}.template`
-    );
-    if (!templateResult.ok) {
-      logger.error({
-        event: "handoff.notify.template.failed",
-        waId: maskedAttendant,
-        leadWaId: maskedLead,
-        status: templateResult.status,
-        requestId: params.requestId,
-      });
-      return;
-    }
-
-    logger.info({
-      event: "handoff.notify.template.sent",
-      waId: maskedAttendant,
-      leadWaId: maskedLead,
-      requestId: params.requestId,
-    });
-    await persistEventSafe(
-      "lead.handoff_notified",
-      {
-        leadWaId: maskedLead,
-        intent: params.intent,
-        schedule: params.schedule,
-      },
-      params.leadWaId,
-      `${baseMessageId}.template`
-    );
-    return;
-  };
-
-  const notifyAttendantHumanRequested = async (params: {
-    attendantWaId: string;
-    leadWaId: string;
-    snippet: string;
-    requestId?: string;
-  }) => {
-    const attendantConversation = await storage.getConversation(
-      params.attendantWaId,
-      tenantClientKey
-    );
-    if (!attendantConversation || !isWindowOpen(attendantConversation, Date.now())) {
-      logger.info({
-        event: "handoff.notify.skipped",
-        reason: "attendant_window_closed",
-        waId: maskNumber(params.attendantWaId),
-        leadWaId: maskNumber(params.leadWaId),
-        requestId: params.requestId,
-      });
-      return;
-    }
-    const clientDisplay =
-      tenantClientKey && tenantClientKey !== "default" ? tenantClientKey : "Re7Online";
-    const textBody = [
-      "[HANDOFF] Lead pediu atendimento humano",
-      `Cliente: ${clientDisplay}`,
-      `Lead: ${params.leadWaId}`,
-      `Link: https://wa.me/${params.leadWaId}`,
-      `Msg: ${params.snippet || "-"}`,
-    ].join("\n");
-    const result = await sendOutboundText({
-      toE164: params.attendantWaId,
-      waId: params.attendantWaId,
-      intent: "handoff",
-      messageId: `handoff.manual.${params.requestId ?? Date.now()}`,
-      replyText: textBody,
-    });
-    logger.info({
-      event: result.ok ? "handoff.notify.sent" : "handoff.notify.failed",
-      notifyType: "text",
-      waId: maskNumber(params.attendantWaId),
-      leadWaId: maskNumber(params.leadWaId),
-      status: result.status,
-      requestId: params.requestId,
-    });
-  };
-
   const typedPayload = payload as WhatsAppWebhookPayload;
   const normalized = normalizeWebhook(typedPayload);
   const phoneNumberId =
@@ -1182,10 +877,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     )
       .map((value: string) => normalizeWaId(value))
       .filter(Boolean);
-    tenantHandoffAttendantWaid =
-      appliedTenantConfig?.handoffAttendantWaid || env.HANDOFF_ATTENDANT_WAID;
-    tenantHandoffTemplateName =
-      appliedTenantConfig?.templates?.manualHandoff || env.HANDOFF_TEMPLATE_NAME;
     tenantDefaultLanguage =
       appliedTenantConfig?.defaultLanguage ||
       env.OUTBOUND_TEMPLATE_DEFAULT_LANG ||
@@ -4306,14 +3997,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           normalizedFrom,
           message.messageId
         );
-        if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
-          await notifyAttendantHumanRequested({
-            attendantWaId: tenantHandoffAttendantWaid,
-            leadWaId: normalizedFrom,
-            snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
-            requestId: meta?.requestId,
-          });
-        }
         if (allowlistHit && env.outboundEnabled && env.OUTBOUND_TEXT_ENABLED) {
           const handoffReply = activatedHandoff.replyText;
           const result = await sendOutboundText({
@@ -5158,14 +4841,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             ) {
               updatedConversation = await ensurePendingHandoffRouting(chatbotResult.state);
               chatbotFlowResult.state = updatedConversation;
-              if (tenantHandoffAttendantWaid) {
-                await notifyAttendantHumanRequested({
-                  attendantWaId: tenantHandoffAttendantWaid,
-                  leadWaId: normalizedFrom,
-                  snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
-                  requestId: meta?.requestId,
-                });
-              }
             }
             logger.info({
               event: "chatbot.executor.checked",
@@ -5641,14 +5316,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         reason: chatbotFlowResult.pendingHandoff.nodeId,
         crmSummary: handoffSummary,
       });
-      if (tenantHandoffAttendantWaid && appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
-        await notifyAttendantHumanRequested({
-          attendantWaId: tenantHandoffAttendantWaid,
-          leadWaId: normalizedFrom,
-          snippet: message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-",
-          requestId: meta?.requestId,
-        });
-      }
       continue;
     }
 
@@ -5758,37 +5425,6 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             method: meta?.method,
             requestId: meta?.requestId,
           });
-          const notifyKey = `${normalizedFrom}|${tenantHandoffAttendantWaid}|${message.messageId}|${tenantHandoffTemplateName}`;
-          if (env.HANDOFF_ENABLED && tenantHandoffAttendantWaid) {
-            if (updatedConversation.lastHandoffDemoScheduledKey === notifyKey) {
-              logger.info({
-                event: "handoff.notify_dedup",
-                waId: maskNumber(normalizedFrom),
-                notifyKey,
-                decision: "skip",
-                requestId: meta?.requestId,
-              });
-            } else {
-              const scheduleText = midDemoFlowResult.scheduleExtract ?? "A combinar";
-              const snippet =
-                message.text?.slice(0, 160).replace(/\s+/g, " ").trim() || "-";
-              await notifyAttendantDemoScheduled({
-                attendantWaId: tenantHandoffAttendantWaid,
-                leadWaId: normalizedFrom,
-                intent: updatedConversation.intent ?? "unknown",
-                schedule: scheduleText,
-                snippet,
-                templateName: tenantHandoffTemplateName,
-                requestId: meta?.requestId,
-              });
-              updatedConversation = {
-                ...updatedConversation,
-                lastHandoffDemoScheduledKey: notifyKey,
-                lastHandoffDemoScheduledAt: nowIso,
-              };
-              demoUpdated = true;
-            }
-          }
           await upsertConversationSafe(updatedConversation);
           if (demoReplyText) {
             await sendOutboundText({
