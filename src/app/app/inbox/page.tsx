@@ -660,7 +660,6 @@ const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }
 const CONVERSATION_QUICK_FILTERS = [
   { value: "UNREAD", label: "Não lidas" },
   { value: "HUMAN", label: "Humano" },
-  { value: "BOT", label: "Bot" },
   { value: "ASSIGNED", label: "Atribuídas" },
 ] as const;
 
@@ -3338,9 +3337,6 @@ export default function AppInboxPage() {
         case "HUMAN":
           if (item.mode !== "HUMAN") return false;
           break;
-        case "BOT":
-          if (item.mode !== "BOT") return false;
-          break;
         case "ASSIGNED":
           if (!item.assignedUserId) return false;
           break;
@@ -4488,7 +4484,7 @@ export default function AppInboxPage() {
         </div>
       ) : null}
 
-      <section className="grid h-full min-h-0 w-full max-w-full grid-cols-1 overflow-hidden md:grid-cols-[260px_minmax(0,1fr)_230px] min-[1367px]:grid-cols-[280px_minmax(0,1fr)_250px] min-[1441px]:grid-cols-[315px_minmax(0,1fr)_300px] 2xl:grid-cols-[330px_minmax(0,1fr)_320px]">
+      <section className="grid h-full min-h-0 w-full max-w-full grid-cols-1 overflow-hidden md:grid-cols-[340px_minmax(0,1fr)_230px] min-[1367px]:grid-cols-[360px_minmax(0,1fr)_250px] min-[1441px]:grid-cols-[380px_minmax(0,1fr)_300px] 2xl:grid-cols-[390px_minmax(0,1fr)_320px]">
         <aside className={`min-h-0 min-w-0 max-w-full flex-col border-r border-white/10 bg-[#0c1930] max-md:border-r-0 md:flex ${selectedConversationKey ? "max-md:hidden" : "flex"}`}>
           <div className="border-b border-white/10 bg-[#10213d] px-4 py-3 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)] max-[1440px]:px-3 max-[1440px]:py-2.5 max-[1280px]:px-2.5 max-[1280px]:py-2">
             <div className="flex items-start justify-between gap-2">
@@ -4560,7 +4556,7 @@ export default function AppInboxPage() {
               />
               <div className="relative space-y-1.5">
                 <div className="grid max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 pb-0.5 max-[1440px]:gap-1">
-                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden max-[1440px]:gap-1">
+                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-visible max-[1440px]:gap-1">
                     {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
                       const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
                       if (!filter) return null;
