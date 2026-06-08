@@ -643,7 +643,7 @@ const CONVERSATION_FILTERS = [
 ] as const;
 
 type ConversationFilter = (typeof CONVERSATION_FILTERS)[number]["value"];
-const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "AUTOMATION", "MINE"];
+const PRIMARY_CONVERSATION_FILTERS: ConversationFilter[] = ["ALL", "WAITING", "AUTOMATION"];
 const MORE_CONVERSATION_FILTERS = CONVERSATION_FILTERS.filter(
   (item) => !PRIMARY_CONVERSATION_FILTERS.includes(item.value)
 );
