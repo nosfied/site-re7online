@@ -3991,11 +3991,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
-      const range = parseConversationReportRange(query.range);
+      const range = parseConversationReportPeriod(query);
       if (!range) {
         json(res, 400, httpError("invalid_range", "Invalid range"));
         return;
       }
+      const dedupe = String(query.dedupe ?? "").trim() === "true";
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -4028,6 +4029,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, {
           ok: true,
           range: range.key,
+          periodFrom: range.since.toISOString(),
+          periodTo: range.until ? range.until.toISOString() : null,
+          dedupe,
           userId: requestedUserId || null,
           departmentId: null,
           totalConversations: 0,
@@ -4042,13 +4046,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const reportData = await loadConversationReportData(prisma, {
         clientId: client.id,
         since: range.since,
+        until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
       });
       if (!reportData.ok) {
         json(res, reportData.status, httpError(reportData.code, "Department not found"));
         return;
       }
-      const filteredMetrics = requestedUserId
+      const userFilteredMetrics = requestedUserId
         ? reportData.metrics.filter(
             (item) =>
               reportData.stateByWaId
@@ -4056,11 +4061,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ?.assignedUserIds.includes(requestedUserId)
           )
         : reportData.metrics;
+      const filteredMetrics = dedupe ? dedupeConversationReportMetrics(userFilteredMetrics) : userFilteredMetrics;
       json(
         res,
         200,
         buildConversationReportSummary({
           rangeKey: range.key,
+          periodFrom: range.since,
+          periodTo: range.until,
+          dedupe,
           requestedUserId: requestedUserId || null,
           requestedDepartmentId: requestedDepartmentId || null,
           filteredMetrics,
@@ -4076,6 +4085,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
         role: clientAuth.role,
         departmentId: requestedDepartmentId || null,
+        dedupe,
       });
     } catch (error) {
       logger.error({
@@ -4101,11 +4111,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
-      const range = parseConversationReportRange(query.range);
+      const range = parseConversationReportPeriod(query);
       if (!range) {
         json(res, 400, httpError("invalid_range", "Invalid range"));
         return;
       }
+      const dedupe = String(query.dedupe ?? "").trim() === "true";
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -4160,6 +4171,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const reportData = await loadConversationReportData(prisma, {
         clientId: client.id,
         since: range.since,
+        until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
         includeClosedAt: true,
       });
@@ -4167,7 +4179,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, reportData.status, httpError(reportData.code, "Department not found"));
         return;
       }
-      const filteredMetrics = requestedUserId
+      const userFilteredMetrics = requestedUserId
         ? reportData.metrics.filter(
             (item) =>
               reportData.stateByWaId
@@ -4175,9 +4187,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ?.assignedUserIds.includes(requestedUserId)
           )
         : reportData.metrics;
+      const filteredMetrics = dedupe ? dedupeConversationReportMetrics(userFilteredMetrics) : userFilteredMetrics;
       res.writeHead(200, {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}.csv\"`,
+        "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}${dedupe ? "-dedupe" : ""}.csv\"`,
       });
       res.end(
         buildConversationReportCsv({
@@ -4193,6 +4206,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
         role: clientAuth.role,
         departmentId: requestedDepartmentId || null,
+        dedupe,
       });
     } catch (error) {
       logger.error({
@@ -12073,15 +12087,35 @@ function parseQuery(parsed: URL) {
 function parseConversationReportRange(rawValue: string | undefined) {
   switch (String(rawValue ?? "").trim()) {
     case "1d":
-      return { key: "1d" as const, since: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+      return { key: "1d" as const, since: new Date(Date.now() - 24 * 60 * 60 * 1000), until: null };
     case "30d":
-      return { key: "30d" as const, since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) };
+      return { key: "30d" as const, since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), until: null };
     case "7d":
     case "":
-      return { key: "7d" as const, since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+      return { key: "7d" as const, since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), until: null };
     default:
       return null;
   }
+}
+
+function parseConversationReportDate(rawValue: unknown) {
+  const value = String(rawValue ?? "").trim();
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp);
+}
+
+function parseConversationReportPeriod(query: Record<string, string>) {
+  const from = parseConversationReportDate(query.from);
+  const to = parseConversationReportDate(query.to);
+  if (from || to) {
+    const since = from ?? new Date(0);
+    const until = to ?? null;
+    if (until && until.getTime() < since.getTime()) return null;
+    return { key: "custom" as const, since, until };
+  }
+  return parseConversationReportRange(query.range);
 }
 
 function buildReportRuntimeStateMap(
@@ -12126,6 +12160,7 @@ async function loadConversationReportData(
   options: {
     clientId: string;
     since: Date;
+    until?: Date | null;
     requestedDepartmentId: string | null;
     includeClosedAt?: boolean;
   }
@@ -12145,7 +12180,10 @@ async function loadConversationReportData(
   const metrics = await prisma.conversationMetrics.findMany({
     where: {
       clientId: options.clientId,
-      startedAt: { gte: options.since },
+      startedAt: {
+        gte: options.since,
+        ...(options.until ? { lte: options.until } : {}),
+      },
       ...(options.requestedDepartmentId
         ? {
             conversation: {
@@ -12167,6 +12205,7 @@ async function loadConversationReportData(
       conversation: {
         select: {
           waId: true,
+          waIdCanonical: true,
           departmentId: true,
         },
       },
@@ -12227,7 +12266,10 @@ async function loadConversationReportData(
 }
 
 function buildConversationReportSummary(options: {
-  rangeKey: "1d" | "7d" | "30d";
+  rangeKey: "1d" | "7d" | "30d" | "custom";
+  periodFrom: Date;
+  periodTo?: Date | null;
+  dedupe: boolean;
   requestedUserId: string | null;
   requestedDepartmentId: string | null;
   filteredMetrics: Array<{
@@ -12239,6 +12281,7 @@ function buildConversationReportSummary(options: {
     resolutionTimeSec: number | null;
     conversation: {
       waId: string;
+      waIdCanonical?: string | null;
       departmentId: string | null;
     };
   }>;
@@ -12327,6 +12370,9 @@ function buildConversationReportSummary(options: {
   return {
     ok: true,
     range: options.rangeKey,
+    periodFrom: options.periodFrom.toISOString(),
+    periodTo: options.periodTo ? options.periodTo.toISOString() : null,
+    dedupe: options.dedupe,
     userId: options.requestedUserId,
     departmentId: options.requestedDepartmentId,
     totalConversations,
@@ -12349,6 +12395,28 @@ function buildConversationReportSummary(options: {
   };
 }
 
+function dedupeConversationReportMetrics<T extends {
+  conversationId: string;
+  startedAt?: Date;
+  conversation: { waId: string; waIdCanonical?: string | null };
+}>(metrics: T[]) {
+  const selected = new Map<string, T>();
+  for (const item of metrics) {
+    const key = getWaIdGroupKey(item.conversation.waId, item.conversation.waIdCanonical);
+    const current = selected.get(key);
+    if (!current) {
+      selected.set(key, item);
+      continue;
+    }
+    const currentStartedAt = current.startedAt instanceof Date ? current.startedAt.getTime() : 0;
+    const itemStartedAt = item.startedAt instanceof Date ? item.startedAt.getTime() : 0;
+    if (itemStartedAt > currentStartedAt) {
+      selected.set(key, item);
+    }
+  }
+  return Array.from(selected.values());
+}
+
 function buildConversationReportCsv(options: {
   metrics: Array<{
     conversationId: string;
@@ -12358,6 +12426,7 @@ function buildConversationReportCsv(options: {
     closedAt?: Date | null;
     conversation: {
       waId: string;
+      waIdCanonical?: string | null;
       departmentId: string | null;
     };
   }>;

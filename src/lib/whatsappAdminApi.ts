@@ -128,7 +128,7 @@ export type AdminClientItem = {
   }>;
 };
 
-export type ConversationReportRange = "1d" | "7d" | "30d";
+export type ConversationReportRange = "1d" | "7d" | "30d" | "custom";
 
 export type AdminChatbotFlowItem = {
   id: string;
@@ -286,6 +286,9 @@ export type ConversationReportByDepartmentItem = {
 export type ConversationReportResponse = {
   ok: true;
   range: ConversationReportRange;
+  periodFrom?: string | null;
+  periodTo?: string | null;
+  dedupe?: boolean;
   userId: string | null;
   departmentId: string | null;
   totalConversations: number;

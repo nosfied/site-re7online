@@ -1192,6 +1192,9 @@ export async function fetchAppConversationReport(
   session: AppSession,
   params: {
     range: ConversationReportRange;
+    from?: string | null;
+    to?: string | null;
+    dedupe?: boolean;
     userId?: string | null;
     departmentId?: string | null;
   }
@@ -1201,6 +1204,9 @@ export async function fetchAppConversationReport(
   });
   if (params.userId) query.set("userId", params.userId);
   if (params.departmentId) query.set("departmentId", params.departmentId);
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.dedupe) query.set("dedupe", "true");
   return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
 }
 
@@ -1224,6 +1230,9 @@ export async function exportAppConversationReportCsv(
   session: AppSession,
   params: {
     range: ConversationReportRange;
+    from?: string | null;
+    to?: string | null;
+    dedupe?: boolean;
     userId?: string | null;
     departmentId?: string | null;
   }
@@ -1233,6 +1242,9 @@ export async function exportAppConversationReportCsv(
   });
   if (params.userId) query.set("userId", params.userId);
   if (params.departmentId) query.set("departmentId", params.departmentId);
+  if (params.from) query.set("from", params.from);
+  if (params.to) query.set("to", params.to);
+  if (params.dedupe) query.set("dedupe", "true");
   return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
 }
 

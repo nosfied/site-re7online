@@ -12,9 +12,11 @@ import {
   fetchAppConversationReport,
   fetchAppDepartments,
   fetchAppRetentionConfig,
+  fetchAppTenantSummary,
   fetchAppUsers,
   loadAppSession,
   saveAppSession,
+  type AppTenantSummary,
 } from "@/lib/appClientApi";
 import type {
   AdminDepartmentItem,
@@ -24,6 +26,13 @@ import type {
 } from "@/lib/whatsappAdminApi";
 
 const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d"];
+
+const RANGE_LABELS: Record<ConversationReportRange, string> = {
+  "1d": "Ultimas 24 horas",
+  "7d": "Ultimos 7 dias",
+  "30d": "Ultimos 30 dias",
+  custom: "Periodo exato",
+};
 
 function canAccessReports(role: string) {
   const normalized = role.trim().toUpperCase();
@@ -45,12 +54,46 @@ function formatSeconds(value: number | null) {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
+function toDateTimeLocalValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function dateTimeLocalToIso(value: string) {
+  if (!value.trim()) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export default function AppReportsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [departments, setDepartments] = useState<AdminDepartmentItem[]>([]);
   const [range, setRange] = useState<ConversationReportRange>("7d");
+  const [periodMode, setPeriodMode] = useState<"preset" | "custom">("preset");
+  const [customFrom, setCustomFrom] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+  const [customTo, setCustomTo] = useState(() => toDateTimeLocalValue(new Date()));
+  const [dedupe, setDedupe] = useState(false);
   const [userId, setUserId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,6 +102,7 @@ export default function AppReportsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [report, setReport] = useState<ConversationReportResponse | null>(null);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
+  const [tenant, setTenant] = useState<AppTenantSummary | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -87,11 +131,12 @@ export default function AppReportsPage() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    Promise.all([fetchAppUsers(session), fetchAppDepartments(session)])
-      .then(([usersResponse, departmentsResponse]) => {
+    Promise.all([fetchAppUsers(session), fetchAppDepartments(session), fetchAppTenantSummary(session)])
+      .then(([usersResponse, departmentsResponse, tenantResponse]) => {
         if (cancelled) return;
         setUsers(usersResponse.items);
         setDepartments(departmentsResponse.items);
+        setTenant(tenantResponse.tenant);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -127,8 +172,19 @@ export default function AppReportsPage() {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    const fromIso = periodMode === "custom" ? dateTimeLocalToIso(customFrom) : null;
+    const toIso = periodMode === "custom" ? dateTimeLocalToIso(customTo) : null;
+    if (periodMode === "custom" && (!fromIso || !toIso || Date.parse(fromIso) > Date.parse(toIso))) {
+      setLoading(false);
+      setReport(null);
+      setError("Informe um periodo exato valido.");
+      return;
+    }
     fetchAppConversationReport(session, {
-      range,
+      range: periodMode === "custom" ? "custom" : range,
+      from: fromIso,
+      to: toIso,
+      dedupe,
       userId: userId || null,
       departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
     })
@@ -159,7 +215,7 @@ export default function AppReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [departmentId, handleUnauthorized, range, router, session, userId]);
+  }, [customFrom, customTo, dedupe, departmentId, handleUnauthorized, periodMode, range, router, session, userId]);
 
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, item.name])),
@@ -172,8 +228,13 @@ export default function AppReportsPage() {
     setError(null);
     setSuccess(null);
     try {
+      const fromIso = periodMode === "custom" ? dateTimeLocalToIso(customFrom) : null;
+      const toIso = periodMode === "custom" ? dateTimeLocalToIso(customTo) : null;
       const csv = await exportAppConversationReportCsv(session, {
-        range,
+        range: periodMode === "custom" ? "custom" : range,
+        from: fromIso,
+        to: toIso,
+        dedupe,
         userId: userId || null,
         departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
       });
@@ -181,7 +242,7 @@ export default function AppReportsPage() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `conversation-report-app-${range}.csv`;
+      anchor.download = `conversation-report-app-${periodMode === "custom" ? "custom" : range}${dedupe ? "-dedupe" : ""}.csv`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -197,6 +258,116 @@ export default function AppReportsPage() {
     } finally {
       setExporting(false);
     }
+  };
+
+  const handleGeneratePdf = () => {
+    if (!session || !report) {
+      setError("Carregue um relatorio antes de gerar o PDF.");
+      return;
+    }
+    const tenantName = tenant?.name || session.user.clientId;
+    const departmentLabel = departmentId
+      ? departments.find((item) => item.id === departmentId)?.name ?? departmentId
+      : "Todos";
+    const userLabel = userId ? userNameById.get(userId) ?? userId : "Todos";
+    const periodLabel =
+      periodMode === "custom"
+        ? `${formatDateTime(report.periodFrom)} a ${formatDateTime(report.periodTo)}`
+        : RANGE_LABELS[range];
+    const byDepartmentRows = report.byDepartment.length
+      ? report.byDepartment
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.departmentName ?? "-")}</td>
+                <td>${escapeHtml(item.conversations)}</td>
+                <td>${escapeHtml(formatSeconds(item.avgResponseTimeSec))}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="3">Nenhum dado por setor.</td></tr>`;
+    const byAgentRows = report.byAgent.length
+      ? report.byAgent
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(userNameById.get(item.userId) ?? item.userId)}</td>
+                <td>${escapeHtml(item.conversations)}</td>
+                <td>${escapeHtml(formatSeconds(item.avgResponseTimeSec))}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="3">Nenhum dado por atendente.</td></tr>`;
+    const html = `<!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Relatorio de conversas - Converta</title>
+          <style>
+            @page { size: A4; margin: 16mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: Arial, sans-serif; color: #102033; background: #fff; }
+            header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0ea5e9; padding-bottom: 16px; }
+            .brand { display: flex; align-items: center; gap: 14px; }
+            .brand img { width: 150px; height: auto; }
+            .eyebrow { margin: 0 0 4px; color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+            h1 { margin: 0; font-size: 22px; color: #0f172a; }
+            .generated { text-align: right; color: #64748b; font-size: 11px; }
+            .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; margin: 18px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; font-size: 12px; }
+            .meta strong { color: #0f172a; }
+            .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+            .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #fff; }
+            .card span { display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+            .card strong { display: block; margin-top: 8px; font-size: 20px; color: #0f172a; }
+            h2 { margin: 20px 0 8px; font-size: 15px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th { text-align: left; background: #0f2742; color: #fff; padding: 8px; }
+            td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
+            footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 10px; }
+          </style>
+        </head>
+        <body>
+          <header>
+            <div class="brand">
+              <img src="${window.location.origin}/images/converta-logo-dark.png" alt="Converta" />
+              <div>
+                <p class="eyebrow">Relatorio operacional</p>
+                <h1>Conversas iniciadas por clientes/leads</h1>
+              </div>
+            </div>
+            <div class="generated">Gerado em<br /><strong>${escapeHtml(formatDateTime(new Date().toISOString()))}</strong></div>
+          </header>
+          <section class="meta">
+            <div><strong>Tenant:</strong> ${escapeHtml(tenantName)}</div>
+            <div><strong>Telefone:</strong> ${escapeHtml(tenant?.phoneDisplay ?? "-")}</div>
+            <div><strong>Periodo:</strong> ${escapeHtml(periodLabel)}</div>
+            <div><strong>Duplicados:</strong> ${dedupe ? "desconsiderados" : "incluidos"}</div>
+            <div><strong>Setor:</strong> ${escapeHtml(departmentLabel)}</div>
+            <div><strong>Atendente:</strong> ${escapeHtml(userLabel)}</div>
+          </section>
+          <section class="cards">
+            <div class="card"><span>Conversas</span><strong>${escapeHtml(report.totalConversations)}</strong></div>
+            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
+            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
+            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
+          </section>
+          <h2>Por setor</h2>
+          <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
+          <h2>Por atendente</h2>
+          <table><thead><tr><th>Atendente</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byAgentRows}</tbody></table>
+          <footer>Converta - Central Inteligente de Atendimento e Vendas. Relatorio gerado para uso operacional interno.</footer>
+        </body>
+      </html>`;
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+    if (!popup) {
+      setError("Nao foi possivel abrir a janela do PDF. Verifique o bloqueador de pop-ups.");
+      return;
+    }
+    popup.document.open();
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(() => popup.print(), 250);
   };
 
   if (!session) {
@@ -231,7 +402,20 @@ export default function AppReportsPage() {
       <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
         <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <label className="grid gap-1 text-sm">
-            <span className="text-white/70">Periodo</span>
+            <span className="text-white/70">Tipo de periodo</span>
+            <select
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={periodMode}
+              onChange={(event) => setPeriodMode(event.target.value as "preset" | "custom")}
+            >
+              <option value="preset">Periodo rapido</option>
+              <option value="custom">Periodo exato</option>
+            </select>
+          </label>
+
+          {periodMode === "preset" ? (
+          <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Periodo rapido</span>
             <select
               className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
               value={range}
@@ -239,11 +423,33 @@ export default function AppReportsPage() {
             >
               {REPORT_RANGES.map((item) => (
                 <option key={item} value={item}>
-                  {item}
+                  {RANGE_LABELS[item]}
                 </option>
               ))}
             </select>
           </label>
+          ) : (
+            <>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Inicio exato</span>
+                <input
+                  type="datetime-local"
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={customFrom}
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-white/70">Fim exato</span>
+                <input
+                  type="datetime-local"
+                  className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+                  value={customTo}
+                  onChange={(event) => setCustomTo(event.target.value)}
+                />
+              </label>
+            </>
+          )}
 
           <label className="grid gap-1 text-sm">
             <span className="text-white/70">Atendente</span>
@@ -280,13 +486,33 @@ export default function AppReportsPage() {
           </label>
 
           <div className="flex items-end">
+            <label className="flex min-h-10 w-full items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white/80">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-white/30 bg-re7-navy"
+                checked={dedupe}
+                onChange={(event) => setDedupe(event.target.checked)}
+              />
+              Desconsiderar duplicados
+            </label>
+          </div>
+
+          <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-4">
             <button
               type="button"
               onClick={handleExport}
               disabled={exporting}
-              className="w-full rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-w-0 flex-1 rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-2 text-sm text-white hover:bg-re7-sky/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {exporting ? "Exportando..." : "Exportar CSV"}
+            </button>
+            <button
+              type="button"
+              onClick={handleGeneratePdf}
+              disabled={!report}
+              className="min-w-0 flex-1 rounded-md border border-emerald-300/30 bg-emerald-500/15 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Gerar PDF
             </button>
           </div>
         </div>
