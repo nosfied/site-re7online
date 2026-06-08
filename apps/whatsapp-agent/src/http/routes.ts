@@ -4061,7 +4061,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ?.assignedUserIds.includes(requestedUserId)
           )
         : reportData.metrics;
-      const filteredMetrics = dedupe ? dedupeConversationReportMetrics(userFilteredMetrics) : userFilteredMetrics;
+      const filteredMetrics = dedupe
+        ? dedupeConversationReportMetrics(userFilteredMetrics, reportData.leadIdentityByWaId)
+        : userFilteredMetrics;
       json(
         res,
         200,
@@ -4187,7 +4189,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ?.assignedUserIds.includes(requestedUserId)
           )
         : reportData.metrics;
-      const filteredMetrics = dedupe ? dedupeConversationReportMetrics(userFilteredMetrics) : userFilteredMetrics;
+      const filteredMetrics = dedupe
+        ? dedupeConversationReportMetrics(userFilteredMetrics, reportData.leadIdentityByWaId)
+        : userFilteredMetrics;
       res.writeHead(200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename=\"conversation-report-app-${range.key}${dedupe ? "-dedupe" : ""}.csv\"`,
@@ -12212,6 +12216,13 @@ async function loadConversationReportData(
     },
   });
   const waIds = Array.from(new Set(metrics.map((item) => item.conversation.waId)));
+  const canonicalWaIds = Array.from(
+    new Set(
+      metrics
+        .map((item) => item.conversation.waIdCanonical ?? item.conversation.waId)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
   const runtimeStates = waIds.length
     ? await prisma.conversationRuntimeState.findMany({
         where: {
@@ -12230,6 +12241,28 @@ async function loadConversationReportData(
         },
       })
     : [];
+  const leads =
+    waIds.length || canonicalWaIds.length
+      ? await prisma.lead.findMany({
+          where: {
+            tenantId: options.clientId,
+            OR: [{ waId: { in: waIds } }, { waIdCanonical: { in: canonicalWaIds } }],
+          },
+          select: {
+            waId: true,
+            waIdCanonical: true,
+            phone: true,
+          },
+        })
+      : [];
+  const leadIdentityByWaId = new Map<string, string>();
+  for (const lead of leads) {
+    const identity = lead.phone?.trim()
+      ? canonicalizeBrazilWaId(lead.phone)
+      : getWaIdGroupKey(lead.waId, lead.waIdCanonical);
+    if (!identity) continue;
+    leadIdentityByWaId.set(getWaIdGroupKey(lead.waId, lead.waIdCanonical), identity);
+  }
   const slaConfig = await prisma.sLAConfig.findUnique({
     where: { clientId: options.clientId },
     select: {
@@ -12260,6 +12293,7 @@ async function loadConversationReportData(
     ok: true as const,
     metrics,
     stateByWaId: buildReportRuntimeStateMap(runtimeStates),
+    leadIdentityByWaId,
     slaConfig,
     departmentNameById: new Map(departments.map((item) => [item.id, item.name])),
   };
@@ -12399,10 +12433,11 @@ function dedupeConversationReportMetrics<T extends {
   conversationId: string;
   startedAt?: Date;
   conversation: { waId: string; waIdCanonical?: string | null };
-}>(metrics: T[]) {
+}>(metrics: T[], leadIdentityByWaId?: Map<string, string>) {
   const selected = new Map<string, T>();
   for (const item of metrics) {
-    const key = getWaIdGroupKey(item.conversation.waId, item.conversation.waIdCanonical);
+    const conversationKey = getWaIdGroupKey(item.conversation.waId, item.conversation.waIdCanonical);
+    const key = leadIdentityByWaId?.get(conversationKey) ?? conversationKey;
     const current = selected.get(key);
     if (!current) {
       selected.set(key, item);
