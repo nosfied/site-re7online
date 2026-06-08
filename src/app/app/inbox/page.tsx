@@ -4555,36 +4555,34 @@ export default function AppInboxPage() {
                 className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-re7-sky/40 max-[1440px]:rounded-lg max-[1440px]:px-2.5 max-[1440px]:py-1.5 max-[1440px]:text-xs"
               />
               <div className="relative space-y-1.5">
-                <div className="grid max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 pb-0.5 max-[1440px]:gap-1">
-                  <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-visible max-[1440px]:gap-1">
-                    {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
-                      const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
-                      if (!filter) return null;
-                      return (
-                        <button
-                          key={filter.value}
-                          type="button"
-                          onClick={() => applyConversationFilter(filter.value)}
-                          className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                <div className="flex max-w-full flex-nowrap items-center gap-1.5 overflow-hidden pb-0.5 max-[1440px]:gap-1">
+                  {PRIMARY_CONVERSATION_FILTERS.map((filterValue) => {
+                    const filter = CONVERSATION_FILTER_BY_VALUE.get(filterValue);
+                    if (!filter) return null;
+                    return (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => applyConversationFilter(filter.value)}
+                        className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-none transition max-[1440px]:px-2 max-[1440px]:text-[10px] ${
+                          conversationFilter === filter.value
+                            ? "bg-re7-sky/30 text-white"
+                            : "bg-white/5 text-white/65 hover:bg-white/10"
+                        }`}
+                      >
+                        <span>{filter.label}</span>
+                        <span
+                          className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
                             conversationFilter === filter.value
-                              ? "bg-re7-sky/30 text-white"
-                              : "bg-white/5 text-white/65 hover:bg-white/10"
+                              ? "bg-white/20 text-white"
+                              : "bg-white/10 text-white/55"
                           }`}
                         >
-                          <span>{filter.label}</span>
-                          <span
-                            className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
-                              conversationFilter === filter.value
-                                ? "bg-white/20 text-white"
-                                : "bg-white/10 text-white/55"
-                            }`}
-                          >
-                            {conversationFilterCounts[filter.value]}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          {conversationFilterCounts[filter.value]}
+                        </span>
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
                     onClick={() => setShowMoreConversationFilters((current) => !current)}
