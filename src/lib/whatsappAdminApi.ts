@@ -283,12 +283,19 @@ export type ConversationReportByDepartmentItem = {
   avgResponseTimeSec: number | null;
 };
 
+export type ConversationReportByChannelItem = {
+  channel: "whatsapp" | "messenger" | "instagram" | "unknown";
+  channelName: string;
+  conversations: number;
+};
+
 export type ConversationReportResponse = {
   ok: true;
   range: ConversationReportRange;
   periodFrom?: string | null;
   periodTo?: string | null;
   dedupe?: boolean;
+  channel?: "whatsapp" | "messenger" | "instagram" | null;
   userId: string | null;
   departmentId: string | null;
   totalConversations: number;
@@ -297,6 +304,7 @@ export type ConversationReportResponse = {
   slaBreaches: number;
   byAgent: ConversationReportByAgentItem[];
   byDepartment: ConversationReportByDepartmentItem[];
+  byChannel?: ConversationReportByChannelItem[];
 };
 
 export type LeadStatus =

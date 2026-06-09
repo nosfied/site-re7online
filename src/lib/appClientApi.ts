@@ -1195,6 +1195,7 @@ export async function fetchAppConversationReport(
     from?: string | null;
     to?: string | null;
     dedupe?: boolean;
+    channel?: string | null;
     userId?: string | null;
     departmentId?: string | null;
   }
@@ -1207,6 +1208,7 @@ export async function fetchAppConversationReport(
   if (params.from) query.set("from", params.from);
   if (params.to) query.set("to", params.to);
   if (params.dedupe) query.set("dedupe", "true");
+  if (params.channel) query.set("channel", params.channel);
   return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
 }
 
@@ -1233,6 +1235,7 @@ export async function exportAppConversationReportCsv(
     from?: string | null;
     to?: string | null;
     dedupe?: boolean;
+    channel?: string | null;
     userId?: string | null;
     departmentId?: string | null;
   }
@@ -1245,6 +1248,7 @@ export async function exportAppConversationReportCsv(
   if (params.from) query.set("from", params.from);
   if (params.to) query.set("to", params.to);
   if (params.dedupe) query.set("dedupe", "true");
+  if (params.channel) query.set("channel", params.channel);
   return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
 }
 

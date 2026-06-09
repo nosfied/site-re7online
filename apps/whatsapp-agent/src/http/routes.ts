@@ -3997,6 +3997,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const dedupe = String(query.dedupe ?? "").trim() === "true";
+      const channelFilter = normalizeReportChannelFilter(query.channel);
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -4032,6 +4033,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           periodFrom: range.since.toISOString(),
           periodTo: range.until ? range.until.toISOString() : null,
           dedupe,
+          channel: channelFilter,
           userId: requestedUserId || null,
           departmentId: null,
           totalConversations: 0,
@@ -4048,6 +4050,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         since: range.since,
         until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
+        channel: channelFilter,
       });
       if (!reportData.ok) {
         json(res, reportData.status, httpError(reportData.code, "Department not found"));
@@ -4072,6 +4075,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           periodFrom: range.since,
           periodTo: range.until,
           dedupe,
+          channel: channelFilter,
           requestedUserId: requestedUserId || null,
           requestedDepartmentId: requestedDepartmentId || null,
           filteredMetrics,
@@ -4088,6 +4092,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
         departmentId: requestedDepartmentId || null,
         dedupe,
+        channel: channelFilter,
       });
     } catch (error) {
       logger.error({
@@ -4119,6 +4124,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const dedupe = String(query.dedupe ?? "").trim() === "true";
+      const channelFilter = normalizeReportChannelFilter(query.channel);
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, httpError("client_not_found", "Client not found"));
@@ -4157,6 +4163,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             [
               "conversationId",
               "waId",
+              "channel",
               "departmentId",
               "departmentName",
               "assignedUserId",
@@ -4175,6 +4182,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         since: range.since,
         until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
+        channel: channelFilter,
         includeClosedAt: true,
       });
       if (!reportData.ok) {
@@ -4211,6 +4219,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         role: clientAuth.role,
         departmentId: requestedDepartmentId || null,
         dedupe,
+        channel: channelFilter,
       });
     } catch (error) {
       logger.error({
@@ -12122,11 +12131,29 @@ function parseConversationReportPeriod(query: Record<string, string>) {
   return parseConversationReportRange(query.range);
 }
 
+type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | null;
+
+function normalizeReportChannelFilter(rawValue: unknown): ReportChannelFilter {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram"
+    ? normalized
+    : null;
+}
+
+function normalizeReportChannelLabel(rawValue?: string | null) {
+  const channel = String(rawValue ?? "whatsapp").trim().toLowerCase();
+  if (channel === "messenger") return { channel: "messenger" as const, channelName: "Facebook/Messenger" };
+  if (channel === "instagram") return { channel: "instagram" as const, channelName: "Instagram" };
+  if (channel === "whatsapp" || !channel) return { channel: "whatsapp" as const, channelName: "WhatsApp" };
+  return { channel: "unknown" as const, channelName: "Desconhecido" };
+}
+
 function buildReportRuntimeStateMap(
   runtimeStates: Array<{
     waId: string;
     assignedUserId: string | null;
     status?: string | null;
+    mode?: string | null;
     assignments?: Array<{ toUserId: string | null }>;
   }>
 ) {
@@ -12146,6 +12173,7 @@ function buildReportRuntimeStateMap(
           assignedUserId: item.assignedUserId ?? null,
           assignedUserIds,
           status: item.status ?? null,
+          mode: item.mode ?? null,
         },
       ] as const;
     })
@@ -12166,6 +12194,7 @@ async function loadConversationReportData(
     since: Date;
     until?: Date | null;
     requestedDepartmentId: string | null;
+    channel?: ReportChannelFilter;
     includeClosedAt?: boolean;
   }
 ) {
@@ -12195,6 +12224,14 @@ async function loadConversationReportData(
             },
           }
         : {}),
+      ...(options.channel
+        ? {
+            conversation: {
+              ...(options.requestedDepartmentId ? { departmentId: options.requestedDepartmentId } : {}),
+              channel: options.channel,
+            },
+          }
+        : {}),
     },
     ...(options.includeClosedAt ? { orderBy: { startedAt: "desc" as const } } : {}),
     select: {
@@ -12210,6 +12247,7 @@ async function loadConversationReportData(
         select: {
           waId: true,
           waIdCanonical: true,
+          channel: true,
           departmentId: true,
         },
       },
@@ -12233,6 +12271,7 @@ async function loadConversationReportData(
           waId: true,
           assignedUserId: true,
           status: true,
+          mode: true,
           assignments: {
             select: {
               toUserId: true,
@@ -12304,6 +12343,7 @@ function buildConversationReportSummary(options: {
   periodFrom: Date;
   periodTo?: Date | null;
   dedupe: boolean;
+  channel?: ReportChannelFilter;
   requestedUserId: string | null;
   requestedDepartmentId: string | null;
   filteredMetrics: Array<{
@@ -12316,6 +12356,7 @@ function buildConversationReportSummary(options: {
     conversation: {
       waId: string;
       waIdCanonical?: string | null;
+      channel?: string | null;
       departmentId: string | null;
     };
   }>;
@@ -12387,11 +12428,11 @@ function buildConversationReportSummary(options: {
     }
   >();
   for (const item of options.filteredMetrics) {
-    const departmentId = item.conversation.departmentId ?? null;
-    const key = departmentId ?? "__none__";
+    const bucket = getReportDepartmentBucket(item, options.stateByWaId, options.departmentNameById);
+    const key = bucket.key;
     const current = byDepartmentMap.get(key) ?? {
-      departmentId,
-      departmentName: departmentId ? options.departmentNameById.get(departmentId) ?? null : null,
+      departmentId: bucket.departmentId,
+      departmentName: bucket.departmentName,
       conversations: 0,
       totalResponseTimeSec: 0,
       responseCount: 0,
@@ -12407,6 +12448,7 @@ function buildConversationReportSummary(options: {
     periodFrom: options.periodFrom.toISOString(),
     periodTo: options.periodTo ? options.periodTo.toISOString() : null,
     dedupe: options.dedupe,
+    channel: options.channel ?? null,
     userId: options.requestedUserId,
     departmentId: options.requestedDepartmentId,
     totalConversations,
@@ -12426,13 +12468,57 @@ function buildConversationReportSummary(options: {
       avgResponseTimeSec:
         item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
     })),
+    byChannel: buildConversationReportChannelSummary(options.filteredMetrics),
   };
+}
+
+function getReportDepartmentBucket(
+  item: { conversation: { waId: string; departmentId: string | null } },
+  stateByWaId: ReturnType<typeof buildReportRuntimeStateMap>,
+  departmentNameById: Map<string, string>
+) {
+  const departmentId = item.conversation.departmentId ?? null;
+  if (departmentId) {
+    return {
+      key: departmentId,
+      departmentId,
+      departmentName: departmentNameById.get(departmentId) ?? null,
+    };
+  }
+  const runtimeState = stateByWaId.get(item.conversation.waId);
+  if (!runtimeState) {
+    return { key: "__sem_setor_legado__", departmentId: null, departmentName: "Sem setor / legado" };
+  }
+  if (runtimeState.mode === "BOT" && !runtimeState.assignedUserIds.length && !runtimeState.assignedUserId) {
+    return { key: "__automacao__", departmentId: null, departmentName: "Automação" };
+  }
+  if (runtimeState.assignedUserIds.length || runtimeState.assignedUserId || runtimeState.status || runtimeState.mode) {
+    return { key: "__sem_setor_legado__", departmentId: null, departmentName: "Sem setor / legado" };
+  }
+  return { key: "__sem_setor_legado__", departmentId: null, departmentName: "Sem setor / legado" };
+}
+
+function buildConversationReportChannelSummary(metrics: Array<{ conversation: { channel?: string | null } }>) {
+  const byChannel = new Map<
+    string,
+    { channel: "whatsapp" | "messenger" | "instagram" | "unknown"; channelName: string; conversations: number }
+  >();
+  for (const item of metrics) {
+    const normalized = normalizeReportChannelLabel(item.conversation.channel);
+    const current = byChannel.get(normalized.channel) ?? {
+      ...normalized,
+      conversations: 0,
+    };
+    current.conversations += 1;
+    byChannel.set(normalized.channel, current);
+  }
+  return Array.from(byChannel.values()).sort((left, right) => right.conversations - left.conversations);
 }
 
 function dedupeConversationReportMetrics<T extends {
   conversationId: string;
   startedAt?: Date;
-  conversation: { waId: string; waIdCanonical?: string | null };
+    conversation: { waId: string; waIdCanonical?: string | null };
 }>(metrics: T[], leadIdentityByWaId?: Map<string, string>) {
   const selected = new Map<string, T>();
   for (const item of metrics) {
@@ -12462,6 +12548,7 @@ function buildConversationReportCsv(options: {
     conversation: {
       waId: string;
       waIdCanonical?: string | null;
+      channel?: string | null;
       departmentId: string | null;
     };
   }>;
@@ -12472,6 +12559,7 @@ function buildConversationReportCsv(options: {
     [
       "conversationId",
       "waId",
+      "channel",
       "departmentId",
       "departmentName",
       "assignedUserId",
@@ -12487,6 +12575,7 @@ function buildConversationReportCsv(options: {
       return [
         csvCell(item.conversationId),
         csvCell(item.conversation.waId),
+        csvCell(normalizeReportChannelLabel(item.conversation.channel).channelName),
         csvCell(departmentId),
         csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
         csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),

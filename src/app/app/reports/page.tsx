@@ -34,6 +34,13 @@ const RANGE_LABELS: Record<ConversationReportRange, string> = {
   custom: "Periodo exato",
 };
 
+const REPORT_CHANNELS = [
+  { value: "", label: "Todos" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "messenger", label: "Facebook/Messenger" },
+  { value: "instagram", label: "Instagram" },
+] as const;
+
 function canAccessReports(role: string) {
   const normalized = role.trim().toUpperCase();
   return normalized === "SUPERVISOR" || normalized === "ADMIN";
@@ -94,6 +101,7 @@ export default function AppReportsPage() {
   const [customFrom, setCustomFrom] = useState(() => toDateTimeLocalValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [customTo, setCustomTo] = useState(() => toDateTimeLocalValue(new Date()));
   const [dedupe, setDedupe] = useState(false);
+  const [channel, setChannel] = useState("");
   const [userId, setUserId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -185,6 +193,7 @@ export default function AppReportsPage() {
       from: fromIso,
       to: toIso,
       dedupe,
+      channel: channel || null,
       userId: userId || null,
       departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
     })
@@ -215,7 +224,7 @@ export default function AppReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [customFrom, customTo, dedupe, departmentId, handleUnauthorized, periodMode, range, router, session, userId]);
+  }, [channel, customFrom, customTo, dedupe, departmentId, handleUnauthorized, periodMode, range, router, session, userId]);
 
   const userNameById = useMemo(
     () => new Map(users.map((item) => [item.id, item.name])),
@@ -235,6 +244,7 @@ export default function AppReportsPage() {
         from: fromIso,
         to: toIso,
         dedupe,
+        channel: channel || null,
         userId: userId || null,
         departmentId: isAdminRole(session.user.role) ? departmentId || null : null,
       });
@@ -270,6 +280,7 @@ export default function AppReportsPage() {
       ? departments.find((item) => item.id === departmentId)?.name ?? departmentId
       : "Todos";
     const userLabel = userId ? userNameById.get(userId) ?? userId : "Todos";
+    const channelLabel = REPORT_CHANNELS.find((item) => item.value === channel)?.label ?? "Todos";
     const periodLabel =
       periodMode === "custom"
         ? `${formatDateTime(report.periodFrom)} a ${formatDateTime(report.periodTo)}`
@@ -298,6 +309,17 @@ export default function AppReportsPage() {
           )
           .join("")
       : `<tr><td colspan="3">Nenhum dado por atendente.</td></tr>`;
+    const byChannelRows = report.byChannel?.length
+      ? report.byChannel
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.channelName)}</td>
+                <td>${escapeHtml(item.conversations)}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="2">Nenhum dado por canal.</td></tr>`;
     const html = `<!doctype html>
       <html lang="pt-BR">
         <head>
@@ -342,6 +364,7 @@ export default function AppReportsPage() {
             <div><strong>Telefone:</strong> ${escapeHtml(tenant?.phoneDisplay ?? "-")}</div>
             <div><strong>Periodo:</strong> ${escapeHtml(periodLabel)}</div>
             <div><strong>Duplicados:</strong> ${dedupe ? "desconsiderados" : "incluidos"}</div>
+            <div><strong>Canal:</strong> ${escapeHtml(channelLabel)}</div>
             <div><strong>Setor:</strong> ${escapeHtml(departmentLabel)}</div>
             <div><strong>Atendente:</strong> ${escapeHtml(userLabel)}</div>
           </section>
@@ -351,6 +374,8 @@ export default function AppReportsPage() {
             <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
             <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
           </section>
+          <h2>Por canal</h2>
+          <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
           <h2>Por setor</h2>
           <table><thead><tr><th>Setor</th><th>Conversas</th><th>Tempo medio de resposta</th></tr></thead><tbody>${byDepartmentRows}</tbody></table>
           <h2>Por atendente</h2>
@@ -358,7 +383,7 @@ export default function AppReportsPage() {
           <footer>Converta - Central Inteligente de Atendimento e Vendas. Relatorio gerado para uso operacional interno.</footer>
         </body>
       </html>`;
-    const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+    const popup = window.open("", "_blank", "width=960,height=720");
     if (!popup) {
       setError("Nao foi possivel abrir a janela do PDF. Verifique o bloqueador de pop-ups.");
       return;
@@ -452,6 +477,21 @@ export default function AppReportsPage() {
           )}
 
           <label className="grid gap-1 text-sm">
+            <span className="text-white/70">Canal</span>
+            <select
+              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
+              value={channel}
+              onChange={(event) => setChannel(event.target.value)}
+            >
+              {REPORT_CHANNELS.map((item) => (
+                <option key={item.value || "all"} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1 text-sm">
             <span className="text-white/70">Atendente</span>
             <select
               className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-white outline-none focus:border-re7-sky"
@@ -541,6 +581,32 @@ export default function AppReportsPage() {
           <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
           <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>
+      </section>
+
+      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <div className="border-b border-white/10 px-4 py-3">
+          <h2 className="text-sm font-semibold">Por canal</h2>
+        </div>
+        {report?.byChannel?.length ? (
+          <table className="w-full min-w-[420px] text-sm">
+            <thead className="bg-white/10 text-left">
+              <tr>
+                <th className="px-3 py-2">Canal</th>
+                <th className="px-3 py-2">Conversas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.byChannel.map((item) => (
+                <tr key={item.channel} className="border-t border-white/10">
+                  <td className="px-3 py-2">{item.channelName}</td>
+                  <td className="px-3 py-2">{item.conversations}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="p-4 text-sm text-white/70">Nenhum dado por canal no periodo selecionado.</p>
+        )}
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
