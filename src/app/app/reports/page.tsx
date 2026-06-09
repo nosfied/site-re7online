@@ -346,9 +346,18 @@ export default function AppReportsPage() {
             th { text-align: left; background: #0f2742; color: #fff; padding: 8px; }
             td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
             footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 10px; }
+            .print-actions { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; margin: 0 0 16px; padding: 10px 0; background: rgba(255, 255, 255, .94); backdrop-filter: blur(8px); }
+            .print-actions button { border: 0; border-radius: 8px; background: #0f2742; color: #fff; cursor: pointer; font-size: 13px; font-weight: 700; padding: 10px 14px; }
+            .print-actions button:hover { background: #123a62; }
+            @media print {
+              .print-actions { display: none; }
+            }
           </style>
         </head>
         <body>
+          <div class="print-actions">
+            <button type="button" onclick="window.print()">Imprimir ou salvar em PDF</button>
+          </div>
           <header>
             <div class="brand">
               <img src="${window.location.origin}/images/converta-logo-dark.png" alt="Converta" />
@@ -392,7 +401,6 @@ export default function AppReportsPage() {
     popup.document.write(html);
     popup.document.close();
     popup.focus();
-    window.setTimeout(() => popup.print(), 250);
   };
 
   if (!session) {
