@@ -771,6 +771,38 @@ test("passive processor normalizes Instagram and resolves tenant from channelAcc
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
+test("passive processor normalizes Instagram when webhook id matches account alias", async () => {
+  const result = await processPassiveMetaWebhookPayload(instagramPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "graph-account-1",
+            externalAccountIds: ["ig-account-1"],
+            enabled: true,
+            runtimeEnabled: true,
+            inboundPersistenceEnabled: true,
+            status: "connected",
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
+});
+
 test("passive processor normalizes Instagram message_edit payload shape", async () => {
   const messageEditPayload = {
     object: "instagram",
@@ -890,6 +922,51 @@ test("passive processor skips Messenger non-text callbacks without normalizing",
             provider: "meta",
             channelAccountId: "page-1",
             enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
+});
+
+test("passive processor resolves Instagram alias but still ignores read callbacks", async () => {
+  const readPayload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        messaging: [
+          {
+            timestamp: 1778760000000,
+            read: { mid: "mid-read-1" },
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = await processPassiveMetaWebhookPayload(readPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "graph-account-1",
+            externalAccountIds: ["ig-account-1"],
+            enabled: true,
+            status: "connected",
           },
         ],
       },

@@ -20,7 +20,9 @@ const TOKEN_STATUSES = new Set<TenantChannelTokenStatus>([
   "missing",
 ]);
 
-type TenantChannelAccountInput = Partial<TenantChannelAccount> & {
+type TenantChannelAccountInput = Partial<Omit<TenantChannelAccount, "externalAccountIds" | "metadata">> & {
+  externalAccountIds?: unknown;
+  metadata?: unknown;
   token?: unknown;
   accessToken?: unknown;
   pageAccessToken?: unknown;
@@ -43,6 +45,32 @@ function sanitizeText(value: unknown, maxLength = 120) {
 
 function sanitizeSecret(value: unknown, maxLength = 4096) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : undefined;
+}
+
+function sanitizeIdentifierList(value: unknown, maxItems = 12) {
+  if (!Array.isArray(value)) return undefined;
+  const seen = new Set<string>();
+  const items: string[] = [];
+  for (const item of value) {
+    const normalized = sanitizeIdentifier(item);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    items.push(normalized);
+    if (items.length >= maxItems) break;
+  }
+  return items.length > 0 ? items : undefined;
+}
+
+function sanitizeMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const output: Record<string, string> = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const key = sanitizeIdentifier(rawKey, 80);
+    const normalizedValue = sanitizeText(rawValue, 180);
+    if (!key || !normalizedValue) continue;
+    output[key] = normalizedValue;
+  }
+  return Object.keys(output).length > 0 ? output : undefined;
 }
 
 function normalizeBoolean(value: unknown, fallback = false) {
@@ -97,7 +125,9 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
     provider: provider as Provider,
     displayName: sanitizeText(input.displayName),
     channelAccountId,
+    externalAccountIds: sanitizeIdentifierList(input.externalAccountIds),
     externalBusinessId: sanitizeIdentifier(input.externalBusinessId),
+    metadata: sanitizeMetadata(input.metadata),
     enabled,
     automationEnabled: normalizeBoolean(input.automationEnabled, false),
     runtimeEnabled: normalizeBoolean(input.runtimeEnabled, false),
@@ -321,7 +351,8 @@ export function findTenantChannelAccount(
       account.tenantKey === tenantKey &&
       account.channel === criteria.channel &&
       account.provider === criteria.provider &&
-      account.channelAccountId === channelAccountId
+      (account.channelAccountId === channelAccountId ||
+        (account.externalAccountIds ?? []).includes(channelAccountId))
   );
 }
 

@@ -48,6 +48,7 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
   assert.equal(account?.tenantKey, "tendencia-modas");
   assert.equal(account?.displayName, "Instagram Principal");
   assert.equal(account?.channelAccountId, "ig_123");
+  assert.deepEqual(account?.externalAccountIds, undefined);
   assert.equal(account?.externalBusinessId, "business_123");
   assert.equal(account?.enabled, true);
   assert.equal(account?.automationEnabled, true);
@@ -63,6 +64,30 @@ test("normalizeTenantChannelAccount accepts valid account", () => {
   assert.equal("longLivedToken" in (account ?? {}), false);
   assert.equal("businessToken" in (account ?? {}), false);
   assert.equal("pageAccessToken" in redactTenantChannelAccount(account!), false);
+});
+
+test("normalizeTenantChannelAccount accepts safe aliases and metadata", () => {
+  const account = normalizeTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: "graph-account-1",
+    externalAccountIds: [" webhook-account-1 ", "webhook-account-1", "bad id!"],
+    metadata: {
+      graphAccountId: " graph-account-1 ",
+      webhookAccountId: " webhook-account-1 ",
+      unsafe: { nested: true },
+    },
+    enabled: true,
+  });
+
+  assert.deepEqual(account?.externalAccountIds, ["webhook-account-1", "badid"]);
+  assert.deepEqual(account?.metadata, {
+    graphAccountId: "graph-account-1",
+    webhookAccountId: "webhook-account-1",
+  });
+  assert.equal("pageAccessToken" in redactTenantChannelAccount(account!), false);
+  assert.deepEqual(redactTenantChannelAccount(account!).externalAccountIds, ["webhook-account-1", "badid"]);
 });
 
 test("normalizeTenantChannelAccount rejects missing tenantKey or channelAccountId", () => {
@@ -314,6 +339,37 @@ test("findTenantChannelAccount scopes by tenant, channel, provider and account",
       channelAccountId: "account-1",
     })?.tenantKey,
     "tenant-b"
+  );
+});
+
+test("findTenantChannelAccount resolves aliases within the same tenant only", () => {
+  const accounts = [
+    validateTenantChannelAccount({
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "graph-a",
+      externalAccountIds: ["webhook-a"],
+      enabled: true,
+    }),
+    validateTenantChannelAccount({
+      tenantKey: "tenant-b",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "graph-b",
+      externalAccountIds: ["webhook-a"],
+      enabled: true,
+    }),
+  ];
+
+  assert.equal(
+    findTenantChannelAccount(accounts, {
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "webhook-a",
+    })?.channelAccountId,
+    "graph-a"
   );
 });
 

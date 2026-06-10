@@ -11,7 +11,9 @@ export type TenantChannelAccount = {
   provider: Provider;
   displayName?: string;
   channelAccountId: string;
+  externalAccountIds?: string[];
   externalBusinessId?: string;
+  metadata?: Record<string, string>;
   enabled: boolean;
   automationEnabled?: boolean;
   runtimeEnabled?: boolean;

@@ -695,7 +695,7 @@ export async function processPassiveMetaWebhookPayload(
       eventType: "message",
     });
 
-    if (resolution.resolution !== "matched_enabled") {
+    if (resolution.resolution !== "matched_enabled" && resolution.resolution !== "matched_alias") {
       unsupportedCount += 1;
       continue;
     }

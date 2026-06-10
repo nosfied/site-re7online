@@ -40,6 +40,77 @@ test("resolveTenantForChannelAccount returns matched_enabled for connected enabl
   assert.equal(result.account?.channelAccountId, "page-1");
 });
 
+test("resolveTenantForChannelAccount returns matched_alias for connected alias", () => {
+  const tenants = {
+    "tenant-a": {
+      id: "tenant-a",
+      name: "Tenant A",
+      metaPhoneNumberId: "phone-tenant-a",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      channelAccounts: [
+        {
+          id: "ig-account",
+          tenantKey: "tenant-a",
+          channel: "instagram",
+          provider: "meta",
+          channelAccountId: "graph-account",
+          externalAccountIds: ["webhook-account"],
+          enabled: true,
+          status: "connected",
+        },
+      ],
+    },
+  } satisfies TenantConfigMap;
+
+  const result = resolveTenantForChannelAccount({
+    tenants,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: "webhook-account",
+  });
+
+  assert.equal(result.resolution, "matched_alias");
+  assert.equal(result.tenantKey, "tenant-a");
+  assert.equal(result.account?.channelAccountId, "graph-account");
+  assert.deepEqual(result.account?.externalAccountIds, ["webhook-account"]);
+});
+
+test("resolveTenantForChannelAccount does not treat disabled alias as enabled", () => {
+  const tenants = {
+    "tenant-a": {
+      id: "tenant-a",
+      name: "Tenant A",
+      metaPhoneNumberId: "phone-tenant-a",
+      allowlist: [],
+      handoffAttendantWaid: "",
+      defaultLanguage: "pt_BR",
+      channelAccounts: [
+        {
+          id: "ig-account",
+          tenantKey: "tenant-a",
+          channel: "instagram",
+          provider: "meta",
+          channelAccountId: "graph-account",
+          externalAccountIds: ["webhook-account"],
+          enabled: false,
+          status: "disabled",
+        },
+      ],
+    },
+  } satisfies TenantConfigMap;
+
+  const result = resolveTenantForChannelAccount({
+    tenants,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: "webhook-account",
+  });
+
+  assert.equal(result.resolution, "matched_disabled");
+});
+
 test("resolveTenantForChannelAccount returns matched_disabled", () => {
   const result = resolveTenantForChannelAccount({
     tenants: tenantsWith("disabled", false),

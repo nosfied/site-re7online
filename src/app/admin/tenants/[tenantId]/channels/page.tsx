@@ -18,7 +18,9 @@ type ChannelAccountDraft = {
   provider: Provider;
   displayName: string;
   channelAccountId: string;
+  externalAccountIds: string;
   externalBusinessId: string;
+  metadata: string;
   enabled: boolean;
   automationEnabled: boolean;
   runtimeEnabled: boolean;
@@ -52,7 +54,9 @@ function createDraft(): ChannelAccountDraft {
     provider: "meta",
     displayName: "",
     channelAccountId: "",
+    externalAccountIds: "",
     externalBusinessId: "",
+    metadata: "",
     enabled: false,
     automationEnabled: false,
     runtimeEnabled: false,
@@ -73,7 +77,9 @@ function toDraft(account: TenantChannelAccount): ChannelAccountDraft {
     provider: account.provider,
     displayName: account.displayName ?? "",
     channelAccountId: account.channelAccountId,
+    externalAccountIds: account.externalAccountIds?.join(", ") ?? "",
     externalBusinessId: account.externalBusinessId ?? "",
+    metadata: account.metadata ? JSON.stringify(account.metadata, null, 2) : "",
     enabled: account.enabled,
     automationEnabled: account.automationEnabled === true,
     runtimeEnabled: account.runtimeEnabled === true,
@@ -87,6 +93,16 @@ function toDraft(account: TenantChannelAccount): ChannelAccountDraft {
   };
 }
 
+function parseMetadata(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = JSON.parse(trimmed) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("metadata precisa ser um objeto JSON.");
+  }
+  return parsed as Record<string, string>;
+}
+
 function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
   return drafts.map((draft) => ({
     id: draft.id,
@@ -95,7 +111,12 @@ function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
     provider: draft.provider,
     displayName: draft.displayName.trim() || undefined,
     channelAccountId: draft.channelAccountId.trim(),
+    externalAccountIds: draft.externalAccountIds
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
     externalBusinessId: draft.externalBusinessId.trim() || undefined,
+    metadata: parseMetadata(draft.metadata),
     enabled: draft.enabled,
     automationEnabled: draft.automationEnabled,
     runtimeEnabled: draft.runtimeEnabled,
@@ -347,6 +368,29 @@ export default function TenantChannelsPage() {
                     onChange={(event) => updateDraft(index, "externalBusinessId", event.target.value)}
                     className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
                     placeholder="business id opcional"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                  <span className="text-white/70">Aliases / externalAccountIds</span>
+                  <input
+                    value={draft.externalAccountIds}
+                    onChange={(event) => updateDraft(index, "externalAccountIds", event.target.value)}
+                    className="rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
+                    placeholder="id alternativo recebido no webhook, separado por virgula"
+                  />
+                  <span className="text-xs text-white/50">
+                    Usado quando a Meta envia um ID de webhook diferente do ID Graph principal.
+                  </span>
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                  <span className="text-white/70">Metadata JSON</span>
+                  <textarea
+                    value={draft.metadata}
+                    onChange={(event) => updateDraft(index, "metadata", event.target.value)}
+                    className="min-h-24 rounded-md border border-white/10 bg-re7-navy px-3 py-2 font-mono text-white"
+                    placeholder='{"graphAccountId":"...","webhookAccountId":"..."}'
                   />
                 </label>
 

@@ -4,6 +4,7 @@ import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 
 export type TenantChannelResolution =
   | "matched_enabled"
+  | "matched_alias"
   | "matched_disabled"
   | "matched_pending"
   | "matched_error"
@@ -28,7 +29,9 @@ function redactAccount(account: TenantChannelAccount): TenantChannelAccount {
     provider: account.provider,
     displayName: account.displayName,
     channelAccountId: account.channelAccountId,
+    externalAccountIds: account.externalAccountIds,
     externalBusinessId: account.externalBusinessId,
+    metadata: account.metadata,
     enabled: account.enabled,
     automationEnabled: account.automationEnabled,
     runtimeEnabled: account.runtimeEnabled,
@@ -50,6 +53,12 @@ function classifyAccount(account: TenantChannelAccount): TenantChannelResolution
   return "matched_disabled";
 }
 
+function accountMatchesChannelAccountId(account: TenantChannelAccount, channelAccountId: string) {
+  if (account.channelAccountId === channelAccountId) return "primary" as const;
+  if ((account.externalAccountIds ?? []).includes(channelAccountId)) return "alias" as const;
+  return null;
+}
+
 export function resolveTenantForChannelAccount(params: {
   tenants: TenantConfigMap;
   channel: Channel;
@@ -61,18 +70,28 @@ export function resolveTenantForChannelAccount(params: {
     return { resolution: "not_found" };
   }
 
-  const matches: Array<{ tenantKey: string; account: TenantChannelAccount; resolution: TenantChannelResolution }> = [];
+  const matches: Array<{
+    tenantKey: string;
+    account: TenantChannelAccount;
+    resolution: TenantChannelResolution;
+  }> = [];
   for (const [tenantKey, tenant] of Object.entries(params.tenants)) {
     for (const account of tenant.channelAccounts ?? []) {
+      const matchType =
+        account.channel === params.channel && account.provider === params.provider
+          ? accountMatchesChannelAccountId(account, channelAccountId)
+          : null;
       if (
-        account.channel === params.channel &&
-        account.provider === params.provider &&
-        account.channelAccountId === channelAccountId
+        matchType
       ) {
+        const classified = classifyAccount(account);
         matches.push({
           tenantKey: tenant.id || tenantKey,
           account,
-          resolution: classifyAccount(account),
+          resolution:
+            matchType === "alias" && classified === "matched_enabled"
+              ? "matched_alias"
+              : classified,
         });
       }
     }
@@ -82,7 +101,9 @@ export function resolveTenantForChannelAccount(params: {
     return { resolution: "not_found" };
   }
 
-  const activeMatches = matches.filter((match) => match.resolution === "matched_enabled");
+  const activeMatches = matches.filter(
+    (match) => match.resolution === "matched_enabled" || match.resolution === "matched_alias"
+  );
   if (activeMatches.length > 1) {
     return { resolution: "ambiguous" };
   }
