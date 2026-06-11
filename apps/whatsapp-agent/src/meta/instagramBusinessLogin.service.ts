@@ -516,7 +516,12 @@ export async function validateInstagramBusinessConnection(params: {
     ? INSTAGRAM_BUSINESS_SCOPES.filter((scope) => !grantedScopes.has(scope))
     : [];
   return {
-    ok: tokenStatus === "configured" && instagramBusinessIdentityValidated,
+    ok:
+      tokenStatus === "configured" &&
+      instagramBusinessIdentityValidated &&
+      errors.length === 0 &&
+      capabilities.conversations === "available" &&
+      capabilities.messages === "available",
     checkedAt,
     tokenStatus,
     tokenDiagnostics: {
