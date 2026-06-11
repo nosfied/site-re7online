@@ -72,6 +72,20 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   );
 }
 
+function formatValidationPendingItem(item: { stage: string; message: string }) {
+  if (item.stage === "conversations_capability") {
+    return {
+      label: "Instagram Direct capability",
+      message:
+        "A identidade Instagram foi validada, mas a Meta ainda nao liberou a capability de conversas/mensagens para este app ou estado de review.",
+    };
+  }
+  return {
+    label: item.stage,
+    message: item.message,
+  };
+}
+
 function AppInstagramChannelSettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -181,7 +195,7 @@ function AppInstagramChannelSettingsContent() {
       if (response.validation.ok) {
         setSuccess("Instagram Business validado com sucesso.");
       } else {
-        setError("A validacao encontrou pendencias. Veja os detalhes abaixo.");
+        setError("Instagram conectado, com pendencias de capability da Meta. Veja os detalhes abaixo.");
       }
     } catch (err) {
       const typed = err as AppApiError;
@@ -399,11 +413,14 @@ function AppInstagramChannelSettingsContent() {
               <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-500/10 p-3">
                 <p className="text-sm font-semibold text-amber-100">Pending items</p>
                 <ul className="mt-2 space-y-2 text-sm text-amber-50/85">
-                  {validation.errors.map((item, index) => (
-                    <li key={`${item.stage}-${index}`}>
-                      <span className="font-semibold">{item.stage}:</span> {item.message}
-                    </li>
-                  ))}
+                  {validation.errors.map((item, index) => {
+                    const formatted = formatValidationPendingItem(item);
+                    return (
+                      <li key={`${item.stage}-${index}`}>
+                        <span className="font-semibold">{formatted.label}:</span> {formatted.message}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ) : null}
