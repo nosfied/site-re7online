@@ -22,9 +22,10 @@ function createFakePrisma() {
   const runtimeStates = new Map<string, any>();
   const contacts = new Map<string, any>();
   const leads = new Map<string, any>();
+  const outboundMessages = new Map<string, any>();
 
   return {
-    state: { inboundMessages, conversations, runtimeStates, contacts, leads },
+    state: { inboundMessages, conversations, runtimeStates, contacts, leads, outboundMessages },
     client: {
       async findUnique(args: any) {
         return args.where.clientKey === client.clientKey ? client : null;
@@ -53,6 +54,26 @@ function createFakePrisma() {
         const item = { id: `inbound-${inboundMessages.size + 1}`, ...args.data };
         inboundMessages.set(`${item.clientId}:${item.messageId}`, item);
         return { id: item.id };
+      },
+    },
+    outboundMessage: {
+      async findFirst(args: any) {
+        const items = Array.from(outboundMessages.values());
+        return (
+          items.find((item) => {
+            if (args.where.clientId && item.clientId !== args.where.clientId) return false;
+            if (args.where.channel && item.channel !== args.where.channel) return false;
+            const clauses = Array.isArray(args.where.OR) ? args.where.OR : [];
+            if (clauses.length === 0) return true;
+            return clauses.some((clause: any) => {
+              if (clause.metaMessageId !== undefined && item.metaMessageId === clause.metaMessageId) return true;
+              if (clause.externalMessageId !== undefined && item.externalMessageId === clause.externalMessageId) {
+                return true;
+              }
+              return false;
+            });
+          }) ?? null
+        );
       },
     },
     conversation: {
@@ -241,6 +262,39 @@ test("persistInstagramInboundEvent persists Instagram inbound once and dedupes b
   assert.equal(realtimeEvents[0].message.direction, "INBOUND");
   assert.equal(realtimeEvents[0].message.messageId, inbound.messageId);
   assert.equal(realtimeEvents[0].message.bodyText, "olá instagram");
+});
+
+test("persistInstagramInboundEvent ignores Instagram outbound echo callbacks by provider message id", async () => {
+  const prisma = createFakePrisma();
+  prisma.state.outboundMessages.set("outbound-1", {
+    id: "outbound-1",
+    clientId: "client-1",
+    channel: "instagram",
+    metaMessageId: "ig-outbound-mid-1",
+    externalMessageId: "ig-outbound-mid-1",
+  });
+
+  const result = await persistInstagramInboundEvent({
+    prisma: prisma as any,
+    event: {
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "ig-alias-account",
+      externalUserId: "ig-user-001",
+      externalMessageId: "ig-outbound-mid-1",
+      text: "resposta enviada pelo operador",
+      timestamp: "2026-05-17T10:01:00.000Z",
+    },
+    tenantKey: "tenant-a",
+    account: enabledAccount,
+    requestId: "req-echo",
+  });
+
+  assert.equal(result.persisted, false);
+  assert.equal(result.reason, "outbound_echo");
+  assert.equal(prisma.state.inboundMessages.size, 0);
+  assert.equal(prisma.state.conversations.size, 0);
 });
 
 test("persistInstagramInboundEvent does not persist when the account flag is off", async () => {

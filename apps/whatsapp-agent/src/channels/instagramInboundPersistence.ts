@@ -22,6 +22,7 @@ export type InstagramInboundPersistenceReason =
   | "inbound_persistence_disabled"
   | "tenant_missing"
   | "client_missing"
+  | "outbound_echo"
   | "duplicate_message"
   | "persisted";
 
@@ -210,6 +211,33 @@ export async function persistInstagramInboundEvent(params: {
     timestamp: event.timestamp,
   });
   const createdAt = normalizeDate(event.timestamp);
+  if (event.externalMessageId) {
+    const outboundEcho = await prisma.outboundMessage.findFirst({
+      where: {
+        clientId: client.id,
+        channel: "instagram",
+        OR: [{ metaMessageId: event.externalMessageId }, { externalMessageId: event.externalMessageId }],
+      },
+      select: { id: true },
+    });
+    if (outboundEcho) {
+      logPersistence({
+        event: "instagram.inbound_persistence.blocked",
+        requestId,
+        tenantKey,
+        channelAccountId: event.channelAccountId,
+        externalMessageId: event.externalMessageId,
+        externalUserHash,
+        reason: "outbound_echo",
+      });
+      return {
+        persisted: false,
+        reason: "outbound_echo",
+        syntheticWaId,
+        inboundMessageId: outboundEcho.id,
+      };
+    }
+  }
   const channelFields = {
     channel: "instagram",
     provider: "meta",
