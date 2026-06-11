@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildInstagramSyntheticWaId,
+  fetchInstagramUserProfile,
   persistInstagramInboundEvent,
   resolveInstagramInboundPersistenceGate,
 } from "./instagramInboundPersistence.js";
@@ -111,6 +112,7 @@ const enabledAccount = validateTenantChannelAccount({
   inboundPersistenceEnabled: true,
   outboundEnabled: false,
   status: "connected",
+  instagramBusinessAccessToken: "ig-business-token",
 });
 
 test("resolveInstagramInboundPersistenceGate blocks unless inbound persistence is explicit", () => {
@@ -140,6 +142,44 @@ test("buildInstagramSyntheticWaId uses hash only", () => {
   assert.equal(synthetic.includes("ig-user"), false);
 });
 
+test("fetchInstagramUserProfile resolves display name without exposing token", async () => {
+  let requestedUrl = "";
+  let authorizationHeader = "";
+  const result = await fetchInstagramUserProfile({
+    instagramBusinessAccessToken: "ig-business-token",
+    externalUserId: "ig-user-001",
+    fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrl = String(url);
+      authorizationHeader = String(init?.headers instanceof Headers
+        ? init.headers.get("authorization")
+        : (init?.headers as Record<string, string> | undefined)?.Authorization ?? "");
+      return new Response(JSON.stringify({ name: "Maria Instagram", username: "maria.ig" }), { status: 200 });
+    }) as typeof fetch,
+  });
+
+  assert.equal(result.displayName, "Maria Instagram");
+  assert.equal(requestedUrl.includes("ig-user-001"), true);
+  assert.equal(requestedUrl.includes("fields=name%2Cusername"), true);
+  assert.equal(requestedUrl.includes("ig-business-token"), false);
+  assert.equal(authorizationHeader, "Bearer ig-business-token");
+});
+
+test("fetchInstagramUserProfile falls back to username and fails open", async () => {
+  const byUsername = await fetchInstagramUserProfile({
+    instagramBusinessAccessToken: "ig-business-token",
+    externalUserId: "ig-user-001",
+    fetchImpl: (async () => new Response(JSON.stringify({ username: "re7online" }), { status: 200 })) as typeof fetch,
+  });
+  const unavailable = await fetchInstagramUserProfile({
+    instagramBusinessAccessToken: "ig-business-token",
+    externalUserId: "ig-user-001",
+    fetchImpl: (async () => new Response("denied", { status: 403 })) as typeof fetch,
+  });
+
+  assert.equal(byUsername.displayName, "@re7online");
+  assert.equal(unavailable.displayName, null);
+});
+
 test("persistInstagramInboundEvent persists Instagram inbound once and dedupes by mid", async () => {
   const prisma = createFakePrisma();
   const realtimeEvents: any[] = [];
@@ -160,6 +200,7 @@ test("persistInstagramInboundEvent persists Instagram inbound once and dedupes b
     tenantKey: "tenant-a",
     account: enabledAccount,
     requestId: "req-1",
+    fetchImpl: (async () => new Response(JSON.stringify({ username: "cliente.re7" }), { status: 200 })) as typeof fetch,
     publishRealtimeEvent: (event: any) => {
       realtimeEvents.push(event);
     },
@@ -186,8 +227,8 @@ test("persistInstagramInboundEvent persists Instagram inbound once and dedupes b
   assert.equal(runtime.mode, "HUMAN");
   assert.equal(runtime.status, "WAITING");
   assert.equal(inbound.externalMessageId, "ig-mid-1");
-  assert.equal(contact.name, "Contato Instagram");
-  assert.equal(lead.name, "Contato Instagram");
+  assert.equal(contact.name, "@cliente.re7");
+  assert.equal(lead.name, "@cliente.re7");
   assert.equal(JSON.stringify({ conversation, runtime, inbound }).includes("ig-user-001"), false);
   assert.equal(realtimeEvents.length, 1);
   assert.equal(realtimeEvents[0].type, "message.created");

@@ -8,6 +8,7 @@ import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
 import { canPersistChannelInbound } from "./tenantChannelAccount.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import { env } from "../config/env.js";
 
 export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Instagram ainda não está habilitado neste canal.";
@@ -36,6 +37,10 @@ export type InstagramInboundPersistenceResult = {
 
 type PrismaLike = ReturnType<typeof getPrisma>;
 
+export type InstagramUserProfile = {
+  displayName: string | null;
+};
+
 function hashExternalUserId(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 32);
 }
@@ -48,6 +53,41 @@ function normalizeDate(value?: string | null) {
 
 function sanitizeMessageIdPart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 160);
+}
+
+function normalizeInstagramProfileName(profile: unknown) {
+  if (!profile || typeof profile !== "object") return null;
+  const data = profile as { name?: unknown; username?: unknown };
+  const name = typeof data.name === "string" ? data.name.trim().replace(/\s+/g, " ").slice(0, 120) : "";
+  if (name) return name;
+  const username =
+    typeof data.username === "string" ? data.username.trim().replace(/^@+/, "").replace(/\s+/g, "").slice(0, 120) : "";
+  return username ? `@${username}` : null;
+}
+
+export async function fetchInstagramUserProfile(params: {
+  instagramBusinessAccessToken?: string | null;
+  externalUserId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<InstagramUserProfile> {
+  const token = params.instagramBusinessAccessToken?.trim();
+  const externalUserId = params.externalUserId.trim();
+  if (!token || !externalUserId) return { displayName: null };
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const url = new URL(`https://graph.instagram.com/${env.WHATSAPP_API_VERSION}/${encodeURIComponent(externalUserId)}`);
+  url.searchParams.set("fields", "name,username");
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) return { displayName: null };
+    const profile = await response.json().catch(() => null);
+    return { displayName: normalizeInstagramProfileName(profile) };
+  } catch {
+    return { displayName: null };
+  }
 }
 
 export function buildInstagramSyntheticWaId(externalUserHash: string) {
@@ -121,6 +161,7 @@ export async function persistInstagramInboundEvent(params: {
   tenantKey: string;
   account?: TenantChannelAccount | null;
   requestId: string;
+  fetchImpl?: typeof fetch;
   publishRealtimeEvent?: typeof publishRealtimeEvent;
 }): Promise<InstagramInboundPersistenceResult> {
   const { event, tenantKey, requestId } = params;
@@ -177,6 +218,12 @@ export async function persistInstagramInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
+  const profile = await fetchInstagramUserProfile({
+    instagramBusinessAccessToken: params.account?.instagramBusinessAccessToken,
+    externalUserId: event.externalUserId,
+    fetchImpl: params.fetchImpl,
+  });
+  const displayName = profile.displayName;
 
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
@@ -284,11 +331,12 @@ export async function persistInstagramInboundEvent(params: {
       create: {
         clientId: client.id,
         waId: syntheticWaId,
-        name: "Contato Instagram",
+        name: displayName ?? "Contato Instagram",
         ...channelFields,
       },
       update: {
         ...channelFields,
+        ...(displayName ? { name: displayName } : {}),
       },
       select: { id: true },
     }),
@@ -298,7 +346,7 @@ export async function persistInstagramInboundEvent(params: {
         tenantId: client.id,
         waId: syntheticWaId,
         waIdCanonical: syntheticWaId,
-        name: "Contato Instagram",
+        name: displayName ?? "Contato Instagram",
         phone: null,
         status: "NEW",
         ...channelFields,
@@ -306,6 +354,7 @@ export async function persistInstagramInboundEvent(params: {
       update: {
         waIdCanonical: syntheticWaId,
         ...channelFields,
+        ...(displayName ? { name: displayName } : {}),
       },
       select: { id: true },
     }),
