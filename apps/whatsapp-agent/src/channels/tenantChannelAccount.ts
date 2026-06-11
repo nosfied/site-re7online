@@ -26,6 +26,7 @@ type TenantChannelAccountInput = Partial<Omit<TenantChannelAccount, "externalAcc
   token?: unknown;
   accessToken?: unknown;
   pageAccessToken?: unknown;
+  instagramBusinessAccessToken?: unknown;
   longLivedToken?: unknown;
   businessToken?: unknown;
 };
@@ -105,6 +106,7 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
 
   const enabled = normalizeBoolean(input.enabled, false);
   const pageAccessToken = sanitizeSecret(input.pageAccessToken);
+  const instagramBusinessAccessToken = sanitizeSecret(input.instagramBusinessAccessToken);
   const status = normalizeStatus(
     input.status,
     ACCOUNT_STATUSES,
@@ -136,10 +138,11 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
     aiEnabled: normalizeBoolean(input.aiEnabled, false),
     handoffEnabled: normalizeBoolean(input.handoffEnabled, false),
     status,
-    tokenStatus: pageAccessToken
+    tokenStatus: pageAccessToken || instagramBusinessAccessToken
       ? "configured"
       : normalizeStatus(input.tokenStatus, TOKEN_STATUSES, "missing"),
     pageAccessToken,
+    instagramBusinessAccessToken,
     createdAt: sanitizeText(input.createdAt, 40),
     updatedAt: sanitizeText(input.updatedAt, 40),
   } satisfies TenantChannelAccount;
@@ -147,6 +150,10 @@ export function normalizeTenantChannelAccount(input: TenantChannelAccountInput) 
 
 function hasIncomingPageAccessToken(input: TenantChannelAccountInput) {
   return typeof input.pageAccessToken === "string" && input.pageAccessToken.trim().length > 0;
+}
+
+function hasIncomingInstagramBusinessAccessToken(input: TenantChannelAccountInput) {
+  return typeof input.instagramBusinessAccessToken === "string" && input.instagramBusinessAccessToken.trim().length > 0;
 }
 
 function buildAccountKey(account: {
@@ -159,7 +166,11 @@ function buildAccountKey(account: {
 }
 
 export function redactTenantChannelAccount(account: TenantChannelAccount): TenantChannelAccount {
-  const { pageAccessToken: _pageAccessToken, ...redacted } = account;
+  const {
+    pageAccessToken: _pageAccessToken,
+    instagramBusinessAccessToken: _instagramBusinessAccessToken,
+    ...redacted
+  } = account;
   return redacted;
 }
 
@@ -199,8 +210,14 @@ export function normalizeTenantChannelAccountsForTenant(
       pageAccessToken: hasIncomingPageAccessToken(item)
         ? item.pageAccessToken
         : existing?.pageAccessToken,
+      instagramBusinessAccessToken: hasIncomingInstagramBusinessAccessToken(item)
+        ? item.instagramBusinessAccessToken
+        : existing?.instagramBusinessAccessToken,
       tokenStatus:
-        hasIncomingPageAccessToken(item) || existing?.pageAccessToken
+        hasIncomingPageAccessToken(item) ||
+        hasIncomingInstagramBusinessAccessToken(item) ||
+        existing?.pageAccessToken ||
+        existing?.instagramBusinessAccessToken
           ? "configured"
           : item.tokenStatus,
     });

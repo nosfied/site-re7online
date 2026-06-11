@@ -45,6 +45,43 @@ export type AppPushStatus = {
   subscriptions: number;
 };
 
+export type AppInstagramBusinessStatus = {
+  channelAccountId: string | null;
+  externalAccountIds: string[];
+  username: string | null;
+  facebookPageId: string | null;
+  tokenStatus: "configured" | "missing" | "expired" | "not_required" | string;
+  enabled: boolean;
+  runtimeEnabled: boolean;
+  inboundPersistenceEnabled: boolean;
+  outboundEnabled: boolean;
+  aiEnabled: boolean;
+  handoffEnabled: boolean;
+  metadata: Record<string, string>;
+};
+
+export type AppInstagramBusinessValidation = {
+  ok: boolean;
+  checkedAt: string;
+  tokenStatus: "configured" | "missing" | "invalid";
+  requiredScopes: string[];
+  grantedScopes: string[];
+  missingScopes: string[];
+  account: {
+    id: string | null;
+    username: string | null;
+  };
+  capabilities: {
+    conversations: "available" | "blocked" | "unknown";
+    messages: "available" | "blocked" | "unknown";
+  };
+  webhook: {
+    callbackConfigured: boolean;
+    expectedCallbackUrl: string;
+  };
+  errors: Array<{ stage: string; message: string; code?: number | null; type?: string | null }>;
+};
+
 export type AppApiError = Error & {
   status?: number;
   errorCode?: string;
@@ -1250,6 +1287,40 @@ export async function exportAppConversationReportCsv(
   if (params.dedupe) query.set("dedupe", "true");
   if (params.channel) query.set("channel", params.channel);
   return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
+}
+
+export async function fetchAppInstagramBusinessStatus(
+  session: AppSession
+): Promise<{
+  ok: true;
+  redirectUri: string;
+  status: AppInstagramBusinessStatus;
+}> {
+  return requestAppJson(session, "/app/channels/instagram/status");
+}
+
+export async function startAppInstagramBusinessConnect(
+  session: AppSession
+): Promise<{
+  ok: true;
+  authUrl: string;
+  redirectUri: string;
+  scopes: string[];
+}> {
+  return requestAppJson(session, "/app/channels/instagram/connect/start", {
+    method: "POST",
+  });
+}
+
+export async function validateAppInstagramBusinessConnection(
+  session: AppSession
+): Promise<{
+  ok: boolean;
+  validation: AppInstagramBusinessValidation;
+}> {
+  return requestAppJson(session, "/app/channels/instagram/validate", {
+    method: "POST",
+  });
 }
 
 export async function createAppDepartment(

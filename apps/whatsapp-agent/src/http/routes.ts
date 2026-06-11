@@ -52,6 +52,14 @@ import {
   subscribeMetaWabaToApp,
 } from "../meta/onboarding.service.js";
 import {
+  buildInstagramBusinessLoginAuthUrl,
+  buildInstagramBusinessStatus,
+  completeInstagramBusinessLogin,
+  createInstagramBusinessLoginState,
+  getInstagramBusinessRedirectUri,
+  validateInstagramBusinessConnection,
+} from "../meta/instagramBusinessLogin.service.js";
+import {
   submitTemplateToMeta,
   MetaTemplateServiceError,
   MetaTemplateValidationError,
@@ -170,6 +178,15 @@ const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
 };
 
 const noisyLogState = new Map<string, { lastLoggedAt: number; suppressedCount: number }>();
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function normalizeConversationRouteId(input: string) {
   const raw = input.trim();
@@ -417,6 +434,60 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (
+    req.method === "GET" &&
+    (pathname === "/meta/instagram/oauth/callback" ||
+      pathname === "/agent-api/meta/instagram/oauth/callback")
+  ) {
+    const error = typeof query.error === "string" ? query.error : "";
+    const errorDescription =
+      typeof query.error_description === "string" ? query.error_description : "";
+    const code = typeof query.code === "string" ? query.code.trim() : "";
+    const state = typeof query.state === "string" ? query.state.trim() : "";
+    try {
+      if (error) {
+        throw new Error(errorDescription || error);
+      }
+      if (!code || !state) {
+        throw new Error("instagram_oauth_callback_missing_code_or_state");
+      }
+      const result = await completeInstagramBusinessLogin({ code, state });
+      const returnUrl = new URL(result.returnPath, "https://converta.re7online.com");
+      returnUrl.searchParams.set("instagramConnect", "success");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html>
+<html lang="pt-BR">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Instagram conectado</title></head>
+  <body style="font-family:Arial,sans-serif;background:#07111f;color:#fff;padding:32px">
+    <main style="max-width:640px;margin:0 auto">
+      <h1>Instagram Business conectado</h1>
+      <p>A conexao foi salva com seguranca. Nenhum token foi exposto.</p>
+      <p><a style="color:#f97316" href="${returnUrl.pathname}${returnUrl.search}">Voltar para o Converta</a></p>
+    </main>
+  </body>
+</html>`);
+    } catch (callbackError) {
+      logger.warn({
+        event: "instagram.business_login.callback_failed",
+        requestId,
+        reason: (callbackError as Error).message,
+      });
+      res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html>
+<html lang="pt-BR">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Falha na conexao Instagram</title></head>
+  <body style="font-family:Arial,sans-serif;background:#07111f;color:#fff;padding:32px">
+    <main style="max-width:640px;margin:0 auto">
+      <h1>Nao foi possivel conectar o Instagram</h1>
+      <p>${escapeHtml((callbackError as Error).message)}</p>
+      <p><a style="color:#f97316" href="/app/settings/channels/instagram?instagramConnect=error">Voltar para o Converta</a></p>
+    </main>
+  </body>
+</html>`);
+    }
+    return;
+  }
+
   if (pathname.startsWith("/app/")) {
     const validation = await validateAppSessionFromRequest(req);
     if (!validation.ok) {
@@ -427,6 +498,84 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (req.method === "GET" && pathname === "/app/channels/instagram/status") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role) && !isSupervisorRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN ou SUPERVISOR pode ver a conexao Instagram." });
+      return;
+    }
+    const prisma = getPrisma();
+    const client = await getScopedClientById(prisma, clientAuth.clientId);
+    if (!client) {
+      json(res, 404, { error: "client_not_found" });
+      return;
+    }
+    const tenants = await getTenants();
+    json(res, 200, {
+      ok: true,
+      redirectUri: getInstagramBusinessRedirectUri(),
+      status: buildInstagramBusinessStatus(tenants[client.clientKey]),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/channels/instagram/connect/start") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role) && !isSupervisorRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN ou SUPERVISOR pode conectar Instagram." });
+      return;
+    }
+    const prisma = getPrisma();
+    const client = await getScopedClientById(prisma, clientAuth.clientId);
+    if (!client) {
+      json(res, 404, { error: "client_not_found" });
+      return;
+    }
+    const state = createInstagramBusinessLoginState({
+      tenantKey: client.clientKey,
+      userId: clientAuth.userId,
+      returnPath: "/app/settings/channels/instagram",
+    });
+    const authUrl = buildInstagramBusinessLoginAuthUrl({ state });
+    logger.info({
+      event: "instagram.business_login.start",
+      requestId,
+      tenantKey: client.clientKey,
+      userId: clientAuth.userId,
+    });
+    json(res, 200, {
+      ok: true,
+      authUrl,
+      redirectUri: getInstagramBusinessRedirectUri(),
+      scopes: [
+        "instagram_business_basic",
+        "instagram_business_manage_messages",
+        "instagram_manage_comments",
+      ],
+    });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/channels/instagram/validate") {
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminRole(clientAuth.role) && !isSupervisorRole(clientAuth.role)) {
+      json(res, 403, { error: "forbidden", message: "Apenas ADMIN ou SUPERVISOR pode validar Instagram." });
+      return;
+    }
+    const prisma = getPrisma();
+    const client = await getScopedClientById(prisma, clientAuth.clientId);
+    if (!client) {
+      json(res, 404, { error: "client_not_found" });
+      return;
+    }
+    const validation = await validateInstagramBusinessConnection({ tenantKey: client.clientKey });
+    json(res, 200, { ok: validation.ok, validation });
+    return;
   }
 
   if (

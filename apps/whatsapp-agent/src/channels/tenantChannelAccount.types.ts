@@ -24,6 +24,7 @@ export type TenantChannelAccount = {
   status?: TenantChannelAccountStatus;
   tokenStatus?: TenantChannelTokenStatus;
   pageAccessToken?: string;
+  instagramBusinessAccessToken?: string;
   createdAt?: string;
   updatedAt?: string;
 };

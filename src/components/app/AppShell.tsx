@@ -116,6 +116,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "CRM", government: "CRM" },
   },
   {
+    href: "/app/settings/channels/instagram",
+    icon: "📷",
+    group: "administration",
+    minRole: "SUPERVISOR",
+    labels: { business: "Canais", government: "Canais" },
+  },
+  {
     href: "/app/settings/privacy",
     icon: "🔒",
     group: "administration",
