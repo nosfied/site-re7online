@@ -46,6 +46,17 @@ const TOKEN_STATUS_OPTIONS: Array<NonNullable<TenantChannelAccount["tokenStatus"
   "expired",
   "missing",
 ];
+const NEW_TENANT_CHECKLIST = [
+  "Cadastrar channelAccount e aliases tecnicos.",
+  "Conectar/autenticar a conta do canal.",
+  "Validar token, identidade e IDs exibidos.",
+  "Validar webhook/subscription.",
+  "Testar inbound real.",
+  "Testar outbound manual antes de ativar Outbound.",
+  "Ativar enabled, runtimeEnabled e inboundPersistenceEnabled.",
+  "Manter IA, automacao e handoff desligados por padrao em Messenger/Instagram.",
+  "Registrar a validacao segura sem expor tokens.",
+];
 
 function createDraft(): ChannelAccountDraft {
   return {
@@ -150,6 +161,68 @@ function getValidationError(drafts: ChannelAccountDraft[]) {
 
 function formatLabel(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function StatusBadge({
+  label,
+  tone = "neutral",
+}: {
+  label: string;
+  tone?: "success" | "warning" | "danger" | "neutral";
+}) {
+  const classes =
+    tone === "success"
+      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-100"
+      : tone === "warning"
+        ? "border-amber-300/30 bg-amber-500/15 text-amber-100"
+        : tone === "danger"
+          ? "border-red-400/30 bg-red-500/15 text-red-100"
+          : "border-white/15 bg-white/5 text-white/70";
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
+}
+
+function getFlagTone(active: boolean, positiveWhenActive = true) {
+  if (positiveWhenActive) return active ? "success" : "warning";
+  return active ? "warning" : "success";
+}
+
+function getTokenTone(status: ChannelAccountDraft["tokenStatus"], hasNewToken: boolean) {
+  if (hasNewToken) return "success";
+  if (status === "configured" || status === "not_required") return "success";
+  if (status === "expired" || status === "missing") return "warning";
+  return "neutral";
+}
+
+function getStatusTone(status: ChannelAccountDraft["status"], enabled: boolean) {
+  if (status === "connected" && enabled) return "success";
+  if (status === "error") return "danger";
+  if (status === "pending") return "warning";
+  return "neutral";
+}
+
+function getChannelModeNote(draft: ChannelAccountDraft) {
+  if (draft.channel === "messenger" || draft.channel === "instagram") {
+    return "Human-only recomendado: sem IA, sem automacao e sem handoff automatico.";
+  }
+  if (draft.channel === "whatsapp") return "WhatsApp usa o runtime operacional principal do tenant.";
+  return "Canal multichannel.";
+}
+
+function getChannelWarnings(draft: ChannelAccountDraft, metadata: Record<string, string>) {
+  const warnings: string[] = [];
+  if ((draft.channel === "messenger" || draft.channel === "instagram") && draft.outboundEnabled) {
+    warnings.push("Outbound ligado: confirme que houve smoke de envio manual antes de manter ativo.");
+  }
+  if ((draft.channel === "messenger" || draft.channel === "instagram") && (draft.aiEnabled || draft.automationEnabled || draft.handoffEnabled)) {
+    warnings.push("Messenger/Instagram devem permanecer human-only por padrao.");
+  }
+  if (draft.tokenStatus === "configured" && !draft.pageAccessToken.trim()) {
+    warnings.push("Token configurado no backend. O valor nao e exibido nem retornado pela API.");
+  }
+  if (draft.channel === "instagram" && metadata.source === "instagram_business_login" && !metadata.businessLoginUsername) {
+    warnings.push("Instagram Business Login sem businessLoginUsername em metadata.");
+  }
+  return warnings;
 }
 
 function TechnicalValue({ label, value }: { label: string; value?: string | null }) {
@@ -276,7 +349,7 @@ export default function TenantChannelsPage() {
 
         <section className="rounded-xl border border-amber-400/30 bg-amber-900/20 p-4 text-sm text-amber-100">
           <strong>Ativação controlada.</strong> Runtime real exige Ativo e Runtime ligados.
-          Envio manual por Messenger exige Outbound e token configurado. Tokens nunca sao exibidos
+          Envio manual por Messenger/Instagram exige Outbound e token configurado. Tokens nunca sao exibidos
           de volta no console.
         </section>
 
@@ -290,9 +363,33 @@ export default function TenantChannelsPage() {
               href="/app/settings/channels/instagram"
               className="inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
             >
-              Abrir onboarding Instagram
+              Temporary Meta Review connection flow
             </Link>
           </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
+                Checklist de novo tenant
+              </h2>
+              <p className="mt-1 text-sm text-white/65">
+                Processo operacional para preparar canais sem expor token nem ativar outbound antes do smoke.
+              </p>
+            </div>
+            <span className="rounded-full border border-white/15 bg-re7-navy/50 px-3 py-1 text-xs font-semibold text-white/70">
+              Fonte tecnica: console interno
+            </span>
+          </div>
+          <ol className="mt-3 grid gap-2 text-sm text-white/75 md:grid-cols-2">
+            {NEW_TENANT_CHECKLIST.map((item, itemIndex) => (
+              <li key={item} className="flex gap-2 rounded-lg border border-white/10 bg-re7-navy/35 px-3 py-2">
+                <span className="font-mono text-xs text-re7-orange">{itemIndex + 1}</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ol>
         </section>
 
         {error ? (
@@ -330,14 +427,18 @@ export default function TenantChannelsPage() {
           {drafts.map((draft, index) => {
             const metadata = parseMetadataPreview(draft.metadata);
             const source = metadata.source;
+            const warnings = getChannelWarnings(draft, metadata);
             return (
             <section key={draft.id || index} className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-wide text-white/60">
-                    Conta {index + 1}
+                  <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white/60">
+                    <span>Conta {index + 1}</span>
+                    <StatusBadge label={draft.channel} />
+                    <StatusBadge label={draft.status} tone={getStatusTone(draft.status, draft.enabled)} />
                   </h2>
                   <p className="mt-1 font-mono text-xs text-white/50">{draft.id}</p>
+                  <p className="mt-2 text-sm text-white/65">{getChannelModeNote(draft)}</p>
                 </div>
                 <button
                   type="button"
@@ -348,16 +449,71 @@ export default function TenantChannelsPage() {
                 </button>
               </div>
 
+              <div className="mb-4 flex flex-wrap gap-2">
+                <StatusBadge label={draft.enabled ? "enabled" : "disabled"} tone={getFlagTone(draft.enabled)} />
+                <StatusBadge label={draft.runtimeEnabled ? "runtime on" : "runtime off"} tone={getFlagTone(draft.runtimeEnabled)} />
+                <StatusBadge
+                  label={draft.inboundPersistenceEnabled ? "inbound on" : "inbound off"}
+                  tone={getFlagTone(draft.inboundPersistenceEnabled)}
+                />
+                <StatusBadge label={draft.outboundEnabled ? "outbound on" : "outbound off"} tone={getFlagTone(draft.outboundEnabled)} />
+                <StatusBadge label={draft.aiEnabled ? "IA on" : "IA off"} tone={getFlagTone(draft.aiEnabled, false)} />
+                <StatusBadge
+                  label={draft.automationEnabled ? "automacao on" : "automacao off"}
+                  tone={getFlagTone(draft.automationEnabled, false)}
+                />
+                <StatusBadge label={draft.handoffEnabled ? "handoff on" : "handoff off"} tone={getFlagTone(draft.handoffEnabled, false)} />
+                <StatusBadge
+                  label={`token ${formatLabel(draft.tokenStatus)}`}
+                  tone={getTokenTone(draft.tokenStatus, Boolean(draft.pageAccessToken.trim()))}
+                />
+              </div>
+
+              {warnings.length ? (
+                <div className="mb-4 rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  <p className="font-semibold">Avisos operacionais</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <dl className="mb-4 grid gap-2 md:grid-cols-3">
                 <TechnicalValue label="channelAccountId" value={draft.channelAccountId} />
                 <TechnicalValue label="externalAccountIds" value={draft.externalAccountIds} />
                 <TechnicalValue label="graphAccountId" value={metadata.graphAccountId} />
                 <TechnicalValue label="webhookAccountId" value={metadata.webhookAccountId} />
                 <TechnicalValue label="facebookPageId" value={metadata.facebookPageId} />
+                <TechnicalValue label="instagramBusinessLoginId" value={metadata.instagramBusinessLoginId} />
                 <TechnicalValue label="username" value={metadata.username} />
+                <TechnicalValue label="businessLoginUsername" value={metadata.businessLoginUsername} />
                 <TechnicalValue label="tokenStatus" value={draft.tokenStatus} />
                 <TechnicalValue label="source" value={source} />
               </dl>
+
+              {draft.channel === "instagram" ? (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <Link
+                    href="/app/settings/channels/instagram"
+                    className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
+                  >
+                    Temporary Meta Review connection flow
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigator.clipboard?.writeText(
+                        "https://converta.re7online.com/agent-api/meta/instagram/oauth/callback"
+                      )
+                    }
+                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                  >
+                    Copy redirect URI
+                  </button>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm">
