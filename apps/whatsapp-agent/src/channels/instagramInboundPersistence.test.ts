@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildInstagramSyntheticWaId,
   fetchInstagramUserProfile,
+  instagramProviderMessageIdsMatchForEcho,
   persistInstagramInboundEvent,
   resolveInstagramInboundPersistenceGate,
 } from "./instagramInboundPersistence.js";
@@ -74,6 +75,16 @@ function createFakePrisma() {
             });
           }) ?? null
         );
+      },
+      async findMany(args: any) {
+        return Array.from(outboundMessages.values()).filter((item) => {
+          if (args.where.clientId && item.clientId !== args.where.clientId) return false;
+          if (args.where.channel && item.channel !== args.where.channel) return false;
+          const createdAt = item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt ?? 0);
+          if (args.where.createdAt?.gte && createdAt < args.where.createdAt.gte) return false;
+          if (args.where.createdAt?.lte && createdAt > args.where.createdAt.lte) return false;
+          return true;
+        });
       },
     },
     conversation: {
@@ -201,6 +212,22 @@ test("fetchInstagramUserProfile falls back to username and fails open", async ()
   assert.equal(unavailable.displayName, null);
 });
 
+test("instagramProviderMessageIdsMatchForEcho treats principal and webhook alias ids as the same sender echo", () => {
+  const aliasMessageId =
+    "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAyMzg2MzMwMjkzOjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTY0NjE2MTI3MTM2MDM1NjozMjg1NzEwMzU0MDc4ODU4MTM5NTk2NjAzNDI5OTU4NDUxMgZDZD";
+  const principalMessageId =
+    "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDcwNzkwNzY2MDQ4OjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTY0NjE2MTI3MTM2MDM1NjozMjg1NzEwMzU0MDc4ODU4MTM5NTk2NjAzNDI5OTU4NDUxMgZDZD";
+
+  assert.equal(
+    instagramProviderMessageIdsMatchForEcho({
+      incomingMessageId: aliasMessageId,
+      outboundMessageId: principalMessageId,
+      accountIds: ["17841470790766048", "17841402386330293"],
+    }),
+    true
+  );
+});
+
 test("persistInstagramInboundEvent persists Instagram inbound once and dedupes by mid", async () => {
   const prisma = createFakePrisma();
   const realtimeEvents: any[] = [];
@@ -289,6 +316,57 @@ test("persistInstagramInboundEvent ignores Instagram outbound echo callbacks by 
     tenantKey: "tenant-a",
     account: enabledAccount,
     requestId: "req-echo",
+  });
+
+  assert.equal(result.persisted, false);
+  assert.equal(result.reason, "outbound_echo");
+  assert.equal(prisma.state.inboundMessages.size, 0);
+  assert.equal(prisma.state.conversations.size, 0);
+});
+
+test("persistInstagramInboundEvent ignores Instagram outbound echo callbacks when Meta rewrites account id in mid", async () => {
+  const prisma = createFakePrisma();
+  const principalMessageId =
+    "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDcwNzkwNzY2MDQ4OjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTY0NjE2MTI3MTM2MDM1NjozMjg1NzEwMzU0MDc4ODU4MTM5NTk2NjAzNDI5OTU4NDUxMgZDZD";
+  const aliasMessageId =
+    "aWdfZAG1faXRlbToxOklHTWVzc2FnZAUlEOjE3ODQxNDAyMzg2MzMwMjkzOjM0MDI4MjM2Njg0MTcxMDMwMTI0NDI1OTY0NjE2MTI3MTM2MDM1NjozMjg1NzEwMzU0MDc4ODU4MTM5NTk2NjAzNDI5OTU4NDUxMgZDZD";
+  const account = validateTenantChannelAccount({
+    tenantKey: "tenant-a",
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: "17841470790766048",
+    externalAccountIds: ["17841402386330293"],
+    enabled: true,
+    runtimeEnabled: true,
+    inboundPersistenceEnabled: true,
+    outboundEnabled: true,
+    status: "connected",
+    instagramBusinessAccessToken: "ig-business-token",
+  });
+  prisma.state.outboundMessages.set("outbound-2", {
+    id: "outbound-2",
+    clientId: "client-1",
+    channel: "instagram",
+    metaMessageId: principalMessageId,
+    externalMessageId: principalMessageId,
+    createdAt: new Date("2026-05-17T10:01:00.000Z"),
+  });
+
+  const result = await persistInstagramInboundEvent({
+    prisma: prisma as any,
+    event: {
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "17841402386330293",
+      externalUserId: "ig-user-001",
+      externalMessageId: aliasMessageId,
+      text: "resposta enviada pelo operador",
+      timestamp: "2026-05-17T10:01:00.000Z",
+    },
+    tenantKey: "tenant-a",
+    account,
+    requestId: "req-alias-echo",
   });
 
   assert.equal(result.persisted, false);

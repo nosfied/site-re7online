@@ -56,6 +56,84 @@ function sanitizeMessageIdPart(value: string) {
   return value.trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 160);
 }
 
+function base64Part(value: string) {
+  return Buffer.from(value).toString("base64").replace(/=+$/g, "");
+}
+
+function collectInstagramAccountIds(account?: TenantChannelAccount | null, channelAccountId?: string | null) {
+  const metadata = account?.metadata ?? {};
+  return Array.from(
+    new Set(
+      [
+        channelAccountId,
+        account?.channelAccountId,
+        ...(account?.externalAccountIds ?? []),
+        metadata.graphAccountId,
+        metadata.webhookAccountId,
+        metadata.instagramBusinessLoginId,
+      ]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+}
+
+export function normalizeInstagramProviderMessageIdForEcho(value: string | null | undefined, accountIds: string[]) {
+  const messageId = value?.trim();
+  if (!messageId) return null;
+  let normalized = messageId;
+  for (const accountId of accountIds) {
+    const id = accountId.trim();
+    if (!id) continue;
+    normalized = normalized
+      .split(base64Part(`:${id}:`))
+      .join(":instagram-account:")
+      .split(base64Part(id))
+      .join("instagram-account");
+  }
+  return normalized;
+}
+
+export function instagramProviderMessageIdsMatchForEcho(params: {
+  incomingMessageId: string | null | undefined;
+  outboundMessageId: string | null | undefined;
+  accountIds: string[];
+}) {
+  const incomingMessageId = params.incomingMessageId?.trim();
+  const outboundMessageId = params.outboundMessageId?.trim();
+  if (!incomingMessageId || !outboundMessageId) return false;
+  if (incomingMessageId === outboundMessageId) return true;
+
+  const normalizedIncoming = normalizeInstagramProviderMessageIdForEcho(incomingMessageId, params.accountIds);
+  const normalizedOutbound = normalizeInstagramProviderMessageIdForEcho(outboundMessageId, params.accountIds);
+  if (normalizedIncoming && normalizedOutbound && normalizedIncoming === normalizedOutbound) return true;
+
+  if (params.accountIds.length < 2 || incomingMessageId.length !== outboundMessageId.length) return false;
+  let firstDiff = 0;
+  while (
+    firstDiff < incomingMessageId.length &&
+    incomingMessageId.charCodeAt(firstDiff) === outboundMessageId.charCodeAt(firstDiff)
+  ) {
+    firstDiff += 1;
+  }
+
+  let lastIncoming = incomingMessageId.length - 1;
+  let lastOutbound = outboundMessageId.length - 1;
+  while (
+    lastIncoming >= firstDiff &&
+    lastOutbound >= firstDiff &&
+    incomingMessageId.charCodeAt(lastIncoming) === outboundMessageId.charCodeAt(lastOutbound)
+  ) {
+    lastIncoming -= 1;
+    lastOutbound -= 1;
+  }
+
+  const prefixLength = firstDiff;
+  const suffixLength = incomingMessageId.length - lastIncoming - 1;
+  const diffLength = lastIncoming - firstDiff + 1;
+  return prefixLength >= 24 && suffixLength >= 48 && diffLength >= 8 && diffLength <= 48;
+}
+
 function normalizeInstagramProfileName(profile: unknown) {
   if (!profile || typeof profile !== "object") return null;
   const data = profile as { name?: unknown; username?: unknown };
@@ -211,6 +289,7 @@ export async function persistInstagramInboundEvent(params: {
     timestamp: event.timestamp,
   });
   const createdAt = normalizeDate(event.timestamp);
+  const instagramAccountIds = collectInstagramAccountIds(params.account, event.channelAccountId);
   if (event.externalMessageId) {
     const outboundEcho = await prisma.outboundMessage.findFirst({
       where: {
@@ -236,6 +315,49 @@ export async function persistInstagramInboundEvent(params: {
         syntheticWaId,
         inboundMessageId: outboundEcho.id,
       };
+    }
+
+    if (event.externalMessageId.trim()) {
+      const outboundsNearEvent = await prisma.outboundMessage.findMany({
+        where: {
+          clientId: client.id,
+          channel: "instagram",
+          createdAt: {
+            gte: new Date(createdAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(createdAt.getTime() + 10 * 60 * 1000),
+          },
+          OR: [{ metaMessageId: { not: null } }, { externalMessageId: { not: null } }],
+        },
+        select: { id: true, metaMessageId: true, externalMessageId: true },
+        take: 50,
+      });
+      const normalizedEcho = outboundsNearEvent.find((outbound) => {
+        const candidates = [outbound.metaMessageId, outbound.externalMessageId];
+        return candidates.some((candidate) =>
+          instagramProviderMessageIdsMatchForEcho({
+            incomingMessageId: event.externalMessageId,
+            outboundMessageId: candidate,
+            accountIds: instagramAccountIds,
+          })
+        );
+      });
+      if (normalizedEcho) {
+        logPersistence({
+          event: "instagram.inbound_persistence.blocked",
+          requestId,
+          tenantKey,
+          channelAccountId: event.channelAccountId,
+          externalMessageId: event.externalMessageId,
+          externalUserHash,
+          reason: "outbound_echo",
+        });
+        return {
+          persisted: false,
+          reason: "outbound_echo",
+          syntheticWaId,
+          inboundMessageId: normalizedEcho.id,
+        };
+      }
     }
   }
   const channelFields = {
