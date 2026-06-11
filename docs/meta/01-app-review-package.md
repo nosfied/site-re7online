@@ -1,6 +1,6 @@
 # Meta App Review Package
 
-Este pacote descreve o uso do Converta para revisão da Meta. O foco atual é atendimento humano manual por Facebook/Messenger dentro do inbox omnichannel, com WhatsApp preservado e Instagram preparado para fase futura.
+Este pacote descreve o uso do Converta para revisão da Meta. O foco atual do novo review e Instagram Business Messaging E2E: conectar Instagram Business, receber DM real no inbox omnichannel e responder manualmente pelo Converta, com WhatsApp e Messenger preservados.
 
 ## Visao Geral
 
@@ -9,28 +9,30 @@ O Converta e uma plataforma SaaS multitenant de atendimento e CRM conversacional
 No piloto atual:
 
 - Tenant piloto: `re7online`
-- Canal: Facebook/Messenger
+- Canal principal do review: Instagram
 - Provider: Meta
-- Modo operacional: inbound Messenger + resposta manual humana
-- Automacao Messenger: desativada
-- IA Messenger: desativada
-- Handoff automatico Messenger: desativado
-- Outbound Messenger: somente humano, somente quando `outboundEnabled=true`
+- Modo operacional: inbound Instagram + resposta manual humana
+- Automacao Instagram: desativada
+- IA Instagram: desativada
+- Handoff automatico Instagram: desativado
+- Campanhas Instagram: desativadas
+- Envio proativo Instagram: desativado
+- Outbound Instagram: somente humano, somente quando `outboundEnabled=true`
 
-O app nao usa tokens globais de Messenger. O `PAGE_ACCESS_TOKEN` e resolvido pela `channelAccount` do tenant e nunca e exposto na UI, API ou logs.
+O app nao usa tokens globais para Instagram. O token `IGAA` da trilha Instagram Business Login e salvo no campo `instagramBusinessAccessToken` da `channelAccount` do tenant e nunca e exposto na UI, API ou logs.
 
 ## Canais Suportados
 
 - WhatsApp: operacional legado e multicanal shadow-write/dual-read saudavel.
 - Facebook/Messenger: inbound real, inbox omnichannel, timeline, resposta manual humana.
-- Instagram: preparado visualmente e arquiteturalmente, mas ainda nao ativo no runtime.
+- Instagram: inbound real, inbox omnichannel, timeline e resposta manual humana, human-only.
 
 ## Arquitetura de Seguranca
 
 - Webhook Meta assinado com `X-Hub-Signature-256`.
-- Token de pagina armazenado por tenant/channelAccount.
+- Token armazenado por tenant/channelAccount.
 - Nenhum token retornado pelas APIs administrativas.
-- PSID nao e exposto no frontend.
+- PSID/Instagram scoped user id nao e exposto no frontend.
 - `externalUserRef` e criptografado para permitir resposta manual segura.
 - Logs usam hash/redaction para identificadores externos.
 - `channelAccountId` precisa bater com tenant/canal/provider para envio.
@@ -40,14 +42,14 @@ O app nao usa tokens globais de Messenger. O `PAGE_ACCESS_TOKEN` e resolvido pel
 
 1. Operador acessa o Converta.
 2. Abre o inbox omnichannel.
-3. Filtra por Facebook/Messenger.
-4. Cliente envia mensagem para a pagina Facebook conectada.
-5. Mensagem inbound aparece na conversa Messenger.
-6. Operador assume/usa conversa em modo humano.
+3. Filtra por Instagram.
+4. Cliente envia DM real para o Instagram conectado.
+5. Mensagem inbound aparece na conversa Instagram.
+6. Operador usa a conversa em modo humano.
 7. Operador envia resposta manual.
-8. Resposta chega ao Messenger real.
+8. Resposta chega ao Instagram Direct real.
 9. Timeline registra inbound e outbound.
-10. WhatsApp continua operando em paralelo sem mudanca funcional.
+10. WhatsApp e Messenger continuam operando em paralelo sem mudanca funcional.
 
 ## Ambiente de Demonstracao e Dados de Teste
 
@@ -56,7 +58,7 @@ O screencast deve usar somente uma conversa controlada de review, enviada por um
 Mensagem sugerida para demonstracao:
 
 ```text
-Ola, este e um teste de atendimento pelo Messenger para revisao da Meta.
+Ola, este e um teste de atendimento pelo Instagram Direct para revisao da Meta.
 ```
 
 Resposta sugerida pelo operador:
@@ -67,7 +69,7 @@ Mensagem recebida no Converta. Esta resposta foi enviada manualmente por um oper
 
 Essas mensagens de teste podem permanecer no inbox como registro operacional da demonstracao. O processo de App Review nao depende de exclusao ou anonimizacao posterior da conversa. Para evitar exposicao de dados pessoais, o roteiro deve criar a conversa ja sem PII: sem nome completo, telefone, email, CPF, endereco, pedido real ou qualquer dado sensivel.
 
-Se houver conversas reais no inbox durante a gravacao, usar filtro Facebook/Messenger e selecionar apenas a conversa de teste. Quando necessario, cortar/blur no video areas com nomes, avatares, telefones ou historico de terceiros.
+Se houver conversas reais no inbox durante a gravacao, usar filtro Instagram e selecionar apenas a conversa de teste. Quando necessario, cortar/blur no video areas com nomes, avatares, telefones ou historico de terceiros.
 
 ## Permissoes Solicitadas
 
@@ -189,38 +191,186 @@ Roteiro de screencast:
 2. Mostrar pagina associada ao tenant.
 3. Explicar que cada tenant possui sua propria configuracao e token.
 
+## Permissoes Instagram para o Novo Review
+
+Para a trilha Instagram API with Instagram Login / Business Login for Instagram, o novo review deve focar somente no fluxo demonstrado no video:
+
+- `instagram_business_basic`
+- `instagram_business_manage_messages`
+- `instagram_business_manage_comments`, somente se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login
+
+Nao incluir `pages_read_engagement` no novo pacote Instagram, salvo se houver uma etapa demonstrada no video que dependa comprovadamente dessa permissao. O fluxo E2E validado para Instagram usa Business Login, webhook `messages`, inbox e resposta manual.
+
+### `instagram_business_basic`
+
+Descricao curta: Permite identificar a conta Instagram Business conectada ao tenant.
+
+Descricao longa: O Converta usa esta permissao durante o Business Login for Instagram para confirmar a identidade da conta conectada, exibir status seguro da conexao e vincular o ativo correto ao tenant.
+
+Justificativa tecnica: A plataforma e multitenant. Cada tenant precisa mapear uma conta Instagram Business especifica para uma `channelAccount`, sem misturar ativos de outros tenants.
+
+Compliance:
+
+- Usada somente para onboarding/validacao da conta conectada.
+- Token nao e exibido.
+- IDs tecnicos sao usados para resolucao de canal, nao para perfilamento.
+
+Roteiro de screencast:
+
+1. Login no Converta.
+2. Abrir `Settings > Channels > Instagram`.
+3. Clicar em `Connect Instagram Business`.
+4. Concluir Business Login.
+5. Mostrar `@re7online` conectado, sem token.
+
+### `instagram_business_manage_messages`
+
+Descricao curta: Permite receber e responder mensagens Instagram Direct da conta conectada.
+
+Descricao longa: O Converta usa esta permissao para receber DMs reais via webhook Meta e permitir que operadores humanos respondam manualmente pelo inbox.
+
+Justificativa tecnica: O inbound e recebido por webhook assinado, resolvido por tenant/channelAccount e persistido como conversa Instagram. O outbound manual usa `graph.instagram.com/{version}/me/messages` com `instagramBusinessAccessToken` tenant-scoped, somente quando `outboundEnabled=true`.
+
+Justificativa operacional: Empresas precisam centralizar Instagram Direct junto com WhatsApp e Messenger para atendimento humano em uma fila unica.
+
+Compliance:
+
+- Sem IA no Instagram.
+- Sem bot no Instagram.
+- Sem handoff automatico.
+- Sem campanhas.
+- Sem envio proativo.
+- Somente resposta manual em conversa inbound existente.
+- Eventos sem `message.text` nao sao persistidos como conversa.
+
+Roteiro de screencast:
+
+1. Enviar DM real para `@re7online`.
+2. Mostrar a mensagem chegando no inbox Instagram.
+3. Abrir a conversa.
+4. Digitar resposta manual.
+5. Mostrar a resposta chegando no Instagram Direct.
+
+### `instagram_business_manage_comments`
+
+Esta permissao so deve ser solicitada se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login. O caso de uso principal do Converta e Instagram Direct Messaging human-only, nao gerenciamento operacional de comentarios. Se a Meta exigir a permissao como parte da trilha, documentar que ela nao e usada no runtime demonstrado para responder DMs.
+
 ## Roteiro Consolidado do Video
 
 1. Login no Converta.
-2. Abrir `/app/inbox`.
-3. Mostrar filtros: Todos, WhatsApp, Instagram, Facebook/Messenger.
-4. Abrir console/admin do tenant e a tela "Canais conectados".
-5. Mostrar a channelAccount Messenger conectada a pagina Facebook, sem mostrar token.
-6. Enviar mensagem controlada de teste para a pagina Facebook/Messenger usando conta admin/tester ou conta de review.
-7. Voltar ao inbox e filtrar Facebook/Messenger.
-8. Mostrar a conversa de teste inbound no topo.
-9. Abrir timeline e mostrar mensagem inbound.
-10. Enviar resposta manual pelo operador.
-11. Mostrar resposta chegando no Messenger real.
-12. Mostrar outbound registrado na timeline.
-13. Abrir filtro WhatsApp e mostrar que conversas WhatsApp continuam funcionando, sem abrir conversas reais com PII.
-14. Explicar isolamento multitenant: token, pagina e conversa pertencem ao tenant configurado.
+2. Abrir `/app/settings/channels/instagram`.
+3. Mostrar tela `Instagram Business` com status seguro, sem token.
+4. Clicar em `Connect Instagram Business`, se o video precisar demonstrar OAuth.
+5. Concluir Business Login e retornar ao Converta.
+6. Validar que `@re7online` esta conectado.
+7. Abrir `/app/inbox`.
+8. Mostrar filtros: Todos, WhatsApp, Instagram, Facebook/Messenger.
+9. Enviar DM controlada de teste para `@re7online`.
+10. Filtrar Instagram.
+11. Mostrar a conversa de teste inbound no topo.
+12. Abrir timeline e mostrar mensagem inbound.
+13. Enviar resposta manual pelo operador.
+14. Mostrar resposta chegando no Instagram Direct real.
+15. Mostrar outbound registrado na timeline.
+16. Explicar isolamento multitenant: token, conta Instagram e conversa pertencem ao tenant configurado.
 
 Nota para o video: nao abrir diretamente `https://converta.re7online.com/agent-api/meta/webhook` como se fosse uma pagina navegavel. Esse endpoint e um webhook tecnico. Mostrar a URL no campo Callback URL do Meta Developers e, para provar que o backend publico esta online, abrir `https://converta.re7online.com/agent-api/health`.
+
+## Roteiro Bilíngue para Screencast Instagram
+
+O video deve ser curto, sem audio e com textos sobrepostos. Usar uma conversa de teste sem PII.
+
+### English
+
+1. **Login**
+   Text: `We log in to Converta as an authorized operator.`
+
+2. **Open Instagram settings**
+   Text: `The tenant has an Instagram Business channel connected through Instagram Business Login.`
+
+3. **Validate connection**
+   Text: `The connected account is @re7online. Tokens are stored securely and are never displayed.`
+
+4. **Open the omnichannel inbox**
+   Text: `Converta centralizes WhatsApp, Facebook Messenger and Instagram conversations in one inbox.`
+
+5. **Send a real Instagram DM**
+   Text: `A test user sends a real Instagram Direct message to @re7online.`
+
+6. **Receive the message**
+   Text: `The Instagram message is received by webhook and appears in the Converta inbox.`
+
+7. **Open the timeline**
+   Text: `The operator opens the Instagram conversation and sees the inbound message.`
+
+8. **Manual reply**
+   Text: `The operator manually types a response. No AI, bot, campaign or proactive message is used.`
+
+9. **Send through Converta**
+   Text: `Converta sends the manual reply through the Instagram Messaging API.`
+
+10. **Confirm delivery in Instagram Direct**
+    Text: `The customer receives the response in Instagram Direct.`
+
+11. **Show the timeline**
+    Text: `The timeline records the inbound and outbound messages for the same Instagram conversation.`
+
+12. **Security note**
+    Text: `Tokens and external user identifiers are never exposed in the UI, API or logs.`
+
+### Portugues
+
+1. **Login**
+   Texto: `Entramos no Converta como operador autorizado.`
+
+2. **Abrir configuracao Instagram**
+   Texto: `O tenant possui um canal Instagram Business conectado pelo Instagram Business Login.`
+
+3. **Validar conexao**
+   Texto: `A conta conectada e @re7online. Tokens sao salvos com seguranca e nunca sao exibidos.`
+
+4. **Abrir inbox omnichannel**
+   Texto: `O Converta centraliza conversas de WhatsApp, Facebook Messenger e Instagram em um unico inbox.`
+
+5. **Enviar DM real**
+   Texto: `Um usuario de teste envia uma mensagem real pelo Instagram Direct para @re7online.`
+
+6. **Receber a mensagem**
+   Texto: `A mensagem Instagram e recebida por webhook e aparece no inbox do Converta.`
+
+7. **Abrir timeline**
+   Texto: `O operador abre a conversa Instagram e visualiza a mensagem recebida.`
+
+8. **Resposta manual**
+   Texto: `O operador digita uma resposta manual. Nao ha IA, bot, campanha ou envio proativo.`
+
+9. **Enviar pelo Converta**
+   Texto: `O Converta envia a resposta manual pela Instagram Messaging API.`
+
+10. **Confirmar no Instagram Direct**
+    Texto: `O cliente recebe a resposta no Instagram Direct.`
+
+11. **Mostrar timeline**
+    Texto: `A timeline registra a mensagem recebida e a resposta enviada na mesma conversa Instagram.`
+
+12. **Nota de seguranca**
+    Texto: `Tokens e identificadores externos nunca sao expostos na UI, API ou logs.`
 
 ## Checklist de Screenshots
 
 - Meta Developers: webhook configurado com callback `https://converta.re7online.com/agent-api/meta/webhook`.
-- Meta Developers: produto Messenger/Page Webhooks com campo `messages` inscrito.
+- Meta Developers: produto Instagram API with Instagram Login com campo `messages` inscrito.
+- Meta Developers: redirect URI `https://converta.re7online.com/agent-api/meta/instagram/oauth/callback`.
 - Console interno: tenant `re7online`.
 - Console interno: tela "Canais conectados".
-- ChannelAccount Messenger com `status=connected` e `tokenStatus=configured`, sem token visivel.
+- ChannelAccount Instagram com `status=connected` e `tokenStatus=configured`, sem token visivel.
+- Tela `/app/settings/channels/instagram` com `@re7online` conectado.
 - Inbox com filtros omnichannel.
-- Inbox filtrado por Facebook/Messenger.
-- Timeline com mensagem inbound Messenger de teste, sem PII.
+- Inbox filtrado por Instagram.
+- Timeline com mensagem inbound Instagram de teste, sem PII.
 - Composer habilitado para resposta manual.
-- Timeline com outbound Messenger enviado na conversa de teste.
-- Messenger real exibindo a resposta recebida.
+- Timeline com outbound Instagram enviado na conversa de teste.
+- Instagram Direct real exibindo a resposta recebida.
 
 ## Checklist de Compliance
 
@@ -237,9 +387,13 @@ Nota para o video: nao abrir diretamente `https://converta.re7online.com/agent-a
 - Messenger AI OFF.
 - Messenger automacao/bot OFF.
 - Messenger handoff automatico OFF.
+- Instagram AI OFF.
+- Instagram automacao/bot OFF.
+- Instagram handoff automatico OFF.
+- Instagram campanhas OFF.
+- Instagram envio proativo OFF.
 - Human-in-the-loop para respostas.
 - WhatsApp preservado.
-- Instagram nao ativo no runtime.
 
 ## Checklist Operacional Antes da Submissao
 
@@ -265,34 +419,42 @@ Nota para o video: nao abrir diretamente `https://converta.re7online.com/agent-a
 
 ### O que o app faz?
 
-O Converta centraliza conversas de atendimento em um inbox omnichannel para empresas. Nesta revisao, o uso de Messenger e para receber mensagens da pagina Facebook conectada e permitir que operadores humanos respondam manualmente pelo Converta.
+O Converta centraliza conversas de atendimento em um inbox omnichannel para empresas. Nesta revisao, o uso de Instagram Business Messaging e para receber mensagens Direct da conta Instagram conectada e permitir que operadores humanos respondam manualmente pelo Converta.
 
 ### O app envia mensagens automaticamente?
 
-Nao para Messenger nesta fase. As respostas Messenger sao enviadas manualmente por operadores humanos. IA, automacao e handoff automatico Messenger permanecem desativados.
+Nao para Instagram. As respostas Instagram sao enviadas manualmente por operadores humanos. IA, automacao, handoff automatico, campanhas e envio proativo Instagram permanecem desativados.
 
-### Como o usuario conecta uma pagina?
+### Como o usuario conecta uma conta Instagram?
 
-Um administrador conecta a pagina ao tenant no console de canais. A pagina e salva como `channelAccount` com `channel=messenger`, `provider=meta` e `channelAccountId` da pagina.
+Um administrador acessa `/app/settings/channels/instagram`, clica em `Connect Instagram Business` e conclui o Instagram Business Login. A conta e salva como `channelAccount` com `channel=instagram`, `provider=meta`, `channelAccountId` principal da conta Instagram e aliases tecnicos para callbacks Meta.
 
 ### Como os dados sao protegidos?
 
-Tokens nao sao retornados por API/UI. PSIDs nao sao exibidos. A referencia externa usada para resposta e criptografada. Logs usam hashes/redaction. Webhooks sao assinados e cada envio valida tenant, canal e pagina.
+Tokens nao sao retornados por API/UI. Instagram scoped user ids nao sao exibidos. A referencia externa usada para resposta e criptografada. Logs usam hashes/redaction. Webhooks sao assinados e cada envio valida tenant, canal e conta Instagram.
 
-### Por que `pages_messaging` e necessario?
+### Por que `instagram_business_manage_messages` e necessario?
 
-Para receber mensagens enviadas por usuarios a pagina Facebook e permitir que operadores humanos respondam manualmente via Messenger.
+Para receber mensagens Direct enviadas por usuarios para a conta Instagram Business conectada e permitir que operadores humanos respondam manualmente pelo Converta.
 
-### Por que `pages_manage_metadata` e necessario?
+### Por que `instagram_business_basic` e necessario?
 
-Para manter a pagina inscrita nos webhooks do app e receber eventos de mensagens em tempo real.
+Para identificar e validar a conta Instagram Business conectada ao tenant durante o Business Login.
 
 ## Evidencias Tecnicas do Piloto
 
-- Inbound Messenger real recebido no tenant `re7online`.
-- Outbound Messenger manual enviado e retornado como `SENT`.
+- Instagram Business Login conectado para `@re7online`.
+- Token `IGAA` salvo em `instagramBusinessAccessToken`, sem exposicao.
+- Inbound Instagram real recebido no tenant `re7online`.
+- `instagram.inbound_persistence.persisted` validado.
+- `Conversation channel=instagram` criada.
+- `InboundMessage channel=instagram` criada.
+- `RuntimeState channel=instagram` criado.
+- Outbound Instagram manual enviado via `graph.instagram.com/{version}/me/messages`.
+- Outbound Instagram retornou `status=200` e foi persistido como `SENT`.
 - Timeline com inbound/outbound.
 - `channels:shadow:compare` WhatsApp saudavel: `missing=0`, `mismatched=0`.
 - Webhook Meta assinado ativo em producao.
+- Marco critico: o app Meta precisou estar publicado/Live para que a Meta entregasse payload `messages` completo. Antes disso, chegavam apenas `message_edit`/`no_messaging_events`.
 
-Nao incluir no pacote tokens reais, PSID puro, dumps, payloads brutos ou dados pessoais de clientes. Como a exclusao/anonimizacao manual de novas conversas Messenger ainda nao faz parte do fluxo operacional, a evidencia de review deve ser criada desde a origem com dados ficticios e nao sensiveis.
+Nao incluir no pacote tokens reais, Instagram scoped user id puro, dumps, payloads brutos ou dados pessoais de clientes. A evidencia de review deve ser criada desde a origem com dados ficticios e nao sensiveis.

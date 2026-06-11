@@ -1,98 +1,266 @@
-# Instagram Readiness
+# Instagram Business Messaging Readiness
 
-Este documento resume a prontidao arquitetural do Converta para Instagram, sem ativar runtime real nesta fase.
+Este documento registra o estado final validado do canal Instagram no Converta apos as sprints 66R, 66S e 66U.
 
 ## Estado Atual
 
-O Converta ja possui base multicanal para:
+O canal Instagram esta operacional para:
 
-- `channel=whatsapp`
-- `channel=messenger`
-- `channel=instagram`
-- `provider=meta`
+- inbound real via webhook Meta assinado;
+- persistencia de conversas e mensagens inbound;
+- inbox omnichannel com filtro Instagram;
+- resposta manual humana pelo operador;
+- outbound texto simples, human-only, controlado por `outboundEnabled`.
 
-O inbox ja exibe filtros:
+O canal Instagram nao esta habilitado para:
 
-- Todos
-- WhatsApp
-- Instagram
-- Facebook/Messenger
+- IA automatica;
+- handoff automatico;
+- campanhas;
+- envio proativo;
+- midias outbound;
+- templates;
+- qualquer envio sem conversa inbound previa.
 
-Instagram ainda nao esta ativo para persistencia, runtime, IA, handoff ou outbound.
+## Trilha Meta Usada
 
-## Reuso da Infraestrutura Messenger
+A integracao Instagram usa a trilha:
 
-Instagram deve reutilizar os mesmos blocos estruturais ja validados para Messenger:
+```text
+Instagram API with Instagram Login / Business Login for Instagram
+```
 
-- `TenantChannelAccount`
-- `channelAccounts` por tenant
-- webhook Meta assinado
-- tenant resolution por `provider + channel + channelAccountId`
-- observed events
-- runtime gates
-- readiness/preflight
-- inbox omnichannel
-- redaction de identificadores externos
-- token tenant-scoped
+O fluxo de conexao e feito pela tela customer-facing:
 
-## Diferencas Esperadas
+```text
+/app/settings/channels/instagram
+```
 
-Instagram exigira adapter proprio para payloads IG e validacao das permissoes Meta aplicaveis. O canal nao deve assumir PSID Messenger nem reutilizar chaves de conversa Messenger.
+O callback publico configurado no painel Meta e:
 
-Campos esperados:
+```text
+https://converta.re7online.com/agent-api/meta/instagram/oauth/callback
+```
 
-- `channel=instagram`
-- `provider=meta`
-- `channelAccountId` da conta Instagram/pagina vinculada, conforme payload Meta
-- `externalUserHash` derivado do ID externo
-- `externalUserRef` criptografado quando outbound for habilitado futuramente
+O console interno continua sendo a fonte tecnica de suporte/auditoria:
 
-## Fases Recomendadas
+```text
+/admin/tenants/:tenantKey/channels
+```
 
-1. Instagram passive adapter.
-2. Smoke webhook com payload controlado.
-3. Tenant resolution passiva.
-4. Observed events.
-5. Inbound persistence MVP.
-6. Inbox read-only validado.
-7. Manual outbound MVP, somente apos permissao e token corretos.
-8. App Review/compliance especifico para Instagram.
+As duas telas leem/escrevem a mesma estrutura `channelAccounts`. Tokens nunca devem aparecer em UI, API, logs ou screenshots.
 
-## Gates Obrigatorios
+## Permissoes da Trilha Atual
 
-Antes de qualquer persistencia Instagram:
+Para o novo review Instagram, solicitar apenas as permissoes necessarias ao fluxo demonstrado:
 
-- `enabled=true`
-- `runtimeEnabled=true`
-- `inboundPersistenceEnabled=true`
-- `status=connected`
-- token configurado quando necessario
-- webhook assinado validado
-- tenant/page/account resolvido sem ambiguidade
+- `instagram_business_basic`
+- `instagram_business_manage_messages`
+- `instagram_business_manage_comments`, somente se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login
 
-Antes de qualquer outbound Instagram:
+Nao incluir `pages_read_engagement` no novo review Instagram, salvo se houver um fluxo demonstrado que dependa comprovadamente dessa permissao.
 
-- `outboundEnabled=true`
-- token valido e tenant-scoped
-- `externalUserRef` criptografado disponivel
-- UI indicando claramente canal Instagram
-- logs sem token, ID puro, raw payload ou texto sensivel
+## IDs Validados para Re7online
 
-## Nao Fazer Ainda
+Tenant piloto:
 
-- Nao ativar Instagram em producao.
-- Nao persistir Instagram sem adapter especifico.
-- Nao enviar outbound Instagram.
-- Nao usar token Messenger para Instagram.
-- Nao misturar identidade Instagram com Messenger.
-- Nao fazer merge automatico de contatos entre canais.
+```text
+tenantKey=re7online
+username=re7online
+```
 
-## Checklist Futuro
+IDs:
 
-- Confirmar permissoes Meta exigidas para Instagram Messaging.
-- Criar adapter passivo Instagram.
-- Criar fixtures sem PII.
-- Validar payload real/controlado.
-- Adicionar testes de tenant/account mismatch.
-- Validar inbox com filtro Instagram vazio e depois com inbound real.
-- Preparar pacote de App Review complementar.
+```text
+channelAccountId principal = 17841470790766048
+externalAccountIds alias = ["17841402386330293"]
+instagramBusinessLoginId = 26979723628382383
+businessLoginUsername = re7online
+facebookPageId = 388765477658592
+metadata.source = instagram_business_login
+```
+
+Interpretacao:
+
+- `17841470790766048` e o ID principal usado pelo Converta para a conta Instagram conectada.
+- `17841402386330293` e o alias observado em callbacks como `message_edit`.
+- `26979723628382383` e o ID retornado pela trilha Instagram Business Login.
+- O alias 66R.3 deve ser preservado para resolver callbacks Meta sem cruzar tenants.
+
+## Token
+
+O token valido da trilha Instagram Business Login e salvo em:
+
+```text
+instagramBusinessAccessToken
+```
+
+Caracteristicas:
+
+- prefixo observado: `IGAA`;
+- tenant-scoped;
+- nunca exposto em UI/API/log;
+- usado preferencialmente para envio Instagram;
+- status publico permitido: `tokenStatus=configured` ou `missing`;
+- nunca registrar token completo, link OAuth completo com segredo, ou payload bruto.
+
+## Inbound
+
+Fluxo validado:
+
+```text
+Instagram Direct
+-> Meta webhook /agent-api/meta/webhook
+-> assinatura X-Hub-Signature-256
+-> tenant resolution por channelAccountId/alias
+-> instagram passive adapter
+-> instagram inbound persistence
+-> Conversation / InboundMessage / RuntimeState
+-> /app/inbox filtro Instagram
+```
+
+Logs esperados:
+
+```text
+meta.webhook.signature.valid secretScope=instagram
+meta.webhook.received object=instagram
+channel.tenant_resolution.matched_enabled
+instagram.inbound_persistence.persisted
+```
+
+Somente eventos com `sender`, `recipient`, `message.mid` e `message.text` podem ser persistidos como mensagem inbound.
+
+Callbacks extras `message_edit` sem `message.text` continuam sendo recebidos pelo alias e devem ser ignorados como evento sem texto. Eles nao devem criar conversa, mensagem, lead ou runtime novo.
+
+## Outbound Manual
+
+O outbound manual Instagram usa:
+
+```text
+POST https://graph.instagram.com/{version}/me/messages
+```
+
+Token source:
+
+```text
+instagramBusinessAccessToken
+```
+
+Payload conceitual:
+
+```json
+{
+  "messaging_type": "RESPONSE",
+  "recipient": { "id": "<instagram_scoped_user_id>" },
+  "message": { "text": "<operator_text>" }
+}
+```
+
+Gates obrigatorios antes de enviar:
+
+- `conversation.channel === "instagram"`;
+- conversa precisa ter inbound previo;
+- `externalUserRef` precisa existir e ser resolvivel;
+- `channelAccount.enabled=true`;
+- `runtimeEnabled=true`;
+- `outboundEnabled=true`;
+- `tokenStatus=configured`;
+- token material presente;
+- usuario operador autenticado;
+- envio manual humano.
+
+Persistencia:
+
+- criar `OutboundMessage` somente apos sucesso da API;
+- `channel=instagram`;
+- `provider=meta`;
+- `channelAccountId=17841470790766048`;
+- registrar `providerMessageId`/`metaMessageId` quando retornado;
+- atualizar timeline e runtime state.
+
+Logs permitidos:
+
+```text
+instagram.outbound.attempt
+instagram.outbound.sent
+instagram.outbound.blocked
+instagram.outbound.failed
+```
+
+Logs proibidos:
+
+- token;
+- ID externo puro em claro;
+- texto sensivel fora do escopo operacional;
+- payload bruto completo.
+
+## Marco Critico: App Live/Public
+
+O principal marco da investigacao foi a publicacao do app Meta.
+
+Antes do app estar publicado/Live:
+
+- webhook Instagram assinava corretamente;
+- tenant resolution por alias funcionava;
+- Business Login conectava e validava identidade;
+- DM real chegava apenas como `message_edit` ou sem eventos uteis;
+- teste oficial `messages` retornava `no_messaging_events`;
+- nao havia `message.text` persistivel.
+
+Depois do app Meta ser publicado/Live:
+
+- a Meta passou a entregar payload `messages` completo;
+- `instagram.inbound_persistence.persisted` ocorreu;
+- `Conversation channel=instagram` foi criada;
+- `InboundMessage channel=instagram` foi criada;
+- `RuntimeState channel=instagram` foi criado;
+- outbound manual retornou `status=200`;
+- `OutboundMessage channel=instagram status=SENT` foi persistido;
+- a resposta chegou no Instagram Direct real.
+
+Conclusao: para demonstrar E2E no App Review, o app precisa estar em estado publicado/Live ou em uma configuracao de reviewer/tester que efetivamente entregue o payload `messages` completo.
+
+## Estado de Compliance
+
+Instagram esta configurado como atendimento humano manual:
+
+- sem IA;
+- sem bot;
+- sem handoff automatico;
+- sem campanha;
+- sem envio proativo;
+- sem reaproveitar token Messenger/Page como fonte principal de envio;
+- sem persistir evento sem texto;
+- isolado por tenant/channelAccount/alias.
+
+WhatsApp e Messenger nao dependem dessa trilha e nao devem ser alterados ao ajustar Instagram.
+
+## Checklist Operacional Antes de Novo Review
+
+- App Meta publicado/Live.
+- Redirect URI Instagram Business Login configurada.
+- Webhook `https://converta.re7online.com/agent-api/meta/webhook` configurado.
+- Campo `messages` assinado na trilha Instagram.
+- Conta Instagram `@re7online` conectada pela tela `/app/settings/channels/instagram`.
+- `tokenStatus=configured`.
+- `instagramBusinessAccessToken` presente.
+- `channelAccountId=17841470790766048`.
+- `externalAccountIds` inclui `17841402386330293`.
+- `outboundEnabled=true` apenas no tenant/canal usado no smoke.
+- Conversa de teste criada sem PII.
+- Inbound real aparece no inbox.
+- Resposta manual chega no Instagram Direct.
+- Nenhum token visivel no video.
+
+## Proxima Evidencia Necessaria
+
+Gravar screencast E2E curto, sem audio, demonstrando:
+
+1. login no Converta;
+2. conexao Instagram Business;
+3. status conectado;
+4. DM real chegando no inbox;
+5. resposta manual no Converta;
+6. resposta chegando no Instagram Direct.
+
+Esse video deve acompanhar a nova submissao de `instagram_business_basic` e `instagram_business_manage_messages`.
