@@ -306,6 +306,22 @@ function getInstagramAccount(tenant?: TenantConfig | null) {
   );
 }
 
+function assertInstagramBusinessLoginMatchesExistingAccount(params: {
+  existing?: TenantChannelAccount | null;
+  profile: Awaited<ReturnType<typeof fetchInstagramBusinessProfile>>;
+}) {
+  const expectedId = params.existing?.metadata?.instagramBusinessLoginId?.trim();
+  const expectedUsername = params.existing?.metadata?.businessLoginUsername?.trim().toLowerCase();
+  const profileId = params.profile.id?.trim();
+  const profileUsername = params.profile.username?.trim().toLowerCase();
+  if (expectedId && profileId && expectedId !== profileId) {
+    throw new Error("instagram_business_login_account_mismatch");
+  }
+  if (expectedUsername && profileUsername && expectedUsername !== profileUsername) {
+    throw new Error("instagram_business_login_account_mismatch");
+  }
+}
+
 function resolveAccountTokens(account?: TenantChannelAccount | null) {
   const raw = account as (TenantChannelAccount & Record<string, unknown>) | null | undefined;
   const legacy =
@@ -571,6 +587,7 @@ export async function completeInstagramBusinessLogin(params: {
   if (!tenant) throw new Error("tenant_not_found");
   const currentAccounts = tenant.channelAccounts ?? [];
   const existing = getInstagramAccount(tenant);
+  assertInstagramBusinessLoginMatchesExistingAccount({ existing, profile });
   const existingOperationalUsername =
     existing?.metadata?.businessLoginUsername?.trim() || existing?.metadata?.username?.trim() || "";
   const nextAccount: TenantChannelAccount = {

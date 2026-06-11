@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 type FeedbackToastProps = {
   message: string | null;
-  variant?: "success" | "error";
+  variant?: "success" | "error" | "warning";
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onFocus?: () => void;
@@ -52,6 +52,8 @@ export function FeedbackToast({
   const style =
     variant === "error"
       ? "border-red-800 bg-red-600 text-white"
+      : variant === "warning"
+        ? "border-amber-800 bg-amber-500 text-slate-950"
       : "border-emerald-800 bg-emerald-600 text-white";
 
   return (

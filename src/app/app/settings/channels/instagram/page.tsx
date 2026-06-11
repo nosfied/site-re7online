@@ -98,9 +98,11 @@ function AppInstagramChannelSettingsContent() {
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
+  const [warning, setWarning] = useState<string | null>(null);
+  const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success || warning), () => {
     setError(null);
     setSuccess(null);
+    setWarning(null);
   });
 
   const handleUnauthorized = useCallback(() => {
@@ -169,6 +171,7 @@ function AppInstagramChannelSettingsContent() {
     setConnecting(true);
     setError(null);
     setSuccess(null);
+    setWarning(null);
     try {
       const response = await startAppInstagramBusinessConnect(session);
       window.location.href = response.authUrl;
@@ -188,6 +191,7 @@ function AppInstagramChannelSettingsContent() {
     setValidating(true);
     setError(null);
     setSuccess(null);
+    setWarning(null);
     try {
       const response = await validateAppInstagramBusinessConnection(session);
       setValidation(response.validation);
@@ -195,7 +199,7 @@ function AppInstagramChannelSettingsContent() {
       if (response.validation.ok) {
         setSuccess("Instagram Business validado com sucesso.");
       } else {
-        setError("Instagram conectado, com pendencias de capability da Meta. Veja os detalhes abaixo.");
+        setWarning("Instagram conectado, com pendencias de capability da Meta. Veja os detalhes abaixo.");
       }
     } catch (err) {
       const typed = err as AppApiError;
@@ -223,6 +227,13 @@ function AppInstagramChannelSettingsContent() {
         <FeedbackToast
           message={error}
           variant="error"
+          {...toastHandlers}
+        />
+      ) : null}
+      {warning ? (
+        <FeedbackToast
+          message={warning}
+          variant="warning"
           {...toastHandlers}
         />
       ) : null}
