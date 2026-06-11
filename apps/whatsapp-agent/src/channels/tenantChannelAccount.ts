@@ -263,6 +263,19 @@ export function canSendMessengerOutbound(account?: TenantChannelAccount | null) 
   );
 }
 
+export function canSendInstagramOutbound(account?: TenantChannelAccount | null) {
+  return Boolean(
+    account?.channel === "instagram" &&
+      account.enabled &&
+      account.runtimeEnabled === true &&
+      account.inboundPersistenceEnabled === true &&
+      account.outboundEnabled === true &&
+      account.status === "connected" &&
+      account.tokenStatus === "configured" &&
+      account.instagramBusinessAccessToken
+  );
+}
+
 export function canPersistChannelInbound(account?: TenantChannelAccount | null) {
   return Boolean(
     account?.enabled &&

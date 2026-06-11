@@ -136,6 +136,7 @@ import {
   normalizeRetentionDays,
 } from "../privacy/privacyRetentionService.js";
 import {
+  canSendInstagramOutbound,
   canSendMessengerOutbound,
   normalizeTenantChannelAccountsForTenant,
   redactTenantChannelAccounts,
@@ -166,6 +167,12 @@ import {
   resolveMessengerOutboundGate,
   sendMessengerTextMessage,
 } from "../channels/messengerOutbound.js";
+import {
+  logInstagramOutbound,
+  persistInstagramOutboundMessage,
+  resolveInstagramOutboundGate,
+  sendInstagramTextMessage,
+} from "../channels/instagramOutbound.js";
 import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
@@ -2626,6 +2633,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               requestId,
               source: resolvedConversation.winner ?? undefined,
             })
+          : resolvedChannel === "instagram"
+            ? await adminSendInstagramMessage({
+                waId: resolvedConversation.resolvedWaId,
+                text,
+                clientKey: client.clientKey,
+                clientId: client.id,
+                requestId,
+                source: resolvedConversation.winner ?? undefined,
+              })
           : await adminSendMessage({
               waId: resolvedConversation.resolvedWaId,
               text,
@@ -15561,7 +15577,7 @@ function serializeInboxChannelFields(source?: {
 
 function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
-  return channel === "instagram";
+  return channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram";
 }
 
 function findTenantChannelAccountForConversation(
@@ -15584,8 +15600,13 @@ function getConversationChannelOutboundEnabled(
 ) {
   const channelFields = serializeInboxChannelFields(source ?? undefined);
   if (channelFields.channel === "whatsapp") return true;
-  if (channelFields.channel !== "messenger") return false;
-  return canSendMessengerOutbound(findTenantChannelAccountForConversation(tenant, source));
+  if (channelFields.channel === "messenger") {
+    return canSendMessengerOutbound(findTenantChannelAccountForConversation(tenant, source));
+  }
+  if (channelFields.channel === "instagram") {
+    return canSendInstagramOutbound(findTenantChannelAccountForConversation(tenant, source));
+  }
+  return false;
 }
 
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
@@ -17426,6 +17447,251 @@ async function adminSendMessengerMessage(params: {
 
   logMessengerOutbound({
     event: sendResult.ok ? "messenger.outbound.sent" : "messenger.outbound.failed",
+    tenantKey: params.clientKey,
+    channelAccountId: runtimeState.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    requestId: params.requestId,
+    status: sendResult.status,
+  });
+
+  return {
+    ok: true,
+    status,
+    messageId,
+    metaMessageId,
+    createdAt: createdAt.toISOString(),
+  };
+}
+
+async function adminSendInstagramMessage(params: {
+  waId: string;
+  text: string;
+  clientKey: string;
+  clientId: string;
+  requestId: string;
+  source: {
+    channel?: string | null;
+    provider?: string | null;
+    channelAccountId?: string | null;
+  };
+}): Promise<
+  | {
+      ok: true;
+      status: "SENT" | "FAILED";
+      messageId: string;
+      metaMessageId: string | null;
+      createdAt: string;
+    }
+  | { ok: false; statusCode: number; error: string; message?: string }
+> {
+  const channel = serializeInboxChannelFields(params.source).channel;
+  if (channel !== "instagram") {
+    return { ok: false, statusCode: 409, error: "channel_outbound_not_enabled" };
+  }
+
+  const tenants = await getTenants();
+  const tenant = tenants[params.clientKey];
+  const account = findTenantChannelAccountForConversation(tenant, params.source);
+  if (account && account.tenantKey !== params.clientKey) {
+    logInstagramOutbound({
+      event: "instagram.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "tenant_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: INSTAGRAM_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  const gate = resolveInstagramOutboundGate(account);
+  if (!gate.allowed) {
+    logInstagramOutbound({
+      event: "instagram.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: gate.reason,
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: INSTAGRAM_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  if (!account) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: INSTAGRAM_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+
+  const prisma = getPrisma();
+  const runtimeState = await prisma.conversationRuntimeState.findFirst({
+    where: {
+      clientId: params.clientId,
+      waId: params.waId,
+      channel: "instagram",
+      channelAccountId: account.channelAccountId,
+    },
+    select: {
+      id: true,
+      waIdCanonical: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      externalUserRef: true,
+      assignedAt: true,
+      assignedUserId: true,
+      mode: true,
+      status: true,
+    },
+  });
+  if (runtimeState && runtimeState.channelAccountId !== account.channelAccountId) {
+    logInstagramOutbound({
+      event: "instagram.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "channel_account_mismatch",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "channel_outbound_not_enabled",
+      message: INSTAGRAM_OUTBOUND_DISABLED_MESSAGE,
+    };
+  }
+  if (runtimeState?.mode && runtimeState.mode !== "HUMAN") {
+    logInstagramOutbound({
+      event: "instagram.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "not_human_mode",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "conversation_not_assigned",
+      message: "Assuma a conversa antes de responder manualmente.",
+    };
+  }
+  const recipientId = decryptMessengerExternalUserRef(runtimeState?.externalUserRef);
+  if (!runtimeState?.externalUserHash || !recipientId) {
+    logInstagramOutbound({
+      event: "instagram.outbound.blocked",
+      tenantKey: params.clientKey,
+      channelAccountId: params.source.channelAccountId,
+      requestId: params.requestId,
+      reason: "recipient_unavailable",
+    });
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "instagram_recipient_unavailable",
+      message: "Nao ha referencia segura do contato Instagram para envio. Aguarde uma nova mensagem do cliente.",
+    };
+  }
+
+  const usageGate = await checkUsageGate({
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    messageType: "text",
+    requestId: params.requestId,
+    waId: params.waId,
+  });
+  if (!usageGate.allowed) {
+    return { ok: false, statusCode: 429, error: "usage_limit_reached" };
+  }
+
+  logInstagramOutbound({
+    event: "instagram.outbound.attempt",
+    tenantKey: params.clientKey,
+    channelAccountId: account.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    requestId: params.requestId,
+  });
+  const sendResult = await sendInstagramTextMessage({
+    instagramBusinessAccessToken: gate.token,
+    recipientId,
+    text: params.text,
+  });
+  const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+  const messageId = `admin.instagram.send.${params.requestId}`;
+  const createdAt = new Date();
+  const metaMessageId = sendResult.ok ? sendResult.messageId : null;
+  await persistInstagramOutboundMessage({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    waIdCanonical: runtimeState.waIdCanonical ?? params.waId,
+    channelAccountId: account.channelAccountId,
+    externalUserHash: runtimeState.externalUserHash,
+    externalUserRef: runtimeState.externalUserRef,
+    messageId,
+    status,
+    text: params.text,
+    requestId: params.requestId,
+    metaMessageId,
+    errorBody: sendResult.ok ? null : sendResult.errorBody,
+  });
+
+  await Promise.all([
+    prisma.conversation.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "instagram",
+        channelAccountId: account.channelAccountId,
+      },
+      data: { lastOutboundAt: createdAt },
+    }),
+    prisma.conversationRuntimeState.updateMany({
+      where: {
+        clientId: params.clientId,
+        waId: params.waId,
+        channel: "instagram",
+        channelAccountId: account.channelAccountId,
+      },
+      data: {
+        lastOutboundAt: createdAt,
+        lastOutboundMessageId: messageId,
+        status: ConversationOperationalStatus.IN_PROGRESS,
+      },
+    }),
+  ]);
+
+  const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
+  if (conversation) {
+    await runtimeStorage.upsertConversation({
+      ...conversation,
+      lastOutboundAt: createdAt.toISOString(),
+      lastOutboundMessageId: messageId,
+      status:
+        conversation.assignedUserId && conversation.status === ConversationOperationalStatus.WAITING
+          ? ConversationOperationalStatus.IN_PROGRESS
+          : conversation.status,
+    });
+  }
+  await recordConversationAgentOutboundMetrics({
+    prisma,
+    clientId: params.clientId,
+    waId: params.waId,
+    occurredAt: createdAt,
+    wasInserted: sendResult.ok,
+    assignedAt: runtimeState.assignedAt?.toISOString() ?? null,
+    assignedUserId: runtimeState.assignedUserId ?? null,
+    requestId: params.requestId,
+  });
+
+  logInstagramOutbound({
+    event: sendResult.ok ? "instagram.outbound.sent" : "instagram.outbound.failed",
     tenantKey: params.clientKey,
     channelAccountId: runtimeState.channelAccountId,
     externalUserHash: runtimeState.externalUserHash,

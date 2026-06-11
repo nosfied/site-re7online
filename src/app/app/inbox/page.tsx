@@ -3423,6 +3423,8 @@ export default function AppInboxPage() {
   const selectedConversationSupportsOutbound =
     selectedConversationChannel === "whatsapp" ||
     (selectedConversationChannel === "messenger" &&
+      selectedConversation?.channelOutboundEnabled === true) ||
+    (selectedConversationChannel === "instagram" &&
       selectedConversation?.channelOutboundEnabled === true);
   const selectedConversationOutboundDisabledMessage =
     selectedConversationChannel === "instagram"
