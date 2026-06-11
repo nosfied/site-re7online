@@ -7,7 +7,7 @@ import type { TenantChannelAccount } from "../channels/tenantChannelAccount.type
 const INSTAGRAM_BUSINESS_SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_messages",
-  "instagram_manage_comments",
+  "instagram_business_manage_comments",
 ];
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -71,12 +71,12 @@ type GraphErrorPayload = {
 };
 
 function getInstagramBusinessAppId() {
-  return (
+  const appId =
     process.env.META_INSTAGRAM_BUSINESS_LOGIN_APP_ID?.trim() ||
     process.env.META_INSTAGRAM_APP_ID?.trim() ||
-    process.env.META_EMBEDDED_SIGNUP_APP_ID?.trim() ||
-    "2074361376674006"
-  );
+    process.env.META_EMBEDDED_SIGNUP_APP_ID?.trim();
+  if (!appId) throw new Error("instagram_business_login_app_id_not_configured");
+  return appId;
 }
 
 function getInstagramBusinessAppSecret() {
@@ -174,6 +174,8 @@ export function buildInstagramBusinessLoginAuthUrl(params: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", INSTAGRAM_BUSINESS_SCOPES.join(","));
   url.searchParams.set("state", params.state);
+  url.searchParams.set("enable_fb_login", "0");
+  url.searchParams.set("force_authentication", "1");
   return url.toString();
 }
 

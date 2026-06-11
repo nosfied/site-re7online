@@ -554,7 +554,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       scopes: [
         "instagram_business_basic",
         "instagram_business_manage_messages",
-        "instagram_manage_comments",
+        "instagram_business_manage_comments",
       ],
     });
     return;
