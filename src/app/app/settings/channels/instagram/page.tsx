@@ -40,10 +40,24 @@ function getTokenTone(status?: string | null) {
   return "danger" as const;
 }
 
-function CapabilityPill({ value, label }: { value: "available" | "blocked" | "unknown"; label: string }) {
+function CapabilityPill({
+  value,
+  label,
+}: {
+  value: "available" | "blocked" | "unknown" | "incompatible_token_or_review_blocked";
+  label: string;
+}) {
+  const display =
+    value === "incompatible_token_or_review_blocked"
+      ? "incompatible/review blocked"
+      : value === "available"
+        ? "available"
+        : value === "blocked"
+          ? "blocked"
+          : "unknown";
   return (
     <StatusPill
-      label={`${label}: ${value === "available" ? "available" : value === "blocked" ? "blocked" : "unknown"}`}
+      label={`${label}: ${display}`}
       tone={value === "available" ? "success" : value === "blocked" ? "danger" : "warning"}
     />
   );
@@ -293,6 +307,72 @@ function AppInstagramChannelSettingsContent() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <p className="text-sm font-semibold text-white">Instagram Business Login token</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusPill
+                    label={validation.tokenDiagnostics?.instagramBusinessToken.present ? "present" : "missing"}
+                    tone={validation.tokenDiagnostics?.instagramBusinessToken.present ? "success" : "warning"}
+                  />
+                  <StatusPill
+                    label={
+                      validation.tokenDiagnostics?.instagramBusinessToken.identityValidated
+                        ? "identity validated"
+                        : "identity pending"
+                    }
+                    tone={
+                      validation.tokenDiagnostics?.instagramBusinessToken.identityValidated ? "success" : "warning"
+                    }
+                  />
+                  <StatusPill
+                    label={
+                      validation.tokenDiagnostics?.instagramBusinessToken.scopesValidated
+                        ? "scopes returned"
+                        : "scopes not returned"
+                    }
+                    tone={validation.tokenDiagnostics?.instagramBusinessToken.scopesValidated ? "success" : "warning"}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-white/55">
+                  Source: {validation.tokenDiagnostics?.instagramBusinessToken.source ?? "none"} · length:{" "}
+                  {validation.tokenDiagnostics?.instagramBusinessToken.tokenLength ?? 0} · prefix:{" "}
+                  {validation.tokenDiagnostics?.instagramBusinessToken.tokenPrefix ?? "-"}
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <p className="text-sm font-semibold text-white">Page / Messenger token validation</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusPill
+                    label={validation.tokenDiagnostics?.pageToken.present ? "present" : "missing"}
+                    tone={validation.tokenDiagnostics?.pageToken.present ? "success" : "warning"}
+                  />
+                  <StatusPill
+                    label={
+                      validation.tokenDiagnostics?.pageToken.debugValidated
+                        ? "debug_token valid"
+                        : "debug_token not used"
+                    }
+                    tone={validation.tokenDiagnostics?.pageToken.debugValidated ? "success" : "warning"}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-white/55">
+                  Page token is only required for the legacy Messenger/Page validation path.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3 md:col-span-2">
+                <p className="text-sm font-semibold text-white">Conversations capability</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <CapabilityPill label="conversations" value={validation.capabilities.conversations} />
+                  <CapabilityPill label="messages" value={validation.capabilities.messages} />
+                </div>
+                <p className="mt-2 text-xs text-white/55">
+                  If this remains incompatible/review blocked while identity is validated, the token exists but Meta
+                  has not released the conversations capability for this app/review state.
+                </p>
+              </div>
+
               <div className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
                 <p className="text-sm font-semibold text-white">Granted scopes</p>
                 <div className="mt-2 flex flex-wrap gap-2">

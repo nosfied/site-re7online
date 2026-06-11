@@ -64,6 +64,24 @@ export type AppInstagramBusinessValidation = {
   ok: boolean;
   checkedAt: string;
   tokenStatus: "configured" | "missing" | "invalid";
+  tokenDiagnostics?: {
+    selectedTokenSource: "instagramBusinessAccessToken" | "pageAccessToken" | "legacy" | "none";
+    instagramBusinessToken: {
+      present: boolean;
+      tokenLength: number;
+      tokenPrefix: string | null;
+      identityValidated: boolean;
+      scopesValidated: boolean;
+      source: "instagramBusinessAccessToken" | "pageAccessToken" | "legacy" | "none";
+    };
+    pageToken: {
+      present: boolean;
+      tokenLength: number;
+      tokenPrefix: string | null;
+      debugValidated: boolean;
+      scopesValidated: boolean;
+    };
+  };
   requiredScopes: string[];
   grantedScopes: string[];
   missingScopes: string[];
@@ -72,8 +90,8 @@ export type AppInstagramBusinessValidation = {
     username: string | null;
   };
   capabilities: {
-    conversations: "available" | "blocked" | "unknown";
-    messages: "available" | "blocked" | "unknown";
+    conversations: "available" | "blocked" | "unknown" | "incompatible_token_or_review_blocked";
+    messages: "available" | "blocked" | "unknown" | "incompatible_token_or_review_blocked";
   };
   webhook: {
     callbackConfigured: boolean;

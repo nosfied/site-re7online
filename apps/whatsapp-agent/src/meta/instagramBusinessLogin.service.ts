@@ -22,6 +22,24 @@ export type InstagramBusinessValidationStatus = {
   ok: boolean;
   checkedAt: string;
   tokenStatus: "configured" | "missing" | "invalid";
+  tokenDiagnostics: {
+    selectedTokenSource: "instagramBusinessAccessToken" | "pageAccessToken" | "legacy" | "none";
+    instagramBusinessToken: {
+      present: boolean;
+      tokenLength: number;
+      tokenPrefix: string | null;
+      identityValidated: boolean;
+      scopesValidated: boolean;
+      source: "instagramBusinessAccessToken" | "pageAccessToken" | "legacy" | "none";
+    };
+    pageToken: {
+      present: boolean;
+      tokenLength: number;
+      tokenPrefix: string | null;
+      debugValidated: boolean;
+      scopesValidated: boolean;
+    };
+  };
   requiredScopes: string[];
   grantedScopes: string[];
   missingScopes: string[];
@@ -30,8 +48,8 @@ export type InstagramBusinessValidationStatus = {
     username: string | null;
   };
   capabilities: {
-    conversations: "available" | "blocked" | "unknown";
-    messages: "available" | "blocked" | "unknown";
+    conversations: "available" | "blocked" | "unknown" | "incompatible_token_or_review_blocked";
+    messages: "available" | "blocked" | "unknown" | "incompatible_token_or_review_blocked";
   };
   webhook: {
     callbackConfigured: boolean;
@@ -200,6 +218,20 @@ function summarizeGraphError(payload: unknown) {
   };
 }
 
+function tokenDiagnostic(token: string | null | undefined) {
+  const normalized = typeof token === "string" ? token.trim() : "";
+  return {
+    present: normalized.length > 0,
+    tokenLength: normalized.length,
+    tokenPrefix: normalized ? normalized.slice(0, 4) : null,
+  };
+}
+
+function isLikelySerializedToken(token: string) {
+  const trimmed = token.trim();
+  return trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith("\"");
+}
+
 async function exchangeCodeForShortLivedToken(params: { code: string; redirectUri: string }) {
   const appId = getInstagramBusinessAppId();
   const appSecret = getInstagramBusinessAppSecret();
@@ -274,22 +306,38 @@ function getInstagramAccount(tenant?: TenantConfig | null) {
   );
 }
 
-function resolveAccountToken(account?: TenantChannelAccount | null) {
+function resolveAccountTokens(account?: TenantChannelAccount | null) {
   const raw = account as (TenantChannelAccount & Record<string, unknown>) | null | undefined;
-  return (
-    account?.instagramBusinessAccessToken ||
-    account?.pageAccessToken ||
+  const legacy =
     (typeof raw?.accessToken === "string" ? raw.accessToken : "") ||
     (typeof raw?.token === "string" ? raw.token : "") ||
     (typeof raw?.longLivedToken === "string" ? raw.longLivedToken : "") ||
     (typeof raw?.businessToken === "string" ? raw.businessToken : "") ||
-    ""
-  ).trim();
+    "";
+  return {
+    instagramBusinessAccessToken: (account?.instagramBusinessAccessToken ?? "").trim(),
+    pageAccessToken: (account?.pageAccessToken ?? "").trim(),
+    legacyToken: legacy.trim(),
+  };
+}
+
+function resolvePreferredToken(account?: TenantChannelAccount | null) {
+  const tokens = resolveAccountTokens(account);
+  if (tokens.instagramBusinessAccessToken) {
+    return { token: tokens.instagramBusinessAccessToken, source: "instagramBusinessAccessToken" as const };
+  }
+  if (tokens.pageAccessToken) {
+    return { token: tokens.pageAccessToken, source: "pageAccessToken" as const };
+  }
+  if (tokens.legacyToken) {
+    return { token: tokens.legacyToken, source: "legacy" as const };
+  }
+  return { token: "", source: "none" as const };
 }
 
 export function buildInstagramBusinessStatus(tenant?: TenantConfig | null) {
   const account = getInstagramAccount(tenant);
-  const hasToken = Boolean(resolveAccountToken(account));
+  const hasToken = Boolean(resolvePreferredToken(account).token);
   return {
     channelAccountId: account?.channelAccountId ?? null,
     externalAccountIds: account?.externalAccountIds ?? [],
@@ -312,7 +360,9 @@ export async function validateInstagramBusinessConnection(params: {
   const tenants = await getTenants();
   const tenant = tenants[params.tenantKey];
   const account = getInstagramAccount(tenant);
-  const accessToken = resolveAccountToken(account);
+  const tokens = resolveAccountTokens(account);
+  const preferred = resolvePreferredToken(account);
+  const accessToken = preferred.token;
   const checkedAt = new Date().toISOString();
   const errors: InstagramBusinessValidationStatus["errors"] = [];
   const grantedScopes = new Set<string>();
@@ -322,12 +372,35 @@ export async function validateInstagramBusinessConnection(params: {
   };
   let tokenStatus: InstagramBusinessValidationStatus["tokenStatus"] = accessToken ? "configured" : "missing";
   let profile = redactAccountStatus(account);
+  let instagramBusinessIdentityValidated = false;
+  let instagramBusinessScopesValidated = false;
+  let pageTokenDebugValidated = false;
+  let pageTokenScopesValidated = false;
+  let effectiveInstagramToken = "";
+  let effectiveInstagramTokenSource: InstagramBusinessValidationStatus["tokenDiagnostics"]["instagramBusinessToken"]["source"] = "none";
+  const instagramBusinessTokenDiagnostic = tokenDiagnostic(tokens.instagramBusinessAccessToken);
+  const pageTokenDiagnostic = tokenDiagnostic(tokens.pageAccessToken);
+  const selectedTokenDiagnostic = tokenDiagnostic(accessToken);
 
   if (!accessToken) {
     return {
       ok: false,
       checkedAt,
       tokenStatus,
+      tokenDiagnostics: {
+        selectedTokenSource: "none",
+        instagramBusinessToken: {
+          ...instagramBusinessTokenDiagnostic,
+          identityValidated: false,
+          scopesValidated: false,
+          source: "none",
+        },
+        pageToken: {
+          ...pageTokenDiagnostic,
+          debugValidated: false,
+          scopesValidated: false,
+        },
+      },
       requiredScopes: INSTAGRAM_BUSINESS_SCOPES,
       grantedScopes: [],
       missingScopes: INSTAGRAM_BUSINESS_SCOPES,
@@ -341,26 +414,12 @@ export async function validateInstagramBusinessConnection(params: {
     };
   }
 
-  try {
-    const debugUrl = new URL(`${GRAPH_BASE_URL}/debug_token`);
-    const appId = getInstagramBusinessAppId();
-    const appSecret = getInstagramBusinessAppSecret();
-    debugUrl.searchParams.set("input_token", accessToken);
-    debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
-    const { response, payload } = await fetchJson(debugUrl.toString());
-    if (!response.ok || !(payload as Record<string, any>)?.data?.is_valid) {
-      tokenStatus = "invalid";
-      errors.push({ stage: "debug_token", ...summarizeGraphError(payload) });
-    } else {
-      const scopes = (payload as Record<string, any>).data?.scopes;
-      if (Array.isArray(scopes)) {
-        scopes.forEach((scope) => {
-          if (typeof scope === "string") grantedScopes.add(scope);
-        });
-      }
-    }
-  } catch (error) {
-    errors.push({ stage: "debug_token", message: (error as Error).message });
+  if (isLikelySerializedToken(accessToken)) {
+    tokenStatus = "invalid";
+    errors.push({
+      stage: "token_format",
+      message: "Saved token looks serialized instead of a plain OAuth access token.",
+    });
   }
 
   try {
@@ -369,25 +428,80 @@ export async function validateInstagramBusinessConnection(params: {
       id: nextProfile.id ?? profile.id,
       username: nextProfile.username ?? profile.username,
     };
+    instagramBusinessIdentityValidated = true;
+    effectiveInstagramToken = accessToken;
+    effectiveInstagramTokenSource = preferred.source;
   } catch (error) {
-    errors.push({ stage: "profile", message: (error as Error).message });
+    errors.push({ stage: "instagram_business_identity", message: (error as Error).message });
+  }
+
+  if (tokens.pageAccessToken && preferred.source === "pageAccessToken" && !instagramBusinessIdentityValidated) {
+    try {
+      const debugUrl = new URL(`${GRAPH_BASE_URL}/debug_token`);
+      const appId = getInstagramBusinessAppId();
+      const appSecret = getInstagramBusinessAppSecret();
+      debugUrl.searchParams.set("input_token", tokens.pageAccessToken);
+      debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
+      const { response, payload } = await fetchJson(debugUrl.toString());
+      if (!response.ok || !(payload as Record<string, any>)?.data?.is_valid) {
+        tokenStatus = "invalid";
+        errors.push({ stage: "page_token_debug", ...summarizeGraphError(payload) });
+      } else {
+        pageTokenDebugValidated = true;
+        const scopes = (payload as Record<string, any>).data?.scopes;
+        if (Array.isArray(scopes)) {
+          pageTokenScopesValidated = true;
+          scopes.forEach((scope) => {
+            if (typeof scope === "string") grantedScopes.add(scope);
+          });
+        }
+      }
+    } catch (error) {
+      errors.push({ stage: "page_token_debug", message: (error as Error).message });
+    }
+  }
+
+  if (instagramBusinessIdentityValidated) {
+    try {
+      const permissionsUrl = new URL(`${GRAPH_INSTAGRAM_BASE_URL}/me/permissions`);
+      permissionsUrl.searchParams.set("access_token", effectiveInstagramToken);
+      const { response, payload } = await fetchJson(permissionsUrl.toString());
+      if (response.ok) {
+        const data = (payload as Record<string, unknown>).data;
+        if (Array.isArray(data)) {
+          instagramBusinessScopesValidated = true;
+          data.forEach((item) => {
+            const permission = item as Record<string, unknown>;
+            const name = typeof permission.permission === "string" ? permission.permission : "";
+            const status = typeof permission.status === "string" ? permission.status : "granted";
+            if (name && status !== "declined") grantedScopes.add(name);
+          });
+        }
+      }
+    } catch (error) {
+      errors.push({ stage: "instagram_business_permissions", message: (error as Error).message });
+    }
   }
 
   const accountId = profile.id ?? account?.channelAccountId ?? "";
-  if (accountId) {
+  if (accountId && effectiveInstagramToken) {
     try {
       const conversationsUrl = new URL(`${GRAPH_BASE_URL}/${env.WHATSAPP_API_VERSION}/${accountId}/conversations`);
       conversationsUrl.searchParams.set("platform", "instagram");
       conversationsUrl.searchParams.set("limit", "1");
-      conversationsUrl.searchParams.set("access_token", accessToken);
+      conversationsUrl.searchParams.set("access_token", effectiveInstagramToken);
       const { response, payload } = await fetchJson(conversationsUrl.toString());
       if (response.ok) {
         capabilities.conversations = "available";
         capabilities.messages = "available";
       } else {
-        capabilities.conversations = "blocked";
-        capabilities.messages = "blocked";
-        errors.push({ stage: "conversations", ...summarizeGraphError(payload) });
+        const summarized = summarizeGraphError(payload);
+        const incompatible =
+          summarized.message.toLowerCase().includes("cannot parse access token") ||
+          summarized.message.toLowerCase().includes("application does not have the capability");
+        capabilities.conversations = incompatible ? "incompatible_token_or_review_blocked" : "blocked";
+        capabilities.messages = incompatible ? "incompatible_token_or_review_blocked" : "blocked";
+        errors.push({ stage: "conversations_capability", ...summarized });
       }
     } catch (error) {
       capabilities.conversations = "unknown";
@@ -397,11 +511,28 @@ export async function validateInstagramBusinessConnection(params: {
   }
 
   const granted = Array.from(grantedScopes).sort();
-  const missingScopes = INSTAGRAM_BUSINESS_SCOPES.filter((scope) => !grantedScopes.has(scope));
+  const scopesValidated = instagramBusinessScopesValidated || pageTokenScopesValidated;
+  const missingScopes = scopesValidated
+    ? INSTAGRAM_BUSINESS_SCOPES.filter((scope) => !grantedScopes.has(scope))
+    : [];
   return {
-    ok: tokenStatus === "configured" && missingScopes.length === 0 && errors.length === 0,
+    ok: tokenStatus === "configured" && instagramBusinessIdentityValidated,
     checkedAt,
     tokenStatus,
+    tokenDiagnostics: {
+      selectedTokenSource: preferred.source,
+      instagramBusinessToken: {
+        ...selectedTokenDiagnostic,
+        identityValidated: instagramBusinessIdentityValidated,
+        scopesValidated: instagramBusinessScopesValidated,
+        source: effectiveInstagramTokenSource,
+      },
+      pageToken: {
+        ...pageTokenDiagnostic,
+        debugValidated: pageTokenDebugValidated,
+        scopesValidated: pageTokenScopesValidated,
+      },
+    },
     requiredScopes: INSTAGRAM_BUSINESS_SCOPES,
     grantedScopes: granted,
     missingScopes,
@@ -428,6 +559,7 @@ export async function completeInstagramBusinessLogin(params: {
   const longToken = await exchangeForLongLivedToken(shortToken.access_token!);
   const profile = await fetchInstagramBusinessProfile(longToken.accessToken);
   if (!profile.id) throw new Error("instagram_business_profile_id_missing");
+  const tokenInfo = tokenDiagnostic(longToken.accessToken);
 
   const tenants = await getTenants();
   const tenant = tenants[state.tenantKey];
@@ -485,6 +617,9 @@ export async function completeInstagramBusinessLogin(params: {
     userId: state.userId,
     channelAccountId: nextAccount.channelAccountId,
     username: profile.username ?? null,
+    tokenPresent: tokenInfo.present,
+    tokenLength: tokenInfo.tokenLength,
+    tokenPrefix: tokenInfo.tokenPrefix,
   });
   return {
     tenantKey: state.tenantKey,
