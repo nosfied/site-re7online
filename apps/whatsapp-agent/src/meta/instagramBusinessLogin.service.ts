@@ -341,7 +341,7 @@ export function buildInstagramBusinessStatus(tenant?: TenantConfig | null) {
   return {
     channelAccountId: account?.channelAccountId ?? null,
     externalAccountIds: account?.externalAccountIds ?? [],
-    username: account?.metadata?.username ?? null,
+    username: account?.metadata?.businessLoginUsername ?? account?.metadata?.username ?? null,
     facebookPageId: account?.metadata?.facebookPageId ?? null,
     tokenStatus: hasToken ? "configured" : account?.tokenStatus ?? "missing",
     enabled: account?.enabled === true,
@@ -571,6 +571,8 @@ export async function completeInstagramBusinessLogin(params: {
   if (!tenant) throw new Error("tenant_not_found");
   const currentAccounts = tenant.channelAccounts ?? [];
   const existing = getInstagramAccount(tenant);
+  const existingOperationalUsername =
+    existing?.metadata?.businessLoginUsername?.trim() || existing?.metadata?.username?.trim() || "";
   const nextAccount: TenantChannelAccount = {
     ...(existing ?? {
       id: `${state.tenantKey}-meta-instagram-${profile.id}`,
@@ -589,7 +591,10 @@ export async function completeInstagramBusinessLogin(params: {
     metadata: {
       ...(existing?.metadata ?? {}),
       graphAccountId: existing?.metadata?.graphAccountId || profile.id,
-      username: profile.username ?? existing?.metadata?.username ?? "",
+      username: existingOperationalUsername || profile.username || "",
+      businessLoginUsername: existing?.metadata?.businessLoginUsername || existingOperationalUsername || profile.username || "",
+      connectedLoginUsername: profile.username ?? "",
+      connectedLoginId: profile.id ?? "",
       source: "instagram_business_login",
       tokenType: longToken.tokenType,
       tokenExpiresIn: longToken.expiresIn != null ? String(longToken.expiresIn) : "",
@@ -600,7 +605,7 @@ export async function completeInstagramBusinessLogin(params: {
     enabled: true,
     runtimeEnabled: existing?.runtimeEnabled ?? true,
     inboundPersistenceEnabled: existing?.inboundPersistenceEnabled ?? true,
-    outboundEnabled: false,
+    outboundEnabled: existing?.outboundEnabled ?? false,
     aiEnabled: false,
     handoffEnabled: false,
     status: "connected",
