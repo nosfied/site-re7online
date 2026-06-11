@@ -128,6 +128,9 @@ export class InstagramPassiveAdapter implements ChannelAdapter<InstagramPassiveI
         ? String(message.mid).trim()
         : messageEdit.messageId;
     const text = typeof message?.text === "string" ? message.text.trim() : messageEdit.text;
+    if (!text) {
+      throw new Error("instagram_text_required");
+    }
 
     return {
       tenantKey: raw.tenantKey,

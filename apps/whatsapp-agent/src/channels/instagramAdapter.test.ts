@@ -77,6 +77,39 @@ test("instagram passive adapter normalizes message_edit payload shape", () => {
   assert.equal(event.text, "oi instagram");
 });
 
+test("instagram passive adapter fails clearly on message_edit without text", () => {
+  const adapter = createInstagramPassiveAdapter();
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        time: 1760000000000,
+        messaging: [
+          {
+            timestamp: 1760000000000,
+            sender: { id: "ig-user-1" },
+            recipient: { id: "ig-account-1" },
+            message_edit: {
+              mid: "ig-mid-1",
+              num_edit: 1,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  assert.throws(
+    () =>
+      adapter.normalizeInbound({
+        tenantKey: "tenant-a",
+        payload,
+      }),
+    /instagram_text_required/
+  );
+});
+
 test("instagram inbound facade builds tenant/channel/account/user conversation key", () => {
   const event = normalizeChannelInboundEvent({
     tenantKey: "tenant-a",

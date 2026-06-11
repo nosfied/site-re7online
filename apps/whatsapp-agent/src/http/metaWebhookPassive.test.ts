@@ -852,6 +852,56 @@ test("passive processor normalizes Instagram message_edit payload shape", async 
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
+test("passive processor ignores Instagram message_edit callbacks without text", async () => {
+  const messageEditPayload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            recipient: { id: "ig-account-1" },
+            timestamp: 1760000000000,
+            message_edit: {
+              mid: "ig-mid-1",
+              num_edit: 1,
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = await processPassiveMetaWebhookPayload(messageEditPayload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "graph-account-1",
+            externalAccountIds: ["ig-account-1"],
+            enabled: true,
+            status: "connected",
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
+});
+
 test("passive processor skips Messenger echo events without normalizing", async () => {
   const echoPayload = messengerPayloadWithText("echo", "mid-echo");
   echoPayload.entry[0]!.messaging[0]!.message = {
