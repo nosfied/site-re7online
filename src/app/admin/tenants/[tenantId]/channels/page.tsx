@@ -103,6 +103,14 @@ function parseMetadata(value: string) {
   return parsed as Record<string, string>;
 }
 
+function parseMetadataPreview(value: string) {
+  try {
+    return parseMetadata(value) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 function toPayload(drafts: ChannelAccountDraft[], tenantId: string) {
   return drafts.map((draft) => ({
     id: draft.id,
@@ -142,6 +150,15 @@ function getValidationError(drafts: ChannelAccountDraft[]) {
 
 function formatLabel(value: string) {
   return value.replace(/_/g, " ");
+}
+
+function TechnicalValue({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-re7-navy/40 px-3 py-2">
+      <dt className="text-[11px] uppercase tracking-wide text-white/45">{label}</dt>
+      <dd className="mt-1 break-all font-mono text-xs text-white/80">{value?.trim() || "-"}</dd>
+    </div>
+  );
 }
 
 export default function TenantChannelsPage() {
@@ -263,6 +280,21 @@ export default function TenantChannelsPage() {
           de volta no console.
         </section>
 
+        <section className="rounded-xl border border-sky-400/25 bg-sky-950/30 p-4 text-sm text-sky-100">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p>
+              Este console interno continua sendo a fonte tecnica para auditoria e flags de canal.
+              A conexao OAuth do Instagram Business deve ser feita pela tela simplificada do app.
+            </p>
+            <Link
+              href="/app/settings/channels/instagram"
+              className="inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
+            >
+              Abrir onboarding Instagram
+            </Link>
+          </div>
+        </section>
+
         {error ? (
           <p className="rounded-md border border-red-400/30 bg-red-900/70 p-3 text-sm text-red-100">
             {error}
@@ -295,7 +327,10 @@ export default function TenantChannelsPage() {
             </section>
           ) : null}
 
-          {drafts.map((draft, index) => (
+          {drafts.map((draft, index) => {
+            const metadata = parseMetadataPreview(draft.metadata);
+            const source = metadata.source;
+            return (
             <section key={draft.id || index} className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -312,6 +347,17 @@ export default function TenantChannelsPage() {
                   Remover
                 </button>
               </div>
+
+              <dl className="mb-4 grid gap-2 md:grid-cols-3">
+                <TechnicalValue label="channelAccountId" value={draft.channelAccountId} />
+                <TechnicalValue label="externalAccountIds" value={draft.externalAccountIds} />
+                <TechnicalValue label="graphAccountId" value={metadata.graphAccountId} />
+                <TechnicalValue label="webhookAccountId" value={metadata.webhookAccountId} />
+                <TechnicalValue label="facebookPageId" value={metadata.facebookPageId} />
+                <TechnicalValue label="username" value={metadata.username} />
+                <TechnicalValue label="tokenStatus" value={draft.tokenStatus} />
+                <TechnicalValue label="source" value={source} />
+              </dl>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="flex flex-col gap-1 text-sm">
@@ -443,7 +489,8 @@ export default function TenantChannelsPage() {
                     autoComplete="off"
                   />
                   <span className="text-xs text-white/50">
-                    O valor e salvo somente no backend e nao retorna pela API.
+                    O valor e salvo somente no backend e nao retorna pela API. Para Instagram Business,
+                    prefira a tela de onboarding OAuth do app.
                   </span>
                 </label>
               </div>
@@ -487,7 +534,8 @@ export default function TenantChannelsPage() {
                 ))}
               </div>
             </section>
-          ))}
+            );
+          })}
 
           <div className="flex justify-end">
             <button
