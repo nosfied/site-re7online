@@ -10,7 +10,9 @@ Move Converta tenant configuration from split JSON/DB ownership toward DB-first 
 
 - DB already owns operational data and many product modules.
 - `.data/tenants.json` still owns technical tenant configuration and several module settings.
-- `TenantOperationalConfig` now owns the first DB-first operational config block: `crmBusinessStatuses`.
+- `TenantOperationalConfig` now owns the first DB-first operational config blocks:
+  `crmBusinessStatuses`, `templates.manualHandoff`, `followUp*`, `handoffLeadNotification*`
+  and `mediaHandoffPolicy`.
 - `getTenants()` and `saveTenants()` remain active compatibility helpers.
 - Existing backfill scripts target multichannel operational records, not full tenant configuration migration.
 
@@ -56,6 +58,8 @@ These affect runtime behavior but do not usually contain external-provider token
 
 3. Media handoff policy
    - Current: `mediaHandoffPolicy`
+   - Implemented destination: `TenantOperationalConfig.config.mediaHandoffPolicy`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: medium because inbound media handling and notification behavior depend on it
 
 4. Follow-up settings

@@ -28,9 +28,11 @@ import {
   resolveFollowUpSettings,
   resolveHandoffLeadNotificationSettings,
   resolveManualHandoffTemplate,
+  resolveMediaHandoffPolicy,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
   saveHandoffLeadNotificationSettings,
+  saveMediaHandoffPolicy,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
 } from "../config/tenantOperationalConfig.js";
@@ -7516,6 +7518,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenant,
         });
         const handoffLeadNotification = resolvedHandoffLeadNotification.settings;
+        const resolvedMediaHandoffPolicy = await resolveMediaHandoffPolicy({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -7542,7 +7550,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiQualification: tenant.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
-            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
+            mediaHandoffPolicy,
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
             aiBusinessContext: tenant.aiBusinessContext ?? "",
@@ -7562,6 +7570,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           configSource: {
             followUp: resolvedFollowUp.source,
             handoffLeadNotification: resolvedHandoffLeadNotification.source,
+            mediaHandoffPolicy: resolvedMediaHandoffPolicy.source,
           },
         });
       } catch (error) {
@@ -7818,8 +7827,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             normalizeHandoffLeadNotificationRecipients(data.handoffLeadNotificationRecipients);
           handoffLeadNotificationFieldsChanged.push("handoffLeadNotificationRecipients");
         }
+        let mediaHandoffPolicyPatch: ReturnType<typeof normalizeTenantMediaHandoffPolicy> | null = null;
         if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
-          aiAssistantPatch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
+          mediaHandoffPolicyPatch = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
         }
         if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
           if (typeof data.disableAiFallback !== "boolean") {
@@ -7836,6 +7846,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           Object.keys(payload).length === 0 &&
           followUpFieldsChanged.length === 0 &&
           handoffLeadNotificationFieldsChanged.length === 0 &&
+          !mediaHandoffPolicyPatch &&
           Object.keys(aiAssistantPatch).length === 0
         ) {
           json(
@@ -7956,10 +7967,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
           handoffLeadNotificationSource = resolvedHandoffLeadNotification.source;
         }
+        const mediaHandoffPolicyResult = mediaHandoffPolicyPatch
+          ? {
+              policy: (await saveMediaHandoffPolicy({
+                prisma,
+                clientId: client.id,
+                policy: mediaHandoffPolicyPatch,
+              })).policy,
+              source: "db" as const,
+              fieldsChanged: ["mediaHandoffPolicy"],
+            }
+          : {
+              ...(await resolveMediaHandoffPolicy({
+                prisma,
+                clientId: client.id,
+                tenant,
+              })),
+              fieldsChanged: [] as string[],
+            };
         const fieldsChanged = [
           ...saved.fieldsChanged,
           ...followUpFieldsChanged,
           ...handoffLeadNotificationFieldsChanged,
+          ...mediaHandoffPolicyResult.fieldsChanged,
         ];
         logger.info({
           event: "admin.chatbot.settings.updated",
@@ -8015,7 +8045,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiQualification: saved.tenant.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotificationSettings.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotificationSettings.recipients,
-            mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
+            mediaHandoffPolicy: mediaHandoffPolicyResult.policy,
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
@@ -8035,6 +8065,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           configSource: {
             followUp: followUpSource,
             handoffLeadNotification: handoffLeadNotificationSource,
+            mediaHandoffPolicy: mediaHandoffPolicyResult.source,
           },
         });
       } catch (error) {

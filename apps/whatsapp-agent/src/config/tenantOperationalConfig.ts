@@ -3,8 +3,10 @@ import { env } from "./env.js";
 import {
   normalizeCrmBusinessStatuses,
   normalizeHandoffLeadNotificationRecipients,
+  normalizeTenantMediaHandoffPolicy,
   type CrmBusinessStatusConfig,
   type HandoffLeadNotificationRecipient,
+  type TenantMediaHandoffPolicy,
   type TenantConfig,
 } from "./tenantConfig.js";
 
@@ -15,6 +17,7 @@ export type TenantOperationalConfigValue = {
   };
   followUp?: FollowUpSettings;
   handoffLeadNotification?: HandoffLeadNotificationSettings;
+  mediaHandoffPolicy?: TenantMediaHandoffPolicy;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -50,6 +53,11 @@ export type HandoffLeadNotificationSettings = {
 
 export type ResolvedHandoffLeadNotificationSettings = {
   settings: HandoffLeadNotificationSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type ResolvedMediaHandoffPolicy = {
+  policy: TenantMediaHandoffPolicy;
   source: TenantOperationalConfigSource;
 };
 
@@ -158,6 +166,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "handoffLeadNotification")) {
     config.handoffLeadNotification = normalizeHandoffLeadNotificationSettings(value.handoffLeadNotification);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "mediaHandoffPolicy")) {
+    config.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(value.mediaHandoffPolicy);
   }
   return config;
 }
@@ -361,6 +372,66 @@ export async function saveHandoffLeadNotificationSettings(params: {
   return {
     record: saved,
     settings: nextSettings,
+  };
+}
+
+export async function resolveMediaHandoffPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<TenantConfig, "mediaHandoffPolicy"> | null;
+}): Promise<ResolvedMediaHandoffPolicy> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.mediaHandoffPolicy) {
+    return {
+      policy: dbConfig.mediaHandoffPolicy,
+      source: "db",
+    };
+  }
+  return {
+    policy: normalizeTenantMediaHandoffPolicy(params.tenant?.mediaHandoffPolicy),
+    source: "json_fallback",
+  };
+}
+
+export async function saveMediaHandoffPolicy(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  policy: TenantMediaHandoffPolicy;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const nextPolicy = normalizeTenantMediaHandoffPolicy(params.policy);
+  const nextConfig = {
+    ...existingConfig,
+    mediaHandoffPolicy: nextPolicy,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    policy: nextPolicy,
   };
 }
 

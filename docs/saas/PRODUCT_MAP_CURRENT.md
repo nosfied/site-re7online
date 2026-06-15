@@ -54,7 +54,7 @@ Default government profile favors oversight and reporting:
 | WhatsApp runtime | Operational | webhook/runtime | `whatsapp/webhook.controller.ts`, `WaPhoneNumber`, `TenantMetaConfig` | Meta Cloud API, tenant config, DB |
 | Messenger/Facebook | Operational human messaging | `/app/inbox` | `metaWebhookPassive.ts`, `messengerInboundPersistence.ts`, channel accounts | `channelAccounts`, Page token |
 | Instagram | Operational inbound/outbound manual, human-only | `/app/inbox`, `/app/settings/channels/instagram` | `instagramInboundPersistence.ts`, `instagramBusinessLogin.service.ts`, channel accounts | Instagram Business Login token, aliases, app review |
-| Chatbot flows | Operational with tenant locks | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up and handoff notification settings are DB-first with `tenants.json` fallback; other tenant locks still use `TenantConfig` |
+| Chatbot flows | Operational with tenant locks | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification and media handoff policy settings are DB-first with `tenants.json` fallback; other tenant locks still use `TenantConfig` |
 | AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantConfig.ai*` | OpenAI config, tenant prompts/topics |
 | Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
@@ -72,7 +72,7 @@ Default government profile favors oversight and reporting:
 ## Main Runtime Dependencies
 
 - Postgres/Prisma for operational data and many tenant-owned entities.
-- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings and handoff lead notification settings.
+- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings and media handoff policy.
 - `.data/tenants.json` for tenant technical configuration not yet migrated.
 - Meta Cloud API for WhatsApp, Messenger and Instagram.
 - WebSocket bridge for realtime inbox.

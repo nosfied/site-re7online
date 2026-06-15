@@ -81,7 +81,10 @@ import {
   isAiAssistantConfigured,
   normalizeTenantMediaHandoffPolicy,
 } from "../config/tenantConfig.js";
-import { resolveHandoffLeadNotificationSettings } from "../config/tenantOperationalConfig.js";
+import {
+  resolveHandoffLeadNotificationSettings,
+  resolveMediaHandoffPolicy,
+} from "../config/tenantOperationalConfig.js";
 import {
   resolveFallbackTemplate,
   resolveTemplateForIntent,
@@ -880,6 +883,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     enabled: false,
     recipients: [] as Array<{ id: string; waId: string; label?: string; isActive: boolean }>,
   };
+  let mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(undefined);
   let tenantCredentialsPromise:
     | Promise<Awaited<ReturnType<typeof resolveTenantOutboundCredentials>>>
     | null = null;
@@ -900,6 +904,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       tenant: appliedTenantConfig,
     });
     handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
+    const resolvedMediaHandoffPolicy = await resolveMediaHandoffPolicy({
+      prisma,
+      clientId: tenantClientId,
+      tenant: appliedTenantConfig,
+    });
+    mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
     tenantAllowlist = (
       appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
     )
@@ -1190,11 +1200,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     params: { receivedMedia: boolean; messageId: string; nowIso: string }
   ) => {
     if (!params.receivedMedia || !tenantClientId || !appliedTenantConfig?.aiQualification) return state;
-    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig.mediaHandoffPolicy);
     if (
-      !mediaPolicy.enabled ||
-      !mediaPolicy.channels.includes("whatsapp") ||
-      mediaPolicy.behavior === "ignore"
+      !mediaHandoffPolicy.enabled ||
+      !mediaHandoffPolicy.channels.includes("whatsapp") ||
+      mediaHandoffPolicy.behavior === "ignore"
     ) {
       return state;
     }
@@ -2293,12 +2302,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       params.nextState.mode === "HUMAN" ||
       getHandoffStatus(params.nextState) === "active";
     if (previousIsHuman || !nextIsHuman) return;
-    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig?.mediaHandoffPolicy);
     const includeMediaSummary =
       params.receivedMedia === true &&
-      mediaPolicy.enabled &&
-      mediaPolicy.channels.includes("whatsapp") &&
-      (mediaPolicy.behavior === "notify_and_reply" || mediaPolicy.behavior === "notify_only");
+      mediaHandoffPolicy.enabled &&
+      mediaHandoffPolicy.channels.includes("whatsapp") &&
+      (mediaHandoffPolicy.behavior === "notify_and_reply" || mediaHandoffPolicy.behavior === "notify_only");
     await notifyHandoffLeadArrival({
       state: params.nextState,
       source: "runtime_transition",
@@ -2308,7 +2316,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         params.crmSummary ??
         [
           "Origem: Transicao operacional para atendimento humano",
-          includeMediaSummary ? mediaPolicy.attendantSummaryText : null,
+          includeMediaSummary ? mediaHandoffPolicy.attendantSummaryText : null,
           "Atendimento entrou na fila humana. Revise o inbox para ver o historico completo.",
         ]
           .filter(Boolean)
@@ -2332,11 +2340,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return params.nextState;
     }
     if (!tenantClientId) return params.nextState;
-    const mediaPolicy = normalizeTenantMediaHandoffPolicy(appliedTenantConfig?.mediaHandoffPolicy);
     const shouldReply =
-      mediaPolicy.enabled &&
-      mediaPolicy.channels.includes("whatsapp") &&
-      (mediaPolicy.behavior === "notify_and_reply" || mediaPolicy.behavior === "reply_only");
+      mediaHandoffPolicy.enabled &&
+      mediaHandoffPolicy.channels.includes("whatsapp") &&
+      (mediaHandoffPolicy.behavior === "notify_and_reply" || mediaHandoffPolicy.behavior === "reply_only");
     if (!shouldReply) return params.nextState;
     const previousIsHuman =
       params.previousState.mode === "HUMAN" ||
@@ -2366,7 +2373,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       return params.nextState;
     }
 
-    const replyText = mediaPolicy.customerNoticeText;
+    const replyText = mediaHandoffPolicy.customerNoticeText;
     const result = await sendOutboundText({
       toE164: env.WHATSAPP_SANDBOX ? env.WHATSAPP_SANDBOX_TO || params.nextState.waId : params.toE164,
       waId: params.nextState.waId,

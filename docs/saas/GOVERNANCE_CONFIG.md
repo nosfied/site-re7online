@@ -28,7 +28,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | Chatbot/automation locks | `tenants.json` | `tenants.json` | none | Migrate after governance, likely tenant operational config |
 | AI assistant prompts/topics/intents | `tenants.json` | `tenants.json` | none | Migrate after evaluation guardrails are documented |
 | AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate with automation settings |
-| Media handoff policy | `tenants.json` | `tenants.json` | none | Migrate as tenant automation config |
+| Media handoff policy | DB-first with JSON fallback | `TenantOperationalConfig.config.mediaHandoffPolicy` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Handoff lead notification recipients | DB-first with JSON fallback | `TenantOperationalConfig.config.handoffLeadNotification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Follow-up settings | DB-first with JSON fallback | `TenantOperationalConfig.config.followUp` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | CRM status catalog | DB-first with JSON fallback | `TenantOperationalConfig.config.crmBusinessStatuses` | `TenantOperationalConfig`, operational records in `Lead.status` | Keep fallback until tenants are backfilled and verified |
@@ -68,7 +68,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - AI assistant configuration
 - Chatbot/automation locks
 - `handoffLeadNotification*` fallback for tenants not yet backfilled
-- Media handoff policy
+- `mediaHandoffPolicy` fallback for tenants not yet backfilled
 - `followUp*` fallback for tenants not yet backfilled
 - Quotas and plan fields
 - `templates.manualHandoff` fallback for tenants not yet backfilled
@@ -86,6 +86,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Templates catalog and manual handoff pointer via `TenantOperationalConfig.config.templates.manualHandoff`, with JSON fallback
 - Follow-up settings via `TenantOperationalConfig.config.followUp`, with JSON fallback
 - Handoff lead notification settings via `TenantOperationalConfig.config.handoffLeadNotification`, with JSON fallback
+- Media handoff policy via `TenantOperationalConfig.config.mediaHandoffPolicy`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -207,6 +208,38 @@ Write/backfill path:
 - `/app/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
 - `/admin/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
 - WhatsApp webhook handoff notification runtime resolves settings DB-first before sending notifications.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+## Sprint 60 DB-First Rule
+
+`mediaHandoffPolicy` is the fifth migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "mediaHandoffPolicy": {
+    "enabled": true,
+    "channels": ["whatsapp"],
+    "behavior": "notify_and_reply",
+    "customerNoticeText": "Recebemos sua mídia. Vou direcionar para a equipe acompanhar.",
+    "attendantSummaryText": "Lead enviou mídia durante o atendimento."
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.mediaHandoffPolicy`
+2. fallback to `TenantConfig.mediaHandoffPolicy`
+3. default safe policy from `normalizeTenantMediaHandoffPolicy`
+
+Write/backfill path:
+
+- `/admin/chatbot/settings` writes media handoff policy to `TenantOperationalConfig`.
+- WhatsApp webhook runtime resolves media handoff policy DB-first before media qualification, handoff summary and customer notice decisions.
 - `npm run tenant-config:backfill -- --dry-run --json`
 - `npm run tenant-config:backfill -- --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
