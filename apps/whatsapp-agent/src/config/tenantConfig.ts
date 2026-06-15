@@ -528,7 +528,7 @@ export function normalizeTenantMediaHandoffPolicy(
   };
 }
 
-function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
+export function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCatalogItem[] {
   if (!Array.isArray(input)) return [];
   const items: AiAssistantIntentCatalogItem[] = [];
   const seen = new Set<string>();

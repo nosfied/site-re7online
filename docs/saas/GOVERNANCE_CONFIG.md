@@ -261,7 +261,39 @@ Write/backfill path:
 - `npm run tenant-config:backfill -- --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
-This sprint does not migrate `aiAssistantIntentCatalog`, `aiQualification`, channel accounts, tokens or OAuth settings.
+## Sprint 64 DB-First Rule
+
+`aiAssistantIntentCatalog` and `aiQualification` are the advanced AI behavior block.
+
+DB shape:
+
+```json
+{
+  "aiIntentQualification": {
+    "aiAssistantIntentCatalog": [],
+    "aiQualification": null
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.aiIntentQualification`
+2. fallback to `TenantConfig.aiAssistantIntentCatalog` and `TenantConfig.aiQualification`
+3. safe defaults: empty intent catalog and disabled qualification (`null`)
+
+Write/backfill path:
+
+- `/admin/chatbot/settings` writes intent catalog and qualification schema to `TenantOperationalConfig`.
+- `/admin/tenants/:tenantKey` writes the same fields to `TenantOperationalConfig` for compatibility with the internal console.
+- `/app/chatbot/settings` exposes the effective DB-first values.
+- WhatsApp webhook runtime and passive channel dry-run apply the effective DB-first values before intent/qualification logic runs.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+- Backfill reports only redacted counts for this block, not prompt-like content or tenant-specific qualification rules.
+
+This sprint does not migrate channel accounts, tokens or OAuth settings.
 
 ## Sprint 58 DB-First Rule
 

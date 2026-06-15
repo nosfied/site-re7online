@@ -1,9 +1,15 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "./env.js";
 import {
+  normalizeQualificationSchema,
+  type AiQualificationSchema,
+} from "../agent/qualification.js";
+import {
+  normalizeAiAssistantIntentCatalog,
   normalizeCrmBusinessStatuses,
   normalizeHandoffLeadNotificationRecipients,
   normalizeTenantMediaHandoffPolicy,
+  type AiAssistantIntentCatalogItem,
   type CrmBusinessStatusConfig,
   type HandoffLeadNotificationRecipient,
   type TenantMediaHandoffPolicy,
@@ -21,6 +27,7 @@ export type TenantOperationalConfigValue = {
   planLimits?: PlanLimitsSettings;
   automationFlags?: AutomationFlagsSettings;
   aiAssistantConfig?: AiAssistantConfigSettings;
+  aiIntentQualification?: AiIntentQualificationSettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -109,6 +116,16 @@ export type AiAssistantConfigSettings = {
 
 export type ResolvedAiAssistantConfigSettings = {
   settings: AiAssistantConfigSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type AiIntentQualificationSettings = {
+  aiAssistantIntentCatalog: AiAssistantIntentCatalogItem[];
+  aiQualification: AiQualificationSchema | null;
+};
+
+export type ResolvedAiIntentQualificationSettings = {
+  settings: AiIntentQualificationSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -360,6 +377,25 @@ function normalizeAiAssistantConfigSettingsFromTenant(
   });
 }
 
+function normalizeAiIntentQualificationSettings(input: unknown): AiIntentQualificationSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    aiAssistantIntentCatalog: normalizeAiAssistantIntentCatalog(record.aiAssistantIntentCatalog),
+    aiQualification: Object.prototype.hasOwnProperty.call(record, "aiQualification")
+      ? normalizeQualificationSchema(record.aiQualification) ?? null
+      : null,
+  };
+}
+
+function normalizeAiIntentQualificationSettingsFromTenant(
+  tenant?: Pick<TenantConfig, "aiAssistantIntentCatalog" | "aiQualification"> | null
+): AiIntentQualificationSettings {
+  return {
+    aiAssistantIntentCatalog: normalizeAiAssistantIntentCatalog(tenant?.aiAssistantIntentCatalog),
+    aiQualification: normalizeQualificationSchema(tenant?.aiQualification) ?? null,
+  };
+}
+
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
@@ -389,6 +425,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "aiAssistantConfig")) {
     config.aiAssistantConfig = normalizeAiAssistantConfigSettings(value.aiAssistantConfig);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "aiIntentQualification")) {
+    config.aiIntentQualification = normalizeAiIntentQualificationSettings(value.aiIntentQualification);
   }
   return config;
 }
@@ -917,6 +956,102 @@ export function applyAiAssistantConfigToTenant<T extends Partial<TenantConfig>>(
     ...tenant,
     ...settings,
   };
+}
+
+export async function resolveAiIntentQualificationSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<TenantConfig, "aiAssistantIntentCatalog" | "aiQualification"> | null;
+}): Promise<ResolvedAiIntentQualificationSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const fallback = normalizeAiIntentQualificationSettingsFromTenant(params.tenant);
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.aiIntentQualification) {
+    return {
+      settings: {
+        aiAssistantIntentCatalog: dbConfig.aiIntentQualification.aiAssistantIntentCatalog,
+        aiQualification: dbConfig.aiIntentQualification.aiQualification,
+      },
+      source: "db",
+    };
+  }
+  return {
+    settings: fallback,
+    source: "json_fallback",
+  };
+}
+
+export async function saveAiIntentQualificationSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<AiIntentQualificationSettings>;
+  tenant?: Pick<TenantConfig, "aiAssistantIntentCatalog" | "aiQualification"> | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).aiIntentQualification
+    ?? normalizeAiIntentQualificationSettingsFromTenant(params.tenant);
+  const nextSettings: AiIntentQualificationSettings = {
+    aiAssistantIntentCatalog: Object.prototype.hasOwnProperty.call(params.settings, "aiAssistantIntentCatalog")
+      ? normalizeAiAssistantIntentCatalog(params.settings.aiAssistantIntentCatalog)
+      : currentSettings.aiAssistantIntentCatalog,
+    aiQualification: Object.prototype.hasOwnProperty.call(params.settings, "aiQualification")
+      ? normalizeQualificationSchema(params.settings.aiQualification) ?? null
+      : currentSettings.aiQualification,
+  };
+  const nextConfig = {
+    ...existingConfig,
+    aiIntentQualification: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
+  };
+}
+
+export function applyAiIntentQualificationToTenant<T extends Partial<TenantConfig>>(
+  tenant: T,
+  settings: AiIntentQualificationSettings
+): T & {
+  aiAssistantIntentCatalog: AiAssistantIntentCatalogItem[];
+  aiQualification?: AiQualificationSchema;
+} {
+  const nextTenant = {
+    ...tenant,
+    aiAssistantIntentCatalog: settings.aiAssistantIntentCatalog,
+  } as T & {
+    aiAssistantIntentCatalog: AiAssistantIntentCatalogItem[];
+    aiQualification?: AiQualificationSchema;
+  };
+  if (settings.aiQualification) {
+    nextTenant.aiQualification = settings.aiQualification;
+  } else {
+    delete nextTenant.aiQualification;
+  }
+  return nextTenant;
 }
 
 export async function saveCrmBusinessStatuses(params: {

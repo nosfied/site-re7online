@@ -3,9 +3,11 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { normalizeQualificationSchema } from "../src/agent/qualification.js";
 import { env } from "../src/config/env.js";
 import {
   getTenants,
+  normalizeAiAssistantIntentCatalog,
   normalizeCrmBusinessStatuses,
   normalizeHandoffLeadNotificationRecipients,
   normalizeTenantMediaHandoffPolicy,
@@ -29,6 +31,7 @@ type BackfillItem = {
   planLimits: ReturnType<typeof normalizePlanLimits>;
   automationFlags: ReturnType<typeof normalizeAutomationFlags>;
   aiAssistantConfig: ReturnType<typeof summarizeAiAssistantConfig>;
+  aiIntentQualification: ReturnType<typeof summarizeAiIntentQualification>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -253,6 +256,26 @@ function summarizeAiAssistantConfig(config: ReturnType<typeof normalizeAiAssista
   };
 }
 
+function normalizeAiIntentQualification(tenant: {
+  aiAssistantIntentCatalog?: unknown;
+  aiQualification?: unknown;
+}) {
+  return {
+    aiAssistantIntentCatalog: normalizeAiAssistantIntentCatalog(tenant.aiAssistantIntentCatalog),
+    aiQualification: normalizeQualificationSchema(tenant.aiQualification) ?? null,
+  };
+}
+
+function summarizeAiIntentQualification(config: ReturnType<typeof normalizeAiIntentQualification>) {
+  return {
+    intentCatalogCount: config.aiAssistantIntentCatalog.length,
+    qualificationEnabled: config.aiQualification?.enabled === true,
+    qualificationSlotCount: config.aiQualification?.slots?.length ?? 0,
+    qualificationHandoffWhenCount: config.aiQualification?.handoffWhen?.length ?? 0,
+    qualificationOutcomeCount: config.aiQualification?.outcomes?.length ?? 0,
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
@@ -262,7 +285,8 @@ function mergeConfig(
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>,
   planLimits: ReturnType<typeof normalizePlanLimits>,
   automationFlags: ReturnType<typeof normalizeAutomationFlags>,
-  aiAssistantConfig: ReturnType<typeof normalizeAiAssistantConfig>
+  aiAssistantConfig: ReturnType<typeof normalizeAiAssistantConfig>,
+  aiIntentQualification: ReturnType<typeof normalizeAiIntentQualification>
 ): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
@@ -285,6 +309,7 @@ function mergeConfig(
   base.planLimits = planLimits;
   base.automationFlags = automationFlags;
   base.aiAssistantConfig = aiAssistantConfig;
+  base.aiIntentQualification = aiIntentQualification;
   return base as Prisma.InputJsonValue;
 }
 
@@ -317,6 +342,7 @@ async function main() {
       const planLimits = normalizePlanLimits(tenant);
       const automationFlags = normalizeAutomationFlags(tenant);
       const aiAssistantConfig = normalizeAiAssistantConfig(tenant);
+      const aiIntentQualification = normalizeAiIntentQualification(tenant);
       if (!client) {
         items.push({
           tenantKey,
@@ -330,6 +356,7 @@ async function main() {
           planLimits,
           automationFlags,
           aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
+          aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
         });
         continue;
       }
@@ -345,6 +372,7 @@ async function main() {
         planLimits,
         automationFlags,
         aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
+        aiIntentQualification: summarizeAiIntentQualification(aiIntentQualification),
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
@@ -356,7 +384,8 @@ async function main() {
         mediaHandoffPolicy,
         planLimits,
         automationFlags,
-        aiAssistantConfig
+        aiAssistantConfig,
+        aiIntentQualification
       );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },

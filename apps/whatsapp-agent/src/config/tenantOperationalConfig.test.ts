@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyAiIntentQualificationToTenant,
   applyAiAssistantConfigToTenant,
   resolveAiAssistantConfigSettings,
+  resolveAiIntentQualificationSettings,
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
 } from "./tenantOperationalConfig.js";
@@ -292,4 +294,74 @@ test("applyAiAssistantConfigToTenant preserves intent catalog and qualification 
   assert.deepEqual(applied.aiAssistantIntentCatalog, tenant.aiAssistantIntentCatalog);
   assert.deepEqual(applied.aiQualification, tenant.aiQualification);
   assert.equal(applied.aiBusinessContext, "Contexto");
+});
+
+test("resolveAiIntentQualificationSettings prefers DB intent catalog and qualification", async () => {
+  const resolved = await resolveAiIntentQualificationSettings({
+    prisma: prismaWithConfig({
+      aiIntentQualification: {
+        aiAssistantIntentCatalog: [
+          {
+            key: "catalogo",
+            topics: ["catalogo"],
+            preQualification: true,
+          },
+        ],
+        aiQualification: {
+          enabled: true,
+          slots: [
+            {
+              key: "email",
+              question: "Qual e-mail podemos anotar?",
+            },
+          ],
+        },
+      },
+    }),
+    clientId: "client-1",
+    tenant: {
+      aiAssistantIntentCatalog: [{ key: "json", topics: ["json"] }],
+      aiQualification: { enabled: false },
+    },
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.equal(resolved.settings.aiAssistantIntentCatalog[0]?.key, "catalogo");
+  assert.equal(resolved.settings.aiAssistantIntentCatalog[0]?.preQualification, true);
+  assert.equal(resolved.settings.aiQualification?.enabled, true);
+  assert.equal(resolved.settings.aiQualification?.slots?.[0]?.key, "email");
+});
+
+test("resolveAiIntentQualificationSettings falls back to tenants.json", async () => {
+  const resolved = await resolveAiIntentQualificationSettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+    tenant: {
+      aiAssistantIntentCatalog: [{ key: "showroom", topics: ["endereco"], handoff: true }],
+      aiQualification: {
+        enabled: true,
+        slots: [{ key: "tipo", question: "Uso próprio ou revenda?" }],
+      },
+    },
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.equal(resolved.settings.aiAssistantIntentCatalog[0]?.key, "showroom");
+  assert.equal(resolved.settings.aiQualification?.slots?.[0]?.key, "tipo");
+});
+
+test("applyAiIntentQualificationToTenant disables qualification when DB has null", () => {
+  const applied = applyAiIntentQualificationToTenant(
+    {
+      aiAssistantIntentCatalog: [{ key: "json", topics: ["json"] }],
+      aiQualification: { enabled: true },
+    } as Partial<import("./tenantConfig.js").TenantConfig>,
+    {
+      aiAssistantIntentCatalog: [{ key: "db", topics: ["db"] }],
+      aiQualification: null,
+    }
+  );
+
+  assert.deepEqual(applied.aiAssistantIntentCatalog, [{ key: "db", topics: ["db"] }]);
+  assert.equal(applied.aiQualification, undefined);
 });

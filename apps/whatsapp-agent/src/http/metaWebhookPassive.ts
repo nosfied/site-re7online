@@ -1,6 +1,11 @@
 import type { ServerResponse } from "node:http";
 import crypto from "node:crypto";
 import { getTenants, type TenantConfigMap } from "../config/tenantConfig.js";
+import {
+  applyAiIntentQualificationToTenant,
+  resolveAiIntentQualificationSettings,
+} from "../config/tenantOperationalConfig.js";
+import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
@@ -752,9 +757,34 @@ export async function processPassiveMetaWebhookPayload(
     }
     const tenantKey = resolution.tenantKey ?? "unknown";
     const tenant = tenants[tenantKey];
+    let effectiveTenant = tenant;
+    if (tenant && resolution.tenantKey) {
+      try {
+        const client = await getPrisma().client.findUnique({
+          where: { clientKey: resolution.tenantKey },
+          select: { id: true },
+        });
+        if (client) {
+          const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
+            prisma: getPrisma(),
+            clientId: client.id,
+            tenant,
+          });
+          effectiveTenant = applyAiIntentQualificationToTenant(tenant, resolvedAiIntentQualification.settings);
+        }
+      } catch (error) {
+        logger.warn({
+          event: "meta.webhook.passive.tenant_operational_config_fallback",
+          route: "/meta/webhook",
+          requestId: options.requestId,
+          tenantKey: resolution.tenantKey,
+          message: (error as Error).message,
+        });
+      }
+    }
     const accountForPersistence =
-      tenant && resolution.tenantKey
-        ? findTenantChannelAccount(tenant.channelAccounts ?? [], {
+      effectiveTenant && resolution.tenantKey
+        ? findTenantChannelAccount(effectiveTenant.channelAccounts ?? [], {
             tenantKey: resolution.tenantKey,
             channel,
             provider: "meta",
@@ -774,7 +804,7 @@ export async function processPassiveMetaWebhookPayload(
           ? { timestamp: getEventTimestamp(channel, item.event) }
           : {}),
       },
-      tenant
+      effectiveTenant
     );
     const shadowPlan = buildChannelRuntimeShadowPlan({
       tenantKey,
@@ -784,7 +814,7 @@ export async function processPassiveMetaWebhookPayload(
       externalUserHash,
       resolution: resolution.resolution,
       gate: runtimeGate,
-      qualificationEnabled: tenant?.aiQualification?.enabled === true,
+      qualificationEnabled: effectiveTenant?.aiQualification?.enabled === true,
       persistencePlanSummary: summarizeChannelPersistencePlan(persistencePlan),
     });
     logRuntimeGate({
@@ -838,7 +868,7 @@ export async function processPassiveMetaWebhookPayload(
         passive: true,
       });
 
-      if (!tenant) {
+      if (!effectiveTenant) {
         logRuntimeDryRun({
           requestId: options.requestId,
           normalized,
@@ -884,7 +914,7 @@ export async function processPassiveMetaWebhookPayload(
         const session = getOrCreateDryRunSession(runtimeIdentity);
         const dryRun = simulateChannelRuntimeDryRun({
           event: normalized,
-          tenant,
+          tenant: effectiveTenant,
           externalUserHash: hashExternalUserId(normalized.externalUserId),
           initialState: {
             aiQualification: session.aiQualification,

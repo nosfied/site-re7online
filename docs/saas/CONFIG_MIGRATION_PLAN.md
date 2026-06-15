@@ -58,7 +58,7 @@ These affect runtime behavior but do not usually contain external-provider token
 
 2. AI assistant configuration
    - Current: prompt/topic/profile subset is DB-first in `TenantOperationalConfig.config.aiAssistantConfig`
-   - Still JSON-only: `aiAssistantIntentCatalog` and `aiQualification`
+   - Current: intent catalog and qualification schema are DB-first in `TenantOperationalConfig.config.aiIntentQualification`
    - Risk: medium/high because tenant-specific automation quality depends on it
 
 3. Media handoff policy
@@ -130,21 +130,13 @@ Incremental expansion only after CRM settings are stable.
 - Sprint 61 migrated plan/quota limits to `TenantOperationalConfig.config.planLimits`.
 - Sprint 62 migrated automation disable flags to `TenantOperationalConfig.config.automationFlags`.
 - Sprint 63 migrated the scoped AI assistant config to `TenantOperationalConfig.config.aiAssistantConfig`.
+- Sprint 64 migrated intent catalog and qualification schema to `TenantOperationalConfig.config.aiIntentQualification`.
 - Keep DB-first loader with JSON fallback.
 - Do not migrate `channelAccounts` yet.
 
-### Next Candidate: AI Intent And Qualification
+### Current Remaining High-Risk Block: Channel Accounts Secure Storage
 
-After Sprint 63, the remaining medium-risk AI blocks are:
-
-- intent catalog;
-- qualification schema.
-
-This should be split into smaller sprints because it affects webhook runtime, assistant behavior, replay/evaluation and tenant-specific commercial quality.
-
-### Later Sprint: Channel Accounts Secure Storage
-
-Dedicated high-risk project.
+Dedicated high-risk project. It touches WhatsApp, Messenger, Instagram, aliases, inbound/outbound credentials, OAuth and tenant resolution. Do not start it without a separate preflight and rollback plan.
 
 - Design secure token storage.
 - Add channel account table/model.

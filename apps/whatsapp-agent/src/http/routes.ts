@@ -25,7 +25,9 @@ import {
 } from "../config/tenantConfig.js";
 import {
   applyAiAssistantConfigToTenant,
+  applyAiIntentQualificationToTenant,
   resolveAiAssistantConfigSettings,
+  resolveAiIntentQualificationSettings,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -34,6 +36,7 @@ import {
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
   saveAiAssistantConfigSettings,
+  saveAiIntentQualificationSettings,
   saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
@@ -41,6 +44,7 @@ import {
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
   type AiAssistantConfigSettings,
+  type AiIntentQualificationSettings,
   type AutomationFlagsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
@@ -3729,7 +3733,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenant,
       });
       const aiAssistantConfig = resolvedAiAssistantConfig.settings;
-      const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
+      const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const aiIntentQualification = resolvedAiIntentQualification.settings;
+      const effectiveTenant = applyAiIntentQualificationToTenant(
+        applyAiAssistantConfigToTenant(tenant, aiAssistantConfig),
+        aiIntentQualification
+      );
       const aiConfigurationStatus = getAiAssistantConfigurationStatus(effectiveTenant);
       const aiConfigured = aiConfigurationStatus.ready;
       const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
@@ -3766,8 +3779,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
           aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
           aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
-          aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
-          aiQualification: tenant.aiQualification,
+          aiAssistantIntentCatalog: aiIntentQualification.aiAssistantIntentCatalog,
+          aiQualification: aiIntentQualification.aiQualification,
           handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
           handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
@@ -3787,6 +3800,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: resolvedHandoffLeadNotification.source,
           aiAssistantConfig: resolvedAiAssistantConfig.source,
+          aiIntentQualification: resolvedAiIntentQualification.source,
         },
       });
     } catch (error) {
@@ -3900,7 +3914,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenant,
       });
       const aiAssistantConfig = resolvedAiAssistantConfig.settings;
-      const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
+      const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const aiIntentQualification = resolvedAiIntentQualification.settings;
+      const effectiveTenant = applyAiIntentQualificationToTenant(
+        applyAiAssistantConfigToTenant(tenant, aiAssistantConfig),
+        aiIntentQualification
+      );
       const aiConfigurationStatus = getAiAssistantConfigurationStatus(effectiveTenant);
       const aiConfigured = aiConfigurationStatus.ready;
       const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
@@ -3930,8 +3953,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
           aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
           aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
-          aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
-          aiQualification: tenant.aiQualification,
+          aiAssistantIntentCatalog: aiIntentQualification.aiAssistantIntentCatalog,
+          aiQualification: aiIntentQualification.aiQualification,
           handoffLeadNotificationEnabled: saved.settings.enabled,
           handoffLeadNotificationRecipients: saved.settings.recipients,
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
@@ -3951,6 +3974,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: "db",
           aiAssistantConfig: resolvedAiAssistantConfig.source,
+          aiIntentQualification: resolvedAiIntentQualification.source,
         },
       });
     } catch (error) {
@@ -7578,7 +7602,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenant,
         });
         const aiAssistantConfig = resolvedAiAssistantConfig.settings;
-        const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
+        const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const aiIntentQualification = resolvedAiIntentQualification.settings;
+        const effectiveTenant = applyAiIntentQualificationToTenant(
+          applyAiAssistantConfigToTenant(tenant, aiAssistantConfig),
+          aiIntentQualification
+        );
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -7601,8 +7634,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
             aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
             aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
-            aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
-            aiQualification: tenant.aiQualification,
+            aiAssistantIntentCatalog: aiIntentQualification.aiAssistantIntentCatalog,
+            aiQualification: aiIntentQualification.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
             mediaHandoffPolicy,
@@ -7628,6 +7661,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             handoffLeadNotification: resolvedHandoffLeadNotification.source,
             mediaHandoffPolicy: resolvedMediaHandoffPolicy.source,
             aiAssistantConfig: resolvedAiAssistantConfig.source,
+            aiIntentQualification: resolvedAiIntentQualification.source,
           },
         });
       } catch (error) {
@@ -7743,6 +7777,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const aiAssistantPatch: Record<string, unknown> = {};
         const aiAssistantConfigPatch: Partial<AiAssistantConfigSettings> = {};
         const aiAssistantConfigFieldsChanged: string[] = [];
+        const aiIntentQualificationPatch: Partial<AiIntentQualificationSettings> = {};
+        const aiIntentQualificationFieldsChanged: string[] = [];
         const handoffLeadNotificationPatch: Partial<HandoffLeadNotificationSettings> = {};
         const handoffLeadNotificationFieldsChanged: string[] = [];
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
@@ -7857,19 +7893,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantIntentCatalog must be an array of intent objects"));
             return;
           }
-          aiAssistantPatch.aiAssistantIntentCatalog = catalog;
+          aiIntentQualificationPatch.aiAssistantIntentCatalog = catalog;
+          aiIntentQualificationFieldsChanged.push("aiAssistantIntentCatalog");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiQualification")) {
           if (data.aiQualification === null || data.aiQualification === undefined) {
-            aiAssistantPatch.aiQualification = undefined;
+            aiIntentQualificationPatch.aiQualification = null;
           } else {
             const qualification = normalizeQualificationSchema(data.aiQualification);
             if (!qualification) {
               json(res, 400, httpError("bad_request", "aiQualification must be a valid qualification schema"));
               return;
             }
-            aiAssistantPatch.aiQualification = qualification;
+            aiIntentQualificationPatch.aiQualification = qualification;
           }
+          aiIntentQualificationFieldsChanged.push("aiQualification");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiBusinessContext")) {
           if (typeof data.aiBusinessContext !== "string") {
@@ -7909,6 +7947,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           followUpFieldsChanged.length === 0 &&
           handoffLeadNotificationFieldsChanged.length === 0 &&
           aiAssistantConfigFieldsChanged.length === 0 &&
+          aiIntentQualificationFieldsChanged.length === 0 &&
           !mediaHandoffPolicyPatch &&
           Object.keys(aiAssistantPatch).length === 0
         ) {
@@ -7933,14 +7972,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           tenant,
         })).settings;
+        const currentAiIntentQualification = (await resolveAiIntentQualificationSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        })).settings;
         const proposedAiAssistantConfig = {
           ...currentAiAssistantConfig,
           ...aiAssistantConfigPatch,
         };
-        const proposedTenant = applyAiAssistantConfigToTenant({
-          ...tenant,
-          ...aiAssistantPatch,
-        }, proposedAiAssistantConfig);
+        const proposedAiIntentQualification = {
+          ...currentAiIntentQualification,
+          ...aiIntentQualificationPatch,
+        };
+        const proposedTenant = applyAiIntentQualificationToTenant(
+          applyAiAssistantConfigToTenant({
+            ...tenant,
+            ...aiAssistantPatch,
+          }, proposedAiAssistantConfig),
+          proposedAiIntentQualification
+        );
         const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
         if (aiAssistantPatch.aiAssistantEnabled === true && !proposedAiStatus.ready) {
           logger.warn({
@@ -8080,7 +8131,30 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant,
           })).source;
         }
-        const savedEffectiveTenant = applyAiAssistantConfigToTenant(saved.tenant, aiAssistantConfigSettings);
+        let aiIntentQualificationSettings: AiIntentQualificationSettings;
+        let aiIntentQualificationSource: "db" | "json_fallback";
+        if (aiIntentQualificationFieldsChanged.length > 0) {
+          const savedAiIntentQualification = await saveAiIntentQualificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+            settings: aiIntentQualificationPatch,
+          });
+          aiIntentQualificationSettings = savedAiIntentQualification.settings;
+          aiIntentQualificationSource = "db";
+        } else {
+          const resolvedAiIntentQualification = await resolveAiIntentQualificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          });
+          aiIntentQualificationSettings = resolvedAiIntentQualification.settings;
+          aiIntentQualificationSource = resolvedAiIntentQualification.source;
+        }
+        const savedEffectiveTenant = applyAiIntentQualificationToTenant(
+          applyAiAssistantConfigToTenant(saved.tenant, aiAssistantConfigSettings),
+          aiIntentQualificationSettings
+        );
         const fieldsChanged = [
           ...saved.fieldsChanged,
           ...automationFlagFieldsChanged,
@@ -8088,6 +8162,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ...handoffLeadNotificationFieldsChanged,
           ...mediaHandoffPolicyResult.fieldsChanged,
           ...aiAssistantConfigFieldsChanged,
+          ...aiIntentQualificationFieldsChanged,
         ];
         logger.info({
           event: "admin.chatbot.settings.updated",
@@ -8139,8 +8214,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantGreetingMessage: aiAssistantConfigSettings.aiAssistantGreetingMessage,
             aiAssistantFallbackMessage: aiAssistantConfigSettings.aiAssistantFallbackMessage,
             aiAssistantHandoffPrompt: aiAssistantConfigSettings.aiAssistantHandoffPrompt,
-            aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
-            aiQualification: saved.tenant.aiQualification,
+            aiAssistantIntentCatalog: aiIntentQualificationSettings.aiAssistantIntentCatalog,
+            aiQualification: aiIntentQualificationSettings.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotificationSettings.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotificationSettings.recipients,
             mediaHandoffPolicy: mediaHandoffPolicyResult.policy,
@@ -8166,6 +8241,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             handoffLeadNotification: handoffLeadNotificationSource,
             mediaHandoffPolicy: mediaHandoffPolicyResult.source,
             aiAssistantConfig: aiAssistantConfigSource,
+            aiIntentQualification: aiIntentQualificationSource,
           },
         });
       } catch (error) {
@@ -9560,20 +9636,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const aiAssistantConfig = client
             ? (await resolveAiAssistantConfigSettings({ prisma, clientId: client.id, tenant })).settings
             : aiAssistantConfigFromTenantView(tenant);
+          const aiIntentQualification = client
+            ? (await resolveAiIntentQualificationSettings({ prisma, clientId: client.id, tenant })).settings
+            : aiIntentQualificationFromTenantView(tenant);
           return [
             key,
-            applyAiAssistantConfigToTenantView(
-              applyAutomationFlagsToTenantView(
-                applyPlanLimitsToTenantView(
-                  {
-                    ...tenant,
-                    channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-                  },
-                  planLimits
+            applyAiIntentQualificationToTenantView(
+              applyAiAssistantConfigToTenantView(
+                applyAutomationFlagsToTenantView(
+                  applyPlanLimitsToTenantView(
+                    {
+                      ...tenant,
+                      channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                    },
+                    planLimits
+                  ),
+                  automationFlags
                 ),
-                automationFlags
+                aiAssistantConfig
               ),
-              aiAssistantConfig
+              aiIntentQualification
             ),
           ] as const;
         })
@@ -10162,29 +10244,42 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             settings: aiAssistantConfigFromTenantView(tenant),
             source: "json_fallback" as const,
           };
-      const tenantWithDisplayPhone = applyAiAssistantConfigToTenantView(
-        applyAutomationFlagsToTenantView(
-          applyPlanLimitsToTenantView(
-            {
-              ...tenant,
-              templates: {
-                ...(tenant.templates ?? {}),
-                ...(resolvedManualHandoff.templateName
-                  ? { manualHandoff: resolvedManualHandoff.templateName }
-                  : {}),
+      const resolvedAiIntentQualification = client
+        ? await resolveAiIntentQualificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            settings: aiIntentQualificationFromTenantView(tenant),
+            source: "json_fallback" as const,
+          };
+      const tenantWithDisplayPhone = applyAiIntentQualificationToTenantView(
+        applyAiAssistantConfigToTenantView(
+          applyAutomationFlagsToTenantView(
+            applyPlanLimitsToTenantView(
+              {
+                ...tenant,
+                templates: {
+                  ...(tenant.templates ?? {}),
+                  ...(resolvedManualHandoff.templateName
+                    ? { manualHandoff: resolvedManualHandoff.templateName }
+                    : {}),
+                },
+                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                displayPhoneNumber:
+                  tenant.displayPhoneNumber?.trim() ||
+                  extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+                  phone?.display ||
+                  undefined,
               },
-              channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-              displayPhoneNumber:
-                tenant.displayPhoneNumber?.trim() ||
-                extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-                phone?.display ||
-                undefined,
-            },
-            resolvedPlanLimits.settings
+              resolvedPlanLimits.settings
+            ),
+            resolvedAutomationFlags.settings
           ),
-          resolvedAutomationFlags.settings
+          resolvedAiAssistantConfig.settings
         ),
-        resolvedAiAssistantConfig.settings
+        resolvedAiIntentQualification.settings
       );
       json(res, 200, {
         ok: true,
@@ -10197,6 +10292,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           planLimits: resolvedPlanLimits.source,
           automationFlags: resolvedAutomationFlags.source,
           aiAssistantConfig: resolvedAiAssistantConfig.source,
+          aiIntentQualification: resolvedAiIntentQualification.source,
         },
         client: client
           ? {
@@ -10955,6 +11051,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantHandoffKeywords,
           aiAssistantMaxReplies,
           aiAssistantProfile,
+          aiAssistantIntentCatalog,
+          aiQualification,
           ...tenantPatch
         } = rawBody;
         const planLimitFieldsChanged = [
@@ -11009,6 +11107,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantProfile") ? ["aiAssistantProfile"] : []),
         ];
+        const aiIntentQualificationFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantIntentCatalog")
+            ? ["aiAssistantIntentCatalog"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiQualification") ? ["aiQualification"] : []),
+        ];
         for (const key of automationFlagFieldsChanged) {
           if (typeof rawBody[key] !== "boolean") {
             json(res, 400, httpError("bad_request", `${key} must be boolean`));
@@ -11055,6 +11159,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ) {
           json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
           return;
+        }
+        const aiIntentQualificationPatch: Partial<AiIntentQualificationSettings> = {};
+        if (Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantIntentCatalog")) {
+          const catalog = normalizeAiAssistantIntentCatalog(aiAssistantIntentCatalog);
+          if (!catalog) {
+            json(res, 400, httpError("bad_request", "aiAssistantIntentCatalog must be an array of intent objects"));
+            return;
+          }
+          aiIntentQualificationPatch.aiAssistantIntentCatalog = catalog;
+        }
+        if (Object.prototype.hasOwnProperty.call(rawBody, "aiQualification")) {
+          if (aiQualification === null || aiQualification === undefined) {
+            aiIntentQualificationPatch.aiQualification = null;
+          } else {
+            const qualification = normalizeQualificationSchema(aiQualification);
+            if (!qualification) {
+              json(res, 400, httpError("bad_request", "aiQualification must be a valid qualification schema"));
+              return;
+            }
+            aiIntentQualificationPatch.aiQualification = qualification;
+          }
         }
         const tenants = await getTenants();
         const currentTenant = tenants[tenantId];
@@ -11225,6 +11350,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant: currentTenant,
           })).settings;
         }
+        let aiIntentQualificationSettings: AiIntentQualificationSettings | null = null;
+        if (client && aiIntentQualificationFieldsChanged.length > 0) {
+          const savedAiIntentQualification = await saveAiIntentQualificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: aiIntentQualificationPatch,
+          });
+          aiIntentQualificationSettings = savedAiIntentQualification.settings;
+        } else if (client) {
+          aiIntentQualificationSettings = (await resolveAiIntentQualificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+          })).settings;
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
           if (client) {
@@ -11245,6 +11386,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
+            ...aiIntentQualificationFieldsChanged,
           ],
           backupPath: saved.backupPath,
           requestId,
@@ -11259,35 +11401,39 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
             ...aiAssistantConfigFieldsChanged,
+            ...aiIntentQualificationFieldsChanged,
           ],
-          tenant: applyAiAssistantConfigToTenantView(
-            applyAutomationFlagsToTenantView(
-              applyPlanLimitsToTenantView(
-                {
-                  ...saved.tenant,
-                  channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
-                },
-                planLimitsSettings ?? {
-                  planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
-                  messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
-                  quotaMonthlyConversations:
-                    typeof currentTenant.quotaMonthlyConversations === "number"
-                      ? currentTenant.quotaMonthlyConversations
-                      : null,
-                  quotaWarnAtPct:
-                    typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
-                  quotaBlockedReplyText:
-                    typeof currentTenant.quotaBlockedReplyText === "string"
-                      ? currentTenant.quotaBlockedReplyText
-                      : null,
-                  quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
-                    ? currentTenant.quotaExcludeWaIds
-                    : [],
-                }
+          tenant: applyAiIntentQualificationToTenantView(
+            applyAiAssistantConfigToTenantView(
+              applyAutomationFlagsToTenantView(
+                applyPlanLimitsToTenantView(
+                  {
+                    ...saved.tenant,
+                    channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+                  },
+                  planLimitsSettings ?? {
+                    planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
+                    messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
+                    quotaMonthlyConversations:
+                      typeof currentTenant.quotaMonthlyConversations === "number"
+                        ? currentTenant.quotaMonthlyConversations
+                        : null,
+                    quotaWarnAtPct:
+                      typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
+                    quotaBlockedReplyText:
+                      typeof currentTenant.quotaBlockedReplyText === "string"
+                        ? currentTenant.quotaBlockedReplyText
+                        : null,
+                    quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
+                      ? currentTenant.quotaExcludeWaIds
+                      : [],
+                  }
+                ),
+                automationFlagsSettings ?? automationFlagsFromTenantView(currentTenant)
               ),
-              automationFlagsSettings ?? automationFlagsFromTenantView(currentTenant)
+              aiAssistantConfigSettings ?? aiAssistantConfigFromTenantView(currentTenant)
             ),
-            aiAssistantConfigSettings ?? aiAssistantConfigFromTenantView(currentTenant)
+            aiIntentQualificationSettings ?? aiIntentQualificationFromTenantView(currentTenant)
           ),
         });
       } catch (error) {
@@ -13493,6 +13639,7 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
       return null;
     }
     if (item.handoff !== undefined && typeof item.handoff !== "boolean") return null;
+    if (item.preQualification !== undefined && typeof item.preQualification !== "boolean") return null;
     normalized.push({
       key,
       ...(title ? { title } : {}),
@@ -13506,6 +13653,7 @@ function normalizeAiAssistantIntentCatalog(input: unknown): AiAssistantIntentCat
         ? { priority: item.priority }
         : {}),
       ...(typeof item.handoff === "boolean" ? { handoff: item.handoff } : {}),
+      ...(typeof item.preQualification === "boolean" ? { preQualification: item.preQualification } : {}),
       tags: tags.filter((tag) => /^[a-z0-9_:-]{2,80}$/.test(tag.toLowerCase())),
     });
   }
@@ -17883,6 +18031,31 @@ function applyAiAssistantConfigToTenantView<T extends Record<string, unknown>>(
     ...tenant,
     ...settings,
   };
+}
+
+function aiIntentQualificationFromTenantView(tenant: Record<string, unknown>): AiIntentQualificationSettings {
+  return {
+    aiAssistantIntentCatalog: normalizeAiAssistantIntentCatalog(tenant.aiAssistantIntentCatalog) ?? [],
+    aiQualification: normalizeQualificationSchema(tenant.aiQualification) ?? null,
+  };
+}
+
+function applyAiIntentQualificationToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  settings: AiIntentQualificationSettings
+) {
+  const nextTenant = {
+    ...tenant,
+    aiAssistantIntentCatalog: settings.aiAssistantIntentCatalog,
+  };
+  if (settings.aiQualification) {
+    return {
+      ...nextTenant,
+      aiQualification: settings.aiQualification,
+    };
+  }
+  const { aiQualification: _aiQualification, ...withoutQualification } = nextTenant;
+  return withoutQualification;
 }
 
 async function adminSendMessage(params: {
