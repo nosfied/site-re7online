@@ -77,6 +77,7 @@ model Client {
   templateRequests TemplateRequest[]
   slaConfig      SLAConfig?
   retentionConfig RetentionConfig?
+  operationalConfig TenantOperationalConfig?
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
   chatbotFlows  ChatbotFlow[]
@@ -355,6 +356,17 @@ model RetentionConfig {
   clientId      String   @unique @db.Uuid
   retentionDays Int      @default(90)
   createdAt     DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model TenantOperationalConfig {
+  id            String   @id @default(cuid())
+  clientId      String   @unique @db.Uuid
+  config        Json
+  schemaVersion Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }

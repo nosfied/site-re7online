@@ -24,6 +24,7 @@
     "retention:run": "tsx scripts/run-retention.ts",
     "storage:report": "tsx scripts/storage-report.ts",
     "events:retention": "tsx scripts/events-retention.ts",
+    "tenant-config:backfill": "node --import tsx scripts/backfill-tenant-operational-config.ts",
     "channels:backfill": "node --import tsx scripts/channels-backfill.ts",
     "channels:backfill:dry-run": "node --import tsx scripts/channels-backfill-dry-run.ts",
     "smoke:webhook:staging": "node --import tsx scripts/staging-webhook-smoke.ts",

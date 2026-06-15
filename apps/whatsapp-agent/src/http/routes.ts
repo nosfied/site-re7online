@@ -23,6 +23,10 @@ import {
   saveTenants,
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
+import {
+  resolveCrmBusinessStatuses,
+  saveCrmBusinessStatuses,
+} from "../config/tenantOperationalConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
   fetchMediaContent,
@@ -3913,7 +3917,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
-      const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const statuses = resolvedStatuses.statuses;
       const counts = await prisma.lead.groupBy({
         by: ["status"],
         where: { tenantId: client.id },
@@ -3927,6 +3936,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantId: client.clientKey,
         settings: {
           crmBusinessStatuses: statuses,
+        },
+        configSource: {
+          crmBusinessStatuses: resolvedStatuses.source,
         },
         leadCountsByStatus,
       });
@@ -3971,8 +3983,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       const statuses = normalizeCrmBusinessStatuses(data.crmBusinessStatuses);
-      const saved = await saveTenantPatch(client.clientKey, {
-        crmBusinessStatuses: statuses,
+      const saved = await saveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        statuses,
       });
       logger.info({
         event: "app.crm.settings.updated",
@@ -3980,15 +3994,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         clientKey: client.clientKey,
         userId: clientAuth.userId,
-        statusCount: statuses.length,
-        fieldsChanged: saved.fieldsChanged,
+        statusCount: saved.statuses.length,
+        configSource: "db",
       });
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
-        fieldsChanged: saved.fieldsChanged,
+        fieldsChanged: ["crmBusinessStatuses"],
         settings: {
-          crmBusinessStatuses: normalizeCrmBusinessStatuses(saved.tenant.crmBusinessStatuses),
+          crmBusinessStatuses: saved.statuses,
+        },
+        configSource: {
+          crmBusinessStatuses: "db",
         },
       });
     } catch (error) {
@@ -4026,7 +4043,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
-      const configuredStatuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const configuredStatuses = (
+        await resolveCrmBusinessStatuses({
+          prisma,
+          clientId: client.id,
+          tenant,
+        })
+      ).statuses;
       const allowedStatuses = new Set(
         configuredStatuses
           .filter((item) => item.isActive && item.campaignEligible)
