@@ -30,11 +30,11 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate with automation settings |
 | Media handoff policy | `tenants.json` | `tenants.json` | none | Migrate as tenant automation config |
 | Handoff lead notification recipients | `tenants.json` | `tenants.json` | none | Migrate with notification settings |
-| Follow-up settings | `tenants.json` | `tenants.json` | none | Migrate after follow-up ownership is defined |
+| Follow-up settings | DB-first with JSON fallback | `TenantOperationalConfig.config.followUp` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | CRM status catalog | DB-first with JSON fallback | `TenantOperationalConfig.config.crmBusinessStatuses` | `TenantOperationalConfig`, operational records in `Lead.status` | Keep fallback until tenants are backfilled and verified |
 | Leads/CRM records | DB | DB | `Lead`, `LeadNote`, `Contact`, `Conversation` | Keep DB-first |
 | Campaigns | DB | DB | `Campaign` | Keep DB-first |
-| Templates | DB + small JSON pointer | DB for catalog; JSON for `templates.manualHandoff` | `Template`, `TemplateRequest` | Move manual handoff template pointer to DB config |
+| Templates | DB-first for manual handoff pointer with JSON fallback | `TenantOperationalConfig.config.templates.manualHandoff` for pointer; DB for catalog | `Template`, `TemplateRequest`, `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Departments/queues | DB | DB | `Department`, `Queue` | Keep DB-first |
 | Users/RBAC/sessions | DB | DB | `User`, `AppAuthSession`, `PasswordResetToken` | Keep DB-first |
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
@@ -50,7 +50,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `WaPhoneNumber.phoneNumberId` and `TenantMetaConfig.phoneNumberId` vs `TenantConfig.metaPhoneNumberId`.
 - `ChatbotFlow` in DB vs automation flags and AI schema in `tenants.json`.
 - `Lead.status` in DB vs `crmBusinessStatuses` catalog now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
-- `Template` in DB vs `templates.manualHandoff` in `tenants.json`.
+- `Template` catalog in DB vs `templates.manualHandoff` pointer now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
 
 ## Current Risks
 
@@ -69,9 +69,9 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Chatbot/automation locks
 - Handoff notification recipients
 - Media handoff policy
-- Follow-up settings
+- `followUp*` fallback for tenants not yet backfilled
 - Quotas and plan fields
-- Manual handoff template pointer
+- `templates.manualHandoff` fallback for tenants not yet backfilled
 - Some onboarding/bootstrap fallback fields
 
 ## DB-First Areas
@@ -83,7 +83,8 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Push subscriptions
 - Departments/queues
 - Campaigns
-- Templates catalog
+- Templates catalog and manual handoff pointer via `TenantOperationalConfig.config.templates.manualHandoff`, with JSON fallback
+- Follow-up settings via `TenantOperationalConfig.config.followUp`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -120,3 +121,54 @@ Backfill:
 - `npm run tenant-config:backfill -- --json`
 
 Do not use `TenantOperationalConfig` for tokens, channel accounts, OAuth data or raw provider payloads.
+
+## Sprint 57 DB-First Rule
+
+`templates.manualHandoff` is the second migrated operational config block.
+
+Read path:
+
+1. `TenantOperationalConfig.config.templates.manualHandoff`
+2. fallback to `TenantConfig.templates.manualHandoff`
+3. `null`/empty if neither exists
+
+Write/backfill path:
+
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+The admin tenant read endpoint returns the effective DB-first `templates.manualHandoff` value for compatibility with existing runtime scripts.
+
+## Sprint 58 DB-First Rule
+
+`followUp*` settings are the third migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "followUp": {
+    "enabled": true,
+    "delayMinutes": 60,
+    "maxCount": 3,
+    "useTemplate": true,
+    "templateName": "re7_followup_v1",
+    "templateLang": "pt_BR"
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.followUp`
+2. fallback to `TenantConfig.followUp*`
+3. environment defaults for safe missing values
+
+Write/backfill path:
+
+- `/admin/chatbot/settings` writes follow-up fields to `TenantOperationalConfig`.
+- `findEligibleFollowUps()` resolves follow-up settings DB-first before evaluating eligibility.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.

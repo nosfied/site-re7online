@@ -27,7 +27,9 @@ These can be migrated first because they are less coupled to external providers 
 
 2. Manual handoff template pointer
    - Current: `TenantConfig.templates.manualHandoff`
-   - Candidate destination: template settings linked to `Template`
+   - Implemented destination: `TenantOperationalConfig.config.templates.manualHandoff`
+   - Existing DB relation: `Template`, `TemplateRequest`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: low if fallback remains
 
 3. Company/legal/contract metadata
@@ -58,6 +60,8 @@ These affect runtime behavior but do not usually contain external-provider token
 
 4. Follow-up settings
    - Current: follow-up enablement, delay, count and template fields
+   - Implemented destination: `TenantOperationalConfig.config.followUp`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: medium because scheduler behavior depends on it
 
 5. Handoff notification recipients
@@ -108,6 +112,8 @@ Incremental expansion only after CRM settings are stable.
 
 - Reuse `TenantOperationalConfig`.
 - Add one low-risk block at a time.
+- Sprint 57 migrated `templates.manualHandoff` to `TenantOperationalConfig.config.templates.manualHandoff`.
+- Sprint 58 migrated `followUp*` settings to `TenantOperationalConfig.config.followUp`.
 - Keep DB-first loader with JSON fallback.
 - Do not migrate `channelAccounts` yet.
 

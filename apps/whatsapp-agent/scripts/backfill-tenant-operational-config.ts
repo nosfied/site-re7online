@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { env } from "../src/config/env.js";
 import { getTenants, normalizeCrmBusinessStatuses } from "../src/config/tenantConfig.js";
 
 type Options = {
@@ -16,6 +17,8 @@ type BackfillItem = {
   clientId: string | null;
   action: "would_upsert" | "upserted" | "skipped_missing_client";
   statusCount: number;
+  manualHandoffTemplate: string | null;
+  followUp: ReturnType<typeof normalizeFollowUp>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -54,12 +57,77 @@ function loadEnv() {
   dotenv.config({ path: envPath });
 }
 
-function mergeConfig(current: unknown, crmBusinessStatuses: unknown): Prisma.InputJsonValue {
+function normalizeManualHandoffTemplate(input: unknown) {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  return value ? value.slice(0, 120) : null;
+}
+
+function normalizePositiveInteger(input: unknown, fallback: number) {
+  if (typeof input !== "number" || !Number.isFinite(input)) return fallback;
+  return Math.max(1, Math.floor(input));
+}
+
+function normalizeNonNegativeInteger(input: unknown, fallback: number) {
+  if (typeof input !== "number" || !Number.isFinite(input)) return fallback;
+  return Math.max(0, Math.floor(input));
+}
+
+function normalizeTemplateName(input: unknown) {
+  if (typeof input !== "string") return "";
+  const value = input.trim();
+  return /^[a-z0-9_]+$/.test(value) ? value.slice(0, 120) : "";
+}
+
+function normalizeTemplateLang(input: unknown, fallback?: string | null) {
+  const value = typeof input === "string" ? input.trim() : "";
+  if (/^[a-z]{2}_[A-Z]{2}$/.test(value)) return value;
+  const fallbackValue = typeof fallback === "string" ? fallback.trim() : "";
+  if (/^[a-z]{2}_[A-Z]{2}$/.test(fallbackValue)) return fallbackValue;
+  return env.OUTBOUND_TEMPLATE_DEFAULT_LANG;
+}
+
+function normalizeFollowUp(tenant: {
+  followUpEnabled?: boolean;
+  followUpDelayMinutes?: number;
+  followUpMaxCount?: number;
+  followUpUseTemplate?: boolean;
+  followUpTemplateName?: string;
+  followUpTemplateLang?: string;
+  defaultLanguage?: string;
+}) {
+  return {
+    enabled: tenant.followUpEnabled === true,
+    delayMinutes: normalizePositiveInteger(tenant.followUpDelayMinutes, env.FOLLOWUP_DEFAULT_DELAY_MINUTES),
+    maxCount: normalizeNonNegativeInteger(tenant.followUpMaxCount, env.FOLLOWUP_MAX_PER_CONVERSATION),
+    useTemplate: tenant.followUpUseTemplate === true,
+    templateName: normalizeTemplateName(tenant.followUpTemplateName),
+    templateLang: normalizeTemplateLang(tenant.followUpTemplateLang, tenant.defaultLanguage),
+  };
+}
+
+function mergeConfig(
+  current: unknown,
+  crmBusinessStatuses: unknown,
+  manualHandoffTemplate: string | null,
+  followUp: ReturnType<typeof normalizeFollowUp>
+): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
       ? { ...(current as Record<string, unknown>) }
       : {};
   base.crmBusinessStatuses = crmBusinessStatuses;
+  if (manualHandoffTemplate) {
+    const currentTemplates =
+      base.templates && typeof base.templates === "object" && !Array.isArray(base.templates)
+        ? { ...(base.templates as Record<string, unknown>) }
+        : {};
+    base.templates = {
+      ...currentTemplates,
+      manualHandoff: manualHandoffTemplate,
+    };
+  }
+  base.followUp = followUp;
   return base as Prisma.InputJsonValue;
 }
 
@@ -85,12 +153,16 @@ async function main() {
         },
       });
       const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
+      const manualHandoffTemplate = normalizeManualHandoffTemplate(tenant.templates?.manualHandoff);
+      const followUp = normalizeFollowUp(tenant);
       if (!client) {
         items.push({
           tenantKey,
           clientId: null,
           action: "skipped_missing_client",
           statusCount: statuses.length,
+          manualHandoffTemplate,
+          followUp,
         });
         continue;
       }
@@ -99,9 +171,16 @@ async function main() {
         clientId: client.id,
         action: options.dryRun ? "would_upsert" : "upserted",
         statusCount: statuses.length,
+        manualHandoffTemplate,
+        followUp,
       });
       if (options.dryRun) continue;
-      const nextConfig = mergeConfig(client.operationalConfig?.config, statuses);
+      const nextConfig = mergeConfig(
+        client.operationalConfig?.config,
+        statuses,
+        manualHandoffTemplate,
+        followUp
+      );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },
         update: {
@@ -134,7 +213,9 @@ async function main() {
       );
       for (const item of items) {
         console.log(
-          `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} crmBusinessStatuses=${item.statusCount}`
+          `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} ` +
+            `crmBusinessStatuses=${item.statusCount} manualHandoff=${item.manualHandoffTemplate ?? "-"} ` +
+            `followUpEnabled=${item.followUp.enabled} followUpDelayMinutes=${item.followUp.delayMinutes}`
         );
       }
     }

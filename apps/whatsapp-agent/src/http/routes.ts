@@ -25,7 +25,11 @@ import {
 } from "../config/tenantConfig.js";
 import {
   resolveCrmBusinessStatuses,
+  resolveFollowUpSettings,
+  resolveManualHandoffTemplate,
   saveCrmBusinessStatuses,
+  saveFollowUpSettings,
+  type FollowUpSettings,
 } from "../config/tenantOperationalConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
@@ -7477,6 +7481,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("tenant_not_found", "Tenant not found"));
           return;
         }
+        const resolvedFollowUp = await resolveFollowUpSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const followUp = resolvedFollowUp.settings;
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -7515,13 +7525,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
-            followUpEnabled: tenant.followUpEnabled === true,
-            followUpDelayMinutes: tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
-            followUpMaxCount: tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
-            followUpUseTemplate: tenant.followUpUseTemplate === true,
-            followUpTemplateName: tenant.followUpTemplateName ?? "",
-            followUpTemplateLang:
-              tenant.followUpTemplateLang ?? tenant.defaultLanguage ?? env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+            followUpEnabled: followUp.enabled,
+            followUpDelayMinutes: followUp.delayMinutes,
+            followUpMaxCount: followUp.maxCount,
+            followUpUseTemplate: followUp.useTemplate,
+            followUpTemplateName: followUp.templateName,
+            followUpTemplateLang: followUp.templateLang,
+          },
+          configSource: {
+            followUp: resolvedFollowUp.source,
           },
         });
       } catch (error) {
@@ -7564,20 +7576,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             payload[key] = data[key] as boolean;
           }
         }
-        const followUpPatch: Record<string, unknown> = {};
+        const followUpPatch: Partial<FollowUpSettings> = {};
+        const followUpFieldsChanged: string[] = [];
         if (Object.prototype.hasOwnProperty.call(data, "followUpEnabled")) {
           if (typeof data.followUpEnabled !== "boolean") {
             json(res, 400, httpError("bad_request", "followUpEnabled must be boolean"));
             return;
           }
-          followUpPatch.followUpEnabled = data.followUpEnabled;
+          followUpPatch.enabled = data.followUpEnabled;
+          followUpFieldsChanged.push("followUpEnabled");
         }
         if (Object.prototype.hasOwnProperty.call(data, "followUpUseTemplate")) {
           if (typeof data.followUpUseTemplate !== "boolean") {
             json(res, 400, httpError("bad_request", "followUpUseTemplate must be boolean"));
             return;
           }
-          followUpPatch.followUpUseTemplate = data.followUpUseTemplate;
+          followUpPatch.useTemplate = data.followUpUseTemplate;
+          followUpFieldsChanged.push("followUpUseTemplate");
         }
         if (Object.prototype.hasOwnProperty.call(data, "followUpDelayMinutes")) {
           if (
@@ -7588,7 +7603,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "followUpDelayMinutes must be a positive number"));
             return;
           }
-          followUpPatch.followUpDelayMinutes = Math.floor(data.followUpDelayMinutes);
+          followUpPatch.delayMinutes = Math.floor(data.followUpDelayMinutes);
+          followUpFieldsChanged.push("followUpDelayMinutes");
         }
         if (Object.prototype.hasOwnProperty.call(data, "followUpMaxCount")) {
           if (
@@ -7599,7 +7615,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "followUpMaxCount must be a non-negative integer"));
             return;
           }
-          followUpPatch.followUpMaxCount = data.followUpMaxCount;
+          followUpPatch.maxCount = data.followUpMaxCount;
+          followUpFieldsChanged.push("followUpMaxCount");
         }
         if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateName")) {
           if (typeof data.followUpTemplateName !== "string") {
@@ -7611,7 +7628,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "followUpTemplateName must use lowercase letters, numbers and underscore"));
             return;
           }
-          followUpPatch.followUpTemplateName = templateName || undefined;
+          followUpPatch.templateName = templateName;
+          followUpFieldsChanged.push("followUpTemplateName");
         }
         if (Object.prototype.hasOwnProperty.call(data, "followUpTemplateLang")) {
           if (typeof data.followUpTemplateLang !== "string") {
@@ -7623,7 +7641,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "followUpTemplateLang must use format pt_BR"));
             return;
           }
-          followUpPatch.followUpTemplateLang = templateLang || undefined;
+          followUpPatch.templateLang = templateLang || env.OUTBOUND_TEMPLATE_DEFAULT_LANG;
+          followUpFieldsChanged.push("followUpTemplateLang");
         }
         const aiAssistantPatch: Record<string, unknown> = {};
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
@@ -7783,7 +7802,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             : null;
         if (
           Object.keys(payload).length === 0 &&
-          Object.keys(followUpPatch).length === 0 &&
+          followUpFieldsChanged.length === 0 &&
           Object.keys(aiAssistantPatch).length === 0
         ) {
           json(
@@ -7805,7 +7824,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const proposedTenant = {
           ...tenant,
           ...payload,
-          ...followUpPatch,
           ...aiAssistantPatch,
         };
         const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
@@ -7841,7 +7859,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
-        const saved = await saveTenantPatch(clientKey, {
+        const jsonPatch = {
           ...(payload.disableChatbot !== undefined
             ? { disableChatbot: payload.disableChatbot }
             : {}),
@@ -7857,15 +7875,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ...(payload.disableChatbotFlowEditing !== undefined
             ? { disableChatbotFlowEditing: payload.disableChatbotFlowEditing }
             : {}),
-          ...followUpPatch,
           ...aiAssistantPatch,
-        });
+        };
+        const saved = Object.keys(jsonPatch).length > 0
+          ? await saveTenantPatch(clientKey, jsonPatch)
+          : {
+              tenant,
+              fieldsChanged: [] as string[],
+            };
+        let followUpSettings: FollowUpSettings;
+        let followUpSource: "db" | "json_fallback";
+        if (followUpFieldsChanged.length > 0) {
+          const savedFollowUp = await saveFollowUpSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+            settings: followUpPatch,
+          });
+          followUpSettings = savedFollowUp.settings;
+          followUpSource = "db";
+        } else {
+          const resolvedFollowUp = await resolveFollowUpSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          });
+          followUpSettings = resolvedFollowUp.settings;
+          followUpSource = resolvedFollowUp.source;
+        }
+        const fieldsChanged = [...saved.fieldsChanged, ...followUpFieldsChanged];
         logger.info({
           event: "admin.chatbot.settings.updated",
           requestId,
           clientId: client.id,
           clientKey,
-          fieldsChanged: saved.fieldsChanged,
+          fieldsChanged,
         });
         const savedAiStatus = getAiAssistantConfigurationStatus(saved.tenant);
         logger.info({
@@ -7890,7 +7934,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
-          fieldsChanged: saved.fieldsChanged,
+          fieldsChanged,
           settings: {
             disableAutoReply: Boolean(saved.tenant.disableAutoReply),
             disableChatbot: Boolean(saved.tenant.disableChatbot),
@@ -7926,15 +7970,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
-            followUpEnabled: saved.tenant.followUpEnabled === true,
-            followUpDelayMinutes: saved.tenant.followUpDelayMinutes ?? env.FOLLOWUP_DEFAULT_DELAY_MINUTES,
-            followUpMaxCount: saved.tenant.followUpMaxCount ?? env.FOLLOWUP_MAX_PER_CONVERSATION,
-            followUpUseTemplate: saved.tenant.followUpUseTemplate === true,
-            followUpTemplateName: saved.tenant.followUpTemplateName ?? "",
-            followUpTemplateLang:
-              saved.tenant.followUpTemplateLang ??
-              saved.tenant.defaultLanguage ??
-              env.OUTBOUND_TEMPLATE_DEFAULT_LANG,
+            followUpEnabled: followUpSettings.enabled,
+            followUpDelayMinutes: followUpSettings.delayMinutes,
+            followUpMaxCount: followUpSettings.maxCount,
+            followUpUseTemplate: followUpSettings.useTemplate,
+            followUpTemplateName: followUpSettings.templateName,
+            followUpTemplateLang: followUpSettings.templateLang,
+          },
+          configSource: {
+            followUp: followUpSource,
           },
         });
       } catch (error) {
@@ -9839,8 +9883,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         },
       });
       const phone = client?.phoneNumbers[0] ?? null;
+      const resolvedManualHandoff = client
+        ? await resolveManualHandoffTemplate({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            templateName:
+              typeof tenant.templates?.manualHandoff === "string" &&
+              tenant.templates.manualHandoff.trim()
+                ? tenant.templates.manualHandoff.trim()
+                : null,
+            source: "json_fallback" as const,
+          };
       const tenantWithDisplayPhone = {
         ...tenant,
+        templates: {
+          ...(tenant.templates ?? {}),
+          ...(resolvedManualHandoff.templateName
+            ? { manualHandoff: resolvedManualHandoff.templateName }
+            : {}),
+        },
         channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
         displayPhoneNumber:
           tenant.displayPhoneNumber?.trim() ||
@@ -9852,6 +9916,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ok: true,
         tenantId,
         tenant: tenantWithDisplayPhone,
+        configSource: {
+          templates: {
+            manualHandoff: resolvedManualHandoff.source,
+          },
+        },
         client: client
           ? {
               id: client.id,

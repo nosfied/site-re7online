@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { env } from "../config/env.js";
 import { getTenant, type TenantConfig } from "../config/tenantConfig.js";
+import { resolveFollowUpSettings } from "../config/tenantOperationalConfig.js";
 import { getPrisma } from "../db.js";
 import { persistOutboundMessage } from "../db/persist.js";
 import { logger } from "../logger/logger.js";
@@ -1002,7 +1003,20 @@ export async function findEligibleFollowUps(options: FollowUpOptions & { limit?:
     result.scanned += 1;
     let tenantConfig = configByClientKey.get(state.client.clientKey);
     if (!tenantConfig) {
-      tenantConfig = resolveFollowUpTenantConfig(await getTenant(state.client.clientKey));
+      const tenant = await getTenant(state.client.clientKey);
+      const resolvedFollowUp = await resolveFollowUpSettings({
+        prisma,
+        clientId: state.clientId,
+        tenant,
+      });
+      tenantConfig = {
+        enabled: resolvedFollowUp.settings.enabled,
+        delayMinutes: resolvedFollowUp.settings.delayMinutes,
+        maxCount: resolvedFollowUp.settings.maxCount,
+        useTemplate: resolvedFollowUp.settings.useTemplate,
+        templateName: resolvedFollowUp.settings.templateName || null,
+        templateLang: resolvedFollowUp.settings.templateLang || null,
+      };
       configByClientKey.set(state.client.clientKey, tenantConfig);
       await logTenantFollowUpConfigLoaded({
         prisma,
