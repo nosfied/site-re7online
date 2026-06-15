@@ -4,7 +4,8 @@ Status: Sprint 65A design plus Sprint 65B schema/backfill/shadow plan.
 
 Sprint 65B creates additive DB tables and comparison scripts only.
 Sprint 65C adds optional runtime shadow comparison behind `CHANNEL_ACCOUNTS_RUNTIME_SHADOW`.
-Runtime resolution, webhook handling, OAuth, outbound and `tenants.json` remain JSON-authoritative.
+Sprint 65D adds optional Messenger DB-first runtime behind `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER`.
+Instagram resolution, OAuth and `tenants.json` remain JSON-authoritative.
 
 ## Scope
 
@@ -38,6 +39,21 @@ Out of scope for Sprint 65C:
 - DB token reads for outbound;
 - OAuth writes to DB-first;
 - any behavior change in inbound/outbound.
+
+Sprint 65D in scope:
+
+- Messenger tenant resolution DB-first only when `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=true`;
+- JSON fallback when DB resolution is missing or fails;
+- Messenger outbound reads `pageAccessToken` from `ChannelAccountSecret` only when the flag is enabled;
+- logs `channel_accounts.db_first_messenger` and `channel_accounts.db_first_messenger_fallback`;
+- rollback is immediate by setting `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=false`.
+
+Out of scope for Sprint 65D:
+
+- Instagram DB-first;
+- Instagram aliases/OAuth changes;
+- WhatsApp runtime changes;
+- removing `channelAccounts` from JSON.
 
 ## Current Inventory
 
@@ -342,6 +358,14 @@ Never log:
 - Use DB result when present and unambiguous.
 - Fallback to JSON when DB result is missing.
 - Keep shadow compare for at least one release.
+
+Messenger is the first controlled DB-first channel:
+
+```bash
+CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=true
+```
+
+Default is `false`. When disabled, Messenger behavior remains JSON-first. When enabled, Messenger webhook resolution uses DB first and falls back to JSON if DB is unavailable or missing. Messenger manual outbound uses the DB account and decrypted `pageAccessToken` only under this flag.
 
 ### Phase 4: JSON Removal
 

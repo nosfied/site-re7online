@@ -57,6 +57,7 @@ export type Env = {
   MULTICHANNEL_SHADOW_STRICT: boolean;
   MULTICHANNEL_DUAL_READ: boolean;
   CHANNEL_ACCOUNTS_RUNTIME_SHADOW: boolean;
+  CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER: boolean;
   WEB_PUSH_VAPID_PUBLIC_KEY: string;
   WEB_PUSH_VAPID_PRIVATE_KEY: string;
   WEB_PUSH_SUBJECT: string;
@@ -226,6 +227,8 @@ export function getEnv(): Env {
     (process.env.MULTICHANNEL_DUAL_READ ?? "false") === "true";
   const CHANNEL_ACCOUNTS_RUNTIME_SHADOW =
     (process.env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW ?? "false") === "true";
+  const CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER =
+    (process.env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER ?? "false") === "true";
   const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.WEB_PUSH_VAPID_PUBLIC_KEY ?? "";
   const WEB_PUSH_VAPID_PRIVATE_KEY = process.env.WEB_PUSH_VAPID_PRIVATE_KEY ?? "";
   const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT ?? "mailto:suporte@re7online.com";
@@ -329,6 +332,7 @@ export function getEnv(): Env {
     MULTICHANNEL_SHADOW_STRICT,
     MULTICHANNEL_DUAL_READ,
     CHANNEL_ACCOUNTS_RUNTIME_SHADOW,
+    CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER,
     WEB_PUSH_VAPID_PUBLIC_KEY,
     WEB_PUSH_VAPID_PRIVATE_KEY,
     WEB_PUSH_SUBJECT,

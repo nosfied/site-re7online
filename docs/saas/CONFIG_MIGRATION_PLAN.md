@@ -165,6 +165,15 @@ Sprint 65C adds optional runtime shadow comparison only:
 - mismatches are logged redacted as `channel_accounts.runtime_shadow_mismatch`;
 - DB shadow failures do not block webhook processing.
 
+Sprint 65D starts the first controlled runtime flip for Messenger only:
+
+- controlled by `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER`;
+- default `false`;
+- Messenger webhook resolution uses DB first only when enabled;
+- Messenger outbound reads `pageAccessToken` from `ChannelAccountSecret` only when enabled;
+- JSON fallback remains for missing/failed DB resolution;
+- Instagram, OAuth and WhatsApp stay unchanged.
+
 The next implementation sprint must not jump directly to DB-first runtime. The safe sequence is:
 
 1. create schema and token secret storage; status: Sprint 65B
@@ -172,8 +181,9 @@ The next implementation sprint must not jump directly to DB-first runtime. The s
 3. keep runtime JSON-first; status: Sprint 65B
 4. add DB-vs-JSON shadow compare; status: Sprint 65B
 5. add optional runtime dual-read shadow while keeping JSON authoritative; status: Sprint 65C
-6. run shadow compare in production and resolve mismatches
-7. only then enable DB-first with JSON fallback in a later sprint
+6. enable Messenger DB-first behind channel-specific flag; status: Sprint 65D
+7. run shadow compare in production and resolve mismatches
+8. only then evaluate Instagram DB-first in a later sprint
 
 ## Documentation To Treat Carefully
 

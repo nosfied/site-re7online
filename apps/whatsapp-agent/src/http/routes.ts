@@ -194,6 +194,7 @@ import {
   resolveMessengerOutboundGate,
   sendMessengerTextMessage,
 } from "../channels/messengerOutbound.js";
+import { findMessengerChannelAccountForConversationDbFirst } from "../channels/channelAccountDbFirst.js";
 import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
@@ -16440,6 +16441,62 @@ function getConversationChannelOutboundEnabled(
   return false;
 }
 
+async function findMessengerAccountForOutbound(params: {
+  clientKey: string;
+  source: { channel?: string | null; provider?: string | null; channelAccountId?: string | null };
+  tenant?: { channelAccounts?: TenantChannelAccount[] };
+  requestId: string;
+}) {
+  const jsonAccount = findTenantChannelAccountForConversation(params.tenant, params.source);
+  if (!env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) return jsonAccount;
+  const channelFields = serializeInboxChannelFields(params.source);
+  try {
+    const dbAccount = await findMessengerChannelAccountForConversationDbFirst({
+      prisma: getPrisma(),
+      clientKey: params.clientKey,
+      channelAccountId: channelFields.channelAccountId,
+      includeSecrets: true,
+    });
+    if (dbAccount) {
+      logger.info({
+        event: "channel_accounts.db_first_messenger",
+        route: "/app/inbox",
+        requestId: params.requestId,
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: channelFields.channelAccountId,
+        dbTenantKey: dbAccount.tenantKey,
+        dbResolution: "matched_enabled",
+      });
+      return dbAccount;
+    }
+    logger.warn({
+      event: "channel_accounts.db_first_messenger_fallback",
+      route: "/app/inbox",
+      requestId: params.requestId,
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: channelFields.channelAccountId,
+      reason: "db_not_found",
+      jsonTenantKey: jsonAccount?.tenantKey ?? params.clientKey,
+    });
+    return jsonAccount;
+  } catch (error) {
+    logger.warn({
+      event: "channel_accounts.db_first_messenger_fallback",
+      route: "/app/inbox",
+      requestId: params.requestId,
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: channelFields.channelAccountId,
+      reason: "db_error",
+      message: (error as Error).message,
+      jsonTenantKey: jsonAccount?.tenantKey ?? params.clientKey,
+    });
+    return jsonAccount;
+  }
+}
+
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
   return item.waIdCanonical || item.waId;
 }
@@ -18209,7 +18266,12 @@ async function adminSendMessengerMessage(params: {
 
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
-  const account = findTenantChannelAccountForConversation(tenant, params.source);
+  const account = await findMessengerAccountForOutbound({
+    clientKey: params.clientKey,
+    source: params.source,
+    tenant,
+    requestId: params.requestId,
+  });
   if (account && account.tenantKey !== params.clientKey) {
     logMessengerOutbound({
       event: "messenger.outbound.blocked",

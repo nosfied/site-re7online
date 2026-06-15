@@ -9,6 +9,7 @@ import { getPrisma } from "../db.js";
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { logChannelAccountRuntimeShadow } from "../channels/channelAccountRuntimeShadow.js";
+import { resolveMessengerTenantChannelAccountDbFirst } from "../channels/channelAccountDbFirst.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
   createDefaultChannelAdapterRegistry,
@@ -505,6 +506,59 @@ function logTenantResolution(params: {
   });
 }
 
+async function resolveTenantForPassiveMetaChannel(params: {
+  tenants: TenantConfigMap;
+  channel: Channel;
+  channelAccountId: string;
+  requestId: string;
+}) {
+  const jsonResolution = resolveTenantForChannelAccount({
+    tenants: params.tenants,
+    channel: params.channel,
+    provider: "meta",
+    channelAccountId: params.channelAccountId,
+  });
+  if (params.channel !== "messenger" || !env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) {
+    return jsonResolution;
+  }
+  try {
+    const dbResolution = await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: getPrisma(),
+      channelAccountId: params.channelAccountId,
+      requestId: params.requestId,
+    });
+    if (dbResolution.resolution === "not_found") {
+      logger.warn({
+        event: "channel_accounts.db_first_messenger_fallback",
+        route: "/meta/webhook",
+        requestId: params.requestId,
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId: params.channelAccountId || null,
+        reason: "db_not_found",
+        jsonResolution: jsonResolution.resolution,
+        jsonTenantKey: jsonResolution.tenantKey ?? null,
+      });
+      return jsonResolution;
+    }
+    return dbResolution;
+  } catch (error) {
+    logger.warn({
+      event: "channel_accounts.db_first_messenger_fallback",
+      route: "/meta/webhook",
+      requestId: params.requestId,
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: params.channelAccountId || null,
+      reason: "db_error",
+      message: (error as Error).message,
+      jsonResolution: jsonResolution.resolution,
+      jsonTenantKey: jsonResolution.tenantKey ?? null,
+    });
+    return jsonResolution;
+  }
+}
+
 function logRuntimeDryRun(params: {
   requestId: string;
   normalized: ReturnType<typeof normalizeChannelInboundEvent>;
@@ -667,11 +721,11 @@ export async function processPassiveMetaWebhookPayload(
   for (const item of events) {
     const externalUserHash = getChannelEventExternalUserHash(channel, item.event);
     const externalMessageId = getEventMessageId(channel, item.event);
-    const resolution = resolveTenantForChannelAccount({
+    const resolution = await resolveTenantForPassiveMetaChannel({
       tenants,
       channel,
-      provider: "meta",
       channelAccountId: item.pageId,
+      requestId: options.requestId,
     });
     if (env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW) {
       await logChannelAccountRuntimeShadow({
