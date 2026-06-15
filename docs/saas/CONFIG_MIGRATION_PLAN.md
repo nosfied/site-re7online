@@ -174,6 +174,16 @@ Sprint 65D starts the first controlled runtime flip for Messenger only:
 - JSON fallback remains for missing/failed DB resolution;
 - Instagram, OAuth and WhatsApp stay unchanged.
 
+Sprint 65D.1 is a performance guard after the first Messenger DB-first smoke:
+
+- runtime remains JSON-first in production;
+- `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=false`;
+- `CHANNEL_ACCOUNTS_RUNTIME_SHADOW=false`;
+- Messenger DB-first code now uses a 60s in-memory cache for account resolution and outbound secret lookup;
+- cache metrics are optional with `CHANNEL_ACCOUNTS_RUNTIME_CACHE_LOGS=true`;
+- fallback remains JSON if DB/cache lookup fails;
+- next activation must happen in a separate controlled Sprint 65D.2.
+
 The next implementation sprint must not jump directly to DB-first runtime. The safe sequence is:
 
 1. create schema and token secret storage; status: Sprint 65B
@@ -182,8 +192,9 @@ The next implementation sprint must not jump directly to DB-first runtime. The s
 4. add DB-vs-JSON shadow compare; status: Sprint 65B
 5. add optional runtime dual-read shadow while keeping JSON authoritative; status: Sprint 65C
 6. enable Messenger DB-first behind channel-specific flag; status: Sprint 65D
-7. run shadow compare in production and resolve mismatches
-8. only then evaluate Instagram DB-first in a later sprint
+7. add runtime cache/performance guard before reactivation; status: Sprint 65D.1
+8. reactivate Messenger DB-first with cache in a later controlled sprint
+9. only then evaluate Instagram DB-first in a later sprint
 
 ## Documentation To Treat Carefully
 

@@ -144,4 +144,5 @@ Current Instagram policy:
 - Sprint 65B creates `ChannelAccount`, `ChannelAccountAlias` and `ChannelAccountSecret` plus offline backfill/shadow scripts, but runtime remains JSON-first.
 - Sprint 65C adds optional runtime dual-read shadow with `CHANNEL_ACCOUNTS_RUNTIME_SHADOW=true`; JSON remains authoritative and only mismatches are logged by default.
 - Sprint 65D allows Messenger-only DB-first runtime with `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=true`; Instagram remains JSON-first.
+- Sprint 65D.1 adds a 60s in-memory runtime cache for Messenger DB-first resolution and decrypted outbound token lookup; both runtime flags remain off until a separate activation smoke.
 - Future DB-first work must keep a JSON fallback and dual-read shadow mode until Messenger and Instagram pass separate production smoke tests.

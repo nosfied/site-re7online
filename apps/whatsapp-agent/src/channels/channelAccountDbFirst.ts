@@ -4,6 +4,12 @@ import { logger } from "../logger/logger.js";
 import type { Channel, Provider } from "./channel.types.js";
 import type { ResolvedTenantChannelAccount, TenantChannelResolution } from "./tenantChannelResolution.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
+import {
+  getCachedChannelAccountResolution,
+  getCachedChannelAccountWithSecret,
+  setCachedChannelAccountResolution,
+  setCachedChannelAccountWithSecret,
+} from "./channelAccountRuntimeCache.js";
 
 type DbChannelAccount = {
   channel: string;
@@ -168,6 +174,14 @@ export async function resolveMessengerTenantChannelAccountDbFirst(params: {
   channelAccountId: string;
   requestId?: string;
 }) {
+  const cached = getCachedChannelAccountResolution({
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: params.channelAccountId,
+    requestId: params.requestId,
+  });
+  if (cached) return cached;
+  const startedAt = Date.now();
   const accounts = await params.prisma.channelAccount.findMany({
     where: {
       channel: "messenger",
@@ -187,6 +201,12 @@ export async function resolveMessengerTenantChannelAccountDbFirst(params: {
     channelAccountId: params.channelAccountId,
     includeSecrets: false,
   });
+  setCachedChannelAccountResolution({
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: params.channelAccountId,
+    value: result,
+  });
   logger.info({
     event: "channel_accounts.db_first_messenger",
     route: "/meta/webhook",
@@ -196,6 +216,7 @@ export async function resolveMessengerTenantChannelAccountDbFirst(params: {
     channelAccountId: params.channelAccountId || null,
     dbTenantKey: result.tenantKey ?? null,
     dbResolution: result.resolution,
+    lookupDurationMs: Date.now() - startedAt,
   });
   return result;
 }
@@ -208,6 +229,16 @@ export async function findMessengerChannelAccountForConversationDbFirst(params: 
 }) {
   const channelAccountId = normalizeIdentifier(params.channelAccountId);
   if (!channelAccountId) return null;
+  const cached = params.includeSecrets
+    ? getCachedChannelAccountWithSecret({
+        tenantKey: params.clientKey,
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId,
+      })
+    : undefined;
+  if (cached !== undefined) return cached;
+  const startedAt = Date.now();
   const account = await params.prisma.channelAccount.findFirst({
     where: {
       client: { clientKey: params.clientKey },
@@ -223,10 +254,34 @@ export async function findMessengerChannelAccountForConversationDbFirst(params: 
         : false,
     },
   });
-  if (!account) return null;
-  return mapDbChannelAccountToTenantAccount({
-    account,
-    tenantKey: account.client.clientKey,
-    includeSecrets: params.includeSecrets,
-  });
+  const mapped = account
+    ? mapDbChannelAccountToTenantAccount({
+        account,
+        tenantKey: account.client.clientKey,
+        includeSecrets: params.includeSecrets,
+      })
+    : null;
+  if (params.includeSecrets) {
+    setCachedChannelAccountWithSecret({
+      tenantKey: params.clientKey,
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId,
+      value: mapped,
+    });
+    if ((process.env.CHANNEL_ACCOUNTS_RUNTIME_CACHE_LOGS ?? "false") === "true") {
+      logger.info({
+        event: "channel_accounts.account_secret_lookup",
+        route: "/app/inbox",
+        channel: "messenger",
+        provider: "meta",
+        channelAccountId,
+        tenantKey: params.clientKey,
+        lookupDurationMs: Date.now() - startedAt,
+        found: Boolean(mapped),
+        tokenPresent: Boolean(mapped?.pageAccessToken),
+      });
+    }
+  }
+  return mapped;
 }

@@ -5,6 +5,7 @@ Status: Sprint 65A design plus Sprint 65B schema/backfill/shadow plan.
 Sprint 65B creates additive DB tables and comparison scripts only.
 Sprint 65C adds optional runtime shadow comparison behind `CHANNEL_ACCOUNTS_RUNTIME_SHADOW`.
 Sprint 65D adds optional Messenger DB-first runtime behind `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER`.
+Sprint 65D.1 adds a runtime cache/performance guard for future Messenger DB-first reactivation.
 Instagram resolution, OAuth and `tenants.json` remain JSON-authoritative.
 
 ## Scope
@@ -54,6 +55,20 @@ Out of scope for Sprint 65D:
 - Instagram aliases/OAuth changes;
 - WhatsApp runtime changes;
 - removing `channelAccounts` from JSON.
+
+Sprint 65D.1 in scope:
+
+- local in-memory cache for Messenger DB-first tenant resolution;
+- local in-memory cache for Messenger outbound account lookup and decrypted `pageAccessToken`;
+- 60s TTL through `CHANNEL_ACCOUNT_RUNTIME_CACHE_TTL_MS`;
+- optional debug metrics through `CHANNEL_ACCOUNTS_RUNTIME_CACHE_LOGS=true`;
+- no production flip: `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER` and `CHANNEL_ACCOUNTS_RUNTIME_SHADOW` remain disabled until a separate activation sprint.
+
+Out of scope for Sprint 65D.1:
+
+- enabling Messenger DB-first in production;
+- enabling runtime shadow in production;
+- changing Instagram/OAuth/WhatsApp behavior.
 
 ## Current Inventory
 
@@ -366,6 +381,16 @@ CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=true
 ```
 
 Default is `false`. When disabled, Messenger behavior remains JSON-first. When enabled, Messenger webhook resolution uses DB first and falls back to JSON if DB is unavailable or missing. Messenger manual outbound uses the DB account and decrypted `pageAccessToken` only under this flag.
+
+Sprint 65D.1 adds a performance guard before the next activation attempt:
+
+- `src/channels/channelAccountRuntimeCache.ts` stores resolution and outbound secret lookups in process memory;
+- cache key includes provider/channel/channel account id and tenant key for secret lookups;
+- TTL is 60 seconds;
+- secret cache may hold the decrypted token in memory, but never logs token or ciphertext;
+- cache is invalidated by TTL, process reload, or `clearChannelAccountRuntimeCache()` in tests;
+- cache hit/miss logs are gated by `CHANNEL_ACCOUNTS_RUNTIME_CACHE_LOGS=true`;
+- DB failures still fall back to JSON in the caller.
 
 ### Phase 4: JSON Removal
 

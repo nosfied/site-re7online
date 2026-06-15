@@ -6,7 +6,13 @@ import {
   findMessengerChannelAccountForConversationDbFirst,
   mapDbChannelAccountToTenantAccount,
   resolveDbTenantChannelAccount,
+  resolveMessengerTenantChannelAccountDbFirst,
 } from "./channelAccountDbFirst.js";
+import {
+  CHANNEL_ACCOUNT_RUNTIME_CACHE_TTL_MS,
+  clearChannelAccountRuntimeCache,
+  setChannelAccountRuntimeCacheNowForTest,
+} from "./channelAccountRuntimeCache.js";
 
 function encryptForTest(value: string, secret: string) {
   const key = crypto.createHash("sha256").update(secret, "utf8").digest();
@@ -97,6 +103,7 @@ test("mapDbChannelAccountToTenantAccount includes decrypted page token only when
 });
 
 test("findMessengerChannelAccountForConversationDbFirst maps first DB result and token", async () => {
+  clearChannelAccountRuntimeCache();
   const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
   process.env.CHANNEL_ACCOUNT_SECRET_KEY = "stable-secret-key";
   try {
@@ -125,6 +132,151 @@ test("findMessengerChannelAccountForConversationDbFirst maps first DB result and
     assert.equal(result?.tenantKey, "re7online");
     assert.equal(result?.pageAccessToken, "page-token");
   } finally {
+    if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+    else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
+  }
+});
+
+test("resolveMessengerTenantChannelAccountDbFirst caches primary resolution", async () => {
+  clearChannelAccountRuntimeCache();
+  setChannelAccountRuntimeCacheNowForTest(() => 1_000);
+  let calls = 0;
+  const prisma = {
+    channelAccount: {
+      findMany: async () => {
+        calls += 1;
+        return [dbAccount()];
+      },
+    },
+  };
+
+  try {
+    const first = await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-1",
+    });
+    const second = await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-1",
+    });
+
+    assert.equal(calls, 1);
+    assert.equal(first.resolution, "matched_enabled");
+    assert.equal(second.resolution, "matched_enabled");
+  } finally {
+    clearChannelAccountRuntimeCache();
+    setChannelAccountRuntimeCacheNowForTest();
+  }
+});
+
+test("resolveMessengerTenantChannelAccountDbFirst cache expires after TTL", async () => {
+  clearChannelAccountRuntimeCache();
+  let currentNow = 1_000;
+  setChannelAccountRuntimeCacheNowForTest(() => currentNow);
+  let calls = 0;
+  const prisma = {
+    channelAccount: {
+      findMany: async () => {
+        calls += 1;
+        return [dbAccount()];
+      },
+    },
+  };
+
+  try {
+    await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-1",
+    });
+    currentNow += CHANNEL_ACCOUNT_RUNTIME_CACHE_TTL_MS + 1;
+    await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-1",
+    });
+
+    assert.equal(calls, 2);
+  } finally {
+    clearChannelAccountRuntimeCache();
+    setChannelAccountRuntimeCacheNowForTest();
+  }
+});
+
+test("resolveMessengerTenantChannelAccountDbFirst caches alias resolution", async () => {
+  clearChannelAccountRuntimeCache();
+  setChannelAccountRuntimeCacheNowForTest(() => 1_000);
+  let calls = 0;
+  const prisma = {
+    channelAccount: {
+      findMany: async () => {
+        calls += 1;
+        return [dbAccount({ aliases: [{ alias: "page-alias" }] })];
+      },
+    },
+  };
+
+  try {
+    const first = await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-alias",
+    });
+    const second = await resolveMessengerTenantChannelAccountDbFirst({
+      prisma: prisma as never,
+      channelAccountId: "page-alias",
+    });
+
+    assert.equal(calls, 1);
+    assert.equal(first.resolution, "matched_alias");
+    assert.equal(second.resolution, "matched_alias");
+  } finally {
+    clearChannelAccountRuntimeCache();
+    setChannelAccountRuntimeCacheNowForTest();
+  }
+});
+
+test("findMessengerChannelAccountForConversationDbFirst caches decrypted secret", async () => {
+  clearChannelAccountRuntimeCache();
+  setChannelAccountRuntimeCacheNowForTest(() => 1_000);
+  const previous = process.env.CHANNEL_ACCOUNT_SECRET_KEY;
+  process.env.CHANNEL_ACCOUNT_SECRET_KEY = "stable-secret-key";
+  let calls = 0;
+  const prisma = {
+    channelAccount: {
+      findFirst: async () => {
+        calls += 1;
+        return dbAccount({
+          secrets: [
+            {
+              secretKind: "pageAccessToken",
+              secretCiphertext: encryptForTest("page-token", "stable-secret-key"),
+              status: "configured",
+            },
+          ],
+        });
+      },
+    },
+  };
+
+  try {
+    const first = await findMessengerChannelAccountForConversationDbFirst({
+      prisma: prisma as never,
+      clientKey: "re7online",
+      channelAccountId: "page-1",
+      includeSecrets: true,
+    });
+    process.env.CHANNEL_ACCOUNT_SECRET_KEY = "wrong-key-after-cache";
+    const second = await findMessengerChannelAccountForConversationDbFirst({
+      prisma: prisma as never,
+      clientKey: "re7online",
+      channelAccountId: "page-1",
+      includeSecrets: true,
+    });
+
+    assert.equal(calls, 1);
+    assert.equal(first?.pageAccessToken, "page-token");
+    assert.equal(second?.pageAccessToken, "page-token");
+  } finally {
+    clearChannelAccountRuntimeCache();
+    setChannelAccountRuntimeCacheNowForTest();
     if (previous === undefined) delete process.env.CHANNEL_ACCOUNT_SECRET_KEY;
     else process.env.CHANNEL_ACCOUNT_SECRET_KEY = previous;
   }
