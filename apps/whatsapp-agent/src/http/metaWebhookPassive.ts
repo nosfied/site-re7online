@@ -562,6 +562,29 @@ async function resolveTenantForPassiveMetaChannel(params: {
   }
 }
 
+function withRawJsonAccountForRuntimeShadow(params: {
+  tenants: TenantConfigMap;
+  jsonResolution: ReturnType<typeof resolveTenantForChannelAccount>;
+}) {
+  const resolvedAccount = params.jsonResolution.account;
+  const tenantKey = params.jsonResolution.tenantKey;
+  if (!resolvedAccount || !tenantKey) return params.jsonResolution;
+  const tenantEntry = Object.entries(params.tenants).find(
+    ([key, tenant]) => (tenant.id || key) === tenantKey
+  );
+  const rawAccount = tenantEntry?.[1].channelAccounts?.find(
+    (account) =>
+      account.channel === resolvedAccount.channel &&
+      account.provider === resolvedAccount.provider &&
+      account.channelAccountId === resolvedAccount.channelAccountId
+  );
+  if (!rawAccount) return params.jsonResolution;
+  return {
+    ...params.jsonResolution,
+    account: rawAccount,
+  };
+}
+
 function logRuntimeDryRun(params: {
   requestId: string;
   normalized: ReturnType<typeof normalizeChannelInboundEvent>;
@@ -744,7 +767,7 @@ export async function processPassiveMetaWebhookPayload(
         channel,
         provider: "meta",
         channelAccountId: item.pageId,
-        jsonResolution,
+        jsonResolution: withRawJsonAccountForRuntimeShadow({ tenants, jsonResolution }),
       });
     }
     logPassiveReceived({
