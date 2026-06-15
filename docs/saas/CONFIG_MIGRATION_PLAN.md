@@ -144,6 +144,27 @@ Dedicated high-risk project. It touches WhatsApp, Messenger, Instagram, aliases,
 - Keep redaction tests.
 - Smoke WhatsApp/Messenger/Instagram separately.
 
+Sprint 65A produced the design in `docs/saas/CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md`.
+
+Sprint 65B adds the additive schema and offline tooling only:
+
+- `ChannelAccount`
+- `ChannelAccountAlias`
+- `ChannelAccountSecret`
+- `npm run channel-accounts:backfill`
+- `npm run channel-accounts:shadow:compare`
+
+Runtime remains JSON-first. Webhooks, OAuth, outbound and tenant resolution do not read these tables yet.
+
+The next implementation sprint must not jump directly to DB-first runtime. The safe sequence is:
+
+1. create schema and token secret storage; status: Sprint 65B
+2. implement redacted, idempotent backfill dry-run; status: Sprint 65B
+3. keep runtime JSON-first; status: Sprint 65B
+4. add DB-vs-JSON shadow compare; status: Sprint 65B
+5. run shadow compare in production and resolve mismatches
+6. only then enable DB-first with JSON fallback in a later sprint
+
 ## Documentation To Treat Carefully
 
 Partially current:

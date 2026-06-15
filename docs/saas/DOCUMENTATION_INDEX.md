@@ -11,6 +11,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/GOVERNANCE_CONFIG.md` | atual | Governanca de configuracao DB vs `tenants.json` |
 | `docs/saas/CHANNELS_GOVERNANCE.md` | atual | Governanca WhatsApp/Messenger/Instagram |
 | `docs/saas/CONFIG_MIGRATION_PLAN.md` | atual | Plano incremental de migracao de configuracao |
+| `docs/saas/CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md` | atual | Desenho tecnico para migracao futura de `channelAccounts` para DB |
 | `docs/saas/RELEASE_CHECKLIST.md` | atual | Checklist de deploy/release |
 | `docs/saas/CHANGE_POLICY.md` | atual | Politica de tipos de mudanca |
 | `docs/saas/FEATURE_LIFECYCLE.md` | atual | Ciclo de vida das features |
@@ -118,7 +119,6 @@ Devem ser revisados antes de uso operacional:
 - Guia de token rotation Meta por canal.
 - Guia de onboarding de desenvolvedor novo.
 - Matriz de ownership por modulo.
-- Runbook de migracao futura de `channelAccounts` para DB seguro.
 - Registro formal de decisoes de configuracao DB-first vs JSON fallback.
 
 ## Regra De Uso
@@ -128,12 +128,12 @@ Para estado atual do produto, usar primeiro:
 1. `PRODUCT_MAP_CURRENT.md`
 2. `GOVERNANCE_CONFIG.md`
 3. `CHANNELS_GOVERNANCE.md`
-4. `FEATURE_FLAGS_MATRIX.md`
-5. `FEATURE_LIFECYCLE.md`
+4. `CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md` quando o assunto for migracao de canais
+5. `FEATURE_FLAGS_MATRIX.md`
+6. `FEATURE_LIFECYCLE.md`
 
 Para deploy, usar:
 
 1. `CHANGE_POLICY.md`
 2. `RELEASE_CHECKLIST.md`
 3. `RUNBOOK_WHATSAPP_AGENT.md` quando houver migration ou producao sensivel
-

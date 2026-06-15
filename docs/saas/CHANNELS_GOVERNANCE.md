@@ -140,4 +140,6 @@ Current Instagram policy:
 - Channel account edits are internal-admin controlled.
 - App-facing Instagram connect screen writes to the same channel account structure.
 - `channelAccounts` migration requires special care because it affects Messenger, Instagram, Meta Review and token safety.
-
+- The migration design lives in `docs/saas/CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md`.
+- Sprint 65B creates `ChannelAccount`, `ChannelAccountAlias` and `ChannelAccountSecret` plus offline backfill/shadow scripts, but runtime remains JSON-first.
+- Future DB-first work must keep a JSON fallback and dual-read shadow mode until Messenger and Instagram pass separate production smoke tests.

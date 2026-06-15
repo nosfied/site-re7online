@@ -78,6 +78,7 @@ model Client {
   slaConfig      SLAConfig?
   retentionConfig RetentionConfig?
   operationalConfig TenantOperationalConfig?
+  channelAccounts ChannelAccount[]
   conversationMetrics ConversationMetrics[]
   metaConfig    TenantMetaConfig?
   chatbotFlows  ChatbotFlow[]
@@ -369,6 +370,71 @@ model TenantOperationalConfig {
   updatedAt     DateTime @updatedAt
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ChannelAccount {
+  id                        String   @id @default(cuid())
+  clientId                  String   @db.Uuid
+  channel                   String
+  provider                  String
+  displayName               String?
+  channelAccountId          String
+  externalAccountIds        Json?
+  externalBusinessId        String?
+  metadata                  Json?
+  enabled                   Boolean  @default(false)
+  automationEnabled         Boolean  @default(false)
+  runtimeEnabled            Boolean  @default(false)
+  inboundPersistenceEnabled Boolean  @default(false)
+  outboundEnabled           Boolean  @default(false)
+  aiEnabled                 Boolean  @default(false)
+  handoffEnabled            Boolean  @default(false)
+  status                    String   @default("pending")
+  tokenStatus               String   @default("missing")
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  client  Client                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  aliases ChannelAccountAlias[]
+  secrets ChannelAccountSecret[]
+
+  @@unique([clientId, provider, channel, channelAccountId])
+  @@index([clientId, channel, provider])
+  @@index([channel, provider, channelAccountId])
+  @@index([status])
+}
+
+model ChannelAccountAlias {
+  id               String   @id @default(cuid())
+  channelAccountId String
+  alias            String
+  aliasType        String   @default("externalAccountId")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, alias])
+  @@index([alias])
+  @@index([aliasType])
+}
+
+model ChannelAccountSecret {
+  id               String   @id @default(cuid())
+  channelAccountId String
+  secretKind       String
+  secretHash       String?
+  secretCiphertext String?
+  encryptionKeyRef String?
+  status           String   @default("missing")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, secretKind])
+  @@index([secretKind, status])
+  @@index([secretHash])
 }
 
 model ConversationRuntimeState {

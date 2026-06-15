@@ -6,8 +6,8 @@ Status: current-state documentation based on code inspection. No migration is ex
 
 The Converta configuration layer is split across Postgres and `.data/tenants.json`.
 
-- Postgres stores tenant identity, users, sessions, departments, campaigns, templates, flows, retention, SLA, Meta onboarding, operational data and first-stage operational config.
-- `.data/tenants.json` still stores tenant technical configuration, channel accounts, several automation settings and commercial limits.
+- Postgres stores tenant identity, users, sessions, departments, campaigns, templates, flows, retention, SLA, Meta onboarding, operational data and migrated operational config.
+- `.data/tenants.json` still stores tenant technical channel configuration and core/bootstrap fallback fields.
 - `apps/whatsapp-agent/src/config/tenantConfig.ts` remains the canonical loader/writer for `tenants.json`.
 - `TenantOperationalConfig` is the DB-first holder for low-risk tenant operational settings migrated in phases.
 
@@ -20,15 +20,15 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | App feature flags | DB | DB | `Client.features` | Keep DB-first; consider shared defaults package |
 | WhatsApp phone mapping | DB + JSON fallback | DB for webhook resolution; JSON still used by bootstrap/fallback | `WaPhoneNumber.phoneNumberId`, `TenantMetaConfig.phoneNumberId` | Make `WaPhoneNumber` mandatory for all tenants |
 | WhatsApp business/WABA credentials | DB | DB-first | `TenantMetaConfig.businessToken`, `wabaId`, `businessId`, `businessPortfolioId` | Keep DB-first; avoid duplicating token in JSON |
-| Messenger channel account | `tenants.json` | `tenants.json` | none | Migrate with `channelAccounts` as dedicated config table or secure JSON |
-| Instagram channel account | `tenants.json` | `tenants.json` | none | Migrate with `channelAccounts`; preserve aliases and token redaction |
-| Channel aliases/metadata | `tenants.json` | `tenants.json` | none | Dedicated channel account model recommended |
-| Channel tokens | `tenants.json` / `TenantMetaConfig` depending channel | Split | partial: `TenantMetaConfig` for WhatsApp | Move non-WhatsApp channel tokens to secure DB storage with redacted APIs |
+| Messenger channel account | `tenants.json` + DB shadow | `tenants.json` | `ChannelAccount`, `ChannelAccountAlias`, `ChannelAccountSecret` for backfill/shadow only | Keep runtime JSON-first until production shadow compare is clean |
+| Instagram channel account | `tenants.json` + DB shadow | `tenants.json` | `ChannelAccount`, `ChannelAccountAlias`, `ChannelAccountSecret` for backfill/shadow only | Keep runtime JSON-first; preserve aliases and token redaction |
+| Channel aliases/metadata | `tenants.json` + DB shadow | `tenants.json` | `ChannelAccount.externalAccountIds`, `ChannelAccountAlias`, `ChannelAccount.metadata` | Use shadow compare before enabling DB-first resolution |
+| Channel tokens | `tenants.json` / `TenantMetaConfig` depending channel + DB shadow | Split; non-WhatsApp runtime still JSON | partial: `TenantMetaConfig` for WhatsApp; `ChannelAccountSecret` for non-runtime shadow | Move non-WhatsApp runtime reads only after encrypted secret material is complete |
 | Chatbot flows | DB | DB | `ChatbotFlow` | Keep DB-first |
 | Chatbot/automation locks | DB-first with JSON fallback | `TenantOperationalConfig.config.automationFlags` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
-| AI assistant prompts/topics/profile | DB-first with JSON fallback | `TenantOperationalConfig.config.aiAssistantConfig` for prompts/topics/profile; JSON fallback during transition | `TenantOperationalConfig` | Keep intent catalog and qualification schema for later dedicated migrations |
-| AI assistant intent catalog | `tenants.json` | `tenants.json` | none | Migrate only after prompt/config stability is verified |
-| AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate in a dedicated qualification sprint after assistant config |
+| AI assistant prompts/topics/profile | DB-first with JSON fallback | `TenantOperationalConfig.config.aiAssistantConfig` for prompts/topics/profile; JSON fallback during transition | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
+| AI assistant intent catalog | DB-first with JSON fallback | `TenantOperationalConfig.config.aiIntentQualification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
+| AI qualification schema | DB-first with JSON fallback | `TenantOperationalConfig.config.aiIntentQualification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Media handoff policy | DB-first with JSON fallback | `TenantOperationalConfig.config.mediaHandoffPolicy` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Handoff lead notification recipients | DB-first with JSON fallback | `TenantOperationalConfig.config.handoffLeadNotification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Follow-up settings | DB-first with JSON fallback | `TenantOperationalConfig.config.followUp` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
@@ -54,6 +54,8 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `Template` catalog in DB vs `templates.manualHandoff` pointer now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
 - Automation flags in `TenantOperationalConfig.config.automationFlags` vs legacy `disable*` fields in `tenants.json`, with JSON fallback during transition.
 - AI assistant prompt/topic/profile fields in `TenantOperationalConfig.config.aiAssistantConfig` vs legacy `aiAssistant*` and `aiBusinessContext` fields in `tenants.json`, with JSON fallback during transition.
+- AI assistant intent catalog and qualification schema in `TenantOperationalConfig.config.aiIntentQualification` vs legacy JSON fields, with JSON fallback during transition.
+- `ChannelAccount`/`ChannelAccountAlias`/`ChannelAccountSecret` vs `TenantConfig.channelAccounts`; DB copy is shadow-only until a later runtime sprint.
 
 ## Current Risks
 
@@ -61,6 +63,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - JSON writes are atomic with backup, but not relationally transactional.
 - Process-local cache in `getTenants()` can hide external file edits until reload or explicit write path.
 - Channel tokens in JSON require strict redaction in every API/UI path.
+- Channel account DB shadow rows must not be treated as runtime source yet.
 - New fields may be added to `tenants.json` without a migration plan unless governance is enforced.
 
 ## What Still Depends On tenants.json
@@ -68,15 +71,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `channelAccounts`
 - Instagram Business Login account/token metadata
 - Messenger token/account metadata
-- AI assistant intent catalog and qualification schema
-- AI assistant config fallback for tenants not yet backfilled
-- Chatbot/automation locks fallback for tenants not yet backfilled
-- `handoffLeadNotification*` fallback for tenants not yet backfilled
-- `mediaHandoffPolicy` fallback for tenants not yet backfilled
-- `planName`, `messagesLimit` and `quota*` fallback for tenants not yet backfilled
-- `followUp*` fallback for tenants not yet backfilled
-- Quotas and plan fields
-- `templates.manualHandoff` fallback for tenants not yet backfilled
+- migrated operational config fallbacks for tenants not yet backfilled
 - Some onboarding/bootstrap fallback fields
 
 ## DB-First Areas
@@ -95,6 +90,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Plan and quota limits via `TenantOperationalConfig.config.planLimits`, with JSON fallback
 - Automation flags via `TenantOperationalConfig.config.automationFlags`, with JSON fallback
 - AI assistant prompt/topic/profile settings via `TenantOperationalConfig.config.aiAssistantConfig`, with JSON fallback
+- AI assistant intent catalog and qualification schema via `TenantOperationalConfig.config.aiIntentQualification`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
