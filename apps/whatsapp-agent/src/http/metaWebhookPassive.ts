@@ -511,13 +511,16 @@ async function resolveTenantForPassiveMetaChannel(params: {
   channel: Channel;
   channelAccountId: string;
   requestId: string;
+  jsonResolution?: ReturnType<typeof resolveTenantForChannelAccount>;
 }) {
-  const jsonResolution = resolveTenantForChannelAccount({
-    tenants: params.tenants,
-    channel: params.channel,
-    provider: "meta",
-    channelAccountId: params.channelAccountId,
-  });
+  const jsonResolution =
+    params.jsonResolution ??
+    resolveTenantForChannelAccount({
+      tenants: params.tenants,
+      channel: params.channel,
+      provider: "meta",
+      channelAccountId: params.channelAccountId,
+    });
   if (params.channel !== "messenger" || !env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) {
     return jsonResolution;
   }
@@ -721,11 +724,18 @@ export async function processPassiveMetaWebhookPayload(
   for (const item of events) {
     const externalUserHash = getChannelEventExternalUserHash(channel, item.event);
     const externalMessageId = getEventMessageId(channel, item.event);
+    const jsonResolution = resolveTenantForChannelAccount({
+      tenants,
+      channel,
+      provider: "meta",
+      channelAccountId: item.pageId,
+    });
     const resolution = await resolveTenantForPassiveMetaChannel({
       tenants,
       channel,
       channelAccountId: item.pageId,
       requestId: options.requestId,
+      jsonResolution,
     });
     if (env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW) {
       await logChannelAccountRuntimeShadow({
@@ -734,7 +744,7 @@ export async function processPassiveMetaWebhookPayload(
         channel,
         provider: "meta",
         channelAccountId: item.pageId,
-        jsonResolution: resolution,
+        jsonResolution,
       });
     }
     logPassiveReceived({
