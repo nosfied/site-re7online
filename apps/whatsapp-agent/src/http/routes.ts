@@ -29,12 +29,15 @@ import {
   resolveHandoffLeadNotificationSettings,
   resolveManualHandoffTemplate,
   resolveMediaHandoffPolicy,
+  resolvePlanLimitsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
   saveHandoffLeadNotificationSettings,
   saveMediaHandoffPolicy,
+  savePlanLimitsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
+  type PlanLimitsSettings,
 } from "../config/tenantOperationalConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
 import {
@@ -9434,15 +9437,39 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (req.method === "GET" && pathname === "/admin/tenants") {
       if (requireSuperadmin()) return;
       const tenants = await getTenants();
-      const redactedTenants = Object.fromEntries(
-        Object.entries(tenants).map(([key, tenant]) => [
-          key,
-          {
-            ...tenant,
-            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-          },
-        ])
+      const clients = await prisma.client.findMany({
+        where: { clientKey: { in: Object.keys(tenants) } },
+        select: { id: true, clientKey: true },
+      });
+      const clientByKey = new Map(clients.map((client) => [client.clientKey, client]));
+      const redactedTenantEntries = await Promise.all(
+        Object.entries(tenants).map(async ([key, tenant]) => {
+          const client = clientByKey.get(key);
+          const planLimits = client
+            ? (await resolvePlanLimitsSettings({ prisma, clientId: client.id, tenant })).settings
+            : {
+                planName: typeof tenant.planName === "string" ? tenant.planName : null,
+                messagesLimit: typeof tenant.messagesLimit === "number" ? tenant.messagesLimit : null,
+                quotaMonthlyConversations:
+                  typeof tenant.quotaMonthlyConversations === "number" ? tenant.quotaMonthlyConversations : null,
+                quotaWarnAtPct: typeof tenant.quotaWarnAtPct === "number" ? tenant.quotaWarnAtPct : 0.8,
+                quotaBlockedReplyText:
+                  typeof tenant.quotaBlockedReplyText === "string" ? tenant.quotaBlockedReplyText : null,
+                quotaExcludeWaIds: Array.isArray(tenant.quotaExcludeWaIds) ? tenant.quotaExcludeWaIds : [],
+              };
+          return [
+            key,
+            applyPlanLimitsToTenantView(
+              {
+                ...tenant,
+                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+              },
+              planLimits
+            ),
+          ] as const;
+        })
       );
+      const redactedTenants = Object.fromEntries(redactedTenantEntries);
       json(res, 200, {
         ok: true,
         count: Object.keys(redactedTenants).length,
@@ -9639,19 +9666,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           select: { id: true, clientKey: true, name: true },
         });
         const clientIds = clients.map((client) => client.id);
-        const quotaExcludeByTenantKey = new Map(
-          tenantKeys.map((tenantKey) => {
-            const excludes = Array.isArray(tenants[tenantKey]?.quotaExcludeWaIds)
-              ? Array.from(
-                  new Set(
-                    (tenants[tenantKey]?.quotaExcludeWaIds ?? [])
-                      .map((waId) => waId.replace(/\D/g, ""))
-                      .filter(Boolean)
-                  )
-                )
-              : [];
-            return [tenantKey, excludes];
+        const planLimitsByTenantKey = new Map<string, PlanLimitsSettings>();
+        await Promise.all(
+          clients.map(async (client) => {
+            const tenant = tenants[client.clientKey];
+            const resolved = await resolvePlanLimitsSettings({
+              prisma,
+              clientId: client.id,
+              tenant,
+            });
+            planLimitsByTenantKey.set(client.clientKey, resolved.settings);
           })
+        );
+        const quotaExcludeByTenantKey = new Map(
+          tenantKeys.map((tenantKey) => [
+            tenantKey,
+            planLimitsByTenantKey.get(tenantKey)?.quotaExcludeWaIds ?? [],
+          ])
         );
         const quotaExcludeUnion = Array.from(
           new Set(Array.from(quotaExcludeByTenantKey.values()).flat())
@@ -9770,6 +9801,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const items = tenantKeys.map((tenantKey) => {
           const client = clientByKey.get(tenantKey);
           const tenantConfig = tenants[tenantKey];
+          const planLimits = planLimitsByTenantKey.get(tenantKey);
           const counts = client
             ? outboundByClient.get(client.id) ?? {
                 sent_text: 0,
@@ -9797,15 +9829,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               : 0;
           const monthlyUsed = Math.max(0, monthlyUsedAll - monthlyUsedExcluded);
           const monthlyLimit =
-            typeof tenantConfig?.quotaMonthlyConversations === "number"
-              ? tenantConfig.quotaMonthlyConversations
+            typeof planLimits?.quotaMonthlyConversations === "number"
+              ? planLimits.quotaMonthlyConversations
               : null;
           const warnAtPct =
             monthlyLimit === null
               ? null
-              : typeof tenantConfig?.quotaWarnAtPct === "number"
-                ? tenantConfig.quotaWarnAtPct
-                : 0.8;
+              : planLimits?.quotaWarnAtPct ?? 0.8;
           const pct = monthlyLimit && monthlyLimit > 0 ? monthlyUsed / monthlyLimit : null;
           const warning =
             monthlyLimit !== null && warnAtPct !== null && pct !== null ? pct >= warnAtPct : false;
@@ -9984,21 +10014,43 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 : null,
             source: "json_fallback" as const,
           };
-      const tenantWithDisplayPhone = {
-        ...tenant,
-        templates: {
-          ...(tenant.templates ?? {}),
-          ...(resolvedManualHandoff.templateName
-            ? { manualHandoff: resolvedManualHandoff.templateName }
-            : {}),
+      const resolvedPlanLimits = client
+        ? await resolvePlanLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            settings: {
+              planName: typeof tenant.planName === "string" ? tenant.planName : null,
+              messagesLimit: typeof tenant.messagesLimit === "number" ? tenant.messagesLimit : null,
+              quotaMonthlyConversations:
+                typeof tenant.quotaMonthlyConversations === "number" ? tenant.quotaMonthlyConversations : null,
+              quotaWarnAtPct: typeof tenant.quotaWarnAtPct === "number" ? tenant.quotaWarnAtPct : 0.8,
+              quotaBlockedReplyText:
+                typeof tenant.quotaBlockedReplyText === "string" ? tenant.quotaBlockedReplyText : null,
+              quotaExcludeWaIds: Array.isArray(tenant.quotaExcludeWaIds) ? tenant.quotaExcludeWaIds : [],
+            },
+            source: "json_fallback" as const,
+          };
+      const tenantWithDisplayPhone = applyPlanLimitsToTenantView(
+        {
+          ...tenant,
+          templates: {
+            ...(tenant.templates ?? {}),
+            ...(resolvedManualHandoff.templateName
+              ? { manualHandoff: resolvedManualHandoff.templateName }
+              : {}),
+          },
+          channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          displayPhoneNumber:
+            tenant.displayPhoneNumber?.trim() ||
+            extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+            phone?.display ||
+            undefined,
         },
-        channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-        displayPhoneNumber:
-          tenant.displayPhoneNumber?.trim() ||
-          extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-          phone?.display ||
-          undefined,
-      };
+        resolvedPlanLimits.settings
+      );
       json(res, 200, {
         ok: true,
         tenantId,
@@ -10007,6 +10059,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           templates: {
             manualHandoff: resolvedManualHandoff.source,
           },
+          planLimits: resolvedPlanLimits.source,
         },
         client: client
           ? {
@@ -10741,14 +10794,45 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const rawBody = body as Record<string, unknown>;
         const requestedProfile =
           "profile" in rawBody ? parseClientProfile(rawBody.profile) : undefined;
-        const { profile: _profile, ...tenantPatch } = rawBody;
-        const saved = await saveTenantPatch(tenantId, tenantPatch);
+        const {
+          profile: _profile,
+          planName,
+          messagesLimit,
+          quotaMonthlyConversations,
+          quotaWarnAtPct,
+          quotaBlockedReplyText,
+          quotaExcludeWaIds,
+          ...tenantPatch
+        } = rawBody;
+        const planLimitFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "planName") ? ["planName"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "messagesLimit") ? ["messagesLimit"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaMonthlyConversations")
+            ? ["quotaMonthlyConversations"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaWarnAtPct") ? ["quotaWarnAtPct"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaBlockedReplyText") ? ["quotaBlockedReplyText"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaExcludeWaIds") ? ["quotaExcludeWaIds"] : []),
+        ];
+        const tenants = await getTenants();
+        const currentTenant = tenants[tenantId];
+        if (!currentTenant) {
+          json(res, 404, { error: "tenant_not_found" });
+          return;
+        }
+        const saved = Object.keys(tenantPatch).length > 0
+          ? await saveTenantPatch(tenantId, tenantPatch)
+          : {
+              backupPath: "",
+              fieldsChanged: [] as string[],
+              tenant: currentTenant,
+            };
         const clientFieldsChanged: string[] = [];
+        const client = await prisma.client.findUnique({
+          where: { clientKey: tenantId },
+          select: { id: true, clientKey: true, profile: true },
+        });
         if (requestedProfile) {
-          const client = await prisma.client.findUnique({
-            where: { clientKey: tenantId },
-            select: { id: true, clientKey: true, profile: true },
-          });
           if (client && getClientProfile(client) !== requestedProfile) {
             await prisma.client.update({
               where: { id: client.id },
@@ -10757,9 +10841,51 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             clientFieldsChanged.push("client.profile");
           }
         }
+        let planLimitsSettings: PlanLimitsSettings | null = null;
+        if (client && planLimitFieldsChanged.length > 0) {
+          const savedPlanLimits = await savePlanLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: {
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "planName")
+                ? { planName: typeof planName === "string" && planName.trim() ? planName.trim() : null }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "messagesLimit")
+                ? { messagesLimit: typeof messagesLimit === "number" ? messagesLimit : null }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaMonthlyConversations")
+                ? {
+                    quotaMonthlyConversations:
+                      typeof quotaMonthlyConversations === "number" ? quotaMonthlyConversations : null,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaWarnAtPct")
+                ? { quotaWarnAtPct: typeof quotaWarnAtPct === "number" ? quotaWarnAtPct : 0.8 }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaBlockedReplyText")
+                ? {
+                    quotaBlockedReplyText:
+                      typeof quotaBlockedReplyText === "string" && quotaBlockedReplyText.trim()
+                        ? quotaBlockedReplyText.trim()
+                        : null,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaExcludeWaIds")
+                ? { quotaExcludeWaIds: Array.isArray(quotaExcludeWaIds) ? quotaExcludeWaIds : [] }
+                : {}),
+            },
+          });
+          planLimitsSettings = savedPlanLimits.settings;
+        } else if (client) {
+          planLimitsSettings = (await resolvePlanLimitsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+          })).settings;
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
-          const client = await prisma.client.findUnique({ where: { clientKey: tenantId } });
           if (client) {
             await syncTenantPhoneNumberMapping({
               clientId: client.id,
@@ -10772,7 +10898,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           event: "admin.tenant.update",
           tenantId,
           authSource: authToken.source,
-          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged, ...planLimitFieldsChanged],
           backupPath: saved.backupPath,
           requestId,
         });
@@ -10780,11 +10906,27 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           tenantId,
           backupPath: saved.backupPath,
-          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged],
-          tenant: {
-            ...saved.tenant,
-            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
-          },
+          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged, ...planLimitFieldsChanged],
+          tenant: applyPlanLimitsToTenantView(
+            {
+              ...saved.tenant,
+              channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+            },
+            planLimitsSettings ?? {
+              planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
+              messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
+              quotaMonthlyConversations:
+                typeof currentTenant.quotaMonthlyConversations === "number"
+                  ? currentTenant.quotaMonthlyConversations
+                  : null,
+              quotaWarnAtPct: typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
+              quotaBlockedReplyText:
+                typeof currentTenant.quotaBlockedReplyText === "string" ? currentTenant.quotaBlockedReplyText : null,
+              quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
+                ? currentTenant.quotaExcludeWaIds
+                : [],
+            }
+          ),
         });
       } catch (error) {
         logger.warn({
@@ -17295,6 +17437,21 @@ function buildWindowClosedError(expiresAt?: string) {
       : "Janela possivelmente fechada. Envie primeiro um template aprovado pela Meta em Campanhas para reabrir a conversa.",
     details:
       "Sem resposta recente do cliente, texto livre fica bloqueado fora da janela de 24 horas. Envie um template aprovado em Campanhas e aguarde o retorno desse numero para a janela reabrir.",
+  };
+}
+
+function applyPlanLimitsToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  planLimits: PlanLimitsSettings
+) {
+  return {
+    ...tenant,
+    planName: planLimits.planName ?? undefined,
+    messagesLimit: planLimits.messagesLimit ?? undefined,
+    quotaMonthlyConversations: planLimits.quotaMonthlyConversations ?? undefined,
+    quotaWarnAtPct: planLimits.quotaWarnAtPct,
+    quotaBlockedReplyText: planLimits.quotaBlockedReplyText ?? undefined,
+    quotaExcludeWaIds: planLimits.quotaExcludeWaIds,
   };
 }
 

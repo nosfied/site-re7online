@@ -1,5 +1,6 @@
 import { MessageStatus, MessageType } from "@prisma/client";
 import { getTenant } from "../config/tenantConfig.js";
+import { resolvePlanLimitsSettings } from "../config/tenantOperationalConfig.js";
 import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 
@@ -34,6 +35,11 @@ function getMonthRangeUtc(now: Date) {
 export async function checkUsageGate(params: UsageGateParams): Promise<UsageGateResult> {
   const prisma = getPrisma();
   const tenant = await getTenant(params.clientKey);
+  const planLimits = (await resolvePlanLimitsSettings({
+    prisma,
+    clientId: params.clientId,
+    tenant,
+  })).settings;
   const { from, to, period } = getMonthRangeUtc(new Date());
   const [messagesSent, messagesReceived, templatesSent] = await Promise.all([
     prisma.outboundMessage.count({
@@ -60,9 +66,8 @@ export async function checkUsageGate(params: UsageGateParams): Promise<UsageGate
     }),
   ]);
 
-  const messagesLimit =
-    typeof tenant?.messagesLimit === "number" ? tenant.messagesLimit : null;
-  const planName = tenant?.planName?.trim() ? tenant.planName.trim() : null;
+  const messagesLimit = planLimits.messagesLimit;
+  const planName = planLimits.planName;
   const countedForUsage = messagesLimit !== null;
 
   if (messagesLimit !== null && messagesSent >= messagesLimit) {

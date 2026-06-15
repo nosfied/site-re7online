@@ -18,6 +18,7 @@ export type TenantOperationalConfigValue = {
   followUp?: FollowUpSettings;
   handoffLeadNotification?: HandoffLeadNotificationSettings;
   mediaHandoffPolicy?: TenantMediaHandoffPolicy;
+  planLimits?: PlanLimitsSettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -58,6 +59,20 @@ export type ResolvedHandoffLeadNotificationSettings = {
 
 export type ResolvedMediaHandoffPolicy = {
   policy: TenantMediaHandoffPolicy;
+  source: TenantOperationalConfigSource;
+};
+
+export type PlanLimitsSettings = {
+  planName: string | null;
+  messagesLimit: number | null;
+  quotaMonthlyConversations: number | null;
+  quotaWarnAtPct: number;
+  quotaBlockedReplyText: string | null;
+  quotaExcludeWaIds: string[];
+};
+
+export type ResolvedPlanLimitsSettings = {
+  settings: PlanLimitsSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -149,6 +164,66 @@ function normalizeHandoffLeadNotificationSettingsFromTenant(
   };
 }
 
+function normalizeOptionalText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  return value ? value.slice(0, maxLength) : null;
+}
+
+function normalizeOptionalNonNegativeNumber(input: unknown) {
+  if (typeof input !== "number" || !Number.isFinite(input) || input < 0) return null;
+  return Math.floor(input);
+}
+
+function normalizeQuotaWarnAtPct(input: unknown) {
+  if (typeof input !== "number" || !Number.isFinite(input)) return 0.8;
+  return Math.min(1, Math.max(0, input));
+}
+
+function normalizeQuotaExcludeWaIds(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((waId) => (typeof waId === "string" ? waId.replace(/\D/g, "") : ""))
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizePlanLimitsSettings(input: unknown): PlanLimitsSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    planName: normalizeOptionalText(record.planName, 80),
+    messagesLimit: normalizeOptionalNonNegativeNumber(record.messagesLimit),
+    quotaMonthlyConversations: normalizeOptionalNonNegativeNumber(record.quotaMonthlyConversations),
+    quotaWarnAtPct: normalizeQuotaWarnAtPct(record.quotaWarnAtPct),
+    quotaBlockedReplyText: normalizeOptionalText(record.quotaBlockedReplyText, 1000),
+    quotaExcludeWaIds: normalizeQuotaExcludeWaIds(record.quotaExcludeWaIds),
+  };
+}
+
+function normalizePlanLimitsSettingsFromTenant(
+  tenant?: Pick<
+    TenantConfig,
+    | "planName"
+    | "messagesLimit"
+    | "quotaMonthlyConversations"
+    | "quotaWarnAtPct"
+    | "quotaBlockedReplyText"
+    | "quotaExcludeWaIds"
+  > | null
+): PlanLimitsSettings {
+  return normalizePlanLimitsSettings({
+    planName: tenant?.planName,
+    messagesLimit: tenant?.messagesLimit,
+    quotaMonthlyConversations: tenant?.quotaMonthlyConversations,
+    quotaWarnAtPct: tenant?.quotaWarnAtPct,
+    quotaBlockedReplyText: tenant?.quotaBlockedReplyText,
+    quotaExcludeWaIds: tenant?.quotaExcludeWaIds,
+  });
+}
+
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
@@ -169,6 +244,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "mediaHandoffPolicy")) {
     config.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(value.mediaHandoffPolicy);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "planLimits")) {
+    config.planLimits = normalizePlanLimitsSettings(value.planLimits);
   }
   return config;
 }
@@ -432,6 +510,88 @@ export async function saveMediaHandoffPolicy(params: {
   return {
     record: saved,
     policy: nextPolicy,
+  };
+}
+
+export async function resolvePlanLimitsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<
+    TenantConfig,
+    | "planName"
+    | "messagesLimit"
+    | "quotaMonthlyConversations"
+    | "quotaWarnAtPct"
+    | "quotaBlockedReplyText"
+    | "quotaExcludeWaIds"
+  > | null;
+}): Promise<ResolvedPlanLimitsSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.planLimits) {
+    return {
+      settings: dbConfig.planLimits,
+      source: "db",
+    };
+  }
+  return {
+    settings: normalizePlanLimitsSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function savePlanLimitsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<PlanLimitsSettings>;
+  tenant?: Pick<
+    TenantConfig,
+    | "planName"
+    | "messagesLimit"
+    | "quotaMonthlyConversations"
+    | "quotaWarnAtPct"
+    | "quotaBlockedReplyText"
+    | "quotaExcludeWaIds"
+  > | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).planLimits
+    ?? normalizePlanLimitsSettingsFromTenant(params.tenant);
+  const nextSettings = normalizePlanLimitsSettings({
+    ...currentSettings,
+    ...params.settings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    planLimits: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
   };
 }
 

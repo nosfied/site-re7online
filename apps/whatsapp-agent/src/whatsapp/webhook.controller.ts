@@ -84,6 +84,8 @@ import {
 import {
   resolveHandoffLeadNotificationSettings,
   resolveMediaHandoffPolicy,
+  resolvePlanLimitsSettings,
+  type PlanLimitsSettings,
 } from "../config/tenantOperationalConfig.js";
 import {
   resolveFallbackTemplate,
@@ -884,6 +886,14 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     recipients: [] as Array<{ id: string; waId: string; label?: string; isActive: boolean }>,
   };
   let mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(undefined);
+  let planLimitsSettings: PlanLimitsSettings = {
+    planName: null,
+    messagesLimit: null,
+    quotaMonthlyConversations: null,
+    quotaWarnAtPct: 0.8,
+    quotaBlockedReplyText: null,
+    quotaExcludeWaIds: [],
+  };
   let tenantCredentialsPromise:
     | Promise<Awaited<ReturnType<typeof resolveTenantOutboundCredentials>>>
     | null = null;
@@ -910,6 +920,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       tenant: appliedTenantConfig,
     });
     mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
+    planLimitsSettings = (await resolvePlanLimitsSettings({
+      prisma,
+      clientId: tenantClientId,
+      tenant: appliedTenantConfig,
+    })).settings;
     tenantAllowlist = (
       appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
     )
@@ -2790,7 +2805,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       : true;
     const status = allowlistHit ? "received" : "ignored";
     const quotaExcludeWaIds = new Set(
-      (appliedTenantConfig?.quotaExcludeWaIds ?? [])
+      planLimitsSettings.quotaExcludeWaIds
         .map((waId) => waId.replace(/\D/g, ""))
         .filter(Boolean)
     );
@@ -2817,8 +2832,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       allowlistHit &&
       !isQuotaExcludedWaId &&
       tenantClientId &&
-      typeof appliedTenantConfig?.quotaMonthlyConversations === "number" &&
-      appliedTenantConfig.quotaMonthlyConversations >= 0
+      typeof planLimitsSettings.quotaMonthlyConversations === "number" &&
+      planLimitsSettings.quotaMonthlyConversations >= 0
     ) {
       const { period, from, to } = getMonthRangeUtc(new Date());
       let quotaBlocked = false;
@@ -2848,13 +2863,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         });
         const isNewThisMonth = !existingThisMonth;
 
-        if (quotaUsed >= appliedTenantConfig.quotaMonthlyConversations && isNewThisMonth) {
+        if (quotaUsed >= planLimitsSettings.quotaMonthlyConversations && isNewThisMonth) {
           quotaBlocked = true;
           logger.info({
             event: "quota.blocked",
             tenantId: appliedTenantConfig.id,
             clientKey: tenantClientKey,
-            limit: appliedTenantConfig.quotaMonthlyConversations,
+            limit: planLimitsSettings.quotaMonthlyConversations,
             used: quotaUsed,
             period,
             waId: maskNumber(normalizedFrom),
@@ -2865,7 +2880,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             event: "quota.checked",
             tenantId: appliedTenantConfig.id,
             clientKey: tenantClientKey,
-            limit: appliedTenantConfig.quotaMonthlyConversations,
+            limit: planLimitsSettings.quotaMonthlyConversations,
             used: quotaUsed,
             period,
             isNewThisMonth,
@@ -2924,11 +2939,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         const quotaReplyTo = env.WHATSAPP_SANDBOX
           ? env.WHATSAPP_SANDBOX_TO || normalizedFrom
           : message.from;
-        const quotaLimit = appliedTenantConfig.quotaMonthlyConversations;
+        const quotaLimit = planLimitsSettings.quotaMonthlyConversations;
         const rawQuotaTemplate =
-          typeof appliedTenantConfig.quotaBlockedReplyText === "string" &&
-          appliedTenantConfig.quotaBlockedReplyText.trim()
-            ? appliedTenantConfig.quotaBlockedReplyText.trim()
+          typeof planLimitsSettings.quotaBlockedReplyText === "string" &&
+          planLimitsSettings.quotaBlockedReplyText.trim()
+            ? planLimitsSettings.quotaBlockedReplyText.trim()
             : DEFAULT_QUOTA_BLOCKED_TEXT;
         const replyText = renderQuotaBlockedText(rawQuotaTemplate, {
           tenantName: appliedTenantConfig.name || tenantClientKey || "nosso time",
@@ -2954,8 +2969,8 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (
       allowlistHit &&
       isQuotaExcludedWaId &&
-      typeof appliedTenantConfig?.quotaMonthlyConversations === "number" &&
-      appliedTenantConfig.quotaMonthlyConversations >= 0
+      typeof planLimitsSettings.quotaMonthlyConversations === "number" &&
+      planLimitsSettings.quotaMonthlyConversations >= 0
     ) {
       logger.info({
         event: "quota.excluded",

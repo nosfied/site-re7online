@@ -26,6 +26,7 @@ type BackfillItem = {
   followUp: ReturnType<typeof normalizeFollowUp>;
   handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>;
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
+  planLimits: ReturnType<typeof normalizePlanLimits>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -123,13 +124,59 @@ function normalizeHandoffLeadNotification(tenant: {
   };
 }
 
+function normalizeOptionalText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return null;
+  const value = input.trim();
+  return value ? value.slice(0, maxLength) : null;
+}
+
+function normalizeOptionalNonNegativeNumber(input: unknown) {
+  if (typeof input !== "number" || !Number.isFinite(input) || input < 0) return null;
+  return Math.floor(input);
+}
+
+function normalizeQuotaWarnAtPct(input: unknown) {
+  if (typeof input !== "number" || !Number.isFinite(input)) return 0.8;
+  return Math.min(1, Math.max(0, input));
+}
+
+function normalizeQuotaExcludeWaIds(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((waId) => (typeof waId === "string" ? waId.replace(/\D/g, "") : ""))
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizePlanLimits(tenant: {
+  planName?: string;
+  messagesLimit?: number;
+  quotaMonthlyConversations?: number;
+  quotaWarnAtPct?: number;
+  quotaBlockedReplyText?: string;
+  quotaExcludeWaIds?: string[];
+}) {
+  return {
+    planName: normalizeOptionalText(tenant.planName, 80),
+    messagesLimit: normalizeOptionalNonNegativeNumber(tenant.messagesLimit),
+    quotaMonthlyConversations: normalizeOptionalNonNegativeNumber(tenant.quotaMonthlyConversations),
+    quotaWarnAtPct: normalizeQuotaWarnAtPct(tenant.quotaWarnAtPct),
+    quotaBlockedReplyText: normalizeOptionalText(tenant.quotaBlockedReplyText, 1000),
+    quotaExcludeWaIds: normalizeQuotaExcludeWaIds(tenant.quotaExcludeWaIds),
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
   manualHandoffTemplate: string | null,
   followUp: ReturnType<typeof normalizeFollowUp>,
   handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>,
-  mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>
+  mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>,
+  planLimits: ReturnType<typeof normalizePlanLimits>
 ): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
@@ -149,6 +196,7 @@ function mergeConfig(
   base.followUp = followUp;
   base.handoffLeadNotification = handoffLeadNotification;
   base.mediaHandoffPolicy = mediaHandoffPolicy;
+  base.planLimits = planLimits;
   return base as Prisma.InputJsonValue;
 }
 
@@ -178,6 +226,7 @@ async function main() {
       const followUp = normalizeFollowUp(tenant);
       const handoffLeadNotification = normalizeHandoffLeadNotification(tenant);
       const mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy);
+      const planLimits = normalizePlanLimits(tenant);
       if (!client) {
         items.push({
           tenantKey,
@@ -188,6 +237,7 @@ async function main() {
           followUp,
           handoffLeadNotification,
           mediaHandoffPolicy,
+          planLimits,
         });
         continue;
       }
@@ -200,6 +250,7 @@ async function main() {
         followUp,
         handoffLeadNotification,
         mediaHandoffPolicy,
+        planLimits,
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
@@ -208,7 +259,8 @@ async function main() {
         manualHandoffTemplate,
         followUp,
         handoffLeadNotification,
-        mediaHandoffPolicy
+        mediaHandoffPolicy,
+        planLimits
       );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },
@@ -248,7 +300,9 @@ async function main() {
             `handoffLeadNotificationEnabled=${item.handoffLeadNotification.enabled} ` +
             `handoffLeadNotificationRecipients=${item.handoffLeadNotification.recipients.length} ` +
             `mediaHandoffPolicyEnabled=${item.mediaHandoffPolicy.enabled} ` +
-            `mediaHandoffPolicyBehavior=${item.mediaHandoffPolicy.behavior}`
+            `mediaHandoffPolicyBehavior=${item.mediaHandoffPolicy.behavior} ` +
+            `planName=${item.planLimits.planName ?? "-"} messagesLimit=${item.planLimits.messagesLimit ?? "-"} ` +
+            `quotaMonthlyConversations=${item.planLimits.quotaMonthlyConversations ?? "-"}`
         );
       }
     }

@@ -72,7 +72,7 @@ Default government profile favors oversight and reporting:
 ## Main Runtime Dependencies
 
 - Postgres/Prisma for operational data and many tenant-owned entities.
-- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings and media handoff policy.
+- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings, media handoff policy and plan/quota limits.
 - `.data/tenants.json` for tenant technical configuration not yet migrated.
 - Meta Cloud API for WhatsApp, Messenger and Instagram.
 - WebSocket bridge for realtime inbox.

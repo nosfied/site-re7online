@@ -40,7 +40,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | Push subscriptions | DB | DB | `PushSubscription` | Keep DB-first |
 | Retention/LGPD | DB | DB | `RetentionConfig` | Keep DB-first |
 | SLA/metrics | DB | DB | `SLAConfig`, `ConversationMetrics` | Keep DB-first |
-| Plan/quota limits | `tenants.json` | `tenants.json` | usage is computed from DB records | Migrate to billing/plan config after product pricing stabilizes |
+| Plan/quota limits | DB-first with JSON fallback | `TenantOperationalConfig.config.planLimits` | `TenantOperationalConfig`; usage is computed from DB records | Keep fallback until tenants are backfilled and verified |
 | Company/legal/contract fields | `tenants.json` | `tenants.json` | partial tenant identity in `Client` | Migrate to tenant profile/contract table if commercial ops require it |
 
 ## Duplications
@@ -69,6 +69,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Chatbot/automation locks
 - `handoffLeadNotification*` fallback for tenants not yet backfilled
 - `mediaHandoffPolicy` fallback for tenants not yet backfilled
+- `planName`, `messagesLimit` and `quota*` fallback for tenants not yet backfilled
 - `followUp*` fallback for tenants not yet backfilled
 - Quotas and plan fields
 - `templates.manualHandoff` fallback for tenants not yet backfilled
@@ -87,6 +88,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Follow-up settings via `TenantOperationalConfig.config.followUp`, with JSON fallback
 - Handoff lead notification settings via `TenantOperationalConfig.config.handoffLeadNotification`, with JSON fallback
 - Media handoff policy via `TenantOperationalConfig.config.mediaHandoffPolicy`, with JSON fallback
+- Plan and quota limits via `TenantOperationalConfig.config.planLimits`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -136,6 +138,42 @@ Read path:
 
 Write/backfill path:
 
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+## Sprint 61 DB-First Rule
+
+Plan and quota limits are the sixth migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "planLimits": {
+    "planName": "Profissional",
+    "messagesLimit": 10000,
+    "quotaMonthlyConversations": 500,
+    "quotaWarnAtPct": 0.8,
+    "quotaBlockedReplyText": "Atingimos o limite mensal ({used}/{limit}) no periodo {period}.",
+    "quotaExcludeWaIds": ["558499049614"]
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.planLimits`
+2. fallback to `TenantConfig.planName`, `TenantConfig.messagesLimit` and `TenantConfig.quota*`
+3. safe defaults: no hard limit, no plan name, warning threshold `0.8`, empty excluded waIds
+
+Write/backfill path:
+
+- `/admin/tenants/:tenantKey` writes plan/quota fields to `TenantOperationalConfig`.
+- `/admin/tenants` and `/admin/tenants/:tenantKey` return effective DB-first values for the existing admin UI contract.
+- Usage gate resolves `messagesLimit` and `planName` DB-first before outbound sends.
+- WhatsApp inbound quota blocking resolves `quotaMonthlyConversations`, `quotaBlockedReplyText` and `quotaExcludeWaIds` DB-first.
+- `/admin/tenants/summary` resolves quota limits/exclusions DB-first before calculating monthly usage.
 - `npm run tenant-config:backfill -- --dry-run --json`
 - `npm run tenant-config:backfill -- --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.

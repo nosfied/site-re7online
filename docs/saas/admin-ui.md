@@ -40,6 +40,11 @@ curl -I http://127.0.0.1:3000
 
 ## Contrato de quota (resumo)
 
+Desde a Sprint 61, `planName`, `messagesLimit` e `quota*` sao DB-first em
+`TenantOperationalConfig.config.planLimits`, com fallback para `tenants.json`.
+O console interno continua recebendo e enviando os mesmos campos no contrato
+HTTP para preservar a UI existente.
+
 `quota.used` em `/admin/tenants/summary`:
 
 - `range` afeta os counts e `lastMessageAt`, mas `quota` sempre representa o mes UTC corrente.

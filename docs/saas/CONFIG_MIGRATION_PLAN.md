@@ -12,7 +12,7 @@ Move Converta tenant configuration from split JSON/DB ownership toward DB-first 
 - `.data/tenants.json` still owns technical tenant configuration and several module settings.
 - `TenantOperationalConfig` now owns the first DB-first operational config blocks:
   `crmBusinessStatuses`, `templates.manualHandoff`, `followUp*`, `handoffLeadNotification*`
-  and `mediaHandoffPolicy`.
+  `mediaHandoffPolicy` and plan/quota limits.
 - `getTenants()` and `saveTenants()` remain active compatibility helpers.
 - Existing backfill scripts target multichannel operational records, not full tenant configuration migration.
 
@@ -41,7 +41,8 @@ These can be migrated first because they are less coupled to external providers 
 
 4. Quota plan metadata
    - Current: tenant quota fields
-   - Candidate destination: billing/plan config
+   - Implemented destination: `TenantOperationalConfig.config.planLimits`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: medium if hard-cap enforcement remains active
 
 ## Medium Risk
