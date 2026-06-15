@@ -28,7 +28,7 @@ type BackfillItem = {
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
   planLimits: ReturnType<typeof normalizePlanLimits>;
   automationFlags: ReturnType<typeof normalizeAutomationFlags>;
-  aiAssistantConfig: ReturnType<typeof normalizeAiAssistantConfig>;
+  aiAssistantConfig: ReturnType<typeof summarizeAiAssistantConfig>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -237,6 +237,22 @@ function normalizeAiAssistantConfig(tenant: {
   };
 }
 
+function summarizeAiAssistantConfig(config: ReturnType<typeof normalizeAiAssistantConfig>) {
+  return {
+    hasBusinessContext: Boolean(config.aiBusinessContext),
+    hasSystemPrompt: Boolean(config.aiAssistantSystemPrompt),
+    hasGreetingMessage: Boolean(config.aiAssistantGreetingMessage),
+    hasFallbackMessage: Boolean(config.aiAssistantFallbackMessage),
+    hasHandoffPrompt: Boolean(config.aiAssistantHandoffPrompt),
+    allowedTopicsCount: config.aiAssistantAllowedTopics.length,
+    secondaryTopicsCount: config.aiAssistantSecondaryTopics.length,
+    blockedTermsCount: config.aiAssistantBlockedTerms.length,
+    handoffKeywordsCount: config.aiAssistantHandoffKeywords.length,
+    aiAssistantMaxReplies: config.aiAssistantMaxReplies,
+    aiAssistantProfile: config.aiAssistantProfile,
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
@@ -313,7 +329,7 @@ async function main() {
           mediaHandoffPolicy,
           planLimits,
           automationFlags,
-          aiAssistantConfig,
+          aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
         });
         continue;
       }
@@ -328,7 +344,7 @@ async function main() {
         mediaHandoffPolicy,
         planLimits,
         automationFlags,
-        aiAssistantConfig,
+        aiAssistantConfig: summarizeAiAssistantConfig(aiAssistantConfig),
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
@@ -390,8 +406,8 @@ async function main() {
             `disableChatbotFlowEditing=${item.automationFlags.disableChatbotFlowEditing} ` +
             `aiAssistantProfile=${item.aiAssistantConfig.aiAssistantProfile} ` +
             `aiAssistantMaxReplies=${item.aiAssistantConfig.aiAssistantMaxReplies} ` +
-            `aiAssistantAllowedTopics=${item.aiAssistantConfig.aiAssistantAllowedTopics.length} ` +
-            `aiAssistantBlockedTerms=${item.aiAssistantConfig.aiAssistantBlockedTerms.length}`
+            `aiAssistantAllowedTopics=${item.aiAssistantConfig.allowedTopicsCount} ` +
+            `aiAssistantBlockedTerms=${item.aiAssistantConfig.blockedTermsCount}`
         );
       }
     }
