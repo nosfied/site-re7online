@@ -54,8 +54,8 @@ Default government profile favors oversight and reporting:
 | WhatsApp runtime | Operational | webhook/runtime | `whatsapp/webhook.controller.ts`, `WaPhoneNumber`, `TenantMetaConfig` | Meta Cloud API, tenant config, DB |
 | Messenger/Facebook | Operational human messaging | `/app/inbox` | `metaWebhookPassive.ts`, `messengerInboundPersistence.ts`, channel accounts | `channelAccounts`, Page token |
 | Instagram | Operational inbound/outbound manual, human-only | `/app/inbox`, `/app/settings/channels/instagram` | `instagramInboundPersistence.ts`, `instagramBusinessLogin.service.ts`, channel accounts | Instagram Business Login token, aliases, app review |
-| Chatbot flows | Operational with tenant locks | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy and automation disable flags are DB-first with `tenants.json` fallback |
-| AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantConfig.ai*` | OpenAI config, tenant prompts/topics |
+| Chatbot flows | Operational with tenant locks | `/app/chatbot` | `ChatbotFlow`, `chatbot/chatbotFlow.ts`, `TenantOperationalConfig` | `Client.features.chatbot`; follow-up, handoff notification, media handoff policy, plan limits, automation disable flags and scoped assistant config are DB-first with `tenants.json` fallback |
+| AI supervised fallback | Partial/tenant-configured | runtime/admin | `controlledAssistant.ts`, `TenantOperationalConfig.config.aiAssistantConfig`, `TenantConfig.aiAssistantIntentCatalog`, `TenantConfig.aiQualification` | OpenAI config; prompt/topic/profile subset is DB-first, intent catalog and qualification remain JSON |
 | Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
 | CRM/timeline | Operational | `/app/crm`, `/app/inbox` | `Lead`, `LeadNote`, conversation/message models | CRM status catalog is DB-first in `TenantOperationalConfig` with `tenants.json` fallback |
@@ -72,7 +72,7 @@ Default government profile favors oversight and reporting:
 ## Main Runtime Dependencies
 
 - Postgres/Prisma for operational data and many tenant-owned entities.
-- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings, media handoff policy, plan/quota limits and automation disable flags.
+- `TenantOperationalConfig` for migrated operational config: CRM status catalog, manual handoff template pointer, follow-up settings, handoff lead notification settings, media handoff policy, plan/quota limits, automation disable flags and scoped AI assistant config.
 - `.data/tenants.json` for tenant technical configuration not yet migrated.
 - Meta Cloud API for WhatsApp, Messenger and Instagram.
 - WebSocket bridge for realtime inbox.

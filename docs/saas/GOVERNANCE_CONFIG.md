@@ -26,8 +26,9 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | Channel tokens | `tenants.json` / `TenantMetaConfig` depending channel | Split | partial: `TenantMetaConfig` for WhatsApp | Move non-WhatsApp channel tokens to secure DB storage with redacted APIs |
 | Chatbot flows | DB | DB | `ChatbotFlow` | Keep DB-first |
 | Chatbot/automation locks | DB-first with JSON fallback | `TenantOperationalConfig.config.automationFlags` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
-| AI assistant prompts/topics/intents | `tenants.json` | `tenants.json` | none | Migrate after evaluation guardrails are documented |
-| AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate with automation settings |
+| AI assistant prompts/topics/profile | DB-first with JSON fallback | `TenantOperationalConfig.config.aiAssistantConfig` for prompts/topics/profile; JSON fallback during transition | `TenantOperationalConfig` | Keep intent catalog and qualification schema for later dedicated migrations |
+| AI assistant intent catalog | `tenants.json` | `tenants.json` | none | Migrate only after prompt/config stability is verified |
+| AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate in a dedicated qualification sprint after assistant config |
 | Media handoff policy | DB-first with JSON fallback | `TenantOperationalConfig.config.mediaHandoffPolicy` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Handoff lead notification recipients | DB-first with JSON fallback | `TenantOperationalConfig.config.handoffLeadNotification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Follow-up settings | DB-first with JSON fallback | `TenantOperationalConfig.config.followUp` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
@@ -52,6 +53,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `Lead.status` in DB vs `crmBusinessStatuses` catalog now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
 - `Template` catalog in DB vs `templates.manualHandoff` pointer now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
 - Automation flags in `TenantOperationalConfig.config.automationFlags` vs legacy `disable*` fields in `tenants.json`, with JSON fallback during transition.
+- AI assistant prompt/topic/profile fields in `TenantOperationalConfig.config.aiAssistantConfig` vs legacy `aiAssistant*` and `aiBusinessContext` fields in `tenants.json`, with JSON fallback during transition.
 
 ## Current Risks
 
@@ -66,7 +68,8 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `channelAccounts`
 - Instagram Business Login account/token metadata
 - Messenger token/account metadata
-- AI assistant configuration
+- AI assistant intent catalog and qualification schema
+- AI assistant config fallback for tenants not yet backfilled
 - Chatbot/automation locks fallback for tenants not yet backfilled
 - `handoffLeadNotification*` fallback for tenants not yet backfilled
 - `mediaHandoffPolicy` fallback for tenants not yet backfilled
@@ -91,6 +94,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Media handoff policy via `TenantOperationalConfig.config.mediaHandoffPolicy`, with JSON fallback
 - Plan and quota limits via `TenantOperationalConfig.config.planLimits`, with JSON fallback
 - Automation flags via `TenantOperationalConfig.config.automationFlags`, with JSON fallback
+- AI assistant prompt/topic/profile settings via `TenantOperationalConfig.config.aiAssistantConfig`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -216,6 +220,48 @@ Write/backfill path:
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 This sprint does not migrate AI prompts, qualification schema, intent catalog, topics, blocked terms or business context.
+
+## Sprint 63 DB-First Rule
+
+AI assistant config is the eighth migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "aiAssistantConfig": {
+    "aiBusinessContext": "Contexto comercial aprovado do tenant.",
+    "aiAssistantSystemPrompt": "Instruções adicionais aprovadas.",
+    "aiAssistantGreetingMessage": "Mensagem de boas-vindas.",
+    "aiAssistantFallbackMessage": "Mensagem segura quando não houver resposta.",
+    "aiAssistantHandoffPrompt": "Mensagem para encaminhamento humano.",
+    "aiAssistantAllowedTopics": ["catalogo"],
+    "aiAssistantSecondaryTopics": ["showroom"],
+    "aiAssistantBlockedTerms": ["cpf"],
+    "aiAssistantHandoffKeywords": ["atendente"],
+    "aiAssistantMaxReplies": 2,
+    "aiAssistantProfile": "business"
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.aiAssistantConfig`
+2. fallback to `TenantConfig.aiBusinessContext` and the scoped `TenantConfig.aiAssistant*` fields
+3. safe defaults: empty strings/lists, `aiAssistantMaxReplies=2`, `aiAssistantProfile=business`
+
+Write/backfill path:
+
+- `/admin/chatbot/settings` writes scoped assistant config fields to `TenantOperationalConfig`.
+- `/admin/tenants/:tenantKey` writes scoped assistant config fields to `TenantOperationalConfig` for compatibility with the internal console.
+- `/app/chatbot/settings` exposes the effective DB-first values but does not allow customer-facing edits to this block.
+- WhatsApp webhook runtime applies the effective DB-first assistant config before supervised AI fallback logic runs.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+This sprint does not migrate `aiAssistantIntentCatalog`, `aiQualification`, channel accounts, tokens or OAuth settings.
 
 ## Sprint 58 DB-First Rule
 

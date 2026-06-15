@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyAiAssistantConfigToTenant,
+  resolveAiAssistantConfigSettings,
   resolveAutomationFlagsSettings,
   resolvePlanLimitsSettings,
 } from "./tenantOperationalConfig.js";
@@ -159,4 +161,135 @@ test("resolveAutomationFlagsSettings keeps legacy flows disabled by default", as
     disableLegacyFlows: true,
     disableChatbotFlowEditing: false,
   });
+});
+
+test("resolveAiAssistantConfigSettings prefers DB assistant config over tenants.json", async () => {
+  const resolved = await resolveAiAssistantConfigSettings({
+    prisma: prismaWithConfig({
+      aiAssistantConfig: {
+        aiBusinessContext: "DB contexto",
+        aiAssistantSystemPrompt: "DB prompt",
+        aiAssistantGreetingMessage: "DB oi",
+        aiAssistantFallbackMessage: "DB fallback",
+        aiAssistantHandoffPrompt: "DB humano",
+        aiAssistantAllowedTopics: ["catalogo", " catalogo ", "precos"],
+        aiAssistantSecondaryTopics: ["showroom"],
+        aiAssistantBlockedTerms: ["cpf"],
+        aiAssistantHandoffKeywords: ["atendente"],
+        aiAssistantMaxReplies: 4,
+        aiAssistantProfile: "government",
+      },
+    }),
+    clientId: "client-1",
+    tenant: {
+      aiBusinessContext: "JSON contexto",
+      aiAssistantSystemPrompt: "JSON prompt",
+      aiAssistantGreetingMessage: "JSON oi",
+      aiAssistantFallbackMessage: "JSON fallback",
+      aiAssistantHandoffPrompt: "JSON humano",
+      aiAssistantAllowedTopics: ["json"],
+      aiAssistantSecondaryTopics: [],
+      aiAssistantBlockedTerms: [],
+      aiAssistantHandoffKeywords: [],
+      aiAssistantMaxReplies: 1,
+      aiAssistantProfile: "business",
+    },
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.deepEqual(resolved.settings, {
+    aiBusinessContext: "DB contexto",
+    aiAssistantSystemPrompt: "DB prompt",
+    aiAssistantGreetingMessage: "DB oi",
+    aiAssistantFallbackMessage: "DB fallback",
+    aiAssistantHandoffPrompt: "DB humano",
+    aiAssistantAllowedTopics: ["catalogo", "precos"],
+    aiAssistantSecondaryTopics: ["showroom"],
+    aiAssistantBlockedTerms: ["cpf"],
+    aiAssistantHandoffKeywords: ["atendente"],
+    aiAssistantMaxReplies: 4,
+    aiAssistantProfile: "government",
+  });
+});
+
+test("resolveAiAssistantConfigSettings falls back to tenants.json assistant config", async () => {
+  const resolved = await resolveAiAssistantConfigSettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+    tenant: {
+      aiBusinessContext: "JSON contexto",
+      aiAssistantSystemPrompt: "JSON prompt",
+      aiAssistantGreetingMessage: "JSON oi",
+      aiAssistantFallbackMessage: "JSON fallback",
+      aiAssistantHandoffPrompt: "JSON humano",
+      aiAssistantAllowedTopics: ["catalogo"],
+      aiAssistantSecondaryTopics: ["showroom"],
+      aiAssistantBlockedTerms: ["cpf"],
+      aiAssistantHandoffKeywords: ["humano"],
+      aiAssistantMaxReplies: 3,
+      aiAssistantProfile: "legal_previdenciario",
+    },
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {
+    aiBusinessContext: "JSON contexto",
+    aiAssistantSystemPrompt: "JSON prompt",
+    aiAssistantGreetingMessage: "JSON oi",
+    aiAssistantFallbackMessage: "JSON fallback",
+    aiAssistantHandoffPrompt: "JSON humano",
+    aiAssistantAllowedTopics: ["catalogo"],
+    aiAssistantSecondaryTopics: ["showroom"],
+    aiAssistantBlockedTerms: ["cpf"],
+    aiAssistantHandoffKeywords: ["humano"],
+    aiAssistantMaxReplies: 3,
+    aiAssistantProfile: "legal_previdenciario",
+  });
+});
+
+test("resolveAiAssistantConfigSettings uses safe assistant defaults", async () => {
+  const resolved = await resolveAiAssistantConfigSettings({
+    prisma: prismaWithConfig(null),
+    clientId: "client-1",
+    tenant: null,
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {
+    aiBusinessContext: "",
+    aiAssistantSystemPrompt: "",
+    aiAssistantGreetingMessage: "",
+    aiAssistantFallbackMessage: "",
+    aiAssistantHandoffPrompt: "",
+    aiAssistantAllowedTopics: [],
+    aiAssistantSecondaryTopics: [],
+    aiAssistantBlockedTerms: [],
+    aiAssistantHandoffKeywords: [],
+    aiAssistantMaxReplies: 2,
+    aiAssistantProfile: "business",
+  });
+});
+
+test("applyAiAssistantConfigToTenant preserves intent catalog and qualification scope", () => {
+  const tenant = {
+    aiAssistantIntentCatalog: [{ key: "catalogo", label: "Catalogo" }],
+    aiQualification: { fields: [{ id: "name", label: "Nome" }] },
+  };
+  const applied = applyAiAssistantConfigToTenant(tenant as Partial<import("./tenantConfig.js").TenantConfig>, {
+    aiBusinessContext: "Contexto",
+    aiAssistantSystemPrompt: "Prompt",
+    aiAssistantGreetingMessage: "Oi",
+    aiAssistantFallbackMessage: "Fallback",
+    aiAssistantHandoffPrompt: "Humano",
+    aiAssistantAllowedTopics: ["catalogo"],
+    aiAssistantSecondaryTopics: [],
+    aiAssistantBlockedTerms: [],
+    aiAssistantHandoffKeywords: ["humano"],
+    aiAssistantMaxReplies: 2,
+    aiAssistantProfile: "business",
+  });
+
+  assert.deepEqual(applied.aiAssistantIntentCatalog, tenant.aiAssistantIntentCatalog);
+  assert.deepEqual(applied.aiQualification, tenant.aiQualification);
+  assert.equal(applied.aiBusinessContext, "Contexto");
 });

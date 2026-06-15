@@ -12,7 +12,8 @@ Move Converta tenant configuration from split JSON/DB ownership toward DB-first 
 - `.data/tenants.json` still owns technical tenant configuration and several module settings.
 - `TenantOperationalConfig` now owns the first DB-first operational config blocks:
   `crmBusinessStatuses`, `templates.manualHandoff`, `followUp*`, `handoffLeadNotification*`
-  `mediaHandoffPolicy`, plan/quota limits and automation disable flags.
+  `mediaHandoffPolicy`, plan/quota limits, automation disable flags and the scoped AI assistant
+  prompt/topic/profile configuration.
 - `getTenants()` and `saveTenants()` remain active compatibility helpers.
 - Existing backfill scripts target multichannel operational records, not full tenant configuration migration.
 
@@ -56,7 +57,8 @@ These affect runtime behavior but do not usually contain external-provider token
    - Risk: medium because runtime behavior changes immediately when values change
 
 2. AI assistant configuration
-   - Current: prompts, topics, blocked terms, intent catalog, qualification schema
+   - Current: prompt/topic/profile subset is DB-first in `TenantOperationalConfig.config.aiAssistantConfig`
+   - Still JSON-only: `aiAssistantIntentCatalog` and `aiQualification`
    - Risk: medium/high because tenant-specific automation quality depends on it
 
 3. Media handoff policy
@@ -127,17 +129,14 @@ Incremental expansion only after CRM settings are stable.
 - Sprint 60 migrated `mediaHandoffPolicy` to `TenantOperationalConfig.config.mediaHandoffPolicy`.
 - Sprint 61 migrated plan/quota limits to `TenantOperationalConfig.config.planLimits`.
 - Sprint 62 migrated automation disable flags to `TenantOperationalConfig.config.automationFlags`.
+- Sprint 63 migrated the scoped AI assistant config to `TenantOperationalConfig.config.aiAssistantConfig`.
 - Keep DB-first loader with JSON fallback.
 - Do not migrate `channelAccounts` yet.
 
-### Next Candidate: AI Assistant Config
+### Next Candidate: AI Intent And Qualification
 
-After Sprint 62, the next medium-risk block is AI assistant configuration:
+After Sprint 63, the remaining medium-risk AI blocks are:
 
-- prompts and business context;
-- allowed/secondary topics;
-- blocked terms;
-- handoff keywords;
 - intent catalog;
 - qualification schema.
 

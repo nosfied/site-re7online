@@ -24,6 +24,8 @@ import {
   type AiAssistantIntentCatalogItem,
 } from "../config/tenantConfig.js";
 import {
+  applyAiAssistantConfigToTenant,
+  resolveAiAssistantConfigSettings,
   resolveCrmBusinessStatuses,
   resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
@@ -31,12 +33,14 @@ import {
   resolveManualHandoffTemplate,
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
+  saveAiAssistantConfigSettings,
   saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
   saveHandoffLeadNotificationSettings,
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
+  type AiAssistantConfigSettings,
   type AutomationFlagsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
@@ -3719,7 +3723,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
-      const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
+      const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const aiAssistantConfig = resolvedAiAssistantConfig.settings;
+      const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(effectiveTenant);
       const aiConfigured = aiConfigurationStatus.ready;
       const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
         prisma,
@@ -3745,16 +3756,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableIntentClassifier: automationFlags.disableIntentClassifier,
           disableLegacyFlows: automationFlags.disableLegacyFlows,
           aiAssistantEnabled: tenant.aiAssistantEnabled === true,
-          aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
-          aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+          aiAssistantMaxReplies: aiAssistantConfig.aiAssistantMaxReplies,
+          aiAssistantProfile: aiAssistantConfig.aiAssistantProfile,
           aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
-          aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
-          aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
-          aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
-          aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
-          aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
-          aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
-          aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantAllowedTopics: aiAssistantConfig.aiAssistantAllowedTopics,
+          aiAssistantSecondaryTopics: aiAssistantConfig.aiAssistantSecondaryTopics,
+          aiAssistantBlockedTerms: aiAssistantConfig.aiAssistantBlockedTerms,
+          aiAssistantHandoffKeywords: aiAssistantConfig.aiAssistantHandoffKeywords,
+          aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
+          aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
+          aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
           aiQualification: tenant.aiQualification,
           handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
@@ -3775,6 +3786,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         configSource: {
           automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: resolvedHandoffLeadNotification.source,
+          aiAssistantConfig: resolvedAiAssistantConfig.source,
         },
       });
     } catch (error) {
@@ -3882,7 +3894,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         fieldsChanged,
         recipientCount: saved.settings.recipients.length,
       });
-      const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
+      const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const aiAssistantConfig = resolvedAiAssistantConfig.settings;
+      const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(effectiveTenant);
       const aiConfigured = aiConfigurationStatus.ready;
       const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
         prisma,
@@ -3901,16 +3920,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableIntentClassifier: automationFlags.disableIntentClassifier,
           disableLegacyFlows: automationFlags.disableLegacyFlows,
           aiAssistantEnabled: tenant.aiAssistantEnabled === true,
-          aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
-          aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+          aiAssistantMaxReplies: aiAssistantConfig.aiAssistantMaxReplies,
+          aiAssistantProfile: aiAssistantConfig.aiAssistantProfile,
           aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
-          aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
-          aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
-          aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
-          aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
-          aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
-          aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
-          aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantAllowedTopics: aiAssistantConfig.aiAssistantAllowedTopics,
+          aiAssistantSecondaryTopics: aiAssistantConfig.aiAssistantSecondaryTopics,
+          aiAssistantBlockedTerms: aiAssistantConfig.aiAssistantBlockedTerms,
+          aiAssistantHandoffKeywords: aiAssistantConfig.aiAssistantHandoffKeywords,
+          aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
+          aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
+          aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
           aiQualification: tenant.aiQualification,
           handoffLeadNotificationEnabled: saved.settings.enabled,
@@ -3931,6 +3950,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         configSource: {
           automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: "db",
+          aiAssistantConfig: resolvedAiAssistantConfig.source,
         },
       });
     } catch (error) {
@@ -7552,6 +7572,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenant,
         });
         const automationFlags = resolvedAutomationFlags.settings;
+        const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const aiAssistantConfig = resolvedAiAssistantConfig.settings;
+        const effectiveTenant = applyAiAssistantConfigToTenant(tenant, aiAssistantConfig);
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -7563,26 +7590,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableLegacyFlows: automationFlags.disableLegacyFlows,
             disableChatbotFlowEditing: automationFlags.disableChatbotFlowEditing,
             aiAssistantEnabled: tenant.aiAssistantEnabled === true,
-            aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
-            aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
-            aiAssistantSystemPrompt: tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantMaxReplies: aiAssistantConfig.aiAssistantMaxReplies,
+            aiAssistantProfile: aiAssistantConfig.aiAssistantProfile,
+            aiAssistantSystemPrompt: aiAssistantConfig.aiAssistantSystemPrompt,
             aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
-            aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
-            aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
-            aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
-            aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
-            aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
-            aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
-            aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantAllowedTopics: aiAssistantConfig.aiAssistantAllowedTopics,
+            aiAssistantSecondaryTopics: aiAssistantConfig.aiAssistantSecondaryTopics,
+            aiAssistantBlockedTerms: aiAssistantConfig.aiAssistantBlockedTerms,
+            aiAssistantHandoffKeywords: aiAssistantConfig.aiAssistantHandoffKeywords,
+            aiAssistantGreetingMessage: aiAssistantConfig.aiAssistantGreetingMessage,
+            aiAssistantFallbackMessage: aiAssistantConfig.aiAssistantFallbackMessage,
+            aiAssistantHandoffPrompt: aiAssistantConfig.aiAssistantHandoffPrompt,
             aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
             aiQualification: tenant.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
             mediaHandoffPolicy,
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
-            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
-            aiBusinessContext: tenant.aiBusinessContext ?? "",
-            aiConfigured: isAiAssistantConfigured(tenant),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(effectiveTenant),
+            aiBusinessContext: aiAssistantConfig.aiBusinessContext,
+            aiConfigured: isAiAssistantConfigured(effectiveTenant),
             chatbotLocked: false,
             flowEditingLocked: automationFlags.disableChatbotFlowEditing,
             aiLocked: false,
@@ -7600,6 +7627,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             followUp: resolvedFollowUp.source,
             handoffLeadNotification: resolvedHandoffLeadNotification.source,
             mediaHandoffPolicy: resolvedMediaHandoffPolicy.source,
+            aiAssistantConfig: resolvedAiAssistantConfig.source,
           },
         });
       } catch (error) {
@@ -7713,6 +7741,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           followUpFieldsChanged.push("followUpTemplateLang");
         }
         const aiAssistantPatch: Record<string, unknown> = {};
+        const aiAssistantConfigPatch: Partial<AiAssistantConfigSettings> = {};
+        const aiAssistantConfigFieldsChanged: string[] = [];
         const handoffLeadNotificationPatch: Partial<HandoffLeadNotificationSettings> = {};
         const handoffLeadNotificationFieldsChanged: string[] = [];
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
@@ -7738,7 +7768,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
             return;
           }
-          aiAssistantPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
+          aiAssistantConfigPatch.aiAssistantMaxReplies = data.aiAssistantMaxReplies;
+          aiAssistantConfigFieldsChanged.push("aiAssistantMaxReplies");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantProfile")) {
           if (
@@ -7749,14 +7780,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
             return;
           }
-          aiAssistantPatch.aiAssistantProfile = data.aiAssistantProfile;
+          aiAssistantConfigPatch.aiAssistantProfile = data.aiAssistantProfile;
+          aiAssistantConfigFieldsChanged.push("aiAssistantProfile");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSystemPrompt")) {
           if (typeof data.aiAssistantSystemPrompt !== "string") {
             json(res, 400, httpError("bad_request", "aiAssistantSystemPrompt must be string"));
             return;
           }
-          aiAssistantPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim() || undefined;
+          aiAssistantConfigPatch.aiAssistantSystemPrompt = data.aiAssistantSystemPrompt.trim();
+          aiAssistantConfigFieldsChanged.push("aiAssistantSystemPrompt");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantAllowedTopics")) {
           const terms = normalizeAiAssistantTermList(data.aiAssistantAllowedTopics);
@@ -7764,7 +7797,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantAllowedTopics must be an array of strings"));
             return;
           }
-          aiAssistantPatch.aiAssistantAllowedTopics = terms;
+          aiAssistantConfigPatch.aiAssistantAllowedTopics = terms;
+          aiAssistantConfigFieldsChanged.push("aiAssistantAllowedTopics");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantSecondaryTopics")) {
           const terms = normalizeAiAssistantTermList(data.aiAssistantSecondaryTopics);
@@ -7772,7 +7806,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantSecondaryTopics must be an array of strings"));
             return;
           }
-          aiAssistantPatch.aiAssistantSecondaryTopics = terms;
+          aiAssistantConfigPatch.aiAssistantSecondaryTopics = terms;
+          aiAssistantConfigFieldsChanged.push("aiAssistantSecondaryTopics");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantBlockedTerms")) {
           const terms = normalizeAiAssistantTermList(data.aiAssistantBlockedTerms);
@@ -7780,7 +7815,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantBlockedTerms must be an array of strings"));
             return;
           }
-          aiAssistantPatch.aiAssistantBlockedTerms = terms;
+          aiAssistantConfigPatch.aiAssistantBlockedTerms = terms;
+          aiAssistantConfigFieldsChanged.push("aiAssistantBlockedTerms");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffKeywords")) {
           const terms = normalizeAiAssistantTermList(data.aiAssistantHandoffKeywords);
@@ -7788,31 +7824,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiAssistantHandoffKeywords must be an array of strings"));
             return;
           }
-          aiAssistantPatch.aiAssistantHandoffKeywords = terms;
+          aiAssistantConfigPatch.aiAssistantHandoffKeywords = terms;
+          aiAssistantConfigFieldsChanged.push("aiAssistantHandoffKeywords");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantFallbackMessage")) {
           if (typeof data.aiAssistantFallbackMessage !== "string") {
             json(res, 400, httpError("bad_request", "aiAssistantFallbackMessage must be string"));
             return;
           }
-          aiAssistantPatch.aiAssistantFallbackMessage =
-            data.aiAssistantFallbackMessage.trim() || undefined;
+          aiAssistantConfigPatch.aiAssistantFallbackMessage = data.aiAssistantFallbackMessage.trim();
+          aiAssistantConfigFieldsChanged.push("aiAssistantFallbackMessage");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantGreetingMessage")) {
           if (typeof data.aiAssistantGreetingMessage !== "string") {
             json(res, 400, httpError("bad_request", "aiAssistantGreetingMessage must be string"));
             return;
           }
-          aiAssistantPatch.aiAssistantGreetingMessage =
-            data.aiAssistantGreetingMessage.trim() || undefined;
+          aiAssistantConfigPatch.aiAssistantGreetingMessage = data.aiAssistantGreetingMessage.trim();
+          aiAssistantConfigFieldsChanged.push("aiAssistantGreetingMessage");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantHandoffPrompt")) {
           if (typeof data.aiAssistantHandoffPrompt !== "string") {
             json(res, 400, httpError("bad_request", "aiAssistantHandoffPrompt must be string"));
             return;
           }
-          aiAssistantPatch.aiAssistantHandoffPrompt =
-            data.aiAssistantHandoffPrompt.trim() || undefined;
+          aiAssistantConfigPatch.aiAssistantHandoffPrompt = data.aiAssistantHandoffPrompt.trim();
+          aiAssistantConfigFieldsChanged.push("aiAssistantHandoffPrompt");
         }
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantIntentCatalog")) {
           const catalog = normalizeAiAssistantIntentCatalog(data.aiAssistantIntentCatalog);
@@ -7839,7 +7876,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "aiBusinessContext must be string"));
             return;
           }
-          aiAssistantPatch.aiBusinessContext = data.aiBusinessContext.trim() || undefined;
+          aiAssistantConfigPatch.aiBusinessContext = data.aiBusinessContext.trim();
+          aiAssistantConfigFieldsChanged.push("aiBusinessContext");
         }
         if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
           if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
@@ -7870,6 +7908,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           automationFlagFieldsChanged.length === 0 &&
           followUpFieldsChanged.length === 0 &&
           handoffLeadNotificationFieldsChanged.length === 0 &&
+          aiAssistantConfigFieldsChanged.length === 0 &&
           !mediaHandoffPolicyPatch &&
           Object.keys(aiAssistantPatch).length === 0
         ) {
@@ -7889,10 +7928,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, httpError("tenant_not_found", "Tenant not found"));
           return;
         }
-        const proposedTenant = {
+        const currentAiAssistantConfig = (await resolveAiAssistantConfigSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        })).settings;
+        const proposedAiAssistantConfig = {
+          ...currentAiAssistantConfig,
+          ...aiAssistantConfigPatch,
+        };
+        const proposedTenant = applyAiAssistantConfigToTenant({
           ...tenant,
           ...aiAssistantPatch,
-        };
+        }, proposedAiAssistantConfig);
         const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
         if (aiAssistantPatch.aiAssistantEnabled === true && !proposedAiStatus.ready) {
           logger.warn({
@@ -8013,12 +8061,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               })),
               fieldsChanged: [] as string[],
             };
+        let aiAssistantConfigSettings: AiAssistantConfigSettings;
+        let aiAssistantConfigSource: "db" | "json_fallback";
+        if (aiAssistantConfigFieldsChanged.length > 0) {
+          const savedAiAssistantConfig = await saveAiAssistantConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+            settings: aiAssistantConfigPatch,
+          });
+          aiAssistantConfigSettings = savedAiAssistantConfig.settings;
+          aiAssistantConfigSource = "db";
+        } else {
+          aiAssistantConfigSettings = currentAiAssistantConfig;
+          aiAssistantConfigSource = (await resolveAiAssistantConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })).source;
+        }
+        const savedEffectiveTenant = applyAiAssistantConfigToTenant(saved.tenant, aiAssistantConfigSettings);
         const fieldsChanged = [
           ...saved.fieldsChanged,
           ...automationFlagFieldsChanged,
           ...followUpFieldsChanged,
           ...handoffLeadNotificationFieldsChanged,
           ...mediaHandoffPolicyResult.fieldsChanged,
+          ...aiAssistantConfigFieldsChanged,
         ];
         logger.info({
           event: "admin.chatbot.settings.updated",
@@ -8027,7 +8096,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientKey,
           fieldsChanged,
         });
-        const savedAiStatus = getAiAssistantConfigurationStatus(saved.tenant);
+        const savedAiStatus = getAiAssistantConfigurationStatus(savedEffectiveTenant);
         logger.info({
           event: savedAiStatus.ready ? "ai.assistant.config_ready" : "ai.assistant.config_incomplete",
           requestId,
@@ -8059,26 +8128,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             disableLegacyFlows: automationFlagsSettings.disableLegacyFlows,
             disableChatbotFlowEditing: automationFlagsSettings.disableChatbotFlowEditing,
             aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
-            aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
-            aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
-            aiAssistantSystemPrompt: saved.tenant.aiAssistantSystemPrompt ?? "",
+            aiAssistantMaxReplies: aiAssistantConfigSettings.aiAssistantMaxReplies,
+            aiAssistantProfile: aiAssistantConfigSettings.aiAssistantProfile,
+            aiAssistantSystemPrompt: aiAssistantConfigSettings.aiAssistantSystemPrompt,
             aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
-            aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
-            aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
-            aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
-            aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
-            aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
-            aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
-            aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
+            aiAssistantAllowedTopics: aiAssistantConfigSettings.aiAssistantAllowedTopics,
+            aiAssistantSecondaryTopics: aiAssistantConfigSettings.aiAssistantSecondaryTopics,
+            aiAssistantBlockedTerms: aiAssistantConfigSettings.aiAssistantBlockedTerms,
+            aiAssistantHandoffKeywords: aiAssistantConfigSettings.aiAssistantHandoffKeywords,
+            aiAssistantGreetingMessage: aiAssistantConfigSettings.aiAssistantGreetingMessage,
+            aiAssistantFallbackMessage: aiAssistantConfigSettings.aiAssistantFallbackMessage,
+            aiAssistantHandoffPrompt: aiAssistantConfigSettings.aiAssistantHandoffPrompt,
             aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
             aiQualification: saved.tenant.aiQualification,
             handoffLeadNotificationEnabled: handoffLeadNotificationSettings.enabled,
             handoffLeadNotificationRecipients: handoffLeadNotificationSettings.recipients,
             mediaHandoffPolicy: mediaHandoffPolicyResult.policy,
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
-            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
-            aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
-            aiConfigured: isAiAssistantConfigured(saved.tenant),
+            aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(savedEffectiveTenant),
+            aiBusinessContext: aiAssistantConfigSettings.aiBusinessContext,
+            aiConfigured: isAiAssistantConfigured(savedEffectiveTenant),
             chatbotLocked: false,
             flowEditingLocked: automationFlagsSettings.disableChatbotFlowEditing,
             aiLocked: false,
@@ -8096,6 +8165,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             followUp: followUpSource,
             handoffLeadNotification: handoffLeadNotificationSource,
             mediaHandoffPolicy: mediaHandoffPolicyResult.source,
+            aiAssistantConfig: aiAssistantConfigSource,
           },
         });
       } catch (error) {
@@ -9487,17 +9557,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           const automationFlags = client
             ? (await resolveAutomationFlagsSettings({ prisma, clientId: client.id, tenant })).settings
             : automationFlagsFromTenantView(tenant);
+          const aiAssistantConfig = client
+            ? (await resolveAiAssistantConfigSettings({ prisma, clientId: client.id, tenant })).settings
+            : aiAssistantConfigFromTenantView(tenant);
           return [
             key,
-            applyAutomationFlagsToTenantView(
-              applyPlanLimitsToTenantView(
-                {
-                  ...tenant,
-                  channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-                },
-                planLimits
+            applyAiAssistantConfigToTenantView(
+              applyAutomationFlagsToTenantView(
+                applyPlanLimitsToTenantView(
+                  {
+                    ...tenant,
+                    channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                  },
+                  planLimits
+                ),
+                automationFlags
               ),
-              automationFlags
+              aiAssistantConfig
             ),
           ] as const;
         })
@@ -10076,26 +10152,39 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             settings: automationFlagsFromTenantView(tenant),
             source: "json_fallback" as const,
           };
-      const tenantWithDisplayPhone = applyAutomationFlagsToTenantView(
-        applyPlanLimitsToTenantView(
-          {
-            ...tenant,
-            templates: {
-              ...(tenant.templates ?? {}),
-              ...(resolvedManualHandoff.templateName
-                ? { manualHandoff: resolvedManualHandoff.templateName }
-                : {}),
+      const resolvedAiAssistantConfig = client
+        ? await resolveAiAssistantConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            settings: aiAssistantConfigFromTenantView(tenant),
+            source: "json_fallback" as const,
+          };
+      const tenantWithDisplayPhone = applyAiAssistantConfigToTenantView(
+        applyAutomationFlagsToTenantView(
+          applyPlanLimitsToTenantView(
+            {
+              ...tenant,
+              templates: {
+                ...(tenant.templates ?? {}),
+                ...(resolvedManualHandoff.templateName
+                  ? { manualHandoff: resolvedManualHandoff.templateName }
+                  : {}),
+              },
+              channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+              displayPhoneNumber:
+                tenant.displayPhoneNumber?.trim() ||
+                extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+                phone?.display ||
+                undefined,
             },
-            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-            displayPhoneNumber:
-              tenant.displayPhoneNumber?.trim() ||
-              extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-              phone?.display ||
-              undefined,
-          },
-          resolvedPlanLimits.settings
+            resolvedPlanLimits.settings
+          ),
+          resolvedAutomationFlags.settings
         ),
-        resolvedAutomationFlags.settings
+        resolvedAiAssistantConfig.settings
       );
       json(res, 200, {
         ok: true,
@@ -10107,6 +10196,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
           planLimits: resolvedPlanLimits.source,
           automationFlags: resolvedAutomationFlags.source,
+          aiAssistantConfig: resolvedAiAssistantConfig.source,
         },
         client: client
           ? {
@@ -10854,6 +10944,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           disableIntentClassifier,
           disableLegacyFlows,
           disableChatbotFlowEditing,
+          aiBusinessContext,
+          aiAssistantSystemPrompt,
+          aiAssistantGreetingMessage,
+          aiAssistantFallbackMessage,
+          aiAssistantHandoffPrompt,
+          aiAssistantAllowedTopics,
+          aiAssistantSecondaryTopics,
+          aiAssistantBlockedTerms,
+          aiAssistantHandoffKeywords,
+          aiAssistantMaxReplies,
+          aiAssistantProfile,
           ...tenantPatch
         } = rawBody;
         const planLimitFieldsChanged = [
@@ -10877,11 +10978,83 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ? ["disableChatbotFlowEditing"]
             : []),
         ];
+        const aiAssistantConfigFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiBusinessContext") ? ["aiBusinessContext"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantSystemPrompt")
+            ? ["aiAssistantSystemPrompt"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantGreetingMessage")
+            ? ["aiAssistantGreetingMessage"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantFallbackMessage")
+            ? ["aiAssistantFallbackMessage"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantHandoffPrompt")
+            ? ["aiAssistantHandoffPrompt"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantAllowedTopics")
+            ? ["aiAssistantAllowedTopics"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantSecondaryTopics")
+            ? ["aiAssistantSecondaryTopics"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantBlockedTerms")
+            ? ["aiAssistantBlockedTerms"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantHandoffKeywords")
+            ? ["aiAssistantHandoffKeywords"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantMaxReplies")
+            ? ["aiAssistantMaxReplies"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantProfile") ? ["aiAssistantProfile"] : []),
+        ];
         for (const key of automationFlagFieldsChanged) {
           if (typeof rawBody[key] !== "boolean") {
             json(res, 400, httpError("bad_request", `${key} must be boolean`));
             return;
           }
+        }
+        for (const key of [
+          "aiBusinessContext",
+          "aiAssistantSystemPrompt",
+          "aiAssistantGreetingMessage",
+          "aiAssistantFallbackMessage",
+          "aiAssistantHandoffPrompt",
+        ]) {
+          if (Object.prototype.hasOwnProperty.call(rawBody, key) && typeof rawBody[key] !== "string") {
+            json(res, 400, httpError("bad_request", `${key} must be string`));
+            return;
+          }
+        }
+        for (const key of [
+          "aiAssistantAllowedTopics",
+          "aiAssistantSecondaryTopics",
+          "aiAssistantBlockedTerms",
+          "aiAssistantHandoffKeywords",
+        ]) {
+          if (Object.prototype.hasOwnProperty.call(rawBody, key) && !normalizeAiAssistantTermList(rawBody[key])) {
+            json(res, 400, httpError("bad_request", `${key} must be an array of strings`));
+            return;
+          }
+        }
+        if (
+          Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantMaxReplies") &&
+          (typeof aiAssistantMaxReplies !== "number" ||
+            !Number.isInteger(aiAssistantMaxReplies) ||
+            aiAssistantMaxReplies < 0)
+        ) {
+          json(res, 400, httpError("bad_request", "aiAssistantMaxReplies must be a non-negative integer"));
+          return;
+        }
+        if (
+          Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantProfile") &&
+          aiAssistantProfile !== "business" &&
+          aiAssistantProfile !== "government" &&
+          aiAssistantProfile !== "legal_previdenciario"
+        ) {
+          json(res, 400, httpError("bad_request", "aiAssistantProfile is invalid"));
+          return;
         }
         const tenants = await getTenants();
         const currentTenant = tenants[tenantId];
@@ -10985,6 +11158,73 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant: currentTenant,
           })).settings;
         }
+        let aiAssistantConfigSettings: AiAssistantConfigSettings | null = null;
+        if (client && aiAssistantConfigFieldsChanged.length > 0) {
+          const savedAiAssistantConfig = await saveAiAssistantConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: {
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiBusinessContext")
+                ? { aiBusinessContext: typeof aiBusinessContext === "string" ? aiBusinessContext.trim() : "" }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantSystemPrompt")
+                ? {
+                    aiAssistantSystemPrompt:
+                      typeof aiAssistantSystemPrompt === "string" ? aiAssistantSystemPrompt.trim() : "",
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantGreetingMessage")
+                ? {
+                    aiAssistantGreetingMessage:
+                      typeof aiAssistantGreetingMessage === "string" ? aiAssistantGreetingMessage.trim() : "",
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantFallbackMessage")
+                ? {
+                    aiAssistantFallbackMessage:
+                      typeof aiAssistantFallbackMessage === "string" ? aiAssistantFallbackMessage.trim() : "",
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantHandoffPrompt")
+                ? {
+                    aiAssistantHandoffPrompt:
+                      typeof aiAssistantHandoffPrompt === "string" ? aiAssistantHandoffPrompt.trim() : "",
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantAllowedTopics")
+                ? { aiAssistantAllowedTopics: normalizeAiAssistantTermList(aiAssistantAllowedTopics) ?? [] }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantSecondaryTopics")
+                ? { aiAssistantSecondaryTopics: normalizeAiAssistantTermList(aiAssistantSecondaryTopics) ?? [] }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantBlockedTerms")
+                ? { aiAssistantBlockedTerms: normalizeAiAssistantTermList(aiAssistantBlockedTerms) ?? [] }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantHandoffKeywords")
+                ? { aiAssistantHandoffKeywords: normalizeAiAssistantTermList(aiAssistantHandoffKeywords) ?? [] }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantMaxReplies")
+                ? { aiAssistantMaxReplies: typeof aiAssistantMaxReplies === "number" ? aiAssistantMaxReplies : 2 }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "aiAssistantProfile")
+                ? {
+                    aiAssistantProfile:
+                      aiAssistantProfile === "government" || aiAssistantProfile === "legal_previdenciario"
+                        ? aiAssistantProfile
+                        : "business",
+                  }
+                : {}),
+            },
+          });
+          aiAssistantConfigSettings = savedAiAssistantConfig.settings;
+        } else if (client) {
+          aiAssistantConfigSettings = (await resolveAiAssistantConfigSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+          })).settings;
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
           if (client) {
@@ -11004,6 +11244,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...clientFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
+            ...aiAssistantConfigFieldsChanged,
           ],
           backupPath: saved.backupPath,
           requestId,
@@ -11017,29 +11258,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...clientFieldsChanged,
             ...planLimitFieldsChanged,
             ...automationFlagFieldsChanged,
+            ...aiAssistantConfigFieldsChanged,
           ],
-          tenant: applyAutomationFlagsToTenantView(
-            applyPlanLimitsToTenantView(
-              {
-                ...saved.tenant,
-                channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
-              },
-              planLimitsSettings ?? {
-                planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
-                messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
-                quotaMonthlyConversations:
-                  typeof currentTenant.quotaMonthlyConversations === "number"
-                    ? currentTenant.quotaMonthlyConversations
-                    : null,
-                quotaWarnAtPct: typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
-                quotaBlockedReplyText:
-                  typeof currentTenant.quotaBlockedReplyText === "string" ? currentTenant.quotaBlockedReplyText : null,
-                quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
-                  ? currentTenant.quotaExcludeWaIds
-                  : [],
-              }
+          tenant: applyAiAssistantConfigToTenantView(
+            applyAutomationFlagsToTenantView(
+              applyPlanLimitsToTenantView(
+                {
+                  ...saved.tenant,
+                  channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+                },
+                planLimitsSettings ?? {
+                  planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
+                  messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
+                  quotaMonthlyConversations:
+                    typeof currentTenant.quotaMonthlyConversations === "number"
+                      ? currentTenant.quotaMonthlyConversations
+                      : null,
+                  quotaWarnAtPct:
+                    typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
+                  quotaBlockedReplyText:
+                    typeof currentTenant.quotaBlockedReplyText === "string"
+                      ? currentTenant.quotaBlockedReplyText
+                      : null,
+                  quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
+                    ? currentTenant.quotaExcludeWaIds
+                    : [],
+                }
+              ),
+              automationFlagsSettings ?? automationFlagsFromTenantView(currentTenant)
             ),
-            automationFlagsSettings ?? automationFlagsFromTenantView(currentTenant)
+            aiAssistantConfigSettings ?? aiAssistantConfigFromTenantView(currentTenant)
           ),
         });
       } catch (error) {
@@ -17590,6 +17838,50 @@ function applyAutomationFlagsToTenantView<T extends Record<string, unknown>>(
     disableIntentClassifier: automationFlags.disableIntentClassifier,
     disableLegacyFlows: automationFlags.disableLegacyFlows,
     disableChatbotFlowEditing: automationFlags.disableChatbotFlowEditing,
+  };
+}
+
+function normalizeAiAssistantConfigText(input: unknown) {
+  return typeof input === "string" ? input.trim() : "";
+}
+
+function normalizeAiAssistantConfigArray(input: unknown) {
+  return Array.isArray(input)
+    ? input.map((term) => (typeof term === "string" ? term.trim() : "")).filter(Boolean)
+    : [];
+}
+
+function aiAssistantConfigFromTenantView(tenant: Record<string, unknown>): AiAssistantConfigSettings {
+  return {
+    aiBusinessContext: normalizeAiAssistantConfigText(tenant.aiBusinessContext),
+    aiAssistantSystemPrompt: normalizeAiAssistantConfigText(tenant.aiAssistantSystemPrompt),
+    aiAssistantGreetingMessage: normalizeAiAssistantConfigText(tenant.aiAssistantGreetingMessage),
+    aiAssistantFallbackMessage: normalizeAiAssistantConfigText(tenant.aiAssistantFallbackMessage),
+    aiAssistantHandoffPrompt: normalizeAiAssistantConfigText(tenant.aiAssistantHandoffPrompt),
+    aiAssistantAllowedTopics: normalizeAiAssistantConfigArray(tenant.aiAssistantAllowedTopics),
+    aiAssistantSecondaryTopics: normalizeAiAssistantConfigArray(tenant.aiAssistantSecondaryTopics),
+    aiAssistantBlockedTerms: normalizeAiAssistantConfigArray(tenant.aiAssistantBlockedTerms),
+    aiAssistantHandoffKeywords: normalizeAiAssistantConfigArray(tenant.aiAssistantHandoffKeywords),
+    aiAssistantMaxReplies:
+      typeof tenant.aiAssistantMaxReplies === "number" &&
+      Number.isInteger(tenant.aiAssistantMaxReplies) &&
+      tenant.aiAssistantMaxReplies >= 0
+        ? tenant.aiAssistantMaxReplies
+        : 2,
+    aiAssistantProfile:
+      tenant.aiAssistantProfile === "government" || tenant.aiAssistantProfile === "legal_previdenciario"
+        ? tenant.aiAssistantProfile
+        : "business",
+  };
+}
+
+function applyAiAssistantConfigToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  settings: AiAssistantConfigSettings
+) {
+  return {
+    ...tenant,
+    ...settings,
   };
 }
 

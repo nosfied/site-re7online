@@ -20,6 +20,7 @@ export type TenantOperationalConfigValue = {
   mediaHandoffPolicy?: TenantMediaHandoffPolicy;
   planLimits?: PlanLimitsSettings;
   automationFlags?: AutomationFlagsSettings;
+  aiAssistantConfig?: AiAssistantConfigSettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -87,6 +88,27 @@ export type AutomationFlagsSettings = {
 
 export type ResolvedAutomationFlagsSettings = {
   settings: AutomationFlagsSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type AiAssistantProfile = "business" | "government" | "legal_previdenciario";
+
+export type AiAssistantConfigSettings = {
+  aiBusinessContext: string;
+  aiAssistantSystemPrompt: string;
+  aiAssistantGreetingMessage: string;
+  aiAssistantFallbackMessage: string;
+  aiAssistantHandoffPrompt: string;
+  aiAssistantAllowedTopics: string[];
+  aiAssistantSecondaryTopics: string[];
+  aiAssistantBlockedTerms: string[];
+  aiAssistantHandoffKeywords: string[];
+  aiAssistantMaxReplies: number;
+  aiAssistantProfile: AiAssistantProfile;
+};
+
+export type ResolvedAiAssistantConfigSettings = {
+  settings: AiAssistantConfigSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -268,6 +290,76 @@ function normalizeAutomationFlagsSettingsFromTenant(
   };
 }
 
+function normalizeAiAssistantProfile(input: unknown): AiAssistantProfile {
+  if (input === "government" || input === "legal_previdenciario") return input;
+  return "business";
+}
+
+function normalizeAiAssistantText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return "";
+  return input.trim().slice(0, maxLength);
+}
+
+function normalizeAiAssistantTermList(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((term) => (typeof term === "string" ? term.trim() : ""))
+        .filter(Boolean)
+        .map((term) => term.slice(0, 120))
+    )
+  );
+}
+
+function normalizeAiAssistantConfigSettings(input: unknown): AiAssistantConfigSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    aiBusinessContext: normalizeAiAssistantText(record.aiBusinessContext, 4000),
+    aiAssistantSystemPrompt: normalizeAiAssistantText(record.aiAssistantSystemPrompt, 4000),
+    aiAssistantGreetingMessage: normalizeAiAssistantText(record.aiAssistantGreetingMessage, 1000),
+    aiAssistantFallbackMessage: normalizeAiAssistantText(record.aiAssistantFallbackMessage, 1000),
+    aiAssistantHandoffPrompt: normalizeAiAssistantText(record.aiAssistantHandoffPrompt, 1000),
+    aiAssistantAllowedTopics: normalizeAiAssistantTermList(record.aiAssistantAllowedTopics),
+    aiAssistantSecondaryTopics: normalizeAiAssistantTermList(record.aiAssistantSecondaryTopics),
+    aiAssistantBlockedTerms: normalizeAiAssistantTermList(record.aiAssistantBlockedTerms),
+    aiAssistantHandoffKeywords: normalizeAiAssistantTermList(record.aiAssistantHandoffKeywords),
+    aiAssistantMaxReplies: normalizeNonNegativeInteger(record.aiAssistantMaxReplies, 2),
+    aiAssistantProfile: normalizeAiAssistantProfile(record.aiAssistantProfile),
+  };
+}
+
+function normalizeAiAssistantConfigSettingsFromTenant(
+  tenant?: Pick<
+    TenantConfig,
+    | "aiBusinessContext"
+    | "aiAssistantSystemPrompt"
+    | "aiAssistantGreetingMessage"
+    | "aiAssistantFallbackMessage"
+    | "aiAssistantHandoffPrompt"
+    | "aiAssistantAllowedTopics"
+    | "aiAssistantSecondaryTopics"
+    | "aiAssistantBlockedTerms"
+    | "aiAssistantHandoffKeywords"
+    | "aiAssistantMaxReplies"
+    | "aiAssistantProfile"
+  > | null
+): AiAssistantConfigSettings {
+  return normalizeAiAssistantConfigSettings({
+    aiBusinessContext: tenant?.aiBusinessContext,
+    aiAssistantSystemPrompt: tenant?.aiAssistantSystemPrompt,
+    aiAssistantGreetingMessage: tenant?.aiAssistantGreetingMessage,
+    aiAssistantFallbackMessage: tenant?.aiAssistantFallbackMessage,
+    aiAssistantHandoffPrompt: tenant?.aiAssistantHandoffPrompt,
+    aiAssistantAllowedTopics: tenant?.aiAssistantAllowedTopics,
+    aiAssistantSecondaryTopics: tenant?.aiAssistantSecondaryTopics,
+    aiAssistantBlockedTerms: tenant?.aiAssistantBlockedTerms,
+    aiAssistantHandoffKeywords: tenant?.aiAssistantHandoffKeywords,
+    aiAssistantMaxReplies: tenant?.aiAssistantMaxReplies,
+    aiAssistantProfile: tenant?.aiAssistantProfile,
+  });
+}
+
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
@@ -294,6 +386,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "automationFlags")) {
     config.automationFlags = normalizeAutomationFlagsSettings(value.automationFlags);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "aiAssistantConfig")) {
+    config.aiAssistantConfig = normalizeAiAssistantConfigSettings(value.aiAssistantConfig);
   }
   return config;
 }
@@ -719,6 +814,108 @@ export async function saveAutomationFlagsSettings(params: {
   return {
     record: saved,
     settings: nextSettings,
+  };
+}
+
+export async function resolveAiAssistantConfigSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<
+    TenantConfig,
+    | "aiBusinessContext"
+    | "aiAssistantSystemPrompt"
+    | "aiAssistantGreetingMessage"
+    | "aiAssistantFallbackMessage"
+    | "aiAssistantHandoffPrompt"
+    | "aiAssistantAllowedTopics"
+    | "aiAssistantSecondaryTopics"
+    | "aiAssistantBlockedTerms"
+    | "aiAssistantHandoffKeywords"
+    | "aiAssistantMaxReplies"
+    | "aiAssistantProfile"
+  > | null;
+}): Promise<ResolvedAiAssistantConfigSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.aiAssistantConfig) {
+    return {
+      settings: dbConfig.aiAssistantConfig,
+      source: "db",
+    };
+  }
+  return {
+    settings: normalizeAiAssistantConfigSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function saveAiAssistantConfigSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<AiAssistantConfigSettings>;
+  tenant?: Pick<
+    TenantConfig,
+    | "aiBusinessContext"
+    | "aiAssistantSystemPrompt"
+    | "aiAssistantGreetingMessage"
+    | "aiAssistantFallbackMessage"
+    | "aiAssistantHandoffPrompt"
+    | "aiAssistantAllowedTopics"
+    | "aiAssistantSecondaryTopics"
+    | "aiAssistantBlockedTerms"
+    | "aiAssistantHandoffKeywords"
+    | "aiAssistantMaxReplies"
+    | "aiAssistantProfile"
+  > | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).aiAssistantConfig
+    ?? normalizeAiAssistantConfigSettingsFromTenant(params.tenant);
+  const nextSettings = normalizeAiAssistantConfigSettings({
+    ...currentSettings,
+    ...params.settings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    aiAssistantConfig: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
+  };
+}
+
+export function applyAiAssistantConfigToTenant<T extends Partial<TenantConfig>>(
+  tenant: T,
+  settings: AiAssistantConfigSettings
+): T & AiAssistantConfigSettings {
+  return {
+    ...tenant,
+    ...settings,
   };
 }
 

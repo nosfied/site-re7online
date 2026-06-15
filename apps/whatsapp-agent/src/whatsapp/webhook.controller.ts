@@ -82,6 +82,8 @@ import {
   normalizeTenantMediaHandoffPolicy,
 } from "../config/tenantConfig.js";
 import {
+  applyAiAssistantConfigToTenant,
+  resolveAiAssistantConfigSettings,
   resolveAutomationFlagsSettings,
   resolveHandoffLeadNotificationSettings,
   resolveMediaHandoffPolicy,
@@ -917,6 +919,15 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     );
     appliedTenantConfig = resolvedTenantConfig.tenant;
     hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
+    const resolvedAiAssistantConfig = await resolveAiAssistantConfigSettings({
+      prisma,
+      clientId: tenantClientId,
+      tenant: appliedTenantConfig,
+    });
+    appliedTenantConfig = applyAiAssistantConfigToTenant(
+      appliedTenantConfig,
+      resolvedAiAssistantConfig.settings
+    );
     const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
       prisma,
       clientId: tenantClientId,

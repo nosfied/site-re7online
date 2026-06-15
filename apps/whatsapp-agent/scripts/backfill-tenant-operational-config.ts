@@ -28,6 +28,7 @@ type BackfillItem = {
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
   planLimits: ReturnType<typeof normalizePlanLimits>;
   automationFlags: ReturnType<typeof normalizeAutomationFlags>;
+  aiAssistantConfig: ReturnType<typeof normalizeAiAssistantConfig>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -186,6 +187,56 @@ function normalizeAutomationFlags(tenant: {
   };
 }
 
+function normalizeAiAssistantProfile(input: unknown) {
+  if (input === "government" || input === "legal_previdenciario") return input;
+  return "business";
+}
+
+function normalizeAiAssistantText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return "";
+  return input.trim().slice(0, maxLength);
+}
+
+function normalizeAiAssistantTermList(input: unknown) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((term) => (typeof term === "string" ? term.trim() : ""))
+        .filter(Boolean)
+        .map((term) => term.slice(0, 120))
+    )
+  );
+}
+
+function normalizeAiAssistantConfig(tenant: {
+  aiBusinessContext?: string;
+  aiAssistantSystemPrompt?: string;
+  aiAssistantGreetingMessage?: string;
+  aiAssistantFallbackMessage?: string;
+  aiAssistantHandoffPrompt?: string;
+  aiAssistantAllowedTopics?: string[];
+  aiAssistantSecondaryTopics?: string[];
+  aiAssistantBlockedTerms?: string[];
+  aiAssistantHandoffKeywords?: string[];
+  aiAssistantMaxReplies?: number;
+  aiAssistantProfile?: string;
+}) {
+  return {
+    aiBusinessContext: normalizeAiAssistantText(tenant.aiBusinessContext, 4000),
+    aiAssistantSystemPrompt: normalizeAiAssistantText(tenant.aiAssistantSystemPrompt, 4000),
+    aiAssistantGreetingMessage: normalizeAiAssistantText(tenant.aiAssistantGreetingMessage, 1000),
+    aiAssistantFallbackMessage: normalizeAiAssistantText(tenant.aiAssistantFallbackMessage, 1000),
+    aiAssistantHandoffPrompt: normalizeAiAssistantText(tenant.aiAssistantHandoffPrompt, 1000),
+    aiAssistantAllowedTopics: normalizeAiAssistantTermList(tenant.aiAssistantAllowedTopics),
+    aiAssistantSecondaryTopics: normalizeAiAssistantTermList(tenant.aiAssistantSecondaryTopics),
+    aiAssistantBlockedTerms: normalizeAiAssistantTermList(tenant.aiAssistantBlockedTerms),
+    aiAssistantHandoffKeywords: normalizeAiAssistantTermList(tenant.aiAssistantHandoffKeywords),
+    aiAssistantMaxReplies: normalizeNonNegativeInteger(tenant.aiAssistantMaxReplies, 2),
+    aiAssistantProfile: normalizeAiAssistantProfile(tenant.aiAssistantProfile),
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
@@ -194,7 +245,8 @@ function mergeConfig(
   handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>,
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>,
   planLimits: ReturnType<typeof normalizePlanLimits>,
-  automationFlags: ReturnType<typeof normalizeAutomationFlags>
+  automationFlags: ReturnType<typeof normalizeAutomationFlags>,
+  aiAssistantConfig: ReturnType<typeof normalizeAiAssistantConfig>
 ): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
@@ -216,6 +268,7 @@ function mergeConfig(
   base.mediaHandoffPolicy = mediaHandoffPolicy;
   base.planLimits = planLimits;
   base.automationFlags = automationFlags;
+  base.aiAssistantConfig = aiAssistantConfig;
   return base as Prisma.InputJsonValue;
 }
 
@@ -247,6 +300,7 @@ async function main() {
       const mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy);
       const planLimits = normalizePlanLimits(tenant);
       const automationFlags = normalizeAutomationFlags(tenant);
+      const aiAssistantConfig = normalizeAiAssistantConfig(tenant);
       if (!client) {
         items.push({
           tenantKey,
@@ -259,6 +313,7 @@ async function main() {
           mediaHandoffPolicy,
           planLimits,
           automationFlags,
+          aiAssistantConfig,
         });
         continue;
       }
@@ -273,6 +328,7 @@ async function main() {
         mediaHandoffPolicy,
         planLimits,
         automationFlags,
+        aiAssistantConfig,
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
@@ -283,7 +339,8 @@ async function main() {
         handoffLeadNotification,
         mediaHandoffPolicy,
         planLimits,
-        automationFlags
+        automationFlags,
+        aiAssistantConfig
       );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },
@@ -330,7 +387,11 @@ async function main() {
             `disableAiFallback=${item.automationFlags.disableAiFallback} ` +
             `disableIntentClassifier=${item.automationFlags.disableIntentClassifier} ` +
             `disableLegacyFlows=${item.automationFlags.disableLegacyFlows} ` +
-            `disableChatbotFlowEditing=${item.automationFlags.disableChatbotFlowEditing}`
+            `disableChatbotFlowEditing=${item.automationFlags.disableChatbotFlowEditing} ` +
+            `aiAssistantProfile=${item.aiAssistantConfig.aiAssistantProfile} ` +
+            `aiAssistantMaxReplies=${item.aiAssistantConfig.aiAssistantMaxReplies} ` +
+            `aiAssistantAllowedTopics=${item.aiAssistantConfig.aiAssistantAllowedTopics.length} ` +
+            `aiAssistantBlockedTerms=${item.aiAssistantConfig.aiAssistantBlockedTerms.length}`
         );
       }
     }
