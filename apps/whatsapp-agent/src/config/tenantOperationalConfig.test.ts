@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolvePlanLimitsSettings } from "./tenantOperationalConfig.js";
+import {
+  resolveAutomationFlagsSettings,
+  resolvePlanLimitsSettings,
+} from "./tenantOperationalConfig.js";
 
 function prismaWithConfig(config: unknown) {
   return {
@@ -84,5 +87,76 @@ test("resolvePlanLimitsSettings uses safe defaults when no limit exists", async 
     quotaWarnAtPct: 0.8,
     quotaBlockedReplyText: null,
     quotaExcludeWaIds: [],
+  });
+});
+
+test("resolveAutomationFlagsSettings prefers DB automation flags over tenants.json", async () => {
+  const resolved = await resolveAutomationFlagsSettings({
+    prisma: prismaWithConfig({
+      automationFlags: {
+        disableChatbot: false,
+        disableAiFallback: true,
+        disableIntentClassifier: true,
+        disableLegacyFlows: false,
+        disableChatbotFlowEditing: true,
+      },
+    }),
+    clientId: "client-1",
+    tenant: {
+      disableChatbot: true,
+      disableAiFallback: false,
+      disableIntentClassifier: false,
+      disableLegacyFlows: true,
+      disableChatbotFlowEditing: false,
+    },
+  });
+
+  assert.equal(resolved.source, "db");
+  assert.deepEqual(resolved.settings, {
+    disableChatbot: false,
+    disableAiFallback: true,
+    disableIntentClassifier: true,
+    disableLegacyFlows: false,
+    disableChatbotFlowEditing: true,
+  });
+});
+
+test("resolveAutomationFlagsSettings falls back to tenants.json automation flags", async () => {
+  const resolved = await resolveAutomationFlagsSettings({
+    prisma: prismaWithConfig({}),
+    clientId: "client-1",
+    tenant: {
+      disableChatbot: true,
+      disableAiFallback: true,
+      disableIntentClassifier: false,
+      disableLegacyFlows: false,
+      disableChatbotFlowEditing: true,
+    },
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {
+    disableChatbot: true,
+    disableAiFallback: true,
+    disableIntentClassifier: false,
+    disableLegacyFlows: false,
+    disableChatbotFlowEditing: true,
+  });
+});
+
+test("resolveAutomationFlagsSettings keeps legacy flows disabled by default", async () => {
+  const resolved = await resolveAutomationFlagsSettings({
+    prisma: prismaWithConfig(null),
+    clientId: "client-1",
+    tenant: null,
+  });
+
+  assert.equal(resolved.source, "json_fallback");
+  assert.deepEqual(resolved.settings, {
+    disableChatbot: false,
+    disableAiFallback: false,
+    disableIntentClassifier: false,
+    disableLegacyFlows: true,
+    disableChatbotFlowEditing: false,
   });
 });

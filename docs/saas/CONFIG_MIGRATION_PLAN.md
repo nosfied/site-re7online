@@ -12,7 +12,7 @@ Move Converta tenant configuration from split JSON/DB ownership toward DB-first 
 - `.data/tenants.json` still owns technical tenant configuration and several module settings.
 - `TenantOperationalConfig` now owns the first DB-first operational config blocks:
   `crmBusinessStatuses`, `templates.manualHandoff`, `followUp*`, `handoffLeadNotification*`
-  `mediaHandoffPolicy` and plan/quota limits.
+  `mediaHandoffPolicy`, plan/quota limits and automation disable flags.
 - `getTenants()` and `saveTenants()` remain active compatibility helpers.
 - Existing backfill scripts target multichannel operational records, not full tenant configuration migration.
 
@@ -51,6 +51,8 @@ These affect runtime behavior but do not usually contain external-provider token
 
 1. Chatbot/automation flags
    - Current: `disableChatbot`, `disableAiFallback`, `disableIntentClassifier`, `disableLegacyFlows`
+   - Implemented destination: `TenantOperationalConfig.config.automationFlags`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: medium because runtime behavior changes immediately when values change
 
 2. AI assistant configuration
@@ -122,8 +124,24 @@ Incremental expansion only after CRM settings are stable.
 - Sprint 57 migrated `templates.manualHandoff` to `TenantOperationalConfig.config.templates.manualHandoff`.
 - Sprint 58 migrated `followUp*` settings to `TenantOperationalConfig.config.followUp`.
 - Sprint 59 migrated `handoffLeadNotification*` settings to `TenantOperationalConfig.config.handoffLeadNotification`.
+- Sprint 60 migrated `mediaHandoffPolicy` to `TenantOperationalConfig.config.mediaHandoffPolicy`.
+- Sprint 61 migrated plan/quota limits to `TenantOperationalConfig.config.planLimits`.
+- Sprint 62 migrated automation disable flags to `TenantOperationalConfig.config.automationFlags`.
 - Keep DB-first loader with JSON fallback.
 - Do not migrate `channelAccounts` yet.
+
+### Next Candidate: AI Assistant Config
+
+After Sprint 62, the next medium-risk block is AI assistant configuration:
+
+- prompts and business context;
+- allowed/secondary topics;
+- blocked terms;
+- handoff keywords;
+- intent catalog;
+- qualification schema.
+
+This should be split into smaller sprints because it affects webhook runtime, assistant behavior, replay/evaluation and tenant-specific commercial quality.
 
 ### Later Sprint: Channel Accounts Secure Storage
 

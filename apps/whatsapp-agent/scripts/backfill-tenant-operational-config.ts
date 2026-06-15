@@ -27,6 +27,7 @@ type BackfillItem = {
   handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>;
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>;
   planLimits: ReturnType<typeof normalizePlanLimits>;
+  automationFlags: ReturnType<typeof normalizeAutomationFlags>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -169,6 +170,22 @@ function normalizePlanLimits(tenant: {
   };
 }
 
+function normalizeAutomationFlags(tenant: {
+  disableChatbot?: boolean;
+  disableAiFallback?: boolean;
+  disableIntentClassifier?: boolean;
+  disableLegacyFlows?: boolean;
+  disableChatbotFlowEditing?: boolean;
+}) {
+  return {
+    disableChatbot: tenant.disableChatbot === true,
+    disableAiFallback: tenant.disableAiFallback === true,
+    disableIntentClassifier: tenant.disableIntentClassifier === true,
+    disableLegacyFlows: tenant.disableLegacyFlows !== false,
+    disableChatbotFlowEditing: tenant.disableChatbotFlowEditing === true,
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
@@ -176,7 +193,8 @@ function mergeConfig(
   followUp: ReturnType<typeof normalizeFollowUp>,
   handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>,
   mediaHandoffPolicy: ReturnType<typeof normalizeTenantMediaHandoffPolicy>,
-  planLimits: ReturnType<typeof normalizePlanLimits>
+  planLimits: ReturnType<typeof normalizePlanLimits>,
+  automationFlags: ReturnType<typeof normalizeAutomationFlags>
 ): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
@@ -197,6 +215,7 @@ function mergeConfig(
   base.handoffLeadNotification = handoffLeadNotification;
   base.mediaHandoffPolicy = mediaHandoffPolicy;
   base.planLimits = planLimits;
+  base.automationFlags = automationFlags;
   return base as Prisma.InputJsonValue;
 }
 
@@ -227,6 +246,7 @@ async function main() {
       const handoffLeadNotification = normalizeHandoffLeadNotification(tenant);
       const mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy);
       const planLimits = normalizePlanLimits(tenant);
+      const automationFlags = normalizeAutomationFlags(tenant);
       if (!client) {
         items.push({
           tenantKey,
@@ -238,6 +258,7 @@ async function main() {
           handoffLeadNotification,
           mediaHandoffPolicy,
           planLimits,
+          automationFlags,
         });
         continue;
       }
@@ -251,6 +272,7 @@ async function main() {
         handoffLeadNotification,
         mediaHandoffPolicy,
         planLimits,
+        automationFlags,
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
@@ -260,7 +282,8 @@ async function main() {
         followUp,
         handoffLeadNotification,
         mediaHandoffPolicy,
-        planLimits
+        planLimits,
+        automationFlags
       );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },
@@ -302,7 +325,12 @@ async function main() {
             `mediaHandoffPolicyEnabled=${item.mediaHandoffPolicy.enabled} ` +
             `mediaHandoffPolicyBehavior=${item.mediaHandoffPolicy.behavior} ` +
             `planName=${item.planLimits.planName ?? "-"} messagesLimit=${item.planLimits.messagesLimit ?? "-"} ` +
-            `quotaMonthlyConversations=${item.planLimits.quotaMonthlyConversations ?? "-"}`
+            `quotaMonthlyConversations=${item.planLimits.quotaMonthlyConversations ?? "-"} ` +
+            `disableChatbot=${item.automationFlags.disableChatbot} ` +
+            `disableAiFallback=${item.automationFlags.disableAiFallback} ` +
+            `disableIntentClassifier=${item.automationFlags.disableIntentClassifier} ` +
+            `disableLegacyFlows=${item.automationFlags.disableLegacyFlows} ` +
+            `disableChatbotFlowEditing=${item.automationFlags.disableChatbotFlowEditing}`
         );
       }
     }

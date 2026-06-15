@@ -82,9 +82,11 @@ import {
   normalizeTenantMediaHandoffPolicy,
 } from "../config/tenantConfig.js";
 import {
+  resolveAutomationFlagsSettings,
   resolveHandoffLeadNotificationSettings,
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
+  type AutomationFlagsSettings,
   type PlanLimitsSettings,
 } from "../config/tenantOperationalConfig.js";
 import {
@@ -894,6 +896,13 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     quotaBlockedReplyText: null,
     quotaExcludeWaIds: [],
   };
+  let automationFlags: AutomationFlagsSettings = {
+    disableChatbot: false,
+    disableAiFallback: false,
+    disableIntentClassifier: false,
+    disableLegacyFlows: true,
+    disableChatbotFlowEditing: false,
+  };
   let tenantCredentialsPromise:
     | Promise<Awaited<ReturnType<typeof resolveTenantOutboundCredentials>>>
     | null = null;
@@ -921,6 +930,11 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     });
     mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
     planLimitsSettings = (await resolvePlanLimitsSettings({
+      prisma,
+      clientId: tenantClientId,
+      tenant: appliedTenantConfig,
+    })).settings;
+    automationFlags = (await resolveAutomationFlagsSettings({
       prisma,
       clientId: tenantClientId,
       tenant: appliedTenantConfig,
@@ -1137,10 +1151,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     return resolvedEntryPointChatbotFlow;
   };
   const isChatbotDisabledForTenant = () =>
-    appliedTenantConfig?.disableChatbot === true;
+    automationFlags.disableChatbot === true;
   const isAiFallbackDisabledForTenant = () =>
     !isAiAssistantConfigured(appliedTenantConfig) ||
-    appliedTenantConfig?.disableAiFallback === true;
+    automationFlags.disableAiFallback === true;
   const isSupervisedAiHandoffEnabled = () =>
     env.AI_ASSISTANT_ENABLED &&
     env.WHATSAPP_AI_ENABLED &&
@@ -1156,7 +1170,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (isChatbotDisabledForTenant()) return null;
     if (
       state.flow === "quote_site" ||
-      (!appliedTenantConfig?.disableLegacyFlows && shouldStartQuoteSite(inboundText))
+      (!automationFlags.disableLegacyFlows && shouldStartQuoteSite(inboundText))
     ) {
       return null;
     }
@@ -4597,7 +4611,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
           let shouldDeferInitialMenuToAssistant = false;
           const intentClassifierEnabled =
             env.FLOW_INTENT_CLASSIFIER_ENABLED &&
-            appliedTenantConfig?.disableIntentClassifier !== true;
+            automationFlags.disableIntentClassifier !== true;
           if (
             !updatedConversation.chatbotActive &&
             !updatedConversation.chatbotNodeId &&
@@ -4927,7 +4941,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         }
       : handoffResult.handled
         ? { state: updatedConversation, handled: false as const, replyText: undefined }
-        : appliedTenantConfig?.disableLegacyFlows || !hasResolvedTenantConfig
+        : automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
           ? { state: updatedConversation, handled: false as const, replyText: undefined }
         : await runFlowExecutor({
             tenantId: appliedTenantConfig?.id ?? "default",
@@ -5417,7 +5431,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     let skipDemoReplies = false;
     let hasDemoSignal = false;
 
-    if (message.text && !appliedTenantConfig?.disableLegacyFlows && hasResolvedTenantConfig) {
+    if (message.text && !automationFlags.disableLegacyFlows && hasResolvedTenantConfig) {
       const midDemoFlowResult = await runMidDemoFlowExecutor({
         tenantId: appliedTenantConfig?.id ?? "default",
         clientKey: tenantClientKey,
@@ -5525,7 +5539,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
       !demoHandled && message.text && updatedConversation.leadRequestedAt
         ? parseLeadFields(message.text)
         : {};
-    const postDemoFlowResult = appliedTenantConfig?.disableLegacyFlows || !hasResolvedTenantConfig
+    const postDemoFlowResult = automationFlags.disableLegacyFlows || !hasResolvedTenantConfig
       ? { handled: false as const }
       : await runPostDemoFlowExecutor({
           tenantId: appliedTenantConfig?.id ?? "default",
@@ -5666,7 +5680,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
 
     const allAutomationLayersDisabled =
       isChatbotDisabledForTenant() &&
-      appliedTenantConfig?.disableLegacyFlows === true &&
+      automationFlags.disableLegacyFlows === true &&
       isAiFallbackDisabledForTenant();
 
     if (

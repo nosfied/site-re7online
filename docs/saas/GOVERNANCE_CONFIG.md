@@ -25,7 +25,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | Channel aliases/metadata | `tenants.json` | `tenants.json` | none | Dedicated channel account model recommended |
 | Channel tokens | `tenants.json` / `TenantMetaConfig` depending channel | Split | partial: `TenantMetaConfig` for WhatsApp | Move non-WhatsApp channel tokens to secure DB storage with redacted APIs |
 | Chatbot flows | DB | DB | `ChatbotFlow` | Keep DB-first |
-| Chatbot/automation locks | `tenants.json` | `tenants.json` | none | Migrate after governance, likely tenant operational config |
+| Chatbot/automation locks | DB-first with JSON fallback | `TenantOperationalConfig.config.automationFlags` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | AI assistant prompts/topics/intents | `tenants.json` | `tenants.json` | none | Migrate after evaluation guardrails are documented |
 | AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate with automation settings |
 | Media handoff policy | DB-first with JSON fallback | `TenantOperationalConfig.config.mediaHandoffPolicy` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
@@ -51,6 +51,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - `ChatbotFlow` in DB vs automation flags and AI schema in `tenants.json`.
 - `Lead.status` in DB vs `crmBusinessStatuses` catalog now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
 - `Template` catalog in DB vs `templates.manualHandoff` pointer now DB-first in `TenantOperationalConfig`, with `tenants.json` fallback during transition.
+- Automation flags in `TenantOperationalConfig.config.automationFlags` vs legacy `disable*` fields in `tenants.json`, with JSON fallback during transition.
 
 ## Current Risks
 
@@ -66,7 +67,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Instagram Business Login account/token metadata
 - Messenger token/account metadata
 - AI assistant configuration
-- Chatbot/automation locks
+- Chatbot/automation locks fallback for tenants not yet backfilled
 - `handoffLeadNotification*` fallback for tenants not yet backfilled
 - `mediaHandoffPolicy` fallback for tenants not yet backfilled
 - `planName`, `messagesLimit` and `quota*` fallback for tenants not yet backfilled
@@ -89,6 +90,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Handoff lead notification settings via `TenantOperationalConfig.config.handoffLeadNotification`, with JSON fallback
 - Media handoff policy via `TenantOperationalConfig.config.mediaHandoffPolicy`, with JSON fallback
 - Plan and quota limits via `TenantOperationalConfig.config.planLimits`, with JSON fallback
+- Automation flags via `TenantOperationalConfig.config.automationFlags`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -179,6 +181,41 @@ Write/backfill path:
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
 
 The admin tenant read endpoint returns the effective DB-first `templates.manualHandoff` value for compatibility with existing runtime scripts.
+
+## Sprint 62 DB-First Rule
+
+Automation disable flags are the seventh migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "automationFlags": {
+    "disableChatbot": false,
+    "disableAiFallback": false,
+    "disableIntentClassifier": false,
+    "disableLegacyFlows": true,
+    "disableChatbotFlowEditing": false
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.automationFlags`
+2. fallback to `TenantConfig.disableChatbot`, `TenantConfig.disableAiFallback`, `TenantConfig.disableIntentClassifier`, `TenantConfig.disableLegacyFlows` and `TenantConfig.disableChatbotFlowEditing`
+3. safe defaults: all locks `false`, except `disableLegacyFlows`, which remains `true` by default to preserve historical runtime behavior
+
+Write/backfill path:
+
+- `/admin/chatbot/settings` writes these automation flags to `TenantOperationalConfig`.
+- `/app/chatbot/settings` exposes the effective DB-first values but does not allow customer-facing edits to the main automation locks.
+- WhatsApp webhook runtime resolves these flags DB-first before deciding chatbot, legacy flow, intent classifier and AI fallback behavior.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+This sprint does not migrate AI prompts, qualification schema, intent catalog, topics, blocked terms or business context.
 
 ## Sprint 58 DB-First Rule
 

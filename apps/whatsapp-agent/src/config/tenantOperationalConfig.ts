@@ -19,6 +19,7 @@ export type TenantOperationalConfigValue = {
   handoffLeadNotification?: HandoffLeadNotificationSettings;
   mediaHandoffPolicy?: TenantMediaHandoffPolicy;
   planLimits?: PlanLimitsSettings;
+  automationFlags?: AutomationFlagsSettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -73,6 +74,19 @@ export type PlanLimitsSettings = {
 
 export type ResolvedPlanLimitsSettings = {
   settings: PlanLimitsSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type AutomationFlagsSettings = {
+  disableChatbot: boolean;
+  disableAiFallback: boolean;
+  disableIntentClassifier: boolean;
+  disableLegacyFlows: boolean;
+  disableChatbotFlowEditing: boolean;
+};
+
+export type ResolvedAutomationFlagsSettings = {
+  settings: AutomationFlagsSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -224,6 +238,36 @@ function normalizePlanLimitsSettingsFromTenant(
   });
 }
 
+function normalizeAutomationFlagsSettings(input: unknown): AutomationFlagsSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    disableChatbot: record.disableChatbot === true,
+    disableAiFallback: record.disableAiFallback === true,
+    disableIntentClassifier: record.disableIntentClassifier === true,
+    disableLegacyFlows: record.disableLegacyFlows !== false,
+    disableChatbotFlowEditing: record.disableChatbotFlowEditing === true,
+  };
+}
+
+function normalizeAutomationFlagsSettingsFromTenant(
+  tenant?: Pick<
+    TenantConfig,
+    | "disableChatbot"
+    | "disableAiFallback"
+    | "disableIntentClassifier"
+    | "disableLegacyFlows"
+    | "disableChatbotFlowEditing"
+  > | null
+): AutomationFlagsSettings {
+  return {
+    disableChatbot: tenant?.disableChatbot === true,
+    disableAiFallback: tenant?.disableAiFallback === true,
+    disableIntentClassifier: tenant?.disableIntentClassifier === true,
+    disableLegacyFlows: tenant?.disableLegacyFlows !== false,
+    disableChatbotFlowEditing: tenant?.disableChatbotFlowEditing === true,
+  };
+}
+
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
@@ -247,6 +291,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "planLimits")) {
     config.planLimits = normalizePlanLimitsSettings(value.planLimits);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "automationFlags")) {
+    config.automationFlags = normalizeAutomationFlagsSettings(value.automationFlags);
   }
   return config;
 }
@@ -571,6 +618,86 @@ export async function savePlanLimitsSettings(params: {
   const nextConfig = {
     ...existingConfig,
     planLimits: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
+  };
+}
+
+export async function resolveAutomationFlagsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<
+    TenantConfig,
+    | "disableChatbot"
+    | "disableAiFallback"
+    | "disableIntentClassifier"
+    | "disableLegacyFlows"
+    | "disableChatbotFlowEditing"
+  > | null;
+}): Promise<ResolvedAutomationFlagsSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.automationFlags) {
+    return {
+      settings: dbConfig.automationFlags,
+      source: "db",
+    };
+  }
+  return {
+    settings: normalizeAutomationFlagsSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function saveAutomationFlagsSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<AutomationFlagsSettings>;
+  tenant?: Pick<
+    TenantConfig,
+    | "disableChatbot"
+    | "disableAiFallback"
+    | "disableIntentClassifier"
+    | "disableLegacyFlows"
+    | "disableChatbotFlowEditing"
+  > | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).automationFlags
+    ?? normalizeAutomationFlagsSettingsFromTenant(params.tenant);
+  const nextSettings = normalizeAutomationFlagsSettings({
+    ...currentSettings,
+    ...params.settings,
+  });
+  const nextConfig = {
+    ...existingConfig,
+    automationFlags: nextSettings,
   };
   const saved = await params.prisma.tenantOperationalConfig.upsert({
     where: { clientId: params.clientId },

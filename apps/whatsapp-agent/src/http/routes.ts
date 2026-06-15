@@ -25,16 +25,19 @@ import {
 } from "../config/tenantConfig.js";
 import {
   resolveCrmBusinessStatuses,
+  resolveAutomationFlagsSettings,
   resolveFollowUpSettings,
   resolveHandoffLeadNotificationSettings,
   resolveManualHandoffTemplate,
   resolveMediaHandoffPolicy,
   resolvePlanLimitsSettings,
+  saveAutomationFlagsSettings,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
   saveHandoffLeadNotificationSettings,
   saveMediaHandoffPolicy,
   savePlanLimitsSettings,
+  type AutomationFlagsSettings,
   type HandoffLeadNotificationSettings,
   type FollowUpSettings,
   type PlanLimitsSettings,
@@ -3718,8 +3721,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
       const aiConfigured = aiConfigurationStatus.ready;
-      const chatbotLocked = Boolean(tenant.disableChatbot);
-      const aiLocked = Boolean(tenant.disableAiFallback);
+      const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const automationFlags = resolvedAutomationFlags.settings;
+      const chatbotLocked = automationFlags.disableChatbot;
+      const aiLocked = automationFlags.disableAiFallback;
       const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
         prisma,
         clientId: client.id,
@@ -3731,9 +3740,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantId: client.clientKey,
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
-          disableChatbot: Boolean(tenant.disableChatbot),
-          disableAiFallback: Boolean(tenant.disableAiFallback),
-          disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+          disableChatbot: automationFlags.disableChatbot,
+          disableAiFallback: automationFlags.disableAiFallback,
+          disableIntentClassifier: automationFlags.disableIntentClassifier,
+          disableLegacyFlows: automationFlags.disableLegacyFlows,
           aiAssistantEnabled: tenant.aiAssistantEnabled === true,
           aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
           aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
@@ -3753,16 +3763,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
           chatbotLocked,
-          flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+          flowEditingLocked: automationFlags.disableChatbotFlowEditing,
           aiLocked,
           aiAssistantLocked:
             !env.AI_ASSISTANT_ENABLED ||
             !env.WHATSAPP_AI_ENABLED ||
-            tenant.disableAiFallback === true ||
+            automationFlags.disableAiFallback === true ||
             !aiConfigured,
           intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
         },
         configSource: {
+          automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: resolvedHandoffLeadNotification.source,
         },
       });
@@ -3873,15 +3884,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
       const aiConfigured = aiConfigurationStatus.ready;
+      const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const automationFlags = resolvedAutomationFlags.settings;
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
         fieldsChanged,
         settings: {
           disableAutoReply: tenant.disableAutoReply ?? false,
-          disableChatbot: Boolean(tenant.disableChatbot),
-          disableAiFallback: Boolean(tenant.disableAiFallback),
-          disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+          disableChatbot: automationFlags.disableChatbot,
+          disableAiFallback: automationFlags.disableAiFallback,
+          disableIntentClassifier: automationFlags.disableIntentClassifier,
+          disableLegacyFlows: automationFlags.disableLegacyFlows,
           aiAssistantEnabled: tenant.aiAssistantEnabled === true,
           aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
           aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
@@ -3900,17 +3918,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
-          chatbotLocked: Boolean(tenant.disableChatbot),
-          flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
-          aiLocked: Boolean(tenant.disableAiFallback),
+          chatbotLocked: automationFlags.disableChatbot,
+          flowEditingLocked: automationFlags.disableChatbotFlowEditing,
+          aiLocked: automationFlags.disableAiFallback,
           aiAssistantLocked:
             !env.AI_ASSISTANT_ENABLED ||
             !env.WHATSAPP_AI_ENABLED ||
-            tenant.disableAiFallback === true ||
+            automationFlags.disableAiFallback === true ||
             !aiConfigured,
           intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
         },
         configSource: {
+          automationFlags: resolvedAutomationFlags.source,
           handoffLeadNotification: "db",
         },
       });
@@ -7527,16 +7546,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenant,
         });
         const mediaHandoffPolicy = resolvedMediaHandoffPolicy.policy;
+        const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const automationFlags = resolvedAutomationFlags.settings;
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
           settings: {
             disableAutoReply: tenant.disableAutoReply ?? false,
-            disableChatbot: Boolean(tenant.disableChatbot),
-            disableAiFallback: Boolean(tenant.disableAiFallback),
-            disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
-            disableLegacyFlows: tenant.disableLegacyFlows !== false,
-            disableChatbotFlowEditing: Boolean(tenant.disableChatbotFlowEditing),
+            disableChatbot: automationFlags.disableChatbot,
+            disableAiFallback: automationFlags.disableAiFallback,
+            disableIntentClassifier: automationFlags.disableIntentClassifier,
+            disableLegacyFlows: automationFlags.disableLegacyFlows,
+            disableChatbotFlowEditing: automationFlags.disableChatbotFlowEditing,
             aiAssistantEnabled: tenant.aiAssistantEnabled === true,
             aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
             aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
@@ -7559,7 +7584,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiBusinessContext: tenant.aiBusinessContext ?? "",
             aiConfigured: isAiAssistantConfigured(tenant),
             chatbotLocked: false,
-            flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+            flowEditingLocked: automationFlags.disableChatbotFlowEditing,
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
@@ -7571,6 +7596,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             followUpTemplateLang: followUp.templateLang,
           },
           configSource: {
+            automationFlags: resolvedAutomationFlags.source,
             followUp: resolvedFollowUp.source,
             handoffLeadNotification: resolvedHandoffLeadNotification.source,
             mediaHandoffPolicy: resolvedMediaHandoffPolicy.source,
@@ -7606,14 +7632,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           "disableLegacyFlows",
           "disableChatbotFlowEditing",
         ] as const;
-        const payload: Record<string, boolean> = {};
+        const automationFlagsPatch: Partial<AutomationFlagsSettings> = {};
+        const automationFlagFieldsChanged: string[] = [];
         for (const key of keys) {
           if (Object.prototype.hasOwnProperty.call(data, key)) {
             if (typeof data[key] !== "boolean") {
               json(res, 400, httpError("bad_request", `${key} must be boolean`));
               return;
             }
-            payload[key] = data[key] as boolean;
+            automationFlagsPatch[key] = data[key] as boolean;
+            automationFlagFieldsChanged.push(key);
           }
         }
         const followUpPatch: Partial<FollowUpSettings> = {};
@@ -7834,19 +7862,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
           mediaHandoffPolicyPatch = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
         }
-        if (Object.prototype.hasOwnProperty.call(data, "disableAiFallback")) {
-          if (typeof data.disableAiFallback !== "boolean") {
-            json(res, 400, httpError("bad_request", "disableAiFallback must be boolean"));
-            return;
-          }
-          aiAssistantPatch.disableAiFallback = data.disableAiFallback;
-        }
         const presetApplied =
           typeof data.aiAssistantPresetApplied === "string"
             ? data.aiAssistantPresetApplied.trim().slice(0, 40)
             : null;
         if (
-          Object.keys(payload).length === 0 &&
+          automationFlagFieldsChanged.length === 0 &&
           followUpFieldsChanged.length === 0 &&
           handoffLeadNotificationFieldsChanged.length === 0 &&
           !mediaHandoffPolicyPatch &&
@@ -7870,7 +7891,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         const proposedTenant = {
           ...tenant,
-          ...payload,
           ...aiAssistantPatch,
         };
         const proposedAiStatus = getAiAssistantConfigurationStatus(proposedTenant);
@@ -7895,7 +7915,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           );
           return;
         }
-        if (payload.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
+        if (automationFlagsPatch.disableIntentClassifier === false && !env.FLOW_INTENT_CLASSIFIER_ENABLED) {
           json(
             res,
             409,
@@ -7907,29 +7927,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
         const jsonPatch = {
-          ...(payload.disableChatbot !== undefined
-            ? { disableChatbot: payload.disableChatbot }
-            : {}),
-          ...(payload.disableAiFallback !== undefined
-            ? { disableAiFallback: payload.disableAiFallback }
-            : {}),
-          ...(payload.disableIntentClassifier !== undefined
-            ? { disableIntentClassifier: payload.disableIntentClassifier }
-            : {}),
-          ...(payload.disableLegacyFlows !== undefined
-            ? { disableLegacyFlows: payload.disableLegacyFlows }
-            : {}),
-          ...(payload.disableChatbotFlowEditing !== undefined
-            ? { disableChatbotFlowEditing: payload.disableChatbotFlowEditing }
-            : {}),
           ...aiAssistantPatch,
         };
         const saved = Object.keys(jsonPatch).length > 0
           ? await saveTenantPatch(clientKey, jsonPatch)
           : {
               tenant,
-              fieldsChanged: [] as string[],
+            fieldsChanged: [] as string[],
             };
+        let automationFlagsSettings: AutomationFlagsSettings;
+        let automationFlagsSource: "db" | "json_fallback";
+        if (automationFlagFieldsChanged.length > 0) {
+          const savedAutomationFlags = await saveAutomationFlagsSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+            settings: automationFlagsPatch,
+          });
+          automationFlagsSettings = savedAutomationFlags.settings;
+          automationFlagsSource = "db";
+        } else {
+          const resolvedAutomationFlags = await resolveAutomationFlagsSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          });
+          automationFlagsSettings = resolvedAutomationFlags.settings;
+          automationFlagsSource = resolvedAutomationFlags.source;
+        }
         let followUpSettings: FollowUpSettings;
         let followUpSource: "db" | "json_fallback";
         if (followUpFieldsChanged.length > 0) {
@@ -7990,6 +8015,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             };
         const fieldsChanged = [
           ...saved.fieldsChanged,
+          ...automationFlagFieldsChanged,
           ...followUpFieldsChanged,
           ...handoffLeadNotificationFieldsChanged,
           ...mediaHandoffPolicyResult.fieldsChanged,
@@ -8027,11 +8053,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           fieldsChanged,
           settings: {
             disableAutoReply: Boolean(saved.tenant.disableAutoReply),
-            disableChatbot: Boolean(saved.tenant.disableChatbot),
-            disableAiFallback: Boolean(saved.tenant.disableAiFallback),
-            disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
-            disableLegacyFlows: saved.tenant.disableLegacyFlows !== false,
-            disableChatbotFlowEditing: Boolean(saved.tenant.disableChatbotFlowEditing),
+            disableChatbot: automationFlagsSettings.disableChatbot,
+            disableAiFallback: automationFlagsSettings.disableAiFallback,
+            disableIntentClassifier: automationFlagsSettings.disableIntentClassifier,
+            disableLegacyFlows: automationFlagsSettings.disableLegacyFlows,
+            disableChatbotFlowEditing: automationFlagsSettings.disableChatbotFlowEditing,
             aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
             aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
             aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
@@ -8054,7 +8080,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiBusinessContext: saved.tenant.aiBusinessContext ?? "",
             aiConfigured: isAiAssistantConfigured(saved.tenant),
             chatbotLocked: false,
-            flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
+            flowEditingLocked: automationFlagsSettings.disableChatbotFlowEditing,
             aiLocked: false,
             aiAssistantLocked: !env.AI_ASSISTANT_ENABLED || !env.WHATSAPP_AI_ENABLED,
             intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
@@ -8066,6 +8092,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             followUpTemplateLang: followUpSettings.templateLang,
           },
           configSource: {
+            automationFlags: automationFlagsSource,
             followUp: followUpSource,
             handoffLeadNotification: handoffLeadNotificationSource,
             mediaHandoffPolicy: mediaHandoffPolicyResult.source,
@@ -9457,14 +9484,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   typeof tenant.quotaBlockedReplyText === "string" ? tenant.quotaBlockedReplyText : null,
                 quotaExcludeWaIds: Array.isArray(tenant.quotaExcludeWaIds) ? tenant.quotaExcludeWaIds : [],
               };
+          const automationFlags = client
+            ? (await resolveAutomationFlagsSettings({ prisma, clientId: client.id, tenant })).settings
+            : automationFlagsFromTenantView(tenant);
           return [
             key,
-            applyPlanLimitsToTenantView(
-              {
-                ...tenant,
-                channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-              },
-              planLimits
+            applyAutomationFlagsToTenantView(
+              applyPlanLimitsToTenantView(
+                {
+                  ...tenant,
+                  channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+                },
+                planLimits
+              ),
+              automationFlags
             ),
           ] as const;
         })
@@ -10033,23 +10066,36 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             },
             source: "json_fallback" as const,
           };
-      const tenantWithDisplayPhone = applyPlanLimitsToTenantView(
-        {
-          ...tenant,
-          templates: {
-            ...(tenant.templates ?? {}),
-            ...(resolvedManualHandoff.templateName
-              ? { manualHandoff: resolvedManualHandoff.templateName }
-              : {}),
+      const resolvedAutomationFlags = client
+        ? await resolveAutomationFlagsSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          })
+        : {
+            settings: automationFlagsFromTenantView(tenant),
+            source: "json_fallback" as const,
+          };
+      const tenantWithDisplayPhone = applyAutomationFlagsToTenantView(
+        applyPlanLimitsToTenantView(
+          {
+            ...tenant,
+            templates: {
+              ...(tenant.templates ?? {}),
+              ...(resolvedManualHandoff.templateName
+                ? { manualHandoff: resolvedManualHandoff.templateName }
+                : {}),
+            },
+            channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+            displayPhoneNumber:
+              tenant.displayPhoneNumber?.trim() ||
+              extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
+              phone?.display ||
+              undefined,
           },
-          channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
-          displayPhoneNumber:
-            tenant.displayPhoneNumber?.trim() ||
-            extractTenantDisplayPhoneFromRawPayload(client?.metaConfig?.rawPayload) ||
-            phone?.display ||
-            undefined,
-        },
-        resolvedPlanLimits.settings
+          resolvedPlanLimits.settings
+        ),
+        resolvedAutomationFlags.settings
       );
       json(res, 200, {
         ok: true,
@@ -10060,6 +10106,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             manualHandoff: resolvedManualHandoff.source,
           },
           planLimits: resolvedPlanLimits.source,
+          automationFlags: resolvedAutomationFlags.source,
         },
         client: client
           ? {
@@ -10802,6 +10849,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           quotaWarnAtPct,
           quotaBlockedReplyText,
           quotaExcludeWaIds,
+          disableChatbot,
+          disableAiFallback,
+          disableIntentClassifier,
+          disableLegacyFlows,
+          disableChatbotFlowEditing,
           ...tenantPatch
         } = rawBody;
         const planLimitFieldsChanged = [
@@ -10814,6 +10866,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaBlockedReplyText") ? ["quotaBlockedReplyText"] : []),
           ...(Object.prototype.hasOwnProperty.call(rawBody, "quotaExcludeWaIds") ? ["quotaExcludeWaIds"] : []),
         ];
+        const automationFlagFieldsChanged = [
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableChatbot") ? ["disableChatbot"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableAiFallback") ? ["disableAiFallback"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableIntentClassifier")
+            ? ["disableIntentClassifier"]
+            : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableLegacyFlows") ? ["disableLegacyFlows"] : []),
+          ...(Object.prototype.hasOwnProperty.call(rawBody, "disableChatbotFlowEditing")
+            ? ["disableChatbotFlowEditing"]
+            : []),
+        ];
+        for (const key of automationFlagFieldsChanged) {
+          if (typeof rawBody[key] !== "boolean") {
+            json(res, 400, httpError("bad_request", `${key} must be boolean`));
+            return;
+          }
+        }
         const tenants = await getTenants();
         const currentTenant = tenants[tenantId];
         if (!currentTenant) {
@@ -10884,6 +10953,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant: currentTenant,
           })).settings;
         }
+        let automationFlagsSettings: AutomationFlagsSettings | null = null;
+        if (client && automationFlagFieldsChanged.length > 0) {
+          const savedAutomationFlags = await saveAutomationFlagsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+            settings: {
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableChatbot")
+                ? { disableChatbot: disableChatbot === true }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableAiFallback")
+                ? { disableAiFallback: disableAiFallback === true }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableIntentClassifier")
+                ? { disableIntentClassifier: disableIntentClassifier === true }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableLegacyFlows")
+                ? { disableLegacyFlows: disableLegacyFlows === true }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(rawBody, "disableChatbotFlowEditing")
+                ? { disableChatbotFlowEditing: disableChatbotFlowEditing === true }
+                : {}),
+            },
+          });
+          automationFlagsSettings = savedAutomationFlags.settings;
+        } else if (client) {
+          automationFlagsSettings = (await resolveAutomationFlagsSettings({
+            prisma,
+            clientId: client.id,
+            tenant: currentTenant,
+          })).settings;
+        }
         const phoneNumberId = normalizeOptionalString(saved.tenant.metaPhoneNumberId);
         if (phoneNumberId) {
           if (client) {
@@ -10898,7 +10999,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           event: "admin.tenant.update",
           tenantId,
           authSource: authToken.source,
-          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged, ...planLimitFieldsChanged],
+          fieldsChanged: [
+            ...saved.fieldsChanged,
+            ...clientFieldsChanged,
+            ...planLimitFieldsChanged,
+            ...automationFlagFieldsChanged,
+          ],
           backupPath: saved.backupPath,
           requestId,
         });
@@ -10906,26 +11012,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           ok: true,
           tenantId,
           backupPath: saved.backupPath,
-          fieldsChanged: [...saved.fieldsChanged, ...clientFieldsChanged, ...planLimitFieldsChanged],
-          tenant: applyPlanLimitsToTenantView(
-            {
-              ...saved.tenant,
-              channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
-            },
-            planLimitsSettings ?? {
-              planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
-              messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
-              quotaMonthlyConversations:
-                typeof currentTenant.quotaMonthlyConversations === "number"
-                  ? currentTenant.quotaMonthlyConversations
-                  : null,
-              quotaWarnAtPct: typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
-              quotaBlockedReplyText:
-                typeof currentTenant.quotaBlockedReplyText === "string" ? currentTenant.quotaBlockedReplyText : null,
-              quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
-                ? currentTenant.quotaExcludeWaIds
-                : [],
-            }
+          fieldsChanged: [
+            ...saved.fieldsChanged,
+            ...clientFieldsChanged,
+            ...planLimitFieldsChanged,
+            ...automationFlagFieldsChanged,
+          ],
+          tenant: applyAutomationFlagsToTenantView(
+            applyPlanLimitsToTenantView(
+              {
+                ...saved.tenant,
+                channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+              },
+              planLimitsSettings ?? {
+                planName: typeof currentTenant.planName === "string" ? currentTenant.planName : null,
+                messagesLimit: typeof currentTenant.messagesLimit === "number" ? currentTenant.messagesLimit : null,
+                quotaMonthlyConversations:
+                  typeof currentTenant.quotaMonthlyConversations === "number"
+                    ? currentTenant.quotaMonthlyConversations
+                    : null,
+                quotaWarnAtPct: typeof currentTenant.quotaWarnAtPct === "number" ? currentTenant.quotaWarnAtPct : 0.8,
+                quotaBlockedReplyText:
+                  typeof currentTenant.quotaBlockedReplyText === "string" ? currentTenant.quotaBlockedReplyText : null,
+                quotaExcludeWaIds: Array.isArray(currentTenant.quotaExcludeWaIds)
+                  ? currentTenant.quotaExcludeWaIds
+                  : [],
+              }
+            ),
+            automationFlagsSettings ?? automationFlagsFromTenantView(currentTenant)
           ),
         });
       } catch (error) {
@@ -17452,6 +17566,30 @@ function applyPlanLimitsToTenantView<T extends Record<string, unknown>>(
     quotaWarnAtPct: planLimits.quotaWarnAtPct,
     quotaBlockedReplyText: planLimits.quotaBlockedReplyText ?? undefined,
     quotaExcludeWaIds: planLimits.quotaExcludeWaIds,
+  };
+}
+
+function automationFlagsFromTenantView(tenant: Record<string, unknown>): AutomationFlagsSettings {
+  return {
+    disableChatbot: tenant.disableChatbot === true,
+    disableAiFallback: tenant.disableAiFallback === true,
+    disableIntentClassifier: tenant.disableIntentClassifier === true,
+    disableLegacyFlows: tenant.disableLegacyFlows !== false,
+    disableChatbotFlowEditing: tenant.disableChatbotFlowEditing === true,
+  };
+}
+
+function applyAutomationFlagsToTenantView<T extends Record<string, unknown>>(
+  tenant: T,
+  automationFlags: AutomationFlagsSettings
+) {
+  return {
+    ...tenant,
+    disableChatbot: automationFlags.disableChatbot,
+    disableAiFallback: automationFlags.disableAiFallback,
+    disableIntentClassifier: automationFlags.disableIntentClassifier,
+    disableLegacyFlows: automationFlags.disableLegacyFlows,
+    disableChatbotFlowEditing: automationFlags.disableChatbotFlowEditing,
   };
 }
 
