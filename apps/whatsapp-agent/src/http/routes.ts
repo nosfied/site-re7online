@@ -26,9 +26,12 @@ import {
 import {
   resolveCrmBusinessStatuses,
   resolveFollowUpSettings,
+  resolveHandoffLeadNotificationSettings,
   resolveManualHandoffTemplate,
   saveCrmBusinessStatuses,
   saveFollowUpSettings,
+  saveHandoffLeadNotificationSettings,
+  type HandoffLeadNotificationSettings,
   type FollowUpSettings,
 } from "../config/tenantOperationalConfig.js";
 import { checkRateLimit } from "./rateLimit.js";
@@ -3712,6 +3715,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const aiConfigured = aiConfigurationStatus.ready;
       const chatbotLocked = Boolean(tenant.disableChatbot);
       const aiLocked = Boolean(tenant.disableAiFallback);
+      const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const handoffLeadNotification = resolvedHandoffLeadNotification.settings;
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
@@ -3733,10 +3742,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
           aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
           aiQualification: tenant.aiQualification,
-          handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
-          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
-            tenant.handoffLeadNotificationRecipients
-          ),
+          handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
+          handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
@@ -3749,6 +3756,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             tenant.disableAiFallback === true ||
             !aiConfigured,
           intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+        },
+        configSource: {
+          handoffLeadNotification: resolvedHandoffLeadNotification.source,
         },
       });
     } catch (error) {
@@ -3811,79 +3821,92 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
-      const patch: Record<string, unknown> = {};
+      const handoffLeadNotificationPatch: Partial<HandoffLeadNotificationSettings> = {};
+      const fieldsChanged: string[] = [];
       if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationEnabled")) {
         if (typeof data.handoffLeadNotificationEnabled !== "boolean") {
           json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
           return;
         }
-        patch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+        handoffLeadNotificationPatch.enabled = data.handoffLeadNotificationEnabled;
+        fieldsChanged.push("handoffLeadNotificationEnabled");
       }
       if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
         if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
           json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
           return;
         }
-        patch.handoffLeadNotificationRecipients = normalizeHandoffLeadNotificationRecipients(
+        handoffLeadNotificationPatch.recipients = normalizeHandoffLeadNotificationRecipients(
           data.handoffLeadNotificationRecipients
         );
+        fieldsChanged.push("handoffLeadNotificationRecipients");
       }
-      if (Object.keys(patch).length === 0) {
+      if (fieldsChanged.length === 0) {
         json(res, 400, httpError("bad_request", "Provide notification settings to update"));
         return;
       }
-      const saved = await saveTenantPatch(client.clientKey, patch);
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey];
+      if (!tenant) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const saved = await saveHandoffLeadNotificationSettings({
+        prisma,
+        clientId: client.id,
+        tenant,
+        settings: handoffLeadNotificationPatch,
+      });
       logger.info({
         event: "app.chatbot.handoff_notification_settings.updated",
         requestId,
         clientId: client.id,
         clientKey: client.clientKey,
         userId: clientAuth.userId,
-        fieldsChanged: saved.fieldsChanged,
-        recipientCount: normalizeHandoffLeadNotificationRecipients(
-          saved.tenant.handoffLeadNotificationRecipients
-        ).length,
+        fieldsChanged,
+        recipientCount: saved.settings.recipients.length,
       });
-      const aiConfigurationStatus = getAiAssistantConfigurationStatus(saved.tenant);
+      const aiConfigurationStatus = getAiAssistantConfigurationStatus(tenant);
       const aiConfigured = aiConfigurationStatus.ready;
       json(res, 200, {
         ok: true,
         tenantId: client.clientKey,
-        fieldsChanged: saved.fieldsChanged,
+        fieldsChanged,
         settings: {
-          disableAutoReply: saved.tenant.disableAutoReply ?? false,
-          disableChatbot: Boolean(saved.tenant.disableChatbot),
-          disableAiFallback: Boolean(saved.tenant.disableAiFallback),
-          disableIntentClassifier: Boolean(saved.tenant.disableIntentClassifier),
-          aiAssistantEnabled: saved.tenant.aiAssistantEnabled === true,
-          aiAssistantMaxReplies: saved.tenant.aiAssistantMaxReplies ?? 2,
-          aiAssistantProfile: saved.tenant.aiAssistantProfile ?? "business",
-          aiAssistantFallbackToHandoff: saved.tenant.aiAssistantFallbackToHandoff === true,
-          aiAssistantAllowedTopics: saved.tenant.aiAssistantAllowedTopics ?? [],
-          aiAssistantSecondaryTopics: saved.tenant.aiAssistantSecondaryTopics ?? [],
-          aiAssistantBlockedTerms: saved.tenant.aiAssistantBlockedTerms ?? [],
-          aiAssistantHandoffKeywords: saved.tenant.aiAssistantHandoffKeywords ?? [],
-          aiAssistantGreetingMessage: saved.tenant.aiAssistantGreetingMessage ?? "",
-          aiAssistantFallbackMessage: saved.tenant.aiAssistantFallbackMessage ?? "",
-          aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
-          aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
-          aiQualification: saved.tenant.aiQualification,
-          handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
-          handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
-            saved.tenant.handoffLeadNotificationRecipients
-          ),
+          disableAutoReply: tenant.disableAutoReply ?? false,
+          disableChatbot: Boolean(tenant.disableChatbot),
+          disableAiFallback: Boolean(tenant.disableAiFallback),
+          disableIntentClassifier: Boolean(tenant.disableIntentClassifier),
+          aiAssistantEnabled: tenant.aiAssistantEnabled === true,
+          aiAssistantMaxReplies: tenant.aiAssistantMaxReplies ?? 2,
+          aiAssistantProfile: tenant.aiAssistantProfile ?? "business",
+          aiAssistantFallbackToHandoff: tenant.aiAssistantFallbackToHandoff === true,
+          aiAssistantAllowedTopics: tenant.aiAssistantAllowedTopics ?? [],
+          aiAssistantSecondaryTopics: tenant.aiAssistantSecondaryTopics ?? [],
+          aiAssistantBlockedTerms: tenant.aiAssistantBlockedTerms ?? [],
+          aiAssistantHandoffKeywords: tenant.aiAssistantHandoffKeywords ?? [],
+          aiAssistantGreetingMessage: tenant.aiAssistantGreetingMessage ?? "",
+          aiAssistantFallbackMessage: tenant.aiAssistantFallbackMessage ?? "",
+          aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
+          aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
+          aiQualification: tenant.aiQualification,
+          handoffLeadNotificationEnabled: saved.settings.enabled,
+          handoffLeadNotificationRecipients: saved.settings.recipients,
           aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
           aiAssistantConfigurationStatus: aiConfigurationStatus,
           aiConfigured,
-          chatbotLocked: Boolean(saved.tenant.disableChatbot),
-          flowEditingLocked: Boolean(saved.tenant.disableChatbotFlowEditing),
-          aiLocked: Boolean(saved.tenant.disableAiFallback),
+          chatbotLocked: Boolean(tenant.disableChatbot),
+          flowEditingLocked: Boolean(tenant.disableChatbotFlowEditing),
+          aiLocked: Boolean(tenant.disableAiFallback),
           aiAssistantLocked:
             !env.AI_ASSISTANT_ENABLED ||
             !env.WHATSAPP_AI_ENABLED ||
-            saved.tenant.disableAiFallback === true ||
+            tenant.disableAiFallback === true ||
             !aiConfigured,
           intentClassifierLocked: !env.FLOW_INTENT_CLASSIFIER_ENABLED,
+        },
+        configSource: {
+          handoffLeadNotification: "db",
         },
       });
     } catch (error) {
@@ -7487,6 +7510,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           tenant,
         });
         const followUp = resolvedFollowUp.settings;
+        const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
+          prisma,
+          clientId: client.id,
+          tenant,
+        });
+        const handoffLeadNotification = resolvedHandoffLeadNotification.settings;
         json(res, 200, {
           ok: true,
           tenantId: clientKey,
@@ -7511,10 +7540,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffPrompt: tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: tenant.aiAssistantIntentCatalog ?? [],
             aiQualification: tenant.aiQualification,
-            handoffLeadNotificationEnabled: tenant.handoffLeadNotificationEnabled === true,
-            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
-              tenant.handoffLeadNotificationRecipients
-            ),
+            handoffLeadNotificationEnabled: handoffLeadNotification.enabled,
+            handoffLeadNotificationRecipients: handoffLeadNotification.recipients,
             mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(tenant.mediaHandoffPolicy),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(tenant),
@@ -7534,6 +7561,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
           configSource: {
             followUp: resolvedFollowUp.source,
+            handoffLeadNotification: resolvedHandoffLeadNotification.source,
           },
         });
       } catch (error) {
@@ -7645,6 +7673,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           followUpFieldsChanged.push("followUpTemplateLang");
         }
         const aiAssistantPatch: Record<string, unknown> = {};
+        const handoffLeadNotificationPatch: Partial<HandoffLeadNotificationSettings> = {};
+        const handoffLeadNotificationFieldsChanged: string[] = [];
         if (Object.prototype.hasOwnProperty.call(data, "aiAssistantEnabled")) {
           if (typeof data.aiAssistantEnabled !== "boolean") {
             json(res, 400, httpError("bad_request", "aiAssistantEnabled must be boolean"));
@@ -7776,15 +7806,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             json(res, 400, httpError("bad_request", "handoffLeadNotificationEnabled must be boolean"));
             return;
           }
-          aiAssistantPatch.handoffLeadNotificationEnabled = data.handoffLeadNotificationEnabled;
+          handoffLeadNotificationPatch.enabled = data.handoffLeadNotificationEnabled;
+          handoffLeadNotificationFieldsChanged.push("handoffLeadNotificationEnabled");
         }
         if (Object.prototype.hasOwnProperty.call(data, "handoffLeadNotificationRecipients")) {
           if (!Array.isArray(data.handoffLeadNotificationRecipients)) {
             json(res, 400, httpError("bad_request", "handoffLeadNotificationRecipients must be an array"));
             return;
           }
-          aiAssistantPatch.handoffLeadNotificationRecipients =
+          handoffLeadNotificationPatch.recipients =
             normalizeHandoffLeadNotificationRecipients(data.handoffLeadNotificationRecipients);
+          handoffLeadNotificationFieldsChanged.push("handoffLeadNotificationRecipients");
         }
         if (Object.prototype.hasOwnProperty.call(data, "mediaHandoffPolicy")) {
           aiAssistantPatch.mediaHandoffPolicy = normalizeTenantMediaHandoffPolicy(data.mediaHandoffPolicy);
@@ -7803,6 +7835,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (
           Object.keys(payload).length === 0 &&
           followUpFieldsChanged.length === 0 &&
+          handoffLeadNotificationFieldsChanged.length === 0 &&
           Object.keys(aiAssistantPatch).length === 0
         ) {
           json(
@@ -7903,7 +7936,31 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           followUpSettings = resolvedFollowUp.settings;
           followUpSource = resolvedFollowUp.source;
         }
-        const fieldsChanged = [...saved.fieldsChanged, ...followUpFieldsChanged];
+        let handoffLeadNotificationSettings: HandoffLeadNotificationSettings;
+        let handoffLeadNotificationSource: "db" | "json_fallback";
+        if (handoffLeadNotificationFieldsChanged.length > 0) {
+          const savedHandoffLeadNotification = await saveHandoffLeadNotificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+            settings: handoffLeadNotificationPatch,
+          });
+          handoffLeadNotificationSettings = savedHandoffLeadNotification.settings;
+          handoffLeadNotificationSource = "db";
+        } else {
+          const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
+            prisma,
+            clientId: client.id,
+            tenant,
+          });
+          handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
+          handoffLeadNotificationSource = resolvedHandoffLeadNotification.source;
+        }
+        const fieldsChanged = [
+          ...saved.fieldsChanged,
+          ...followUpFieldsChanged,
+          ...handoffLeadNotificationFieldsChanged,
+        ];
         logger.info({
           event: "admin.chatbot.settings.updated",
           requestId,
@@ -7956,10 +8013,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             aiAssistantHandoffPrompt: saved.tenant.aiAssistantHandoffPrompt ?? "",
             aiAssistantIntentCatalog: saved.tenant.aiAssistantIntentCatalog ?? [],
             aiQualification: saved.tenant.aiQualification,
-            handoffLeadNotificationEnabled: saved.tenant.handoffLeadNotificationEnabled === true,
-            handoffLeadNotificationRecipients: normalizeHandoffLeadNotificationRecipients(
-              saved.tenant.handoffLeadNotificationRecipients
-            ),
+            handoffLeadNotificationEnabled: handoffLeadNotificationSettings.enabled,
+            handoffLeadNotificationRecipients: handoffLeadNotificationSettings.recipients,
             mediaHandoffPolicy: normalizeTenantMediaHandoffPolicy(saved.tenant.mediaHandoffPolicy),
             aiAssistantGlobalSafety: getAiAssistantGlobalSafetyConfig(),
             aiAssistantConfigurationStatus: getAiAssistantConfigurationStatus(saved.tenant),
@@ -7979,6 +8034,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
           configSource: {
             followUp: followUpSource,
+            handoffLeadNotification: handoffLeadNotificationSource,
           },
         });
       } catch (error) {

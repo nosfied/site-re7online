@@ -29,7 +29,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 | AI assistant prompts/topics/intents | `tenants.json` | `tenants.json` | none | Migrate after evaluation guardrails are documented |
 | AI qualification schema | `tenants.json` | `tenants.json` | none | Migrate with automation settings |
 | Media handoff policy | `tenants.json` | `tenants.json` | none | Migrate as tenant automation config |
-| Handoff lead notification recipients | `tenants.json` | `tenants.json` | none | Migrate with notification settings |
+| Handoff lead notification recipients | DB-first with JSON fallback | `TenantOperationalConfig.config.handoffLeadNotification` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | Follow-up settings | DB-first with JSON fallback | `TenantOperationalConfig.config.followUp` | `TenantOperationalConfig` | Keep fallback until tenants are backfilled and verified |
 | CRM status catalog | DB-first with JSON fallback | `TenantOperationalConfig.config.crmBusinessStatuses` | `TenantOperationalConfig`, operational records in `Lead.status` | Keep fallback until tenants are backfilled and verified |
 | Leads/CRM records | DB | DB | `Lead`, `LeadNote`, `Contact`, `Conversation` | Keep DB-first |
@@ -67,7 +67,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Messenger token/account metadata
 - AI assistant configuration
 - Chatbot/automation locks
-- Handoff notification recipients
+- `handoffLeadNotification*` fallback for tenants not yet backfilled
 - Media handoff policy
 - `followUp*` fallback for tenants not yet backfilled
 - Quotas and plan fields
@@ -85,6 +85,7 @@ The Converta configuration layer is split across Postgres and `.data/tenants.jso
 - Campaigns
 - Templates catalog and manual handoff pointer via `TenantOperationalConfig.config.templates.manualHandoff`, with JSON fallback
 - Follow-up settings via `TenantOperationalConfig.config.followUp`, with JSON fallback
+- Handoff lead notification settings via `TenantOperationalConfig.config.handoffLeadNotification`, with JSON fallback
 - CRM status catalog via `TenantOperationalConfig.config.crmBusinessStatuses`, with JSON fallback
 - Chatbot flows
 - SLA/retention/metrics
@@ -169,6 +170,43 @@ Write/backfill path:
 
 - `/admin/chatbot/settings` writes follow-up fields to `TenantOperationalConfig`.
 - `findEligibleFollowUps()` resolves follow-up settings DB-first before evaluating eligibility.
+- `npm run tenant-config:backfill -- --dry-run --json`
+- `npm run tenant-config:backfill -- --json`
+- The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+## Sprint 59 DB-First Rule
+
+`handoffLeadNotification*` settings are the fourth migrated operational config block.
+
+DB shape:
+
+```json
+{
+  "handoffLeadNotification": {
+    "enabled": true,
+    "recipients": [
+      {
+        "id": "wa_5511999999999",
+        "waId": "5511999999999",
+        "label": "Atendente",
+        "isActive": true
+      }
+    ]
+  }
+}
+```
+
+Read path:
+
+1. `TenantOperationalConfig.config.handoffLeadNotification`
+2. fallback to `TenantConfig.handoffLeadNotificationEnabled` and `TenantConfig.handoffLeadNotificationRecipients`
+3. disabled with empty recipients if neither exists
+
+Write/backfill path:
+
+- `/app/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
+- `/admin/chatbot/settings` writes handoff notification settings to `TenantOperationalConfig`.
+- WhatsApp webhook handoff notification runtime resolves settings DB-first before sending notifications.
 - `npm run tenant-config:backfill -- --dry-run --json`
 - `npm run tenant-config:backfill -- --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.

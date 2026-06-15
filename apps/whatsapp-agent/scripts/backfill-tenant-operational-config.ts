@@ -4,7 +4,11 @@ import process from "node:process";
 import dotenv from "dotenv";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { env } from "../src/config/env.js";
-import { getTenants, normalizeCrmBusinessStatuses } from "../src/config/tenantConfig.js";
+import {
+  getTenants,
+  normalizeCrmBusinessStatuses,
+  normalizeHandoffLeadNotificationRecipients,
+} from "../src/config/tenantConfig.js";
 
 type Options = {
   json: boolean;
@@ -19,6 +23,7 @@ type BackfillItem = {
   statusCount: number;
   manualHandoffTemplate: string | null;
   followUp: ReturnType<typeof normalizeFollowUp>;
+  handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>;
 };
 
 function parseArgs(argv: string[]): Options {
@@ -106,11 +111,22 @@ function normalizeFollowUp(tenant: {
   };
 }
 
+function normalizeHandoffLeadNotification(tenant: {
+  handoffLeadNotificationEnabled?: boolean;
+  handoffLeadNotificationRecipients?: unknown;
+}) {
+  return {
+    enabled: tenant.handoffLeadNotificationEnabled === true,
+    recipients: normalizeHandoffLeadNotificationRecipients(tenant.handoffLeadNotificationRecipients),
+  };
+}
+
 function mergeConfig(
   current: unknown,
   crmBusinessStatuses: unknown,
   manualHandoffTemplate: string | null,
-  followUp: ReturnType<typeof normalizeFollowUp>
+  followUp: ReturnType<typeof normalizeFollowUp>,
+  handoffLeadNotification: ReturnType<typeof normalizeHandoffLeadNotification>
 ): Prisma.InputJsonValue {
   const base =
     current && typeof current === "object" && !Array.isArray(current)
@@ -128,6 +144,7 @@ function mergeConfig(
     };
   }
   base.followUp = followUp;
+  base.handoffLeadNotification = handoffLeadNotification;
   return base as Prisma.InputJsonValue;
 }
 
@@ -155,6 +172,7 @@ async function main() {
       const statuses = normalizeCrmBusinessStatuses(tenant.crmBusinessStatuses);
       const manualHandoffTemplate = normalizeManualHandoffTemplate(tenant.templates?.manualHandoff);
       const followUp = normalizeFollowUp(tenant);
+      const handoffLeadNotification = normalizeHandoffLeadNotification(tenant);
       if (!client) {
         items.push({
           tenantKey,
@@ -163,6 +181,7 @@ async function main() {
           statusCount: statuses.length,
           manualHandoffTemplate,
           followUp,
+          handoffLeadNotification,
         });
         continue;
       }
@@ -173,13 +192,15 @@ async function main() {
         statusCount: statuses.length,
         manualHandoffTemplate,
         followUp,
+        handoffLeadNotification,
       });
       if (options.dryRun) continue;
       const nextConfig = mergeConfig(
         client.operationalConfig?.config,
         statuses,
         manualHandoffTemplate,
-        followUp
+        followUp,
+        handoffLeadNotification
       );
       await prisma.tenantOperationalConfig.upsert({
         where: { clientId: client.id },
@@ -215,7 +236,9 @@ async function main() {
         console.log(
           `- tenant=${item.tenantKey} action=${item.action} clientId=${item.clientId ?? "-"} ` +
             `crmBusinessStatuses=${item.statusCount} manualHandoff=${item.manualHandoffTemplate ?? "-"} ` +
-            `followUpEnabled=${item.followUp.enabled} followUpDelayMinutes=${item.followUp.delayMinutes}`
+            `followUpEnabled=${item.followUp.enabled} followUpDelayMinutes=${item.followUp.delayMinutes} ` +
+            `handoffLeadNotificationEnabled=${item.handoffLeadNotification.enabled} ` +
+            `handoffLeadNotificationRecipients=${item.handoffLeadNotification.recipients.length}`
         );
       }
     }

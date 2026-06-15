@@ -2,7 +2,9 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "./env.js";
 import {
   normalizeCrmBusinessStatuses,
+  normalizeHandoffLeadNotificationRecipients,
   type CrmBusinessStatusConfig,
+  type HandoffLeadNotificationRecipient,
   type TenantConfig,
 } from "./tenantConfig.js";
 
@@ -12,6 +14,7 @@ export type TenantOperationalConfigValue = {
     manualHandoff?: string;
   };
   followUp?: FollowUpSettings;
+  handoffLeadNotification?: HandoffLeadNotificationSettings;
 };
 
 export type TenantOperationalConfigSource = "db" | "json_fallback";
@@ -37,6 +40,16 @@ export type FollowUpSettings = {
 
 export type ResolvedFollowUpSettings = {
   settings: FollowUpSettings;
+  source: TenantOperationalConfigSource;
+};
+
+export type HandoffLeadNotificationSettings = {
+  enabled: boolean;
+  recipients: HandoffLeadNotificationRecipient[];
+};
+
+export type ResolvedHandoffLeadNotificationSettings = {
+  settings: HandoffLeadNotificationSettings;
   source: TenantOperationalConfigSource;
 };
 
@@ -108,6 +121,26 @@ function normalizeFollowUpSettingsFromTenant(
   };
 }
 
+function normalizeHandoffLeadNotificationSettings(input: unknown): HandoffLeadNotificationSettings {
+  const record = isRecord(input) ? input : {};
+  return {
+    enabled: record.enabled === true,
+    recipients: normalizeHandoffLeadNotificationRecipients(record.recipients),
+  };
+}
+
+function normalizeHandoffLeadNotificationSettingsFromTenant(
+  tenant?: Pick<
+    TenantConfig,
+    "handoffLeadNotificationEnabled" | "handoffLeadNotificationRecipients"
+  > | null
+): HandoffLeadNotificationSettings {
+  return {
+    enabled: tenant?.handoffLeadNotificationEnabled === true,
+    recipients: normalizeHandoffLeadNotificationRecipients(tenant?.handoffLeadNotificationRecipients),
+  };
+}
+
 function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   if (!isRecord(value)) return {};
   const config: TenantOperationalConfigValue = {};
@@ -122,6 +155,9 @@ function parseOperationalConfig(value: unknown): TenantOperationalConfigValue {
   }
   if (Object.prototype.hasOwnProperty.call(value, "followUp")) {
     config.followUp = normalizeFollowUpSettings(value.followUp);
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "handoffLeadNotification")) {
+    config.handoffLeadNotification = normalizeHandoffLeadNotificationSettings(value.handoffLeadNotification);
   }
   return config;
 }
@@ -251,6 +287,80 @@ export async function saveFollowUpSettings(params: {
   return {
     record: saved,
     settings: nextFollowUp,
+  };
+}
+
+export async function resolveHandoffLeadNotificationSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  tenant?: Pick<
+    TenantConfig,
+    "handoffLeadNotificationEnabled" | "handoffLeadNotificationRecipients"
+  > | null;
+}): Promise<ResolvedHandoffLeadNotificationSettings> {
+  const record = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const dbConfig = parseOperationalConfig(record?.config);
+  if (dbConfig.handoffLeadNotification) {
+    return {
+      settings: dbConfig.handoffLeadNotification,
+      source: "db",
+    };
+  }
+  return {
+    settings: normalizeHandoffLeadNotificationSettingsFromTenant(params.tenant),
+    source: "json_fallback",
+  };
+}
+
+export async function saveHandoffLeadNotificationSettings(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  settings: Partial<HandoffLeadNotificationSettings>;
+  tenant?: Pick<
+    TenantConfig,
+    "handoffLeadNotificationEnabled" | "handoffLeadNotificationRecipients"
+  > | null;
+}) {
+  const existing = await params.prisma.tenantOperationalConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: { config: true },
+  });
+  const existingConfig = isRecord(existing?.config) ? { ...existing.config } : {};
+  const currentSettings = parseOperationalConfig(existing?.config).handoffLeadNotification
+    ?? normalizeHandoffLeadNotificationSettingsFromTenant(params.tenant);
+  const nextSettings: HandoffLeadNotificationSettings = {
+    enabled: params.settings.enabled ?? currentSettings.enabled,
+    recipients: params.settings.recipients
+      ? normalizeHandoffLeadNotificationRecipients(params.settings.recipients)
+      : currentSettings.recipients,
+  };
+  const nextConfig = {
+    ...existingConfig,
+    handoffLeadNotification: nextSettings,
+  };
+  const saved = await params.prisma.tenantOperationalConfig.upsert({
+    where: { clientId: params.clientId },
+    update: {
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    create: {
+      clientId: params.clientId,
+      config: nextConfig as Prisma.InputJsonValue,
+      schemaVersion: 1,
+    },
+    select: {
+      id: true,
+      schemaVersion: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    record: saved,
+    settings: nextSettings,
   };
 }
 

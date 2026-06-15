@@ -66,6 +66,8 @@ These affect runtime behavior but do not usually contain external-provider token
 
 5. Handoff notification recipients
    - Current: `handoffLeadNotificationRecipients`
+   - Implemented destination: `TenantOperationalConfig.config.handoffLeadNotification`
+   - Status: DB-first with `tenants.json` fallback
    - Risk: medium because notification fan-out must remain tenant-scoped and compliant
 
 ## High Risk
@@ -114,6 +116,7 @@ Incremental expansion only after CRM settings are stable.
 - Add one low-risk block at a time.
 - Sprint 57 migrated `templates.manualHandoff` to `TenantOperationalConfig.config.templates.manualHandoff`.
 - Sprint 58 migrated `followUp*` settings to `TenantOperationalConfig.config.followUp`.
+- Sprint 59 migrated `handoffLeadNotification*` settings to `TenantOperationalConfig.config.handoffLeadNotification`.
 - Keep DB-first loader with JSON fallback.
 - Do not migrate `channelAccounts` yet.
 

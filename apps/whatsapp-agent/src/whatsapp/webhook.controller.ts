@@ -79,9 +79,9 @@ import {
   getDefaultTenant,
   getTenantByClientKeyOrPhoneNumberId,
   isAiAssistantConfigured,
-  normalizeHandoffLeadNotificationRecipients,
   normalizeTenantMediaHandoffPolicy,
 } from "../config/tenantConfig.js";
+import { resolveHandoffLeadNotificationSettings } from "../config/tenantOperationalConfig.js";
 import {
   resolveFallbackTemplate,
   resolveTemplateForIntent,
@@ -876,6 +876,10 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   }
   let tenantClientId = "";
   let tenantClientKey = env.CLIENT_ID;
+  let handoffLeadNotificationSettings = {
+    enabled: false,
+    recipients: [] as Array<{ id: string; waId: string; label?: string; isActive: boolean }>,
+  };
   let tenantCredentialsPromise:
     | Promise<Awaited<ReturnType<typeof resolveTenantOutboundCredentials>>>
     | null = null;
@@ -890,6 +894,12 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     );
     appliedTenantConfig = resolvedTenantConfig.tenant;
     hasResolvedTenantConfig = resolvedTenantConfig.hasTenantConfig;
+    const resolvedHandoffLeadNotification = await resolveHandoffLeadNotificationSettings({
+      prisma,
+      clientId: tenantClientId,
+      tenant: appliedTenantConfig,
+    });
+    handoffLeadNotificationSettings = resolvedHandoffLeadNotification.settings;
     tenantAllowlist = (
       appliedTenantConfig?.allowlist ?? env.WHATSAPP_ALLOWLIST
     )
@@ -1812,9 +1822,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
   };
 
   const getHandoffLeadNotificationRecipients = () =>
-    normalizeHandoffLeadNotificationRecipients(
-      appliedTenantConfig?.handoffLeadNotificationRecipients
-    ).filter((recipient) => recipient.isActive && recipient.waId);
+    handoffLeadNotificationSettings.recipients.filter((recipient) => recipient.isActive && recipient.waId);
 
   const cleanHandoffNotificationText = (value?: string | null) => {
     if (!value) return null;
@@ -1895,7 +1903,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
     if (!tenantClientId || !tenantClientKey) return;
     const prisma = getPrisma();
     const eventRequestId = `handoff.lead_notification.${tenantClientId}.${params.state.waId}.${params.messageId}.${params.source}`;
-    if (appliedTenantConfig?.handoffLeadNotificationEnabled !== true) {
+    if (handoffLeadNotificationSettings.enabled !== true) {
       logger.info({
         event: "handoff.lead_notification.skipped",
         clientId: tenantClientId,
