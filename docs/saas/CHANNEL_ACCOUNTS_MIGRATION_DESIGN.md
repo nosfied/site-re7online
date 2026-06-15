@@ -2,7 +2,9 @@
 
 Status: Sprint 65A design plus Sprint 65B schema/backfill/shadow plan.
 
-Sprint 65B creates additive DB tables and comparison scripts only. Runtime resolution, webhook handling, OAuth, outbound and `tenants.json` remain unchanged.
+Sprint 65B creates additive DB tables and comparison scripts only.
+Sprint 65C adds optional runtime shadow comparison behind `CHANNEL_ACCOUNTS_RUNTIME_SHADOW`.
+Runtime resolution, webhook handling, OAuth, outbound and `tenants.json` remain JSON-authoritative.
 
 ## Scope
 
@@ -22,6 +24,20 @@ Sprint 65B in scope:
 - DB-vs-JSON shadow compare;
 - redacted token presence/hash tracking;
 - optional encrypted token material if `CHANNEL_ACCOUNT_SECRET_KEY` is configured.
+
+Sprint 65C in scope:
+
+- calculate DB channel-account resolution in parallel during Messenger/Instagram webhook processing;
+- compare DB result with current JSON result;
+- log only mismatches by default;
+- keep JSON result as the only runtime decision.
+
+Out of scope for Sprint 65C:
+
+- DB-first runtime;
+- DB token reads for outbound;
+- OAuth writes to DB-first;
+- any behavior change in inbound/outbound.
 
 ## Current Inventory
 
@@ -293,6 +309,14 @@ For every Messenger/Instagram webhook and outbound eligibility check:
 - use JSON result;
 - log redacted diff.
 
+Runtime shadow flag:
+
+```bash
+CHANNEL_ACCOUNTS_RUNTIME_SHADOW=true
+```
+
+Default is `false`. When enabled, webhook tenant resolution still uses JSON. The DB result is calculated only for comparison. Matches are logged only when `CHANNEL_ACCOUNTS_RUNTIME_SHADOW_LOG_MATCHES=true`; mismatches and DB shadow failures are always logged.
+
 Log event examples:
 
 - `channel_accounts.shadow.missing_db`
@@ -303,6 +327,8 @@ Log event examples:
 - `channel_accounts.shadow.flags_mismatch`
 - `channel_accounts.shadow.token_status_mismatch`
 - `channel_accounts.shadow.ambiguous_db`
+- `channel_accounts.runtime_shadow_mismatch`
+- `channel_accounts.runtime_shadow_failed`
 
 Never log:
 

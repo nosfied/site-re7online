@@ -6,7 +6,9 @@ import {
   resolveAiIntentQualificationSettings,
 } from "../config/tenantOperationalConfig.js";
 import { getPrisma } from "../db.js";
+import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
+import { logChannelAccountRuntimeShadow } from "../channels/channelAccountRuntimeShadow.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
   createDefaultChannelAdapterRegistry,
@@ -671,6 +673,16 @@ export async function processPassiveMetaWebhookPayload(
       provider: "meta",
       channelAccountId: item.pageId,
     });
+    if (env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW) {
+      await logChannelAccountRuntimeShadow({
+        prisma: getPrisma(),
+        requestId: options.requestId,
+        channel,
+        provider: "meta",
+        channelAccountId: item.pageId,
+        jsonResolution: resolution,
+      });
+    }
     logPassiveReceived({
       requestId: options.requestId,
       channel,

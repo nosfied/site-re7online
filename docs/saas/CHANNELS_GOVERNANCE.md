@@ -142,4 +142,5 @@ Current Instagram policy:
 - `channelAccounts` migration requires special care because it affects Messenger, Instagram, Meta Review and token safety.
 - The migration design lives in `docs/saas/CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md`.
 - Sprint 65B creates `ChannelAccount`, `ChannelAccountAlias` and `ChannelAccountSecret` plus offline backfill/shadow scripts, but runtime remains JSON-first.
+- Sprint 65C adds optional runtime dual-read shadow with `CHANNEL_ACCOUNTS_RUNTIME_SHADOW=true`; JSON remains authoritative and only mismatches are logged by default.
 - Future DB-first work must keep a JSON fallback and dual-read shadow mode until Messenger and Instagram pass separate production smoke tests.
