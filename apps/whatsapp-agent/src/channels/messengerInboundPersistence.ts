@@ -6,6 +6,7 @@ import type { NormalizedInboundEvent } from "./channel.types.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { canPersistChannelInbound } from "./tenantChannelAccount.js";
 import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
+import { channelLatencyNow, type ChannelLatencyProfiler } from "./channelLatencyProfiler.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 
@@ -168,8 +169,11 @@ export async function persistMessengerInboundEvent(params: {
   requestId: string;
   fetchImpl?: typeof fetch;
   publishRealtimeEvent?: typeof publishRealtimeEvent;
+  latencyProfiler?: ChannelLatencyProfiler;
 }): Promise<MessengerInboundPersistenceResult> {
   const { event, tenantKey, requestId } = params;
+  const latency = params.latencyProfiler;
+  const persistenceStartedAt = channelLatencyNow();
   if (event.channel !== "messenger" || event.provider !== "meta") {
     return { persisted: false, reason: "not_messenger" };
   }
@@ -190,10 +194,12 @@ export async function persistMessengerInboundEvent(params: {
   }
 
   const prisma = params.prisma ?? getPrisma();
+  const clientLookupStartedAt = channelLatencyNow();
   const client = await prisma.client.findUnique({
     where: { clientKey: tenantKey },
     select: { id: true, clientKey: true, status: true },
   });
+  latency?.duration("clientLookup", clientLookupStartedAt);
   if (!client) {
     logPersistence({
       event: "messenger.inbound_persistence.blocked",
@@ -223,17 +229,21 @@ export async function persistMessengerInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
+  const profileLookupStartedAt = channelLatencyNow();
   const profile = await fetchMessengerUserProfile({
     pageAccessToken: params.account?.pageAccessToken,
     externalUserId: event.externalUserId,
     fetchImpl: params.fetchImpl,
   });
+  latency?.duration("profileLookup", profileLookupStartedAt);
   const displayName = profile.displayName;
 
+  const duplicateLookupStartedAt = channelLatencyNow();
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
     select: { id: true },
   });
+  latency?.duration("duplicateLookup", duplicateLookupStartedAt);
   if (duplicate) {
     logPersistence({
       event: "messenger.inbound_persistence.blocked",
@@ -254,12 +264,15 @@ export async function persistMessengerInboundEvent(params: {
     };
   }
 
+  const defaultRouteStartedAt = channelLatencyNow();
   const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, client.id);
+  latency?.duration("defaultRouteLookup", defaultRouteStartedAt);
   const operationalRoute = {
     departmentId: defaults.department.id,
     queueId: defaults.queue.id,
   };
 
+  const persistenceDbStartedAt = channelLatencyNow();
   const [conversation, runtimeState, inbound] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
@@ -364,6 +377,8 @@ export async function persistMessengerInboundEvent(params: {
       select: { id: true },
     }),
   ]);
+  latency?.duration("persistenceDb", persistenceDbStartedAt);
+  latency?.duration("persistence", persistenceStartedAt);
 
   logPersistence({
     event: "messenger.inbound_persistence.persisted",
@@ -376,6 +391,7 @@ export async function persistMessengerInboundEvent(params: {
   });
 
   const publish = params.publishRealtimeEvent ?? publishRealtimeEvent;
+  const realtimeStartedAt = channelLatencyNow();
   publish({
     type: "message.created",
     clientId: client.id,
@@ -401,6 +417,7 @@ export async function persistMessengerInboundEvent(params: {
       createdAt: createdAt.toISOString(),
     },
   });
+  latency?.duration("realtime", realtimeStartedAt);
 
   return {
     persisted: true,

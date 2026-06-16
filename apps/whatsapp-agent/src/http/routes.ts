@@ -195,6 +195,7 @@ import {
   sendMessengerTextMessage,
 } from "../channels/messengerOutbound.js";
 import { findMessengerChannelAccountForConversationDbFirst } from "../channels/channelAccountDbFirst.js";
+import { channelLatencyNow, createChannelLatencyProfiler, type ChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
@@ -16446,9 +16447,14 @@ async function findMessengerAccountForOutbound(params: {
   source: { channel?: string | null; provider?: string | null; channelAccountId?: string | null };
   tenant?: { channelAccounts?: TenantChannelAccount[] };
   requestId: string;
+  latencyProfiler?: ChannelLatencyProfiler;
 }) {
+  const startedAt = channelLatencyNow();
   const jsonAccount = findTenantChannelAccountForConversation(params.tenant, params.source);
-  if (!env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) return jsonAccount;
+  if (!env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) {
+    params.latencyProfiler?.duration("accountResolution", startedAt);
+    return jsonAccount;
+  }
   const channelFields = serializeInboxChannelFields(params.source);
   try {
     const dbAccount = await findMessengerChannelAccountForConversationDbFirst({
@@ -16456,7 +16462,9 @@ async function findMessengerAccountForOutbound(params: {
       clientKey: params.clientKey,
       channelAccountId: channelFields.channelAccountId,
       includeSecrets: true,
+      latencyProfiler: params.latencyProfiler,
     });
+    params.latencyProfiler?.duration("accountResolution", startedAt);
     if (dbAccount) {
       logger.info({
         event: "channel_accounts.db_first_messenger",
@@ -16482,6 +16490,7 @@ async function findMessengerAccountForOutbound(params: {
     });
     return jsonAccount;
   } catch (error) {
+    params.latencyProfiler?.duration("accountResolution", startedAt);
     logger.warn({
       event: "channel_accounts.db_first_messenger_fallback",
       route: "/app/inbox",
@@ -18259,18 +18268,33 @@ async function adminSendMessengerMessage(params: {
     }
   | { ok: false; statusCode: number; error: string; message?: string }
 > {
+  const latency = createChannelLatencyProfiler();
+  const finishLatency = (fields: Record<string, string | number | boolean | null | undefined>) => {
+    latency.finish("channel_latency.messenger_outbound", {
+      requestId: params.requestId,
+      tenantKey: params.clientKey,
+      channel: "messenger",
+      channelAccountId: params.source.channelAccountId ?? null,
+      mode: env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER ? "db_first" : "json_first",
+      ...fields,
+    });
+  };
   const channel = serializeInboxChannelFields(params.source).channel;
   if (channel !== "messenger") {
+    finishLatency({ result: "blocked", reason: "channel_not_messenger" });
     return { ok: false, statusCode: 409, error: "channel_outbound_not_enabled" };
   }
 
+  const tenantConfigStartedAt = channelLatencyNow();
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
+  latency.duration("tenantConfig", tenantConfigStartedAt);
   const account = await findMessengerAccountForOutbound({
     clientKey: params.clientKey,
     source: params.source,
     tenant,
     requestId: params.requestId,
+    latencyProfiler: latency,
   });
   if (account && account.tenantKey !== params.clientKey) {
     logMessengerOutbound({
@@ -18280,6 +18304,7 @@ async function adminSendMessengerMessage(params: {
       requestId: params.requestId,
       reason: "tenant_mismatch",
     });
+    finishLatency({ result: "blocked", reason: "tenant_mismatch" });
     return {
       ok: false,
       statusCode: 409,
@@ -18296,6 +18321,7 @@ async function adminSendMessengerMessage(params: {
       requestId: params.requestId,
       reason: gate.reason,
     });
+    finishLatency({ result: "blocked", reason: gate.reason });
     return {
       ok: false,
       statusCode: 409,
@@ -18304,6 +18330,7 @@ async function adminSendMessengerMessage(params: {
     };
   }
   if (!account) {
+    finishLatency({ result: "blocked", reason: "account_missing" });
     return {
       ok: false,
       statusCode: 409,
@@ -18313,6 +18340,7 @@ async function adminSendMessengerMessage(params: {
   }
 
   const prisma = getPrisma();
+  const runtimeStateStartedAt = channelLatencyNow();
   const runtimeState = await prisma.conversationRuntimeState.findFirst({
     where: {
       clientId: params.clientId,
@@ -18330,6 +18358,7 @@ async function adminSendMessengerMessage(params: {
       assignedUserId: true,
     },
   });
+  latency.duration("runtimeStateLookup", runtimeStateStartedAt);
   if (runtimeState && runtimeState.channelAccountId !== account.channelAccountId) {
     logMessengerOutbound({
       event: "messenger.outbound.blocked",
@@ -18338,6 +18367,7 @@ async function adminSendMessengerMessage(params: {
       requestId: params.requestId,
       reason: "channel_account_mismatch",
     });
+    finishLatency({ result: "blocked", reason: "channel_account_mismatch" });
     return {
       ok: false,
       statusCode: 409,
@@ -18354,6 +18384,7 @@ async function adminSendMessengerMessage(params: {
       requestId: params.requestId,
       reason: "recipient_unavailable",
     });
+    finishLatency({ result: "blocked", reason: "recipient_unavailable" });
     return {
       ok: false,
       statusCode: 409,
@@ -18362,6 +18393,7 @@ async function adminSendMessengerMessage(params: {
     };
   }
 
+  const usageGateStartedAt = channelLatencyNow();
   const usageGate = await checkUsageGate({
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -18369,19 +18401,24 @@ async function adminSendMessengerMessage(params: {
     requestId: params.requestId,
     waId: params.waId,
   });
+  latency.duration("usageGate", usageGateStartedAt);
   if (!usageGate.allowed) {
+    finishLatency({ result: "blocked", reason: "usage_limit_reached" });
     return { ok: false, statusCode: 429, error: "usage_limit_reached" };
   }
 
+  const metaCallStartedAt = channelLatencyNow();
   const sendResult = await sendMessengerTextMessage({
     pageAccessToken: gate.token,
     recipientPsid,
     text: params.text,
   });
+  latency.duration("metaCall", metaCallStartedAt);
   const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
   const messageId = `admin.messenger.send.${params.requestId}`;
   const createdAt = new Date();
   const metaMessageId = sendResult.ok ? sendResult.messageId : null;
+  const outboundPersistenceStartedAt = channelLatencyNow();
   await persistMessengerOutboundMessage({
     prisma,
     clientId: params.clientId,
@@ -18397,7 +18434,9 @@ async function adminSendMessengerMessage(params: {
     metaMessageId,
     errorBody: sendResult.ok ? null : sendResult.errorBody,
   });
+  latency.duration("outboundPersistence", outboundPersistenceStartedAt);
 
+  const statusUpdateStartedAt = channelLatencyNow();
   await Promise.all([
     prisma.conversation.updateMany({
       where: {
@@ -18422,7 +18461,9 @@ async function adminSendMessengerMessage(params: {
       },
     }),
   ]);
+  latency.duration("statusUpdate", statusUpdateStartedAt);
 
+  const runtimeStorageStartedAt = channelLatencyNow();
   const conversation = await runtimeStorage.getConversation(params.waId, params.clientKey);
   if (conversation) {
     await runtimeStorage.upsertConversation({
@@ -18435,6 +18476,8 @@ async function adminSendMessengerMessage(params: {
           : conversation.status,
     });
   }
+  latency.duration("runtimeStorage", runtimeStorageStartedAt);
+  const metricsStartedAt = channelLatencyNow();
   await recordConversationAgentOutboundMetrics({
     prisma,
     clientId: params.clientId,
@@ -18445,6 +18488,7 @@ async function adminSendMessengerMessage(params: {
     assignedUserId: runtimeState.assignedUserId ?? null,
     requestId: params.requestId,
   });
+  latency.duration("metrics", metricsStartedAt);
 
   logMessengerOutbound({
     event: sendResult.ok ? "messenger.outbound.sent" : "messenger.outbound.failed",
@@ -18454,6 +18498,7 @@ async function adminSendMessengerMessage(params: {
     requestId: params.requestId,
     status: sendResult.status,
   });
+  finishLatency({ result: sendResult.ok ? "sent" : "failed", status: sendResult.status });
 
   return {
     ok: true,

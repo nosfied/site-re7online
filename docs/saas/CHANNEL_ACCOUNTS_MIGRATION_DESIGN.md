@@ -6,6 +6,8 @@ Sprint 65B creates additive DB tables and comparison scripts only.
 Sprint 65C adds optional runtime shadow comparison behind `CHANNEL_ACCOUNTS_RUNTIME_SHADOW`.
 Sprint 65D adds optional Messenger DB-first runtime behind `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER`.
 Sprint 65D.1 adds a runtime cache/performance guard for future Messenger DB-first reactivation.
+Sprint 65D.2 validated Messenger DB-first with cache functionally, but was rolled back by flag because UX latency was still perceptible.
+Sprint 65D.3 adds latency profiling only; Messenger DB-first and runtime shadow remain disabled by default.
 Instagram resolution, OAuth and `tenants.json` remain JSON-authoritative.
 
 ## Scope
@@ -68,6 +70,21 @@ Out of scope for Sprint 65D.1:
 
 - enabling Messenger DB-first in production;
 - enabling runtime shadow in production;
+- changing Instagram/OAuth/WhatsApp behavior.
+
+Sprint 65D.3 in scope:
+
+- optional hot-path profiling controlled by `CHANNEL_LATENCY_PROFILING=false`;
+- sample control through `CHANNEL_LATENCY_PROFILING_SAMPLE_RATE`;
+- structured redacted logs for `channel_latency.messenger_inbound` and `channel_latency.messenger_outbound`;
+- operational summary script `npm run channel-latency:summary`;
+- no runtime flip, no channel behavior change and no token/ciphertext logging.
+
+Out of scope for Sprint 65D.3:
+
+- reactivating `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER`;
+- reactivating `CHANNEL_ACCOUNTS_RUNTIME_SHADOW`;
+- optimizing before measured evidence;
 - changing Instagram/OAuth/WhatsApp behavior.
 
 ## Current Inventory
@@ -391,6 +408,37 @@ Sprint 65D.1 adds a performance guard before the next activation attempt:
 - cache is invalidated by TTL, process reload, or `clearChannelAccountRuntimeCache()` in tests;
 - cache hit/miss logs are gated by `CHANNEL_ACCOUNTS_RUNTIME_CACHE_LOGS=true`;
 - DB failures still fall back to JSON in the caller.
+
+Sprint 65D.2 result:
+
+- Messenger DB-first with cache was functionally validated for inbound and outbound;
+- no unexpected fallback was observed;
+- health and offline shadow remained healthy;
+- user-perceived inbox/message latency remained unacceptable;
+- rollback was performed by setting `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=false`.
+
+Sprint 65D.3 latency profiling:
+
+- default flags stay off:
+  - `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=false`
+  - `CHANNEL_ACCOUNTS_RUNTIME_SHADOW=false`
+  - `CHANNEL_LATENCY_PROFILING=false`
+- inbound Messenger profiling measures tenant resolution, normalization, persistence DB work, realtime publish and total webhook path;
+- outbound Messenger profiling measures tenant config, account/token resolution, runtime-state lookup, usage gate, Meta call, persistence, status update, runtime storage, metrics and total API path;
+- frontend inbox debug can be enabled per browser with `localStorage.setItem("INBOX_LATENCY_DEBUG", "1")`;
+- production collection should run for a short controlled window, then be disabled again.
+
+Operational collection example:
+
+```bash
+pm2 logs re7-whatsapp-agent --lines 0 --no-color \
+  | grep 'channel_latency.' \
+  | tee /tmp/channel-latency.log
+
+npm run channel-latency:summary -- --file /tmp/channel-latency.log
+```
+
+Do not attempt another Messenger DB-first flip until the collected profile shows whether the bottleneck is DB/cache, Meta API, persistence, realtime, frontend refresh or a broader backend cold path.
 
 ### Phase 4: JSON Removal
 

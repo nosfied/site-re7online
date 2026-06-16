@@ -77,6 +77,19 @@ const LEAD_STATUS_OPTIONS: LeadStatus[] = [
   "NURTURE",
 ];
 
+function isInboxLatencyDebugEnabled() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.localStorage.getItem("INBOX_LATENCY_DEBUG") === "1" ||
+    window.localStorage.getItem("converta_inbox_latency_debug") === "1"
+  );
+}
+
+function logInboxLatencyDebug(payload: Record<string, unknown>) {
+  if (!isInboxLatencyDebugEnabled()) return;
+  console.debug(JSON.stringify({ event: "inbox_latency.outbound", ...payload }));
+}
+
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
 const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
 const INBOX_UX_DEBUG_STORAGE_KEY = "converta_inbox_ux_debug";
@@ -3727,7 +3740,11 @@ export default function AppInboxPage() {
         setQueuedMessageCount(outgoingQueueRef.current.length);
         if (!next) continue;
         try {
+          const latencyStartedAt = performance.now();
+          const requestStartedAt = performance.now();
           const response = await sendAppConversationMessage(session, next.waId, next.text);
+          const requestMs = performance.now() - requestStartedAt;
+          const uiStartedAt = performance.now();
           shouldScrollToBottomRef.current = true;
           if (selectedConversationWaId === next.waId) {
             const outboundMessage: InboxMessageItem = {
@@ -3780,6 +3797,12 @@ export default function AppInboxPage() {
             response.message.createdAt,
             next.waId
           );
+          logInboxLatencyDebug({
+            result: "sent",
+            requestMs: Math.round(requestMs),
+            uiMergeMs: Math.round(performance.now() - uiStartedAt),
+            totalMs: Math.round(performance.now() - latencyStartedAt),
+          });
         } catch (err) {
           const typed = err as { status?: number; message?: string; details?: string };
           if (typed.status === 401) {

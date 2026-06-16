@@ -145,4 +145,13 @@ Current Instagram policy:
 - Sprint 65C adds optional runtime dual-read shadow with `CHANNEL_ACCOUNTS_RUNTIME_SHADOW=true`; JSON remains authoritative and only mismatches are logged by default.
 - Sprint 65D allows Messenger-only DB-first runtime with `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER=true`; Instagram remains JSON-first.
 - Sprint 65D.1 adds a 60s in-memory runtime cache for Messenger DB-first resolution and decrypted outbound token lookup; both runtime flags remain off until a separate activation smoke.
+- Sprint 65D.2 proved Messenger DB-first with cache works functionally, but rollback was required because UX latency was still perceptible.
+- Sprint 65D.3 adds opt-in profiling with `CHANNEL_LATENCY_PROFILING=true` and `CHANNEL_LATENCY_PROFILING_SAMPLE_RATE`; default production behavior remains JSON-first.
 - Future DB-first work must keep a JSON fallback and dual-read shadow mode until Messenger and Instagram pass separate production smoke tests.
+
+Latency profiling rules:
+
+- logs are redacted and must not contain message content, raw PSID, tokens or ciphertext;
+- backend events are `channel_latency.messenger_inbound` and `channel_latency.messenger_outbound`;
+- frontend inbox debug is browser-local through `INBOX_LATENCY_DEBUG=1`;
+- profiling is for short observation windows only and must be disabled after diagnosis.

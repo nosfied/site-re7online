@@ -184,6 +184,16 @@ Sprint 65D.1 is a performance guard after the first Messenger DB-first smoke:
 - fallback remains JSON if DB/cache lookup fails;
 - next activation must happen in a separate controlled Sprint 65D.2.
 
+Sprint 65D.2 reactivated Messenger DB-first with cache and validated inbound/outbound functionally, but it was not approved for permanent production use because the inbox still had perceptible latency. Rollback was performed by flag and the runtime returned to JSON-first.
+
+Sprint 65D.3 adds diagnosis before any further flip:
+
+- `CHANNEL_LATENCY_PROFILING=false` by default;
+- `CHANNEL_LATENCY_PROFILING_SAMPLE_RATE=1` controls sampling when enabled;
+- backend emits redacted `channel_latency.messenger_inbound` and `channel_latency.messenger_outbound` events;
+- `npm run channel-latency:summary` calculates p50/p95/max by stage from a short log window;
+- no DB-first or runtime shadow flag is reactivated by this sprint.
+
 The next implementation sprint must not jump directly to DB-first runtime. The safe sequence is:
 
 1. create schema and token secret storage; status: Sprint 65B
@@ -193,8 +203,9 @@ The next implementation sprint must not jump directly to DB-first runtime. The s
 5. add optional runtime dual-read shadow while keeping JSON authoritative; status: Sprint 65C
 6. enable Messenger DB-first behind channel-specific flag; status: Sprint 65D
 7. add runtime cache/performance guard before reactivation; status: Sprint 65D.1
-8. reactivate Messenger DB-first with cache in a later controlled sprint
-9. only then evaluate Instagram DB-first in a later sprint
+8. reactivate Messenger DB-first with cache; status: Sprint 65D.2 functional but rolled back for latency
+9. measure hot path with latency profiling; status: Sprint 65D.3
+10. only then evaluate a new Messenger flip, and later Instagram DB-first
 
 ## Documentation To Treat Carefully
 

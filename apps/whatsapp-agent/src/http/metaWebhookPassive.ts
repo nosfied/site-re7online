@@ -28,6 +28,7 @@ import {
 } from "../channels/channelPersistencePlan.js";
 import { persistInstagramInboundEvent } from "../channels/instagramInboundPersistence.js";
 import { persistMessengerInboundEvent } from "../channels/messengerInboundPersistence.js";
+import { channelLatencyNow, createChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import { findTenantChannelAccount, resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
 import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
 import type { Channel } from "../channels/channel.types.js";
@@ -745,8 +746,10 @@ export async function processPassiveMetaWebhookPayload(
   let unsupportedCount = 0;
 
   for (const item of events) {
+    const latency = channel === "messenger" ? createChannelLatencyProfiler() : null;
     const externalUserHash = getChannelEventExternalUserHash(channel, item.event);
     const externalMessageId = getEventMessageId(channel, item.event);
+    const tenantResolutionStartedAt = channelLatencyNow();
     const jsonResolution = resolveTenantForChannelAccount({
       tenants,
       channel,
@@ -760,6 +763,7 @@ export async function processPassiveMetaWebhookPayload(
       requestId: options.requestId,
       jsonResolution,
     });
+    latency?.duration("tenantResolution", tenantResolutionStartedAt);
     if (env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW) {
       await logChannelAccountRuntimeShadow({
         prisma: getPrisma(),
@@ -934,6 +938,7 @@ export async function processPassiveMetaWebhookPayload(
     });
 
     try {
+      const normalizationStartedAt = channelLatencyNow();
       const normalized = normalizeChannelInboundEvent({
         tenantKey,
         channel,
@@ -952,6 +957,7 @@ export async function processPassiveMetaWebhookPayload(
           },
         },
       });
+      latency?.duration("normalization", normalizationStartedAt);
 
       normalizedCount += 1;
       logger.info({
@@ -992,6 +998,7 @@ export async function processPassiveMetaWebhookPayload(
           tenantKey,
           account: accountForPersistence,
           requestId: options.requestId,
+          latencyProfiler: latency ?? undefined,
         });
       }
 
@@ -1059,6 +1066,14 @@ export async function processPassiveMetaWebhookPayload(
           details: { reason: (error as Error).message },
         });
       }
+      latency?.mark("webhookResponse");
+      latency?.finish("channel_latency.messenger_inbound", {
+        requestId: options.requestId,
+        channel: "messenger",
+        tenantKey,
+        channelAccountId: normalized.channelAccountId,
+        mode: env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER ? "db_first" : "json_first",
+      });
     } catch (error) {
       unsupportedCount += 1;
       logger.warn({

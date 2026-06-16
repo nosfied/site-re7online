@@ -10,6 +10,7 @@ import {
   setCachedChannelAccountResolution,
   setCachedChannelAccountWithSecret,
 } from "./channelAccountRuntimeCache.js";
+import { channelLatencyNow, type ChannelLatencyProfiler } from "./channelLatencyProfiler.js";
 
 type DbChannelAccount = {
   channel: string;
@@ -226,9 +227,11 @@ export async function findMessengerChannelAccountForConversationDbFirst(params: 
   clientKey: string;
   channelAccountId: string | null | undefined;
   includeSecrets?: boolean;
+  latencyProfiler?: ChannelLatencyProfiler;
 }) {
   const channelAccountId = normalizeIdentifier(params.channelAccountId);
   if (!channelAccountId) return null;
+  const tokenLookupStartedAt = channelLatencyNow();
   const cached = params.includeSecrets
     ? getCachedChannelAccountWithSecret({
         tenantKey: params.clientKey,
@@ -237,7 +240,10 @@ export async function findMessengerChannelAccountForConversationDbFirst(params: 
         channelAccountId,
       })
     : undefined;
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    params.latencyProfiler?.duration("tokenLookup", tokenLookupStartedAt);
+    return cached;
+  }
   const startedAt = Date.now();
   const account = await params.prisma.channelAccount.findFirst({
     where: {
@@ -283,5 +289,6 @@ export async function findMessengerChannelAccountForConversationDbFirst(params: 
       });
     }
   }
+  params.latencyProfiler?.duration("tokenLookup", tokenLookupStartedAt);
   return mapped;
 }
