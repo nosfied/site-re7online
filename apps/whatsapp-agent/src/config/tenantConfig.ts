@@ -1066,6 +1066,13 @@ export async function getDefaultTenant() {
 }
 
 export async function saveTenants(nextTenants: unknown) {
+  if (env.ENV === "production" && !env.ALLOW_TENANTS_JSON_WRITE) {
+    logger.error({
+      event: "tenants_json.write_blocked",
+      reason: "ALLOW_TENANTS_JSON_WRITE=false",
+    });
+    throw new Error("tenants_json_write_disabled");
+  }
   await ensureTenantsDir();
   const tenantsPath = getTenantsPath();
   const backupPath = getBackupPath();

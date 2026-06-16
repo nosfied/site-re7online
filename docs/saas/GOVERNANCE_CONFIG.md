@@ -392,3 +392,37 @@ Write/backfill path:
 - `npm run tenant-config:backfill -- --dry-run --json`
 - `npm run tenant-config:backfill -- --json`
 - The backfill copies JSON -> DB and does not modify `tenants.json`.
+
+## Sprint 67 Retirement Guardrails
+
+Sprint 67 starts the controlled retirement of `.data/tenants.json`.
+
+New runtime flags:
+
+- `ENABLE_TENANTS_JSON_FALLBACK=false` by default. When false, DB-first channel resolution does not silently fall back to JSON.
+- `ALLOW_TENANTS_JSON_WRITE=false` by default in production. Production calls to `saveTenants()` are blocked unless explicitly enabled for emergency rollback.
+- `CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER` controls Messenger DB-first runtime resolution.
+- `CHANNEL_ACCOUNTS_DB_FIRST_INSTAGRAM` controls Instagram DB-first runtime resolution.
+
+Channel account governance after Sprint 67:
+
+- `/admin/tenants/:tenantKey/channel-accounts` reads and writes `ChannelAccount`, `ChannelAccountAlias` and `ChannelAccountSecret` in DB.
+- Instagram Business Login writes the connected account and `instagramBusinessAccessToken` to DB, encrypted through `ChannelAccountSecret`.
+- Tokens are not written to API responses, UI payloads or logs.
+- Local/test fixtures may still use JSON compatibility paths; production writes are guarded by `ALLOW_TENANTS_JSON_WRITE`.
+
+Retirement check:
+
+```bash
+npm run tenants-json:retirement:check
+```
+
+The check reports remaining `getTenants()` / `saveTenants()` usage by category, DB coverage for tenant config tables and whether the database was reachable.
+
+Known blockers before declaring `.data/tenants.json` fully retired:
+
+- `src/http/metaWebhookPassive.ts` still has a runtime-critical JSON load for compatibility with passive Meta processing and tenant-shaped operational fallbacks.
+- `src/whatsapp/tenantCredentials.ts` still uses JSON fallback for WhatsApp credential resolution.
+- `src/index.ts` still loads tenants during bootstrap checks.
+
+Until those blockers are removed, `.data/tenants.json` is legacy/emergency fallback, not removable runtime state.

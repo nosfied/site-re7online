@@ -80,9 +80,9 @@ import {
 } from "../meta/onboarding.service.js";
 import {
   buildInstagramBusinessLoginAuthUrl,
-  buildInstagramBusinessStatus,
   completeInstagramBusinessLogin,
   createInstagramBusinessLoginState,
+  getInstagramBusinessStatus,
   getInstagramBusinessRedirectUri,
   validateInstagramBusinessConnection,
 } from "../meta/instagramBusinessLogin.service.js";
@@ -194,7 +194,14 @@ import {
   resolveMessengerOutboundGate,
   sendMessengerTextMessage,
 } from "../channels/messengerOutbound.js";
-import { findMessengerChannelAccountForConversationDbFirst } from "../channels/channelAccountDbFirst.js";
+import {
+  findInstagramChannelAccountForConversationDbFirst,
+  findMessengerChannelAccountForConversationDbFirst,
+} from "../channels/channelAccountDbFirst.js";
+import {
+  listTenantChannelAccountsFromDb,
+  replaceTenantChannelAccountsInDb,
+} from "../channels/channelAccountPersistence.js";
 import { channelLatencyNow, createChannelLatencyProfiler, type ChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import {
   logInstagramOutbound,
@@ -549,11 +556,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 404, { error: "client_not_found" });
       return;
     }
-    const tenants = await getTenants();
     json(res, 200, {
       ok: true,
       redirectUri: getInstagramBusinessRedirectUri(),
-      status: buildInstagramBusinessStatus(tenants[client.clientKey]),
+      status: await getInstagramBusinessStatus({ tenantKey: client.clientKey }),
     });
     return;
   }
@@ -10123,18 +10129,72 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
-      const tenants = await getTenants();
-      const tenant = tenants[tenantId];
-      if (!tenant) {
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true },
+      });
+      if (!client) {
+        if (env.ENV !== "production") {
+          const tenants = await getTenants();
+          const tenant = tenants[tenantId];
+          if (!tenant) {
+            json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+            return;
+          }
+          if (req.method === "GET") {
+            json(res, 200, {
+              ok: true,
+              tenantId,
+              source: "tenants_json_test_fallback",
+              channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+            });
+            return;
+          }
+          if (req.method === "PUT") {
+            const body = await readJsonBody(req, res);
+            if (body === null) return;
+            const rawAccounts = Array.isArray(body)
+              ? body
+              : body && typeof body === "object" && !Array.isArray(body)
+                ? (body as Record<string, unknown>).channelAccounts
+                : undefined;
+            if (!Array.isArray(rawAccounts)) {
+              json(res, 400, httpError("bad_request", "channelAccounts must be an array"));
+              return;
+            }
+            try {
+              const channelAccounts =
+                normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, tenant.channelAccounts) ?? [];
+              const saved = await saveTenantPatch(tenantId, { channelAccounts });
+              json(res, 200, {
+                ok: true,
+                tenantId,
+                backupPath: saved.backupPath,
+                fieldsChanged: saved.fieldsChanged,
+                channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+              });
+            } catch (error) {
+              json(res, 400, httpError("invalid_channel_accounts", (error as Error).message));
+            }
+            return;
+          }
+        }
         json(res, 404, httpError("tenant_not_found", "Tenant not found"));
         return;
       }
 
       if (req.method === "GET") {
+        const channelAccounts = await listTenantChannelAccountsFromDb({
+          prisma,
+          tenantKey: tenantId,
+          includeSecrets: false,
+        });
         json(res, 200, {
           ok: true,
           tenantId,
-          channelAccounts: redactTenantChannelAccounts(tenant.channelAccounts),
+          source: "db",
+          channelAccounts: redactTenantChannelAccounts(channelAccounts),
         });
         return;
       }
@@ -10153,24 +10213,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
 
         try {
+          const existingAccounts = await listTenantChannelAccountsFromDb({
+            prisma,
+            tenantKey: tenantId,
+            includeSecrets: true,
+          });
           const channelAccounts =
-            normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, tenant.channelAccounts) ?? [];
-          const saved = await saveTenantPatch(tenantId, { channelAccounts });
+            normalizeTenantChannelAccountsForTenant(rawAccounts, tenantId, existingAccounts) ?? [];
+          await replaceTenantChannelAccountsInDb({
+            prisma,
+            tenantKey: tenantId,
+            accounts: channelAccounts,
+          });
           logger.info({
             event: "admin.tenant.channel_accounts.updated",
             tenantId,
             authSource: authToken.source,
-            accountCount: saved.tenant.channelAccounts?.length ?? 0,
-            fieldsChanged: saved.fieldsChanged,
-            backupPath: saved.backupPath,
+            accountCount: channelAccounts.length,
+            fieldsChanged: ["channelAccounts"],
+            source: "db",
             requestId,
           });
           json(res, 200, {
             ok: true,
             tenantId,
-            backupPath: saved.backupPath,
-            fieldsChanged: saved.fieldsChanged,
-            channelAccounts: redactTenantChannelAccounts(saved.tenant.channelAccounts),
+            source: "db",
+            fieldsChanged: ["channelAccounts"],
+            channelAccounts: redactTenantChannelAccounts(channelAccounts),
           });
         } catch (error) {
           logger.warn({
@@ -16527,6 +16596,88 @@ async function findMessengerAccountForOutbound(params: {
   }
 }
 
+async function findInstagramAccountForOutbound(params: {
+  clientKey: string;
+  source: { channel?: string | null; provider?: string | null; channelAccountId?: string | null };
+  tenant?: { channelAccounts?: TenantChannelAccount[] };
+  requestId: string;
+}) {
+  const jsonAccount = findTenantChannelAccountForConversation(params.tenant, params.source);
+  if (!env.CHANNEL_ACCOUNTS_DB_FIRST_INSTAGRAM) {
+    return jsonAccount;
+  }
+  const channelFields = serializeInboxChannelFields(params.source);
+  try {
+    const dbAccount = await findInstagramChannelAccountForConversationDbFirst({
+      prisma: getPrisma(),
+      clientKey: params.clientKey,
+      channelAccountId: channelFields.channelAccountId,
+      includeSecrets: true,
+    });
+    if (dbAccount) {
+      logger.info({
+        event: "channel_accounts.db_first_instagram",
+        route: "/app/inbox",
+        requestId: params.requestId,
+        channel: "instagram",
+        provider: "meta",
+        channelAccountId: channelFields.channelAccountId,
+        dbTenantKey: dbAccount.tenantKey,
+        dbResolution: "matched_enabled",
+      });
+      return dbAccount;
+    }
+    logger.warn({
+      event: "channel_accounts.db_first_instagram_fallback",
+      route: "/app/inbox",
+      requestId: params.requestId,
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: channelFields.channelAccountId,
+      reason: "db_not_found",
+      jsonTenantKey: jsonAccount?.tenantKey ?? params.clientKey,
+      fallbackEnabled: env.ENABLE_TENANTS_JSON_FALLBACK,
+    });
+    if (env.ENABLE_TENANTS_JSON_FALLBACK) {
+      logger.warn({
+        event: "tenants_json.legacy_fallback_used",
+        route: "/app/inbox",
+        requestId: params.requestId,
+        channel: "instagram",
+        provider: "meta",
+        reason: "db_channel_account_not_found",
+      });
+      return jsonAccount;
+    }
+    return null;
+  } catch (error) {
+    logger.warn({
+      event: "channel_accounts.db_first_instagram_fallback",
+      route: "/app/inbox",
+      requestId: params.requestId,
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: channelFields.channelAccountId,
+      reason: "db_error",
+      message: (error as Error).message,
+      jsonTenantKey: jsonAccount?.tenantKey ?? params.clientKey,
+      fallbackEnabled: env.ENABLE_TENANTS_JSON_FALLBACK,
+    });
+    if (env.ENABLE_TENANTS_JSON_FALLBACK) {
+      logger.warn({
+        event: "tenants_json.legacy_fallback_used",
+        route: "/app/inbox",
+        requestId: params.requestId,
+        channel: "instagram",
+        provider: "meta",
+        reason: "db_channel_account_error",
+      });
+      return jsonAccount;
+    }
+    return null;
+  }
+}
+
 function getConversationListCursorIdentity(item: { waId: string; waIdCanonical: string }) {
   return item.waIdCanonical || item.waId;
 }
@@ -18575,7 +18726,12 @@ async function adminSendInstagramMessage(params: {
 
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
-  const account = findTenantChannelAccountForConversation(tenant, params.source);
+  const account = await findInstagramAccountForOutbound({
+    clientKey: params.clientKey,
+    source: params.source,
+    tenant,
+    requestId: params.requestId,
+  });
   if (account && account.tenantKey !== params.clientKey) {
     logInstagramOutbound({
       event: "instagram.outbound.blocked",

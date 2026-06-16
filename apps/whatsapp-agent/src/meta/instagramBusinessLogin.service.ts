@@ -1,8 +1,13 @@
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
-import { getTenants, saveTenants, type TenantConfig } from "../config/tenantConfig.js";
+import { getTenants, type TenantConfig } from "../config/tenantConfig.js";
+import { getPrisma } from "../db.js";
 import { logger } from "../logger/logger.js";
 import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
+import {
+  listTenantChannelAccountsFromDb,
+  upsertTenantChannelAccountToDb,
+} from "../channels/channelAccountPersistence.js";
 
 const INSTAGRAM_BUSINESS_SCOPES = [
   "instagram_business_basic",
@@ -306,6 +311,12 @@ function getInstagramAccount(tenant?: TenantConfig | null) {
   );
 }
 
+function getInstagramAccountFromList(accounts?: TenantChannelAccount[] | null) {
+  return (accounts ?? []).find(
+    (account) => account.channel === "instagram" && account.provider === "meta"
+  );
+}
+
 function assertInstagramBusinessLoginMatchesExistingAccount(params: {
   existing?: TenantChannelAccount | null;
   profile: Awaited<ReturnType<typeof fetchInstagramBusinessProfile>>;
@@ -353,6 +364,10 @@ function resolvePreferredToken(account?: TenantChannelAccount | null) {
 
 export function buildInstagramBusinessStatus(tenant?: TenantConfig | null) {
   const account = getInstagramAccount(tenant);
+  return buildInstagramBusinessStatusFromAccount(account);
+}
+
+function buildInstagramBusinessStatusFromAccount(account?: TenantChannelAccount | null) {
   const hasToken = Boolean(resolvePreferredToken(account).token);
   return {
     channelAccountId: account?.channelAccountId ?? null,
@@ -370,12 +385,61 @@ export function buildInstagramBusinessStatus(tenant?: TenantConfig | null) {
   };
 }
 
+async function listInstagramBusinessAccountsDbFirst(tenantKey: string) {
+  const accounts = await listTenantChannelAccountsFromDb({
+    prisma: getPrisma(),
+    tenantKey,
+    includeSecrets: true,
+  });
+  return accounts;
+}
+
+export async function getInstagramBusinessStatus(params: { tenantKey: string }) {
+  try {
+    const accounts = await listInstagramBusinessAccountsDbFirst(params.tenantKey);
+    const account = getInstagramAccountFromList(accounts);
+    if (account || !env.ENABLE_TENANTS_JSON_FALLBACK) {
+      return buildInstagramBusinessStatusFromAccount(account);
+    }
+  } catch (error) {
+    logger.warn({
+      event: "instagram.business_login.status_db_failed",
+      tenantKey: params.tenantKey,
+      message: (error as Error).message,
+      fallbackEnabled: env.ENABLE_TENANTS_JSON_FALLBACK,
+    });
+    if (!env.ENABLE_TENANTS_JSON_FALLBACK) {
+      return buildInstagramBusinessStatusFromAccount(null);
+    }
+  }
+  logger.warn({
+    event: "tenants_json.legacy_fallback_used",
+    route: "/app/channels/instagram/status",
+    tenantKey: params.tenantKey,
+    channel: "instagram",
+    provider: "meta",
+    reason: "instagram_status_db_missing",
+  });
+  const tenants = await getTenants();
+  return buildInstagramBusinessStatus(tenants[params.tenantKey]);
+}
+
 export async function validateInstagramBusinessConnection(params: {
   tenantKey: string;
 }): Promise<InstagramBusinessValidationStatus> {
-  const tenants = await getTenants();
-  const tenant = tenants[params.tenantKey];
-  const account = getInstagramAccount(tenant);
+  let account = getInstagramAccountFromList(await listInstagramBusinessAccountsDbFirst(params.tenantKey));
+  if (!account && env.ENABLE_TENANTS_JSON_FALLBACK) {
+    logger.warn({
+      event: "tenants_json.legacy_fallback_used",
+      route: "/app/channels/instagram/validate",
+      tenantKey: params.tenantKey,
+      channel: "instagram",
+      provider: "meta",
+      reason: "instagram_validate_db_missing",
+    });
+    const tenants = await getTenants();
+    account = getInstagramAccount(tenants[params.tenantKey]);
+  }
   const tokens = resolveAccountTokens(account);
   const preferred = resolvePreferredToken(account);
   const accessToken = preferred.token;
@@ -582,11 +646,13 @@ export async function completeInstagramBusinessLogin(params: {
   if (!profile.id) throw new Error("instagram_business_profile_id_missing");
   const tokenInfo = tokenDiagnostic(longToken.accessToken);
 
-  const tenants = await getTenants();
-  const tenant = tenants[state.tenantKey];
-  if (!tenant) throw new Error("tenant_not_found");
-  const currentAccounts = tenant.channelAccounts ?? [];
-  const existing = getInstagramAccount(tenant);
+  const prisma = getPrisma();
+  const existingAccounts = await listTenantChannelAccountsFromDb({
+    prisma,
+    tenantKey: state.tenantKey,
+    includeSecrets: true,
+  });
+  const existing = getInstagramAccountFromList(existingAccounts);
   assertInstagramBusinessLoginMatchesExistingAccount({ existing, profile });
   const existingOperationalUsername =
     existing?.metadata?.businessLoginUsername?.trim() || existing?.metadata?.username?.trim() || "";
@@ -627,17 +693,11 @@ export async function completeInstagramBusinessLogin(params: {
     handoffEnabled: false,
     status: "connected",
   };
-  const nextAccounts = existing
-    ? currentAccounts.map((account) => (account === existing ? nextAccount : account))
-    : [...currentAccounts, nextAccount];
-  const nextTenants = {
-    ...tenants,
-    [state.tenantKey]: {
-      ...tenant,
-      channelAccounts: nextAccounts,
-    },
-  };
-  const saved = await saveTenants(nextTenants);
+  await upsertTenantChannelAccountToDb({
+    prisma,
+    tenantKey: state.tenantKey,
+    account: nextAccount,
+  });
   logger.info({
     event: "instagram.business_login.connected",
     tenantKey: state.tenantKey,
@@ -651,7 +711,6 @@ export async function completeInstagramBusinessLogin(params: {
   return {
     tenantKey: state.tenantKey,
     returnPath: state.returnPath,
-    backupPath: saved.backupPath,
-    status: buildInstagramBusinessStatus(saved.tenants[state.tenantKey]),
+    status: await getInstagramBusinessStatus({ tenantKey: state.tenantKey }),
   };
 }

@@ -9,7 +9,7 @@ import { getPrisma } from "../db.js";
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { logChannelAccountRuntimeShadow } from "../channels/channelAccountRuntimeShadow.js";
-import { resolveMessengerTenantChannelAccountDbFirst } from "../channels/channelAccountDbFirst.js";
+import { resolveMetaTenantChannelAccountDbFirst } from "../channels/channelAccountDbFirst.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
   createDefaultChannelAdapterRegistry,
@@ -30,7 +30,7 @@ import { persistInstagramInboundEvent } from "../channels/instagramInboundPersis
 import { persistMessengerInboundEvent } from "../channels/messengerInboundPersistence.js";
 import { channelLatencyNow, createChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import { findTenantChannelAccount, resolveChannelRuntimeGate } from "../channels/tenantChannelAccount.js";
-import { resolveTenantForChannelAccount } from "../channels/tenantChannelResolution.js";
+import { resolveTenantForChannelAccount, type ResolvedTenantChannelAccount } from "../channels/tenantChannelResolution.js";
 import type { Channel } from "../channels/channel.types.js";
 
 type MetaWebhookQuery = Record<string, string | undefined>;
@@ -513,7 +513,7 @@ async function resolveTenantForPassiveMetaChannel(params: {
   channelAccountId: string;
   requestId: string;
   jsonResolution?: ReturnType<typeof resolveTenantForChannelAccount>;
-}) {
+}): Promise<ResolvedTenantChannelAccount> {
   const jsonResolution =
     params.jsonResolution ??
     resolveTenantForChannelAccount({
@@ -522,44 +522,72 @@ async function resolveTenantForPassiveMetaChannel(params: {
       provider: "meta",
       channelAccountId: params.channelAccountId,
     });
-  if (params.channel !== "messenger" || !env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) {
+  const dbFirstEnabled =
+    (params.channel === "messenger" && env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) ||
+    (params.channel === "instagram" && env.CHANNEL_ACCOUNTS_DB_FIRST_INSTAGRAM);
+  if (!dbFirstEnabled || (params.channel !== "messenger" && params.channel !== "instagram")) {
     return jsonResolution;
   }
   try {
-    const dbResolution = await resolveMessengerTenantChannelAccountDbFirst({
+    const dbResolution = await resolveMetaTenantChannelAccountDbFirst({
       prisma: getPrisma(),
+      channel: params.channel,
       channelAccountId: params.channelAccountId,
       requestId: params.requestId,
     });
     if (dbResolution.resolution === "not_found") {
       logger.warn({
-        event: "channel_accounts.db_first_messenger_fallback",
+        event: `channel_accounts.db_first_${params.channel}_fallback`,
         route: "/meta/webhook",
         requestId: params.requestId,
-        channel: "messenger",
+        channel: params.channel,
         provider: "meta",
         channelAccountId: params.channelAccountId || null,
         reason: "db_not_found",
         jsonResolution: jsonResolution.resolution,
         jsonTenantKey: jsonResolution.tenantKey ?? null,
+        fallbackEnabled: env.ENABLE_TENANTS_JSON_FALLBACK,
       });
-      return jsonResolution;
+      if (env.ENABLE_TENANTS_JSON_FALLBACK) {
+        logger.warn({
+          event: "tenants_json.legacy_fallback_used",
+          route: "/meta/webhook",
+          requestId: params.requestId,
+          channel: params.channel,
+          provider: "meta",
+          reason: "db_channel_account_not_found",
+        });
+        return jsonResolution;
+      }
+      return dbResolution;
     }
     return dbResolution;
   } catch (error) {
     logger.warn({
-      event: "channel_accounts.db_first_messenger_fallback",
+      event: `channel_accounts.db_first_${params.channel}_fallback`,
       route: "/meta/webhook",
       requestId: params.requestId,
-      channel: "messenger",
+      channel: params.channel,
       provider: "meta",
       channelAccountId: params.channelAccountId || null,
       reason: "db_error",
       message: (error as Error).message,
       jsonResolution: jsonResolution.resolution,
       jsonTenantKey: jsonResolution.tenantKey ?? null,
+      fallbackEnabled: env.ENABLE_TENANTS_JSON_FALLBACK,
     });
-    return jsonResolution;
+    if (env.ENABLE_TENANTS_JSON_FALLBACK) {
+      logger.warn({
+        event: "tenants_json.legacy_fallback_used",
+        route: "/meta/webhook",
+        requestId: params.requestId,
+        channel: params.channel,
+        provider: "meta",
+        reason: "db_channel_account_error",
+      });
+      return jsonResolution;
+    }
+    return { resolution: "not_found" as const };
   }
 }
 
@@ -1072,7 +1100,12 @@ export async function processPassiveMetaWebhookPayload(
         channel: "messenger",
         tenantKey,
         channelAccountId: normalized.channelAccountId,
-        mode: env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER ? "db_first" : "json_first",
+        mode:
+          channel === "messenger"
+            ? env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER ? "db_first" : "json_first"
+            : channel === "instagram"
+              ? env.CHANNEL_ACCOUNTS_DB_FIRST_INSTAGRAM ? "db_first" : "json_first"
+              : "json_first",
       });
     } catch (error) {
       unsupportedCount += 1;

@@ -148,6 +148,12 @@ Current Instagram policy:
 - Sprint 65D.2 proved Messenger DB-first with cache works functionally, but rollback was required because UX latency was still perceptible.
 - Sprint 65D.3 adds opt-in profiling with `CHANNEL_LATENCY_PROFILING=true` and `CHANNEL_LATENCY_PROFILING_SAMPLE_RATE`; default production behavior remains JSON-first.
 - Future DB-first work must keep a JSON fallback and dual-read shadow mode until Messenger and Instagram pass separate production smoke tests.
+- Sprint 67 adds the DB-authoritative guardrails for channel account management:
+  - `ENABLE_TENANTS_JSON_FALLBACK=false` prevents silent JSON fallback in DB-first channel paths.
+  - `ALLOW_TENANTS_JSON_WRITE=false` blocks production writes to `.data/tenants.json`.
+  - `/admin/tenants/:tenantKey/channel-accounts` now manages DB channel accounts/secrets/aliases.
+  - Instagram Business Login persists the account and encrypted token in DB, not in `tenants.json`.
+  - `npm run tenants-json:retirement:check` reports remaining runtime blockers before final JSON removal.
 
 Latency profiling rules:
 

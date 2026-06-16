@@ -161,6 +161,14 @@ WhatsApp:
 npm run channels:shadow:compare -- --json
 ```
 
+Tenant config / channel account migrations:
+
+```bash
+npm run tenants-json:retirement:check
+```
+
+Use this command whenever the release touches tenant configuration, channel accounts, OAuth, webhook tenant resolution or JSON fallback removal. The command must not expose tokens and must report whether the database was reachable.
+
 Messenger:
 
 - Validar pelo menos uma conversa ou status de token se a release tocou Meta.
@@ -200,4 +208,3 @@ Todo deploy deve registrar:
 - smoke inbox: OK/falhou/nao executado
 - shadow compare WhatsApp: OK/falhou/nao executado
 - pendencias
-
