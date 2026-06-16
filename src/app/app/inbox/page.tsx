@@ -96,6 +96,7 @@ const INBOX_PUSH_DISABLED_STORAGE_KEY = "wa_app_inbox_push_disabled_v1";
 const INBOX_UX_DEBUG_STORAGE_KEY = "converta_inbox_ux_debug";
 const MEDIA_NOT_FOUND_TTL_MS = 5 * 60 * 1000;
 const CONVERSATION_PAGE_SIZE = 30;
+const SELECTED_TIMELINE_BACKGROUND_REFRESH_MS = 10000;
 const MEDIA_UPLOAD_SOFT_LIMIT_BYTES = 9.2 * 1024 * 1024;
 const IMAGE_UPLOAD_TARGET_BYTES = 7.5 * 1024 * 1024;
 const mediaBlobCache = new Map<string, Blob>();
@@ -1659,6 +1660,7 @@ export default function AppInboxPage() {
   const pendingUnreadAnchorMessageIdRef = useRef<string | null>(null);
   const timelineOutOfSyncRetryKeyRef = useRef<string | null>(null);
   const conversationOpenStartedAtRef = useRef<{ key: string; startedAt: number } | null>(null);
+  const conversationDetailLoadedAtRef = useRef<{ key: string; loadedAt: number; itemCount: number } | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -1673,6 +1675,7 @@ export default function AppInboxPage() {
   const outgoingQueueRef = useRef<PendingOutgoingMessage[]>([]);
   const processingOutgoingRef = useRef(false);
   const detailRequestSeqRef = useRef(0);
+  const selectedTimelineLastRefreshAtRef = useRef(0);
   const selectedConversationIdentityCandidatesRef = useRef<string[]>([]);
   const refreshConversationListRef = useRef<((activeSession: AppSession) => Promise<void>) | null>(null);
   const timelineCacheRef = useRef(new Map<string, InboxMessageItem[]>());
@@ -2784,6 +2787,7 @@ export default function AppInboxPage() {
         ? messages[messages.length - 1]?.createdAt ?? null
         : null;
     const shouldStickToBottom = mode === "append" && isTimelineNearBottom();
+    selectedTimelineLastRefreshAtRef.current = Date.now();
     const response = await fetchAppConversation(activeSession, waId, {
       order: mode === "append" ? "asc" : "desc",
       limit: mode === "append" ? 80 : 300,
@@ -2926,12 +2930,14 @@ export default function AppInboxPage() {
       pendingUnreadScrollTargetRef.current?.conversationKey === selectedConversationKey;
     const cachedMessages = timelineCacheRef.current.get(selectedConversationWaId);
     const shouldStickToBottomAfterHydration = !shouldRefreshUnreadWindow;
-    setLoadingMessages(true);
+    const hasCachedMessages = Boolean(cachedMessages?.length);
+    setLoadingMessages(!hasCachedMessages);
     setError(null);
     setMessages(cachedMessages ?? []);
     setMessagesConversationKey(cachedMessages ? selectedConversationKey : null);
 
     const requestStartedAt = performance.now();
+    selectedTimelineLastRefreshAtRef.current = Date.now();
     fetchAppConversation(session, selectedConversationWaId, {
       order: "desc",
       limit: 500,
@@ -2979,6 +2985,11 @@ export default function AppInboxPage() {
         );
         primedTimelineNotificationKeysRef.current.add(responseConversationKey);
         const responseItems = sortMessagesAscending(response.items);
+        conversationDetailLoadedAtRef.current = {
+          key: visibleConversationKey,
+          loadedAt: performance.now(),
+          itemCount: responseItems.length,
+        };
         setMessages((prev) => {
           const nextMessages =
             cachedMessages?.length && shouldRefreshUnreadWindow
@@ -3142,6 +3153,28 @@ export default function AppInboxPage() {
   ]);
 
   useEffect(() => {
+    if (!selectedConversationKey || messagesConversationKey !== selectedConversationKey) return;
+    const loaded = conversationDetailLoadedAtRef.current;
+    if (!loaded || loaded.key !== selectedConversationKey) return;
+    const frame = window.requestAnimationFrame(() => {
+      const openStarted = conversationOpenStartedAtRef.current;
+      logInboxLatencyDebug({
+        event: "inbox_latency.conversation_detail_rendered",
+        apiToRenderMs: Math.round(performance.now() - loaded.loadedAt),
+        openToRenderMs:
+          openStarted?.key === selectedConversationKey
+            ? Math.round(performance.now() - openStarted.startedAt)
+            : null,
+        itemCount: loaded.itemCount,
+      });
+      if (conversationDetailLoadedAtRef.current === loaded) {
+        conversationDetailLoadedAtRef.current = null;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, messagesConversationKey, selectedConversationKey]);
+
+  useEffect(() => {
     const node = timelineRef.current;
     if (!node) return;
 
@@ -3163,11 +3196,14 @@ export default function AppInboxPage() {
       polling = true;
       try {
         await refreshConversationList(session);
+        const now = Date.now();
         if (
           selectedConversationWaId &&
           !loadingMessages &&
-          messagesConversationKey === selectedConversationKey
+          messagesConversationKey === selectedConversationKey &&
+          now - selectedTimelineLastRefreshAtRef.current >= SELECTED_TIMELINE_BACKGROUND_REFRESH_MS
         ) {
+          selectedTimelineLastRefreshAtRef.current = now;
           await refreshSelectedTimeline(session, selectedConversationWaId, "append");
         }
       } catch (err) {
@@ -3209,6 +3245,8 @@ export default function AppInboxPage() {
     const shouldOpenAtUnread = unreadCount > 0;
     const activityAt = getConversationActivityAt(item);
     const latestReadAt = getLatestReadAtForConversation(item, readState);
+    const cachedMessages = timelineCacheRef.current.get(item.waId);
+    const hasCachedTimeline = Boolean(cachedMessages?.length);
     pendingUnreadScrollTargetRef.current = shouldOpenAtUnread
       ? {
           conversationKey: conversationIdentity,
@@ -3235,15 +3273,16 @@ export default function AppInboxPage() {
       event: "inbox_latency.conversation_open_start",
       unreadCount,
       fromPush: options?.fromPush === true,
-      hasCachedTimeline: timelineCacheRef.current.has(item.waId),
+      hasCachedTimeline,
     });
     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
     selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
     setUnreadSeparatorIndex(null);
     setUnreadAnchorMessageIdentity(null);
     setActiveConversationIdentity(conversationIdentity);
-    setLoadingMessages(true);
-    setMessagesConversationKey(null);
+    setLoadingMessages(!hasCachedTimeline);
+    setMessages(cachedMessages ?? []);
+    setMessagesConversationKey(hasCachedTimeline ? conversationIdentity : null);
     setSelectedConversationKey(conversationIdentity);
     setSelectedConversationWaId(item.waId);
     setShowMoreActions(false);
