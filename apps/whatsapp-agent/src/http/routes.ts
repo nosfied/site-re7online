@@ -2015,6 +2015,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 4
   ) {
+    const latency = createChannelLatencyProfiler();
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
     if (!clientAuth) return;
@@ -2032,7 +2033,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const limitRaw = Number(query.limit ?? 200);
       const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 200;
       const includeRaw = String(query.includeRaw ?? "false") === "true";
+      const clientLookupStartedAt = channelLatencyNow();
       const client = await getScopedClientById(prisma, clientAuth.clientId);
+      latency.duration("clientLookup", clientLookupStartedAt);
       if (!client) {
         json(res, 404, { error: "client_not_found" });
         return;
@@ -2041,11 +2044,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      const departmentAccessStartedAt = channelLatencyNow();
       const departmentAccess = await loadAppDepartmentAccess(prisma, {
         clientId: client.id,
         userId: clientAuth.userId,
         role: clientAuth.role,
       });
+      latency.duration("departmentAccess", departmentAccessStartedAt);
+      const routeResolveStartedAt = channelLatencyNow();
       const resolvedConversation = await resolveConversationTarget(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -2053,14 +2059,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_detail_department_check",
       });
+      latency.duration("routeResolve", routeResolveStartedAt);
       if (!resolvedConversation.winner) {
         json(res, 404, { error: "conversation_not_found" });
         return;
       }
+      const routeOperationalStateStartedAt = channelLatencyNow();
       const scopedConversation = materializeConversationOperationalState(
         await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey),
         await ensureDefaultDepartmentAndQueue(prisma, client.id)
       );
+      latency.duration("routeOperationalState", routeOperationalStateStartedAt);
       if (
         !hasConversationDepartmentAccess({
           role: clientAuth.role,
@@ -2086,6 +2095,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
 
+      const buildPayloadStartedAt = channelLatencyNow();
       const result = await buildConversationDetailPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -2097,8 +2107,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         includeAssignedUserName: true,
         requestId,
         source: "app_conversation_detail",
+        latency,
       });
+      latency.duration("buildPayload", buildPayloadStartedAt);
       json(res, 200, result);
+      latency.finish("channel_latency.app_conversation_detail", {
+        requestId,
+        tenantKey: client.clientKey,
+        channel: String(result.channel ?? "unknown"),
+        count: result.count,
+        order,
+        limit,
+        mode: "json_first",
+      });
     } catch (error) {
       logger.error({
         event: "app.conversation.messages.error",
@@ -17165,9 +17186,13 @@ async function buildConversationDetailPayload(
     includeAssignedUserName: boolean;
     requestId: string;
     source: string;
+    latency?: ChannelLatencyProfiler | null;
   }
 ) {
+  const defaultsStartedAt = channelLatencyNow();
   const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  params.latency?.duration("detailDefaults", defaultsStartedAt);
+  const detailResolveStartedAt = channelLatencyNow();
   const resolved = await resolveConversationTarget(prisma, {
     clientId: params.clientId,
     clientKey: params.clientKey,
@@ -17175,12 +17200,15 @@ async function buildConversationDetailPayload(
     requestId: params.requestId,
     source: params.source,
   });
+  params.latency?.duration("detailResolve", detailResolveStartedAt);
+  const runtimeConversationStartedAt = channelLatencyNow();
   const conversation = resolved.winner
     ? materializeConversationOperationalState(
         await runtimeStorage.getConversation(resolved.resolvedWaId, params.clientKey),
         defaults
       )
     : null;
+  params.latency?.duration("detailRuntimeConversation", runtimeConversationStartedAt);
   const detailWaIds = Array.from(
     new Set(
       [
@@ -17199,6 +17227,7 @@ async function buildConversationDetailPayload(
         ? params.after
         : historyVisibleAfter
       : params.after ?? historyVisibleAfter;
+  const assignedUserStartedAt = channelLatencyNow();
   const assignedUser =
     params.includeAssignedUserName && conversation?.assignedUserId
       ? await prisma.user.findFirst({
@@ -17206,7 +17235,9 @@ async function buildConversationDetailPayload(
           select: { name: true },
         })
       : null;
+  params.latency?.duration("detailAssignedUser", assignedUserStartedAt);
 
+  const messageQueryStartedAt = channelLatencyNow();
   const [inbound, outbound] = await Promise.all([
     prisma.inboundMessage.findMany({
       where: {
@@ -17248,11 +17279,14 @@ async function buildConversationDetailPayload(
       },
     }),
   ]);
+  params.latency?.duration("detailMessageQuery", messageQueryStartedAt);
+  const operationalLookupsStartedAt = channelLatencyNow();
   const operationalLookups = await loadConversationOperationalLookups(prisma, {
     clientId: params.clientId,
     states: [conversation],
     defaults,
   });
+  params.latency?.duration("detailOperationalLookups", operationalLookupsStartedAt);
 
   const items = [
     ...inbound.map((item) => ({
@@ -17319,13 +17353,17 @@ async function buildConversationDetailPayload(
     })
     .slice(0, params.limit);
 
+  const tenantsStartedAt = channelLatencyNow();
+  const tenant = (await getTenants())[params.clientKey];
+  params.latency?.duration("detailTenantConfig", tenantsStartedAt);
+
   return {
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
     channelOutboundEnabled: getConversationChannelOutboundEnabled(
-      (await getTenants())[params.clientKey],
+      tenant,
       resolved.winner ?? undefined
     ),
     ...serializeConversationOperationalFields({

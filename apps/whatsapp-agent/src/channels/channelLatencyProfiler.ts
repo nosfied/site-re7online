@@ -1,6 +1,9 @@
 import { logger } from "../logger/logger.js";
 
-export type ChannelLatencyEvent = "channel_latency.messenger_inbound" | "channel_latency.messenger_outbound";
+export type ChannelLatencyEvent =
+  | "channel_latency.messenger_inbound"
+  | "channel_latency.messenger_outbound"
+  | "channel_latency.app_conversation_detail";
 
 type ChannelLatencyFields = Record<string, string | number | boolean | null | undefined>;
 

@@ -87,7 +87,8 @@ function isInboxLatencyDebugEnabled() {
 
 function logInboxLatencyDebug(payload: Record<string, unknown>) {
   if (!isInboxLatencyDebugEnabled()) return;
-  console.debug(JSON.stringify({ event: "inbox_latency.outbound", ...payload }));
+  const event = typeof payload.event === "string" ? payload.event : "inbox_latency.outbound";
+  console.debug(JSON.stringify({ ...payload, event }));
 }
 
 const INBOX_SOUND_ENABLED_STORAGE_KEY = "wa_app_inbox_sound_enabled_v1";
@@ -1657,6 +1658,7 @@ export default function AppInboxPage() {
   const pendingUnreadLastReadAtRef = useRef<string | null>(null);
   const pendingUnreadAnchorMessageIdRef = useRef<string | null>(null);
   const timelineOutOfSyncRetryKeyRef = useRef<string | null>(null);
+  const conversationOpenStartedAtRef = useRef<{ key: string; startedAt: number } | null>(null);
   const lastSelectedConversationKeyRef = useRef<string | null>(null);
   const lastMessageSignatureRef = useRef<string | null>(null);
   const lastInboundConversationSignatureRef = useRef<string | null>(null);
@@ -2929,6 +2931,7 @@ export default function AppInboxPage() {
     setMessages(cachedMessages ?? []);
     setMessagesConversationKey(cachedMessages ? selectedConversationKey : null);
 
+    const requestStartedAt = performance.now();
     fetchAppConversation(session, selectedConversationWaId, {
       order: "desc",
       limit: 500,
@@ -2955,6 +2958,20 @@ export default function AppInboxPage() {
           return;
         }
         const visibleConversationKey = selectedConversationKey ?? responseConversationKey;
+        const openStarted = conversationOpenStartedAtRef.current;
+        const apiMs = Math.round(performance.now() - requestStartedAt);
+        const openToApiMs =
+          openStarted?.key === visibleConversationKey
+            ? Math.round(performance.now() - openStarted.startedAt)
+            : null;
+        logInboxLatencyDebug({
+          event: "inbox_latency.conversation_detail_loaded",
+          apiMs,
+          openToApiMs,
+          itemCount: response.items.length,
+          usedCachedTimeline: Boolean(cachedMessages?.length),
+          shouldRefreshUnreadWindow,
+        });
         rememberInboundMessages(
           responseConversationKey,
           response.items,
@@ -3210,6 +3227,16 @@ export default function AppInboxPage() {
       activityAt,
       waId: item.waId,
     };
+    conversationOpenStartedAtRef.current = {
+      key: conversationIdentity,
+      startedAt: performance.now(),
+    };
+    logInboxLatencyDebug({
+      event: "inbox_latency.conversation_open_start",
+      unreadCount,
+      fromPush: options?.fromPush === true,
+      hasCachedTimeline: timelineCacheRef.current.has(item.waId),
+    });
     shouldScrollToBottomRef.current = !shouldOpenAtUnread;
     selectedConversationIdentityCandidatesRef.current = conversationIdentityCandidates;
     setUnreadSeparatorIndex(null);
@@ -5256,8 +5283,9 @@ export default function AppInboxPage() {
                 const messageIdentity = getMessageIdentity(item);
                 const statusTicks = renderMessageStatusTicks(item);
                 const shouldAutoLoadMedia = index >= Math.max(messages.length - 8, 0);
-                const isUnreadAnchor =
-                  unreadAnchorMessageIdentity === messageIdentity || unreadSeparatorIndex === index;
+                const isUnreadAnchor = unreadAnchorMessageIdentity
+                  ? unreadAnchorMessageIdentity === messageIdentity
+                  : unreadSeparatorIndex === index;
                 return (
                   <Fragment key={messageIdentity}>
                     {isUnreadAnchor ? (
