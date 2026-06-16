@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import crypto from "node:crypto";
-import { getTenants, type TenantConfigMap } from "../config/tenantConfig.js";
+import type { TenantConfig, TenantConfigMap } from "../config/tenantConfig.js";
+import { loadTenantsJsonFallback } from "../config/tenantJsonFallback.js";
 import {
   applyAiIntentQualificationToTenant,
   resolveAiIntentQualificationSettings,
@@ -10,6 +11,7 @@ import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { logChannelAccountRuntimeShadow } from "../channels/channelAccountRuntimeShadow.js";
 import { resolveMetaTenantChannelAccountDbFirst } from "../channels/channelAccountDbFirst.js";
+import { listTenantChannelAccountsFromDb } from "../channels/channelAccountPersistence.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
   createDefaultChannelAdapterRegistry,
@@ -508,21 +510,25 @@ function logTenantResolution(params: {
 }
 
 async function resolveTenantForPassiveMetaChannel(params: {
-  tenants: TenantConfigMap;
+  tenants?: TenantConfigMap;
   channel: Channel;
   channelAccountId: string;
   requestId: string;
   jsonResolution?: ReturnType<typeof resolveTenantForChannelAccount>;
+  preferDbFirst?: boolean;
 }): Promise<ResolvedTenantChannelAccount> {
   const jsonResolution =
     params.jsonResolution ??
-    resolveTenantForChannelAccount({
-      tenants: params.tenants,
-      channel: params.channel,
-      provider: "meta",
-      channelAccountId: params.channelAccountId,
-    });
+    (params.tenants
+      ? resolveTenantForChannelAccount({
+          tenants: params.tenants,
+          channel: params.channel,
+          provider: "meta",
+          channelAccountId: params.channelAccountId,
+        })
+      : { resolution: "not_found" as const });
   const dbFirstEnabled =
+    params.preferDbFirst ||
     (params.channel === "messenger" && env.CHANNEL_ACCOUNTS_DB_FIRST_MESSENGER) ||
     (params.channel === "instagram" && env.CHANNEL_ACCOUNTS_DB_FIRST_INSTAGRAM);
   if (!dbFirstEnabled || (params.channel !== "messenger" && params.channel !== "instagram")) {
@@ -592,12 +598,12 @@ async function resolveTenantForPassiveMetaChannel(params: {
 }
 
 function withRawJsonAccountForRuntimeShadow(params: {
-  tenants: TenantConfigMap;
+  tenants?: TenantConfigMap;
   jsonResolution: ReturnType<typeof resolveTenantForChannelAccount>;
 }) {
   const resolvedAccount = params.jsonResolution.account;
   const tenantKey = params.jsonResolution.tenantKey;
-  if (!resolvedAccount || !tenantKey) return params.jsonResolution;
+  if (!params.tenants || !resolvedAccount || !tenantKey) return params.jsonResolution;
   const tenantEntry = Object.entries(params.tenants).find(
     ([key, tenant]) => (tenant.id || key) === tenantKey
   );
@@ -611,6 +617,35 @@ function withRawJsonAccountForRuntimeShadow(params: {
   return {
     ...params.jsonResolution,
     account: rawAccount,
+  };
+}
+
+async function buildDbTenantForPassiveMetaRuntime(params: {
+  tenantKey: string;
+  account: ResolvedTenantChannelAccount["account"];
+}): Promise<TenantConfig | null> {
+  const prisma = getPrisma();
+  const client = await prisma.client.findUnique({
+    where: { clientKey: params.tenantKey },
+    select: { clientKey: true, name: true },
+  });
+  if (!client) return null;
+  const channelAccounts = await listTenantChannelAccountsFromDb({
+    prisma,
+    tenantKey: params.tenantKey,
+    includeSecrets: false,
+  });
+  const account =
+    params.account ??
+    channelAccounts.find((item) => item.channel === "messenger" || item.channel === "instagram");
+  return {
+    id: client.clientKey,
+    name: client.name || client.clientKey,
+    metaPhoneNumberId: "",
+    allowlist: [],
+    handoffAttendantWaid: "",
+    defaultLanguage: "pt_BR",
+    channelAccounts: account ? [account, ...channelAccounts.filter((item) => item.id !== account.id)] : channelAccounts,
   };
 }
 
@@ -769,7 +804,16 @@ export async function processPassiveMetaWebhookPayload(
   }
 
   const registry = options.registry ?? createDefaultChannelAdapterRegistry();
-  const tenants = options.tenants ?? (await getTenants());
+  const tenants =
+    options.tenants ??
+    (env.ENABLE_TENANTS_JSON_FALLBACK
+      ? await loadTenantsJsonFallback({
+          route: "/meta/webhook",
+          requestId: options.requestId,
+          reason: "meta_webhook_legacy_resolution_enabled",
+        })
+      : undefined);
+  const preferDbFirst = !options.tenants;
   let normalizedCount = 0;
   let unsupportedCount = 0;
 
@@ -778,18 +822,21 @@ export async function processPassiveMetaWebhookPayload(
     const externalUserHash = getChannelEventExternalUserHash(channel, item.event);
     const externalMessageId = getEventMessageId(channel, item.event);
     const tenantResolutionStartedAt = channelLatencyNow();
-    const jsonResolution = resolveTenantForChannelAccount({
-      tenants,
-      channel,
-      provider: "meta",
-      channelAccountId: item.pageId,
-    });
+    const jsonResolution = tenants
+      ? resolveTenantForChannelAccount({
+          tenants,
+          channel,
+          provider: "meta",
+          channelAccountId: item.pageId,
+        })
+      : { resolution: "not_found" as const };
     const resolution = await resolveTenantForPassiveMetaChannel({
       tenants,
       channel,
       channelAccountId: item.pageId,
       requestId: options.requestId,
       jsonResolution,
+      preferDbFirst,
     });
     latency?.duration("tenantResolution", tenantResolutionStartedAt);
     if (env.CHANNEL_ACCOUNTS_RUNTIME_SHADOW) {
@@ -887,7 +934,10 @@ export async function processPassiveMetaWebhookPayload(
       continue;
     }
     const tenantKey = resolution.tenantKey ?? "unknown";
-    const tenant = tenants[tenantKey];
+    const tenant = tenants?.[tenantKey] ?? await buildDbTenantForPassiveMetaRuntime({
+      tenantKey,
+      account: resolution.account,
+    });
     let effectiveTenant = tenant;
     if (tenant && resolution.tenantKey) {
       try {

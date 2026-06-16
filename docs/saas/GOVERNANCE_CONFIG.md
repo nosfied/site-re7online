@@ -419,10 +419,12 @@ npm run tenants-json:retirement:check
 
 The check reports remaining `getTenants()` / `saveTenants()` usage by category, DB coverage for tenant config tables and whether the database was reachable.
 
-Known blockers before declaring `.data/tenants.json` fully retired:
+Sprint 67B removes the remaining runtime-critical blockers from:
 
-- `src/http/metaWebhookPassive.ts` still has a runtime-critical JSON load for compatibility with passive Meta processing and tenant-shaped operational fallbacks.
-- `src/whatsapp/tenantCredentials.ts` still uses JSON fallback for WhatsApp credential resolution.
-- `src/index.ts` still loads tenants during bootstrap checks.
+- `src/http/metaWebhookPassive.ts`
+- `src/whatsapp/tenantCredentials.ts`
+- `src/index.ts`
 
-Until those blockers are removed, `.data/tenants.json` is legacy/emergency fallback, not removable runtime state.
+These paths now use DB-first data in normal operation and only load `.data/tenants.json` through the explicit legacy fallback wrapper when `ENABLE_TENANTS_JSON_FALLBACK=true`.
+
+`.data/tenants.json` is now legacy/emergency fallback. It must not be treated as the normal production source of tenant configuration.

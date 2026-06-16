@@ -206,7 +206,7 @@ The next implementation sprint must not jump directly to DB-first runtime. The s
 8. reactivate Messenger DB-first with cache; status: Sprint 65D.2 functional but rolled back for latency
 9. measure hot path with latency profiling; status: Sprint 65D.3
 10. add DB-authoritative guardrails and move channel-account admin/OAuth writes to DB; status: Sprint 67
-11. remove remaining runtime-critical JSON loads after `tenants-json:retirement:check` is clean in production
+11. remove remaining runtime-critical JSON loads behind `ENABLE_TENANTS_JSON_FALLBACK`; status: Sprint 67B
 
 Sprint 67 introduces the retirement check:
 
@@ -214,12 +214,12 @@ Sprint 67 introduces the retirement check:
 npm run tenants-json:retirement:check
 ```
 
-The command must be part of pre-release for any future tenant config migration. A clean final retirement requires:
+The command must be part of pre-release for any future tenant config migration. A clean DB-authoritative runtime requires:
 
 - database reachable;
 - no runtime-critical `getTenants()` usage;
-- no onboarding write path using `saveTenants()`;
-- all active tenants with `TenantOperationalConfig` and `ChannelAccount` coverage;
+- all active tenants with `TenantOperationalConfig` and WhatsApp DB identity coverage;
+- `ChannelAccount` coverage for tenants that use Messenger/Instagram;
 - JSON fallback intentionally disabled unless rollback is being executed.
 
 ## Documentation To Treat Carefully

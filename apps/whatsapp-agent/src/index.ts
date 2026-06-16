@@ -4,7 +4,7 @@ import { createServer } from "./http/server.js";
 import { attachRealtimeWebSocket } from "./realtime/websocket.js";
 import { logger } from "./logger/logger.js";
 import { getPrisma } from "./db.js";
-import { getTenants } from "./config/tenantConfig.js";
+import { loadTenantsJsonFallback } from "./config/tenantJsonFallback.js";
 
 async function bootstrap() {
   const { env } = await import("./config/env.js");
@@ -41,8 +41,22 @@ async function bootstrap() {
   }
 
   try {
-    const tenants = await getTenants();
     const prisma = getPrisma();
+    if (!env.ENABLE_TENANTS_JSON_FALLBACK) {
+      const [clientCount, phoneCount] = await Promise.all([
+        prisma.client.count(),
+        prisma.waPhoneNumber.count(),
+      ]);
+      logger.info({
+        event: "bootstrap.db_authoritative.ready",
+        clientCount,
+        waPhoneNumberCount: phoneCount,
+      });
+    } else {
+      const tenants = await loadTenantsJsonFallback({
+        route: "bootstrap",
+        reason: "legacy_tenant_bootstrap_enabled",
+      });
     const forcePhoneAssign =
       String(process.env.BOOTSTRAP_FORCE_PHONE_ASSIGN ?? "").toLowerCase() === "true";
 
@@ -146,6 +160,7 @@ async function bootstrap() {
         previousClientId: existingPhone.clientId,
         previousClientKey: existingPhone.client?.clientKey ?? null,
       });
+    }
     }
   } catch (error) {
     logger.error({

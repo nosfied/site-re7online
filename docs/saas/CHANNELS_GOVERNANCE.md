@@ -154,6 +154,7 @@ Current Instagram policy:
   - `/admin/tenants/:tenantKey/channel-accounts` now manages DB channel accounts/secrets/aliases.
   - Instagram Business Login persists the account and encrypted token in DB, not in `tenants.json`.
   - `npm run tenants-json:retirement:check` reports remaining runtime blockers before final JSON removal.
+- Sprint 67B removes the remaining runtime-critical JSON reads from Meta webhook processing, WhatsApp outbound credential resolution and bootstrap checks. JSON can still be used only when `ENABLE_TENANTS_JSON_FALLBACK=true`.
 
 Latency profiling rules:
 

@@ -167,8 +167,11 @@ async function main() {
     const blocking = usages.filter((usage) => usage.kind === "runtime_critical" || usage.kind === "onboarding");
     const incompleteTenants = databaseReachable
       ? tenants.filter(
-          (tenant) => tenant.status === "ACTIVE" && (!tenant.operationalConfig || tenant.channelAccounts.length === 0)
+          (tenant) => tenant.status === "ACTIVE" && (!tenant.operationalConfig || (!tenant.waPhoneNumber && !tenant.tenantMetaConfig))
         )
+      : [];
+    const activeTenantsWithoutChannelAccounts = databaseReachable
+      ? tenants.filter((tenant) => tenant.status === "ACTIVE" && tenant.channelAccounts.length === 0)
       : [];
     console.log(JSON.stringify({
       ok: databaseReachable && blocking.length === 0 && incompleteTenants.length === 0,
@@ -186,6 +189,9 @@ async function main() {
       usageCounts,
       blockingUsages: blocking,
       incompleteTenants,
+      warnings: {
+        activeTenantsWithoutChannelAccounts,
+      },
       tenants,
     }, null, 2));
     if (!databaseReachable || blocking.length > 0 || incompleteTenants.length > 0) process.exitCode = 1;
