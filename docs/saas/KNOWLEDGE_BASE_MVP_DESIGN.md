@@ -30,7 +30,7 @@ O MVP nao deve tentar resolver importacao automatica de documentos, embeddings, 
 | FAQ conceitual | docs e respostas espalhadas | Nao formal | Tipo de artigo `faq` |
 | Documentos | docs/manual/anexos externos | Nao formal no produto | Fonte/referencia de artigo |
 | CRM context | `flowContext`, `Lead`, `LeadNote` | Contexto operacional | Sinais para selecionar artigo/intent |
-| Respostas reutilizaveis | catalogos, flows, prompts | Espalhadas | `approvedAnswer` do artigo |
+| Respostas reutilizaveis | catalogos, flows, prompts | Espalhadas | `body` do artigo publicado |
 | `knowledge.base.ts` | legado global | Base minima Re7 | Seed historico, nao fonte oficial |
 
 ## 3. Principios Do Modelo
@@ -59,7 +59,7 @@ Knowledge lookup por tenant
   - intentKeys
   - tags
   - texto
-  - status approved
+  - status published
   |
   v
 IA supervisionada ou resposta controlada
@@ -111,7 +111,7 @@ Campos propostos:
 | `key` | string | chave unica por tenant |
 | `title` | string | titulo |
 | `question` | string nullable | pergunta/FAQ |
-| `approvedAnswer` | text | resposta aprovada |
+| `body` | text | resposta/conteudo aprovado |
 | `summary` | string nullable | resumo curto |
 | `tags` | json/string[] | tags |
 | `intentKeys` | json/string[] | intents relacionados |
@@ -119,12 +119,12 @@ Campos propostos:
 | `sourceType` | enum | `manual`, `document`, `faq`, `flow`, `intent`, `crm` |
 | `sourceNote` | string nullable | referencia textual |
 | `sourceUrl` | string nullable | link externo/interno |
-| `status` | enum | `draft`, `approved`, `archived` |
+| `status` | enum | `draft`, `published`, `archived` |
 | `version` | int | versao atual |
 | `createdByUserId` | string nullable | auditoria |
 | `updatedByUserId` | string nullable | auditoria |
-| `approvedByUserId` | string nullable | auditoria |
-| `approvedAt` | datetime nullable | controle de uso |
+| `publishedByUserId` | string nullable | auditoria |
+| `publishedAt` | datetime nullable | controle de uso |
 | `createdAt` | datetime | auditoria |
 | `updatedAt` | datetime | auditoria |
 
@@ -198,7 +198,7 @@ Fase seguinte:
 
 Pode consumir apenas:
 
-- `status = approved`;
+- `status = published`;
 - `clientId` do tenant atual;
 - colecoes ativas;
 - respostas dentro do limite de tamanho.
@@ -297,7 +297,7 @@ No MVP, o artigo nao deve atualizar CRM sozinho. Ele deve apenas fornecer metada
 
 - Colecoes por tenant.
 - Artigos por tenant.
-- Status `draft`, `approved`, `archived`.
+- Status `draft`, `published`, `archived`.
 - Tags e intent keys.
 - Resposta aprovada.
 - Fonte/referencia.
@@ -360,7 +360,7 @@ No MVP, o artigo nao deve atualizar CRM sozinho. Ele deve apenas fornecer metada
 | Risco | Impacto | Mitigacao |
 | --- | --- | --- |
 | Mistura de conhecimento entre tenants | Alto | `clientId` obrigatorio e testes de isolamento |
-| IA usar artigo em rascunho | Alto | runtime filtra apenas `approved` |
+| IA usar artigo em rascunho | Alto | runtime filtra apenas `published` |
 | Resposta desatualizada | Medio/alto | status/version/updateAt e revisão |
 | Conteudo sensivel em artigo | Alto | revisao humana e politica LGPD |
 | Prompt muito grande | Medio | limitar artigos e tamanho |
@@ -388,32 +388,42 @@ Validacoes:
 - testes de isolamento por tenant;
 - token/dado sensivel nao exposto.
 
-### Sprint 69D - KB Lookup + IA Shadow
+### Sprint 69D - Runtime Integration Design
 
 Objetivo:
 
-- buscar artigos aprovados por intent/tag/texto;
+- desenhar lookup tenant-scoped;
+- definir elegibilidade `published`;
+- definir shadow mode;
+- definir eventos, replay e flags;
+- sem alterar runtime.
+
+### Sprint 69E - KB Lookup + IA Shadow
+
+Objetivo:
+
+- buscar artigos publicados por intent/tag/texto;
 - montar resultado de lookup sem alterar resposta final;
 - logar shadow redigido;
 - validar relevancia.
 
-### Sprint 69E - IA KB-first Controlada
+### Sprint 69F - IA KB-first Controlada
 
 Objetivo:
 
-- IA usa artigos aprovados;
+- IA usa artigos publicados;
 - evento `knowledge.article.used`;
 - fallback/handoff se nao houver artigo confiavel;
 - evaluation/replay obrigatorio.
 
-### Sprint 69F - Chatbot References
+### Sprint 69G - Chatbot References
 
 Objetivo:
 
 - permitir flow node apontar para artigo;
 - reduzir duplicidade de respostas em flows.
 
-### Sprint 69G - App Tenant Suggestions
+### Sprint 69H - App Tenant Suggestions
 
 Objetivo:
 

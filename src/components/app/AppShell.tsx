@@ -131,6 +131,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Canais", government: "Canais" },
   },
   {
+    href: "/app/api-keys",
+    icon: "🔑",
+    group: "administration",
+    minRole: "SUPERVISOR",
+    labels: { business: "API", government: "API" },
+  },
+  {
     href: "/app/settings/privacy",
     icon: "🔒",
     group: "administration",

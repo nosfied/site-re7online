@@ -85,6 +85,7 @@ model Client {
   channelIdentities ContactChannelIdentity[]
   knowledgeBaseCollections KnowledgeBaseCollection[]
   knowledgeBaseArticles KnowledgeBaseArticle[]
+  publicApiKeys PublicApiKey[]
 }
 
 model User {
@@ -814,4 +815,29 @@ model KnowledgeBaseArticle {
   @@index([clientId, status])
   @@index([clientId, collectionId])
   @@index([clientId, updatedAt])
+}
+
+model PublicApiKey {
+  id                 String    @id @default(cuid())
+  clientId           String    @db.Uuid
+  name               String
+  keyPrefix          String
+  keyHash            String    @unique
+  scopes             Json
+  status             String    @default("active")
+  rateLimitPerMinute Int?
+  lastUsedAt         DateTime?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  createdByUserId    String?
+  revokedByUserId    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, status])
+  @@index([clientId, createdAt])
+  @@index([keyPrefix])
+  @@index([expiresAt])
 }

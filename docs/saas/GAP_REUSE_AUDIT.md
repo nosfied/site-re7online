@@ -21,7 +21,7 @@ Fonte primaria: codigo e documentacao existentes no repositorio. Nenhum comporta
 | NPS | NAO ATENDE | Nao | Pouco, apenas reports/dashboard como destino futuro | Nao | Sim, gap citado em auditorias |
 | Agendamento | PARCIAL | Nao como modulo agenda | Sim, fluxo legado de demo/agendamento textual | Nao | Sim, docs antigas e bid matrix |
 | Webchat | NAO ATENDE | Nao | Baixo, apenas inbox/realtime podem ser base | Nao | Sim, citado como gap |
-| Base de conhecimento | PARCIAL | Sim, modulo formal iniciado | Sim, `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, `/app/knowledge-base`, `knowledge.base.ts`, IA tenant-scoped, prompts/config | Sim como CRUD, ainda nao consumido pelo runtime | Sim, KB MVP design |
+| Base de conhecimento | PARCIAL | Sim, modulo formal iniciado | Sim, `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, `/app/knowledge-base`, `knowledge.base.ts`, IA tenant-scoped, prompts/config | Sim como CRUD, com design de integracao runtime; ainda nao consumido pelo runtime | Sim, KB MVP design e runtime integration design |
 | Telegram | NAO ATENDE | Nao | Medio-baixo, arquitetura multicanal pode inspirar | Nao | Sim, citado como gap |
 
 Conclusao: o proximo bloco com melhor relacao ganho/reuso e **Base de conhecimento + NPS**, seguido por **API publica**. Webchat e Telegram exigem canais novos e devem vir depois de contratos de API/canal mais claros. Agendamento tem codigo reaproveitavel, mas nao deve ser vendido como modulo pronto.

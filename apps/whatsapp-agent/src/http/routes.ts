@@ -212,6 +212,14 @@ import {
 } from "../channels/channelAccountPersistence.js";
 import { channelLatencyNow, createChannelLatencyProfiler, type ChannelLatencyProfiler } from "../channels/channelLatencyProfiler.js";
 import {
+  authenticatePublicApiRequest,
+  checkPublicApiRateLimit,
+  createPublicApiKey,
+  listPublicApiKeys,
+  recordPublicApiAuditEvent,
+  revokePublicApiKey,
+} from "../publicApi/publicApiKeyService.js";
+import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
   resolveInstagramOutboundGate,
@@ -261,6 +269,96 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "GET" && pathname === "/") {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("whatsapp-agent running");
+    return;
+  }
+
+  if (pathname.startsWith("/public-api/v1/")) {
+    const prisma = getPrisma();
+    if (req.method === "GET" && pathname === "/public-api/v1/health") {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          scopes: authResult.auth.scopes,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        service: "converta-public-api",
+        version: "v1",
+        tenant: {
+          id: authResult.auth.clientId,
+          key: authResult.auth.clientKey,
+          name: authResult.auth.tenantName,
+        },
+        apiKey: {
+          id: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          scopes: authResult.auth.scopes,
+          status: "active",
+        },
+      });
+      return;
+    }
+    json(res, 404, {
+      error: {
+        code: "not_found",
+        message: "Public API endpoint not found.",
+        requestId,
+      },
+    });
     return;
   }
 
@@ -549,6 +647,156 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       return;
     }
     setValidatedClientAuth(req, validation.auth);
+  }
+
+  if (req.method === "GET" && pathname === "/app/api-keys") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminOrSupervisorRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const keys = await listPublicApiKeys({ prisma, clientId: client.id });
+      json(res, 200, {
+        ok: true,
+        keys,
+        availableScopes: ["read", "write", "contacts", "conversations", "messages", "campaigns", "webhooks"],
+        publicBasePath: "/public-api/v1",
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.api_keys.list.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/api-keys") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminOrSupervisorRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await createPublicApiKey({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        requestId,
+        name: String(body.name ?? ""),
+        scopes: body.scopes,
+        expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
+      });
+      if (!result.ok) {
+        json(res, 400, httpError(result.error, "Invalid API key payload"));
+        return;
+      }
+      logger.info({
+        event: "api.key.created",
+        clientId: client.id,
+        userId: clientAuth.userId,
+        apiKeyId: result.key.id,
+        keyPrefix: result.key.keyPrefix,
+        requestId,
+      });
+      json(res, 201, {
+        ok: true,
+        key: result.key,
+        secret: result.secret,
+        message: "Guarde esta chave agora. Ela nao sera exibida novamente.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.api_keys.create.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const apiKeyRevokeMatch = pathname.match(/^\/app\/api-keys\/([^/]+)\/revoke$/);
+  if (req.method === "POST" && apiKeyRevokeMatch) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    if (!isAdminOrSupervisorRole(clientAuth.role)) {
+      json(res, 403, httpError("forbidden", "Only supervisor or admin can manage API keys."));
+      return;
+    }
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      const result = await revokePublicApiKey({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        keyId: decodeURIComponent(apiKeyRevokeMatch[1] ?? ""),
+        requestId,
+      });
+      if (!result.ok) {
+        json(res, 404, httpError(result.error, "API key not found"));
+        return;
+      }
+      logger.info({
+        event: "api.key.revoked",
+        clientId: client.id,
+        userId: clientAuth.userId,
+        apiKeyId: result.key.id,
+        keyPrefix: result.key.keyPrefix,
+        requestId,
+      });
+      json(res, 200, { ok: true, key: result.key });
+    } catch (error) {
+      logger.error({
+        event: "app.api_keys.revoke.error",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
   }
 
   if (req.method === "GET" && pathname === "/app/channels/instagram/status") {
@@ -15874,6 +16122,10 @@ function isSupervisorRole(role: string | null | undefined) {
 
 function isAdminRole(role: string | null | undefined) {
   return normalizeUserRole(role) === "ADMIN";
+}
+
+function isAdminOrSupervisorRole(role: string | null | undefined) {
+  return isAdminRole(role) || isSupervisorRole(role);
 }
 
 function canManageAnyConversation(role: string | null | undefined) {

@@ -107,6 +107,43 @@ export type AppApiError = Error & {
   payload?: unknown;
 };
 
+export type AppPublicApiScope =
+  | "read"
+  | "write"
+  | "contacts"
+  | "conversations"
+  | "messages"
+  | "campaigns"
+  | "webhooks";
+
+export type AppPublicApiKey = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: AppPublicApiScope[];
+  status: "active" | "revoked" | string;
+  rateLimitPerMinute: number | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppPublicApiKeysResponse = {
+  ok: true;
+  keys: AppPublicApiKey[];
+  availableScopes: AppPublicApiScope[];
+  publicBasePath: string;
+};
+
+export type AppPublicApiKeyCreateResponse = {
+  ok: true;
+  key: AppPublicApiKey;
+  secret: string;
+  message: string;
+};
+
 type AppConversationOperationalPayload = {
   ok: true;
   waId: string;
@@ -1195,6 +1232,30 @@ export async function updateAppUser(
   return requestAppJson(session, `/app/users/${encodeURIComponent(userId)}`, {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAppPublicApiKeys(session: AppSession): Promise<AppPublicApiKeysResponse> {
+  return requestAppJson(session, "/app/api-keys");
+}
+
+export function createAppPublicApiKey(
+  session: AppSession,
+  payload: { name: string; scopes: AppPublicApiScope[]; expiresAt?: string | null }
+): Promise<AppPublicApiKeyCreateResponse> {
+  return requestAppJson(session, "/app/api-keys", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function revokeAppPublicApiKey(
+  session: AppSession,
+  keyId: string
+): Promise<{ ok: true; key: AppPublicApiKey }> {
+  return requestAppJson(session, `/app/api-keys/${encodeURIComponent(keyId)}/revoke`, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }
 
