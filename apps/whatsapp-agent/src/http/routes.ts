@@ -134,6 +134,14 @@ import {
 import { ensureDefaultDepartments } from "../bootstrap/seedDepartments.js";
 import { validateChatbotFlowDefinition } from "../chatbot/chatbotFlow.js";
 import {
+  createKnowledgeBaseArticle,
+  createKnowledgeBaseCollection,
+  getKnowledgeBaseArticle,
+  listKnowledgeBase,
+  transitionKnowledgeBaseArticle,
+  updateKnowledgeBaseArticle,
+} from "../knowledge/knowledgeBaseService.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -3835,6 +3843,270 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.chatbot.settings.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/knowledge-base") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can view the knowledge base."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "knowledgeBase",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const result = await listKnowledgeBase({
+        prisma,
+        clientId: client.id,
+        status: parsedUrl.searchParams.get("status"),
+        search: parsedUrl.searchParams.get("search"),
+      });
+      json(res, 200, { ok: true, ...result });
+    } catch (error) {
+      logger.error({
+        event: "app.knowledge_base.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/knowledge-base/collections") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage the knowledge base."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "knowledgeBase",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await createKnowledgeBaseCollection({
+        prisma,
+        clientId: client.id,
+        input: body as Record<string, unknown>,
+      });
+      if (!result.ok) {
+        json(res, 400, httpError(result.error, "Invalid knowledge base collection"));
+        return;
+      }
+      json(res, 201, { ok: true, collection: result.collection });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        json(res, 409, httpError("knowledge_collection_key_conflict", "Collection key already exists."));
+        return;
+      }
+      logger.error({
+        event: "app.knowledge_base.collection.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/knowledge-base/articles") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage the knowledge base."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "knowledgeBase",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await createKnowledgeBaseArticle({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        input: body as Record<string, unknown>,
+      });
+      if (!result.ok) {
+        const status = result.error === "collection_not_found" ? 404 : 400;
+        json(res, status, httpError(result.error, "Invalid knowledge base article"));
+        return;
+      }
+      json(res, 201, { ok: true, article: result.article });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        json(res, 409, httpError("knowledge_article_key_conflict", "Article key already exists."));
+        return;
+      }
+      logger.error({
+        event: "app.knowledge_base.article.create.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const knowledgeArticleActionMatch = pathname.match(/^\/app\/knowledge-base\/articles\/([^/]+)\/(publish|unpublish|archive)$/);
+  if (req.method === "POST" && knowledgeArticleActionMatch) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can manage the knowledge base."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "knowledgeBase",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const result = await transitionKnowledgeBaseArticle({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        articleId: decodeURIComponent(knowledgeArticleActionMatch[1] ?? ""),
+        action: knowledgeArticleActionMatch[2] as "publish" | "unpublish" | "archive",
+      });
+      if (!result.ok) {
+        json(res, 404, httpError(result.error, "Knowledge base article not found"));
+        return;
+      }
+      json(res, 200, { ok: true, article: result.article });
+    } catch (error) {
+      logger.error({
+        event: "app.knowledge_base.article.transition.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const knowledgeArticleDetailMatch = pathname.match(/^\/app\/knowledge-base\/articles\/([^/]+)$/);
+  if ((req.method === "GET" || req.method === "PUT") && knowledgeArticleDetailMatch) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      if (isAgentRole(clientAuth.role)) {
+        json(res, 403, httpError("forbidden", "Only supervisor or admin can use the knowledge base."));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "knowledgeBase",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const articleId = decodeURIComponent(knowledgeArticleDetailMatch[1] ?? "");
+      if (req.method === "GET") {
+        const article = await getKnowledgeBaseArticle({ prisma, clientId: client.id, articleId });
+        if (!article) {
+          json(res, 404, httpError("article_not_found", "Knowledge base article not found"));
+          return;
+        }
+        json(res, 200, { ok: true, article });
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await updateKnowledgeBaseArticle({
+        prisma,
+        clientId: client.id,
+        userId: clientAuth.userId,
+        articleId,
+        input: body as Record<string, unknown>,
+      });
+      if (!result.ok) {
+        const status = result.error === "article_not_found" || result.error === "collection_not_found" ? 404 : 400;
+        json(res, status, httpError(result.error, "Invalid knowledge base article"));
+        return;
+      }
+      json(res, 200, { ok: true, article: result.article });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        json(res, 409, httpError("knowledge_article_key_conflict", "Article key already exists."));
+        return;
+      }
+      logger.error({
+        event: "app.knowledge_base.article.detail.error",
         message: (error as Error).message,
         requestId,
       });

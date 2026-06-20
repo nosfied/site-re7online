@@ -85,6 +85,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Automacao", government: "Configuracoes" },
   },
   {
+    href: "/app/knowledge-base",
+    icon: "📚",
+    group: "operation",
+    feature: "knowledgeBase",
+    minRole: "SUPERVISOR",
+    labels: { business: "Base", government: "Base" },
+  },
+  {
     href: "/app/reports",
     icon: "📈",
     group: "operation",

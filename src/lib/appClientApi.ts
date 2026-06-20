@@ -231,6 +231,61 @@ export type AppChatbotFlowItem = {
   updatedAt: string;
 };
 
+export type AppKnowledgeBaseStatus = "draft" | "published" | "archived";
+
+export type AppKnowledgeBaseCollection = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  status: "active" | "archived";
+  visibility: "internal" | "operator" | "public";
+  articleCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppKnowledgeBaseArticle = {
+  id: string;
+  collectionId: string | null;
+  collection: { id: string; key: string; name: string } | null;
+  key: string;
+  title: string;
+  summary: string | null;
+  question: string | null;
+  body: string;
+  tags: string[];
+  intentKeys: string[];
+  sourceType: "manual" | "document" | "faq" | "flow" | "intent" | "crm";
+  sourceNote: string | null;
+  sourceUrl: string | null;
+  status: AppKnowledgeBaseStatus;
+  visibility: "internal" | "operator" | "public";
+  version: number;
+  createdByUserId: string | null;
+  updatedByUserId: string | null;
+  publishedByUserId: string | null;
+  publishedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppKnowledgeBaseArticlePayload = {
+  collectionId?: string | null;
+  key?: string | null;
+  title: string;
+  summary?: string | null;
+  question?: string | null;
+  body: string;
+  tags?: string[];
+  intentKeys?: string[];
+  sourceType?: string | null;
+  sourceNote?: string | null;
+  sourceUrl?: string | null;
+  visibility?: string | null;
+};
+
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
@@ -1241,6 +1296,86 @@ export async function updateAppChatbotFlow(
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchAppKnowledgeBase(
+  session: AppSession,
+  params?: { status?: AppKnowledgeBaseStatus | "all"; search?: string }
+): Promise<{
+  ok: true;
+  collections: AppKnowledgeBaseCollection[];
+  articles: AppKnowledgeBaseArticle[];
+}> {
+  const query = new URLSearchParams();
+  if (params?.status && params.status !== "all") query.set("status", params.status);
+  if (params?.search?.trim()) query.set("search", params.search.trim());
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/knowledge-base${suffix}`);
+}
+
+export async function fetchAppKnowledgeBaseArticle(
+  session: AppSession,
+  articleId: string
+): Promise<{
+  ok: true;
+  article: AppKnowledgeBaseArticle;
+}> {
+  return requestAppJson(session, `/app/knowledge-base/articles/${encodeURIComponent(articleId)}`);
+}
+
+export async function createAppKnowledgeBaseCollection(
+  session: AppSession,
+  payload: { name: string; key?: string | null; description?: string | null; visibility?: string | null }
+): Promise<{
+  ok: true;
+  collection: AppKnowledgeBaseCollection;
+}> {
+  return requestAppJson(session, "/app/knowledge-base/collections", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppKnowledgeBaseArticle(
+  session: AppSession,
+  payload: AppKnowledgeBaseArticlePayload
+): Promise<{
+  ok: true;
+  article: AppKnowledgeBaseArticle;
+}> {
+  return requestAppJson(session, "/app/knowledge-base/articles", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppKnowledgeBaseArticle(
+  session: AppSession,
+  articleId: string,
+  payload: AppKnowledgeBaseArticlePayload
+): Promise<{
+  ok: true;
+  article: AppKnowledgeBaseArticle;
+}> {
+  return requestAppJson(session, `/app/knowledge-base/articles/${encodeURIComponent(articleId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function transitionAppKnowledgeBaseArticle(
+  session: AppSession,
+  articleId: string,
+  action: "publish" | "unpublish" | "archive"
+): Promise<{
+  ok: true;
+  article: AppKnowledgeBaseArticle;
+}> {
+  return requestAppJson(
+    session,
+    `/app/knowledge-base/articles/${encodeURIComponent(articleId)}/${action}`,
+    { method: "POST" }
+  );
 }
 
 export async function fetchAppConversationReport(

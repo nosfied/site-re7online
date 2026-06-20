@@ -22,6 +22,7 @@ Status: current-state documentation based on code inspection. This file does not
 | `reports` | true | true | same defaults | yes, reports routes | yes |
 | `campaigns` | true | false | same defaults | yes, campaign routes | yes |
 | `chatbot` | true | true | same defaults | yes, chatbot routes | yes |
+| `knowledgeBase` | false | false | controlled rollout via `Client.features` | yes, knowledge base routes | yes |
 
 ## Frontend-Only/Future Flags
 
@@ -47,4 +48,3 @@ These are typed in the frontend feature model but are not part of backend `Clien
 - Backend and frontend currently duplicate the default matrix in separate files.
 - Any new production feature flag must be added to both backend and frontend definitions unless a shared package is introduced later.
 - Tenant-level automation flags in `tenants.json` are not the same as `Client.features`; they are operational configuration, not module availability.
-

@@ -83,6 +83,8 @@ model Client {
   metaConfig    TenantMetaConfig?
   chatbotFlows  ChatbotFlow[]
   channelIdentities ContactChannelIdentity[]
+  knowledgeBaseCollections KnowledgeBaseCollection[]
+  knowledgeBaseArticles KnowledgeBaseArticle[]
 }
 
 model User {
@@ -759,4 +761,57 @@ model ChatbotFlow {
 
   @@index([clientId, createdAt])
   @@index([clientId, isActive, entryPoint])
+}
+
+model KnowledgeBaseCollection {
+  id          String   @id @default(cuid())
+  clientId    String   @db.Uuid
+  key         String
+  name        String
+  description String?
+  status      String   @default("active")
+  visibility  String   @default("internal")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  articles KnowledgeBaseArticle[]
+
+  @@unique([clientId, key])
+  @@index([clientId, status])
+  @@index([clientId, updatedAt])
+}
+
+model KnowledgeBaseArticle {
+  id           String   @id @default(cuid())
+  clientId     String   @db.Uuid
+  collectionId String?
+  key          String
+  title        String
+  summary      String?
+  question     String?
+  body         String
+  tags         Json?
+  intentKeys   Json?
+  sourceType   String   @default("manual")
+  sourceNote   String?
+  sourceUrl    String?
+  status       String   @default("draft")
+  visibility   String   @default("internal")
+  version      Int      @default(1)
+  createdByUserId String?
+  updatedByUserId String?
+  publishedByUserId String?
+  publishedAt  DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client     Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  collection KnowledgeBaseCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  @@unique([clientId, key])
+  @@index([clientId, status])
+  @@index([clientId, collectionId])
+  @@index([clientId, updatedAt])
 }
