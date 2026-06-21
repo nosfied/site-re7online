@@ -401,10 +401,27 @@ A etapa de scheduler shadow foi implementada sem envio:
 - nenhum status de reminder e alterado;
 - nenhum `OutboundMessage` e criado.
 
-Criterio para avancar para envio real:
+Criterio para avancar para design de envio real:
 
 - shadow por tenant sem divergencia;
 - templates aprovados e mapeados;
 - janela Meta/WhatsApp validada;
 - idempotencia de envio definida;
 - rollback por feature flag testado.
+
+## Status Pos-Sprint 71G
+
+A Sprint 71G adicionou o desenho especifico do envio real controlado em `docs/saas/SCHEDULING_REMINDER_CONTROLLED_SEND_DESIGN.md`.
+
+Ela manteve o runtime intacto e definiu:
+
+- flag futura `schedulingRemindersSend=false`;
+- WhatsApp primeiro;
+- tenant piloto obrigatorio;
+- dry-run antes de execute;
+- template obrigatorio fora da janela Meta;
+- limites baixos;
+- sem retry automatico no MVP;
+- rollback por flag, sem migration.
+
+A proxima sprint de implementacao deve ser a 71H, com envio real apenas para tenant teste e `--execute` explicito.

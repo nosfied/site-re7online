@@ -613,4 +613,22 @@ A Sprint 71F adicionou apenas a camada de elegibilidade em shadow:
 - nenhum envio de mensagem;
 - nenhuma alteracao em WhatsApp, Messenger, Instagram, chatbot, IA, follow-up ou campaigns.
 
-Proxima etapa recomendada: **Sprint 71G - Reminder Sending Controlled**, somente depois de validar shadow por tenant e templates.
+Proxima etapa recomendada: **Sprint 71G - Reminder Sending Controlled Design**, antes de qualquer envio real.
+
+## Status Pos-Sprint 71G
+
+A Sprint 71G documentou o desenho do primeiro envio real controlado em `docs/saas/SCHEDULING_REMINDER_CONTROLLED_SEND_DESIGN.md`.
+
+Definicoes principais:
+
+- nova flag futura `schedulingRemindersSend=false`;
+- envio real somente por tenant piloto;
+- WhatsApp como primeiro e unico canal do MVP;
+- CLI futura com `--dry-run` default e `--execute` explicito;
+- template obrigatorio fora da janela Meta de 24h;
+- limite inicial baixo por execucao;
+- idempotencia obrigatoria antes de chamar provider;
+- rollback imediato desligando `schedulingRemindersSend`;
+- sem cron permanente no primeiro envio real.
+
+Proxima implementacao recomendada: **Sprint 71H - Controlled Send MVP**, ainda restrita a tenant teste e flag explicita.
