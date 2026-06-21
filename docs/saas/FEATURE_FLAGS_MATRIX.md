@@ -25,6 +25,7 @@ Status: current-state documentation based on code inspection. This file does not
 | `knowledgeBase` | false | false | controlled rollout via `Client.features` | yes, knowledge base routes | yes |
 | `scheduling` | false | false | controlled rollout via `Client.features` | yes, scheduling routes | yes |
 | `schedulingReminders` | false | false | controlled rollout via `Client.features` | yes, scheduling reminders routes | yes |
+| `schedulingRemindersShadow` | false | false | controlled rollout via `Client.features` | CLI shadow eligibility only | no customer UI yet |
 | `schedulingConfirmation` | false | false | controlled rollout via `Client.features` | reserved for future confirmation runtime | no runtime yet |
 | `satisfaction` | false | false | controlled rollout via `Client.features` | yes, satisfaction routes | yes |
 

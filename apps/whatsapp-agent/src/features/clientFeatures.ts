@@ -9,6 +9,7 @@ export type ClientFeatureKey =
   | "knowledgeBase"
   | "scheduling"
   | "schedulingReminders"
+  | "schedulingRemindersShadow"
   | "schedulingConfirmation"
   | "satisfaction"
   | "sla";
@@ -28,6 +29,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
+  schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
 };
@@ -44,6 +46,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
+  schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
 };
@@ -85,6 +88,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     knowledgeBase: normalizeFeatureValue(input.knowledgeBase) ?? defaults.knowledgeBase,
     scheduling: normalizeFeatureValue(input.scheduling) ?? defaults.scheduling,
     schedulingReminders: normalizeFeatureValue(input.schedulingReminders) ?? defaults.schedulingReminders,
+    schedulingRemindersShadow:
+      normalizeFeatureValue(input.schedulingRemindersShadow) ?? defaults.schedulingRemindersShadow,
     schedulingConfirmation:
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,

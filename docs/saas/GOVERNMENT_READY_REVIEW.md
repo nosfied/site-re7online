@@ -88,7 +88,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | IA supervisionada | ATENDE COM AJUSTE | Medio/alto | Config DB-first; multiagentes formais ainda nao. |
 | Base de conhecimento | ATENDE COM AJUSTE | Medio/alto | Schema/CRUD em producao; runtime IA/chatbot ainda desenhado, nao ligado. |
 | Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks/escrita/campanhas. |
-| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes e design de confirmacao; faltam chatbot/IA, scheduler/envio de lembretes, calendar e API publica. |
+| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes e scheduler shadow de elegibilidade; faltam chatbot/IA, envio real de lembretes, calendar e API publica. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD MVP em `/app/satisfaction`; falta disparo automatico/manual por conversa, link publico e relatorio NPS/CSAT. |
 | Webchat | NAO ATENDE | Alto quando exigido | Audit/design prontos; falta schema/widget/runtime. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |

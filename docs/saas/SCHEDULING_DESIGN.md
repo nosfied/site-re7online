@@ -598,3 +598,19 @@ A Sprint 71E implementou o MVP operacional sem runtime:
 - sem integracao com chatbot, IA, follow-up ou campaigns.
 
 Proxima sprint recomendada: **Sprint 71F - Reminder Scheduler Shadow**, ainda sem envio automatico.
+
+## Status Pos-Sprint 71F
+
+A Sprint 71F adicionou apenas a camada de elegibilidade em shadow:
+
+- feature flag `schedulingRemindersShadow=false` por padrao;
+- CLI `npm run scheduling-reminders:shadow`;
+- varredura tenant-scoped de `AppointmentReminder` com `status=pending` e `scheduledAt <= now`;
+- elegibilidade restrita a tenants com `scheduling`, `schedulingReminders` e `schedulingRemindersShadow`;
+- compromisso precisa estar ativo/futuro (`scheduled`, `confirmed` ou `rescheduled`);
+- logs/eventos redigidos de shadow quando solicitado;
+- nenhum update em `AppointmentReminder`;
+- nenhum envio de mensagem;
+- nenhuma alteracao em WhatsApp, Messenger, Instagram, chatbot, IA, follow-up ou campaigns.
+
+Proxima etapa recomendada: **Sprint 71G - Reminder Sending Controlled**, somente depois de validar shadow por tenant e templates.

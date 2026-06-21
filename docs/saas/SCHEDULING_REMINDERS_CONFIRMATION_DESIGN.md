@@ -386,3 +386,25 @@ A primeira etapa operacional posterior a este design implementou:
 - nenhuma alteracao em WhatsApp, Messenger, Instagram, chatbot, IA, follow-up ou campaigns.
 
 O proximo passo continua sendo scheduler em shadow antes de qualquer envio real.
+
+## Status Pos-Sprint 71F
+
+A etapa de scheduler shadow foi implementada sem envio:
+
+- flag `schedulingRemindersShadow=false` por padrao;
+- script manual `npm run scheduling-reminders:shadow -- --json`;
+- opcao `--record-events` para gravar auditoria redigida em `Event`;
+- eventos/logs:
+  - `appointment.reminder.shadow_run`;
+  - `appointment.reminder.shadow_eligible`;
+- nenhum canal e chamado;
+- nenhum status de reminder e alterado;
+- nenhum `OutboundMessage` e criado.
+
+Criterio para avancar para envio real:
+
+- shadow por tenant sem divergencia;
+- templates aprovados e mapeados;
+- janela Meta/WhatsApp validada;
+- idempotencia de envio definida;
+- rollback por feature flag testado.

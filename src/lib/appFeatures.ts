@@ -12,6 +12,7 @@ export type AppFeatureKey =
   | "knowledgeBase"
   | "scheduling"
   | "schedulingReminders"
+  | "schedulingRemindersShadow"
   | "schedulingConfirmation"
   | "satisfaction";
 
@@ -35,6 +36,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
+  schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
 };
@@ -51,6 +53,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   knowledgeBase: false,
   scheduling: false,
   schedulingReminders: false,
+  schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
 };
@@ -95,6 +98,8 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     knowledgeBase: normalizeBoolean(input.knowledgeBase) ?? defaults.knowledgeBase,
     scheduling: normalizeBoolean(input.scheduling) ?? defaults.scheduling,
     schedulingReminders: normalizeBoolean(input.schedulingReminders) ?? defaults.schedulingReminders,
+    schedulingRemindersShadow:
+      normalizeBoolean(input.schedulingRemindersShadow) ?? defaults.schedulingRemindersShadow,
     schedulingConfirmation:
       normalizeBoolean(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeBoolean(input.satisfaction) ?? defaults.satisfaction,

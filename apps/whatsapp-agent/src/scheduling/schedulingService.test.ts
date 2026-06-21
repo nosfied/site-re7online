@@ -8,6 +8,7 @@ import {
   updateAppointmentReminder,
   updateSchedulingService,
 } from "./schedulingService.js";
+import { findSchedulingReminderShadowCandidates } from "./schedulingReminderShadow.js";
 
 function makeDate(value: string) {
   return new Date(value);
@@ -258,6 +259,156 @@ test("updateSchedulingService does not update cross-tenant records", async () =>
   });
   assert.deepEqual(result, { ok: false, error: "service_not_found" });
   assert.equal(updateCalled, false);
+});
+
+test("scheduling reminder shadow only reports eligible tenants and does not mutate reminders", async () => {
+  let updateCalled = false;
+  let createdEventCount = 0;
+  const prisma = makePrisma({
+    client: {
+      findMany: async () => [
+        {
+          id: "tenant_a",
+          clientKey: "tenant-a",
+          profile: "government",
+          features: {
+            scheduling: true,
+            schedulingReminders: true,
+            schedulingRemindersShadow: true,
+          },
+        },
+        {
+          id: "tenant_b",
+          clientKey: "tenant-b",
+          profile: "government",
+          features: {
+            scheduling: true,
+            schedulingReminders: true,
+            schedulingRemindersShadow: false,
+          },
+        },
+      ],
+    },
+    appointmentReminder: {
+      findMany: async ({ where }: { where: { clientId: string } }) => [
+        {
+          id: `rem_${where.clientId}`,
+          clientId: where.clientId,
+          appointmentId: `apt_${where.clientId}`,
+          channel: "whatsapp",
+          kind: "manual",
+          scheduledAt: makeDate("2026-06-20T09:00:00.000Z"),
+          status: "pending",
+          templateName: "appointment_reminder_manual",
+          templateLang: "pt_BR",
+          appointment: {
+            id: `apt_${where.clientId}`,
+            startsAt: makeDate("2026-06-21T12:00:00.000Z"),
+            endsAt: makeDate("2026-06-21T13:00:00.000Z"),
+            status: "scheduled",
+          },
+        },
+      ],
+      update: async () => {
+        updateCalled = true;
+        return null;
+      },
+    },
+    event: {
+      create: async () => {
+        createdEventCount += 1;
+        return {};
+      },
+    },
+  });
+
+  const report = await findSchedulingReminderShadowCandidates({
+    prisma,
+    now: makeDate("2026-06-20T10:00:00.000Z"),
+    runId: "test-run",
+    recordEvents: true,
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.dryRun, true);
+  assert.equal(report.checkedTenants, 2);
+  assert.equal(report.scannedReminders, 2);
+  assert.equal(report.eligible, 1);
+  assert.equal(report.skipped, 1);
+  assert.equal(report.candidates[0]?.clientId, "tenant_a");
+  assert.equal(report.skippedItems[0]?.reason, "tenant_feature_disabled");
+  assert.equal(createdEventCount, 3);
+  assert.equal(updateCalled, false);
+});
+
+test("scheduling reminder shadow skips completed or past appointments", async () => {
+  const prisma = makePrisma({
+    client: {
+      findMany: async () => [
+        {
+          id: "tenant_a",
+          clientKey: "tenant-a",
+          profile: "government",
+          features: {
+            scheduling: true,
+            schedulingReminders: true,
+            schedulingRemindersShadow: true,
+          },
+        },
+      ],
+    },
+    appointmentReminder: {
+      findMany: async () => [
+        {
+          id: "rem_completed",
+          clientId: "tenant_a",
+          appointmentId: "apt_completed",
+          channel: "whatsapp",
+          kind: "manual",
+          scheduledAt: makeDate("2026-06-20T09:00:00.000Z"),
+          status: "pending",
+          templateName: null,
+          templateLang: null,
+          appointment: {
+            id: "apt_completed",
+            startsAt: makeDate("2026-06-21T12:00:00.000Z"),
+            endsAt: makeDate("2026-06-21T13:00:00.000Z"),
+            status: "completed",
+          },
+        },
+        {
+          id: "rem_past",
+          clientId: "tenant_a",
+          appointmentId: "apt_past",
+          channel: "whatsapp",
+          kind: "manual",
+          scheduledAt: makeDate("2026-06-20T09:00:00.000Z"),
+          status: "pending",
+          templateName: null,
+          templateLang: null,
+          appointment: {
+            id: "apt_past",
+            startsAt: makeDate("2026-06-20T07:00:00.000Z"),
+            endsAt: makeDate("2026-06-20T08:00:00.000Z"),
+            status: "scheduled",
+          },
+        },
+      ],
+    },
+  });
+
+  const report = await findSchedulingReminderShadowCandidates({
+    prisma,
+    now: makeDate("2026-06-20T10:00:00.000Z"),
+    runId: "test-run",
+  });
+
+  assert.equal(report.eligible, 0);
+  assert.equal(report.skipped, 2);
+  assert.deepEqual(
+    report.skippedItems.map((item) => item.reason),
+    ["appointment_not_eligible", "appointment_past"]
+  );
 });
 
 test("createAppointment validates tenant-scoped service reference", async () => {
