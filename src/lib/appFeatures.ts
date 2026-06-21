@@ -9,7 +9,8 @@ export type AppFeatureKey =
   | "reports"
   | "campaigns"
   | "chatbot"
-  | "knowledgeBase";
+  | "knowledgeBase"
+  | "scheduling";
 
 export type FutureAppFeatureKey =
   | "governmentReports"
@@ -29,6 +30,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   campaigns: true,
   chatbot: true,
   knowledgeBase: false,
+  scheduling: false,
 };
 
 export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
@@ -41,6 +43,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   campaigns: false,
   chatbot: true,
   knowledgeBase: false,
+  scheduling: false,
 };
 
 export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> = {
@@ -81,6 +84,7 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     campaigns: normalizeBoolean(input.campaigns) ?? defaults.campaigns,
     chatbot: normalizeBoolean(input.chatbot) ?? defaults.chatbot,
     knowledgeBase: normalizeBoolean(input.knowledgeBase) ?? defaults.knowledgeBase,
+    scheduling: normalizeBoolean(input.scheduling) ?? defaults.scheduling,
     governmentReports:
       normalizeBoolean(input.governmentReports) ?? DEFAULT_FUTURE_APP_FEATURES.governmentReports,
     poc: normalizeBoolean(input.poc) ?? DEFAULT_FUTURE_APP_FEATURES.poc,

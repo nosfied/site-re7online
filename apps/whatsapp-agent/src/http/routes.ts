@@ -142,6 +142,17 @@ import {
   updateKnowledgeBaseArticle,
 } from "../knowledge/knowledgeBaseService.js";
 import {
+  createAppointment,
+  createSchedulingAvailability,
+  createSchedulingResource,
+  createSchedulingService,
+  listScheduling,
+  updateAppointment,
+  updateSchedulingAvailability,
+  updateSchedulingResource,
+  updateSchedulingService,
+} from "../scheduling/schedulingService.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -4305,6 +4316,90 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.knowledge_base.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const schedulingMatch = pathname.match(/^\/app\/scheduling(?:\/(services|resources|availabilities|appointments)(?:\/([^/]+))?)?$/);
+  if (schedulingMatch) {
+    const prisma = getPrisma();
+    const access = await requireSchedulingAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    const entity = schedulingMatch[1] as
+      | "services"
+      | "resources"
+      | "availabilities"
+      | "appointments"
+      | undefined;
+    const entityId = schedulingMatch[2] ? decodeURIComponent(schedulingMatch[2]) : null;
+    try {
+      if (req.method === "GET" && !entity) {
+        const result = await listScheduling({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      if (req.method === "POST" && entity && !entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "services"
+            ? await createSchedulingService({ prisma, clientId: access.client.id, input })
+            : entity === "resources"
+              ? await createSchedulingResource({ prisma, clientId: access.client.id, input })
+              : entity === "availabilities"
+                ? await createSchedulingAvailability({ prisma, clientId: access.client.id, input })
+                : await createAppointment({
+                    prisma,
+                    clientId: access.client.id,
+                    userId: access.clientAuth.userId,
+                    input,
+                  });
+        if (!result.ok) {
+          json(res, schedulingErrorStatus(result.error), httpError(result.error, "Invalid scheduling payload"));
+          return;
+        }
+        json(res, 201, { ok: true, [schedulingResponseKey(entity)]: schedulingResponseValue(result) });
+        return;
+      }
+      if (req.method === "PUT" && entity && entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "services"
+            ? await updateSchedulingService({ prisma, clientId: access.client.id, serviceId: entityId, input })
+            : entity === "resources"
+              ? await updateSchedulingResource({ prisma, clientId: access.client.id, resourceId: entityId, input })
+              : entity === "availabilities"
+                ? await updateSchedulingAvailability({
+                    prisma,
+                    clientId: access.client.id,
+                    availabilityId: entityId,
+                    input,
+                  })
+                : await updateAppointment({
+                    prisma,
+                    clientId: access.client.id,
+                    userId: access.clientAuth.userId,
+                    appointmentId: entityId,
+                    input,
+                  });
+        if (!result.ok) {
+          json(res, schedulingErrorStatus(result.error), httpError(result.error, "Invalid scheduling payload"));
+          return;
+        }
+        json(res, 200, { ok: true, [schedulingResponseKey(entity)]: schedulingResponseValue(result) });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      logger.error({
+        event: "app.scheduling.error",
         message: (error as Error).message,
         requestId,
       });
@@ -15659,6 +15754,54 @@ async function getScopedClientById(
     where: { id: clientId },
     select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
+}
+
+async function requireSchedulingAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage scheduling."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "scheduling",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
+function schedulingErrorStatus(error: string) {
+  return error.endsWith("_not_found") ? 404 : 400;
+}
+
+function schedulingResponseKey(entity: "services" | "resources" | "availabilities" | "appointments") {
+  if (entity === "services") return "service";
+  if (entity === "resources") return "resource";
+  if (entity === "availabilities") return "availability";
+  return "appointment";
+}
+
+function schedulingResponseValue(result: Record<string, unknown>) {
+  return result.service ?? result.resource ?? result.availability ?? result.appointment;
 }
 
 function getTenantMaxActiveAppUsers(clientKey: string, tenants: Awaited<ReturnType<typeof getTenants>>) {

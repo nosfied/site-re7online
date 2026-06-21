@@ -86,6 +86,11 @@ model Client {
   knowledgeBaseCollections KnowledgeBaseCollection[]
   knowledgeBaseArticles KnowledgeBaseArticle[]
   publicApiKeys PublicApiKey[]
+  schedulingServices SchedulingService[]
+  schedulingResources SchedulingResource[]
+  schedulingAvailabilities SchedulingAvailability[]
+  appointments Appointment[]
+  appointmentReminders AppointmentReminder[]
 }
 
 model User {
@@ -104,6 +109,9 @@ model User {
   authSessions AppAuthSession[]
   passwordResetTokens PasswordResetToken[]
   pushSubscriptions PushSubscription[]
+  schedulingResources SchedulingResource[]
+  appointmentsCreated Appointment[] @relation("AppointmentCreatedBy")
+  appointmentsUpdated Appointment[] @relation("AppointmentUpdatedBy")
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
@@ -195,6 +203,7 @@ model Contact {
 
   client Client @relation(fields: [clientId], references: [id])
   channelIdentities ContactChannelIdentity[]
+  appointments Appointment[]
 
   @@unique([clientId, waId])
   @@index([clientId, channel, provider, channelAccountId])
@@ -231,6 +240,7 @@ model Conversation {
   department Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   messages Message[]
   metrics  ConversationMetrics?
+  appointments Appointment[]
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
@@ -549,6 +559,9 @@ model Department {
   conversations Conversation[]
   queues Queue[]
   runtimeStates ConversationRuntimeState[]
+  schedulingServices SchedulingService[]
+  schedulingResources SchedulingResource[]
+  appointments Appointment[]
 
   @@unique([clientId, name])
   @@unique([clientId, slug])
@@ -707,6 +720,7 @@ model Lead {
   updatedAt DateTime @updatedAt
   notes     LeadNote[]
   contactChannelIdentity ContactChannelIdentity? @relation(fields: [contactChannelIdentityId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
 
   @@unique([tenantId, waId])
   @@index([tenantId, createdAt])
@@ -840,4 +854,148 @@ model PublicApiKey {
   @@index([clientId, createdAt])
   @@index([keyPrefix])
   @@index([expiresAt])
+}
+
+model SchedulingService {
+  id                  String   @id @default(cuid())
+  clientId            String   @db.Uuid
+  departmentId        String?
+  name                String
+  description         String?
+  durationMinutes     Int      @default(30)
+  bufferBeforeMinutes Int      @default(0)
+  bufferAfterMinutes  Int      @default(0)
+  requiresApproval    Boolean  @default(false)
+  status              String   @default("active")
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  availabilities SchedulingAvailability[]
+  appointments Appointment[]
+
+  @@index([clientId, status])
+  @@index([clientId, departmentId])
+  @@index([clientId, updatedAt])
+}
+
+model SchedulingResource {
+  id           String   @id @default(cuid())
+  clientId     String   @db.Uuid
+  departmentId String?
+  userId       String?
+  name         String
+  description  String?
+  type         String   @default("person")
+  capacity     Int      @default(1)
+  status       String   @default("active")
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  availabilities SchedulingAvailability[]
+  appointments Appointment[]
+
+  @@index([clientId, status])
+  @@index([clientId, departmentId])
+  @@index([clientId, userId])
+  @@index([clientId, updatedAt])
+}
+
+model SchedulingAvailability {
+  id          String   @id @default(cuid())
+  clientId    String   @db.Uuid
+  serviceId   String?
+  resourceId  String?
+  weekday     Int
+  startsAtLocal String
+  endsAtLocal   String
+  timezone    String   @default("America/Fortaleza")
+  status      String   @default("active")
+  effectiveFrom DateTime?
+  effectiveUntil DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service SchedulingService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  resource SchedulingResource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([clientId, weekday])
+  @@index([clientId, serviceId])
+  @@index([clientId, resourceId])
+}
+
+model Appointment {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  serviceId      String?
+  resourceId     String?
+  departmentId   String?
+  contactId      String?  @db.Uuid
+  leadId         String?
+  conversationId String?  @db.Uuid
+  title          String
+  description    String?
+  startsAt       DateTime
+  endsAt         DateTime
+  timezone       String   @default("America/Fortaleza")
+  status         String   @default("scheduled")
+  source         String   @default("manual")
+  createdByUserId String?
+  updatedByUserId String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service SchedulingService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  resource SchedulingResource? @relation(fields: [resourceId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("AppointmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("AppointmentUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  reminders AppointmentReminder[]
+
+  @@index([clientId, status])
+  @@index([clientId, startsAt])
+  @@index([clientId, serviceId])
+  @@index([clientId, resourceId])
+  @@index([clientId, contactId])
+  @@index([clientId, leadId])
+  @@index([clientId, conversationId])
+}
+
+model AppointmentReminder {
+  id            String   @id @default(cuid())
+  clientId      String   @db.Uuid
+  appointmentId String
+  channel       String   @default("whatsapp")
+  kind          String   @default("reminder")
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  status        String   @default("pending")
+  templateName  String?
+  templateLang  String?
+  requestId     String?
+  error         String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, status])
+  @@index([clientId, scheduledAt])
+  @@index([appointmentId, scheduledAt])
 }

@@ -23,6 +23,7 @@ Status: current-state documentation based on code inspection. This file does not
 | `campaigns` | true | false | same defaults | yes, campaign routes | yes |
 | `chatbot` | true | true | same defaults | yes, chatbot routes | yes |
 | `knowledgeBase` | false | false | controlled rollout via `Client.features` | yes, knowledge base routes | yes |
+| `scheduling` | false | false | controlled rollout via `Client.features` | yes, scheduling routes | yes |
 
 ## Frontend-Only/Future Flags
 

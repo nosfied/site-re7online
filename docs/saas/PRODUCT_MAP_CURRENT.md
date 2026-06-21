@@ -59,6 +59,8 @@ Default government profile favors oversight and reporting:
 | Campaigns | Operational | `/app/campaigns` | `Campaign`, `campaignRunner.ts` | templates, contacts/leads, feature flag |
 | Templates | Operational | `/app/templates`, admin routes | `Template`, `TemplateRequest`, `meta/template.service.ts` | WABA token, feature flag |
 | CRM/timeline | Operational | `/app/crm`, `/app/inbox` | `Lead`, `LeadNote`, conversation/message models | CRM status catalog is DB-first in `TenantOperationalConfig` with `tenants.json` fallback |
+| Knowledge Base | Structural MVP, controlled rollout | `/app/knowledge-base` | `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, feature `knowledgeBase` | runtime consumption by IA/chatbot is designed but not enabled |
+| Scheduling | Structural MVP, controlled rollout | `/app/scheduling` | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling` | no chatbot/IA/API/calendar/reminder runtime integration yet |
 | Dashboard | Available by profile/flag | `/app/dashboard` | feature-gated routes | `Client.features.dashboard` |
 | Reports | Operational | `/app/reports` | report routes, `ConversationMetrics`, SLA/retention reads | feature flag, operational data |
 | Departments/queues | Operational | `/app/departments`, admin | `Department`, `Queue` | feature flag, inbox assignment |

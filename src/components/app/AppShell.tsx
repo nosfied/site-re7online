@@ -93,6 +93,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Base", government: "Base" },
   },
   {
+    href: "/app/scheduling",
+    icon: "🗓️",
+    group: "operation",
+    feature: "scheduling",
+    minRole: "SUPERVISOR",
+    labels: { business: "Agenda", government: "Agenda" },
+  },
+  {
     href: "/app/reports",
     icon: "📈",
     group: "operation",

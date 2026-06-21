@@ -173,7 +173,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | LGPD/retencao | ATENDE | 100% | `RetentionConfig`, privacy settings, delete/anonymize | Documentar politica por contrato publico | Baixo | Baixo | Sprint 69 |
 | Auditoria/logs | ATENDE PARCIALMENTE | 50% | `Event`, logs estruturados, eventos de feature denied/conversa | Falta tela/relatorio de auditoria formal para cliente | Medio | Medio | Sprint 70 |
 | API para integracao externa | ATENDE PARCIALMENTE | 65% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI inicial e leitura de contatos | Falta conversas, mensagens, webhooks outbound e escrita controlada | Alto | Medio/alto | Sprint 70E |
-| Agendamento | NAO ATENDE | 0% | Campos demo para agendamento existem, mas nao modulo agenda | Criar agenda/slots/servicos/notificacoes | Alto | Alto | Sprint 74 |
+| Agendamento | ATENDE PARCIALMENTE | 35% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling` tenant-scoped | Ainda nao ha consumo por chatbot/IA, lembretes automaticos, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71D/72 |
 | NPS/pesquisa satisfacao | NAO ATENDE | 0% | Nao ha model/rotas/tela NPS | Criar pesquisa pos-atendimento e relatorio | Alto | Medio | Sprint 72 |
 | Webchat | NAO ATENDE | 0% | Nao ha canal/widget webchat | Criar widget publico, identidade, persistencia e inbox | Alto | Alto | Sprint 75 |
 | Telegram | NAO ATENDE | 0% | Nao ha adapter/rotas Telegram | Criar canal, token, webhook, outbound, tenant resolution | Alto | Alto | Sprint 76 |

@@ -323,6 +323,134 @@ export type AppKnowledgeBaseArticlePayload = {
   visibility?: string | null;
 };
 
+export type AppSchedulingEntityStatus = "active" | "inactive" | "archived";
+export type AppAppointmentStatus =
+  | "scheduled"
+  | "confirmed"
+  | "rescheduled"
+  | "cancelled"
+  | "completed"
+  | "no_show";
+
+export type AppSchedulingService = {
+  id: string;
+  departmentId: string | null;
+  name: string;
+  description: string | null;
+  durationMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  requiresApproval: boolean;
+  status: AppSchedulingEntityStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSchedulingResource = {
+  id: string;
+  departmentId: string | null;
+  userId: string | null;
+  name: string;
+  description: string | null;
+  type: string;
+  capacity: number;
+  status: AppSchedulingEntityStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSchedulingAvailability = {
+  id: string;
+  serviceId: string | null;
+  resourceId: string | null;
+  weekday: number;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone: string;
+  status: AppSchedulingEntityStatus;
+  effectiveFrom: string | null;
+  effectiveUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppAppointment = {
+  id: string;
+  serviceId: string | null;
+  resourceId: string | null;
+  departmentId: string | null;
+  contactId: string | null;
+  leadId: string | null;
+  conversationId: string | null;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  status: AppAppointmentStatus;
+  source: string;
+  createdByUserId: string | null;
+  updatedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSchedulingPayload = {
+  services: AppSchedulingService[];
+  resources: AppSchedulingResource[];
+  availabilities: AppSchedulingAvailability[];
+  appointments: AppAppointment[];
+};
+
+export type AppSchedulingServicePayload = {
+  name: string;
+  description?: string | null;
+  departmentId?: string | null;
+  durationMinutes?: number;
+  bufferBeforeMinutes?: number;
+  bufferAfterMinutes?: number;
+  requiresApproval?: boolean;
+  status?: AppSchedulingEntityStatus;
+};
+
+export type AppSchedulingResourcePayload = {
+  name: string;
+  description?: string | null;
+  departmentId?: string | null;
+  userId?: string | null;
+  type?: string;
+  capacity?: number;
+  status?: AppSchedulingEntityStatus;
+};
+
+export type AppSchedulingAvailabilityPayload = {
+  serviceId?: string | null;
+  resourceId?: string | null;
+  weekday: number;
+  startsAtLocal: string;
+  endsAtLocal: string;
+  timezone?: string;
+  status?: AppSchedulingEntityStatus;
+  effectiveFrom?: string | null;
+  effectiveUntil?: string | null;
+};
+
+export type AppAppointmentPayload = {
+  serviceId?: string | null;
+  resourceId?: string | null;
+  departmentId?: string | null;
+  contactId?: string | null;
+  leadId?: string | null;
+  conversationId?: string | null;
+  title: string;
+  description?: string | null;
+  startsAt: string;
+  endsAt: string;
+  timezone?: string;
+  status?: AppAppointmentStatus;
+  source?: string;
+};
+
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
@@ -1437,6 +1565,94 @@ export async function transitionAppKnowledgeBaseArticle(
     `/app/knowledge-base/articles/${encodeURIComponent(articleId)}/${action}`,
     { method: "POST" }
   );
+}
+
+export async function fetchAppScheduling(session: AppSession): Promise<{ ok: true } & AppSchedulingPayload> {
+  return requestAppJson(session, "/app/scheduling");
+}
+
+export async function createAppSchedulingService(
+  session: AppSession,
+  payload: AppSchedulingServicePayload
+): Promise<{ ok: true; service: AppSchedulingService }> {
+  return requestAppJson(session, "/app/scheduling/services", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppSchedulingService(
+  session: AppSession,
+  serviceId: string,
+  payload: AppSchedulingServicePayload
+): Promise<{ ok: true; service: AppSchedulingService }> {
+  return requestAppJson(session, `/app/scheduling/services/${encodeURIComponent(serviceId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppSchedulingResource(
+  session: AppSession,
+  payload: AppSchedulingResourcePayload
+): Promise<{ ok: true; resource: AppSchedulingResource }> {
+  return requestAppJson(session, "/app/scheduling/resources", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppSchedulingResource(
+  session: AppSession,
+  resourceId: string,
+  payload: AppSchedulingResourcePayload
+): Promise<{ ok: true; resource: AppSchedulingResource }> {
+  return requestAppJson(session, `/app/scheduling/resources/${encodeURIComponent(resourceId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppSchedulingAvailability(
+  session: AppSession,
+  payload: AppSchedulingAvailabilityPayload
+): Promise<{ ok: true; availability: AppSchedulingAvailability }> {
+  return requestAppJson(session, "/app/scheduling/availabilities", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppSchedulingAvailability(
+  session: AppSession,
+  availabilityId: string,
+  payload: AppSchedulingAvailabilityPayload
+): Promise<{ ok: true; availability: AppSchedulingAvailability }> {
+  return requestAppJson(session, `/app/scheduling/availabilities/${encodeURIComponent(availabilityId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppAppointment(
+  session: AppSession,
+  payload: AppAppointmentPayload
+): Promise<{ ok: true; appointment: AppAppointment }> {
+  return requestAppJson(session, "/app/scheduling/appointments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppAppointment(
+  session: AppSession,
+  appointmentId: string,
+  payload: AppAppointmentPayload
+): Promise<{ ok: true; appointment: AppAppointment }> {
+  return requestAppJson(session, `/app/scheduling/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function fetchAppConversationReport(

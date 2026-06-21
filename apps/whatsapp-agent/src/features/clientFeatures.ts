@@ -7,6 +7,7 @@ export type ClientFeatureKey =
   | "campaigns"
   | "chatbot"
   | "knowledgeBase"
+  | "scheduling"
   | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
@@ -22,6 +23,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   campaigns: true,
   chatbot: true,
   knowledgeBase: false,
+  scheduling: false,
 };
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
@@ -34,6 +36,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   campaigns: false,
   chatbot: true,
   knowledgeBase: false,
+  scheduling: false,
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
@@ -71,6 +74,7 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     campaigns: normalizeFeatureValue(input.campaigns) ?? defaults.campaigns,
     chatbot: normalizeFeatureValue(input.chatbot) ?? defaults.chatbot,
     knowledgeBase: normalizeFeatureValue(input.knowledgeBase) ?? defaults.knowledgeBase,
+    scheduling: normalizeFeatureValue(input.scheduling) ?? defaults.scheduling,
   };
 }
 

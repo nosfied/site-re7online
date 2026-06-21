@@ -526,4 +526,24 @@ O caminho correto e construir agendamento como modulo novo, reaproveitando CRM, 
 
 Nao ha migracao direta a partir do fluxo legado de demo. O fluxo de demo ajuda como experiencia acumulada, mas nao substitui agenda.
 
-Proxima sprint recomendada: **Sprint 71C - Scheduling Schema + Feature Flag**, ainda sem runtime automatico.
+## Status Pos-Sprint 71C
+
+A Sprint 71C implementou o MVP estrutural do modulo:
+
+- migration aditiva com `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment` e `AppointmentReminder`;
+- tenant scope obrigatorio via `clientId`;
+- feature flag `scheduling=false` por padrao para `business` e `government`;
+- CRUD basico tenant-scoped em `/app/scheduling`;
+- leitura/escrita restrita a `ADMIN` e `SUPERVISOR`;
+- sem runtime de chatbot, IA, canais, API publica, Google Calendar ou lembretes automaticos.
+
+Com isso, o requisito de agendamento passa a **ATENDE PARCIALMENTE** em nivel estrutural. Para editais que exigem jornada completa de agendamento, ainda faltam:
+
+- criacao/remarcacao/cancelamento a partir da timeline;
+- auditoria/timeline do appointment;
+- validacao de conflito;
+- lembretes automaticos;
+- relatorio de agenda;
+- consumo por chatbot/IA em shadow antes de qualquer resposta automatica.
+
+Proxima sprint recomendada: **Sprint 71D - Scheduling Validation + Inbox Entry Point**, ainda sem lembretes automaticos.
