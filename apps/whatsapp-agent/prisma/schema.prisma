@@ -94,6 +94,9 @@ model Client {
   satisfactionQuestions SatisfactionQuestion[]
   satisfactionSurveys SatisfactionSurvey[]
   satisfactionResponses SatisfactionResponse[]
+  webchatSites WebchatSite[]
+  webchatSettings WebchatSettings[]
+  webchatAllowedDomains WebchatAllowedDomain[]
 }
 
 model User {
@@ -1110,4 +1113,60 @@ model SatisfactionResponse {
   @@index([clientId, conversationId])
   @@index([clientId, contactId])
   @@index([clientId, leadId])
+}
+
+model WebchatSite {
+  id        String   @id @default(cuid())
+  clientId  String   @db.Uuid
+  name      String
+  slug      String
+  status    String   @default("inactive")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  settings WebchatSettings?
+  allowedDomains WebchatAllowedDomain[]
+
+  @@unique([clientId, slug])
+  @@index([clientId, status])
+  @@index([clientId, updatedAt])
+}
+
+model WebchatSettings {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  siteId         String   @unique
+  theme          Json?
+  welcomeMessage String?
+  collectName    Boolean  @default(true)
+  collectEmail   Boolean  @default(false)
+  collectPhone   Boolean  @default(false)
+  allowAnonymous Boolean  @default(true)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site WebchatSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, siteId])
+}
+
+model WebchatAllowedDomain {
+  id        String   @id @default(cuid())
+  clientId  String   @db.Uuid
+  siteId    String
+  domain    String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site WebchatSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, domain])
+  @@index([clientId, active])
+  @@index([clientId, siteId])
 }

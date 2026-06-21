@@ -12,6 +12,7 @@ export type ClientFeatureKey =
   | "schedulingRemindersShadow"
   | "schedulingConfirmation"
   | "satisfaction"
+  | "webchat"
   | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
@@ -32,6 +33,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  webchat: false,
 };
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
@@ -49,6 +51,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  webchat: false,
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
@@ -93,6 +96,7 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     schedulingConfirmation:
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
+    webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
   };
 }
 

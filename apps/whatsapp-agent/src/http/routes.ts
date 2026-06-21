@@ -163,6 +163,14 @@ import {
   updateSatisfactionSurvey,
 } from "../satisfaction/satisfactionService.js";
 import {
+  createWebchatAllowedDomain,
+  createWebchatSite,
+  listWebchat,
+  updateWebchatAllowedDomain,
+  updateWebchatSite,
+  upsertWebchatSettings,
+} from "../webchat/webchatService.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -4708,6 +4716,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.scheduling.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const webchatMatch = pathname.match(/^\/app\/webchat(?:\/(sites|settings|domains)(?:\/([^/]+))?)?$/);
+  if (webchatMatch) {
+    const prisma = getPrisma();
+    const access = await requireWebchatAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    const entity = webchatMatch[1] as "sites" | "settings" | "domains" | undefined;
+    const entityId = webchatMatch[2] ? decodeURIComponent(webchatMatch[2]) : null;
+    try {
+      if (req.method === "GET" && !entity) {
+        const result = await listWebchat({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      if (req.method === "POST" && entity && !entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "sites"
+            ? await createWebchatSite({ prisma, clientId: access.client.id, input })
+            : entity === "settings"
+              ? await upsertWebchatSettings({ prisma, clientId: access.client.id, input })
+              : await createWebchatAllowedDomain({ prisma, clientId: access.client.id, input });
+        if (!result.ok) {
+          json(res, webchatErrorStatus(result.error), httpError(result.error, "Invalid webchat payload"));
+          return;
+        }
+        json(res, 201, { ok: true, [webchatResponseKey(entity)]: webchatResponseValue(result) });
+        return;
+      }
+      if (req.method === "PUT" && (entity === "sites" || entity === "domains") && entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "sites"
+            ? await updateWebchatSite({ prisma, clientId: access.client.id, siteId: entityId, input })
+            : await updateWebchatAllowedDomain({ prisma, clientId: access.client.id, domainId: entityId, input });
+        if (!result.ok) {
+          json(res, webchatErrorStatus(result.error), httpError(result.error, "Invalid webchat payload"));
+          return;
+        }
+        json(res, 200, { ok: true, [webchatResponseKey(entity)]: webchatResponseValue(result) });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      const known = error as { code?: string; message?: string };
+      if (known.code === "P2002") {
+        json(res, 409, httpError("duplicate_webchat_record", "Duplicate webchat record"));
+        return;
+      }
+      logger.error({
+        event: "app.webchat.error",
         message: (error as Error).message,
         requestId,
       });
@@ -16208,6 +16278,39 @@ async function requireSatisfactionAppAccess(
   return { clientAuth, client };
 }
 
+async function requireWebchatAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage webchat settings."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "webchat",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
 function schedulingErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
 }
@@ -16222,6 +16325,20 @@ function schedulingResponseKey(entity: "services" | "resources" | "availabilitie
 
 function schedulingResponseValue(result: Record<string, unknown>) {
   return result.service ?? result.resource ?? result.availability ?? result.appointment ?? result.reminder;
+}
+
+function webchatErrorStatus(error: string) {
+  return error.endsWith("_not_found") ? 404 : 400;
+}
+
+function webchatResponseKey(entity: "sites" | "settings" | "domains") {
+  if (entity === "sites") return "site";
+  if (entity === "settings") return "settings";
+  return "domain";
+}
+
+function webchatResponseValue(result: Record<string, unknown>) {
+  return result.site ?? result.settings ?? result.domain;
 }
 
 function satisfactionErrorStatus(error: string) {

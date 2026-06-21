@@ -90,7 +90,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks/escrita/campanhas. |
 | Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes, scheduler shadow de elegibilidade e design de envio controlado; faltam chatbot/IA, envio real de lembretes, calendar e API publica. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD MVP em `/app/satisfaction`; falta disparo automatico/manual por conversa, link publico e relatorio NPS/CSAT. |
-| Webchat | NAO ATENDE | Alto quando exigido | Audit/design prontos; falta schema/widget/runtime. |
+| Webchat | ATENDE COM AJUSTE | Alto quando exigido | Schema/settings MVP em `/app/webchat` com feature `webchat`; falta widget publico, sessao, persistencia no inbox e runtime. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |
 | Relatorios | ATENDE | Alto | Reports operacionais e export. |
 | Dashboard | ATENDE COM AJUSTE | Medio | Operacional; nao e BI completo. |
@@ -110,7 +110,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | Gap | Status | Impacto | Bloqueia participacao? | Observacao |
 | --- | --- | --- | --- | --- |
 | NPS/Satisfacao funcional | MVP estrutural em producao | Alto em editais com pesquisa pos-atendimento | Pode bloquear se requisito exigir disparo/relatorio completo imediato | Proxima fase: envio manual/automatico e relatorio NPS/CSAT. |
-| Webchat funcional | Design concluido | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget, sessao, persistencia e inbox. |
+| Webchat funcional | Schema/settings MVP | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget publico, sessao, persistencia no inbox e atendimento E2E. |
 | Telegram funcional | Audit concluida | Alto quando exigido | Sim, se Telegram for obrigatorio | Ainda falta design antes de implementar. |
 | Public API webhooks/escrita | MVP read-only em producao | Alto se exigir integracao completa | Geralmente nao bloqueia se leitura de contatos/conversas/mensagens bastar; bloqueia se exigir eventos outbound ou escrita | Proxima etapa natural: webhooks outbound. |
 | Scheduling runtime/lembretes | MVP estrutural + lembretes manuais | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Proxima fase: scheduler shadow, depois envio controlado por tenant. |

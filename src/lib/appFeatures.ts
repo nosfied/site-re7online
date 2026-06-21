@@ -14,7 +14,8 @@ export type AppFeatureKey =
   | "schedulingReminders"
   | "schedulingRemindersShadow"
   | "schedulingConfirmation"
-  | "satisfaction";
+  | "satisfaction"
+  | "webchat";
 
 export type FutureAppFeatureKey =
   | "governmentReports"
@@ -39,6 +40,7 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  webchat: false,
 };
 
 export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
@@ -56,6 +58,7 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  webchat: false,
 };
 
 export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> = {
@@ -103,6 +106,7 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     schedulingConfirmation:
       normalizeBoolean(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeBoolean(input.satisfaction) ?? defaults.satisfaction,
+    webchat: normalizeBoolean(input.webchat) ?? defaults.webchat,
     governmentReports:
       normalizeBoolean(input.governmentReports) ?? DEFAULT_FUTURE_APP_FEATURES.governmentReports,
     poc: normalizeBoolean(input.poc) ?? DEFAULT_FUTURE_APP_FEATURES.poc,

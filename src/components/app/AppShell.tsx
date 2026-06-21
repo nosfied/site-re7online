@@ -109,6 +109,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Satisfacao", government: "Satisfacao" },
   },
   {
+    href: "/app/webchat",
+    icon: "💬",
+    group: "operation",
+    feature: "webchat",
+    minRole: "SUPERVISOR",
+    labels: { business: "Webchat", government: "Webchat" },
+  },
+  {
     href: "/app/reports",
     icon: "📈",
     group: "operation",

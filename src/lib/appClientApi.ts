@@ -593,6 +593,67 @@ export type AppSatisfactionResponsePayload = {
   respondedAt?: string | null;
 };
 
+export type AppWebchatSiteStatus = "active" | "inactive" | "archived";
+
+export type AppWebchatSite = {
+  id: string;
+  name: string;
+  slug: string;
+  status: AppWebchatSiteStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppWebchatSettings = {
+  id: string;
+  siteId: string;
+  theme: Record<string, unknown>;
+  welcomeMessage: string | null;
+  collectName: boolean;
+  collectEmail: boolean;
+  collectPhone: boolean;
+  allowAnonymous: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppWebchatAllowedDomain = {
+  id: string;
+  siteId: string;
+  domain: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppWebchatPayload = {
+  sites: AppWebchatSite[];
+  settings: AppWebchatSettings[];
+  allowedDomains: AppWebchatAllowedDomain[];
+};
+
+export type AppWebchatSitePayload = {
+  name: string;
+  slug?: string;
+  status?: AppWebchatSiteStatus;
+};
+
+export type AppWebchatSettingsPayload = {
+  siteId: string;
+  theme?: Record<string, unknown>;
+  welcomeMessage?: string | null;
+  collectName?: boolean;
+  collectEmail?: boolean;
+  collectPhone?: boolean;
+  allowAnonymous?: boolean;
+};
+
+export type AppWebchatAllowedDomainPayload = {
+  siteId: string;
+  domain: string;
+  active?: boolean;
+};
+
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
@@ -1870,6 +1931,62 @@ export async function createAppSatisfactionResponse(
 ): Promise<{ ok: true; response: AppSatisfactionResponse }> {
   return requestAppJson(session, "/app/satisfaction/responses", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppWebchat(session: AppSession): Promise<{ ok: true } & AppWebchatPayload> {
+  return requestAppJson(session, "/app/webchat");
+}
+
+export async function createAppWebchatSite(
+  session: AppSession,
+  payload: AppWebchatSitePayload
+): Promise<{ ok: true; site: AppWebchatSite }> {
+  return requestAppJson(session, "/app/webchat/sites", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppWebchatSite(
+  session: AppSession,
+  siteId: string,
+  payload: AppWebchatSitePayload
+): Promise<{ ok: true; site: AppWebchatSite }> {
+  return requestAppJson(session, `/app/webchat/sites/${encodeURIComponent(siteId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function upsertAppWebchatSettings(
+  session: AppSession,
+  payload: AppWebchatSettingsPayload
+): Promise<{ ok: true; settings: AppWebchatSettings }> {
+  return requestAppJson(session, "/app/webchat/settings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppWebchatAllowedDomain(
+  session: AppSession,
+  payload: AppWebchatAllowedDomainPayload
+): Promise<{ ok: true; domain: AppWebchatAllowedDomain }> {
+  return requestAppJson(session, "/app/webchat/domains", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppWebchatAllowedDomain(
+  session: AppSession,
+  domainId: string,
+  payload: AppWebchatAllowedDomainPayload
+): Promise<{ ok: true; domain: AppWebchatAllowedDomain }> {
+  return requestAppJson(session, `/app/webchat/domains/${encodeURIComponent(domainId)}`, {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }

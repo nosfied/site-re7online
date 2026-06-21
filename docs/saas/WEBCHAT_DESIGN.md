@@ -524,13 +524,13 @@ Nao logar:
 
 Implementar estrutura sem runtime publico:
 
-- models `WebchatWidget` e `WebchatSession`;
+- models `WebchatSite`, `WebchatSettings` e `WebchatAllowedDomain`;
 - migration aditiva;
 - feature flag `webchat=false`;
-- CRUD simples em `/app/settings/webchat`;
+- CRUD simples em `/app/webchat`;
 - dominios permitidos;
-- preview/snippet de instalacao;
-- sem widget funcional ainda.
+- configuracoes iniciais de coleta/tema/mensagem de boas-vindas;
+- sem widget, iframe, snippet funcional, sessao, mensagem ou realtime.
 
 ### Sprint 73D - Webchat Widget Bootstrap + Inbound MVP
 
@@ -605,9 +605,9 @@ A proxima sprint correta e **Sprint 73C - Webchat Schema + App Settings MVP**.
 
 Recorte recomendado:
 
-- criar models aditivos `WebchatWidget` e `WebchatSession`;
+- criar models aditivos `WebchatSite`, `WebchatSettings` e `WebchatAllowedDomain`;
 - adicionar feature flag `webchat=false`;
-- criar tela de configuracao em `/app/settings/webchat`;
-- gerar snippet de instalacao;
+- criar tela de configuracao em `/app/webchat`;
+- manter apenas configuracao interna de sites, preferencias e dominios permitidos;
 - nao publicar widget funcional ainda;
 - nao alterar WhatsApp, Messenger, Instagram, IA, chatbot, Public API ou runtime de canais.
