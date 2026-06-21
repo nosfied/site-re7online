@@ -29,13 +29,25 @@ test("listPublicConversationMessages requires tenant-owned conversation", async 
       findFirst: async (args: { where: { id: string; clientId: string } }) => {
         calls.push({ model: "conversation", args });
         return args.where.clientId === "client_a" && args.where.id === "conversation_a"
-          ? { id: "conversation_a", clientId: "client_a", channel: "whatsapp" }
+          ? {
+              id: "conversation_a",
+              clientId: "client_a",
+              channel: "whatsapp",
+              waId: "558499999999",
+              waIdCanonical: "558499999999",
+            }
           : null;
       },
     },
-    message: {
+    inboundMessage: {
       findMany: async (args: unknown) => {
-        calls.push({ model: "message", args });
+        calls.push({ model: "inbound", args });
+        return [];
+      },
+    },
+    outboundMessage: {
+      findMany: async (args: unknown) => {
+        calls.push({ model: "outbound", args });
         return [];
       },
     },
@@ -50,7 +62,7 @@ test("listPublicConversationMessages requires tenant-owned conversation", async 
     }),
     null
   );
-  assert.equal(calls.some((call) => call.model === "message"), false);
+  assert.equal(calls.some((call) => call.model === "inbound" || call.model === "outbound"), false);
 });
 
 test("listPublicConversationMessages returns only safe normalized fields", async () => {
@@ -59,28 +71,40 @@ test("listPublicConversationMessages returns only safe normalized fields", async
     conversation: {
       findFirst: async (args: unknown) => {
         calls.push({ model: "conversation", args });
-        return { id: "conversation_a", clientId: "client_a", channel: "instagram" };
+        return {
+          id: "conversation_a",
+          clientId: "client_a",
+          channel: "instagram",
+          waId: "ig_user_1",
+          waIdCanonical: "ig_user_1",
+        };
       },
     },
-    message: {
+    inboundMessage: {
       findMany: async (args: unknown) => {
-        calls.push({ model: "message", args });
+        calls.push({ model: "inbound", args });
         return [
           {
             id: "message_1",
-            direction: "INBOUND",
+            channel: null,
             type: "TEXT",
             bodyText: "Ola",
-            status: "RECEIVED",
             createdAt: now,
             waId: "558499999999",
             messageId: "provider_message",
             metaMessageId: "meta_message",
             requestId: "request_1",
           },
+        ];
+      },
+    },
+    outboundMessage: {
+      findMany: async (args: unknown) => {
+        calls.push({ model: "outbound", args });
+        return [
           {
             id: "message_2",
-            direction: "OUTBOUND",
+            channel: "instagram",
             type: "TEXT",
             bodyText: "Oi",
             status: "SENT",
@@ -114,10 +138,15 @@ test("listPublicConversationMessages returns only safe normalized fields", async
   const conversationWhere = (calls[0]?.args as { where: { clientId?: string; deletedAt?: null } }).where;
   assert.equal(conversationWhere.clientId, "client_a");
   assert.equal(conversationWhere.deletedAt, null);
-  const messageSelect = (calls[1]?.args as { select: Record<string, unknown> }).select;
-  assert.equal(messageSelect.bodyText, true);
-  assert.equal("waId" in messageSelect, false);
-  assert.equal("messageId" in messageSelect, false);
-  assert.equal("metaMessageId" in messageSelect, false);
-  assert.equal("requestId" in messageSelect, false);
+  const inboundArgs = calls.find((call) => call.model === "inbound")?.args as {
+    where: { clientId?: string; OR?: unknown[] };
+    select: Record<string, unknown>;
+  };
+  assert.equal(inboundArgs.where.clientId, "client_a");
+  assert.equal(Array.isArray(inboundArgs.where.OR), true);
+  assert.equal(inboundArgs.select.bodyText, true);
+  assert.equal("waId" in inboundArgs.select, false);
+  assert.equal("messageId" in inboundArgs.select, false);
+  assert.equal("metaMessageId" in inboundArgs.select, false);
+  assert.equal("requestId" in inboundArgs.select, false);
 });

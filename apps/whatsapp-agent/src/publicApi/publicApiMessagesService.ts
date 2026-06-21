@@ -7,15 +7,19 @@ type ConversationRow = {
   id: string;
   clientId: string;
   channel: string | null;
+  waId: string;
+  waIdCanonical: string | null;
 };
 
 type MessageRow = {
   id: string;
   direction: string;
+  channel: string | null;
   type: string;
   bodyText: string | null;
   status: string;
   createdAt: Date;
+  source: "inbound" | "outbound";
 };
 
 export type PublicMessagesQuery = {
@@ -61,12 +65,46 @@ function serializePublicMessage(message: MessageRow, conversation: ConversationR
   return {
     id: message.id,
     direction: message.direction,
-    channel: conversation.channel ?? "whatsapp",
+    channel: message.channel ?? conversation.channel ?? "whatsapp",
     type: message.type,
     text: message.bodyText,
     createdAt: message.createdAt.toISOString(),
     status: message.status,
     senderRole: senderRoleFromDirection(message.direction),
+  };
+}
+
+function conversationLookupKeys(conversation: ConversationRow) {
+  const keys = new Set<string>();
+  keys.add(conversation.waId);
+  if (conversation.waIdCanonical) keys.add(conversation.waIdCanonical);
+  return Array.from(keys).filter(Boolean);
+}
+
+function isAfterCursor(message: MessageRow, cursor: { createdAt: Date; id: string } | null) {
+  if (!cursor) return true;
+  const left = message.createdAt.getTime();
+  const right = cursor.createdAt.getTime();
+  if (left !== right) return left > right;
+  return message.id > cursor.id;
+}
+
+function buildMessageWhere(clientId: string, lookupKeys: string[], cursor: { createdAt: Date; id: string } | null) {
+  return {
+    clientId,
+    OR: [{ waId: { in: lookupKeys } }, { waIdCanonical: { in: lookupKeys } }],
+    ...(cursor
+      ? {
+          AND: [
+            {
+              OR: [
+                { createdAt: { gt: cursor.createdAt } },
+                { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+              ],
+            },
+          ],
+        }
+      : {}),
   };
 }
 
@@ -86,36 +124,67 @@ export async function listPublicConversationMessages(params: {
       id: true,
       clientId: true,
       channel: true,
+      waId: true,
+      waIdCanonical: true,
     },
   });
   if (!conversation) return null;
 
   const limit = normalizePublicMessagesLimit(params.query.limit);
   const cursor = decodePublicMessagesCursor(params.query.cursor);
+  const lookupKeys = conversationLookupKeys(conversation);
   const take = limit + 1;
-  const messages = await params.prisma.message.findMany({
-    where: {
-      conversationId: conversation.id,
-      ...(cursor
-        ? {
-            OR: [
-              { createdAt: { gt: cursor.createdAt } },
-              { createdAt: cursor.createdAt, id: { gt: cursor.id } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    take,
-    select: {
-      id: true,
-      direction: true,
-      type: true,
-      bodyText: true,
-      status: true,
-      createdAt: true,
-    },
-  });
+  const [inboundMessages, outboundMessages] = await Promise.all([
+    lookupKeys.length
+      ? params.prisma.inboundMessage.findMany({
+          where: buildMessageWhere(params.clientId, lookupKeys, cursor),
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take,
+          select: {
+            id: true,
+            channel: true,
+            type: true,
+            bodyText: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+    lookupKeys.length
+      ? params.prisma.outboundMessage.findMany({
+          where: buildMessageWhere(params.clientId, lookupKeys, cursor),
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take,
+          select: {
+            id: true,
+            channel: true,
+            type: true,
+            bodyText: true,
+            status: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const messages: MessageRow[] = [
+    ...inboundMessages.map((message) => ({
+      ...message,
+      direction: "INBOUND",
+      status: "RECEIVED",
+      source: "inbound" as const,
+    })),
+    ...outboundMessages.map((message) => ({
+      ...message,
+      direction: "OUTBOUND",
+      source: "outbound" as const,
+    })),
+  ]
+    .filter((message) => isAfterCursor(message, cursor))
+    .sort((left, right) => {
+      const leftTime = left.createdAt.getTime();
+      const rightTime = right.createdAt.getTime();
+      if (leftTime !== rightTime) return leftTime - rightTime;
+      return left.id.localeCompare(right.id);
+    });
   const pageMessages = messages.slice(0, limit);
   const nextCursorSource = messages.length > limit ? pageMessages[pageMessages.length - 1] : null;
   return {
