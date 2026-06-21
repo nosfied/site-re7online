@@ -23,7 +23,7 @@ import {
   upsertAppWebchatSettings,
 } from "@/lib/appClientApi";
 
-type TabKey = "sites" | "settings" | "domains";
+type TabKey = "sites" | "settings" | "domains" | "session";
 
 type SiteForm = {
   id: string;
@@ -51,6 +51,15 @@ type DomainForm = {
   active: boolean;
 };
 
+type SessionTestState = {
+  siteId: string;
+  visitorName: string;
+  visitorEmail: string;
+  visitorPhone: string;
+  token: string;
+  result: string;
+};
+
 const SITE_EMPTY: SiteForm = {
   id: "",
   name: "",
@@ -75,6 +84,15 @@ const DOMAIN_EMPTY: DomainForm = {
   siteId: "",
   domain: "",
   active: true,
+};
+
+const SESSION_TEST_EMPTY: SessionTestState = {
+  siteId: "",
+  visitorName: "",
+  visitorEmail: "",
+  visitorPhone: "",
+  token: "",
+  result: "",
 };
 
 function canManageWebchat(role: string) {
@@ -130,6 +148,7 @@ export default function WebchatPage() {
   const [siteForm, setSiteForm] = useState(SITE_EMPTY);
   const [settingsForm, setSettingsForm] = useState(SETTINGS_EMPTY);
   const [domainForm, setDomainForm] = useState(DOMAIN_EMPTY);
+  const [sessionTest, setSessionTest] = useState(SESSION_TEST_EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -157,6 +176,7 @@ export default function WebchatPage() {
           const siteId = response.sites[0].id;
           setSettingsForm(toSettingsForm(siteId, response.settings.find((item) => item.siteId === siteId)));
           setDomainForm((prev) => ({ ...prev, siteId }));
+          setSessionTest((prev) => ({ ...prev, siteId }));
         }
       } catch (err) {
         const typed = err as AppApiError;
@@ -269,6 +289,80 @@ export default function WebchatPage() {
     }
   };
 
+  const createSession = async () => {
+    if (!session || !sessionTest.siteId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`${session.baseUrl}/webchat/v1/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: sessionTest.siteId,
+          visitor: {
+            name: sessionTest.visitorName || undefined,
+            email: sessionTest.visitorEmail || undefined,
+            phone: sessionTest.visitorPhone || undefined,
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "webchat_session_failed");
+      }
+      setSessionTest((prev) => ({
+        ...prev,
+        token: payload.token ?? "",
+        result: JSON.stringify(
+          {
+            session: payload.session,
+            visitor: payload.visitor,
+            site: payload.site,
+            tenant: payload.tenant,
+          },
+          null,
+          2
+        ),
+      }));
+      setSuccess("Sessao publica criada.");
+    } catch (err) {
+      setError((err as Error).message || "Nao foi possivel criar a sessao.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const restoreSession = async () => {
+    if (!session || !sessionTest.token.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`${session.baseUrl}/webchat/v1/session/${encodeURIComponent(sessionTest.token.trim())}`);
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "webchat_session_restore_failed");
+      }
+      setSessionTest((prev) => ({
+        ...prev,
+        result: JSON.stringify(
+          {
+            session: payload.session,
+            visitor: payload.visitor,
+            site: payload.site,
+            tenant: payload.tenant,
+          },
+          null,
+          2
+        ),
+      }));
+      setSuccess("Sessao publica recuperada.");
+    } catch (err) {
+      setError((err as Error).message || "Nao foi possivel recuperar a sessao.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!session) return <main className="min-h-screen bg-slate-950" />;
 
   return (
@@ -288,11 +382,12 @@ export default function WebchatPage() {
         </section>
 
         <section className="rounded-lg border theme-surface p-2">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {[
               ["sites", "Sites"],
               ["settings", "Configuracoes"],
               ["domains", "Dominios"],
+              ["session", "Sessao"],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -390,6 +485,36 @@ export default function WebchatPage() {
                   </ListItem>
                 );
               })}
+            </Panel>
+          </TwoColumn>
+        ) : null}
+
+        {tab === "session" ? (
+          <TwoColumn>
+            <Panel title="Teste tecnico de sessao">
+              <SelectInput
+                label="Site"
+                value={sessionTest.siteId}
+                onChange={(siteId) => setSessionTest((prev) => ({ ...prev, siteId }))}
+                options={sites.map((site) => ({ value: site.id, label: `${site.name} (${site.status})` }))}
+              />
+              <TextInput label="Nome do visitante" value={sessionTest.visitorName} onChange={(visitorName) => setSessionTest((prev) => ({ ...prev, visitorName }))} />
+              <TextInput label="Email do visitante" value={sessionTest.visitorEmail} onChange={(visitorEmail) => setSessionTest((prev) => ({ ...prev, visitorEmail }))} />
+              <TextInput label="Telefone do visitante" value={sessionTest.visitorPhone} onChange={(visitorPhone) => setSessionTest((prev) => ({ ...prev, visitorPhone }))} />
+              <button className="theme-button-primary h-10 rounded-md px-4 text-sm" disabled={saving || !sessionTest.siteId} onClick={createSession}>
+                {saving ? "Processando..." : "Criar sessao"}
+              </button>
+              <TextArea label="Token" value={sessionTest.token} onChange={(token) => setSessionTest((prev) => ({ ...prev, token }))} />
+              <button className="theme-button-secondary h-10 rounded-md px-4 text-sm" disabled={saving || !sessionTest.token.trim()} onClick={restoreSession}>
+                Recuperar sessao
+              </button>
+            </Panel>
+            <Panel title="Resultado seguro">
+              {sessionTest.result ? (
+                <pre className="max-h-96 overflow-auto rounded-md border theme-card p-3 text-xs theme-text">{sessionTest.result}</pre>
+              ) : (
+                <ListEmpty visible label="Nenhuma sessao testada." />
+              )}
             </Panel>
           </TwoColumn>
         ) : null}

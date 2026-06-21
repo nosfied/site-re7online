@@ -97,6 +97,8 @@ model Client {
   webchatSites WebchatSite[]
   webchatSettings WebchatSettings[]
   webchatAllowedDomains WebchatAllowedDomain[]
+  webchatVisitors WebchatVisitor[]
+  webchatSessions WebchatSession[]
 }
 
 model User {
@@ -1128,6 +1130,8 @@ model WebchatSite {
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   settings WebchatSettings?
   allowedDomains WebchatAllowedDomain[]
+  visitors WebchatVisitor[]
+  sessions WebchatSession[]
 
   @@unique([clientId, slug])
   @@index([clientId, status])
@@ -1169,4 +1173,51 @@ model WebchatAllowedDomain {
   @@unique([siteId, domain])
   @@index([clientId, active])
   @@index([clientId, siteId])
+}
+
+model WebchatVisitor {
+  id            String   @id @default(cuid())
+  clientId      String   @db.Uuid
+  siteId        String
+  visitorIdHash String
+  name          String?
+  email         String?
+  phone         String?
+  metadata      Json?
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site WebchatSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sessions WebchatSession[]
+
+  @@unique([siteId, visitorIdHash])
+  @@index([clientId, siteId])
+  @@index([clientId, updatedAt])
+}
+
+model WebchatSession {
+  id            String   @id @default(cuid())
+  clientId      String   @db.Uuid
+  siteId        String
+  visitorId     String
+  tokenHash     String   @unique
+  status        String   @default("active")
+  originDomain  String
+  ipHash        String?
+  userAgentHash String?
+  expiresAt     DateTime
+  lastSeenAt    DateTime @default(now())
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site WebchatSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  visitor WebchatVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, siteId, status])
+  @@index([clientId, expiresAt])
+  @@index([visitorId, status])
 }

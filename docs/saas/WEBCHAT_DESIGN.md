@@ -522,7 +522,7 @@ Nao logar:
 
 ### Sprint 73C - Webchat Schema + App Settings MVP
 
-Implementar estrutura sem runtime publico:
+Status: implementado em producao.
 
 - models `WebchatSite`, `WebchatSettings` e `WebchatAllowedDomain`;
 - migration aditiva;
@@ -532,7 +532,25 @@ Implementar estrutura sem runtime publico:
 - configuracoes iniciais de coleta/tema/mensagem de boas-vindas;
 - sem widget, iframe, snippet funcional, sessao, mensagem ou realtime.
 
-### Sprint 73D - Webchat Widget Bootstrap + Inbound MVP
+### Sprint 73D - Webchat Runtime Design
+
+Status: concluido em `docs/saas/WEBCHAT_RUNTIME_DESIGN.md`.
+
+Define sessao publica, endpoints `/webchat/v1`, identidade de visitante, entrada no inbox, estrategia de polling/SSE/WebSocket, seguranca, eventos e rollback. Nao implementa runtime.
+
+### Sprint 73E - Webchat Session Bootstrap MVP
+
+Status: implementado como runtime inicial sem mensagens.
+
+- models `WebchatVisitor` e `WebchatSession`;
+- `POST /webchat/v1/session`;
+- `GET /webchat/v1/session/:token`;
+- token de visitante gerado pelo backend e armazenado apenas como hash;
+- validacao de site ativo, feature `webchat`, dominio permitido e rate limit basico;
+- painel tecnico em `/app/webchat` para criar/restaurar sessao;
+- sem widget visual, mensagem, polling, websocket, chatbot, IA ou inbox.
+
+### Sprint 73F - Webchat Inbound Text MVP
 
 Primeiro fluxo real:
 
@@ -543,7 +561,7 @@ Primeiro fluxo real:
 - persistencia `channel=webchat`;
 - conversa aparece no inbox.
 
-### Sprint 73E - Webchat Outbound + Visitor Polling
+### Sprint 73G - Webchat Outbound + Visitor Polling
 
 Completar ponta a ponta:
 
@@ -553,7 +571,7 @@ Completar ponta a ponta:
 - expiracao de sessao;
 - eventos redigidos.
 
-### Sprint 73F - Webchat Realtime + Identification
+### Sprint 73H - Webchat Realtime + Identification
 
 Evoluir:
 
@@ -563,7 +581,7 @@ Evoluir:
 - horario/offline;
 - melhor UX mobile.
 
-### Sprint 73G - Webchat Intelligence
+### Sprint 73I - Webchat Intelligence
 
 Somente depois do E2E humano:
 

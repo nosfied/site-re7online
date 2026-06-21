@@ -1,8 +1,8 @@
-# Sprint 75A - Government Ready Review
+# Sprint 75B - Government Ready Reassessment
 
 Data: 2026-06-21
 
-Escopo: revisao consolidada de aderencia B2G apos as trilhas de Knowledge Base, Public API, Scheduling, NPS, Webchat e Telegram.
+Escopo: reavaliacao consolidada de aderencia B2G apos as entregas de Knowledge Base, Public API read-only, Scheduling, NPS/Satisfacao, Webchat schema/settings e Webchat runtime design.
 
 Nao houve alteracao de codigo, banco, migration, runtime, canais, chatbot, IA ou frontend operacional.
 
@@ -23,6 +23,7 @@ Este review consolida o estado atual documentado em:
 - `docs/saas/NPS_SATISFACTION_DESIGN.md`;
 - `docs/saas/WEBCHAT_AUDIT.md`;
 - `docs/saas/WEBCHAT_DESIGN.md`;
+- `docs/saas/WEBCHAT_RUNTIME_DESIGN.md`;
 - `docs/saas/TELEGRAM_AUDIT.md`;
 - `docs/saas/PRODUCT_MAP_CURRENT.md`.
 
@@ -40,38 +41,38 @@ A classificacao final considera aderencia tecnica, documentacao disponivel e ris
 
 ## Resumo Executivo
 
-O Converta evoluiu de uma plataforma WhatsApp-first para uma base B2G mais defensavel:
+O Converta evoluiu de uma plataforma WhatsApp-first para uma base B2G mais defensavel e demonstravel:
 
 - Knowledge Base ja possui schema/CRUD e design de runtime;
-- Public API ja possui API keys, OpenAPI inicial, health autenticado, contatos read-only e conversas read-only;
-- Scheduling ja possui schema/CRUD MVP com rollout controlado;
+- Public API ja possui API keys, OpenAPI, health autenticado, contatos, conversas e mensagens read-only;
+- Scheduling ja possui schema/CRUD MVP, lembretes manuais, scheduler shadow e design de envio controlado;
 - NPS/Satisfacao ja possui schema/CRUD MVP com rollout controlado;
-- Webchat ja possui auditoria e design;
+- Webchat ja possui schema/settings MVP, runtime design e bootstrap de sessao publica;
 - Telegram ja possui auditoria.
 
-Isso muda a leitura dos gaps: varios itens deixam de ser "nao iniciado" e passam a ser "em trilha controlada", mesmo quando ainda nao atendem funcionalmente.
+Isso muda a leitura dos gaps: Knowledge Base, Public API, Scheduling, NPS e Webchat deixam de ser lacunas absolutas. Ainda ha diferenca entre "base pronta" e "funcionalidade operacional completa", mas o risco de proposta caiu porque agora existe estrutura demonstravel e roadmap tecnico consistente.
 
-Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS com disparo automatico/relatorios, OTP, transcricao de audio, busca textual avancada ou storage de grande volume, o produto ainda precisa de implementacao adicional ou declaracao de excecao.
+Ainda assim, para editais que exigem Webchat operacional, Telegram operacional, NPS com disparo/relatorio completo, agendamento com envio real, OTP, transcricao de audio, busca textual avancada ou storage de grande volume, o produto ainda precisa de implementacao adicional ou declaracao de excecao.
 
 ## Aderencia Atual Por Edital
 
 | Edital | Classificacao atual | Aderencia atual | Leitura executiva |
 | --- | --- | ---: | --- |
-| Conselheiro Lafaiete/MG | ATENDE COM AJUSTE | 78% | Competitivo para WhatsApp, multiatendimento, chatbot, IA, SLA e relatorios; ainda exige ajuste em agendamento operacional completo, envio/relatorio de satisfacao, transcricao/busca e dossie documental. |
-| Aripuana/MT | ATENDE COM AJUSTE | 72% | Viavel com proposta tecnica controlada; risco maior em escala, storage de 600 GB, mobile nativo se exigido, multiplos canais e provas de capacidade. |
-| Cabreuva/SP | ATENDE COM AJUSTE | 83% | Forte para atendimento WhatsApp, setores, dashboard/SLA e relatorios; API publica, Scheduling MVP e Satisfaction MVP melhoram aderencia. Requer checar se exige Webchat/Telegram/NPS automatizado. |
-| Quatro Barras/PR | ATENDE COM AJUSTE | 82% | Boa aderencia para WhatsApp-first municipal, filas, historico, SLA, relatorios e POC; gaps de canais extras permanecem se forem obrigatorios. |
-| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 65% | Melhorou com API publica, KB, Scheduling e Satisfaction MVP, mas continua sendo edital-guia avancado; Webchat, Telegram, NPS automatizado, OTP e multiagentes IA podem ser bloqueadores. |
+| Conselheiro Lafaiete/MG | ATENDE COM AJUSTE | 81% | Competitivo para WhatsApp, multiatendimento, chatbot, IA, SLA, relatorios e agendamento estrutural; ainda exige ajuste em envio real de lembretes, NPS operacional/relatorio, transcricao/busca e dossie documental. |
+| Aripuana/MT | ATENDE COM AJUSTE | 74% | Viavel com proposta tecnica controlada; API read-only completa e modulos estruturais ajudam, mas escala, storage 600 GB, mobile nativo se literal, Webchat/Telegram e provas de capacidade seguem sensiveis. |
+| Cabreuva/SP | ATENDE COM AJUSTE | 86% | Forte para atendimento WhatsApp, setores, dashboard/SLA, relatorios e integracao read-only; risco fica concentrado em Webchat/Telegram/NPS automatico se forem obrigatorios. |
+| Quatro Barras/PR | ATENDE COM AJUSTE | 85% | Boa aderencia para WhatsApp-first municipal, filas, historico, SLA, relatorios, POC e API demonstravel; canais extras permanecem condicionais. |
+| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 69% | Melhorou com API publica completa em leitura, KB, Scheduling, Satisfaction e bootstrap Webchat, mas continua sendo edital-guia avancado; Webchat/Telegram operacionais, NPS automatico, OTP e multiagentes IA ainda podem bloquear. |
 
 ## Comparativo De Evolucao
 
 | Edital | Leitura anterior | Leitura atual | Motivo da mudanca |
 | --- | ---: | ---: | --- |
-| Conselheiro Lafaiete/MG | 72% B2G / 61% tecnico no BID | 78% | Scheduling e Satisfaction sairam de lacuna absoluta para MVP estrutural; API e KB mais maduras. |
-| Aripuana/MT | 76% B2G / 50% tecnico no BID | 72% | Evoluiu em API/Scheduling, mas a ponderacao atual penaliza escala, storage e canais obrigatorios. |
-| Cabreuva/SP | 75% | 83% | Public API, Scheduling e Satisfaction reduzem lacunas recorrentes; perfil WhatsApp/SLA continua favoravel. |
-| Quatro Barras/PR | 76% | 82% | Mesmo ganho de Cabreuva em documentacao/produto, com baixo risco se WhatsApp-first. |
-| Sao Jose do Rio Preto/SP | 55% | 65% | API publica, KB, Scheduling e Satisfaction melhoraram a base; canais Webchat/Telegram e NPS automatizado ainda pesam. |
+| Conselheiro Lafaiete/MG | 78% na 75A | 81% | Scheduling ganhou lembretes manuais/shadow e design de envio; NPS ja tem MVP estrutural; API publica ficou mais completa. |
+| Aripuana/MT | 72% na 75A | 74% | API com mensagens read-only e Webchat melhor governado reduzem risco tecnico, mas escala/storage/mobile ainda limitam a nota. |
+| Cabreuva/SP | 83% na 75A | 86% | Public API read-only completa e modulos B2G estruturais fortalecem demonstracao; perfil WhatsApp/SLA continua favoravel. |
+| Quatro Barras/PR | 82% na 75A | 85% | Ganho semelhante a Cabreuva, principalmente em integracao, agendamento estrutural e NPS estrutural. |
+| Sao Jose do Rio Preto/SP | 65% na 75A | 69% | Evoluiu em API, Scheduling, NPS e bootstrap Webchat, mas o edital-guia continua exigindo canais e automacoes ainda nao operacionais. |
 
 ## Matriz Consolidada De Requisitos
 
@@ -87,10 +88,10 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | Chatbot | ATENDE | Alto | Fluxos configuraveis por tenant. |
 | IA supervisionada | ATENDE COM AJUSTE | Medio/alto | Config DB-first; multiagentes formais ainda nao. |
 | Base de conhecimento | ATENDE COM AJUSTE | Medio/alto | Schema/CRUD em producao; runtime IA/chatbot ainda desenhado, nao ligado. |
-| Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks/escrita/campanhas. |
-| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes, scheduler shadow de elegibilidade e design de envio controlado; faltam chatbot/IA, envio real de lembretes, calendar e API publica. |
+| Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks outbound, escrita controlada e campanhas. |
+| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes, scheduler shadow de elegibilidade e design de envio controlado; faltam envio real de lembretes, chatbot/IA, calendar e API publica. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD MVP em `/app/satisfaction`; falta disparo automatico/manual por conversa, link publico e relatorio NPS/CSAT. |
-| Webchat | ATENDE COM AJUSTE | Alto quando exigido | Schema/settings MVP em `/app/webchat` com feature `webchat`; falta widget publico, sessao, persistencia no inbox e runtime. |
+| Webchat | ATENDE COM AJUSTE | Alto quando exigido | Schema/settings MVP, runtime design e bootstrap de sessao publica; falta widget publico, mensagens, persistencia no inbox e atendimento E2E. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |
 | Relatorios | ATENDE | Alto | Reports operacionais e export. |
 | Dashboard | ATENDE COM AJUSTE | Medio | Operacional; nao e BI completo. |
@@ -109,11 +110,11 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 
 | Gap | Status | Impacto | Bloqueia participacao? | Observacao |
 | --- | --- | --- | --- | --- |
-| NPS/Satisfacao funcional | MVP estrutural em producao | Alto em editais com pesquisa pos-atendimento | Pode bloquear se requisito exigir disparo/relatorio completo imediato | Proxima fase: envio manual/automatico e relatorio NPS/CSAT. |
-| Webchat funcional | Schema/settings MVP | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget publico, sessao, persistencia no inbox e atendimento E2E. |
+| NPS/Satisfacao funcional | MVP estrutural em producao | Alto em editais com pesquisa pos-atendimento | Pode bloquear se requisito exigir disparo/relatorio completo imediato | Proxima fase: disparo manual/automatico por encerramento e relatorio NPS/CSAT. |
+| Webchat funcional | Schema/settings + session bootstrap | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget publico, mensagens, persistencia no inbox e atendimento E2E. |
 | Telegram funcional | Audit concluida | Alto quando exigido | Sim, se Telegram for obrigatorio | Ainda falta design antes de implementar. |
-| Public API webhooks/escrita | MVP read-only em producao | Alto se exigir integracao completa | Geralmente nao bloqueia se leitura de contatos/conversas/mensagens bastar; bloqueia se exigir eventos outbound ou escrita | Proxima etapa natural: webhooks outbound. |
-| Scheduling runtime/lembretes | MVP estrutural + lembretes manuais | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Proxima fase: scheduler shadow, depois envio controlado por tenant. |
+| Public API webhooks/escrita | MVP read-only completo em producao | Alto se exigir integracao completa | Geralmente nao bloqueia se leitura de contatos/conversas/mensagens bastar; bloqueia se exigir eventos outbound ou escrita | Proxima etapa natural: webhooks outbound. |
+| Scheduling runtime/lembretes | MVP estrutural + lembretes manuais + scheduler shadow | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Proxima fase: envio controlado por tenant. |
 | KB runtime IA/chatbot | CRUD em producao, runtime desenhado | Medio/alto | Nao costuma bloquear participacao; limita demonstracao de IA com base formal | Fazer shadow antes de resposta real. |
 | Auditoria formal para cliente | Parcial | Medio/alto | Raramente bloqueia habilitacao, mas fortalece proposta | Criar tela/report de eventos. |
 | XLSX nativo | Parcial | Medio | Pode ser ajuste simples se edital exigir Excel literal | CSV/PDF ja reduzem risco. |
@@ -125,9 +126,9 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 
 ### P0 - Melhor retorno imediato para edital
 
-1. **NPS/Satisfacao 72D/72E**: envio manual/automatico e relatorio NPS/CSAT.
-2. **Public API 70G**: webhooks outbound, se o edital exigir eventos externos em tempo real.
-3. **Scheduling 71F**: scheduler shadow para lembretes, ainda sem envio automatico.
+1. **NPS/Satisfacao 72D/72E**: disparo por encerramento, link publico e relatorio NPS/CSAT.
+2. **Scheduling 71H**: envio controlado de lembretes por tenant, com template e rollback.
+3. **Public API 70G**: webhooks outbound, se o edital exigir eventos externos em tempo real.
 4. **Relatorio licitatorio consolidado**: PDF/CSV/XLSX se exigido.
 
 Motivo: alto impacto, escopo controlado, baixo risco comparado a novo canal.
@@ -143,7 +144,7 @@ Motivo: aumenta maturidade e prova, sem abrir novos canais.
 
 ### P2 - Canais novos
 
-1. **Webchat 73C/73D/73E**: schema/settings, inbound, outbound.
+1. **Webchat 73E/73F/73G**: sessao publica/bootstrap, inbound e outbound por polling.
 2. **Telegram 74B/74C/74D/74E**: design, config, inbound, outbound.
 
 Motivo: alto impacto, mas alto risco. Devem vir depois dos modulos menores que aumentam aderencia rapidamente.
@@ -178,7 +179,9 @@ Estes itens ja podem ser tratados como atendidos ou atendiveis com configuracao/
 - contatos via Public API;
 - conversas e mensagens read-only via Public API;
 - Knowledge Base estrutural;
-- Scheduling estrutural.
+- Scheduling estrutural;
+- NPS/Satisfacao estrutural;
+- Webchat schema/settings e session bootstrap.
 
 ## Itens Que Ainda Podem Bloquear Se Forem Obrigatorios
 
@@ -201,7 +204,7 @@ Estes itens ja podem ser tratados como atendidos ou atendiveis com configuracao/
 
 Classificacao: **ATENDE COM AJUSTE**.
 
-Aderencia: **76%**.
+Aderencia atual: **81%**.
 
 Pontos fortes:
 
@@ -211,12 +214,15 @@ Pontos fortes:
 - IA;
 - relatorios;
 - SLA;
+- API publica read-only;
+- agendamento estrutural;
+- NPS estrutural.
 - historico.
 
 Gaps principais:
 
-- satisfacao/NPS funcional;
-- agendamento automatico completo;
+- satisfacao/NPS funcional com disparo e relatorio;
+- agendamento automatico completo com envio real;
 - transcricao de audio;
 - busca textual avancada;
 - dossie documental/atestados.
@@ -227,7 +233,7 @@ Decisao: participacao e defensavel se o edital permitir entrega/implantacao com 
 
 Classificacao: **ATENDE COM AJUSTE**.
 
-Aderencia: **72%**.
+Aderencia atual: **74%**.
 
 Pontos fortes:
 
@@ -237,14 +243,15 @@ Pontos fortes:
 - Instagram ja validado em producao;
 - relatorios/dashboard;
 - campanhas/templates;
-- governanca multi-tenant.
+- governanca multi-tenant;
+- API publica read-only completa.
 
 Gaps principais:
 
 - escala 400 usuarios e 30 WhatsApps precisa prova;
 - 600 GB midia requer plano de storage;
 - app mobile nativo pode ser problema se PWA nao bastar;
-- Webchat/Telegram/NPS/OTP nao funcionais;
+- Webchat/Telegram/NPS automatico/OTP nao funcionais;
 - ambiente EAD nao existe.
 
 Decisao: viavel somente com proposta tecnica conservadora, precificacao de infra e esclarecimentos sobre mobile/storage/garantia.
@@ -253,13 +260,13 @@ Decisao: viavel somente com proposta tecnica conservadora, precificacao de infra
 
 Classificacao: **ATENDE COM AJUSTE**.
 
-Aderencia: **82%**.
+Aderencia atual: **86%**.
 
 Pontos fortes:
 
 - perfil WhatsApp-first favorece o produto;
 - setores, SLA, reports e dashboard estao fortes;
-- Public API e Scheduling MVP reduzem lacunas.
+- Public API read-only completa, Scheduling MVP e NPS MVP reduzem lacunas.
 
 Gaps principais:
 
@@ -273,12 +280,13 @@ Decisao: bom alvo para proposta, desde que o TR nao exija canais fora da Meta co
 
 Classificacao: **ATENDE COM AJUSTE**.
 
-Aderencia: **82%**.
+Aderencia atual: **85%**.
 
 Pontos fortes:
 
 - WhatsApp, atendimento humano, filas, historico e relatorios;
 - POC demonstravel;
+- Public API demonstravel;
 - profile government e feature flags.
 
 Gaps principais:
@@ -293,14 +301,16 @@ Decisao: bom alvo para edital WhatsApp/SLA/relatorios; risco sobe se exigir Webc
 
 Classificacao: **ATENDE COM AJUSTE**.
 
-Aderencia: **63%**.
+Aderencia atual: **69%**.
 
 Pontos fortes:
 
 - core de atendimento e governanca;
-- Public API inicial;
+- Public API read-only completa;
 - Knowledge Base estrutural;
 - Scheduling estrutural;
+- NPS estrutural;
+- Webchat session bootstrap;
 - Instagram/Messenger/WhatsApp operacionais.
 
 Gaps principais:
@@ -318,15 +328,15 @@ Decisao: ainda nao e o melhor primeiro alvo se o edital exigir a pilha completa.
 
 ## Recomendacao Final
 
-O Converta esta em estado **Government Ready v0.8** para editais WhatsApp-first e **Government Ready v0.6** para editais multicanal avancados.
+O Converta esta em estado **Government Ready v0.85** para editais WhatsApp-first e **Government Ready v0.68** para editais multicanal avancados.
 
 Proxima etapa recomendada:
 
-1. concluir NPS/Satisfacao funcional;
-2. expandir Public API para conversas;
-3. evoluir Scheduling com lembretes;
-4. preparar relatorio/dossie licitatorio;
-5. so entao iniciar Webchat runtime;
+1. concluir NPS/Satisfacao funcional com disparo, link publico e relatorio;
+2. evoluir Scheduling para envio controlado de lembretes;
+3. adicionar webhooks outbound na Public API se o edital exigir eventos em tempo real;
+4. preparar relatorio/dossie licitatorio com evidencias de API, LGPD, SLA e Meta Oficial;
+5. continuar Webchat runtime em fases pequenas;
 6. desenhar Telegram antes de qualquer implementacao.
 
-Com isso, a versao **Government Ready v1** ficaria bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, e canais adicionais com roadmap claro.
+Com isso, a versao **Government Ready v1** ficaria bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, Webchat em E2E humano e Telegram com roadmap claro.

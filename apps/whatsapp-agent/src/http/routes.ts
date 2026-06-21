@@ -171,6 +171,10 @@ import {
   upsertWebchatSettings,
 } from "../webchat/webchatService.js";
 import {
+  createWebchatSession,
+  restoreWebchatSession,
+} from "../webchat/webchatSessionService.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -293,6 +297,12 @@ function normalizeConversationRouteId(input: string) {
   return normalizeWaId(raw);
 }
 
+function getRequestOrigin(req: IncomingMessage) {
+  const origin = req.headers.origin;
+  if (Array.isArray(origin)) return origin[0] ?? null;
+  return origin ?? null;
+}
+
 export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   const url = req.url ?? "/";
   const requestId = crypto.randomUUID();
@@ -307,6 +317,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "GET" && pathname === "/") {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("whatsapp-agent running");
+    return;
+  }
+
+  if (pathname.startsWith("/webchat/v1/")) {
+    const prisma = getPrisma();
+    if (req.method === "POST" && pathname === "/webchat/v1/session") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await createWebchatSession({
+        prisma,
+        requestId,
+        input: body,
+        origin: getRequestOrigin(req),
+        ip: getRequestIp(req) ?? "unknown",
+        userAgent: getUserAgent(req),
+      });
+      if (!result.ok) {
+        const status = webchatRuntimeErrorStatus(result.error);
+        if (result.error === "webchat_rate_limited" && "retryAfterSec" in result) {
+          res.setHeader("Retry-After", String(result.retryAfterSec));
+        }
+        json(res, status, {
+          ok: false,
+          error: result.error,
+          requestId,
+          ...(result.error === "webchat_rate_limited" && "retryAfterSec" in result
+            ? { retryAfterSec: result.retryAfterSec }
+            : {}),
+        });
+        return;
+      }
+      json(res, 201, result);
+      return;
+    }
+    const webchatSessionMatch = pathname.match(/^\/webchat\/v1\/session\/([^/]+)$/);
+    if (req.method === "GET" && webchatSessionMatch) {
+      const result = await restoreWebchatSession({
+        prisma,
+        requestId,
+        token: decodeURIComponent(webchatSessionMatch[1] ?? ""),
+        origin: getRequestOrigin(req),
+        ip: getRequestIp(req) ?? "unknown",
+      });
+      if (!result.ok) {
+        const status = webchatRuntimeErrorStatus(result.error);
+        if (result.error === "webchat_rate_limited" && "retryAfterSec" in result) {
+          res.setHeader("Retry-After", String(result.retryAfterSec));
+        }
+        json(res, status, {
+          ok: false,
+          error: result.error,
+          requestId,
+          ...(result.error === "webchat_rate_limited" && "retryAfterSec" in result
+            ? { retryAfterSec: result.retryAfterSec }
+            : {}),
+        });
+        return;
+      }
+      json(res, 200, result);
+      return;
+    }
+    json(res, 404, { ok: false, error: "webchat_endpoint_not_found", requestId });
     return;
   }
 
@@ -16329,6 +16401,22 @@ function schedulingResponseValue(result: Record<string, unknown>) {
 
 function webchatErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
+}
+
+function webchatRuntimeErrorStatus(error: string) {
+  if (error === "webchat_rate_limited") return 429;
+  if (error === "webchat_session_not_found" || error === "webchat_site_not_found") return 404;
+  if (
+    error === "webchat_origin_not_allowed" ||
+    error === "webchat_site_inactive" ||
+    error === "webchat_session_inactive" ||
+    error === "feature_not_enabled" ||
+    error === "client_inactive"
+  ) {
+    return 403;
+  }
+  if (error === "webchat_session_expired") return 401;
+  return 400;
 }
 
 function webchatResponseKey(entity: "sites" | "settings" | "domains") {
