@@ -44,7 +44,7 @@ Tratamento esperado:
 
 ## Integracoes Externas
 
-O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria e health autenticado. Nesta fase, a API publica ainda nao expoe contatos, conversas ou mensagens como contrato externo completo.
+O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria, rate limit, health autenticado e leitura basica de contatos. Nesta fase, a API publica ainda nao expoe conversas, mensagens, campanhas, escrita ou webhooks outbound como contrato externo completo.
 
 Para integracoes com sistemas terceiros, recomenda-se especificar em projeto:
 
@@ -74,7 +74,7 @@ Essas integracoes devem ser tratadas como escopo especifico, com contrato de API
 
 ## Premissas
 
-- O Converta possui base tecnica para APIs, mas API publica para terceiros deve ser documentada por contrato.
+- O Converta possui base tecnica para APIs e contrato OpenAPI inicial para health e contatos.
 - A exposicao de dados operacionais por API publica deve passar por escopos, rate limit, auditoria e validacao LGPD.
 - Integracoes novas exigem levantamento, seguranca, homologacao e testes.
 - Tokens e credenciais de integracao nunca devem ser expostos em UI, logs ou documentacao publica.

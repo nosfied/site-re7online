@@ -220,6 +220,10 @@ import {
   revokePublicApiKey,
 } from "../publicApi/publicApiKeyService.js";
 import {
+  getPublicContact,
+  listPublicContacts,
+} from "../publicApi/publicApiContactsService.js";
+import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
   resolveInstagramOutboundGate,
@@ -350,6 +354,173 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           status: "active",
         },
       });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/public-api/v1/contacts") {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read", "contacts"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      const result = await listPublicContacts({
+        prisma,
+        clientId: authResult.auth.clientId,
+        query: {
+          phone: typeof query.phone === "string" ? query.phone : null,
+          name: typeof query.name === "string" ? query.name : null,
+          updatedSince: typeof query.updatedSince === "string" ? query.updatedSince : null,
+          cursor: typeof query.cursor === "string" ? query.cursor : null,
+          limit: typeof query.limit === "string" ? query.limit : null,
+        },
+      });
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.contacts.listed",
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          count: result.data.length,
+        },
+      });
+      json(res, 200, result);
+      return;
+    }
+    const publicContactDetailMatch = pathname.match(/^\/public-api\/v1\/contacts\/([^/]+)$/);
+    if (req.method === "GET" && publicContactDetailMatch) {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read", "contacts"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      const contact = await getPublicContact({
+        prisma,
+        clientId: authResult.auth.clientId,
+        contactId: decodeURIComponent(publicContactDetailMatch[1] ?? ""),
+      });
+      if (!contact) {
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.denied",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            reason: "contact_not_found",
+          },
+        });
+        json(res, 404, {
+          error: {
+            code: "not_found",
+            message: "Contact not found.",
+            requestId,
+          },
+        });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.contacts.read",
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          contactId: contact.id,
+        },
+      });
+      json(res, 200, { data: contact });
       return;
     }
     json(res, 404, {

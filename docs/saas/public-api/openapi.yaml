@@ -1,0 +1,287 @@
+openapi: 3.1.0
+info:
+  title: Converta Public API
+  version: 1.0.0
+  summary: API publica tenant-scoped do Converta.
+  description: >
+    API publica inicial do Converta. A versao atual expoe health autenticado e leitura
+    minima de contatos. Escrita, mensagens, campanhas e webhooks outbound ficam fora
+    deste MVP.
+servers:
+  - url: https://converta.re7online.com/public-api/v1
+    description: Producao via dominio principal
+  - url: https://converta.re7online.com/agent-api/public-api/v1
+    description: Producao via prefixo do backend
+security:
+  - bearerApiKey: []
+tags:
+  - name: Health
+  - name: Contacts
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Valida a API key e retorna estado basico da API publica.
+      operationId: getPublicApiHealth
+      security:
+        - bearerApiKey: []
+      responses:
+        "200":
+          description: API key valida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: Lista contatos do tenant da API key.
+      operationId: listContacts
+      security:
+        - bearerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtro seguro por digitos do telefone/identificador interno do contato.
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Busca parcial por nome.
+        - name: updatedSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Retorna contatos atualizados a partir da data informada.
+      responses:
+        "200":
+          description: Lista paginada de contatos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /contacts/{id}:
+    get:
+      tags: [Contacts]
+      summary: Retorna um contato do tenant da API key.
+      operationId: getContact
+      security:
+        - bearerApiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID publico do contato.
+      responses:
+        "200":
+          description: Contato encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+components:
+  securitySchemes:
+    bearerApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: Converta API Key
+      description: API key criada em `/app/api-keys`.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+      description: Quantidade maxima de itens por pagina.
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Cursor opaco retornado pela pagina anterior.
+  responses:
+    Unauthorized:
+      description: API key ausente ou invalida.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: API key revogada, expirada, sem escopo ou tenant inativo.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Recurso nao encontrado no tenant da API key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Limite de requisicoes excedido.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Segundos ate nova tentativa recomendada.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok, service, version, tenant, apiKey]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        service:
+          type: string
+          example: converta-public-api
+        version:
+          type: string
+          example: v1
+        tenant:
+          type: object
+          required: [id, key, name]
+          properties:
+            id:
+              type: string
+            key:
+              type: string
+            name:
+              type: string
+        apiKey:
+          type: object
+          required: [id, keyPrefix, scopes, status]
+          properties:
+            id:
+              type: string
+            keyPrefix:
+              type: string
+              example: cvt_live_abcd1234
+            scopes:
+              type: array
+              items:
+                type: string
+            status:
+              type: string
+              example: active
+    PublicContact:
+      type: object
+      required: [id, name, phone, channel, createdAt, updatedAt, lastConversationAt, leadStatus, tags]
+      properties:
+        id:
+          type: string
+        name:
+          type:
+            - string
+            - "null"
+        phone:
+          type:
+            - string
+            - "null"
+          description: Telefone/identificador mascarado para reduzir exposicao de PII.
+          example: 5584****1234
+        channel:
+          type: string
+          example: whatsapp
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastConversationAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        leadStatus:
+          type:
+            - string
+            - "null"
+          example: NEW
+        tags:
+          type: array
+          items:
+            type: string
+    ContactsListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicContact"
+        page:
+          type: object
+          required: [nextCursor, hasMore, limit]
+          properties:
+            nextCursor:
+              type:
+                - string
+                - "null"
+            hasMore:
+              type: boolean
+            limit:
+              type: integer
+    ContactResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/PublicContact"
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              type: string
+              example: forbidden
+            message:
+              type: string
+              example: Insufficient scope.
+            requestId:
+              type: string

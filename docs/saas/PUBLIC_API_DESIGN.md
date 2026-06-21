@@ -689,18 +689,32 @@ Sprint 70C implementa apenas a fundacao segura:
 - auditoria `api.request`, `api.denied`, `api.rate_limited`, `api.key.created`, `api.key.revoked`;
 - `GET /public-api/v1/health`.
 
-Ainda ficam fora da 70C:
+Sprint 70D amplia a API publica com o primeiro endpoint de negocio somente leitura:
 
-- contacts;
+- `GET /public-api/v1/contacts`;
+- `GET /public-api/v1/contacts/{id}`;
+- OpenAPI inicial em `docs/saas/public-api/openapi.yaml`;
+- DTO publico minimo para contato:
+  - `id`;
+  - `name`;
+  - `phone` mascarado;
+  - `channel`;
+  - `createdAt`;
+  - `updatedAt`;
+  - `lastConversationAt`;
+  - `leadStatus`;
+  - `tags`.
+
+Ainda ficam fora apos 70D:
+
 - conversations;
 - messages;
 - campaigns;
 - webhooks outbound;
-- OpenAPI completo;
 - escrita publica.
 
-Proxima sprint recomendada apos 70C: **Sprint 70D - Read-only Public API MVP**, ainda podendo ser dividida em:
+Proxima sprint recomendada apos 70D: **Sprint 70E - Conversations Read MVP**, ainda sem escrita:
 
-1. contacts read-only;
-2. conversations/messages read-only;
-3. OpenAPI e exemplos.
+1. conversations read-only;
+2. messages read-only por conversa;
+3. exemplos de integracao e erros.

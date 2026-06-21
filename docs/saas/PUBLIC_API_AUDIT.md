@@ -2,23 +2,25 @@
 
 Data: 2026-06-20
 
-Escopo: auditoria documental baseada no codigo atual. Nao houve alteracao de runtime, banco, canais, rotas ou autenticacao.
+Escopo: auditoria documental baseada no codigo atual. Documento atualizado apos as Sprints 70C/70D para refletir a API publica inicial.
 
 ## Resumo executivo
 
 O Converta possui uma base robusta de APIs internas para o aplicativo, console administrativo, webhooks Meta e realtime do inbox. Essa base e suficiente para operar o produto e pode ser reaproveitada para desenhar uma API publica.
 
-Ainda nao existe, porem, uma API publica formal de integracao externa. O estado atual e **PARCIAL**:
+Ja existe uma API publica inicial de integracao externa. O estado atual e **PARCIAL**:
 
 - existe API REST interna tenant-scoped em `/app/*`;
 - existe API administrativa em `/admin/*`;
 - existe webhook inbound Meta em `/webhook`;
 - existe WebSocket autenticado para realtime em `/app/realtime`;
-- nao foi encontrado namespace publico versionado, como `/public-api/v1`;
-- nao foi encontrado contrato OpenAPI/Swagger;
-- nao foi encontrado modelo de API key/scopes por integracao externa;
+- existe namespace publico versionado `/public-api/v1`;
+- existe contrato OpenAPI inicial em `docs/saas/public-api/openapi.yaml`;
+- existe modelo de API key/scopes por integracao externa;
+- existe `GET /public-api/v1/health`;
+- existe leitura basica de contatos em `GET /public-api/v1/contacts` e `GET /public-api/v1/contacts/{id}`;
 - nao foi encontrado webhook outbound para sistemas de clientes;
-- nao foi encontrada politica publica de rate limit, idempotencia, versionamento e auditoria por integracao.
+- nao ha escrita publica, mensagens, campanhas ou conversas no contrato publico atual.
 
 Recomendacao: nao expor `/app` nem `/admin` como API publica. O caminho correto e criar uma camada publica versionada, com autenticacao propria, scopes, rate limit, OpenAPI e DTOs estaveis, reaproveitando os services e contratos internos com adaptadores.
 
@@ -34,7 +36,7 @@ Recomendacao: nao expor `/app` nem `/admin` como API publica. O caminho correto 
 | Realtime | `apps/whatsapp-agent/src/realtime/websocket.ts` | WebSocket autenticado em `/app/realtime` e `/agent-api/app/realtime` |
 | Webhook Meta | `apps/whatsapp-agent/src/http/routes.ts`, `apps/whatsapp-agent/src/http/metaWebhookPassive.ts` | Recebimento externo Meta, com assinatura em producao |
 | Docs existentes | `docs/saas/GAP_REUSE_AUDIT.md`, `docs/saas/bid-package/12-integracoes.md` | Documentam gap de API publica e integracoes |
-| OpenAPI/Swagger | Busca por `openapi`/`swagger` | Nao foi encontrado contrato formal de API publica |
+| OpenAPI/Swagger | `docs/saas/public-api/openapi.yaml` | Contrato inicial para health e contacts read-only |
 
 ## Superficies de API existentes
 
@@ -133,17 +135,15 @@ Pode ser reaproveitado conceitualmente para eventos de API publica, mas a recome
 
 ## OpenAPI / Swagger
 
-Classificacao: **NAO ATENDE**
+Classificacao: **ATENDE PARCIALMENTE**
 
-Nao foi encontrado arquivo OpenAPI/Swagger ou rota de documentacao publica de API.
+Existe OpenAPI inicial em `docs/saas/public-api/openapi.yaml`, cobrindo auth Bearer, health autenticado e leitura de contatos. Ainda falta guia humano de integracao, exemplos, changelog e expansao para conversas/mensagens/webhooks.
 
 Para licitacoes e integracoes profissionais, o Converta deve criar:
 
-- `docs/api/openapi.yaml` ou `docs/saas/public-api/openapi.yaml`;
 - documentacao humana com exemplos;
 - politica de autenticacao;
 - convencao de erros;
-- versionamento `/public-api/v1`;
 - changelog de API.
 
 ## Integracoes suportadas hoje
@@ -180,24 +180,25 @@ Para licitacoes e integracoes profissionais, o Converta deve criar:
 | Requisito de API publica | Classificacao | Aderencia | Evidencia | Gap principal |
 | --- | --- | ---: | --- | --- |
 | API REST existente | PARCIAL | 55% | `/app/*`, `/admin/*` | Falta camada publica versionada |
-| API publica versionada | NAO ATENDE | 0% | Nao encontrado `/public-api/v1` | Criar namespace e contrato |
-| Autenticacao para integracao | PARCIAL | 35% | App session/admin token | Criar API keys/scopes por tenant |
+| API publica versionada | ATENDE PARCIALMENTE | 65% | `/public-api/v1` | Expandir contrato para conversas/mensagens/webhooks |
+| Autenticacao para integracao | ATENDE | 90% | `PublicApiKey`, hash-only, scopes e revoke | Refinar tela/rotação/expiração |
 | Webhooks inbound | ATENDE | 90% | `/webhook` Meta | Inbound e fornecedor-especifico |
 | Webhooks outbound | NAO ATENDE | 0% | Nao encontrado | Criar eventos assinados |
-| OpenAPI/Swagger | NAO ATENDE | 0% | Busca sem resultado | Criar especificacao |
-| Rate limit publico | PARCIAL | 30% | Infra HTTP existente | Rate por API key/integracao |
-| Auditoria por integracao | PARCIAL | 40% | Logs/eventos internos | Criar audit trail de API publica |
+| OpenAPI/Swagger | ATENDE PARCIALMENTE | 65% | `docs/saas/public-api/openapi.yaml` | Adicionar examples/changelog e futuros endpoints |
+| Rate limit publico | ATENDE PARCIALMENTE | 70% | Rate limit basico por API key | Evoluir para quotas por plano e janelas configuraveis |
+| Auditoria por integracao | ATENDE PARCIALMENTE | 70% | Eventos `api.request`, `api.denied`, `api.rate_limited` | Tela/relatorio de auditoria publico |
 | Multi-tenant isolation | ATENDE PARCIALMENTE | 80% | Client/session/RBAC existentes | Formalizar no middleware publico |
 | LGPD/PII controls | PARCIAL | 60% | Retencao, anonimizar, redaction | Definir minimizacao por endpoint |
 | Idempotencia | NAO ATENDE | 0% | Nao encontrado contrato | Obrigatorio para escrita |
 | Documentacao de integracao | PARCIAL | 40% | bid package/docs saas | Falta guia developer |
 
-Aderencia consolidada estimada para "API publica": **39%**.
+Aderencia consolidada estimada para "API publica": **58%**.
 
 Interpretação:
 
 - Para edital que aceita API interna/sistema integravel de forma generica: **ATENDE PARCIALMENTE**.
-- Para edital que exige API publica documentada, OpenAPI, chaves de acesso e webhooks: **NAO ATENDE** no formato atual.
+- Para edital que exige API publica documentada, OpenAPI, chaves de acesso e leitura basica de contatos: **ATENDE PARCIALMENTE** no formato atual.
+- Para edital que exige webhooks outbound, conversas, mensagens, campanhas ou escrita por API: **NAO ATENDE** no formato atual.
 
 ## Riscos
 
@@ -261,15 +262,22 @@ Escopo seguro:
 
 Nao incluir contatos, conversas, mensagens nem envio neste primeiro passo.
 
-### Sprint 70D - Read-only Public API MVP
+### Sprint 70D - Public API OpenAPI + Contacts Read MVP
 
 Escopo seguro:
 
 - `GET /public-api/v1/contacts`;
-- `GET /public-api/v1/conversations`;
-- `GET /public-api/v1/conversations/{id}`;
-- `GET /public-api/v1/conversations/{id}/messages`;
-- OpenAPI e exemplos.
+- `GET /public-api/v1/contacts/{id}`;
+- OpenAPI inicial em `docs/saas/public-api/openapi.yaml`;
+- DTO publico minimo, com telefone mascarado e sem mensagens/notas internas.
+
+Ficam fora da 70D:
+
+- conversations;
+- messages;
+- campaigns;
+- escrita publica;
+- webhooks outbound.
 
 ### Sprint 70E - Webhooks outbound
 
@@ -309,16 +317,16 @@ Envio de mensagens deve exigir:
 
 ## Decisao de produto
 
-O Converta deve posicionar a API publica como "em construcao/MVP planejado" ate concluir pelo menos 70B/70C.
+O Converta deve posicionar a API publica como **MVP read-only em evolucao** apos 70D.
 
 Para licitacoes:
 
 - se o requisito for "possuir integracoes com API oficial Meta": **ATENDE**;
-- se o requisito for "possuir API para integracao externa documentada": **ATENDE PARCIALMENTE**;
-- se o requisito exigir OpenAPI, token por cliente, webhooks de saida e endpoints publicos estaveis: **NAO ATENDE** hoje.
+- se o requisito for "possuir API para integracao externa documentada com leitura de contatos": **ATENDE PARCIALMENTE**;
+- se o requisito exigir conversas, mensagens, webhooks de saida, escrita ou automacoes via API: **NAO ATENDE** hoje.
 
 ## Conclusao
 
-Existe fundacao tecnica suficiente para uma API publica profissional, mas ela ainda nao deve ser declarada como pronta. O produto precisa de uma camada publica propria, separada das rotas internas, para preservar seguranca, multi-tenancy, LGPD, estabilidade de contrato e governanca de integracoes.
+Existe fundacao tecnica suficiente para uma API publica profissional, e a camada publica propria ja existe para health autenticado e leitura basica de contatos. Ela ainda nao deve ser declarada como API completa de integracao operacional, porque conversas, mensagens, escrita e webhooks outbound seguem fora do contrato publico.
 
-Proxima sprint recomendada: **Sprint 70B - Public API Design**.
+Proxima sprint recomendada: **Sprint 70E - Public API Conversations Read Design/MVP**, mantendo leitura antes de qualquer escrita.
