@@ -44,7 +44,7 @@ Tratamento esperado:
 
 ## Integracoes Externas
 
-O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria, rate limit, health autenticado, leitura basica de contatos e leitura resumida de conversas. Nesta fase, a API publica ainda nao expoe mensagens, campanhas, escrita ou webhooks outbound como contrato externo completo.
+O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria, rate limit, health autenticado, leitura basica de contatos, leitura resumida de conversas e leitura paginada de mensagens normalizadas. Nesta fase, a API publica ainda nao expoe campanhas, escrita ou webhooks outbound como contrato externo completo.
 
 Para integracoes com sistemas terceiros, recomenda-se especificar em projeto:
 

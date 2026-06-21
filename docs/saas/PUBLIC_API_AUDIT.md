@@ -2,7 +2,7 @@
 
 Data: 2026-06-20
 
-Escopo: auditoria documental baseada no codigo atual. Documento atualizado apos as Sprints 70C/70D para refletir a API publica inicial.
+Escopo: auditoria documental baseada no codigo atual. Documento atualizado apos as Sprints 70C/70D/70E/70F para refletir a API publica inicial.
 
 ## Resumo executivo
 
@@ -20,8 +20,9 @@ Ja existe uma API publica inicial de integracao externa. O estado atual e **PARC
 - existe `GET /public-api/v1/health`;
 - existe leitura basica de contatos em `GET /public-api/v1/contacts` e `GET /public-api/v1/contacts/{id}`;
 - existe leitura resumida de conversas em `GET /public-api/v1/conversations` e `GET /public-api/v1/conversations/{id}`;
+- existe leitura paginada de mensagens normalizadas em `GET /public-api/v1/conversations/{id}/messages`;
 - nao foi encontrado webhook outbound para sistemas de clientes;
-- nao ha escrita publica, mensagens, campanhas ou webhooks outbound no contrato publico atual.
+- nao ha escrita publica, campanhas ou webhooks outbound no contrato publico atual.
 
 Recomendacao: nao expor `/app` nem `/admin` como API publica. O caminho correto e criar uma camada publica versionada, com autenticacao propria, scopes, rate limit, OpenAPI e DTOs estaveis, reaproveitando os services e contratos internos com adaptadores.
 
@@ -138,7 +139,7 @@ Pode ser reaproveitado conceitualmente para eventos de API publica, mas a recome
 
 Classificacao: **ATENDE PARCIALMENTE**
 
-Existe OpenAPI inicial em `docs/saas/public-api/openapi.yaml`, cobrindo auth Bearer, health autenticado e leitura de contatos. Ainda falta guia humano de integracao, exemplos, changelog e expansao para conversas/mensagens/webhooks.
+Existe OpenAPI inicial em `docs/saas/public-api/openapi.yaml`, cobrindo auth Bearer, health autenticado e leitura de contatos, conversas e mensagens normalizadas. Ainda falta guia humano de integracao, exemplos, changelog, webhooks outbound e endpoints de escrita controlada.
 
 Para licitacoes e integracoes profissionais, o Converta deve criar:
 
@@ -180,12 +181,12 @@ Para licitacoes e integracoes profissionais, o Converta deve criar:
 
 | Requisito de API publica | Classificacao | Aderencia | Evidencia | Gap principal |
 | --- | --- | ---: | --- | --- |
-| API REST existente | PARCIAL | 55% | `/app/*`, `/admin/*` | Falta camada publica versionada |
-| API publica versionada | ATENDE PARCIALMENTE | 72% | `/public-api/v1` | Expandir contrato para mensagens/webhooks/escrita controlada |
+| API REST existente | PARCIAL | 65% | `/app/*`, `/admin/*`, `/public-api/v1` | Separar contrato publico estavel dos endpoints internos |
+| API publica versionada | ATENDE PARCIALMENTE | 82% | `/public-api/v1` | Expandir contrato para webhooks/escrita controlada |
 | Autenticacao para integracao | ATENDE | 90% | `PublicApiKey`, hash-only, scopes e revoke | Refinar tela/rotação/expiração |
 | Webhooks inbound | ATENDE | 90% | `/webhook` Meta | Inbound e fornecedor-especifico |
 | Webhooks outbound | NAO ATENDE | 0% | Nao encontrado | Criar eventos assinados |
-| OpenAPI/Swagger | ATENDE PARCIALMENTE | 72% | `docs/saas/public-api/openapi.yaml` | Adicionar examples/changelog e futuros endpoints |
+| OpenAPI/Swagger | ATENDE PARCIALMENTE | 80% | `docs/saas/public-api/openapi.yaml` | Adicionar examples/changelog e futuros endpoints |
 | Rate limit publico | ATENDE PARCIALMENTE | 70% | Rate limit basico por API key | Evoluir para quotas por plano e janelas configuraveis |
 | Auditoria por integracao | ATENDE PARCIALMENTE | 70% | Eventos `api.request`, `api.denied`, `api.rate_limited` | Tela/relatorio de auditoria publico |
 | Multi-tenant isolation | ATENDE PARCIALMENTE | 80% | Client/session/RBAC existentes | Formalizar no middleware publico |
@@ -193,13 +194,13 @@ Para licitacoes e integracoes profissionais, o Converta deve criar:
 | Idempotencia | NAO ATENDE | 0% | Nao encontrado contrato | Obrigatorio para escrita |
 | Documentacao de integracao | PARCIAL | 40% | bid package/docs saas | Falta guia developer |
 
-Aderencia consolidada estimada para "API publica": **58%**.
+Aderencia consolidada estimada para "API publica": **66%**.
 
 Interpretação:
 
 - Para edital que aceita API interna/sistema integravel de forma generica: **ATENDE PARCIALMENTE**.
 - Para edital que exige API publica documentada, OpenAPI, chaves de acesso e leitura basica de contatos: **ATENDE PARCIALMENTE** no formato atual.
-- Para edital que exige webhooks outbound, conversas, mensagens, campanhas ou escrita por API: **NAO ATENDE** no formato atual.
+- Para edital que exige webhooks outbound, campanhas ou escrita por API: **NAO ATENDE** no formato atual.
 
 ## Riscos
 
@@ -299,7 +300,25 @@ Ficam fora da 70E:
 - envio por canal;
 - webhooks outbound.
 
-### Sprint 70F - Webhooks outbound
+### Sprint 70F - Public API Messages Read MVP
+
+Escopo seguro:
+
+- `GET /public-api/v1/conversations/{id}/messages`;
+- OpenAPI atualizado em `docs/saas/public-api/openapi.yaml`;
+- DTO publico com texto normalizado e metadados seguros;
+- scopes `read + messages`;
+- auditoria `api.messages.listed` via `api.request`;
+- sem escrita, envio, payload bruto, IDs de provider, tokens, `waId`, `externalUserRef` ou midia binaria.
+
+Ficam fora da 70F:
+
+- campaigns;
+- escrita publica;
+- envio por canal;
+- webhooks outbound.
+
+### Sprint 70G - Webhooks outbound
 
 Eventos recomendados:
 
@@ -318,7 +337,7 @@ Obrigatorio:
 - tela de configuracao por tenant;
 - redaction de payload quando aplicavel.
 
-### Sprint 70F - Escrita controlada
+### Sprint 70H - Escrita controlada
 
 Somente apos read-only e webhooks:
 
@@ -337,16 +356,16 @@ Envio de mensagens deve exigir:
 
 ## Decisao de produto
 
-O Converta deve posicionar a API publica como **MVP read-only em evolucao** apos 70D.
+O Converta deve posicionar a API publica como **MVP read-only demonstravel** apos 70F.
 
 Para licitacoes:
 
 - se o requisito for "possuir integracoes com API oficial Meta": **ATENDE**;
-- se o requisito for "possuir API para integracao externa documentada com leitura de contatos": **ATENDE PARCIALMENTE**;
-- se o requisito exigir conversas, mensagens, webhooks de saida, escrita ou automacoes via API: **NAO ATENDE** hoje.
+- se o requisito for "possuir API para integracao externa documentada com leitura de contatos, conversas e mensagens": **ATENDE PARCIALMENTE**;
+- se o requisito exigir webhooks de saida, escrita ou automacoes via API: **NAO ATENDE** hoje.
 
 ## Conclusao
 
-Existe fundacao tecnica suficiente para uma API publica profissional, e a camada publica propria ja existe para health autenticado e leitura basica de contatos. Ela ainda nao deve ser declarada como API completa de integracao operacional, porque conversas, mensagens, escrita e webhooks outbound seguem fora do contrato publico.
+Existe fundacao tecnica suficiente para uma API publica profissional, e a camada publica propria ja existe para health autenticado e leitura basica de contatos, conversas e mensagens normalizadas. Ela ainda nao deve ser declarada como API completa de integracao operacional, porque escrita, campanhas e webhooks outbound seguem fora do contrato publico.
 
-Proxima sprint recomendada: **Sprint 70E - Public API Conversations Read Design/MVP**, mantendo leitura antes de qualquer escrita.
+Proxima sprint recomendada: **Sprint 70G - Public API Webhooks Outbound Design/MVP**, mantendo leitura estabilizada antes de qualquer escrita.

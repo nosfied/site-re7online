@@ -246,6 +246,7 @@ import {
   getPublicConversation,
   listPublicConversations,
 } from "../publicApi/publicApiConversationsService.js";
+import { listPublicConversationMessages } from "../publicApi/publicApiMessagesService.js";
 import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
@@ -615,6 +616,103 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           method: req.method,
           statusCode: 200,
           durationMs: Date.now() - startedAt,
+          count: result.data.length,
+        },
+      });
+      json(res, 200, result);
+      return;
+    }
+    const publicConversationMessagesMatch = pathname.match(/^\/public-api\/v1\/conversations\/([^/]+)\/messages$/);
+    if (req.method === "GET" && publicConversationMessagesMatch) {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read", "messages"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      const result = await listPublicConversationMessages({
+        prisma,
+        clientId: authResult.auth.clientId,
+        conversationId: decodeURIComponent(publicConversationMessagesMatch[1] ?? ""),
+        query: {
+          cursor: typeof query.cursor === "string" ? query.cursor : null,
+          limit: typeof query.limit === "string" ? query.limit : null,
+        },
+      });
+      if (!result) {
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.denied",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            reason: "conversation_not_found",
+          },
+        });
+        json(res, 404, {
+          error: {
+            code: "not_found",
+            message: "Conversation not found.",
+            requestId,
+          },
+        });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.messages.listed",
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          conversationId: decodeURIComponent(publicConversationMessagesMatch[1] ?? ""),
           count: result.data.length,
         },
       });

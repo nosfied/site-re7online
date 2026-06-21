@@ -5,8 +5,8 @@ info:
   summary: API publica tenant-scoped do Converta.
   description: >
     API publica inicial do Converta. A versao atual expoe health autenticado, leitura
-    minima de contatos e leitura resumida de conversas. Escrita, mensagens, campanhas e webhooks outbound ficam fora
-    deste MVP.
+    minima de contatos, leitura resumida de conversas e leitura paginada de mensagens normalizadas.
+    Escrita, envio de mensagens, campanhas e webhooks outbound ficam fora deste MVP.
 servers:
   - url: https://converta.re7online.com/public-api/v1
     description: Producao via dominio principal
@@ -173,6 +173,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConversationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /conversations/{id}/messages:
+    get:
+      tags: [Conversations]
+      summary: Lista mensagens normalizadas de uma conversa do tenant da API key.
+      operationId: listConversationMessages
+      description: >
+        Retorna somente metadados seguros e texto normalizado. Nao expoe payload bruto,
+        identificadores de provider, tokens, waId bruto, externalUserRef nem midia binaria.
+      security:
+        - bearerApiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID publico da conversa.
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Lista paginada de mensagens normalizadas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagesListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -445,6 +479,55 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/PublicConversation"
+    PublicMessage:
+      type: object
+      required: [id, direction, channel, type, text, createdAt, status, senderRole]
+      properties:
+        id:
+          type: string
+        direction:
+          type: string
+          enum: [INBOUND, OUTBOUND]
+        channel:
+          type: string
+          example: whatsapp
+        type:
+          type: string
+          example: TEXT
+        text:
+          type:
+            - string
+            - "null"
+          description: Texto ja normalizado pela plataforma, quando existir.
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          example: RECEIVED
+        senderRole:
+          type: string
+          enum: [contact, agent, system]
+    MessagesListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicMessage"
+        page:
+          type: object
+          required: [nextCursor, hasMore, limit]
+          properties:
+            nextCursor:
+              type:
+                - string
+                - "null"
+            hasMore:
+              type: boolean
+            limit:
+              type: integer
     ErrorResponse:
       type: object
       required: [error]

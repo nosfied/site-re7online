@@ -146,7 +146,7 @@ export async function createPublicApiKey(params: {
   });
   await recordPublicApiAuditEvent(params.prisma, {
     clientId: params.clientId,
-    requestId: params.requestId,
+    requestId: `${params.requestId}:api-key-created:${key.id}`,
     eventName: "api.key.created",
     payload: {
       apiKeyId: key.id,
@@ -187,7 +187,7 @@ export async function revokePublicApiKey(params: {
   });
   await recordPublicApiAuditEvent(params.prisma, {
     clientId: params.clientId,
-    requestId: params.requestId,
+    requestId: `${params.requestId}:api-key-revoked:${key.id}`,
     eventName: "api.key.revoked",
     payload: {
       apiKeyId: key.id,

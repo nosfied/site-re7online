@@ -718,15 +718,30 @@ Sprint 70E amplia a API publica com conversas somente leitura:
   - `metrics`;
   - `lastActivityAt`.
 
-Ainda ficam fora apos 70E:
+Sprint 70F amplia a API publica com mensagens somente leitura:
 
-- messages;
+- `GET /public-api/v1/conversations/{id}/messages`;
+- OpenAPI atualizado em `docs/saas/public-api/openapi.yaml`;
+- DTO publico minimo para mensagem:
+  - `id`;
+  - `direction`;
+  - `channel`;
+  - `type`;
+  - `text` normalizado;
+  - `createdAt`;
+  - `status`;
+  - `senderRole`;
+- scopes `read + messages`;
+- sem payload bruto, IDs de provider, `waId`, `externalUserRef`, tokens ou midia binaria.
+
+Ainda ficam fora apos 70F:
+
 - campaigns;
 - webhooks outbound;
 - escrita publica.
 
-Proxima sprint recomendada apos 70E: **Sprint 70F - Messages Read MVP**, ainda sem escrita:
+Proxima sprint recomendada apos 70F: **Sprint 70G - Webhooks outbound Design/MVP**, ainda sem escrita publica operacional:
 
-1. messages read-only por conversa;
-2. redacao/limites de PII;
+1. eventos assinados por tenant;
+2. retry/backoff e auditoria;
 3. exemplos de integracao e erros.
