@@ -9,9 +9,26 @@ export const APPOINTMENT_STATUSES = [
   "completed",
   "no_show",
 ] as const;
+export const APPOINTMENT_REMINDER_STATUSES = [
+  "pending",
+  "sent",
+  "skipped",
+  "failed",
+  "cancelled",
+  "expired",
+] as const;
+export const APPOINTMENT_REMINDER_KINDS = [
+  "24h",
+  "2h",
+  "custom",
+  "manual",
+  "confirmation",
+] as const;
 
 export type SchedulingEntityStatus = (typeof SCHEDULING_ENTITY_STATUSES)[number];
 export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
+export type AppointmentReminderStatus = (typeof APPOINTMENT_REMINDER_STATUSES)[number];
+export type AppointmentReminderKind = (typeof APPOINTMENT_REMINDER_KINDS)[number];
 
 type JsonInput = Record<string, unknown>;
 
@@ -56,6 +73,26 @@ function normalizeAppointmentStatus(input: unknown): AppointmentStatus {
     input === "no_show"
     ? input
     : "scheduled";
+}
+
+function normalizeAppointmentReminderStatus(input: unknown): AppointmentReminderStatus {
+  return input === "sent" ||
+    input === "skipped" ||
+    input === "failed" ||
+    input === "cancelled" ||
+    input === "expired"
+    ? input
+    : "pending";
+}
+
+function normalizeAppointmentReminderKind(input: unknown): AppointmentReminderKind {
+  return input === "24h" ||
+    input === "2h" ||
+    input === "custom" ||
+    input === "manual" ||
+    input === "confirmation"
+    ? input
+    : "manual";
 }
 
 function normalizeWeekday(input: unknown) {
@@ -207,6 +244,38 @@ function serializeAppointment(item: {
   };
 }
 
+function serializeAppointmentReminder(item: {
+  id: string;
+  appointmentId: string;
+  channel: string;
+  kind: string;
+  scheduledAt: Date;
+  sentAt: Date | null;
+  status: string;
+  templateName: string | null;
+  templateLang: string | null;
+  requestId: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: item.id,
+    appointmentId: item.appointmentId,
+    channel: item.channel,
+    kind: normalizeAppointmentReminderKind(item.kind),
+    scheduledAt: item.scheduledAt.toISOString(),
+    sentAt: serializeDate(item.sentAt),
+    status: normalizeAppointmentReminderStatus(item.status),
+    templateName: item.templateName,
+    templateLang: item.templateLang,
+    requestId: item.requestId,
+    error: item.error,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  };
+}
+
 async function validateOptionalDepartment(prisma: PrismaClient, clientId: string, departmentId: string | null) {
   if (!departmentId) return true;
   const department = await prisma.department.findFirst({
@@ -270,8 +339,17 @@ async function validateOptionalConversation(prisma: PrismaClient, clientId: stri
   return Boolean(conversation);
 }
 
-export async function listScheduling(params: { prisma: PrismaClient; clientId: string }) {
-  const [services, resources, availabilities, appointments] = await Promise.all([
+async function validateAppointment(prisma: PrismaClient, clientId: string, appointmentId: string | null) {
+  if (!appointmentId) return false;
+  const appointment = await prisma.appointment.findFirst({
+    where: { id: appointmentId, clientId },
+    select: { id: true },
+  });
+  return Boolean(appointment);
+}
+
+export async function listScheduling(params: { prisma: PrismaClient; clientId: string; includeReminders?: boolean }) {
+  const [services, resources, availabilities, appointments, reminders] = await Promise.all([
     params.prisma.schedulingService.findMany({
       where: { clientId: params.clientId },
       orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -292,12 +370,20 @@ export async function listScheduling(params: { prisma: PrismaClient; clientId: s
       orderBy: [{ startsAt: "desc" }],
       take: 200,
     }),
+    params.includeReminders
+      ? params.prisma.appointmentReminder.findMany({
+          where: { clientId: params.clientId },
+          orderBy: [{ scheduledAt: "asc" }, { createdAt: "desc" }],
+          take: 300,
+        })
+      : Promise.resolve([]),
   ]);
   return {
     services: services.map(serializeService),
     resources: resources.map(serializeResource),
     availabilities: availabilities.map(serializeAvailability),
     appointments: appointments.map(serializeAppointment),
+    reminders: reminders.map(serializeAppointmentReminder),
   };
 }
 
@@ -575,4 +661,69 @@ export async function updateAppointment(params: {
     },
   });
   return { ok: true as const, appointment: serializeAppointment(appointment) };
+}
+
+function buildAppointmentReminderData(input: JsonInput) {
+  const appointmentId = normalizeOptionalId(input.appointmentId);
+  if (!appointmentId) return { ok: false as const, error: "appointment_required" };
+  const scheduledAt = normalizeDate(input.scheduledAt);
+  if (!scheduledAt) return { ok: false as const, error: "reminder_scheduled_at_required" };
+  const sentAt = normalizeDate(input.sentAt);
+  return {
+    ok: true as const,
+    data: {
+      appointmentId,
+      channel: normalizeText(input.channel, MAX_TYPE_LENGTH) || "whatsapp",
+      kind: normalizeAppointmentReminderKind(input.kind),
+      scheduledAt,
+      sentAt,
+      status: normalizeAppointmentReminderStatus(input.status),
+      templateName: normalizeOptionalText(input.templateName, MAX_NAME_LENGTH),
+      templateLang: normalizeOptionalText(input.templateLang, 16),
+      requestId: normalizeOptionalText(input.requestId, 160),
+      error: normalizeOptionalText(input.error, 1000),
+    },
+  };
+}
+
+export async function createAppointmentReminder(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  input: JsonInput;
+}) {
+  const normalized = buildAppointmentReminderData(params.input);
+  if (!normalized.ok) return normalized;
+  if (!(await validateAppointment(params.prisma, params.clientId, normalized.data.appointmentId))) {
+    return { ok: false as const, error: "appointment_not_found" };
+  }
+  const reminder = await params.prisma.appointmentReminder.create({
+    data: {
+      clientId: params.clientId,
+      ...normalized.data,
+    },
+  });
+  return { ok: true as const, reminder: serializeAppointmentReminder(reminder) };
+}
+
+export async function updateAppointmentReminder(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  reminderId: string;
+  input: JsonInput;
+}) {
+  const existing = await params.prisma.appointmentReminder.findFirst({
+    where: { id: params.reminderId, clientId: params.clientId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false as const, error: "reminder_not_found" };
+  const normalized = buildAppointmentReminderData(params.input);
+  if (!normalized.ok) return normalized;
+  if (!(await validateAppointment(params.prisma, params.clientId, normalized.data.appointmentId))) {
+    return { ok: false as const, error: "appointment_not_found" };
+  }
+  const reminder = await params.prisma.appointmentReminder.update({
+    where: { id: existing.id },
+    data: normalized.data,
+  });
+  return { ok: true as const, reminder: serializeAppointmentReminder(reminder) };
 }

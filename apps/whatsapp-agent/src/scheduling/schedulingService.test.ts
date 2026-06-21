@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createAppointment,
+  createAppointmentReminder,
   createSchedulingService,
   listScheduling,
+  updateAppointmentReminder,
   updateSchedulingService,
 } from "./schedulingService.js";
 
@@ -52,6 +54,7 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     },
     appointment: {
       findMany: async () => [],
+      findFirst: async () => ({ id: "apt_1" }),
       create: async ({ data }: { data: Record<string, unknown> }) => ({
         id: "apt_1",
         serviceId: null,
@@ -66,6 +69,38 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
         source: "manual",
         createdByUserId: null,
         updatedByUserId: null,
+        createdAt: makeDate("2026-06-20T10:00:00.000Z"),
+        updatedAt: makeDate("2026-06-20T10:00:00.000Z"),
+        ...data,
+      }),
+    },
+    appointmentReminder: {
+      findMany: async () => [],
+      findFirst: async () => ({ id: "rem_1" }),
+      create: async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "rem_1",
+        sentAt: null,
+        status: "pending",
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        error: null,
+        createdAt: makeDate("2026-06-20T10:00:00.000Z"),
+        updatedAt: makeDate("2026-06-20T10:00:00.000Z"),
+        ...data,
+      }),
+      update: async ({ data }: { data: Record<string, unknown> }) => ({
+        id: "rem_1",
+        appointmentId: "apt_1",
+        channel: "whatsapp",
+        kind: "manual",
+        scheduledAt: makeDate("2026-06-20T10:00:00.000Z"),
+        sentAt: null,
+        status: "pending",
+        templateName: null,
+        templateLang: null,
+        requestId: null,
+        error: null,
         createdAt: makeDate("2026-06-20T10:00:00.000Z"),
         updatedAt: makeDate("2026-06-20T10:00:00.000Z"),
         ...data,
@@ -97,12 +132,78 @@ test("listScheduling filters every collection by clientId", async () => {
     schedulingResource: { findMany: async (args: Record<string, unknown>) => (calls.push(args), []) },
     schedulingAvailability: { findMany: async (args: Record<string, unknown>) => (calls.push(args), []) },
     appointment: { findMany: async (args: Record<string, unknown>) => (calls.push(args), []) },
+    appointmentReminder: { findMany: async (args: Record<string, unknown>) => (calls.push(args), []) },
   });
-  await listScheduling({ prisma, clientId: "tenant_a" });
-  assert.equal(calls.length, 4);
+  await listScheduling({ prisma, clientId: "tenant_a", includeReminders: true });
+  assert.equal(calls.length, 5);
   for (const call of calls) {
     assert.deepEqual(call.where, { clientId: "tenant_a" });
   }
+});
+
+test("createAppointmentReminder writes clientId and validates appointment tenant", async () => {
+  let created: { clientId?: unknown; appointmentId?: unknown; templateName?: unknown } | null = null;
+  const prisma = makePrisma({
+    appointment: {
+      findFirst: async (args: { where: Record<string, unknown> }) =>
+        args.where.clientId === "tenant_a" && args.where.id === "apt_1" ? { id: "apt_1" } : null,
+    },
+    appointmentReminder: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        created = data;
+        return {
+          id: "rem_1",
+          sentAt: null,
+          status: "pending",
+          requestId: null,
+          error: null,
+          createdAt: makeDate("2026-06-20T10:00:00.000Z"),
+          updatedAt: makeDate("2026-06-20T10:00:00.000Z"),
+          ...data,
+        };
+      },
+    },
+  });
+  const result = await createAppointmentReminder({
+    prisma,
+    clientId: "tenant_a",
+    input: {
+      appointmentId: "apt_1",
+      kind: "24h",
+      scheduledAt: "2026-06-21T10:00:00.000Z",
+      templateName: "appointment_reminder_24h",
+      templateLang: "pt_BR",
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.ok(created);
+  assert.equal((created as { clientId?: unknown }).clientId, "tenant_a");
+  assert.equal((created as { appointmentId?: unknown }).appointmentId, "apt_1");
+  assert.equal((created as { templateName?: unknown }).templateName, "appointment_reminder_24h");
+});
+
+test("updateAppointmentReminder does not update cross-tenant records", async () => {
+  let updateCalled = false;
+  const prisma = makePrisma({
+    appointmentReminder: {
+      findFirst: async () => null,
+      update: async () => {
+        updateCalled = true;
+        return null;
+      },
+    },
+  });
+  const result = await updateAppointmentReminder({
+    prisma,
+    clientId: "tenant_a",
+    reminderId: "rem_other",
+    input: {
+      appointmentId: "apt_1",
+      scheduledAt: "2026-06-21T10:00:00.000Z",
+    },
+  });
+  assert.deepEqual(result, { ok: false, error: "reminder_not_found" });
+  assert.equal(updateCalled, false);
 });
 
 test("createSchedulingService writes the current clientId", async () => {

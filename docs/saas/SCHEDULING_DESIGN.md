@@ -443,7 +443,7 @@ O banco do Converta continua fonte de verdade. Google Calendar e espelho/integra
 - sem runtime chatbot/IA;
 - sem Google Calendar.
 
-### Sprint 71D - App CRUD
+### Sprint 71C - App CRUD
 
 - `/app/scheduling`;
 - CRUD de servicos;
@@ -452,35 +452,58 @@ O banco do Converta continua fonte de verdade. Google Calendar e espelho/integra
 - CRUD manual de appointments;
 - timeline read-only do appointment.
 
-### Sprint 71E - Inbox Assisted Scheduling
+### Sprint 71D - Reminders / Confirmation Design
+
+- definir fluxo de lembretes 24h/2h/custom/manual;
+- definir confirmacao, cancelamento, remarcacao e no-response;
+- definir politica Meta/template;
+- definir flags `schedulingReminders` e `schedulingConfirmation`;
+- sem envio automatico.
+
+### Sprint 71E - Reminder Config + Manual Records
+
+- criar/configurar reminders ao criar/remarcar appointment;
+- eventos de auditoria;
+- CRUD manual de `AppointmentReminder`;
+- flags `schedulingReminders` e `schedulingConfirmation`;
+- sem scheduler automatico.
+
+### Sprint 71F - Reminder Scheduler Shadow
+
+- job calcula reminders elegiveis;
+- nao envia mensagens;
+- valida idempotencia, templates e janela Meta;
+- logs redigidos e contadores.
+
+### Sprint 71G - Reminder Sending Controlled
+
+- scheduler com envio por tenant;
+- templates Meta quando janela fechada;
+- persistencia em `OutboundMessage`;
+- eventos e auditoria;
+- retry seguro.
+
+### Sprint 71H - Inbox Assisted Scheduling
 
 - botao "Agendar" na timeline;
 - criar/remarcar/cancelar appointment a partir de conversa;
 - evento na timeline;
 - sem IA automatica.
 
-### Sprint 71F - Appointment Reminders
-
-- criar reminders 24h/2h/custom;
-- scheduler;
-- templates Meta quando janela fechada;
-- eventos e auditoria;
-- retry seguro.
-
-### Sprint 71G - Chatbot/IA Shadow
+### Sprint 71I - Chatbot/IA Shadow
 
 - detectar intencao de agendamento;
 - sugerir slots em shadow;
 - evaluation/replay;
 - sem enviar confirmacao automatica ainda.
 
-### Sprint 71H - Public API Scheduling Read
+### Sprint 71J - Public API Scheduling Read
 
 - endpoints read-only de servicos, disponibilidade e appointments;
 - scopes `read + scheduling`;
 - OpenAPI.
 
-### Sprint 71I - Google Calendar Design/Connector
+### Sprint 71K - Google Calendar Design/Connector
 
 - desenho e depois implementacao controlada;
 - OAuth separado;
@@ -546,4 +569,32 @@ Com isso, o requisito de agendamento passa a **ATENDE PARCIALMENTE** em nivel es
 - relatorio de agenda;
 - consumo por chatbot/IA em shadow antes de qualquer resposta automatica.
 
-Proxima sprint recomendada: **Sprint 71D - Scheduling Validation + Inbox Entry Point**, ainda sem lembretes automaticos.
+## Status Pos-Sprint 71D
+
+A Sprint 71D documentou o desenho de lembretes e confirmacao em `docs/saas/SCHEDULING_REMINDERS_CONFIRMATION_DESIGN.md`.
+
+Pontos definidos:
+
+- `AppointmentReminder` como fonte transacional de lembretes;
+- lembretes 24h, 2h, custom e manual;
+- confirmacao, cancelamento, remarcacao, no-response e expiracao;
+- politica Meta/WhatsApp com template obrigatorio fora da janela de 24h;
+- templates sugeridos para confirmacao, lembrete, cancelamento e remarcacao;
+- flags futuras `schedulingReminders` e `schedulingConfirmation`, ambas desligadas por padrao;
+- eventos e metricas futuras;
+- rollback por tenant, flag, scheduler e template.
+
+## Status Pos-Sprint 71E
+
+A Sprint 71E implementou o MVP operacional sem runtime:
+
+- flags `schedulingReminders=false` e `schedulingConfirmation=false` por padrao;
+- CRUD manual de `AppointmentReminder` protegido por `schedulingReminders`;
+- aba "Lembretes" em `/app/scheduling`, visivel apenas quando `schedulingReminders=true`;
+- vinculo logico de template por `templateName` e `templateLang`;
+- status operacional manual: `pending`, `sent`, `skipped`, `failed`, `cancelled`, `expired`;
+- sem scheduler automatico;
+- sem envio WhatsApp/Messenger/Instagram;
+- sem integracao com chatbot, IA, follow-up ou campaigns.
+
+Proxima sprint recomendada: **Sprint 71F - Reminder Scheduler Shadow**, ainda sem envio automatico.

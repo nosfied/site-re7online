@@ -395,11 +395,43 @@ export type AppAppointment = {
   updatedAt: string;
 };
 
+export type AppAppointmentReminderStatus =
+  | "pending"
+  | "sent"
+  | "skipped"
+  | "failed"
+  | "cancelled"
+  | "expired";
+
+export type AppAppointmentReminderKind =
+  | "24h"
+  | "2h"
+  | "custom"
+  | "manual"
+  | "confirmation";
+
+export type AppAppointmentReminder = {
+  id: string;
+  appointmentId: string;
+  channel: string;
+  kind: AppAppointmentReminderKind;
+  scheduledAt: string;
+  sentAt: string | null;
+  status: AppAppointmentReminderStatus;
+  templateName: string | null;
+  templateLang: string | null;
+  requestId: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AppSchedulingPayload = {
   services: AppSchedulingService[];
   resources: AppSchedulingResource[];
   availabilities: AppSchedulingAvailability[];
   appointments: AppAppointment[];
+  reminders?: AppAppointmentReminder[];
 };
 
 export type AppSchedulingServicePayload = {
@@ -449,6 +481,19 @@ export type AppAppointmentPayload = {
   timezone?: string;
   status?: AppAppointmentStatus;
   source?: string;
+};
+
+export type AppAppointmentReminderPayload = {
+  appointmentId: string;
+  channel?: string;
+  kind?: AppAppointmentReminderKind;
+  scheduledAt: string;
+  sentAt?: string | null;
+  status?: AppAppointmentReminderStatus;
+  templateName?: string | null;
+  templateLang?: string | null;
+  requestId?: string | null;
+  error?: string | null;
 };
 
 export type AppSatisfactionQuestionStatus = "active" | "inactive" | "archived";
@@ -1747,6 +1792,27 @@ export async function updateAppAppointment(
   payload: AppAppointmentPayload
 ): Promise<{ ok: true; appointment: AppAppointment }> {
   return requestAppJson(session, `/app/scheduling/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppAppointmentReminder(
+  session: AppSession,
+  payload: AppAppointmentReminderPayload
+): Promise<{ ok: true; reminder: AppAppointmentReminder }> {
+  return requestAppJson(session, "/app/scheduling/reminders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppAppointmentReminder(
+  session: AppSession,
+  reminderId: string,
+  payload: AppAppointmentReminderPayload
+): Promise<{ ok: true; reminder: AppAppointmentReminder }> {
+  return requestAppJson(session, `/app/scheduling/reminders/${encodeURIComponent(reminderId)}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });

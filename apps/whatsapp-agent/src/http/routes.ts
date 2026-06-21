@@ -143,11 +143,13 @@ import {
 } from "../knowledge/knowledgeBaseService.js";
 import {
   createAppointment,
+  createAppointmentReminder,
   createSchedulingAvailability,
   createSchedulingResource,
   createSchedulingService,
   listScheduling,
   updateAppointment,
+  updateAppointmentReminder,
   updateSchedulingAvailability,
   updateSchedulingResource,
   updateSchedulingService,
@@ -4601,7 +4603,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
-  const schedulingMatch = pathname.match(/^\/app\/scheduling(?:\/(services|resources|availabilities|appointments)(?:\/([^/]+))?)?$/);
+  const schedulingMatch = pathname.match(/^\/app\/scheduling(?:\/(services|resources|availabilities|appointments|reminders)(?:\/([^/]+))?)?$/);
   if (schedulingMatch) {
     const prisma = getPrisma();
     const access = await requireSchedulingAppAccess(req, res, requestId, pathname);
@@ -4611,13 +4613,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       | "resources"
       | "availabilities"
       | "appointments"
+      | "reminders"
       | undefined;
     const entityId = schedulingMatch[2] ? decodeURIComponent(schedulingMatch[2]) : null;
     try {
+      const remindersEnabled = hasFeature(access.client, "schedulingReminders");
       if (req.method === "GET" && !entity) {
-        const result = await listScheduling({ prisma, clientId: access.client.id });
+        const result = await listScheduling({
+          prisma,
+          clientId: access.client.id,
+          includeReminders: remindersEnabled,
+        });
         json(res, 200, { ok: true, ...result });
         return;
+      }
+      if (entity === "reminders" && !remindersEnabled) {
+        const enabled = await enforceAppFeature(prisma, res, {
+          client: access.client,
+          userId: access.clientAuth.userId,
+          feature: "schedulingReminders",
+          endpoint: pathname,
+          requestId,
+        });
+        if (!enabled) return;
       }
       if (req.method === "POST" && entity && !entityId) {
         const body = await readJsonBody(req, res);
@@ -4630,12 +4648,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               ? await createSchedulingResource({ prisma, clientId: access.client.id, input })
               : entity === "availabilities"
                 ? await createSchedulingAvailability({ prisma, clientId: access.client.id, input })
-                : await createAppointment({
-                    prisma,
-                    clientId: access.client.id,
-                    userId: access.clientAuth.userId,
-                    input,
-                  });
+                : entity === "appointments"
+                  ? await createAppointment({
+                      prisma,
+                      clientId: access.client.id,
+                      userId: access.clientAuth.userId,
+                      input,
+                    })
+                  : await createAppointmentReminder({
+                      prisma,
+                      clientId: access.client.id,
+                      input,
+                    });
         if (!result.ok) {
           json(res, schedulingErrorStatus(result.error), httpError(result.error, "Invalid scheduling payload"));
           return;
@@ -4659,13 +4683,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                     availabilityId: entityId,
                     input,
                   })
-                : await updateAppointment({
-                    prisma,
-                    clientId: access.client.id,
-                    userId: access.clientAuth.userId,
-                    appointmentId: entityId,
-                    input,
-                  });
+                : entity === "appointments"
+                  ? await updateAppointment({
+                      prisma,
+                      clientId: access.client.id,
+                      userId: access.clientAuth.userId,
+                      appointmentId: entityId,
+                      input,
+                    })
+                  : await updateAppointmentReminder({
+                      prisma,
+                      clientId: access.client.id,
+                      reminderId: entityId,
+                      input,
+                    });
         if (!result.ok) {
           json(res, schedulingErrorStatus(result.error), httpError(result.error, "Invalid scheduling payload"));
           return;
@@ -16181,15 +16212,16 @@ function schedulingErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
 }
 
-function schedulingResponseKey(entity: "services" | "resources" | "availabilities" | "appointments") {
+function schedulingResponseKey(entity: "services" | "resources" | "availabilities" | "appointments" | "reminders") {
   if (entity === "services") return "service";
   if (entity === "resources") return "resource";
   if (entity === "availabilities") return "availability";
+  if (entity === "reminders") return "reminder";
   return "appointment";
 }
 
 function schedulingResponseValue(result: Record<string, unknown>) {
-  return result.service ?? result.resource ?? result.availability ?? result.appointment;
+  return result.service ?? result.resource ?? result.availability ?? result.appointment ?? result.reminder;
 }
 
 function satisfactionErrorStatus(error: string) {

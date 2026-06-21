@@ -8,12 +8,14 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppAppointment,
+  AppAppointmentReminder,
   AppSchedulingAvailability,
   AppSchedulingResource,
   AppSchedulingService,
   AppSession,
   clearAppSession,
   createAppAppointment,
+  createAppAppointmentReminder,
   createAppSchedulingAvailability,
   createAppSchedulingResource,
   createAppSchedulingService,
@@ -21,12 +23,13 @@ import {
   loadAppSession,
   saveAppSession,
   updateAppAppointment,
+  updateAppAppointmentReminder,
   updateAppSchedulingAvailability,
   updateAppSchedulingResource,
   updateAppSchedulingService,
 } from "@/lib/appClientApi";
 
-type TabKey = "services" | "resources" | "availability" | "appointments";
+type TabKey = "services" | "resources" | "availability" | "appointments" | "reminders";
 
 const SERVICE_EMPTY = {
   id: "",
@@ -71,6 +74,20 @@ const APPOINTMENT_EMPTY = {
   status: "scheduled",
 };
 
+const REMINDER_EMPTY = {
+  id: "",
+  appointmentId: "",
+  channel: "whatsapp",
+  kind: "manual",
+  scheduledAt: "",
+  sentAt: "",
+  status: "pending",
+  templateName: "",
+  templateLang: "pt_BR",
+  requestId: "",
+  error: "",
+};
+
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
 
 function canManageScheduling(role: string) {
@@ -113,6 +130,16 @@ function StatusPill({ status }: { status: string }) {
               ? "Concluido"
               : status === "confirmed"
                 ? "Confirmado"
+                : status === "pending"
+                  ? "Pendente"
+                  : status === "sent"
+                    ? "Enviado"
+                    : status === "skipped"
+                      ? "Ignorado"
+                      : status === "failed"
+                        ? "Falhou"
+                        : status === "expired"
+                          ? "Expirado"
                 : "Agendado";
   return <span className="rounded-full border px-2 py-0.5 text-[11px] theme-muted">{label}</span>;
 }
@@ -125,10 +152,12 @@ export default function SchedulingPage() {
   const [resources, setResources] = useState<AppSchedulingResource[]>([]);
   const [availabilities, setAvailabilities] = useState<AppSchedulingAvailability[]>([]);
   const [appointments, setAppointments] = useState<AppAppointment[]>([]);
+  const [reminders, setReminders] = useState<AppAppointmentReminder[]>([]);
   const [serviceForm, setServiceForm] = useState(SERVICE_EMPTY);
   const [resourceForm, setResourceForm] = useState(RESOURCE_EMPTY);
   const [availabilityForm, setAvailabilityForm] = useState(AVAILABILITY_EMPTY);
   const [appointmentForm, setAppointmentForm] = useState(APPOINTMENT_EMPTY);
+  const [reminderForm, setReminderForm] = useState(REMINDER_EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,6 +182,7 @@ export default function SchedulingPage() {
         setResources(response.resources);
         setAvailabilities(response.availabilities);
         setAppointments(response.appointments);
+        setReminders(response.reminders ?? []);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -187,6 +217,11 @@ export default function SchedulingPage() {
   const futureAppointments = useMemo(
     () => appointments.filter((item) => item.status !== "cancelled" && item.status !== "completed").length,
     [appointments]
+  );
+  const remindersEnabled = Boolean(session?.features.schedulingReminders);
+  const pendingReminders = useMemo(
+    () => reminders.filter((item) => item.status === "pending").length,
+    [reminders]
   );
 
   const saveService = async () => {
@@ -309,6 +344,39 @@ export default function SchedulingPage() {
     }
   };
 
+  const saveReminder = async () => {
+    if (!session || !reminderForm.appointmentId || !reminderForm.scheduledAt) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        appointmentId: reminderForm.appointmentId,
+        channel: reminderForm.channel,
+        kind: reminderForm.kind as AppAppointmentReminder["kind"],
+        scheduledAt: fromLocalDateTimeInput(reminderForm.scheduledAt),
+        sentAt: reminderForm.sentAt ? fromLocalDateTimeInput(reminderForm.sentAt) : null,
+        status: reminderForm.status as AppAppointmentReminder["status"],
+        templateName: reminderForm.templateName || null,
+        templateLang: reminderForm.templateLang || null,
+        requestId: reminderForm.requestId || null,
+        error: reminderForm.error || null,
+      };
+      if (reminderForm.id) {
+        await updateAppAppointmentReminder(session, reminderForm.id, payload);
+        setSuccess("Lembrete atualizado.");
+      } else {
+        await createAppAppointmentReminder(session, payload);
+        setSuccess("Lembrete criado.");
+      }
+      setReminderForm(REMINDER_EMPTY);
+      await loadScheduling(session);
+    } catch (err) {
+      setError(normalizeError(err as AppApiError, "Nao foi possivel salvar o lembrete."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!session) return <main className="min-h-screen bg-slate-950" />;
 
   return (
@@ -321,20 +389,22 @@ export default function SchedulingPage() {
         <FeedbackToast message={success} variant="success" {...toastHandlers} />
         <FeedbackToast message={error} variant="error" {...toastHandlers} />
 
-        <section className="grid gap-3 md:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-5">
           <Metric label="Servicos" value={services.length} />
           <Metric label="Recursos" value={resources.length} />
           <Metric label="Disponibilidades" value={availabilities.length} />
           <Metric label="Compromissos ativos" value={futureAppointments} />
+          {remindersEnabled ? <Metric label="Lembretes pendentes" value={pendingReminders} /> : null}
         </section>
 
         <section className="rounded-lg border theme-surface p-2">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             {[
               ["services", "Servicos"],
               ["resources", "Recursos"],
               ["availability", "Disponibilidade"],
               ["appointments", "Compromissos"],
+              ...(remindersEnabled ? ([["reminders", "Lembretes"]] as [string, string][]) : []),
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -473,6 +543,112 @@ export default function SchedulingPage() {
                   status: item.status,
                 })} />
               ))}
+            </ListPanel>
+          </TwoColumn>
+        ) : null}
+
+        {tab === "reminders" && remindersEnabled ? (
+          <TwoColumn>
+            <Panel title={reminderForm.id ? "Editar lembrete" : "Novo lembrete"}>
+              <SelectInput
+                label="Compromisso"
+                value={reminderForm.appointmentId}
+                onChange={(appointmentId) => setReminderForm((prev) => ({ ...prev, appointmentId }))}
+                options={[
+                  ["", "Selecione um compromisso"],
+                  ...appointments.map((item) => [
+                    item.id,
+                    `${item.title} · ${new Date(item.startsAt).toLocaleString("pt-BR")}`,
+                  ] as [string, string]),
+                ]}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectInput
+                  label="Tipo"
+                  value={reminderForm.kind}
+                  onChange={(kind) => setReminderForm((prev) => ({ ...prev, kind }))}
+                  options={[
+                    ["manual", "Manual"],
+                    ["24h", "24 horas"],
+                    ["2h", "2 horas"],
+                    ["custom", "Custom"],
+                    ["confirmation", "Confirmacao"],
+                  ]}
+                />
+                <SelectInput
+                  label="Canal"
+                  value={reminderForm.channel}
+                  onChange={(channel) => setReminderForm((prev) => ({ ...prev, channel }))}
+                  options={[
+                    ["whatsapp", "WhatsApp"],
+                    ["messenger", "Messenger"],
+                    ["instagram", "Instagram"],
+                  ]}
+                />
+              </div>
+              <TextInput
+                label="Agendado para"
+                value={reminderForm.scheduledAt}
+                onChange={(scheduledAt) => setReminderForm((prev) => ({ ...prev, scheduledAt }))}
+                type="datetime-local"
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextInput
+                  label="Template"
+                  value={reminderForm.templateName}
+                  onChange={(templateName) => setReminderForm((prev) => ({ ...prev, templateName }))}
+                />
+                <TextInput
+                  label="Idioma"
+                  value={reminderForm.templateLang}
+                  onChange={(templateLang) => setReminderForm((prev) => ({ ...prev, templateLang }))}
+                />
+              </div>
+              <SelectInput
+                label="Status"
+                value={reminderForm.status}
+                onChange={(status) => setReminderForm((prev) => ({ ...prev, status }))}
+                options={[
+                  ["pending", "Pendente"],
+                  ["sent", "Enviado"],
+                  ["skipped", "Ignorado"],
+                  ["failed", "Falhou"],
+                  ["cancelled", "Cancelado"],
+                  ["expired", "Expirado"],
+                ]}
+              />
+              <TextArea
+                label="Falha/observacao"
+                value={reminderForm.error}
+                onChange={(error) => setReminderForm((prev) => ({ ...prev, error }))}
+              />
+              <FormActions saving={saving} onNew={() => setReminderForm(REMINDER_EMPTY)} onSave={saveReminder} />
+            </Panel>
+            <ListPanel title="Lembretes">
+              {reminders.map((item) => {
+                const appointment = appointments.find((candidate) => candidate.id === item.appointmentId);
+                return (
+                  <ListItem
+                    key={item.id}
+                    title={`${item.kind} · ${appointment?.title ?? "compromisso"}`}
+                    subtitle={`${new Date(item.scheduledAt).toLocaleString("pt-BR")} · ${item.channel} · ${item.templateName ?? "sem template"}`}
+                    status={item.status}
+                    onEdit={() => setReminderForm({
+                      id: item.id,
+                      appointmentId: item.appointmentId,
+                      channel: item.channel,
+                      kind: item.kind,
+                      scheduledAt: toLocalDateTimeInput(item.scheduledAt),
+                      sentAt: item.sentAt ? toLocalDateTimeInput(item.sentAt) : "",
+                      status: item.status,
+                      templateName: item.templateName ?? "",
+                      templateLang: item.templateLang ?? "pt_BR",
+                      requestId: item.requestId ?? "",
+                      error: item.error ?? "",
+                    })}
+                  />
+                );
+              })}
             </ListPanel>
           </TwoColumn>
         ) : null}

@@ -33,7 +33,7 @@ O Converta nao e apenas um chatbot. A plataforma atua como uma central inteligen
 | Chatbot | Fluxos configuraveis de atendimento e qualificacao | Operacional |
 | IA supervisionada | Respostas assistidas/configuradas por tenant | Operacional com controle por tenant |
 | CRM Timeline | Historico do lead/contato e notas operacionais | Operacional |
-| Agendamento | Servicos, recursos, disponibilidade e compromissos por tenant | MVP estrutural por feature flag |
+| Agendamento | Servicos, recursos, disponibilidade, compromissos e lembretes manuais por tenant; confirmacao/scheduler desenhados para proxima fase | MVP estrutural por feature flag |
 | Campanhas | Disparo por templates oficiais aprovados pela Meta | Operacional |
 | Templates | Gestao de modelos oficiais | Operacional |
 | Relatorios | Indicadores de conversas, SLA e operacao | Operacional |

@@ -88,7 +88,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | IA supervisionada | ATENDE COM AJUSTE | Medio/alto | Config DB-first; multiagentes formais ainda nao. |
 | Base de conhecimento | ATENDE COM AJUSTE | Medio/alto | Schema/CRUD em producao; runtime IA/chatbot ainda desenhado, nao ligado. |
 | Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks/escrita/campanhas. |
-| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP; faltam chatbot/IA, lembretes, calendar e API publica. |
+| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes e design de confirmacao; faltam chatbot/IA, scheduler/envio de lembretes, calendar e API publica. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD MVP em `/app/satisfaction`; falta disparo automatico/manual por conversa, link publico e relatorio NPS/CSAT. |
 | Webchat | NAO ATENDE | Alto quando exigido | Audit/design prontos; falta schema/widget/runtime. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |
@@ -113,7 +113,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 | Webchat funcional | Design concluido | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget, sessao, persistencia e inbox. |
 | Telegram funcional | Audit concluida | Alto quando exigido | Sim, se Telegram for obrigatorio | Ainda falta design antes de implementar. |
 | Public API webhooks/escrita | MVP read-only em producao | Alto se exigir integracao completa | Geralmente nao bloqueia se leitura de contatos/conversas/mensagens bastar; bloqueia se exigir eventos outbound ou escrita | Proxima etapa natural: webhooks outbound. |
-| Scheduling runtime/lembretes | MVP estrutural em producao | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Precisa lembrete/template e uso no chatbot/IA. |
+| Scheduling runtime/lembretes | MVP estrutural + lembretes manuais | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Proxima fase: scheduler shadow, depois envio controlado por tenant. |
 | KB runtime IA/chatbot | CRUD em producao, runtime desenhado | Medio/alto | Nao costuma bloquear participacao; limita demonstracao de IA com base formal | Fazer shadow antes de resposta real. |
 | Auditoria formal para cliente | Parcial | Medio/alto | Raramente bloqueia habilitacao, mas fortalece proposta | Criar tela/report de eventos. |
 | XLSX nativo | Parcial | Medio | Pode ser ajuste simples se edital exigir Excel literal | CSV/PDF ja reduzem risco. |
@@ -127,7 +127,7 @@ Ainda assim, para editais que exigem canal Webchat ou Telegram operacional, NPS 
 
 1. **NPS/Satisfacao 72D/72E**: envio manual/automatico e relatorio NPS/CSAT.
 2. **Public API 70G**: webhooks outbound, se o edital exigir eventos externos em tempo real.
-3. **Scheduling 71D**: lembretes/configuracao e primeiro fluxo de confirmacao manual/template.
+3. **Scheduling 71F**: scheduler shadow para lembretes, ainda sem envio automatico.
 4. **Relatorio licitatorio consolidado**: PDF/CSV/XLSX se exigido.
 
 Motivo: alto impacto, escopo controlado, baixo risco comparado a novo canal.
