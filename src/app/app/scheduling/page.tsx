@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
@@ -146,8 +146,10 @@ function StatusPill({ status }: { status: string }) {
 
 export default function SchedulingPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const initialTab: TabKey = pathname?.endsWith("/reminders") ? "reminders" : "services";
   const [session, setSession] = useState<AppSession | null>(null);
-  const [tab, setTab] = useState<TabKey>("services");
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [services, setServices] = useState<AppSchedulingService[]>([]);
   const [resources, setResources] = useState<AppSchedulingResource[]>([]);
   const [availabilities, setAvailabilities] = useState<AppSchedulingAvailability[]>([]);
@@ -223,6 +225,12 @@ export default function SchedulingPage() {
     () => reminders.filter((item) => item.status === "pending").length,
     [reminders]
   );
+
+  useEffect(() => {
+    if (tab === "reminders" && session && !remindersEnabled) {
+      setTab("services");
+    }
+  }, [remindersEnabled, session, tab]);
 
   const saveService = async () => {
     if (!session || !serviceForm.name.trim()) return;
