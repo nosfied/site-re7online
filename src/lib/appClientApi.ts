@@ -451,6 +451,103 @@ export type AppAppointmentPayload = {
   source?: string;
 };
 
+export type AppSatisfactionQuestionStatus = "active" | "inactive" | "archived";
+export type AppSatisfactionSurveyStatus = "draft" | "pending" | "sent" | "responded" | "expired" | "cancelled";
+export type AppSatisfactionType = "csat" | "nps";
+
+export type AppSatisfactionQuestion = {
+  id: string;
+  key: string;
+  type: AppSatisfactionType;
+  title: string;
+  questionText: string;
+  commentPrompt: string | null;
+  commentEnabled: boolean;
+  status: AppSatisfactionQuestionStatus;
+  createdByUserId: string | null;
+  updatedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSatisfactionSurvey = {
+  id: string;
+  questionId: string | null;
+  conversationId: string | null;
+  contactId: string | null;
+  leadId: string | null;
+  departmentId: string | null;
+  assignedUserId: string | null;
+  channel: string | null;
+  type: AppSatisfactionType;
+  status: AppSatisfactionSurveyStatus;
+  questionText: string;
+  commentEnabled: boolean;
+  source: string;
+  sentAt: string | null;
+  answeredAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSatisfactionResponse = {
+  id: string;
+  surveyId: string;
+  conversationId: string | null;
+  contactId: string | null;
+  leadId: string | null;
+  score: number;
+  comment: string | null;
+  category: string | null;
+  source: string;
+  respondedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSatisfactionPayload = {
+  questions: AppSatisfactionQuestion[];
+  surveys: AppSatisfactionSurvey[];
+  responses: AppSatisfactionResponse[];
+};
+
+export type AppSatisfactionQuestionPayload = {
+  key?: string;
+  type?: AppSatisfactionType;
+  title: string;
+  questionText: string;
+  commentPrompt?: string | null;
+  commentEnabled?: boolean;
+  status?: AppSatisfactionQuestionStatus;
+};
+
+export type AppSatisfactionSurveyPayload = {
+  questionId?: string | null;
+  conversationId?: string | null;
+  contactId?: string | null;
+  leadId?: string | null;
+  departmentId?: string | null;
+  assignedUserId?: string | null;
+  channel?: string | null;
+  type?: AppSatisfactionType;
+  status?: AppSatisfactionSurveyStatus;
+  questionText: string;
+  commentEnabled?: boolean;
+  source?: string;
+  sentAt?: string | null;
+  answeredAt?: string | null;
+  expiresAt?: string | null;
+};
+
+export type AppSatisfactionResponsePayload = {
+  surveyId: string;
+  score: number;
+  comment?: string | null;
+  source?: string;
+  respondedAt?: string | null;
+};
+
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
@@ -1651,6 +1748,62 @@ export async function updateAppAppointment(
 ): Promise<{ ok: true; appointment: AppAppointment }> {
   return requestAppJson(session, `/app/scheduling/appointments/${encodeURIComponent(appointmentId)}`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchAppSatisfaction(session: AppSession): Promise<{ ok: true } & AppSatisfactionPayload> {
+  return requestAppJson(session, "/app/satisfaction");
+}
+
+export async function createAppSatisfactionQuestion(
+  session: AppSession,
+  payload: AppSatisfactionQuestionPayload
+): Promise<{ ok: true; question: AppSatisfactionQuestion }> {
+  return requestAppJson(session, "/app/satisfaction/questions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppSatisfactionQuestion(
+  session: AppSession,
+  questionId: string,
+  payload: AppSatisfactionQuestionPayload
+): Promise<{ ok: true; question: AppSatisfactionQuestion }> {
+  return requestAppJson(session, `/app/satisfaction/questions/${encodeURIComponent(questionId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppSatisfactionSurvey(
+  session: AppSession,
+  payload: AppSatisfactionSurveyPayload
+): Promise<{ ok: true; survey: AppSatisfactionSurvey }> {
+  return requestAppJson(session, "/app/satisfaction/surveys", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppSatisfactionSurvey(
+  session: AppSession,
+  surveyId: string,
+  payload: AppSatisfactionSurveyPayload
+): Promise<{ ok: true; survey: AppSatisfactionSurvey }> {
+  return requestAppJson(session, `/app/satisfaction/surveys/${encodeURIComponent(surveyId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppSatisfactionResponse(
+  session: AppSession,
+  payload: AppSatisfactionResponsePayload
+): Promise<{ ok: true; response: AppSatisfactionResponse }> {
+  return requestAppJson(session, "/app/satisfaction/responses", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }

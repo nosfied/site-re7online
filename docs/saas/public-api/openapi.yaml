@@ -4,8 +4,8 @@ info:
   version: 1.0.0
   summary: API publica tenant-scoped do Converta.
   description: >
-    API publica inicial do Converta. A versao atual expoe health autenticado e leitura
-    minima de contatos. Escrita, mensagens, campanhas e webhooks outbound ficam fora
+    API publica inicial do Converta. A versao atual expoe health autenticado, leitura
+    minima de contatos e leitura resumida de conversas. Escrita, mensagens, campanhas e webhooks outbound ficam fora
     deste MVP.
 servers:
   - url: https://converta.re7online.com/public-api/v1
@@ -17,6 +17,7 @@ security:
 tags:
   - name: Health
   - name: Contacts
+  - name: Conversations
 paths:
   /health:
     get:
@@ -101,6 +102,77 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ContactResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /conversations:
+    get:
+      tags: [Conversations]
+      summary: Lista conversas do tenant da API key sem expor mensagens.
+      operationId: listConversations
+      security:
+        - bearerApiKey: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: channel
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtro por canal, por exemplo `whatsapp`, `messenger` ou `instagram`.
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtro por status operacional publico.
+        - name: updatedSince
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Retorna conversas atualizadas a partir da data informada.
+      responses:
+        "200":
+          description: Lista paginada de conversas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /conversations/{id}:
+    get:
+      tags: [Conversations]
+      summary: Retorna uma conversa do tenant da API key sem expor mensagens.
+      operationId: getConversation
+      security:
+        - bearerApiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID publico da conversa.
+      responses:
+        "200":
+          description: Conversa encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -269,6 +341,110 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/PublicContact"
+    PublicConversation:
+      type: object
+      required: [id, status, channel, createdAt, updatedAt, contactId, assignedUser, department, metrics, lastActivityAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          example: IN_PROGRESS
+        channel:
+          type: string
+          example: whatsapp
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        contactId:
+          type:
+            - string
+            - "null"
+        assignedUser:
+          type:
+            - object
+            - "null"
+          required: [id, name]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+        department:
+          type:
+            - object
+            - "null"
+          required: [id, name, slug]
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            slug:
+              type: string
+        metrics:
+          type:
+            - object
+            - "null"
+          properties:
+            firstResponseTimeSec:
+              type:
+                - integer
+                - "null"
+            avgResponseTimeSec:
+              type:
+                - integer
+                - "null"
+            resolutionTimeSec:
+              type:
+                - integer
+                - "null"
+            totalMessages:
+              type: integer
+            totalAgentMessages:
+              type: integer
+            responseCount:
+              type: integer
+            startedAt:
+              type: string
+              format: date-time
+            closedAt:
+              type:
+                - string
+                - "null"
+              format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+    ConversationsListResponse:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicConversation"
+        page:
+          type: object
+          required: [nextCursor, hasMore, limit]
+          properties:
+            nextCursor:
+              type:
+                - string
+                - "null"
+            hasMore:
+              type: boolean
+            limit:
+              type: integer
+    ConversationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/PublicConversation"
     ErrorResponse:
       type: object
       required: [error]

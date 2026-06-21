@@ -33,7 +33,7 @@ Pontuacao usada na matriz percentual:
 
 O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, webchat publico, NPS, agendamento e API publica documentada para integracoes externas.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, webchat publico, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot e API publica ampla para integracoes externas.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -174,7 +174,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Auditoria/logs | ATENDE PARCIALMENTE | 50% | `Event`, logs estruturados, eventos de feature denied/conversa | Falta tela/relatorio de auditoria formal para cliente | Medio | Medio | Sprint 70 |
 | API para integracao externa | ATENDE PARCIALMENTE | 65% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI inicial e leitura de contatos | Falta conversas, mensagens, webhooks outbound e escrita controlada | Alto | Medio/alto | Sprint 70E |
 | Agendamento | ATENDE PARCIALMENTE | 35% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling` tenant-scoped | Ainda nao ha consumo por chatbot/IA, lembretes automaticos, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71D/72 |
-| NPS/pesquisa satisfacao | NAO ATENDE | 0% | Nao ha model/rotas/tela NPS | Criar pesquisa pos-atendimento e relatorio | Alto | Medio | Sprint 72 |
+| NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 35% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
 | Webchat | NAO ATENDE | 0% | Nao ha canal/widget webchat | Criar widget publico, identidade, persistencia e inbox | Alto | Alto | Sprint 75 |
 | Telegram | NAO ATENDE | 0% | Nao ha adapter/rotas Telegram | Criar canal, token, webhook, outbound, tenant resolution | Alto | Alto | Sprint 76 |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
@@ -332,7 +332,7 @@ Ordem recomendada:
 1. Sprint 69: pacote B2G + POC municipal + matriz por edital.
 2. Sprint 70: relatorios/auditoria/exportacao para licitacao.
 3. Sprint 71: multiagentes IA/base inicial de conhecimento, se o edital exigir IA forte.
-4. Sprint 72: NPS.
+4. Sprint 72: completar NPS com envio manual/automatico e relatorios.
 5. Sprint 73+: canais e integracoes novas somente se o edital-alvo exigir expressamente.
 
-Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa fechar NPS, webchat, Telegram, API publica formal, agendamento e multiagentes IA antes de afirmar aderencia plena.
+Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS com envio/relatorio, webchat, Telegram, API publica ampliada, agendamento integrado e multiagentes IA antes de afirmar aderencia plena.

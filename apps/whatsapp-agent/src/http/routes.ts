@@ -153,6 +153,14 @@ import {
   updateSchedulingService,
 } from "../scheduling/schedulingService.js";
 import {
+  createSatisfactionQuestion,
+  createSatisfactionResponse,
+  createSatisfactionSurvey,
+  listSatisfaction,
+  updateSatisfactionQuestion,
+  updateSatisfactionSurvey,
+} from "../satisfaction/satisfactionService.js";
+import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
   AI_ASSISTANT_GLOBAL_TOPIC_TERMS,
@@ -234,6 +242,10 @@ import {
   getPublicContact,
   listPublicContacts,
 } from "../publicApi/publicApiContactsService.js";
+import {
+  getPublicConversation,
+  listPublicConversations,
+} from "../publicApi/publicApiConversationsService.js";
 import {
   logInstagramOutbound,
   persistInstagramOutboundMessage,
@@ -532,6 +544,173 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         },
       });
       json(res, 200, { data: contact });
+      return;
+    }
+    if (req.method === "GET" && pathname === "/public-api/v1/conversations") {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read", "conversations"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      const result = await listPublicConversations({
+        prisma,
+        clientId: authResult.auth.clientId,
+        query: {
+          channel: typeof query.channel === "string" ? query.channel : null,
+          status: typeof query.status === "string" ? query.status : null,
+          updatedSince: typeof query.updatedSince === "string" ? query.updatedSince : null,
+          cursor: typeof query.cursor === "string" ? query.cursor : null,
+          limit: typeof query.limit === "string" ? query.limit : null,
+        },
+      });
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.conversations.listed",
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          count: result.data.length,
+        },
+      });
+      json(res, 200, result);
+      return;
+    }
+    const publicConversationDetailMatch = pathname.match(/^\/public-api\/v1\/conversations\/([^/]+)$/);
+    if (req.method === "GET" && publicConversationDetailMatch) {
+      const startedAt = Date.now();
+      const authResult = await authenticatePublicApiRequest({
+        prisma,
+        req,
+        requestId,
+        requiredScopes: ["read", "conversations"],
+      });
+      if (!authResult.ok) {
+        json(res, authResult.status, {
+          error: {
+            code: authResult.error,
+            message: authResult.reason,
+            requestId,
+          },
+        });
+        return;
+      }
+      const rate = checkPublicApiRateLimit(authResult.auth);
+      res.setHeader("X-RateLimit-Limit", String(rate.limit));
+      res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetAt / 1000)));
+      if (rate.limited) {
+        res.setHeader("Retry-After", String(rate.retryAfterSec));
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.rate_limited",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            limit: rate.limit,
+            windowMs: 60_000,
+          },
+        });
+        json(res, 429, {
+          error: {
+            code: "rate_limited",
+            message: "Rate limit exceeded.",
+            requestId,
+          },
+        });
+        return;
+      }
+      const conversation = await getPublicConversation({
+        prisma,
+        clientId: authResult.auth.clientId,
+        conversationId: decodeURIComponent(publicConversationDetailMatch[1] ?? ""),
+      });
+      if (!conversation) {
+        await recordPublicApiAuditEvent(prisma, {
+          clientId: authResult.auth.clientId,
+          requestId,
+          eventName: "api.denied",
+          payload: {
+            apiKeyId: authResult.auth.apiKeyId,
+            keyPrefix: authResult.auth.keyPrefix,
+            path: pathname,
+            method: req.method,
+            reason: "conversation_not_found",
+          },
+        });
+        json(res, 404, {
+          error: {
+            code: "not_found",
+            message: "Conversation not found.",
+            requestId,
+          },
+        });
+        return;
+      }
+      await recordPublicApiAuditEvent(prisma, {
+        clientId: authResult.auth.clientId,
+        requestId,
+        eventName: "api.request",
+        payload: {
+          action: "api.conversation.read",
+          apiKeyId: authResult.auth.apiKeyId,
+          keyPrefix: authResult.auth.keyPrefix,
+          path: pathname,
+          method: req.method,
+          statusCode: 200,
+          durationMs: Date.now() - startedAt,
+          conversationId: conversation.id,
+        },
+      });
+      json(res, 200, { data: conversation });
       return;
     }
     json(res, 404, {
@@ -4400,6 +4579,84 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.scheduling.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const satisfactionMatch = pathname.match(/^\/app\/satisfaction(?:\/(questions|surveys|responses)(?:\/([^/]+))?)?$/);
+  if (satisfactionMatch) {
+    const prisma = getPrisma();
+    const access = await requireSatisfactionAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    const entity = satisfactionMatch[1] as "questions" | "surveys" | "responses" | undefined;
+    const entityId = satisfactionMatch[2] ? decodeURIComponent(satisfactionMatch[2]) : null;
+    try {
+      if (req.method === "GET" && !entity) {
+        const result = await listSatisfaction({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      if (req.method === "POST" && entity && !entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "questions"
+            ? await createSatisfactionQuestion({
+                prisma,
+                clientId: access.client.id,
+                userId: access.clientAuth.userId,
+                input,
+              })
+            : entity === "surveys"
+              ? await createSatisfactionSurvey({ prisma, clientId: access.client.id, input })
+              : await createSatisfactionResponse({ prisma, clientId: access.client.id, input });
+        if (!result.ok) {
+          json(res, satisfactionErrorStatus(result.error), httpError(result.error, "Invalid satisfaction payload"));
+          return;
+        }
+        json(res, 201, { ok: true, [satisfactionResponseKey(entity)]: satisfactionResponseValue(result) });
+        return;
+      }
+      if (req.method === "PUT" && (entity === "questions" || entity === "surveys") && entityId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const input = body as Record<string, unknown>;
+        const result =
+          entity === "questions"
+            ? await updateSatisfactionQuestion({
+                prisma,
+                clientId: access.client.id,
+                userId: access.clientAuth.userId,
+                questionId: entityId,
+                input,
+              })
+            : await updateSatisfactionSurvey({
+                prisma,
+                clientId: access.client.id,
+                surveyId: entityId,
+                input,
+              });
+        if (!result.ok) {
+          json(res, satisfactionErrorStatus(result.error), httpError(result.error, "Invalid satisfaction payload"));
+          return;
+        }
+        json(res, 200, { ok: true, [satisfactionResponseKey(entity)]: satisfactionResponseValue(result) });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      const known = error as { code?: string; message?: string };
+      if (known.code === "P2002") {
+        json(res, 409, httpError("duplicate_satisfaction_record", "Duplicate satisfaction record"));
+        return;
+      }
+      logger.error({
+        event: "app.satisfaction.error",
         message: (error as Error).message,
         requestId,
       });
@@ -15789,6 +16046,39 @@ async function requireSchedulingAppAccess(
   return { clientAuth, client };
 }
 
+async function requireSatisfactionAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage satisfaction surveys."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "satisfaction",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
 function schedulingErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
 }
@@ -15802,6 +16092,20 @@ function schedulingResponseKey(entity: "services" | "resources" | "availabilitie
 
 function schedulingResponseValue(result: Record<string, unknown>) {
   return result.service ?? result.resource ?? result.availability ?? result.appointment;
+}
+
+function satisfactionErrorStatus(error: string) {
+  return error.endsWith("_not_found") ? 404 : 400;
+}
+
+function satisfactionResponseKey(entity: "questions" | "surveys" | "responses") {
+  if (entity === "questions") return "question";
+  if (entity === "surveys") return "survey";
+  return "response";
+}
+
+function satisfactionResponseValue(result: Record<string, unknown>) {
+  return result.question ?? result.survey ?? result.response;
 }
 
 function getTenantMaxActiveAppUsers(clientKey: string, tenants: Awaited<ReturnType<typeof getTenants>>) {

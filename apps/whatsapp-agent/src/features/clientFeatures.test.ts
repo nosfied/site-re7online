@@ -12,6 +12,11 @@ test("scheduling is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).scheduling, false);
 });
 
+test("satisfaction is disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).satisfaction, false);
+  assert.equal(getFeatures({ profile: "government" }).satisfaction, false);
+});
+
 test("knowledgeBase can be enabled by tenant feature override", () => {
   const client = { profile: "business", features: { knowledgeBase: true } };
   assert.equal(getFeatures(client).knowledgeBase, true);
@@ -22,4 +27,10 @@ test("scheduling can be enabled by tenant feature override", () => {
   const client = { profile: "government", features: { scheduling: true } };
   assert.equal(getFeatures(client).scheduling, true);
   assert.equal(hasFeature(client, "scheduling"), true);
+});
+
+test("satisfaction can be enabled by tenant feature override", () => {
+  const client = { profile: "government", features: { satisfaction: true } };
+  assert.equal(getFeatures(client).satisfaction, true);
+  assert.equal(hasFeature(client, "satisfaction"), true);
 });

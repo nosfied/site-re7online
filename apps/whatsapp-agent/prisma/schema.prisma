@@ -91,6 +91,9 @@ model Client {
   schedulingAvailabilities SchedulingAvailability[]
   appointments Appointment[]
   appointmentReminders AppointmentReminder[]
+  satisfactionQuestions SatisfactionQuestion[]
+  satisfactionSurveys SatisfactionSurvey[]
+  satisfactionResponses SatisfactionResponse[]
 }
 
 model User {
@@ -112,6 +115,9 @@ model User {
   schedulingResources SchedulingResource[]
   appointmentsCreated Appointment[] @relation("AppointmentCreatedBy")
   appointmentsUpdated Appointment[] @relation("AppointmentUpdatedBy")
+  satisfactionQuestionsCreated SatisfactionQuestion[] @relation("SatisfactionQuestionCreatedBy")
+  satisfactionQuestionsUpdated SatisfactionQuestion[] @relation("SatisfactionQuestionUpdatedBy")
+  satisfactionSurveysAssigned SatisfactionSurvey[] @relation("SatisfactionSurveyAssignedUser")
 
   @@unique([clientId, email])
   @@index([clientId, createdAt])
@@ -204,6 +210,8 @@ model Contact {
   client Client @relation(fields: [clientId], references: [id])
   channelIdentities ContactChannelIdentity[]
   appointments Appointment[]
+  satisfactionSurveys SatisfactionSurvey[]
+  satisfactionResponses SatisfactionResponse[]
 
   @@unique([clientId, waId])
   @@index([clientId, channel, provider, channelAccountId])
@@ -241,6 +249,8 @@ model Conversation {
   messages Message[]
   metrics  ConversationMetrics?
   appointments Appointment[]
+  satisfactionSurveys SatisfactionSurvey[]
+  satisfactionResponses SatisfactionResponse[]
 
   @@unique([clientId, waId])
   @@index([clientId, waId])
@@ -562,6 +572,7 @@ model Department {
   schedulingServices SchedulingService[]
   schedulingResources SchedulingResource[]
   appointments Appointment[]
+  satisfactionSurveys SatisfactionSurvey[]
 
   @@unique([clientId, name])
   @@unique([clientId, slug])
@@ -721,6 +732,8 @@ model Lead {
   notes     LeadNote[]
   contactChannelIdentity ContactChannelIdentity? @relation(fields: [contactChannelIdentityId], references: [id], onDelete: SetNull)
   appointments Appointment[]
+  satisfactionSurveys SatisfactionSurvey[]
+  satisfactionResponses SatisfactionResponse[]
 
   @@unique([tenantId, waId])
   @@index([tenantId, createdAt])
@@ -998,4 +1011,103 @@ model AppointmentReminder {
   @@index([clientId, status])
   @@index([clientId, scheduledAt])
   @@index([appointmentId, scheduledAt])
+}
+
+model SatisfactionQuestion {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  key             String
+  type            String   @default("csat")
+  title           String
+  questionText    String
+  commentPrompt   String?
+  commentEnabled  Boolean  @default(true)
+  status          String   @default("active")
+  metadata        Json?
+  createdByUserId String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("SatisfactionQuestionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("SatisfactionQuestionUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  surveys SatisfactionSurvey[]
+
+  @@unique([clientId, key])
+  @@index([clientId, status])
+  @@index([clientId, type])
+  @@index([clientId, updatedAt])
+}
+
+model SatisfactionSurvey {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  questionId     String?
+  conversationId String?  @db.Uuid
+  contactId      String?  @db.Uuid
+  leadId         String?
+  departmentId   String?
+  assignedUserId String?
+  channel        String?
+  type           String   @default("csat")
+  status         String   @default("draft")
+  questionText   String
+  commentEnabled Boolean  @default(true)
+  source         String   @default("manual")
+  templateName   String?
+  templateLang   String?
+  requestId      String?
+  sentAt         DateTime?
+  answeredAt     DateTime?
+  expiresAt      DateTime?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  question SatisfactionQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedUser User? @relation("SatisfactionSurveyAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  response SatisfactionResponse?
+
+  @@index([clientId, status, createdAt])
+  @@index([clientId, type, createdAt])
+  @@index([clientId, conversationId])
+  @@index([clientId, contactId])
+  @@index([clientId, leadId])
+  @@index([clientId, departmentId, createdAt])
+  @@index([clientId, assignedUserId, createdAt])
+}
+
+model SatisfactionResponse {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  surveyId       String   @unique
+  conversationId String?  @db.Uuid
+  contactId      String?  @db.Uuid
+  leadId         String?
+  score          Int
+  comment        String?
+  category       String?
+  source         String   @default("app")
+  respondedAt    DateTime @default(now())
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  survey SatisfactionSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, respondedAt])
+  @@index([clientId, score, respondedAt])
+  @@index([clientId, conversationId])
+  @@index([clientId, contactId])
+  @@index([clientId, leadId])
 }

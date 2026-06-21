@@ -101,6 +101,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Agenda", government: "Agenda" },
   },
   {
+    href: "/app/satisfaction",
+    icon: "⭐",
+    group: "operation",
+    feature: "satisfaction",
+    minRole: "SUPERVISOR",
+    labels: { business: "Satisfacao", government: "Satisfacao" },
+  },
+  {
     href: "/app/reports",
     icon: "📈",
     group: "operation",

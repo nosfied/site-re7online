@@ -19,8 +19,9 @@ Ja existe uma API publica inicial de integracao externa. O estado atual e **PARC
 - existe modelo de API key/scopes por integracao externa;
 - existe `GET /public-api/v1/health`;
 - existe leitura basica de contatos em `GET /public-api/v1/contacts` e `GET /public-api/v1/contacts/{id}`;
+- existe leitura resumida de conversas em `GET /public-api/v1/conversations` e `GET /public-api/v1/conversations/{id}`;
 - nao foi encontrado webhook outbound para sistemas de clientes;
-- nao ha escrita publica, mensagens, campanhas ou conversas no contrato publico atual.
+- nao ha escrita publica, mensagens, campanhas ou webhooks outbound no contrato publico atual.
 
 Recomendacao: nao expor `/app` nem `/admin` como API publica. O caminho correto e criar uma camada publica versionada, com autenticacao propria, scopes, rate limit, OpenAPI e DTOs estaveis, reaproveitando os services e contratos internos com adaptadores.
 
@@ -36,7 +37,7 @@ Recomendacao: nao expor `/app` nem `/admin` como API publica. O caminho correto 
 | Realtime | `apps/whatsapp-agent/src/realtime/websocket.ts` | WebSocket autenticado em `/app/realtime` e `/agent-api/app/realtime` |
 | Webhook Meta | `apps/whatsapp-agent/src/http/routes.ts`, `apps/whatsapp-agent/src/http/metaWebhookPassive.ts` | Recebimento externo Meta, com assinatura em producao |
 | Docs existentes | `docs/saas/GAP_REUSE_AUDIT.md`, `docs/saas/bid-package/12-integracoes.md` | Documentam gap de API publica e integracoes |
-| OpenAPI/Swagger | `docs/saas/public-api/openapi.yaml` | Contrato inicial para health e contacts read-only |
+| OpenAPI/Swagger | `docs/saas/public-api/openapi.yaml` | Contrato inicial para health, contacts read-only e conversations read-only |
 
 ## Superficies de API existentes
 
@@ -180,11 +181,11 @@ Para licitacoes e integracoes profissionais, o Converta deve criar:
 | Requisito de API publica | Classificacao | Aderencia | Evidencia | Gap principal |
 | --- | --- | ---: | --- | --- |
 | API REST existente | PARCIAL | 55% | `/app/*`, `/admin/*` | Falta camada publica versionada |
-| API publica versionada | ATENDE PARCIALMENTE | 65% | `/public-api/v1` | Expandir contrato para conversas/mensagens/webhooks |
+| API publica versionada | ATENDE PARCIALMENTE | 72% | `/public-api/v1` | Expandir contrato para mensagens/webhooks/escrita controlada |
 | Autenticacao para integracao | ATENDE | 90% | `PublicApiKey`, hash-only, scopes e revoke | Refinar tela/rotação/expiração |
 | Webhooks inbound | ATENDE | 90% | `/webhook` Meta | Inbound e fornecedor-especifico |
 | Webhooks outbound | NAO ATENDE | 0% | Nao encontrado | Criar eventos assinados |
-| OpenAPI/Swagger | ATENDE PARCIALMENTE | 65% | `docs/saas/public-api/openapi.yaml` | Adicionar examples/changelog e futuros endpoints |
+| OpenAPI/Swagger | ATENDE PARCIALMENTE | 72% | `docs/saas/public-api/openapi.yaml` | Adicionar examples/changelog e futuros endpoints |
 | Rate limit publico | ATENDE PARCIALMENTE | 70% | Rate limit basico por API key | Evoluir para quotas por plano e janelas configuraveis |
 | Auditoria por integracao | ATENDE PARCIALMENTE | 70% | Eventos `api.request`, `api.denied`, `api.rate_limited` | Tela/relatorio de auditoria publico |
 | Multi-tenant isolation | ATENDE PARCIALMENTE | 80% | Client/session/RBAC existentes | Formalizar no middleware publico |
@@ -279,7 +280,26 @@ Ficam fora da 70D:
 - escrita publica;
 - webhooks outbound.
 
-### Sprint 70E - Webhooks outbound
+### Sprint 70E - Public API Conversations Read MVP
+
+Escopo seguro:
+
+- `GET /public-api/v1/conversations`;
+- `GET /public-api/v1/conversations/{id}`;
+- OpenAPI atualizado em `docs/saas/public-api/openapi.yaml`;
+- DTO publico resumido, sem mensagens, payloads, tokens ou identificadores sensiveis;
+- scopes `read + conversations`;
+- auditoria `api.conversations.listed` e `api.conversation.read` via `api.request`.
+
+Ficam fora da 70E:
+
+- messages;
+- campaigns;
+- escrita publica;
+- envio por canal;
+- webhooks outbound.
+
+### Sprint 70F - Webhooks outbound
 
 Eventos recomendados:
 

@@ -24,6 +24,7 @@ Status: current-state documentation based on code inspection. This file does not
 | `chatbot` | true | true | same defaults | yes, chatbot routes | yes |
 | `knowledgeBase` | false | false | controlled rollout via `Client.features` | yes, knowledge base routes | yes |
 | `scheduling` | false | false | controlled rollout via `Client.features` | yes, scheduling routes | yes |
+| `satisfaction` | false | false | controlled rollout via `Client.features` | yes, satisfaction routes | yes |
 
 ## Frontend-Only/Future Flags
 

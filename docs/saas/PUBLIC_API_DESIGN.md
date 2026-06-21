@@ -264,11 +264,7 @@ Filtros iniciais:
 
 - `channel`;
 - `status`;
-- `mode`;
-- `departmentId`;
-- `assignedToUserId`;
 - `updatedSince`;
-- `startedSince`;
 - `limit`;
 - `cursor`.
 
@@ -705,16 +701,32 @@ Sprint 70D amplia a API publica com o primeiro endpoint de negocio somente leitu
   - `leadStatus`;
   - `tags`.
 
-Ainda ficam fora apos 70D:
+Sprint 70E amplia a API publica com conversas somente leitura:
 
-- conversations;
+- `GET /public-api/v1/conversations`;
+- `GET /public-api/v1/conversations/{id}`;
+- OpenAPI atualizado em `docs/saas/public-api/openapi.yaml`;
+- DTO publico minimo para conversa:
+  - `id`;
+  - `status`;
+  - `channel`;
+  - `createdAt`;
+  - `updatedAt`;
+  - `assignedUser`;
+  - `department`;
+  - `contactId`;
+  - `metrics`;
+  - `lastActivityAt`.
+
+Ainda ficam fora apos 70E:
+
 - messages;
 - campaigns;
 - webhooks outbound;
 - escrita publica.
 
-Proxima sprint recomendada apos 70D: **Sprint 70E - Conversations Read MVP**, ainda sem escrita:
+Proxima sprint recomendada apos 70E: **Sprint 70F - Messages Read MVP**, ainda sem escrita:
 
-1. conversations read-only;
-2. messages read-only por conversa;
+1. messages read-only por conversa;
+2. redacao/limites de PII;
 3. exemplos de integracao e erros.

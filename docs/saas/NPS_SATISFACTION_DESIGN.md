@@ -2,7 +2,9 @@
 
 Data: 2026-06-21
 
-Escopo: desenho funcional e tecnico do modulo de NPS/CSAT/Satisfacao. Nao houve migration, alteracao de banco, runtime, canais, chatbot, IA, API publica ou frontend operacional.
+Escopo original: desenho funcional e tecnico do modulo de NPS/CSAT/Satisfacao.
+
+Status apos Sprint 72C: a estrutura formal foi implementada com `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction=false` por padrao e CRUD `/app/satisfaction`. Ainda nao ha disparo automatico, envio por conversa, chatbot/IA, API publica, formulario publico ou relatorios NPS/CSAT.
 
 ## Objetivo
 
@@ -395,12 +397,12 @@ Alternativa recomendada para MVP controlado:
 
 ### Sprint 72C - Satisfaction Schema + App CRUD MVP
 
-Implementar estrutura sem envio automatico:
+Concluida como estrutura sem envio automatico:
 
-- models aditivos;
+- models aditivos `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`;
 - migration;
 - feature flag `satisfaction=false`;
-- CRUD de perguntas/configuracao em `/app/satisfaction`;
+- CRUD de perguntas, pesquisas e respostas manuais em `/app/satisfaction`;
 - listagem de surveys/respostas;
 - sem disparo por canal.
 
