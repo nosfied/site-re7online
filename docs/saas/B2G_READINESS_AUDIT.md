@@ -2,7 +2,7 @@
 
 Status: auditoria de aderencia para editais publicos baseada no codigo atual. Este documento nao altera runtime.
 
-Data: 2026-06-17.
+Data: 2026-06-17. Atualizacao de aderencia: 2026-06-22, apos Webchat MVP operacional.
 
 ## Escopo
 
@@ -23,17 +23,17 @@ Classificacao:
 - ATENDE PARCIALMENTE: existe base funcional, mas faltam amplitude, formalizacao, configuracao ou modulo exigivel em edital.
 - NAO ATENDE: nao ha implementacao operacional encontrada no codigo atual.
 
-Pontuacao usada na matriz percentual:
+Pontuacao usada na leitura percentual consolidada:
 
 - ATENDE = 100
-- ATENDE PARCIALMENTE = 50
+- ATENDE PARCIALMENTE = percentual graduado conforme maturidade real, evidencias e risco de demonstracao
 - NAO ATENDE = 0
 
 ## Resumo Executivo
 
-O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao e POC controlada.
+O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, Webchat avancado com roteamento/identificacao, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot e API publica ampla para integracoes externas.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio e API publica com escrita/webhooks.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -42,16 +42,17 @@ O projeto ja possui uma base importante para B2G:
 - defaults B2G com dashboard, departamentos, usuarios, SLA, relatorios e chatbot ativos;
 - console interno para criar/editar tenant como "Governo / edital";
 - POC controlada `demo-prefeitura`;
-- relatorios, dashboard, SLA, departamentos, auditoria de eventos e retencao LGPD.
+- relatorios, dashboard, SLA, departamentos, auditoria de eventos e retencao LGPD;
+- Knowledge Base, Public API, Scheduling, Satisfaction/NPS e Webchat ja possuem fundacao formal em producao, com rollout controlado por feature.
 
 Leitura final:
 
 | Dimensao | Aderencia |
 | --- | ---: |
-| Grupo A medio, WhatsApp-first | 78% |
-| Grupo A com multicanal Meta e POC | 72% |
-| Sao Jose do Rio Preto como edital-guia avancado | 55% |
-| Aderencia consolidada ponderada | 68% |
+| Grupo A medio, WhatsApp-first | 88% |
+| Grupo A com multicanal Meta, Webchat e POC | 83% |
+| Sao Jose do Rio Preto como edital-guia avancado | 78% |
+| Aderencia consolidada ponderada | 84% |
 
 ## Perfis B2B x B2G
 
@@ -121,6 +122,13 @@ Fonte: `apps/whatsapp-agent/src/features/clientFeatures.ts`.
 | `reports` | Relatorios | on | on | Alta |
 | `campaigns` | Campanhas | on | off | Media/baixa para B2G |
 | `chatbot` | Chatbot | on | on | Alta |
+| `knowledgeBase` | Base de conhecimento | off | off | Alta, rollout controlado |
+| `scheduling` | Agendamento | off | off | Alta, rollout controlado |
+| `schedulingReminders` | Lembretes de agendamento | off | off | Media/alta, sem envio automatico pleno |
+| `schedulingConfirmation` | Confirmacao de agendamento | off | off | Media, reservado |
+| `satisfaction` | NPS/Satisfacao | off | off | Alta, rollout controlado |
+| `webchat` | Webchat | off | off | Alta quando edital exigir canal web |
+| `webchatOutbound` | Resposta humana Webchat | off | off | Alta quando Webchat estiver habilitado |
 
 ### Flags frontend futuras/reservadas
 
@@ -141,13 +149,11 @@ Ainda nao existem flags oficiais para:
 - CRM;
 - auditoria;
 - LGPD/retencao;
-- public API;
-- NPS;
-- agendamento;
-- webchat;
 - Telegram;
 - multiagentes IA;
-- base de conhecimento.
+- OTP;
+- transcricao de audio;
+- busca avancada.
 
 Parte desses modulos existe sem flag dedicada; outros nao existem.
 
@@ -164,7 +170,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | CRM/timeline | ATENDE | 100% | `Lead`, `LeadNote`, timeline no inbox | Ajustar nomenclatura B2G se edital evitar "CRM" | Baixo | Baixo | Sprint 69 |
 | Chatbot | ATENDE | 100% | `ChatbotFlow`, `/app/chatbot`, flags `chatbot` | Templates de fluxo por servico publico | Medio | Medio | Sprint 70 |
 | IA | ATENDE PARCIALMENTE | 50% | IA supervisionada, `aiAssistantConfig`, `aiIntentQualification` DB-first | Falta pacote formal de base de conhecimento/multiagentes | Medio | Medio/alto | Sprint 71 |
-| Base de conhecimento | ATENDE PARCIALMENTE | 35% | `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, feature `knowledgeBase`, CRUD `/app/knowledge-base` tenant-scoped; Sprint 69D desenha consumo runtime | Falta lookup/shadow no runtime, consumo por IA/chatbot, busca semantica e importacao documental | Medio/alto | Medio | Sprint 69E/69F |
+| Base de conhecimento | ATENDE PARCIALMENTE | 55% | `KnowledgeBaseCollection`, `KnowledgeBaseArticle`, feature `knowledgeBase`, CRUD `/app/knowledge-base` tenant-scoped; Sprint 69D desenha consumo runtime | Falta lookup/shadow no runtime, consumo por IA/chatbot, busca semantica e importacao documental | Medio/alto | Medio | Sprint 69E/69F |
 | Campanhas/templates | ATENDE PARCIALMENTE | 50% | `Campaign`, `Template`, Meta templates | Government default desliga campaigns/templates; edital pode exigir comunicados oficiais | Medio | Baixo/medio | Sprint 69/70 |
 | Relatorios | ATENDE | 100% | `/app/reports`, export, `ConversationMetrics` | Criar relatorio licitatorio fechado por periodo/orgaos/canais se exigido | Baixo | Medio | Sprint 69 |
 | Dashboard | ATENDE PARCIALMENTE | 50% | `/app/dashboard`, KPIs operacionais, profile government | Dashboard e beta e operacional, nao BI completo | Medio | Medio | Sprint 70 |
@@ -172,15 +178,15 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Exportacao Excel/CSV | ATENDE PARCIALMENTE | 50% | Exportacao CSV/text em relatorios | Excel/XLSX nativo nao evidenciado | Medio | Baixo | Sprint 69 |
 | LGPD/retencao | ATENDE | 100% | `RetentionConfig`, privacy settings, delete/anonymize | Documentar politica por contrato publico | Baixo | Baixo | Sprint 69 |
 | Auditoria/logs | ATENDE PARCIALMENTE | 50% | `Event`, logs estruturados, eventos de feature denied/conversa | Falta tela/relatorio de auditoria formal para cliente | Medio | Medio | Sprint 70 |
-| API para integracao externa | ATENDE PARCIALMENTE | 65% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI inicial e leitura de contatos | Falta conversas, mensagens, webhooks outbound e escrita controlada | Alto | Medio/alto | Sprint 70E |
-| Agendamento | ATENDE PARCIALMENTE | 48% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e design de envio controlado | Ainda nao ha consumo por chatbot/IA, envio real de lembretes, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71H |
-| NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 35% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
-| Webchat | ATENDE PARCIALMENTE | 78% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
+| API para integracao externa | ATENDE PARCIALMENTE | 80% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI, contatos, conversas e mensagens read-only | Falta webhooks outbound, escrita controlada e envio por API | Alto | Medio/alto | Sprint 70G |
+| Agendamento | ATENDE PARCIALMENTE | 62% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e design de envio controlado | Ainda nao ha consumo por chatbot/IA, envio real de lembretes, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71H |
+| NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
+| Webchat | ATENDE PARCIALMENTE | 85% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
 | Telegram | NAO ATENDE | 0% | Nao ha adapter/rotas Telegram | Criar canal, token, webhook, outbound, tenant resolution | Alto | Alto | Sprint 76 |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |
 
-Pontuacao simples: 67%.
+Pontuacao simples atualizada: 78%.
 
 ## Aderencia Por Edital
 
@@ -188,12 +194,12 @@ Sem os TRs completos versionados, a estimativa abaixo considera padroes recorren
 
 | Edital | Perfil provavel | Aderencia atual | Leitura |
 | --- | --- | ---: | --- |
-| Pinheiros/ES | WhatsApp-first, atendimento municipal, relatorios | 78% | Bom encaixe se nao exigir Telegram/webchat/NPS. |
-| Cabreuva/SP | WhatsApp, setores, dashboard/SLA | 75% | Forte em operacao; revisar API publica e exportacao exigida. |
-| Aripuana/MT | Atendimento digital municipal com POC | 76% | POC demo ajuda; ajustar labels e seed para municipio. |
-| Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 72% | Precisa reforcar auditoria formal e relatorios licitatorios. |
-| Quatro Barras/PR | Atendimento e relatorios | 76% | Aderente para WhatsApp/SLA/filas; gaps em canais extras. |
-| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 55% | Exigencias como Telegram, webchat, NPS, OTP/API formal reduzem aderencia. |
+| Pinheiros/ES | WhatsApp-first, atendimento municipal, relatorios | 88% | Bom encaixe; Webchat MVP e API read-only fortalecem POC se exigidos. |
+| Cabreuva/SP | WhatsApp, setores, dashboard/SLA | 88% | Forte em operacao; API publica e Webchat MVP ja sao demonstraveis. |
+| Aripuana/MT | Atendimento digital municipal com POC | 77% | POC demo ajuda; escala, storage, mobile nativo e Telegram continuam sensiveis. |
+| Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 83% | Precisa reforcar NPS funcional, envio real de lembretes, transcricao/busca e documentos. |
+| Quatro Barras/PR | Atendimento e relatorios | 87% | Aderente para WhatsApp/SLA/filas; Webchat MVP reduz risco em canal web. |
+| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 78% | Webchat, API e modulos estruturais melhoraram; Telegram, OTP, NPS automatico e busca/transcricao ainda reduzem aderencia. |
 
 ## Documentacao Existente Reaproveitavel
 
@@ -238,13 +244,13 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | --- | --- | --- | --- | --- |
 | Pacote documental B2G e POC municipal | Alto | Baixo | Baixo | P0 |
 | Relatorio licitatorio consolidado + PDF/CSV/XLSX | Alto | Medio | Medio | P0 |
+| NPS/pesquisa de satisfacao funcional | Alto em editais avancados | Medio | Medio | P0 |
+| Agendamento com envio real de lembretes | Alto quando exigido | Medio | Medio | P0 |
 | Auditoria formal consultavel por tela/relatorio | Medio/alto | Medio | Medio | P1 |
-| NPS/pesquisa de satisfacao | Alto em editais avancados | Medio | Medio | P1 |
-| Multiagentes IA / base de conhecimento | Alto em editais com IA | Alto | Medio/alto | P1 |
-| API publica versionada | Alto se exigido | Alto | Alto | P2 |
-| Webchat | Alto se exigido | Alto | Alto | P2 |
+| Public API webhooks outbound | Alto se exigido | Medio/alto | Medio | P1 |
+| Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
+| Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
 | Telegram | Alto se exigido | Alto | Alto | P2 |
-| Agendamento | Medio/alto | Alto | Alto | P2 |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
 ## O Que Ja Existe Mas Pode Estar Escondido Por Profile/Feature
@@ -259,11 +265,15 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Templates | off por default em government | Pode ser habilitado se edital permitir comunicados/template Meta. |
 | Campaigns | off por default em government | Deve ser habilitado com cuidado por LGPD/comunicacao oficial. |
 | Chatbot | default on | Requer configuracao de fluxos por servico. |
+| Knowledge Base | `knowledgeBase`; default off | Estrutural em producao, habilitar por tenant quando houver curadoria. |
+| Scheduling | `scheduling`; default off | Estrutural em producao, habilitar por tenant piloto. |
+| Satisfaction/NPS | `satisfaction`; default off | Estrutural em producao, falta disparo/link/relatorio. |
+| Webchat | `webchat` e `webchatOutbound`; default off | MVP operacional, habilitar por tenant/site/dominio. |
 | POC | flag frontend reservada; demo por script | Nao e modulo exposto como feature final. |
 
 ## Roadmap Sem Retrabalho
 
-### Sprint 69 - B2G Proposal Package + POC Municipal
+### P0 - B2G Proposal Package + POC Municipal
 
 Objetivo: preparar entrega comercial/licitatoria sem criar modulo novo.
 
@@ -278,7 +288,33 @@ Entregas:
 
 Risco: baixo.
 
-### Sprint 70 - B2G Reports/Audit Hardening
+### P0 - NPS/Satisfacao Funcional
+
+Objetivo: transformar o modulo estrutural em fluxo operacional de pesquisa pos-atendimento.
+
+Entregas:
+
+- disparo manual ou por encerramento;
+- link publico de resposta;
+- relatorio NPS/CSAT por periodo, canal e setor;
+- exportacao.
+
+Risco: medio.
+
+### P0 - Scheduling Controlled Send
+
+Objetivo: transformar lembretes manuais/shadow em envio real controlado.
+
+Entregas:
+
+- envio por tenant piloto;
+- template obrigatorio quando fora da janela Meta;
+- limites e rollback por flag;
+- eventos de auditoria.
+
+Risco: medio.
+
+### P1 - B2G Reports/Audit Hardening
 
 Objetivo: aumentar aderencia em relatorios, SLA, auditoria e exportacao.
 
@@ -291,7 +327,33 @@ Entregas:
 
 Risco: medio.
 
-### Sprint 71 - AI B2G Package
+### P1 - Public API Webhooks Outbound
+
+Objetivo: cobrir editais que exigem integracao ativa por eventos.
+
+Entregas:
+
+- cadastro de endpoint por tenant;
+- eventos de conversa/mensagem;
+- assinatura/retry;
+- logs redigidos.
+
+Risco: medio/alto.
+
+### P1 - Webchat Refinement
+
+Objetivo: transformar o Webchat MVP em experiencia mais vendavel para POC.
+
+Entregas:
+
+- identificacao mais clara do visitante;
+- roteamento por departamento;
+- acessibilidade/copy visual;
+- pacote de embed por edital.
+
+Risco: medio.
+
+### P1 - AI B2G Package
 
 Objetivo: formalizar IA para edital.
 
@@ -305,34 +367,32 @@ Entregas:
 
 Risco: medio/alto.
 
-### Sprint 72 - NPS + Knowledge Base Design/Implementation
+### P2 - Telegram
 
-Objetivo: cobrir dois gaps comuns de edital avancado.
+Objetivo: cobrir canal adicional quando edital exigir expressamente.
 
 Entregas:
 
-- pesquisa pos-atendimento;
-- relatorio NPS/satisfacao;
-- desenho ou primeira versao de base de conhecimento por tenant.
+- design;
+- schema/config;
+- inbound;
+- outbound humano;
+- Inbox/timeline;
+- rollout controlado.
 
-Risco: medio/alto.
-
-### Sprint 73+ - API Publica, Webchat, Telegram, Agendamento
-
-Objetivo: cobrir requisitos de editais avancados.
-
-Recomendacao: nao implementar todos juntos. Cada um e modulo/canal novo com seguranca, tenant resolution, logs, LGPD e testes especificos.
+Risco: alto.
 
 ## Recomendacao Final
 
-Nao iniciar Telegram/Webchat/API publica antes de fechar o pacote B2G documental e o hardening dos relatorios/auditoria.
+O Converta ja pode ser tratado como competitivo para editais WhatsApp-first e defensavel para editais com API read-only, POC e Webchat basico. A proxima fase deve transformar modulos estruturais em fluxos operacionais completos, antes de abrir novos canais pesados.
 
 Ordem recomendada:
 
-1. Sprint 69: pacote B2G + POC municipal + matriz por edital.
-2. Sprint 70: relatorios/auditoria/exportacao para licitacao.
-3. Sprint 71: multiagentes IA/base inicial de conhecimento, se o edital exigir IA forte.
-4. Sprint 72: completar NPS com envio manual/automatico e relatorios.
-5. Sprint 73+: canais e integracoes novas somente se o edital-alvo exigir expressamente.
+1. completar NPS com envio/link/relatorio;
+2. completar Scheduling com envio controlado de lembretes;
+3. criar POC/runbook B2G pos-Webchat MVP;
+4. adicionar Public API webhooks outbound se o edital exigir eventos externos;
+5. refinar Webchat para identificacao/roteamento/acessibilidade;
+6. iniciar Telegram apenas se o edital-alvo exigir expressamente.
 
-Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS com envio/relatorio, webchat, Telegram, API publica ampliada, agendamento integrado e multiagentes IA antes de afirmar aderencia plena.
+Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram, OTP, transcricao/busca, webhooks Public API e multiagentes IA antes de afirmar aderencia plena.
