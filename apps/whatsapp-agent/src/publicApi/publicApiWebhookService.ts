@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { getFeatures } from "../features/clientFeatures.js";
 
 export const PUBLIC_API_WEBHOOK_EVENTS = [
   "contact.created",
@@ -15,6 +16,7 @@ export type PublicApiWebhookEvent = (typeof PUBLIC_API_WEBHOOK_EVENTS)[number];
 
 const WEBHOOK_SECRET_PREFIX = "whsec";
 const MAX_ENDPOINTS_PER_TENANT = 20;
+const SHADOW_SIGNATURE_MODE = "shadow_hash_key";
 const PRIVATE_IPV4_RANGES = [
   /^10\./,
   /^127\./,
@@ -49,6 +51,112 @@ export function signWebhookPayload(params: {
 
 export function hashWebhookPayload(payload: unknown) {
   return crypto.createHash("sha256").update(JSON.stringify(payload ?? {}), "utf8").digest("hex");
+}
+
+function isPublicApiWebhookEvent(value: string): value is PublicApiWebhookEvent {
+  return (PUBLIC_API_WEBHOOK_EVENTS as readonly string[]).includes(value);
+}
+
+function sanitizePublicId(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9_:-]/g, "").slice(0, 120);
+}
+
+export function buildShadowWebhookPayload(params: {
+  eventType: PublicApiWebhookEvent;
+  client: { id: string; clientKey: string };
+  now?: Date;
+}) {
+  const now = params.now ?? new Date();
+  const base = {
+    id: `evt_shadow_${now.getTime()}`,
+    type: params.eventType,
+    createdAt: now.toISOString(),
+    tenant: {
+      id: params.client.id,
+      key: params.client.clientKey,
+    },
+  };
+  if (params.eventType === "contact.created") {
+    return {
+      ...base,
+      data: {
+        id: "contact_shadow",
+        name: "Contato Shadow",
+        channel: "webhook-shadow",
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+    };
+  }
+  if (params.eventType === "conversation.created") {
+    return {
+      ...base,
+      data: {
+        id: "conversation_shadow",
+        status: "open",
+        channel: "webhook-shadow",
+        contactId: "contact_shadow",
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      },
+    };
+  }
+  if (params.eventType === "message.received" || params.eventType === "message.sent") {
+    return {
+      ...base,
+      data: {
+        id: params.eventType === "message.received" ? "inbound_shadow" : "outbound_shadow",
+        conversationId: "conversation_shadow",
+        direction: params.eventType === "message.received" ? "inbound" : "outbound",
+        channel: "webhook-shadow",
+        type: "text",
+        text: "Mensagem shadow",
+        createdAt: now.toISOString(),
+        status: params.eventType === "message.sent" ? "sent" : "received",
+      },
+    };
+  }
+  return {
+    ...base,
+    data: {
+      id: `${params.eventType.replace(".", "_")}_shadow`,
+      status: "shadow",
+      createdAt: now.toISOString(),
+    },
+  };
+}
+
+const BLOCKED_PUBLIC_PAYLOAD_KEYS = new Set([
+  "rawPayload",
+  "providerPayload",
+  "token",
+  "accessToken",
+  "pageAccessToken",
+  "instagramBusinessAccessToken",
+  "ciphertext",
+  "externalUserRef",
+  "waId",
+  "ip",
+  "userAgent",
+]);
+
+function assertPublicWebhookPayload(value: unknown, path = "payload"): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return null;
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      const nested = assertPublicWebhookPayload(value[index], `${path}[${index}]`);
+      if (nested) return nested;
+    }
+    return null;
+  }
+  if (typeof value !== "object") return `invalid_${path}`;
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    if (BLOCKED_PUBLIC_PAYLOAD_KEYS.has(key)) return `blocked_payload_key:${key}`;
+    const nested = assertPublicWebhookPayload(nestedValue, `${path}.${key}`);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 export function validateWebhookEndpointUrl(input: string) {
@@ -168,6 +276,146 @@ export async function listWebhookDashboard(params: {
   };
 }
 
+export async function generateWebhookShadowDelivery(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  endpointId?: string | null;
+  eventType: string;
+  payload?: unknown;
+  recordAttempts?: boolean;
+  requestId: string;
+}) {
+  if (!isPublicApiWebhookEvent(params.eventType)) {
+    await recordWebhookShadowAudit(params.prisma, {
+      clientId: params.clientId,
+      requestId: `${params.requestId}:webhook-shadow-denied:invalid-event`,
+      eventName: "webhook.shadow.denied",
+      payload: { reason: "invalid_event_type", eventType: params.eventType },
+    });
+    return { ok: false as const, error: "invalid_event_type" };
+  }
+  const client = await params.prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { id: true, clientKey: true, status: true, features: true, profile: true },
+  });
+  if (!client) return { ok: false as const, error: "client_not_found" };
+  if (client.status !== "ACTIVE") return { ok: false as const, error: "client_inactive" };
+  if (!getFeatures(client).webhooks) {
+    await recordWebhookShadowAudit(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-shadow-denied:feature-disabled`,
+      eventName: "webhook.shadow.denied",
+      payload: { reason: "feature_disabled", eventType: params.eventType },
+    });
+    return { ok: false as const, error: "feature_disabled" };
+  }
+  const endpoint = params.endpointId
+    ? await params.prisma.webhookEndpoint.findFirst({
+        where: { id: params.endpointId, clientId: client.id },
+      })
+    : await params.prisma.webhookEndpoint.findFirst({
+        where: { clientId: client.id, active: true },
+        orderBy: { createdAt: "desc" },
+      });
+  if (!endpoint) {
+    await recordWebhookShadowAudit(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-shadow-skipped:no-endpoint`,
+      eventName: "webhook.shadow.skipped",
+      payload: { reason: "endpoint_not_found", eventType: params.eventType },
+    });
+    return { ok: false as const, error: "webhook_endpoint_not_found" };
+  }
+  if (!endpoint.active) {
+    await recordWebhookShadowAudit(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-shadow-skipped:inactive-endpoint:${endpoint.id}`,
+      eventName: "webhook.shadow.skipped",
+      payload: { reason: "endpoint_inactive", eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: "webhook_endpoint_inactive" };
+  }
+  const payload =
+    params.payload ??
+    buildShadowWebhookPayload({
+      eventType: params.eventType,
+      client,
+    });
+  const payloadIssue = assertPublicWebhookPayload(payload);
+  if (payloadIssue) {
+    await recordWebhookShadowAudit(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-shadow-denied:unsafe-payload`,
+      eventName: "webhook.shadow.denied",
+      payload: { reason: "unsafe_payload", detail: payloadIssue, eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: "unsafe_payload", detail: payloadIssue };
+  }
+
+  const rawBody = JSON.stringify(payload);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const payloadHash = hashWebhookPayload(payload);
+  const signature = signWebhookPayload({
+    secret: endpoint.signingSecretHash,
+    timestamp,
+    payload: rawBody,
+  });
+  let delivery: ReturnType<typeof serializeWebhookDelivery> | null = null;
+  let attempt: ReturnType<typeof serializeWebhookAttempt> | null = null;
+  if (params.recordAttempts) {
+    const createdDelivery = await params.prisma.webhookDelivery.create({
+      data: {
+        clientId: client.id,
+        endpointId: endpoint.id,
+        eventType: params.eventType,
+        payloadHash,
+        status: "shadow",
+      },
+    });
+    const createdAttempt = await params.prisma.webhookAttempt.create({
+      data: {
+        clientId: client.id,
+        deliveryId: createdDelivery.id,
+        attemptNumber: 1,
+        status: "skipped",
+        responseCode: null,
+      },
+    });
+    delivery = serializeWebhookDelivery(createdDelivery);
+    attempt = serializeWebhookAttempt(createdAttempt);
+  }
+  await recordWebhookShadowAudit(params.prisma, {
+    clientId: client.id,
+    requestId: `${params.requestId}:webhook-shadow-generated:${endpoint.id}:${sanitizePublicId(params.eventType)}`,
+    eventName: "webhook.shadow.generated",
+    payload: {
+      endpointId: endpoint.id,
+      eventType: params.eventType,
+      payloadHash,
+      recorded: Boolean(params.recordAttempts),
+      signatureMode: SHADOW_SIGNATURE_MODE,
+    },
+  });
+  return {
+    ok: true as const,
+    endpoint: serializeWebhookEndpoint(endpoint),
+    eventType: params.eventType,
+    payload,
+    rawBody,
+    headers: {
+      "X-Converta-Timestamp": String(timestamp),
+      "X-Converta-Signature": signature,
+      "X-Converta-Signature-Mode": SHADOW_SIGNATURE_MODE,
+    },
+    payloadHash,
+    signaturePreview: signature.slice(0, 19),
+    signatureMode: SHADOW_SIGNATURE_MODE,
+    recorded: Boolean(params.recordAttempts),
+    delivery,
+    attempt,
+  };
+}
+
 export async function createWebhookEndpoint(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -281,6 +529,22 @@ export async function recordWebhookAuditEvent(
       payloadJson: params.payload as Prisma.InputJsonObject,
     },
   });
+}
+
+async function recordWebhookShadowAudit(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    requestId: string;
+    eventName: "webhook.shadow.generated" | "webhook.shadow.skipped" | "webhook.shadow.denied";
+    payload: Record<string, unknown>;
+  }
+) {
+  try {
+    await recordWebhookAuditEvent(prisma, params);
+  } catch {
+    // Shadow mode must never fail the caller only because audit already exists.
+  }
 }
 
 export function webhookEndpointErrorStatus(error: string) {

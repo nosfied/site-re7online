@@ -1,4 +1,4 @@
-# Sprint 70G/70H - Public API Webhooks Design + Infra MVP
+# Sprint 70G/70H/70I - Public API Webhooks Design + Infra/Shadow MVP
 
 Data: 2026-06-22
 
@@ -17,6 +17,18 @@ Na Sprint 70H foi implementada a infraestrutura inicial, ainda sem envio automat
 - auditoria de `webhook.endpoint.created`, `webhook.endpoint.updated` e `webhook.endpoint.disabled`.
 
 Importante: a 70H nao cria dispatch automatico, worker, retries reais, dead letter operacional ou emissao de eventos de negocio. Esses itens continuam em fase futura.
+
+Na Sprint 70I foi implementado o modo shadow/manual, ainda sem chamada HTTP externa:
+
+- service `generateWebhookShadowDelivery`;
+- CLI `npm run webhooks:shadow -- --tenant demo-prefeitura --event message.received --json`;
+- payloads shadow para `contact.created`, `conversation.created`, `message.received` e `message.sent`;
+- calculo de `payloadHash`;
+- calculo de assinatura HMAC para validar canonicalizacao;
+- persistencia opcional de `WebhookDelivery.status=shadow` e `WebhookAttempt.status=skipped` somente com `--record-attempts`;
+- auditoria `webhook.shadow.generated`, `webhook.shadow.skipped` e `webhook.shadow.denied`.
+
+Limite importante da 70I: como a 70H armazena apenas `signingSecretHash`, o shadow usa o hash como material tecnico de assinatura (`X-Converta-Signature-Mode: shadow_hash_key`). Isso valida formato/canonicalizacao sem expor segredo, mas nao substitui a assinatura real de dispatch. Antes de envio HTTP real, sera necessario rotacionar/recriar segredo ou introduzir armazenamento criptografado do segredo.
 
 ## Objetivo
 
@@ -502,10 +514,15 @@ Escopo:
 
 Escopo:
 
-- gerar deliveries em modo shadow;
+- gerar deliveries em modo shadow/manual;
 - nao chamar endpoint externo;
-- validar payloads e filtros por evento;
-- relatorio de candidatos.
+- validar payloads publicos e filtros por evento;
+- calcular `payloadHash`;
+- calcular HMAC em modo `shadow_hash_key`;
+- registrar `WebhookDelivery.status=shadow` e `WebhookAttempt.status=skipped` apenas quando `--record-attempts`;
+- disponibilizar CLI `webhooks:shadow`.
+
+Status: implementado como MVP seguro, sem dispatch automatico.
 
 ### Sprint 70J - Webhooks Controlled Delivery
 
