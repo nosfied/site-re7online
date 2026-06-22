@@ -33,7 +33,7 @@ Pontuacao usada na matriz percentual:
 
 O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, webchat publico, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot e API publica ampla para integracoes externas.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, Webchat avancado com roteamento/identificacao, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot e API publica ampla para integracoes externas.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -175,7 +175,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | API para integracao externa | ATENDE PARCIALMENTE | 65% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI inicial e leitura de contatos | Falta conversas, mensagens, webhooks outbound e escrita controlada | Alto | Medio/alto | Sprint 70E |
 | Agendamento | ATENDE PARCIALMENTE | 48% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e design de envio controlado | Ainda nao ha consumo por chatbot/IA, envio real de lembretes, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71H |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 35% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
-| Webchat | ATENDE PARCIALMENTE | 70% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido e polling publico seguro | Implementar widget minimo, embed e experiencia visual E2E para o visitante | Alto | Alto | Sprint 73J+ |
+| Webchat | ATENDE PARCIALMENTE | 78% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
 | Telegram | NAO ATENDE | 0% | Nao ha adapter/rotas Telegram | Criar canal, token, webhook, outbound, tenant resolution | Alto | Alto | Sprint 76 |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |

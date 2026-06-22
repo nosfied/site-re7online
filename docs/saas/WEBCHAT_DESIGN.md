@@ -86,6 +86,14 @@ Status apos Sprint 73I:
 - cursor opaco, `limit` seguro, rate limit e validacao de dominio/site/sessao foram implementados;
 - widget final, WebSocket/SSE, chatbot e IA seguem fora do runtime.
 
+Status apos Sprint 73J:
+
+- `public/webchat/widget.js` criado como widget JS minimo embutivel;
+- o widget usa somente `POST /webchat/v1/session`, `POST /webchat/v1/messages` e `GET /webchat/v1/messages`;
+- sessao, envio de mensagem e polling por cursor funcionam no navegador do visitante;
+- CORS do backend foi liberado apenas para o namespace publico `/webchat/v1/*`, mantendo validacao real em `WebchatAllowedDomain`;
+- nao ha upload, midia, WebSocket, SSE, chatbot ou IA.
+
 ## Entidades Alvo
 
 ### WebchatWidget
@@ -239,7 +247,10 @@ Modelo preferencial:
 ```html
 <script
   src="https://converta.re7online.com/webchat/widget.js"
-  data-widget-key="wgt_xxx"
+  data-site-id="webchat_site_id"
+  data-title="Atendimento"
+  data-subtitle="Fale com a equipe"
+  data-accent="#fc6c16"
   async
 ></script>
 ```
@@ -340,7 +351,7 @@ Endpoints do MVP:
 | --- | --- | --- |
 | `GET` | `/webchat/widget.js` | script publico |
 | `GET` | `/webchat/embed` | iframe/painel |
-| `POST` | `/webchat/v1/bootstrap` | valida widget/origem e cria sessao |
+| `POST` | `/webchat/v1/session` | valida site/origem e cria sessao |
 | `POST` | `/webchat/v1/messages` | visitante envia mensagem |
 | `GET` | `/webchat/v1/messages` | visitante busca mensagens permitidas |
 | `POST` | `/webchat/v1/identify` | visitante se identifica |
@@ -645,7 +656,18 @@ Disponibilizar mensagens ao visitante:
 
 Status: implementado como polling publico seguro. O proximo passo para E2E visual e o widget minimo.
 
-### Sprint 73J - Webchat Realtime + Identification
+### Sprint 73J - Webchat Minimal Widget
+
+- script embutivel `public/webchat/widget.js`;
+- iniciar sessao;
+- armazenar `sessionToken` em `localStorage`;
+- enviar mensagem texto;
+- consultar mensagens por polling/cursor;
+- sem midia, upload, WebSocket, SSE, chatbot ou IA.
+
+Status: implementado como widget minimo embutivel. O proximo passo e refinamento visual/operacional e identificacao/roteamento.
+
+### Sprint 73K - Webchat Realtime + Identification
 
 Evoluir:
 
@@ -655,7 +677,7 @@ Evoluir:
 - horario/offline;
 - melhor UX mobile.
 
-### Sprint 73I - Webchat Intelligence
+### Sprint 73L - Webchat Intelligence
 
 Somente depois do E2E humano:
 

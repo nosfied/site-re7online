@@ -60,6 +60,14 @@ Status apos Sprint 73I:
 - eventos redigidos `webchat.message.polled` e `webchat.polling.denied` foram definidos no runtime;
 - widget final, WebSocket/SSE, chatbot e IA continuam fora do runtime.
 
+Status apos Sprint 73J:
+
+- `public/webchat/widget.js` implementado como script embutivel minimo;
+- widget inicia sessao, armazena `sessionToken`, envia texto e consulta mensagens por polling/cursor;
+- CORS foi ajustado somente para o namespace publico do Webchat, preservando validacao por `WebchatAllowedDomain`;
+- fluxo E2E humano fica disponivel: visitante envia -> Inbox recebe -> operador responde -> visitante consulta;
+- midia, upload, WebSocket, SSE, chatbot e IA continuam fora do runtime.
+
 Este documento define como o runtime deve nascer sem improvisar sobre WhatsApp, Messenger, Instagram ou Public API.
 
 ## Principios De Runtime
@@ -842,10 +850,13 @@ Status: implementado como polling publico controlado. O visitante consegue busca
 
 - widget tecnico minimo embutivel;
 - abrir/fechar painel;
-- criar/restaurar sessao;
+- criar sessao;
+- armazenar `sessionToken` no navegador;
 - enviar inbound;
 - consultar polling;
-- sem anexos e sem IA.
+- sem anexos, upload, WebSocket, SSE, chatbot ou IA.
+
+Status: implementado como widget minimo embutivel em `public/webchat/widget.js`.
 
 ### Sprint 73K - Identification + Department Routing
 
@@ -870,6 +881,18 @@ Status: implementado como polling publico controlado. O visitante consegue busca
 - nenhum token/API key aparece no browser alem do token de visitante;
 - logs redigidos;
 - rollback por tenant funciona sem migration.
+
+## Confirmacao 73J
+
+Esta sprint adicionou apenas o widget minimo e o ajuste CORS necessario ao namespace publico do Webchat. Nao houve:
+
+- novo endpoint de negocio;
+- migration;
+- upload/midia;
+- WebSocket ou SSE;
+- chatbot ou IA;
+- alteracao em WhatsApp, Messenger ou Instagram;
+- alteracao em Public API.
 
 ## Confirmacao 73G
 

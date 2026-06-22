@@ -11,6 +11,7 @@ O Converta integra canais oficiais Meta e dispoe de APIs internas para operacao 
 | WhatsApp | Meta Cloud API oficial | Operacional |
 | Facebook/Messenger | Meta Page/Messenger | Operacional quando configurado |
 | Instagram Direct | Instagram Business Login/API | Operacional human-only quando configurado e autorizado |
+| Webchat | Widget JS publico + runtime Converta | MVP operacional por feature flag |
 
 ## APIs Internas
 
@@ -41,6 +42,20 @@ Tratamento esperado:
 - persistencia da mensagem;
 - atualizacao da timeline;
 - emissao realtime para o inbox.
+
+## Webchat Publico
+
+O Webchat utiliza script embutivel servido pelo Converta e endpoints publicos do namespace `/webchat/v1`.
+
+Fluxo suportado no MVP:
+
+- iniciar sessao de visitante;
+- enviar mensagem texto;
+- criar conversa `channel=webchat` no Inbox;
+- permitir resposta humana pelo operador;
+- disponibilizar mensagens ao visitante por polling com cursor.
+
+O widget respeita dominio autorizado, site ativo e feature flag `webchat`. Midia, upload, WebSocket, SSE, IA e chatbot automatico ficam fora deste MVP.
 
 ## Integracoes Externas
 

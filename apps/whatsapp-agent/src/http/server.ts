@@ -7,7 +7,10 @@ const ALLOWED_HEADERS = "Content-Type, Authorization, X-Admin-Token";
 
 function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
   const origin = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
-  if (origin === ALLOWED_ORIGIN) {
+  const url = req.url ?? "/";
+  const pathname = url.startsWith("http") ? new URL(url).pathname : new URL(url, "http://localhost").pathname;
+  const isPublicWebchat = pathname.startsWith("/webchat/v1/") || pathname.startsWith("/agent-api/webchat/v1/");
+  if (origin === ALLOWED_ORIGIN || (isPublicWebchat && origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);

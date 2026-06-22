@@ -30,6 +30,7 @@ O Converta nao e apenas um chatbot. A plataforma atua como uma central inteligen
 | WhatsApp Oficial | Atendimento via API oficial Meta/WhatsApp Cloud API | Operacional |
 | Instagram Direct | Inbound/outbound manual human-only, conforme permissao Meta | Operacional condicionado a configuracao |
 | Facebook/Messenger | Atendimento humano via Page/Messenger | Operacional condicionado a token valido |
+| Webchat | Widget JS minimo embutivel, sessao publica, inbound no Inbox, resposta humana e polling do visitante | MVP operacional por feature flag |
 | Chatbot | Fluxos configuraveis de atendimento e qualificacao | Operacional |
 | IA supervisionada | Respostas assistidas/configuradas por tenant | Operacional com controle por tenant |
 | CRM Timeline | Historico do lead/contato e notas operacionais | Operacional |
@@ -80,3 +81,21 @@ O Converta nao e apenas um chatbot. A plataforma atua como uma central inteligen
 - A contratacao deve especificar volume de usuarios, canais, armazenamento, tempo de retencao e SLA.
 - Recursos que dependem da Meta exigem conta, permissao, token e aprovacao aplicavel.
 - Canais adicionais ou exigencias de alto volume exigem validacao previa de infraestrutura.
+
+## Webchat Embutivel
+
+O Webchat pode ser habilitado por tenant e por site autorizado. O widget minimo usa script publico e valida dominio por `WebchatAllowedDomain`.
+
+Exemplo de instalacao:
+
+```html
+<script
+  src="https://converta.re7online.com/webchat/widget.js"
+  data-site-id="webchat_site_id"
+  data-title="Atendimento"
+  data-subtitle="Fale com a equipe"
+  async
+></script>
+```
+
+O MVP suporta texto, sessao de visitante, conversa no Inbox, resposta humana e polling. Nao inclui midia, upload, WebSocket, SSE, IA ou chatbot automatico.
