@@ -16,7 +16,9 @@ export type PublicApiWebhookEvent = (typeof PUBLIC_API_WEBHOOK_EVENTS)[number];
 
 const WEBHOOK_SECRET_PREFIX = "whsec";
 const MAX_ENDPOINTS_PER_TENANT = 20;
-const SHADOW_SIGNATURE_MODE = "shadow_hash_key";
+const REAL_SIGNATURE_MODE = "encrypted_secret";
+const LEGACY_SHADOW_SIGNATURE_MODE = "shadow_hash_key";
+const WEBHOOK_SECRET_KEY_REF = "WEBHOOK_SECRET_ENCRYPTION_KEY";
 const PRIVATE_IPV4_RANGES = [
   /^10\./,
   /^127\./,
@@ -28,6 +30,49 @@ const PRIVATE_IPV4_RANGES = [
 
 export function generateWebhookSigningSecret() {
   return `${WEBHOOK_SECRET_PREFIX}_${crypto.randomBytes(32).toString("base64url")}`;
+}
+
+function getWebhookSecretEncryptionKey(secret = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? "") {
+  const value = secret.trim();
+  if (!value || value.length < 32) return null;
+  return crypto.createHash("sha256").update(value, "utf8").digest();
+}
+
+export function assertWebhookSecretEncryptionConfigured(secret = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? "") {
+  const key = getWebhookSecretEncryptionKey(secret);
+  if (!key) return { ok: false as const, error: "webhook_secret_encryption_key_missing_or_weak" };
+  return { ok: true as const };
+}
+
+export function encryptWebhookSigningSecret(value: string, secret = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? "") {
+  const key = getWebhookSecretEncryptionKey(secret);
+  if (!key) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `v1:${iv.toString("base64")}:${tag.toString("base64")}:${encrypted.toString("base64")}`;
+}
+
+export function decryptWebhookSigningSecret(ciphertext: string | null | undefined, secret = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ?? "") {
+  const raw = ciphertext?.trim();
+  if (!raw) return null;
+  const key = getWebhookSecretEncryptionKey(secret);
+  if (!key) return null;
+  const parts = raw.split(":");
+  if (parts.length !== 4 || parts[0] !== "v1") return null;
+  try {
+    const [, ivRaw, tagRaw, encryptedRaw] = parts;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivRaw, "base64"));
+    decipher.setAuthTag(Buffer.from(tagRaw, "base64"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encryptedRaw, "base64")),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8").trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export function hashWebhookSigningSecret(secret: string) {
@@ -134,6 +179,8 @@ const BLOCKED_PUBLIC_PAYLOAD_KEYS = new Set([
   "pageAccessToken",
   "instagramBusinessAccessToken",
   "ciphertext",
+  "signingSecretHash",
+  "signingSecretCiphertext",
   "externalUserRef",
   "waId",
   "ip",
@@ -197,6 +244,8 @@ function serializeWebhookEndpoint(item: {
   name: string;
   url: string;
   active: boolean;
+  signingSecretCiphertext?: string | null;
+  signingSecretRotatedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -205,6 +254,8 @@ function serializeWebhookEndpoint(item: {
     name: item.name,
     url: item.url,
     active: item.active,
+    secretStatus: item.signingSecretCiphertext ? "encrypted" : "legacy_hash_only",
+    signingSecretRotatedAt: item.signingSecretRotatedAt?.toISOString() ?? null,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
   };
@@ -355,8 +406,10 @@ export async function generateWebhookShadowDelivery(params: {
   const rawBody = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000);
   const payloadHash = hashWebhookPayload(payload);
+  const decryptedSecret = decryptWebhookSigningSecret(endpoint.signingSecretCiphertext);
+  const signatureMode = decryptedSecret ? REAL_SIGNATURE_MODE : LEGACY_SHADOW_SIGNATURE_MODE;
   const signature = signWebhookPayload({
-    secret: endpoint.signingSecretHash,
+    secret: decryptedSecret ?? endpoint.signingSecretHash,
     timestamp,
     payload: rawBody,
   });
@@ -393,7 +446,7 @@ export async function generateWebhookShadowDelivery(params: {
       eventType: params.eventType,
       payloadHash,
       recorded: Boolean(params.recordAttempts),
-      signatureMode: SHADOW_SIGNATURE_MODE,
+      signatureMode,
     },
   });
   return {
@@ -405,11 +458,11 @@ export async function generateWebhookShadowDelivery(params: {
     headers: {
       "X-Converta-Timestamp": String(timestamp),
       "X-Converta-Signature": signature,
-      "X-Converta-Signature-Mode": SHADOW_SIGNATURE_MODE,
+      "X-Converta-Signature-Mode": signatureMode,
     },
     payloadHash,
     signaturePreview: signature.slice(0, 19),
-    signatureMode: SHADOW_SIGNATURE_MODE,
+    signatureMode,
     recorded: Boolean(params.recordAttempts),
     delivery,
     attempt,
@@ -433,12 +486,19 @@ export async function createWebhookEndpoint(params: {
     return { ok: false as const, error: "webhook_endpoint_limit_reached" };
   }
   const secret = generateWebhookSigningSecret();
+  const encryptedSecret = encryptWebhookSigningSecret(secret);
+  if (!encryptedSecret) {
+    return { ok: false as const, error: "webhook_secret_encryption_key_missing_or_weak" };
+  }
   const endpoint = await params.prisma.webhookEndpoint.create({
     data: {
       clientId: params.clientId,
       name,
       url: urlResult.url,
       signingSecretHash: hashWebhookSigningSecret(secret),
+      signingSecretCiphertext: encryptedSecret,
+      signingSecretKeyVersion: WEBHOOK_SECRET_KEY_REF,
+      signingSecretRotatedAt: new Date(),
       active: true,
       createdByUserId: params.userId,
     },
@@ -451,6 +511,48 @@ export async function createWebhookEndpoint(params: {
       endpointId: endpoint.id,
       urlHost: new URL(endpoint.url).hostname,
       createdByUserId: params.userId,
+    },
+  });
+  return {
+    ok: true as const,
+    endpoint: serializeWebhookEndpoint(endpoint),
+    secret,
+  };
+}
+
+export async function rotateWebhookEndpointSecret(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  userId: string;
+  requestId: string;
+  endpointId: string;
+}) {
+  const existing = await params.prisma.webhookEndpoint.findFirst({
+    where: { id: params.endpointId, clientId: params.clientId },
+  });
+  if (!existing) return { ok: false as const, error: "webhook_endpoint_not_found" };
+  const secret = generateWebhookSigningSecret();
+  const encryptedSecret = encryptWebhookSigningSecret(secret);
+  if (!encryptedSecret) {
+    return { ok: false as const, error: "webhook_secret_encryption_key_missing_or_weak" };
+  }
+  const endpoint = await params.prisma.webhookEndpoint.update({
+    where: { id: existing.id },
+    data: {
+      signingSecretHash: hashWebhookSigningSecret(secret),
+      signingSecretCiphertext: encryptedSecret,
+      signingSecretKeyVersion: WEBHOOK_SECRET_KEY_REF,
+      signingSecretRotatedAt: new Date(),
+    },
+  });
+  await recordWebhookAuditEvent(params.prisma, {
+    clientId: params.clientId,
+    requestId: `${params.requestId}:webhook-endpoint-secret-rotated:${endpoint.id}`,
+    eventName: "webhook.endpoint.secret_rotated",
+    payload: {
+      endpointId: endpoint.id,
+      rotatedByUserId: params.userId,
+      keyRef: WEBHOOK_SECRET_KEY_REF,
     },
   });
   return {

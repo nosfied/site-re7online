@@ -14,6 +14,7 @@ import {
   createAppWebhookEndpoint,
   fetchAppWebhooks,
   loadAppSession,
+  rotateAppWebhookEndpointSecret,
   saveAppSession,
   updateAppWebhookEndpoint,
 } from "@/lib/appClientApi";
@@ -34,6 +35,21 @@ function EndpointStatusPill({ active }: { active: boolean }) {
       }`}
     >
       {active ? "Ativo" : "Inativo"}
+    </span>
+  );
+}
+
+function SecretStatusPill({ status }: { status?: string }) {
+  const encrypted = status === "encrypted";
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+        encrypted
+          ? "border-sky-300/30 bg-sky-500/15 text-sky-100"
+          : "border-amber-300/30 bg-amber-500/15 text-amber-100"
+      }`}
+    >
+      {encrypted ? "Segredo criptografado" : "Legado"}
     </span>
   );
 }
@@ -177,6 +193,29 @@ export default function AppWebhooksPage() {
         return;
       }
       setError(typed.message || "Nao foi possivel atualizar o webhook.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleRotateSecret = async (endpoint: AppWebhookEndpoint) => {
+    if (!session) return;
+    setUpdatingId(endpoint.id);
+    setError(null);
+    setSuccess(null);
+    setCreatedSecret(null);
+    try {
+      const response = await rotateAppWebhookEndpointSecret(session, endpoint.id);
+      setEndpoints((current) => current.map((item) => (item.id === response.endpoint.id ? response.endpoint : item)));
+      setCreatedSecret(response.secret);
+      setSuccess("Segredo rotacionado.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Nao foi possivel rotacionar o segredo.");
     } finally {
       setUpdatingId(null);
     }
@@ -362,6 +401,7 @@ export default function AppWebhooksPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="break-words text-sm font-semibold text-white">{endpoint.name}</h3>
                             <EndpointStatusPill active={endpoint.active} />
+                            <SecretStatusPill status={endpoint.secretStatus} />
                           </div>
                           <p className="mt-1 break-all font-mono text-xs text-white/55">{endpoint.url}</p>
                         </div>
@@ -379,11 +419,22 @@ export default function AppWebhooksPage() {
                           >
                             {endpoint.active ? "Desativar" : "Ativar"}
                           </button>
+                          <button
+                            onClick={() => handleRotateSecret(endpoint)}
+                            disabled={updatingId === endpoint.id}
+                            className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                          >
+                            Rotacionar segredo
+                          </button>
                         </div>
                       </div>
                       <div className="mt-3 grid gap-1 text-xs text-white/45 sm:grid-cols-2">
                         <span>Criado em {formatDateTime(endpoint.createdAt)}</span>
-                        <span>Atualizado em {formatDateTime(endpoint.updatedAt)}</span>
+                        <span>
+                          {endpoint.signingSecretRotatedAt
+                            ? `Segredo rotacionado em ${formatDateTime(endpoint.signingSecretRotatedAt)}`
+                            : `Atualizado em ${formatDateTime(endpoint.updatedAt)}`}
+                        </span>
                       </div>
                     </>
                   )}

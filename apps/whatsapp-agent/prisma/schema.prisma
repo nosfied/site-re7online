@@ -883,6 +883,9 @@ model WebhookEndpoint {
   name              String
   url               String
   signingSecretHash String
+  signingSecretCiphertext String?
+  signingSecretKeyVersion String?
+  signingSecretRotatedAt DateTime?
   active            Boolean  @default(true)
   createdByUserId   String?
   createdAt         DateTime @default(now())

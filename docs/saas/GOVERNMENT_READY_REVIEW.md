@@ -60,7 +60,7 @@ Isso remove Webchat da categoria de gap operacional absoluto. Ele ainda nao e um
 Estado consolidado atual:
 
 - Knowledge Base: schema/CRUD em producao, runtime ainda desenhado;
-- Public API: API keys, OpenAPI, health, contatos, conversas e mensagens read-only em producao; infraestrutura de webhooks com cadastro e shadow/manual sem dispatch automatico;
+- Public API: API keys, OpenAPI, health, contatos, conversas e mensagens read-only em producao; infraestrutura de webhooks com cadastro, segredo criptografado/rotacao e shadow/manual sem dispatch automatico;
 - Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e design de envio controlado;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
@@ -90,7 +90,7 @@ Aderencia consolidada estimada:
 | Modulo | Estado atual | Impacto B2G | Limite atual |
 | --- | --- | --- | --- |
 | Webchat MVP | Operacional e demonstravel | Alto para editais multicanal e POC | Widget minimo, polling simples, sem roteamento avancado, sem IA/chatbot e sem refinamento visual completo |
-| Public API | Read-only completa para contatos, conversas e mensagens; webhooks infra + shadow MVP | Alto para integracoes e transparencias tecnicas | Sem dispatch automatico de webhooks, sem escrita e sem envio por API |
+| Public API | Read-only completa para contatos, conversas e mensagens; webhooks infra + segredo criptografado + shadow MVP | Alto para integracoes e transparencias tecnicas | Sem dispatch automatico de webhooks, sem escrita e sem envio por API |
 | Scheduling | CRUD + reminders manuais + shadow | Medio/alto para editais com agendamento | Sem envio real de lembretes, sem chatbot/IA, sem Google Calendar e sem API publica |
 | NPS/Satisfacao | CRUD estrutural | Medio/alto quando pesquisa pos-atendimento e exigida | Sem disparo por encerramento, link publico, coleta externa e relatorio NPS/CSAT completo |
 | Knowledge Base | CRUD e desenho runtime | Medio/alto para IA e CAC | IA/chatbot ainda nao consome KB |
@@ -109,7 +109,7 @@ Aderencia consolidada estimada:
 | Chatbot | ATENDE | Alto | Fluxos configuraveis por tenant. |
 | IA supervisionada | ATENDE COM AJUSTE | Medio/alto | Config DB-first; multiagentes formais ainda nao. |
 | Base de conhecimento | ATENDE COM AJUSTE | Medio/alto | Schema/CRUD em producao; runtime IA/chatbot ainda desenhado, nao ligado. |
-| Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; webhooks possuem cadastro e shadow/manual, mas faltam dispatch outbound e escrita controlada. |
+| Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; webhooks possuem cadastro, segredo criptografado, rotacao e shadow/manual, mas faltam dispatch outbound e escrita controlada. |
 | Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD, lembretes manuais, scheduler shadow e design de envio; falta envio real de lembretes e integracoes. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD em `/app/satisfaction`; falta disparo/link publico/relatorio NPS/CSAT. |
 | Webchat | ATENDE COM AJUSTE | Alto quando exigido | MVP operacional: widget JS, sessao, inbound, Inbox, outbound humano e polling. Falta camada avancada de UX, roteamento, identidade e realtime. |
@@ -146,7 +146,7 @@ Aderencia consolidada estimada:
 | OTP/MFA cidadao | Nao implementado | Medio/alto | Sim, se exigido | Sprint especifica de autenticacao/validacao. |
 | Transcricao de audio | Nao implementado | Medio/alto | Sim, se exigida | Design de transcricao, custo e LGPD antes de implementar. |
 | Busca avancada em dialogos | Nao formalizada | Medio | Pode bloquear se literal | Criar busca indexada por conversa/mensagem. |
-| API webhooks/escrita | Webhooks com cadastro e shadow/manual, sem dispatch | Medio/alto | Bloqueia se exigir integracao ativa em tempo real | Proxima etapa: controlled delivery com endpoint piloto. |
+| API webhooks/escrita | Webhooks com cadastro, rotacao e shadow/manual, sem dispatch | Medio/alto | Bloqueia se exigir integracao ativa em tempo real | Proxima etapa: controlled delivery com endpoint piloto. |
 | Auditoria formal para cliente | Parcial | Medio | Normalmente nao bloqueia, mas fortalece habilitacao | Tela/report de eventos por usuario/conversa. |
 | Escala/storage 600 GB | Infra/comercial | Alto em Aripuana | Pode bloquear sem proposta de infra | Plano de capacidade, backup e custo. |
 

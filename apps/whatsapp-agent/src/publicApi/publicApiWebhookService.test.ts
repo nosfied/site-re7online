@@ -2,12 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createWebhookEndpoint,
+  decryptWebhookSigningSecret,
+  encryptWebhookSigningSecret,
   generateWebhookShadowDelivery,
   hashWebhookSigningSecret,
+  rotateWebhookEndpointSecret,
   signWebhookPayload,
   updateWebhookEndpoint,
   validateWebhookEndpointUrl,
 } from "./publicApiWebhookService.js";
+
+const TEST_WEBHOOK_ENCRYPTION_KEY = "test-webhook-secret-encryption-key-32";
 
 function makeDate(value: string) {
   return new Date(value);
@@ -229,6 +234,43 @@ test("shadow delivery can persist delivery and skipped attempt", async () => {
   assert.equal(prisma.state.attempts.length, 1);
 });
 
+test("shadow delivery uses decrypted signing secret when ciphertext exists", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push({
+    id: "endpoint_1",
+    clientId: "tenant_a",
+    name: "ERP",
+    url: "https://integracao.example.gov.br/webhook",
+    active: true,
+    signingSecretHash: "stored_hash",
+    signingSecretCiphertext: encryptWebhookSigningSecret("whsec_real"),
+    signingSecretKeyVersion: "WEBHOOK_SECRET_ENCRYPTION_KEY",
+    signingSecretRotatedAt: makeDate("2026-06-22T12:00:00.000Z"),
+    createdAt: makeDate("2026-06-22T12:00:00.000Z"),
+    updatedAt: makeDate("2026-06-22T12:00:00.000Z"),
+  });
+  try {
+    const result = await generateWebhookShadowDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      payload: { id: "evt_1", type: "message.received", data: { text: "Oi" } },
+      requestId: "req_shadow_real_secret",
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.signatureMode, "encrypted_secret");
+    assert.equal(result.headers["X-Converta-Signature-Mode"], "encrypted_secret");
+    assert.match(result.headers["X-Converta-Signature"], /^sha256=[a-f0-9]{64}$/);
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
 test("shadow delivery rejects unsafe payload fields", async () => {
   const prisma = makePrisma();
   prisma.state.endpoints.push({
@@ -256,22 +298,101 @@ test("shadow delivery rejects unsafe payload fields", async () => {
 });
 
 test("creates endpoint with one-time secret and hash-only storage", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
   const prisma = makePrisma();
-  const result = await createWebhookEndpoint({
-    prisma: prisma as any,
+  try {
+    const result = await createWebhookEndpoint({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      userId: "user_1",
+      requestId: "req_1",
+      name: "ERP",
+      url: "https://integracao.example.gov.br/webhook",
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.match(result.secret, /^whsec_/);
+    assert.equal(result.endpoint.secretStatus, "encrypted");
+    const stored = prisma.state.endpoints[0];
+    assert.equal(stored.signingSecretHash, hashWebhookSigningSecret(result.secret));
+    assert.notEqual(stored.signingSecretHash, result.secret);
+    assert.equal(typeof stored.signingSecretCiphertext, "string");
+    assert.equal(decryptWebhookSigningSecret(String(stored.signingSecretCiphertext)), result.secret);
+    assert.equal(prisma.state.events[0].eventName, "webhook.endpoint.created");
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("create endpoint blocks missing or weak encryption key", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  try {
+    const result = await createWebhookEndpoint({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      userId: "user_1",
+      requestId: "req_no_key",
+      name: "ERP",
+      url: "https://integracao.example.gov.br/webhook",
+    });
+    assert.deepEqual(result, { ok: false, error: "webhook_secret_encryption_key_missing_or_weak" });
+    assert.equal(prisma.state.endpoints.length, 0);
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("rotates endpoint secret once and keeps tenant isolation", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push({
+    id: "endpoint_1",
     clientId: "tenant_a",
-    userId: "user_1",
-    requestId: "req_1",
     name: "ERP",
     url: "https://integracao.example.gov.br/webhook",
+    active: true,
+    signingSecretHash: "old_hash",
+    signingSecretCiphertext: encryptWebhookSigningSecret("whsec_old"),
+    signingSecretKeyVersion: "WEBHOOK_SECRET_ENCRYPTION_KEY",
+    signingSecretRotatedAt: makeDate("2026-06-22T12:00:00.000Z"),
+    createdAt: makeDate("2026-06-22T12:00:00.000Z"),
+    updatedAt: makeDate("2026-06-22T12:00:00.000Z"),
   });
-  assert.equal(result.ok, true);
-  if (!result.ok) return;
-  assert.match(result.secret, /^whsec_/);
-  const stored = prisma.state.endpoints[0];
-  assert.equal(stored.signingSecretHash, hashWebhookSigningSecret(result.secret));
-  assert.notEqual(stored.signingSecretHash, result.secret);
-  assert.equal(prisma.state.events[0].eventName, "webhook.endpoint.created");
+  try {
+    const denied = await rotateWebhookEndpointSecret({
+      prisma: prisma as any,
+      clientId: "tenant_b",
+      userId: "user_1",
+      requestId: "req_rotate_denied",
+      endpointId: "endpoint_1",
+    });
+    assert.deepEqual(denied, { ok: false, error: "webhook_endpoint_not_found" });
+
+    const result = await rotateWebhookEndpointSecret({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      userId: "user_1",
+      requestId: "req_rotate",
+      endpointId: "endpoint_1",
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.match(result.secret, /^whsec_/);
+    assert.notEqual(result.secret, "whsec_old");
+    const stored = prisma.state.endpoints[0];
+    assert.equal(stored.signingSecretHash, hashWebhookSigningSecret(result.secret));
+    assert.equal(decryptWebhookSigningSecret(String(stored.signingSecretCiphertext)), result.secret);
+    assert.equal(prisma.state.events[0].eventName, "webhook.endpoint.secret_rotated");
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
 });
 
 test("updates endpoint only inside the tenant scope", async () => {

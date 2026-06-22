@@ -64,6 +64,12 @@ npm run db:deploy
 
 Somente executar `db:deploy` quando a release tiver migration aprovada.
 
+Webhooks Public API:
+
+- Releases que criam ou rotacionam segredo de webhook exigem `WEBHOOK_SECRET_ENCRYPTION_KEY` configurada em producao.
+- A chave deve ser estavel, forte e nunca commitada.
+- Sem essa env, endpoints legados continuam listaveis, mas criacao/rotacao de segredo deve falhar de forma controlada.
+
 ## Frontend
 
 Diretorio raiz do repo:

@@ -258,6 +258,7 @@ import {
 import {
   createWebhookEndpoint,
   listWebhookDashboard,
+  rotateWebhookEndpointSecret,
   updateWebhookEndpoint,
   webhookEndpointErrorStatus,
 } from "../publicApi/publicApiWebhookService.js";
@@ -1501,6 +1502,49 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.webhooks.update.error",
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const webhookSecretRotateMatch = pathname.match(/^\/app\/webhooks\/([^/]+)\/rotate-secret$/);
+  if (req.method === "POST" && webhookSecretRotateMatch) {
+    const prisma = getPrisma();
+    const access = await requireWebhooksAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    try {
+      const result = await rotateWebhookEndpointSecret({
+        prisma,
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
+        requestId,
+        endpointId: decodeURIComponent(webhookSecretRotateMatch[1] ?? ""),
+      });
+      if (!result.ok) {
+        json(res, webhookEndpointErrorStatus(result.error), httpError(result.error, "Could not rotate webhook secret"));
+        return;
+      }
+      logger.info({
+        event: "webhook.endpoint.secret_rotated",
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
+        endpointId: result.endpoint.id,
+        requestId,
+      });
+      json(res, 200, {
+        ok: true,
+        endpoint: result.endpoint,
+        secret: result.secret,
+        message: "Guarde este segredo agora. Ele nao sera exibido novamente.",
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.webhooks.rotate_secret.error",
         clientId: access.client.id,
         userId: access.clientAuth.userId,
         requestId,

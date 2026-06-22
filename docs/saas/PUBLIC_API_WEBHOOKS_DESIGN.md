@@ -1,4 +1,4 @@
-# Sprint 70G/70H/70I - Public API Webhooks Design + Infra/Shadow MVP
+# Sprint 70G/70H/70I/70J.1 - Public API Webhooks Design + Infra/Shadow/Secret Rotation MVP
 
 Data: 2026-06-22
 
@@ -29,6 +29,17 @@ Na Sprint 70I foi implementado o modo shadow/manual, ainda sem chamada HTTP exte
 - auditoria `webhook.shadow.generated`, `webhook.shadow.skipped` e `webhook.shadow.denied`.
 
 Limite importante da 70I: como a 70H armazena apenas `signingSecretHash`, o shadow usa o hash como material tecnico de assinatura (`X-Converta-Signature-Mode: shadow_hash_key`). Isso valida formato/canonicalizacao sem expor segredo, mas nao substitui a assinatura real de dispatch. Antes de envio HTTP real, sera necessario rotacionar/recriar segredo ou introduzir armazenamento criptografado do segredo.
+
+Na Sprint 70J.1 foi adicionada criptografia e rotacao do segredo de assinatura, ainda sem chamada HTTP externa:
+
+- env obrigatoria para criacao/rotacao: `WEBHOOK_SECRET_ENCRYPTION_KEY`;
+- campos `signingSecretCiphertext`, `signingSecretKeyVersion` e `signingSecretRotatedAt` em `WebhookEndpoint`;
+- criacao de endpoint salva hash + ciphertext e retorna segredo uma unica vez;
+- `POST /app/webhooks/{id}/rotate-secret` gera novo segredo, atualiza hash/ciphertext e retorna o novo segredo uma unica vez;
+- shadow delivery usa o segredo descriptografado quando disponivel (`X-Converta-Signature-Mode: encrypted_secret`);
+- endpoints legados sem ciphertext continuam funcionando em modo `shadow_hash_key` ate rotacao.
+
+Importante: a 70J.1 prepara HMAC real, mas ainda nao cria dispatch automatico, worker, retry real, dead letter operacional ou chamada HTTP externa.
 
 ## Objetivo
 
@@ -90,6 +101,9 @@ Modelo implementado na Sprint 70H:
 | `name` | string | Nome amigavel |
 | `url` | string | URL HTTPS de destino |
 | `signingSecretHash` | string | Hash SHA-256 do segredo exibido uma unica vez |
+| `signingSecretCiphertext` | string/null | Segredo criptografado para assinatura futura |
+| `signingSecretKeyVersion` | string/null | Referencia da chave de criptografia |
+| `signingSecretRotatedAt` | datetime/null | Data da ultima criacao/rotacao do segredo |
 | `active` | boolean | Endpoint ativo/inativo |
 | `createdByUserId` | string/null | Usuario que criou |
 | `createdAt` / `updatedAt` | datetime | Auditoria |
@@ -97,6 +111,8 @@ Modelo implementado na Sprint 70H:
 Regras:
 
 - segredo exibido apenas uma vez na criacao;
+- segredo tambem pode ser exibido uma unica vez apos rotacao;
+- segredo em claro nunca e persistido;
 - URL deve ser `https://` em producao;
 - bloquear IPs privados/link-local por padrao para evitar SSRF;
 - localhost, loopback e redes privadas sao bloqueados tambem no MVP;
@@ -524,7 +540,23 @@ Escopo:
 
 Status: implementado como MVP seguro, sem dispatch automatico.
 
+### Sprint 70J.1 - Webhook Secret Encryption + Rotation
+
+Escopo:
+
+- armazenar segredo criptografado em `WebhookEndpoint.signingSecretCiphertext`;
+- manter `signingSecretHash` para identificacao/validacao;
+- exigir `WEBHOOK_SECRET_ENCRYPTION_KEY` forte para criacao/rotacao;
+- retornar segredo apenas uma vez;
+- permitir rotacao por `/app/webhooks/{id}/rotate-secret`;
+- manter endpoints legados sem ciphertext funcionando em modo shadow legado;
+- sem envio HTTP externo.
+
+Status: implementado como preparacao para HMAC real.
+
 ### Sprint 70J - Webhooks Controlled Delivery
+
+Pre-requisito: 70J.1 concluida e `WEBHOOK_SECRET_ENCRYPTION_KEY` configurada em producao.
 
 Escopo:
 

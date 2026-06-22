@@ -149,6 +149,8 @@ export type AppWebhookEndpoint = {
   name: string;
   url: string;
   active: boolean;
+  secretStatus?: "encrypted" | "legacy_hash_only" | string;
+  signingSecretRotatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1655,6 +1657,16 @@ export function updateAppWebhookEndpoint(
   return requestAppJson(session, `/app/webhooks/${encodeURIComponent(endpointId)}`, {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function rotateAppWebhookEndpointSecret(
+  session: AppSession,
+  endpointId: string
+): Promise<AppWebhookEndpointCreateResponse> {
+  return requestAppJson(session, `/app/webhooks/${encodeURIComponent(endpointId)}/rotate-secret`, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }
 
