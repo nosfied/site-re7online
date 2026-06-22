@@ -310,6 +310,10 @@ async function postWebhookPayload(params: {
             typeof optionsOrCallback === "function"
               ? optionsOrCallback
               : callback;
+          if (typeof optionsOrCallback === "object" && optionsOrCallback?.all) {
+            done?.(null, [resolved.address]);
+            return;
+          }
           done?.(null, resolved.address.address, resolved.address.family);
         },
       },
