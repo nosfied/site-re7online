@@ -42,7 +42,7 @@ export type InboxMessageItem = {
   createdAt: string;
 };
 
-export type InboxChannel = "whatsapp" | "messenger" | "instagram";
+export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat";
 
 export type InboxConversationItem = {
   waId: string;
@@ -207,7 +207,7 @@ export type HandoffLeadNotificationRecipient = {
 
 export type MediaHandoffPolicy = {
   enabled: boolean;
-  channels: Array<"whatsapp" | "messenger" | "instagram">;
+  channels: Array<"whatsapp" | "messenger" | "instagram" | "webchat">;
   behavior: "notify_and_reply" | "notify_only" | "reply_only" | "ignore";
   customerNoticeText: string;
   attendantSummaryText: string;
@@ -284,7 +284,7 @@ export type ConversationReportByDepartmentItem = {
 };
 
 export type ConversationReportByChannelItem = {
-  channel: "whatsapp" | "messenger" | "instagram" | "unknown";
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "unknown";
   channelName: string;
   conversations: number;
 };
@@ -295,7 +295,7 @@ export type ConversationReportResponse = {
   periodFrom?: string | null;
   periodTo?: string | null;
   dedupe?: boolean;
-  channel?: "whatsapp" | "messenger" | "instagram" | null;
+  channel?: "whatsapp" | "messenger" | "instagram" | "webchat" | null;
   userId: string | null;
   departmentId: string | null;
   totalConversations: number;

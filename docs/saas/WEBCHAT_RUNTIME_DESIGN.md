@@ -30,7 +30,16 @@ Status apos Sprint 73E:
 - `GET /webchat/v1/session/:token` implementado;
 - criacao/recuperacao de sessao publica implementada;
 - validacao de site ativo, feature `webchat` e dominios permitidos implementada;
-- mensagens, polling, widget visual, realtime e inbox continuam fora do runtime.
+- naquele momento, mensagens, polling, widget visual, realtime e inbox ainda estavam fora do runtime.
+
+Status apos Sprint 73F:
+
+- `POST /webchat/v1/messages` implementado para mensagem texto inbound;
+- validacao de sessao, origem, site ativo e feature `webchat` reaproveitada;
+- mensagem cria/atualiza `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`,
+  `ConversationRuntimeState` e `InboundMessage` com `channel=webchat`;
+- conversa passa a aparecer no `/app/inbox` e na timeline pelo mesmo caminho multicanal;
+- outbound, widget publico final, polling publico, chatbot e IA continuam fora do runtime.
 
 Este documento define como o runtime deve nascer sem improvisar sobre WhatsApp, Messenger, Instagram ou Public API.
 
@@ -52,7 +61,8 @@ Site do cliente
   -> widget/script futuro
   -> /webchat/v1/session
   -> WebchatSite + WebchatAllowedDomain
-  -> WebchatVisitor/WebchatSession futuro
+  -> WebchatVisitor/WebchatSession
+  -> /webchat/v1/messages
   -> Conversation channel=webchat
   -> InboundMessage/OutboundMessage
   -> /app/inbox
@@ -250,22 +260,25 @@ Nao expor:
 
 Objetivo: receber mensagem texto do visitante.
 
+Status: implementado como MVP inbound na Sprint 73F. Ainda nao envia resposta ao visitante.
+
 Entrada:
 
-- `Authorization: Bearer <visitorToken>`;
-- `clientMessageId` para idempotencia;
+- `sessionToken`;
 - `text`.
 
 Fluxo:
 
-1. validar token e sessao;
+1. validar token de sessao;
 2. validar dominio/origem;
 3. aplicar rate limit;
-4. criar `Conversation` se ainda nao existir;
-5. criar `InboundMessage` e/ou entidade de timeline usada pelo inbox;
-6. atualizar `ConversationRuntimeState`;
-7. emitir realtime interno para operadores;
-8. retornar mensagem normalizada.
+4. criar/atualizar `Contact` e `ContactChannelIdentity`;
+5. criar/atualizar `Conversation` se ainda nao existir;
+6. criar `InboundMessage` na fonte usada pelo inbox;
+7. atualizar `ConversationRuntimeState`;
+8. registrar `Event` redigido `webchat.message.received`;
+9. emitir realtime interno para operadores quando houver conexao ativa;
+10. retornar mensagem normalizada.
 
 ## Integracao Com Inbox
 

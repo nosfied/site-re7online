@@ -47,7 +47,7 @@ O Converta evoluiu de uma plataforma WhatsApp-first para uma base B2G mais defen
 - Public API ja possui API keys, OpenAPI, health autenticado, contatos, conversas e mensagens read-only;
 - Scheduling ja possui schema/CRUD MVP, lembretes manuais, scheduler shadow e design de envio controlado;
 - NPS/Satisfacao ja possui schema/CRUD MVP com rollout controlado;
-- Webchat ja possui schema/settings MVP, runtime design e bootstrap de sessao publica;
+- Webchat ja possui schema/settings MVP, runtime design, bootstrap de sessao publica e inbound texto no Inbox;
 - Telegram ja possui auditoria.
 
 Isso muda a leitura dos gaps: Knowledge Base, Public API, Scheduling, NPS e Webchat deixam de ser lacunas absolutas. Ainda ha diferenca entre "base pronta" e "funcionalidade operacional completa", mas o risco de proposta caiu porque agora existe estrutura demonstravel e roadmap tecnico consistente.
@@ -91,7 +91,7 @@ Ainda assim, para editais que exigem Webchat operacional, Telegram operacional, 
 | Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; faltam webhooks outbound, escrita controlada e campanhas. |
 | Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD MVP, CRUD manual de lembretes, scheduler shadow de elegibilidade e design de envio controlado; faltam envio real de lembretes, chatbot/IA, calendar e API publica. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD MVP em `/app/satisfaction`; falta disparo automatico/manual por conversa, link publico e relatorio NPS/CSAT. |
-| Webchat | ATENDE COM AJUSTE | Alto quando exigido | Schema/settings MVP, runtime design e bootstrap de sessao publica; falta widget publico, mensagens, persistencia no inbox e atendimento E2E. |
+| Webchat | ATENDE COM AJUSTE | Alto quando exigido | Schema/settings MVP, session bootstrap e inbound texto persistido no Inbox; faltam widget publico final, outbound do operador para visitante e atendimento E2E. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |
 | Relatorios | ATENDE | Alto | Reports operacionais e export. |
 | Dashboard | ATENDE COM AJUSTE | Medio | Operacional; nao e BI completo. |
@@ -111,7 +111,7 @@ Ainda assim, para editais que exigem Webchat operacional, Telegram operacional, 
 | Gap | Status | Impacto | Bloqueia participacao? | Observacao |
 | --- | --- | --- | --- | --- |
 | NPS/Satisfacao funcional | MVP estrutural em producao | Alto em editais com pesquisa pos-atendimento | Pode bloquear se requisito exigir disparo/relatorio completo imediato | Proxima fase: disparo manual/automatico por encerramento e relatorio NPS/CSAT. |
-| Webchat funcional | Schema/settings + session bootstrap | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget publico, mensagens, persistencia no inbox e atendimento E2E. |
+| Webchat funcional | Schema/settings + session bootstrap + inbound no Inbox | Alto em editais multicanal | Sim, se o canal web for obrigatorio | Precisa widget publico final, outbound para visitante e atendimento E2E. |
 | Telegram funcional | Audit concluida | Alto quando exigido | Sim, se Telegram for obrigatorio | Ainda falta design antes de implementar. |
 | Public API webhooks/escrita | MVP read-only completo em producao | Alto se exigir integracao completa | Geralmente nao bloqueia se leitura de contatos/conversas/mensagens bastar; bloqueia se exigir eventos outbound ou escrita | Proxima etapa natural: webhooks outbound. |
 | Scheduling runtime/lembretes | MVP estrutural + lembretes manuais + scheduler shadow | Alto em Conselheiro | Pode bloquear se exigir agendamento automatico completo | Proxima fase: envio controlado por tenant. |
@@ -144,7 +144,7 @@ Motivo: aumenta maturidade e prova, sem abrir novos canais.
 
 ### P2 - Canais novos
 
-1. **Webchat 73E/73F/73G**: sessao publica/bootstrap, inbound e outbound por polling.
+1. **Webchat 73G+**: widget publico, outbound do operador e polling publico.
 2. **Telegram 74B/74C/74D/74E**: design, config, inbound, outbound.
 
 Motivo: alto impacto, mas alto risco. Devem vir depois dos modulos menores que aumentam aderencia rapidamente.
@@ -181,7 +181,7 @@ Estes itens ja podem ser tratados como atendidos ou atendiveis com configuracao/
 - Knowledge Base estrutural;
 - Scheduling estrutural;
 - NPS/Satisfacao estrutural;
-- Webchat schema/settings e session bootstrap.
+- Webchat schema/settings, session bootstrap e inbound texto no Inbox.
 
 ## Itens Que Ainda Podem Bloquear Se Forem Obrigatorios
 
@@ -310,7 +310,7 @@ Pontos fortes:
 - Knowledge Base estrutural;
 - Scheduling estrutural;
 - NPS estrutural;
-- Webchat session bootstrap;
+- Webchat session bootstrap e inbound texto no Inbox;
 - Instagram/Messenger/WhatsApp operacionais.
 
 Gaps principais:

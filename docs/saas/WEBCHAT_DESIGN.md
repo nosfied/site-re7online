@@ -42,8 +42,8 @@ Representacao operacional sugerida:
 
 ```text
 channel = "webchat"
-provider = "converta_widget"
-channelAccountId = WebchatWidget.id ou publicKey
+provider = "converta"
+channelAccountId = WebchatSite.id
 ```
 
 O canal deve usar a mesma dinamica operacional do inbox:
@@ -53,6 +53,14 @@ O canal deve usar a mesma dinamica operacional do inbox:
 - pode entrar em fila/setor;
 - mensagens entram na timeline;
 - encerramento, notas e CRM continuam funcionando.
+
+Status apos Sprint 73F:
+
+- `WebchatSite`, `WebchatSettings`, `WebchatAllowedDomain`, `WebchatVisitor` e `WebchatSession` existem;
+- `POST /webchat/v1/session` e `GET /webchat/v1/session/:token` existem;
+- `POST /webchat/v1/messages` recebe texto inbound e cria conversa `channel=webchat`;
+- a conversa aparece no `/app/inbox` e usa a timeline existente;
+- resposta do operador para visitante, widget publico final, polling publico, chatbot e IA seguem fora do escopo atual.
 
 ## Entidades Alvo
 

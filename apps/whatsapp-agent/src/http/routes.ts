@@ -174,6 +174,7 @@ import {
   createWebchatSession,
   restoreWebchatSession,
 } from "../webchat/webchatSessionService.js";
+import { createWebchatInboundMessage } from "../webchat/webchatInboundService.js";
 import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
@@ -332,6 +333,34 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         origin: getRequestOrigin(req),
         ip: getRequestIp(req) ?? "unknown",
         userAgent: getUserAgent(req),
+      });
+      if (!result.ok) {
+        const status = webchatRuntimeErrorStatus(result.error);
+        if (result.error === "webchat_rate_limited" && "retryAfterSec" in result) {
+          res.setHeader("Retry-After", String(result.retryAfterSec));
+        }
+        json(res, status, {
+          ok: false,
+          error: result.error,
+          requestId,
+          ...(result.error === "webchat_rate_limited" && "retryAfterSec" in result
+            ? { retryAfterSec: result.retryAfterSec }
+            : {}),
+        });
+        return;
+      }
+      json(res, 201, result);
+      return;
+    }
+    if (req.method === "POST" && pathname === "/webchat/v1/messages") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await createWebchatInboundMessage({
+        prisma,
+        requestId,
+        input: body,
+        origin: getRequestOrigin(req),
+        ip: getRequestIp(req) ?? "unknown",
       });
       if (!result.ok) {
         const status = webchatRuntimeErrorStatus(result.error);
@@ -14544,6 +14573,7 @@ function normalizeReportChannelLabel(rawValue?: string | null) {
   const channel = String(rawValue ?? "whatsapp").trim().toLowerCase();
   if (channel === "messenger") return { channel: "messenger" as const, channelName: "Facebook/Messenger" };
   if (channel === "instagram") return { channel: "instagram" as const, channelName: "Instagram" };
+  if (channel === "webchat") return { channel: "webchat" as const, channelName: "Webchat" };
   if (channel === "whatsapp" || !channel) return { channel: "whatsapp" as const, channelName: "WhatsApp" };
   return { channel: "unknown" as const, channelName: "Desconhecido" };
 }
@@ -14901,7 +14931,7 @@ function getReportDepartmentBucket(
 function buildConversationReportChannelSummary(metrics: Array<{ conversation: { channel?: string | null } }>) {
   const byChannel = new Map<
     string,
-    { channel: "whatsapp" | "messenger" | "instagram" | "unknown"; channelName: string; conversations: number }
+    { channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "unknown"; channelName: string; conversations: number }
   >();
   for (const item of metrics) {
     const normalized = normalizeReportChannelLabel(item.conversation.channel);
@@ -16407,6 +16437,14 @@ function webchatRuntimeErrorStatus(error: string) {
   if (error === "webchat_rate_limited") return 429;
   if (error === "webchat_session_not_found" || error === "webchat_site_not_found") return 404;
   if (
+    error === "webchat_token_required" ||
+    error === "webchat_origin_required" ||
+    error === "webchat_message_required" ||
+    error === "webchat_message_too_long"
+  ) {
+    return 400;
+  }
+  if (
     error === "webchat_origin_not_allowed" ||
     error === "webchat_site_inactive" ||
     error === "webchat_session_inactive" ||
@@ -17812,7 +17850,7 @@ async function buildAppDashboardOverview(
 
 type ConversationListFilters = {
   status: ConversationOperationalStatus | null;
-  channel: "whatsapp" | "messenger" | "instagram" | null;
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | null;
   departmentId: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
@@ -17956,7 +17994,7 @@ function normalizeConversationStatusFilter(value: unknown): ConversationOperatio
 
 function normalizeConversationChannelFilter(value: unknown): ConversationListFilters["channel"] {
   const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram"
+  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram" || normalized === "webchat"
     ? normalized
     : null;
 }
