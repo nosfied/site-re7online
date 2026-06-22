@@ -59,7 +59,17 @@ O widget respeita dominio autorizado, site ativo e feature flag `webchat`. Midia
 
 ## Integracoes Externas
 
-O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria, rate limit, health autenticado, leitura basica de contatos, leitura resumida de conversas e leitura paginada de mensagens normalizadas. Nesta fase, a API publica ainda nao expoe campanhas, escrita ou webhooks outbound como contrato externo completo.
+O Converta possui uma fundacao de API publica em `/public-api/v1`, com chaves por tenant, escopos, auditoria, rate limit, health autenticado, leitura basica de contatos, leitura resumida de conversas e leitura paginada de mensagens normalizadas.
+
+Tambem existe infraestrutura inicial de webhooks outbound para integracoes externas:
+
+- cadastro de endpoints por tenant;
+- segredo HMAC exibido uma unica vez;
+- armazenamento apenas de hash do segredo;
+- validacao de URL HTTPS e bloqueio basico de destinos internos;
+- diagnostico de deliveries/attempts para a fase de envio futuro.
+
+Nesta fase, a API publica ainda nao expoe campanhas, escrita ou dispatch automatico de webhooks como contrato externo completo.
 
 Para integracoes com sistemas terceiros, recomenda-se especificar em projeto:
 
@@ -68,7 +78,7 @@ Para integracoes com sistemas terceiros, recomenda-se especificar em projeto:
 - payloads;
 - limites;
 - eventos;
-- webhooks de saida;
+- webhooks de saida e politica de retries;
 - auditoria;
 - SLA;
 - responsabilidades.
@@ -89,7 +99,8 @@ Essas integracoes devem ser tratadas como escopo especifico, com contrato de API
 
 ## Premissas
 
-- O Converta possui base tecnica para APIs e contrato OpenAPI inicial para health e contatos.
+- O Converta possui base tecnica para APIs e contrato OpenAPI inicial para health, contatos, conversas e mensagens.
+- Webhooks outbound possuem infraestrutura de cadastro/assinatura, mas o envio automatico deve ser contratado e homologado em fase propria.
 - A exposicao de dados operacionais por API publica deve passar por escopos, rate limit, auditoria e validacao LGPD.
 - Integracoes novas exigem levantamento, seguranca, homologacao e testes.
 - Tokens e credenciais de integracao nunca devem ser expostos em UI, logs ou documentacao publica.

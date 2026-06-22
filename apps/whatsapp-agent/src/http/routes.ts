@@ -256,6 +256,12 @@ import {
   revokePublicApiKey,
 } from "../publicApi/publicApiKeyService.js";
 import {
+  createWebhookEndpoint,
+  listWebhookDashboard,
+  updateWebhookEndpoint,
+  webhookEndpointErrorStatus,
+} from "../publicApi/publicApiWebhookService.js";
+import {
   getPublicContact,
   listPublicContacts,
 } from "../publicApi/publicApiContactsService.js";
@@ -1391,6 +1397,112 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         event: "app.api_keys.revoke.error",
         clientId: clientAuth.clientId,
         userId: clientAuth.userId,
+        requestId,
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/webhooks") {
+    const prisma = getPrisma();
+    const access = await requireWebhooksAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "GET") {
+      try {
+        const dashboard = await listWebhookDashboard({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...dashboard });
+      } catch (error) {
+        logger.error({
+          event: "app.webhooks.list.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    if (req.method === "POST") {
+      try {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await createWebhookEndpoint({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          name: String(body.name ?? ""),
+          url: String(body.url ?? ""),
+        });
+        if (!result.ok) {
+          json(res, webhookEndpointErrorStatus(result.error), httpError(result.error, "Invalid webhook endpoint"));
+          return;
+        }
+        logger.info({
+          event: "webhook.endpoint.created",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          endpointId: result.endpoint.id,
+          requestId,
+        });
+        json(res, 201, {
+          ok: true,
+          endpoint: result.endpoint,
+          secret: result.secret,
+          message: "Guarde este segredo agora. Ele nao sera exibido novamente.",
+        });
+      } catch (error) {
+        logger.error({
+          event: "app.webhooks.create.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+  }
+
+  const webhookEndpointMatch = pathname.match(/^\/app\/webhooks\/([^/]+)$/);
+  if (req.method === "PUT" && webhookEndpointMatch) {
+    const prisma = getPrisma();
+    const access = await requireWebhooksAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const result = await updateWebhookEndpoint({
+        prisma,
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
+        requestId,
+        endpointId: decodeURIComponent(webhookEndpointMatch[1] ?? ""),
+        name: body.name,
+        url: body.url,
+        active: body.active,
+      });
+      if (!result.ok) {
+        json(res, webhookEndpointErrorStatus(result.error), httpError(result.error, "Invalid webhook endpoint"));
+        return;
+      }
+      logger.info({
+        event: result.endpoint.active ? "webhook.endpoint.updated" : "webhook.endpoint.disabled",
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
+        endpointId: result.endpoint.id,
+        requestId,
+      });
+      json(res, 200, { ok: true, endpoint: result.endpoint });
+    } catch (error) {
+      logger.error({
+        event: "app.webhooks.update.error",
+        clientId: access.client.id,
+        userId: access.clientAuth.userId,
         requestId,
         message: (error as Error).message,
       });
@@ -16455,6 +16567,39 @@ async function requireWebchatAppAccess(
     client,
     userId: clientAuth.userId,
     feature: "webchat",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
+async function requireWebhooksAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage webhooks."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "webhooks",
     endpoint,
     requestId,
   });

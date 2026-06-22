@@ -86,6 +86,9 @@ model Client {
   knowledgeBaseCollections KnowledgeBaseCollection[]
   knowledgeBaseArticles KnowledgeBaseArticle[]
   publicApiKeys PublicApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  webhookDeliveries WebhookDelivery[]
+  webhookAttempts WebhookAttempt[]
   schedulingServices SchedulingService[]
   schedulingResources SchedulingResource[]
   schedulingAvailabilities SchedulingAvailability[]
@@ -872,6 +875,60 @@ model PublicApiKey {
   @@index([clientId, createdAt])
   @@index([keyPrefix])
   @@index([expiresAt])
+}
+
+model WebhookEndpoint {
+  id                String   @id @default(cuid())
+  clientId          String   @db.Uuid
+  name              String
+  url               String
+  signingSecretHash String
+  active            Boolean  @default(true)
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  client     Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([clientId, active])
+  @@index([clientId, createdAt])
+}
+
+model WebhookDelivery {
+  id          String   @id @default(cuid())
+  clientId    String   @db.Uuid
+  endpointId  String
+  eventType   String
+  payloadHash String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  attempts WebhookAttempt[]
+
+  @@index([clientId, status, createdAt])
+  @@index([endpointId, status, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model WebhookAttempt {
+  id            String   @id @default(cuid())
+  clientId      String   @db.Uuid
+  deliveryId    String
+  attemptNumber Int
+  status        String
+  responseCode  Int?
+  createdAt     DateTime @default(now())
+
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  delivery WebhookDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([clientId, status, createdAt])
+  @@index([deliveryId, createdAt])
 }
 
 model SchedulingService {

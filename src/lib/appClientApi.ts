@@ -144,6 +144,49 @@ export type AppPublicApiKeyCreateResponse = {
   message: string;
 };
 
+export type AppWebhookEndpoint = {
+  id: string;
+  name: string;
+  url: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppWebhookDelivery = {
+  id: string;
+  endpointId: string;
+  eventType: string;
+  payloadHash: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppWebhookAttempt = {
+  id: string;
+  deliveryId: string;
+  attemptNumber: number;
+  status: string;
+  responseCode: number | null;
+  createdAt: string;
+};
+
+export type AppWebhooksResponse = {
+  ok: true;
+  endpoints: AppWebhookEndpoint[];
+  deliveries: AppWebhookDelivery[];
+  attempts: AppWebhookAttempt[];
+  supportedEvents: string[];
+};
+
+export type AppWebhookEndpointCreateResponse = {
+  ok: true;
+  endpoint: AppWebhookEndpoint;
+  secret: string;
+  message: string;
+};
+
 type AppConversationOperationalPayload = {
   ok: true;
   waId: string;
@@ -1587,6 +1630,31 @@ export function revokeAppPublicApiKey(
   return requestAppJson(session, `/app/api-keys/${encodeURIComponent(keyId)}/revoke`, {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+export function fetchAppWebhooks(session: AppSession): Promise<AppWebhooksResponse> {
+  return requestAppJson(session, "/app/webhooks");
+}
+
+export function createAppWebhookEndpoint(
+  session: AppSession,
+  payload: { name: string; url: string }
+): Promise<AppWebhookEndpointCreateResponse> {
+  return requestAppJson(session, "/app/webhooks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAppWebhookEndpoint(
+  session: AppSession,
+  endpointId: string,
+  payload: { name?: string; url?: string; active?: boolean }
+): Promise<{ ok: true; endpoint: AppWebhookEndpoint }> {
+  return requestAppJson(session, `/app/webhooks/${encodeURIComponent(endpointId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
 

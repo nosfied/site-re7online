@@ -162,6 +162,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "API", government: "API" },
   },
   {
+    href: "/app/webhooks",
+    icon: "🪝",
+    group: "administration",
+    feature: "webhooks",
+    minRole: "SUPERVISOR",
+    labels: { business: "Webhooks", government: "Webhooks" },
+  },
+  {
     href: "/app/settings/privacy",
     icon: "🔒",
     group: "administration",

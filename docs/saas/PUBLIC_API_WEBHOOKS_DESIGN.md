@@ -1,10 +1,22 @@
-# Sprint 70G - Public API Webhooks Design
+# Sprint 70G/70H - Public API Webhooks Design + Infra MVP
 
 Data: 2026-06-22
 
 Escopo: desenho tecnico e funcional dos webhooks outbound da API publica do Converta.
 
-Nao houve alteracao de codigo, banco, migration, runtime, canais, chatbot, IA ou rotas publicas nesta sprint.
+Na Sprint 70G nao houve alteracao de codigo, banco, migration, runtime, canais, chatbot, IA ou rotas publicas.
+
+Na Sprint 70H foi implementada a infraestrutura inicial, ainda sem envio automatico de webhooks:
+
+- models `WebhookEndpoint`, `WebhookDelivery` e `WebhookAttempt`;
+- feature flag `webhooks=false` por padrao;
+- CRUD tenant-scoped em `/app/webhooks`;
+- segredo de assinatura exibido uma unica vez e armazenado apenas como hash;
+- validacao de URL HTTPS com bloqueio basico de localhost, loopback e redes privadas;
+- helper HMAC SHA-256;
+- auditoria de `webhook.endpoint.created`, `webhook.endpoint.updated` e `webhook.endpoint.disabled`.
+
+Importante: a 70H nao cria dispatch automatico, worker, retries reais, dead letter operacional ou emissao de eventos de negocio. Esses itens continuam em fase futura.
 
 ## Objetivo
 
@@ -55,9 +67,9 @@ Esses eventos podem entrar depois que os eventos P0 estiverem estaveis.
 
 ## Modelo Conceitual
 
-### PublicApiWebhookEndpoint
+### WebhookEndpoint
 
-Modelo futuro sugerido, sem criar migration nesta sprint:
+Modelo implementado na Sprint 70H:
 
 | Campo | Tipo | Finalidade |
 | --- | --- | --- |
@@ -65,13 +77,8 @@ Modelo futuro sugerido, sem criar migration nesta sprint:
 | `clientId` | string | Tenant dono do endpoint |
 | `name` | string | Nome amigavel |
 | `url` | string | URL HTTPS de destino |
-| `status` | enum | `active`, `disabled`, `revoked` |
-| `events` | string[] | Eventos assinados |
-| `secretHash` | string | Hash do segredo para auditoria/rotacao |
-| `secretCiphertext` | string | Segredo criptografado se for necessario reenviar assinatura |
-| `lastSuccessAt` | datetime | Ultima entrega 2xx |
-| `lastFailureAt` | datetime | Ultima falha |
-| `failureCount` | int | Falhas consecutivas |
+| `signingSecretHash` | string | Hash SHA-256 do segredo exibido uma unica vez |
+| `active` | boolean | Endpoint ativo/inativo |
 | `createdByUserId` | string/null | Usuario que criou |
 | `createdAt` / `updatedAt` | datetime | Auditoria |
 
@@ -80,36 +87,36 @@ Regras:
 - segredo exibido apenas uma vez na criacao;
 - URL deve ser `https://` em producao;
 - bloquear IPs privados/link-local por padrao para evitar SSRF;
-- permitir localhost apenas em ambiente de desenvolvimento;
-- exigir scope `webhooks` para gerenciar endpoints via Public API futura;
-- permitir gestao inicial pelo `/app/api-keys` ou `/app/settings/integrations`.
+- localhost, loopback e redes privadas sao bloqueados tambem no MVP;
+- gestao inicial fica no `/app/webhooks`, protegida por RBAC e feature flag.
 
-### PublicApiWebhookDelivery
+### WebhookDelivery
 
-Modelo futuro sugerido:
+Modelo implementado para diagnostico e fila futura:
 
 | Campo | Tipo | Finalidade |
 | --- | --- | --- |
-| `id` | string/uuid | Delivery id enviado ao consumidor |
+| `id` | string/uuid | Delivery id |
 | `clientId` | string | Tenant |
 | `endpointId` | string | Endpoint destino |
 | `eventType` | string | Tipo do evento |
-| `eventId` | string | Id logico do evento |
-| `payload` | Json | Payload publico redigido |
-| `status` | enum | `pending`, `delivering`, `delivered`, `retrying`, `dead_letter`, `discarded` |
-| `attemptCount` | int | Tentativas |
-| `nextAttemptAt` | datetime/null | Proxima tentativa |
-| `lastStatusCode` | int/null | Ultimo HTTP status |
-| `lastError` | string/null | Erro redigido |
+| `payloadHash` | string | Hash do payload publico futuro |
+| `status` | string | Estado da entrega futura |
 | `createdAt` / `updatedAt` | datetime | Auditoria |
-| `deliveredAt` | datetime/null | Entrega 2xx |
 
-Regras:
+### WebhookAttempt
 
-- nao armazenar response body completo do cliente;
-- limitar `lastError` a texto redigido e truncado;
-- payload pode ser armazenado para retry, mas deve ser DTO publico e minimizado;
-- dead letter deve manter diagnostico suficiente sem PII excessiva.
+Modelo implementado para tentativas futuras:
+
+| Campo | Tipo | Finalidade |
+| --- | --- | --- |
+| `id` | string/uuid | Attempt id |
+| `clientId` | string | Tenant |
+| `deliveryId` | string | Delivery |
+| `attemptNumber` | int | Numero da tentativa |
+| `status` | string | Estado da tentativa |
+| `responseCode` | int/null | Status HTTP redigido |
+| `createdAt` | datetime | Auditoria |
 
 ## Contrato De Entrega
 
