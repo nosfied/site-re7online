@@ -275,7 +275,7 @@ async function resolveWebhookDispatchAddress(parsed: URL) {
   if (addresses.length === 0) return { ok: false as const, error: "dns_lookup_failed" };
   const blocked = addresses.find((item) => isBlockedIpAddress(item.address));
   if (blocked) return { ok: false as const, error: "ssrf_blocked" };
-  return { ok: true as const, address: addresses[0] };
+  return { ok: true as const, address: addresses.find((item) => item.family === 4) ?? addresses[0] };
 }
 
 async function postWebhookPayload(params: {
