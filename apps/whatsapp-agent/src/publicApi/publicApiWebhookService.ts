@@ -305,8 +305,12 @@ async function postWebhookPayload(params: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(params.rawBody),
         },
-        lookup: (_hostname, _options, callback) => {
-          callback(null, resolved.address.address, resolved.address.family);
+        lookup: (_hostname, optionsOrCallback, callback) => {
+          const done =
+            typeof optionsOrCallback === "function"
+              ? optionsOrCallback
+              : callback;
+          done?.(null, resolved.address.address, resolved.address.family);
         },
       },
       (response) => {
