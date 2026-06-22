@@ -175,6 +175,7 @@ import {
   restoreWebchatSession,
 } from "../webchat/webchatSessionService.js";
 import { createWebchatInboundMessage } from "../webchat/webchatInboundService.js";
+import { createWebchatOutboundMessage } from "../webchat/webchatOutboundService.js";
 import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
@@ -269,6 +270,8 @@ import {
   sendInstagramTextMessage,
 } from "../channels/instagramOutbound.js";
 import type { TenantChannelAccount } from "../channels/tenantChannelAccount.types.js";
+
+const WEBCHAT_OUTBOUND_DISABLED_MESSAGE = "Envio por Webchat ainda não está habilitado neste canal.";
 
 const LEGACY_OPERATIONAL_DEPARTMENT_FILTER = {
   NOT: [
@@ -3443,7 +3446,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
           message:
-            resolvedChannel === "instagram"
+            resolvedChannel === "webchat"
+              ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
+              : resolvedChannel === "instagram"
               ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
               : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
         });
@@ -3524,13 +3529,23 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 requestId,
                 source: resolvedConversation.winner ?? undefined,
               })
-          : await adminSendMessage({
-              waId: resolvedConversation.resolvedWaId,
-              text,
-              clientKey: client.clientKey,
-              clientId: client.id,
-              requestId,
-            });
+            : resolvedChannel === "webchat"
+              ? await createWebchatOutboundMessage({
+                  prisma,
+                  waId: resolvedConversation.resolvedWaId,
+                  text,
+                  clientKey: client.clientKey,
+                  clientId: client.id,
+                  requestId,
+                  source: resolvedConversation.winner ?? undefined,
+                })
+              : await adminSendMessage({
+                  waId: resolvedConversation.resolvedWaId,
+                  text,
+                  clientKey: client.clientKey,
+                  clientId: client.id,
+                  requestId,
+                });
       if (!result.ok) {
         if (result.error === "window_closed" && "errorPayload" in result && result.errorPayload) {
           json(res, result.statusCode, { error: result.errorPayload });
@@ -3567,7 +3582,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
         channelOutboundEnabled: getConversationChannelOutboundEnabled(
           (await getTenants())[client.clientKey],
-          resolvedConversation.winner ?? undefined
+          resolvedConversation.winner ?? undefined,
+          getFeatures(client)
         ),
         message: {
           messageId: result.messageId,
@@ -3651,11 +3667,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         source: "app_conversation_send_media",
       });
       const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
-      if (isConversationOutboundBlocked(resolvedConversation.winner) || resolvedChannel === "messenger") {
+      if (
+        isConversationOutboundBlocked(resolvedConversation.winner) ||
+        resolvedChannel === "messenger" ||
+        resolvedChannel === "webchat"
+      ) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
           message:
-            resolvedChannel === "instagram"
+            resolvedChannel === "webchat"
+              ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
+              : resolvedChannel === "instagram"
               ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
               : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
         });
@@ -17400,6 +17422,11 @@ async function buildConversationActionPayload(
         )?.name ?? null;
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
+  const client = await prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { features: true, profile: true },
+  });
+  const clientFeatures = getFeatures(client);
   const channelSource = conversation?.waId
     ? await prisma.conversation.findFirst({
         where: {
@@ -17418,7 +17445,7 @@ async function buildConversationActionPayload(
     waId: conversation?.waId ?? null,
     waIdCanonical: conversation?.waIdCanonical ?? null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
-    channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, channelSource),
+    channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, channelSource, clientFeatures),
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName,
@@ -18015,7 +18042,7 @@ function serializeInboxChannelFields(source?: {
 
 function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
-  return channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram";
+  return channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram" && channel !== "webchat";
 }
 
 function findTenantChannelAccountForConversation(
@@ -18034,7 +18061,8 @@ function findTenantChannelAccountForConversation(
 
 function getConversationChannelOutboundEnabled(
   tenant: { channelAccounts?: TenantChannelAccount[] } | undefined,
-  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null,
+  features?: { webchat?: boolean; webchatOutbound?: boolean } | null
 ) {
   const channelFields = serializeInboxChannelFields(source ?? undefined);
   if (channelFields.channel === "whatsapp") return true;
@@ -18043,6 +18071,9 @@ function getConversationChannelOutboundEnabled(
   }
   if (channelFields.channel === "instagram") {
     return canSendInstagramOutbound(findTenantChannelAccountForConversation(tenant, source));
+  }
+  if (channelFields.channel === "webchat") {
+    return features?.webchat === true && features?.webchatOutbound === true;
   }
   return false;
 }
@@ -18664,6 +18695,11 @@ async function buildConversationListPayload(
       };
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
+  const client = await prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { features: true, profile: true },
+  });
+  const clientFeatures = getFeatures(client);
 
   const unreadInboundCountByWaId = new Map<string, number>();
   for (const conversation of winners) {
@@ -18781,7 +18817,7 @@ async function buildConversationListPayload(
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
       ...serializeInboxChannelFields(conversation),
-      channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, conversation),
+      channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, conversation, clientFeatures),
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -19021,6 +19057,11 @@ async function buildConversationDetailPayload(
 
   const tenantsStartedAt = channelLatencyNow();
   const tenant = (await getTenants())[params.clientKey];
+  const client = await prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { features: true, profile: true },
+  });
+  const clientFeatures = getFeatures(client);
   params.latency?.duration("detailTenantConfig", tenantsStartedAt);
 
   return {
@@ -19030,7 +19071,8 @@ async function buildConversationDetailPayload(
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
     channelOutboundEnabled: getConversationChannelOutboundEnabled(
       tenant,
-      resolved.winner ?? undefined
+      resolved.winner ?? undefined,
+      clientFeatures
     ),
     ...serializeConversationOperationalFields({
       conversation,

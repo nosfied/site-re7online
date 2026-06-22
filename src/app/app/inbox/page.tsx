@@ -3523,7 +3523,10 @@ export default function AppInboxPage() {
     (selectedConversationChannel === "messenger" &&
       selectedConversation?.channelOutboundEnabled === true) ||
     (selectedConversationChannel === "instagram" &&
+      selectedConversation?.channelOutboundEnabled === true) ||
+    (selectedConversationChannel === "webchat" &&
       selectedConversation?.channelOutboundEnabled === true);
+  const selectedConversationSupportsMediaOutbound = selectedConversationChannel === "whatsapp";
   const selectedConversationOutboundDisabledMessage =
     selectedConversationChannel === "webchat"
       ? "Envio por Webchat ainda não está habilitado neste canal."
@@ -3943,8 +3946,12 @@ export default function AppInboxPage() {
   const sendMediaFile = useCallback(
     async (file: File, caption?: string) => {
       if (!session || !selectedConversationWaId || !selectedConversation) return;
-      if (!selectedConversationSupportsOutbound) {
-        setError(selectedConversationOutboundDisabledMessage);
+      if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
+        setError(
+          !selectedConversationSupportsOutbound
+            ? selectedConversationOutboundDisabledMessage
+            : "Envio de midia ainda nao esta habilitado para Webchat."
+        );
         setErrorDetails(null);
         return;
       }
@@ -4054,6 +4061,7 @@ export default function AppInboxPage() {
       handleUnauthorized,
       selectedConversation,
       selectedConversationOutboundDisabledMessage,
+      selectedConversationSupportsMediaOutbound,
       selectedConversationSupportsOutbound,
       selectedConversationWaId,
       session,
@@ -4075,8 +4083,12 @@ export default function AppInboxPage() {
 
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
-    if (!selectedConversationSupportsOutbound) {
-      setError(selectedConversationOutboundDisabledMessage);
+    if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
+      setError(
+        !selectedConversationSupportsOutbound
+          ? selectedConversationOutboundDisabledMessage
+          : "Envio de audio ainda nao esta habilitado para Webchat."
+      );
       setErrorDetails(null);
       return;
     }
@@ -5483,11 +5495,21 @@ export default function AppInboxPage() {
                   const nextFile = event.target.files?.[0] ?? null;
                   setSelectedMediaFile(nextFile);
                 }}
-                disabled={!selectedConversationWaId || !composerEnabled || isHydratingSelectedTimeline}
+                disabled={
+                  !selectedConversationWaId ||
+                  !composerEnabled ||
+                  !selectedConversationSupportsMediaOutbound ||
+                  isHydratingSelectedTimeline
+                }
               />
               <button
                 type="button"
-                disabled={!selectedConversationWaId || !composerEnabled || isHydratingSelectedTimeline}
+                disabled={
+                  !selectedConversationWaId ||
+                  !composerEnabled ||
+                  !selectedConversationSupportsMediaOutbound ||
+                  isHydratingSelectedTimeline
+                }
                 onClick={() => mediaInputRef.current?.click()}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl max-md:h-11 max-md:w-11"
               >
@@ -5506,6 +5528,7 @@ export default function AppInboxPage() {
                 disabled={
                   !selectedConversationWaId ||
                   !composerEnabled ||
+                  !selectedConversationSupportsMediaOutbound ||
                   isHydratingSelectedTimeline ||
                   sendingMessage ||
                   Boolean(selectedMediaFile) ||
@@ -5554,6 +5577,7 @@ export default function AppInboxPage() {
                 disabled={
                   !selectedConversationWaId ||
                   (!messageDraft.trim() && !selectedMediaFile) ||
+                  (Boolean(selectedMediaFile) && !selectedConversationSupportsMediaOutbound) ||
                   !composerEnabled ||
                   isHydratingSelectedTimeline ||
                   sendingMessage

@@ -26,6 +26,8 @@ test("satisfaction is disabled by default for controlled rollout", () => {
 test("webchat is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webchat, false);
   assert.equal(getFeatures({ profile: "government" }).webchat, false);
+  assert.equal(getFeatures({ profile: "business" }).webchatOutbound, false);
+  assert.equal(getFeatures({ profile: "government" }).webchatOutbound, false);
 });
 
 test("knowledgeBase can be enabled by tenant feature override", () => {
@@ -61,7 +63,9 @@ test("satisfaction can be enabled by tenant feature override", () => {
 });
 
 test("webchat can be enabled by tenant feature override", () => {
-  const client = { profile: "government", features: { webchat: true } };
+  const client = { profile: "government", features: { webchat: true, webchatOutbound: true } };
   assert.equal(getFeatures(client).webchat, true);
+  assert.equal(getFeatures(client).webchatOutbound, true);
   assert.equal(hasFeature(client, "webchat"), true);
+  assert.equal(hasFeature(client, "webchatOutbound"), true);
 });

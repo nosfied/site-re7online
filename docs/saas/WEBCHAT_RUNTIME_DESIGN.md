@@ -41,6 +41,16 @@ Status apos Sprint 73F:
 - conversa passa a aparecer no `/app/inbox` e na timeline pelo mesmo caminho multicanal;
 - outbound, widget publico final, polling publico, chatbot e IA continuam fora do runtime.
 
+Status apos Sprint 73H:
+
+- feature flag `webchatOutbound=false` criada para rollout controlado;
+- resposta humana pelo Inbox para `Conversation.channel=webchat` liberada somente com `webchat=true` e `webchatOutbound=true`;
+- outbound Webchat persiste `OutboundMessage channel=webchat provider=converta`;
+- timeline do Inbox reflete a resposta humana persistida;
+- sessoes invalidas/expiradas, site inativo e dominio nao permitido bloqueiam o envio com evento redigido `webchat.outbound.blocked`;
+- a mensagem fica marcada como `delivery=pending_public_polling`, pois o visitante ainda nao possui endpoint publico de leitura;
+- polling publico, widget final, chatbot e IA continuam fora do runtime.
+
 Este documento define como o runtime deve nascer sem improvisar sobre WhatsApp, Messenger, Instagram ou Public API.
 
 ## Principios De Runtime
@@ -325,7 +335,7 @@ O CRM deve tratar Webchat como canal de relacionamento, nao como API tecnica.
 
 ### Polling
 
-Recomendado para MVP.
+Recomendado para o primeiro canal E2E, mas somente depois do outbound humano estar controlado.
 
 Vantagens:
 
@@ -344,6 +354,82 @@ Parametros iniciais:
 - polling a cada 3-5 segundos quando janela aberta;
 - backoff quando aba estiver oculta;
 - pausa quando sessao fechada.
+- `limit` maximo baixo por chamada;
+- cursor ou `since` obrigatorio para evitar payload crescente;
+- rate limit por sessao/IP hash;
+- resposta vazia barata quando nao houver mensagens novas.
+
+### Polling Publico Do Visitante
+
+Endpoint alvo:
+
+```text
+GET /webchat/v1/messages
+```
+
+Parametros:
+
+- `sessionToken`;
+- `cursor` ou `since`;
+- `limit`.
+
+Validacoes:
+
+- token de sessao valido;
+- sessao ativa e nao expirada;
+- `Origin` em `WebchatAllowedDomain.active=true`;
+- dominio igual ao dominio da sessao;
+- site ativo;
+- feature `webchat=true`;
+- feature futura `webchatPolling=true`;
+- rate limit por sessao/IP hash.
+
+Retorno seguro:
+
+```json
+{
+  "ok": true,
+  "messages": [
+    {
+      "id": "public_message_id",
+      "direction": "inbound|outbound",
+      "type": "text",
+      "text": "mensagem normalizada",
+      "status": "sent|delivered|read|failed",
+      "createdAt": "2026-06-21T10:00:00.000Z"
+    }
+  ],
+  "nextCursor": "opaque_cursor"
+}
+```
+
+Nao retornar:
+
+- `waId`;
+- `externalUserRef`;
+- token bruto ou hash;
+- `channelAccountId` interno;
+- `rawPayload`;
+- ids internos de operador;
+- email/telefone do visitante;
+- dados de outro tenant.
+
+Ordenacao:
+
+- estavel por `createdAt` + `id`;
+- mensagens antigas e novas devem reconciliar sem duplicar;
+- cursor opaco preferivel a page numerica.
+
+Eventos:
+
+- `webchat.message.polled`;
+- `webchat.polling.denied`;
+- `webchat.message.read` apenas se a chamada tambem confirmar leitura.
+
+Logs:
+
+- logar `clientId`, `siteId`, `sessionId`, contagem retornada, cursor presente/ausente;
+- nunca logar token, texto completo ou IP bruto.
 
 ### SSE
 
@@ -377,21 +463,121 @@ Desvantagens:
 
 ### Recomendacao
 
-MVP 73E/73F:
+Status atual 73E/73F:
 
 ```text
 POST mensagem visitante
-GET mensagens por polling
 realtime interno existente para operadores
 ```
 
-Depois de estabilizar:
+Proxima fase recomendada:
 
 ```text
-SSE visitante
+73H: outbound humano controlado - implementado
+73I: polling publico controlado
+73J: widget minimo
 ```
 
 WebSocket so deve entrar se houver requisito real de baixa latencia ou volume que justifique.
+
+## Outbound Humano Pelo Inbox
+
+Objetivo: permitir que o operador responda conversas `channel=webchat` pelo `/app/inbox`, sem usar WhatsApp,
+Messenger, Instagram ou Meta.
+
+### Guardrails
+
+O envio Webchat foi implementado para texto e deve ser liberado apenas quando:
+
+- `Conversation.channel === "webchat"`;
+- `Conversation.provider === "converta"`;
+- feature `webchat=true`;
+- feature `webchatOutbound=true`;
+- `WebchatSite.status=active`;
+- `WebchatSession.status=active`;
+- sessao nao expirada;
+- origem/domino da sessao ainda permitido;
+- operador tem acesso RBAC/departamento;
+- conversa esta em modo humano e permite resposta.
+
+Se qualquer condicao falhar:
+
+- nao criar `OutboundMessage` como enviado;
+- retornar erro operacional claro ao Inbox;
+- registrar `webchat.outbound.blocked` redigido.
+
+### Persistencia
+
+Usar `OutboundMessage` como fonte da timeline:
+
+| Campo | Valor |
+| --- | --- |
+| `clientId` | tenant da conversa |
+| `waId/waIdCanonical` | `Conversation.waId` sintetico `webchat:<hash>` |
+| `channel` | `webchat` |
+| `provider` | `converta` |
+| `channelAccountId` | `WebchatSite.id` |
+| `externalUserHash` | hash do visitante |
+| `messageId` | `webchat:out:<siteId>:<hash>` |
+| `externalMessageId` | nulo ou igual ao id publico gerado |
+| `type` | `TEXT` no MVP |
+| `status` | `SENT` no MVP quando persistido |
+| `bodyText` | texto normalizado |
+| `rawPayload` | metadados redigidos, sem token |
+
+Tambem atualizar:
+
+- `Conversation.lastOutboundAt`;
+- `ConversationRuntimeState.lastOutboundAt`;
+- `ConversationRuntimeState.lastOutboundMessageId`;
+- status operacional conforme regra atual do Inbox, sem alterar canais Meta.
+
+### Status Inicial
+
+No MVP 73H, resposta Webchat nao depende de API externa. Portanto:
+
+- `SENT`: mensagem persistida e pronta para polling futuro;
+- `DELIVERED`: futuro, quando o widget confirmar recebimento;
+- `READ`: futuro, quando o visitante abrir/confirmar leitura;
+- `FAILED`: apenas para falha interna antes de persistir/disponibilizar.
+
+`DELIVERED` e `READ` nao devem ser simulados no MVP.
+
+### Separacao Dos Canais Meta
+
+O caminho Webchat nao deve chamar:
+
+- `sendTextMessage` WhatsApp;
+- Messenger Graph API;
+- Instagram Graph API;
+- adapters Meta;
+- templates Meta.
+
+O dispatcher do Inbox deve tratar `webchat` em branch propria:
+
+```text
+channel=whatsapp   -> WhatsApp outbound atual
+channel=messenger  -> Messenger outbound atual
+channel=instagram  -> Instagram outbound atual
+channel=webchat    -> persistir OutboundMessage local para polling
+outro              -> bloquear
+```
+
+### Erros Ao Operador
+
+Mensagens sugeridas:
+
+- `Sessao Webchat expirada. O visitante precisa iniciar uma nova conversa.`
+- `Envio por Webchat desativado neste tenant.`
+- `Site Webchat inativo ou dominio nao permitido.`
+- `Conversa Webchat fora do seu departamento.`
+
+Nao exibir:
+
+- token;
+- hash de visitante;
+- detalhes internos de schema;
+- IP/origem bruta alem do dominio permitido quando necessario.
 
 ## Seguranca
 
@@ -488,6 +674,23 @@ Branding:
 | Scheduling | permitir criar agendamento a partir de conversa Webchat em sprint futura |
 | NPS | disparar pesquisa ao encerrar sessao/conversa |
 
+## Feature Flags
+
+Flags recomendadas:
+
+| Flag | Default | Uso |
+| --- | --- | --- |
+| `webchat` | `false` | habilita modulo, settings, sessao e inbound |
+| `webchatOutbound` | `false` | habilita resposta humana pelo Inbox |
+| `webchatPolling` | `false` | habilita leitura publica de mensagens pelo visitante |
+
+Regras:
+
+- `webchatOutbound=true` nao deve habilitar `webchatPolling` automaticamente;
+- `webchatPolling=true` nao deve permitir envio pelo operador;
+- se `webchat=false`, todas as rotas publicas e operacoes do canal devem bloquear;
+- rollout deve ser por tenant piloto antes de habilitar em qualquer perfil padrao.
+
 ## Eventos
 
 Eventos minimos:
@@ -499,7 +702,11 @@ webchat.session.closed
 webchat.session.expired
 webchat.visitor.identified
 webchat.message.received
-webchat.message.sent
+webchat.message.outbound_created
+webchat.message.polled
+webchat.message.read
+webchat.outbound.blocked
+webchat.polling.denied
 webchat.origin.denied
 webchat.rate_limited
 webchat.abuse_detected
@@ -528,6 +735,20 @@ Efeito esperado:
 - novas mensagens publicas nao entram;
 - conversas existentes ficam preservadas no inbox para historico.
 
+Rollback seletivo:
+
+```text
+Client.features.webchatOutbound=false
+Client.features.webchatPolling=false
+```
+
+Efeito esperado:
+
+- inbound permanece ativo, se `webchat=true`;
+- operador deixa de responder pelo Webchat;
+- visitante deixa de consultar mensagens por polling;
+- timeline e historico permanecem preservados.
+
 Rollback operacional:
 
 - desativar `WebchatSite.status`;
@@ -553,6 +774,9 @@ Rollback de release:
 | Sobrecarga por polling | Medio | backoff, limites por sessao e intervalo minimo |
 | LGPD incompleta | Medio/alto | privacy text e coleta opcional por tenant |
 | Operador confundir canal | Medio | badge `Webchat` no inbox em sprint runtime |
+| Resposta em sessao expirada | Medio | bloquear outbound e instruir nova sessao |
+| Visitante nao receber mensagem persistida | Medio | polling com cursor, status publico e testes E2E |
+| Mistura com canais Meta | Alto | branch propria `channel=webchat`, sem adapters Meta |
 
 ## Ordem Recomendada De Implementacao
 
@@ -574,21 +798,53 @@ Status: implementado como primeiro runtime real, sem mensagens.
 - aparecer no inbox;
 - sem outbound visitante ainda.
 
-### Sprint 73G - Webchat Visitor Polling + Outbound
+### Sprint 73G - Webchat Outbound + Polling Design
+
+Status: design documental, sem alteracao funcional.
+
+- definir resposta humana pelo Inbox;
+- definir polling publico do visitante;
+- definir flags `webchatOutbound` e `webchatPolling`;
+- definir eventos e rollback;
+- separar implementacoes em 73H/73I/73J.
+
+### Sprint 73H - Webchat Human Outbound Controlled MVP
+
+- habilitar resposta humana pelo Inbox apenas para tenant piloto;
+- persistir `OutboundMessage channel=webchat`;
+- nao criar widget final;
+- nao criar IA/chatbot;
+- manter polling publico desligado ate 73I;
+- validar que WhatsApp/Messenger/Instagram nao sao chamados.
+
+Status: implementado como outbound humano controlado e persistido. O visitante ainda nao recebe a mensagem porque `GET /webchat/v1/messages` fica para 73I.
+
+### Sprint 73I - Webchat Visitor Polling MVP
 
 - `GET /webchat/v1/messages`;
-- operador responde no inbox;
-- visitante recebe por polling;
-- status basico.
+- visitante recebe inbound/outbound seguros por polling;
+- status publico basico;
+- cursor/since;
+- rate limit e backoff;
+- sem widget final ainda.
 
-### Sprint 73H - Identification + Department Routing
+### Sprint 73J - Webchat Minimal Widget
+
+- widget tecnico minimo embutivel;
+- abrir/fechar painel;
+- criar/restaurar sessao;
+- enviar inbound;
+- consultar polling;
+- sem anexos e sem IA.
+
+### Sprint 73K - Identification + Department Routing
 
 - upgrade anonimo -> identificado;
 - vincular `Contact`;
 - roteamento por departamento;
 - eventos CRM.
 
-### Sprint 73I - Realtime/SSE + Intelligence Shadow
+### Sprint 73L - Realtime/SSE + Intelligence Shadow
 
 - SSE opcional;
 - KB/IA/chatbot em shadow;
@@ -604,6 +860,18 @@ Status: implementado como primeiro runtime real, sem mensagens.
 - nenhum token/API key aparece no browser alem do token de visitante;
 - logs redigidos;
 - rollback por tenant funciona sem migration.
+
+## Confirmacao 73G
+
+Esta sprint alterou apenas documentacao. Nao houve:
+
+- codigo de runtime;
+- migration;
+- novo endpoint;
+- habilitacao de outbound;
+- widget publico;
+- alteracao em WhatsApp, Messenger ou Instagram;
+- alteracao em chatbot, IA, Inbox ou Public API.
 
 ## Confirmacao 73D
 

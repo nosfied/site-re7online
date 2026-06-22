@@ -62,6 +62,22 @@ Status apos Sprint 73F:
 - a conversa aparece no `/app/inbox` e usa a timeline existente;
 - resposta do operador para visitante, widget publico final, polling publico, chatbot e IA seguem fora do escopo atual.
 
+Status apos Sprint 73G:
+
+- outbound humano pelo Inbox e polling publico foram desenhados;
+- a implementacao foi dividida em etapas menores: 73H outbound controlado, 73I polling publico e 73J widget minimo;
+- flags futuras recomendadas: `webchatOutbound` e `webchatPolling`, ambas desligadas por padrao;
+- nenhuma funcionalidade runtime nova foi ativada nesta etapa.
+
+Status apos Sprint 73H:
+
+- `webchatOutbound=false` criado para rollout controlado;
+- operador pode responder no Inbox quando `webchat=true` e `webchatOutbound=true`;
+- resposta persiste `OutboundMessage channel=webchat provider=converta`;
+- timeline do Inbox mostra a resposta humana;
+- sessoes invalidas/expiradas, site inativo e dominio nao permitido bloqueiam outbound;
+- visitante ainda nao recebe a resposta: polling publico e widget final seguem fora do runtime.
+
 ## Entidades Alvo
 
 ### WebchatWidget
@@ -183,6 +199,27 @@ Regra:
 | `Department`/`Queue` | roteamento inicial |
 | `Event` | auditoria redigida |
 | `KnowledgeBaseArticle` | respostas/FAQ futuras |
+
+## Outbound E Polling Futuro
+
+O E2E humano Webchat deve ser implementado sem reaproveitar adapters Meta.
+
+Fluxo alvo:
+
+1. visitante envia mensagem por `POST /webchat/v1/messages`;
+2. conversa aparece no Inbox como `channel=webchat`;
+3. operador responde no Inbox;
+4. backend persiste `OutboundMessage channel=webchat`;
+5. visitante busca respostas por `GET /webchat/v1/messages`;
+6. widget reconcilia mensagens por cursor.
+
+Regras:
+
+- `webchatOutbound=false` bloqueia resposta humana;
+- `webchatPolling=false` bloqueia leitura publica;
+- `webchat=false` bloqueia tudo;
+- sessao expirada bloqueia outbound;
+- nenhum envio deve passar por WhatsApp, Messenger, Instagram ou templates Meta.
 
 ## Widget
 
@@ -569,9 +606,9 @@ Primeiro fluxo real:
 - persistencia `channel=webchat`;
 - conversa aparece no inbox.
 
-### Sprint 73G - Webchat Outbound + Visitor Polling
+### Sprint 73G - Webchat Outbound + Visitor Polling Design
 
-Completar ponta a ponta:
+Desenhar ponta a ponta:
 
 - operador responde no inbox;
 - visitante recebe por polling;
@@ -579,7 +616,27 @@ Completar ponta a ponta:
 - expiracao de sessao;
 - eventos redigidos.
 
-### Sprint 73H - Webchat Realtime + Identification
+### Sprint 73H - Webchat Outbound Controlado
+
+Implementar primeiro outbound humano:
+
+- operador responde no inbox;
+- persistencia `OutboundMessage channel=webchat`;
+- guardrails de feature, sessao, site e dominio;
+- sem polling publico;
+- sem widget final;
+- sem IA/chatbot.
+
+### Sprint 73I - Webchat Visitor Polling
+
+Disponibilizar mensagens ao visitante:
+
+- `GET /webchat/v1/messages`;
+- cursor/since;
+- rate limit;
+- status publico basico.
+
+### Sprint 73J - Webchat Realtime + Identification
 
 Evoluir:
 

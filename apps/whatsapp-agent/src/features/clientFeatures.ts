@@ -13,6 +13,7 @@ export type ClientFeatureKey =
   | "schedulingConfirmation"
   | "satisfaction"
   | "webchat"
+  | "webchatOutbound"
   | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
@@ -34,6 +35,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   schedulingConfirmation: false,
   satisfaction: false,
   webchat: false,
+  webchatOutbound: false,
 };
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
@@ -52,6 +54,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   schedulingConfirmation: false,
   satisfaction: false,
   webchat: false,
+  webchatOutbound: false,
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
@@ -97,6 +100,7 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
     webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
+    webchatOutbound: normalizeFeatureValue(input.webchatOutbound) ?? defaults.webchatOutbound,
   };
 }
 
