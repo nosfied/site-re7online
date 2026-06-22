@@ -33,6 +33,10 @@ test("webchat is disabled by default for controlled rollout", () => {
 test("webhooks is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webhooks, false);
   assert.equal(getFeatures({ profile: "government" }).webhooks, false);
+  assert.equal(getFeatures({ profile: "business" }).webhookDispatch, false);
+  assert.equal(getFeatures({ profile: "government" }).webhookDispatch, false);
+  assert.equal(getFeatures({ profile: "business" }).webhookDispatchExecute, false);
+  assert.equal(getFeatures({ profile: "government" }).webhookDispatchExecute, false);
 });
 
 test("knowledgeBase can be enabled by tenant feature override", () => {
@@ -76,7 +80,14 @@ test("webchat can be enabled by tenant feature override", () => {
 });
 
 test("webhooks can be enabled by tenant feature override", () => {
-  const client = { profile: "government", features: { webhooks: true } };
+  const client = {
+    profile: "government",
+    features: { webhooks: true, webhookDispatch: true, webhookDispatchExecute: true },
+  };
   assert.equal(getFeatures(client).webhooks, true);
+  assert.equal(getFeatures(client).webhookDispatch, true);
+  assert.equal(getFeatures(client).webhookDispatchExecute, true);
   assert.equal(hasFeature(client, "webhooks"), true);
+  assert.equal(hasFeature(client, "webhookDispatch"), true);
+  assert.equal(hasFeature(client, "webhookDispatchExecute"), true);
 });

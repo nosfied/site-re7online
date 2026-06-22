@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import dns from "node:dns/promises";
+import https from "node:https";
+import net from "node:net";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
 
@@ -19,6 +22,8 @@ const MAX_ENDPOINTS_PER_TENANT = 20;
 const REAL_SIGNATURE_MODE = "encrypted_secret";
 const LEGACY_SHADOW_SIGNATURE_MODE = "shadow_hash_key";
 const WEBHOOK_SECRET_KEY_REF = "WEBHOOK_SECRET_ENCRYPTION_KEY";
+const WEBHOOK_DISPATCH_TIMEOUT_MS = 5000;
+const WEBHOOK_DISPATCH_MAX_RESPONSE_BYTES = 32 * 1024;
 const PRIVATE_IPV4_RANGES = [
   /^10\./,
   /^127\./,
@@ -26,6 +31,12 @@ const PRIVATE_IPV4_RANGES = [
   /^169\.254\./,
   /^192\.168\./,
   /^172\.(1[6-9]|2\d|3[0-1])\./,
+];
+const PRIVATE_IPV6_PREFIXES = [
+  "fc",
+  "fd",
+  "fe80",
+  "::1",
 ];
 
 export function generateWebhookSigningSecret() {
@@ -100,6 +111,18 @@ export function hashWebhookPayload(payload: unknown) {
 
 function isPublicApiWebhookEvent(value: string): value is PublicApiWebhookEvent {
   return (PUBLIC_API_WEBHOOK_EVENTS as readonly string[]).includes(value);
+}
+
+function isBlockedIpAddress(address: string) {
+  const ipVersion = net.isIP(address);
+  if (ipVersion === 0) return true;
+  if (ipVersion === 4) {
+    return PRIVATE_IPV4_RANGES.some((pattern) => pattern.test(address));
+  }
+  const normalized = address.toLowerCase();
+  if (normalized === "::" || normalized === "::1") return true;
+  if (PRIVATE_IPV6_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;
+  return false;
 }
 
 function sanitizePublicId(value: string) {
@@ -237,6 +260,109 @@ export function validateWebhookEndpointUrl(input: string) {
     return { ok: false as const, error: "blocked_internal_url" };
   }
   return { ok: true as const, url: parsed.toString() };
+}
+
+async function resolveWebhookDispatchAddress(parsed: URL) {
+  if (net.isIP(parsed.hostname) && isBlockedIpAddress(parsed.hostname)) {
+    return { ok: false as const, error: "ssrf_blocked" };
+  }
+  let addresses: Array<{ address: string; family: number }>;
+  try {
+    addresses = await dns.lookup(parsed.hostname, { all: true, verbatim: true });
+  } catch {
+    return { ok: false as const, error: "dns_lookup_failed" };
+  }
+  if (addresses.length === 0) return { ok: false as const, error: "dns_lookup_failed" };
+  const blocked = addresses.find((item) => isBlockedIpAddress(item.address));
+  if (blocked) return { ok: false as const, error: "ssrf_blocked" };
+  return { ok: true as const, address: addresses[0] };
+}
+
+async function postWebhookPayload(params: {
+  url: string;
+  rawBody: string;
+  headers: Record<string, string>;
+}) {
+  const parsed = new URL(params.url);
+  const resolved = await resolveWebhookDispatchAddress(parsed);
+  if (!resolved.ok) return { ok: false as const, errorCode: resolved.error, durationMs: 0 };
+  const startedAt = Date.now();
+  return await new Promise<
+    | { ok: true; responseCode: number; responseBodyHash: string; durationMs: number; redirected: boolean }
+    | { ok: false; responseCode?: number; responseBodyHash?: string; errorCode: string; durationMs: number; redirected?: boolean }
+  >((resolve) => {
+    const request = https.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        servername: parsed.hostname,
+        port: parsed.port ? Number(parsed.port) : 443,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "POST",
+        timeout: WEBHOOK_DISPATCH_TIMEOUT_MS,
+        headers: {
+          ...params.headers,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(params.rawBody),
+        },
+        lookup: (_hostname, _options, callback) => {
+          callback(null, resolved.address.address, resolved.address.family);
+        },
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        response.on("data", (chunk: Buffer) => {
+          if (total >= WEBHOOK_DISPATCH_MAX_RESPONSE_BYTES) return;
+          const remaining = WEBHOOK_DISPATCH_MAX_RESPONSE_BYTES - total;
+          const part = chunk.length > remaining ? chunk.subarray(0, remaining) : chunk;
+          chunks.push(part);
+          total += part.length;
+        });
+        response.on("end", () => {
+          const durationMs = Date.now() - startedAt;
+          const responseCode = response.statusCode ?? 0;
+          const body = Buffer.concat(chunks);
+          const responseBodyHash = crypto.createHash("sha256").update(body).digest("hex");
+          if (responseCode >= 300 && responseCode < 400) {
+            resolve({
+              ok: false,
+              responseCode,
+              responseBodyHash,
+              errorCode: "redirect_blocked",
+              durationMs,
+              redirected: true,
+            });
+            return;
+          }
+          if (responseCode >= 200 && responseCode < 300) {
+            resolve({ ok: true, responseCode, responseBodyHash, durationMs, redirected: false });
+            return;
+          }
+          resolve({
+            ok: false,
+            responseCode,
+            responseBodyHash,
+            errorCode: responseCode >= 500 ? "http_5xx" : "http_4xx",
+            durationMs,
+            redirected: false,
+          });
+        });
+      }
+    );
+    request.on("timeout", () => {
+      request.destroy(new Error("timeout"));
+    });
+    request.on("error", (error) => {
+      resolve({
+        ok: false,
+        errorCode: error.message === "timeout" ? "timeout" : "http_request_failed",
+        durationMs: Date.now() - startedAt,
+      });
+    });
+    request.write(params.rawBody);
+    request.end();
+  });
 }
 
 function serializeWebhookEndpoint(item: {
@@ -466,6 +592,217 @@ export async function generateWebhookShadowDelivery(params: {
     recorded: Boolean(params.recordAttempts),
     delivery,
     attempt,
+  };
+}
+
+export async function dispatchWebhookDelivery(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  endpointId: string;
+  eventType: string;
+  payload?: unknown;
+  execute?: boolean;
+  requestId: string;
+  httpPost?: typeof postWebhookPayload;
+}) {
+  const execute = Boolean(params.execute);
+  if (!isPublicApiWebhookEvent(params.eventType)) {
+    return { ok: false as const, error: "invalid_event_type" };
+  }
+  const client = await params.prisma.client.findUnique({
+    where: { id: params.clientId },
+    select: { id: true, clientKey: true, status: true, features: true, profile: true },
+  });
+  if (!client) return { ok: false as const, error: "client_not_found" };
+  if (client.status !== "ACTIVE") return { ok: false as const, error: "client_inactive" };
+  const features = getFeatures(client);
+  if (!features.webhooks || !features.webhookDispatch) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-denied:feature-disabled`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: "feature_disabled", eventType: params.eventType },
+    });
+    return { ok: false as const, error: "feature_disabled" };
+  }
+  if (execute && !features.webhookDispatchExecute) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-denied:execute-disabled`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: "execute_disabled", eventType: params.eventType },
+    });
+    return { ok: false as const, error: "execute_disabled" };
+  }
+  const endpoint = await params.prisma.webhookEndpoint.findFirst({
+    where: { id: params.endpointId, clientId: client.id },
+  });
+  if (!endpoint) return { ok: false as const, error: "webhook_endpoint_not_found" };
+  if (!endpoint.active) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-skipped:inactive-endpoint:${endpoint.id}`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: "endpoint_inactive", eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: "webhook_endpoint_inactive" };
+  }
+  const decryptedSecret = decryptWebhookSigningSecret(endpoint.signingSecretCiphertext);
+  if (!decryptedSecret) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-skipped:secret-not-encrypted:${endpoint.id}`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: "webhook_secret_not_encrypted", eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: "webhook_secret_not_encrypted" };
+  }
+  const urlResult = validateWebhookEndpointUrl(endpoint.url);
+  if (!urlResult.ok) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-skipped:invalid-url:${endpoint.id}`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: urlResult.error, eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: urlResult.error };
+  }
+  const payload =
+    params.payload ??
+    buildShadowWebhookPayload({
+      eventType: params.eventType,
+      client,
+    });
+  const payloadIssue = assertPublicWebhookPayload(payload);
+  if (payloadIssue) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-denied:unsafe-payload:${endpoint.id}`,
+      eventName: "webhook.dispatch.failed",
+      payload: { reason: "unsafe_payload", detail: payloadIssue, eventType: params.eventType, endpointId: endpoint.id },
+    });
+    return { ok: false as const, error: "unsafe_payload", detail: payloadIssue };
+  }
+  const rawBody = JSON.stringify(payload);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const payloadHash = hashWebhookPayload(payload);
+  const baseHeaders = {
+    "User-Agent": "Converta-Webhooks/1.0",
+    "X-Converta-Event": params.eventType,
+    "X-Converta-Timestamp": String(timestamp),
+    "X-Converta-Signature": signWebhookPayload({
+      secret: decryptedSecret,
+      timestamp,
+      payload: rawBody,
+    }),
+  };
+  if (!execute) {
+    await recordWebhookAuditEvent(params.prisma, {
+      clientId: client.id,
+      requestId: `${params.requestId}:webhook-dispatch-dry-run:${endpoint.id}:${sanitizePublicId(params.eventType)}`,
+      eventName: "webhook.dispatch.started",
+      payload: {
+        endpointId: endpoint.id,
+        eventType: params.eventType,
+        payloadHash,
+        execute: false,
+      },
+    });
+    return {
+      ok: true as const,
+      executed: false,
+      endpoint: serializeWebhookEndpoint(endpoint),
+      eventType: params.eventType,
+      payload,
+      payloadHash,
+      headers: baseHeaders,
+      signaturePreview: baseHeaders["X-Converta-Signature"].slice(0, 19),
+      delivery: null,
+      attempt: null,
+      httpCalled: false,
+    };
+  }
+
+  const createdDelivery = await params.prisma.webhookDelivery.create({
+    data: {
+      clientId: client.id,
+      endpointId: endpoint.id,
+      eventType: params.eventType,
+      payloadHash,
+      status: "pending",
+    },
+  });
+  const deliveryId = createdDelivery.id;
+  const headers = {
+    ...baseHeaders,
+    "X-Converta-Delivery-Id": deliveryId,
+  };
+  await recordWebhookAuditEvent(params.prisma, {
+    clientId: client.id,
+    requestId: `${params.requestId}:webhook-dispatch-started:${endpoint.id}:${deliveryId}`,
+    eventName: "webhook.dispatch.started",
+    payload: {
+      endpointId: endpoint.id,
+      deliveryId,
+      eventType: params.eventType,
+      payloadHash,
+      execute: true,
+    },
+  });
+  const dispatchResult = await (params.httpPost ?? postWebhookPayload)({
+    url: urlResult.url,
+    rawBody,
+    headers,
+  });
+  const status = dispatchResult.ok
+    ? "delivered"
+    : dispatchResult.errorCode === "ssrf_blocked" || dispatchResult.errorCode === "redirect_blocked"
+      ? "dead_letter"
+      : "failed";
+  const [updatedDelivery, createdAttempt] = await params.prisma.$transaction([
+    params.prisma.webhookDelivery.update({
+      where: { id: deliveryId },
+      data: { status },
+    }),
+    params.prisma.webhookAttempt.create({
+      data: {
+        clientId: client.id,
+        deliveryId,
+        attemptNumber: 1,
+        status,
+        responseCode: dispatchResult.responseCode ?? null,
+      },
+    }),
+  ]);
+  await recordWebhookAuditEvent(params.prisma, {
+    clientId: client.id,
+    requestId: `${params.requestId}:webhook-dispatch-${dispatchResult.ok ? "succeeded" : "failed"}:${endpoint.id}:${deliveryId}`,
+    eventName: dispatchResult.ok ? "webhook.dispatch.succeeded" : "webhook.dispatch.failed",
+    payload: {
+      endpointId: endpoint.id,
+      deliveryId,
+      eventType: params.eventType,
+      responseCode: dispatchResult.responseCode ?? null,
+      durationMs: dispatchResult.durationMs,
+      errorCode: dispatchResult.ok ? null : dispatchResult.errorCode,
+      redirected: dispatchResult.redirected ?? false,
+    },
+  });
+  return {
+    ok: true as const,
+    executed: true,
+    endpoint: serializeWebhookEndpoint(endpoint),
+    eventType: params.eventType,
+    payloadHash,
+    headers,
+    signaturePreview: headers["X-Converta-Signature"].slice(0, 19),
+    delivery: serializeWebhookDelivery(updatedDelivery),
+    attempt: serializeWebhookAttempt(createdAttempt),
+    httpCalled: true,
+    responseCode: dispatchResult.responseCode ?? null,
+    responseBodyHash: dispatchResult.responseBodyHash ?? null,
+    durationMs: dispatchResult.durationMs,
+    errorCode: dispatchResult.ok ? null : dispatchResult.errorCode,
   };
 }
 

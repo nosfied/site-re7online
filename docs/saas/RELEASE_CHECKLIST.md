@@ -69,6 +69,8 @@ Webhooks Public API:
 - Releases que criam ou rotacionam segredo de webhook exigem `WEBHOOK_SECRET_ENCRYPTION_KEY` configurada em producao.
 - A chave deve ser estavel, forte e nunca commitada.
 - Sem essa env, endpoints legados continuam listaveis, mas criacao/rotacao de segredo deve falhar de forma controlada.
+- Releases futuras que executem dispatch HTTP externo de webhooks devem exigir flags explicitas por tenant, com dry-run default, SSRF reforcado, timeout curto e smoke contra endpoint controlado.
+- Nenhum deploy deve ativar `webhookDispatchExecute` por padrao.
 
 ## Frontend
 

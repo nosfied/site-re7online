@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createWebhookEndpoint,
   decryptWebhookSigningSecret,
+  dispatchWebhookDelivery,
   encryptWebhookSigningSecret,
   generateWebhookShadowDelivery,
   hashWebhookSigningSecret,
@@ -25,14 +26,14 @@ function makePrisma() {
         id: "tenant_a",
         clientKey: "tenant-a",
         status: "ACTIVE",
-        features: { webhooks: true },
+        features: { webhooks: true, webhookDispatch: true, webhookDispatchExecute: true },
         profile: "government",
       },
       {
         id: "tenant_b",
         clientKey: "tenant-b",
         status: "ACTIVE",
-        features: { webhooks: false },
+        features: { webhooks: false, webhookDispatch: false, webhookDispatchExecute: false },
         profile: "government",
       },
     ] as Array<Record<string, unknown>>,
@@ -85,6 +86,17 @@ function makePrisma() {
         state.deliveries.push(item);
         return item;
       },
+      update: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const index = state.deliveries.findIndex((item) => item.id === where.id);
+        assert.notEqual(index, -1);
+        const item = {
+          ...state.deliveries[index],
+          ...data,
+          updatedAt: makeDate("2026-06-22T12:11:00.000Z"),
+        };
+        state.deliveries[index] = item;
+        return item;
+      },
     },
     webhookAttempt: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -97,12 +109,30 @@ function makePrisma() {
         return item;
       },
     },
+    $transaction: async (operations: Array<Promise<unknown>>) => await Promise.all(operations),
     event: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         state.events.push(data);
         return data;
       },
     },
+  };
+}
+
+function encryptedEndpoint(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "endpoint_1",
+    clientId: "tenant_a",
+    name: "ERP",
+    url: "https://integracao.example.gov.br/webhook",
+    active: true,
+    signingSecretHash: hashWebhookSigningSecret("whsec_real"),
+    signingSecretCiphertext: encryptWebhookSigningSecret("whsec_real"),
+    signingSecretKeyVersion: "WEBHOOK_SECRET_ENCRYPTION_KEY",
+    signingSecretRotatedAt: makeDate("2026-06-22T12:00:00.000Z"),
+    createdAt: makeDate("2026-06-22T12:00:00.000Z"),
+    updatedAt: makeDate("2026-06-22T12:00:00.000Z"),
+    ...overrides,
   };
 }
 
@@ -265,6 +295,244 @@ test("shadow delivery uses decrypted signing secret when ciphertext exists", asy
     assert.equal(result.signatureMode, "encrypted_secret");
     assert.equal(result.headers["X-Converta-Signature-Mode"], "encrypted_secret");
     assert.match(result.headers["X-Converta-Signature"], /^sha256=[a-f0-9]{64}$/);
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("controlled dispatch dry-run signs payload without HTTP or persistence", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push(encryptedEndpoint());
+  try {
+    const result = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_dry_run",
+      execute: false,
+      httpPost: async () => {
+        throw new Error("http should not be called");
+      },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.executed, false);
+    assert.equal(result.httpCalled, false);
+    assert.equal(result.delivery, null);
+    assert.match(result.headers["X-Converta-Signature"], /^sha256=[a-f0-9]{64}$/);
+    assert.equal(prisma.state.deliveries.length, 0);
+    assert.equal(prisma.state.attempts.length, 0);
+    assert.equal(prisma.state.events[0].eventName, "webhook.dispatch.started");
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("controlled dispatch execute sends once and marks delivery delivered", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push(encryptedEndpoint());
+  try {
+    const result = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.sent",
+      requestId: "req_dispatch_execute",
+      execute: true,
+      httpPost: async ({ headers }) => {
+        assert.equal(headers["X-Converta-Event"], "message.sent");
+        assert.match(headers["X-Converta-Signature"], /^sha256=[a-f0-9]{64}$/);
+        assert.equal(typeof headers["X-Converta-Delivery-Id"], "string");
+        return { ok: true, responseCode: 204, responseBodyHash: "hash", durationMs: 12, redirected: false };
+      },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.executed, true);
+    assert.equal(result.httpCalled, true);
+    assert.equal(result.delivery?.status, "delivered");
+    assert.equal(result.attempt?.status, "delivered");
+    assert.equal(result.responseCode, 204);
+    assert.equal(prisma.state.deliveries[0].status, "delivered");
+    assert.equal(prisma.state.attempts[0].responseCode, 204);
+    assert.equal(prisma.state.events[prisma.state.events.length - 1]?.eventName, "webhook.dispatch.succeeded");
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("controlled dispatch execute records 4xx and 5xx failures without retry", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push(encryptedEndpoint());
+  try {
+    const result = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_4xx",
+      execute: true,
+      httpPost: async () => ({
+        ok: false,
+        responseCode: 403,
+        responseBodyHash: "hash_403",
+        errorCode: "http_4xx",
+        durationMs: 10,
+        redirected: false,
+      }),
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.delivery?.status, "failed");
+    assert.equal(result.attempt?.status, "failed");
+    assert.equal(result.responseCode, 403);
+    assert.equal(result.errorCode, "http_4xx");
+    assert.equal(prisma.state.attempts.length, 1);
+
+    const serverError = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_5xx",
+      execute: true,
+      httpPost: async () => ({
+        ok: false,
+        responseCode: 503,
+        responseBodyHash: "hash_503",
+        errorCode: "http_5xx",
+        durationMs: 11,
+        redirected: false,
+      }),
+    });
+    assert.equal(serverError.ok, true);
+    if (!serverError.ok) return;
+    assert.equal(serverError.delivery?.status, "failed");
+    assert.equal(serverError.attempt?.status, "failed");
+    assert.equal(serverError.errorCode, "http_5xx");
+
+    const timeout = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_timeout",
+      execute: true,
+      httpPost: async () => ({
+        ok: false,
+        errorCode: "timeout",
+        durationMs: 5000,
+      }),
+    });
+    assert.equal(timeout.ok, true);
+    if (!timeout.ok) return;
+    assert.equal(timeout.delivery?.status, "failed");
+    assert.equal(timeout.attempt?.status, "failed");
+    assert.equal(timeout.errorCode, "timeout");
+
+    const blocked = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_ssrf",
+      execute: true,
+      httpPost: async () => ({
+        ok: false,
+        errorCode: "ssrf_blocked",
+        durationMs: 0,
+      }),
+    });
+    assert.equal(blocked.ok, true);
+    if (!blocked.ok) return;
+    assert.equal(blocked.delivery?.status, "dead_letter");
+    assert.equal(blocked.attempt?.status, "dead_letter");
+    assert.equal(blocked.errorCode, "ssrf_blocked");
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("controlled dispatch blocks tenant mismatch, inactive endpoint and disabled flags", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push(encryptedEndpoint({ active: false }));
+  try {
+    const disabled = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_b",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_disabled",
+      execute: false,
+    });
+    assert.deepEqual(disabled, { ok: false, error: "feature_disabled" });
+
+    const missing = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_other",
+      eventType: "message.received",
+      requestId: "req_dispatch_missing",
+      execute: false,
+    });
+    assert.deepEqual(missing, { ok: false, error: "webhook_endpoint_not_found" });
+
+    const inactive = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_inactive",
+      execute: false,
+    });
+    assert.deepEqual(inactive, { ok: false, error: "webhook_endpoint_inactive" });
+  } finally {
+    if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+    else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("controlled dispatch requires execute flag feature and encrypted secret", async () => {
+  const previous = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = TEST_WEBHOOK_ENCRYPTION_KEY;
+  const prisma = makePrisma();
+  prisma.state.endpoints.push(encryptedEndpoint());
+  try {
+    prisma.state.clients[0].features = { webhooks: true, webhookDispatch: true, webhookDispatchExecute: false };
+    const executeDenied = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_execute_denied",
+      execute: true,
+    });
+    assert.deepEqual(executeDenied, { ok: false, error: "execute_disabled" });
+
+    prisma.state.clients[0].features = { webhooks: true, webhookDispatch: true, webhookDispatchExecute: true };
+    prisma.state.endpoints[0].signingSecretCiphertext = null;
+    const legacyDenied = await dispatchWebhookDelivery({
+      prisma: prisma as any,
+      clientId: "tenant_a",
+      endpointId: "endpoint_1",
+      eventType: "message.received",
+      requestId: "req_dispatch_legacy_denied",
+      execute: true,
+    });
+    assert.deepEqual(legacyDenied, { ok: false, error: "webhook_secret_not_encrypted" });
   } finally {
     if (previous === undefined) delete process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
     else process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = previous;

@@ -70,6 +70,7 @@ Tambem existe infraestrutura inicial de webhooks outbound para integracoes exter
 - validacao de URL HTTPS e bloqueio basico de destinos internos;
 - diagnostico de deliveries/attempts para a fase de envio futuro;
 - modo shadow/manual para validar payload publico, hash e assinatura sem chamada HTTP externa.
+- design de dispatch controlado com dry-run default, `--execute` explicito, SSRF reforcado, HMAC real, timeout curto e rollback por flag.
 
 Nesta fase, a API publica ainda nao expoe campanhas, escrita ou dispatch automatico de webhooks como contrato externo completo.
 
@@ -102,7 +103,7 @@ Essas integracoes devem ser tratadas como escopo especifico, com contrato de API
 ## Premissas
 
 - O Converta possui base tecnica para APIs e contrato OpenAPI inicial para health, contatos, conversas e mensagens.
-- Webhooks outbound possuem infraestrutura de cadastro, assinatura, segredo criptografado, rotacao e shadow manual, mas o envio automatico deve ser contratado e homologado em fase propria.
+- Webhooks outbound possuem infraestrutura de cadastro, assinatura, segredo criptografado, rotacao, shadow manual e desenho de dispatch controlado; envio HTTP real e envio automatico devem ser contratados e homologados em fase propria.
 - A exposicao de dados operacionais por API publica deve passar por escopos, rate limit, auditoria e validacao LGPD.
 - Integracoes novas exigem levantamento, seguranca, homologacao e testes.
 - Tokens e credenciais de integracao nunca devem ser expostos em UI, logs ou documentacao publica.

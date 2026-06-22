@@ -15,6 +15,8 @@ export type ClientFeatureKey =
   | "webchat"
   | "webchatOutbound"
   | "webhooks"
+  | "webhookDispatch"
+  | "webhookDispatchExecute"
   | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
@@ -38,6 +40,8 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   webchat: false,
   webchatOutbound: false,
   webhooks: false,
+  webhookDispatch: false,
+  webhookDispatchExecute: false,
 };
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
@@ -58,6 +62,8 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   webchat: false,
   webchatOutbound: false,
   webhooks: false,
+  webhookDispatch: false,
+  webhookDispatchExecute: false,
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
@@ -105,6 +111,9 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeFeatureValue(input.webchatOutbound) ?? defaults.webchatOutbound,
     webhooks: normalizeFeatureValue(input.webhooks) ?? defaults.webhooks,
+    webhookDispatch: normalizeFeatureValue(input.webhookDispatch) ?? defaults.webhookDispatch,
+    webhookDispatchExecute:
+      normalizeFeatureValue(input.webhookDispatchExecute) ?? defaults.webhookDispatchExecute,
   };
 }
 

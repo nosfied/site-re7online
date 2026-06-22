@@ -1,4 +1,4 @@
-# Sprint 70G/70H/70I/70J.1 - Public API Webhooks Design + Infra/Shadow/Secret Rotation MVP
+# Sprint 70G/70H/70I/70J.1/70J.2/70K - Public API Webhooks Design + Infra/Shadow/Secret Rotation/Controlled Dispatch
 
 Data: 2026-06-22
 
@@ -40,6 +40,31 @@ Na Sprint 70J.1 foi adicionada criptografia e rotacao do segredo de assinatura, 
 - endpoints legados sem ciphertext continuam funcionando em modo `shadow_hash_key` ate rotacao.
 
 Importante: a 70J.1 prepara HMAC real, mas ainda nao cria dispatch automatico, worker, retry real, dead letter operacional ou chamada HTTP externa.
+
+Na Sprint 70J.2 foi desenhado o primeiro dispatch HTTP externo controlado, ainda sem alteracao funcional:
+
+- dispatch manual por CLI;
+- `--dry-run` como comportamento padrao;
+- `--execute` obrigatorio para envio real futuro;
+- flags futuras `webhookDispatch` e `webhookDispatchExecute`;
+- reforco SSRF antes de qualquer socket externo;
+- HMAC real usando segredo descriptografado;
+- timeout curto, limite de payload e response body hash-only;
+- sem cron, worker, retry automatico ou acoplamento a eventos reais.
+
+Documento detalhado: `docs/saas/PUBLIC_API_WEBHOOKS_CONTROLLED_DISPATCH_DESIGN.md`.
+
+Na Sprint 70K foi implementado o MVP de dispatch HTTP externo controlado:
+
+- script `npm run webhooks:dispatch`;
+- `--dry-run` como comportamento default;
+- `--execute` obrigatorio para envio real;
+- flags `webhookDispatch=false` e `webhookDispatchExecute=false` por padrao;
+- POST HTTPS assinado com HMAC real;
+- timeout curto, sem redirects e sem retry automatico;
+- `WebhookDelivery.status=pending|delivered|failed`;
+- `WebhookAttempt.status=delivered|failed`;
+- sem cron, worker permanente, dispatch automatico ou acoplamento a eventos reais.
 
 ## Objetivo
 
@@ -554,17 +579,35 @@ Escopo:
 
 Status: implementado como preparacao para HMAC real.
 
-### Sprint 70J - Webhooks Controlled Delivery
+### Sprint 70J.2 - Webhooks Controlled Dispatch Design
+
+Escopo:
+
+- desenhar dispatch manual/piloto;
+- manter `--dry-run` como default;
+- exigir `--execute` para envio real futuro;
+- reforcar SSRF, timeout e limites;
+- definir status, retry manual, dead letter e rollback;
+- sem HTTP externo, sem cron/job e sem acoplar eventos reais.
+
+Status: documentado em `PUBLIC_API_WEBHOOKS_CONTROLLED_DISPATCH_DESIGN.md`.
+
+### Sprint 70K - Webhooks Controlled Dispatch MVP
 
 Pre-requisito: 70J.1 concluida e `WEBHOOK_SECRET_ENCRYPTION_KEY` configurada em producao.
 
 Escopo:
 
-- entrega real para tenant piloto;
+- CLI manual com dry-run default;
+- entrega real apenas com `--execute` e flags explicitas;
+- uma tentativa HTTP para endpoint piloto;
 - HMAC;
-- retries;
-- dead letter;
+- SSRF reforcado;
+- sem retries automaticos;
+- dead letter apenas controlado/manual;
 - smoke com endpoint de teste.
+
+Status: implementado como envio manual/piloto via CLI, com rollback por feature flag.
 
 ### Sprint 70K - Webhooks Public Docs + OpenAPI
 

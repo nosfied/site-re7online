@@ -60,7 +60,7 @@ Isso remove Webchat da categoria de gap operacional absoluto. Ele ainda nao e um
 Estado consolidado atual:
 
 - Knowledge Base: schema/CRUD em producao, runtime ainda desenhado;
-- Public API: API keys, OpenAPI, health, contatos, conversas e mensagens read-only em producao; infraestrutura de webhooks com cadastro, segredo criptografado/rotacao e shadow/manual sem dispatch automatico;
+- Public API: API keys, OpenAPI, health, contatos, conversas e mensagens read-only em producao; infraestrutura de webhooks com cadastro, segredo criptografado/rotacao, shadow/manual e dispatch HTTP controlado por CLI/flags, ainda sem dispatch automatico;
 - Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e design de envio controlado;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
@@ -146,7 +146,7 @@ Aderencia consolidada estimada:
 | OTP/MFA cidadao | Nao implementado | Medio/alto | Sim, se exigido | Sprint especifica de autenticacao/validacao. |
 | Transcricao de audio | Nao implementado | Medio/alto | Sim, se exigida | Design de transcricao, custo e LGPD antes de implementar. |
 | Busca avancada em dialogos | Nao formalizada | Medio | Pode bloquear se literal | Criar busca indexada por conversa/mensagem. |
-| API webhooks/escrita | Webhooks com cadastro, rotacao e shadow/manual, sem dispatch | Medio/alto | Bloqueia se exigir integracao ativa em tempo real | Proxima etapa: controlled delivery com endpoint piloto. |
+| API webhooks/escrita | Webhooks com cadastro, rotacao, shadow/manual e dispatch controlado por CLI, sem eventos automaticos | Medio/alto | Ainda pode bloquear se exigir integracao ativa automatica em tempo real | Proxima etapa: retry/dead letter UI e coupling shadow com eventos reais. |
 | Auditoria formal para cliente | Parcial | Medio | Normalmente nao bloqueia, mas fortalece habilitacao | Tela/report de eventos por usuario/conversa. |
 | Escala/storage 600 GB | Infra/comercial | Alto em Aripuana | Pode bloquear sem proposta de infra | Plano de capacidade, backup e custo. |
 
@@ -161,7 +161,7 @@ Aderencia consolidada estimada:
 
 ### P1 - Integracao e maturidade
 
-1. **Public API webhooks controlled delivery**: envio real para endpoint piloto, retries e dead letter operacional.
+1. **Public API webhooks hardening pos-MVP**: retry manual, dead letter UI e shadow a partir de eventos reais antes de qualquer dispatch automatico.
 2. **Knowledge Base runtime shadow**.
 3. **Webchat refinamento**: identificacao, roteamento, acessibilidade e UI mais polida.
 4. **XLSX nativo**, se edital exigir Excel literal.
