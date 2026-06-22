@@ -51,6 +51,15 @@ Status apos Sprint 73H:
 - a mensagem fica marcada como `delivery=pending_public_polling`, pois o visitante ainda nao possui endpoint publico de leitura;
 - polling publico, widget final, chatbot e IA continuam fora do runtime.
 
+Status apos Sprint 73I:
+
+- `GET /webchat/v1/messages` implementado para polling publico do visitante;
+- polling valida token de sessao, origem permitida, site ativo, sessao ativa/nao expirada, feature `webchat=true` e rate limit;
+- retorno publico usa a timeline real (`InboundMessage` + `OutboundMessage`) com DTO seguro;
+- cursor opaco e `limit` seguro foram adicionados;
+- eventos redigidos `webchat.message.polled` e `webchat.polling.denied` foram definidos no runtime;
+- widget final, WebSocket/SSE, chatbot e IA continuam fora do runtime.
+
 Este documento define como o runtime deve nascer sem improvisar sobre WhatsApp, Messenger, Instagram ou Public API.
 
 ## Principios De Runtime
@@ -381,7 +390,6 @@ Validacoes:
 - dominio igual ao dominio da sessao;
 - site ativo;
 - feature `webchat=true`;
-- feature futura `webchatPolling=true`;
 - rate limit por sessao/IP hash.
 
 Retorno seguro:
@@ -399,7 +407,10 @@ Retorno seguro:
       "createdAt": "2026-06-21T10:00:00.000Z"
     }
   ],
-  "nextCursor": "opaque_cursor"
+  "page": {
+    "limit": 30,
+    "nextCursor": "opaque_cursor"
+  }
 }
 ```
 
@@ -680,14 +691,12 @@ Flags recomendadas:
 
 | Flag | Default | Uso |
 | --- | --- | --- |
-| `webchat` | `false` | habilita modulo, settings, sessao e inbound |
+| `webchat` | `false` | habilita modulo, settings, sessao, inbound e polling publico |
 | `webchatOutbound` | `false` | habilita resposta humana pelo Inbox |
-| `webchatPolling` | `false` | habilita leitura publica de mensagens pelo visitante |
 
 Regras:
 
-- `webchatOutbound=true` nao deve habilitar `webchatPolling` automaticamente;
-- `webchatPolling=true` nao deve permitir envio pelo operador;
+- polling publico nao permite envio pelo operador;
 - se `webchat=false`, todas as rotas publicas e operacoes do canal devem bloquear;
 - rollout deve ser por tenant piloto antes de habilitar em qualquer perfil padrao.
 
@@ -739,14 +748,13 @@ Rollback seletivo:
 
 ```text
 Client.features.webchatOutbound=false
-Client.features.webchatPolling=false
 ```
 
 Efeito esperado:
 
 - inbound permanece ativo, se `webchat=true`;
 - operador deixa de responder pelo Webchat;
-- visitante deixa de consultar mensagens por polling;
+- visitante ainda pode consultar mensagens por polling enquanto `webchat=true`;
 - timeline e historico permanecem preservados.
 
 Rollback operacional:
@@ -804,7 +812,7 @@ Status: design documental, sem alteracao funcional.
 
 - definir resposta humana pelo Inbox;
 - definir polling publico do visitante;
-- definir flags `webchatOutbound` e `webchatPolling`;
+- definir `webchatOutbound` e rollback por `webchat`;
 - definir eventos e rollback;
 - separar implementacoes em 73H/73I/73J.
 
@@ -827,6 +835,8 @@ Status: implementado como outbound humano controlado e persistido. O visitante a
 - cursor/since;
 - rate limit e backoff;
 - sem widget final ainda.
+
+Status: implementado como polling publico controlado. O visitante consegue buscar mensagens inbound/outbound da propria sessao com DTO seguro. Ainda nao ha widget final, WebSocket/SSE, IA ou chatbot.
 
 ### Sprint 73J - Webchat Minimal Widget
 

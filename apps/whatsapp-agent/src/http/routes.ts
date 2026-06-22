@@ -176,6 +176,7 @@ import {
 } from "../webchat/webchatSessionService.js";
 import { createWebchatInboundMessage } from "../webchat/webchatInboundService.js";
 import { createWebchatOutboundMessage } from "../webchat/webchatOutboundService.js";
+import { listWebchatMessages } from "../webchat/webchatPollingService.js";
 import {
   AI_ASSISTANT_GLOBAL_BLOCKED_TERMS,
   AI_ASSISTANT_GLOBAL_HANDOFF_TERMS,
@@ -381,6 +382,32 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       json(res, 201, result);
+      return;
+    }
+    if (req.method === "GET" && pathname === "/webchat/v1/messages") {
+      const result = await listWebchatMessages({
+        prisma,
+        requestId,
+        query,
+        origin: getRequestOrigin(req),
+        ip: getRequestIp(req) ?? "unknown",
+      });
+      if (!result.ok) {
+        const status = webchatRuntimeErrorStatus(result.error);
+        if (result.error === "webchat_rate_limited" && "retryAfterSec" in result) {
+          res.setHeader("Retry-After", String(result.retryAfterSec));
+        }
+        json(res, status, {
+          ok: false,
+          error: result.error,
+          requestId,
+          ...(result.error === "webchat_rate_limited" && "retryAfterSec" in result
+            ? { retryAfterSec: result.retryAfterSec }
+            : {}),
+        });
+        return;
+      }
+      json(res, 200, result);
       return;
     }
     const webchatSessionMatch = pathname.match(/^\/webchat\/v1\/session\/([^/]+)$/);
@@ -16462,7 +16489,8 @@ function webchatRuntimeErrorStatus(error: string) {
     error === "webchat_token_required" ||
     error === "webchat_origin_required" ||
     error === "webchat_message_required" ||
-    error === "webchat_message_too_long"
+    error === "webchat_message_too_long" ||
+    error === "webchat_cursor_invalid"
   ) {
     return 400;
   }

@@ -6,6 +6,10 @@ function makeDate(value: string) {
   return new Date(value);
 }
 
+function futureDate() {
+  return new Date(Date.now() + 60 * 60 * 1000);
+}
+
 function makeSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session_1",
@@ -15,7 +19,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     tokenHash: "hash",
     status: "active",
     originDomain: "portal.example.com",
-    expiresAt: makeDate("2026-06-22T10:00:00.000Z"),
+    expiresAt: futureDate(),
     lastSeenAt: makeDate("2026-06-21T10:00:00.000Z"),
     createdAt: makeDate("2026-06-21T10:00:00.000Z"),
     visitor: {

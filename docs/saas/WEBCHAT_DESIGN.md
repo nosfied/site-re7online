@@ -66,7 +66,7 @@ Status apos Sprint 73G:
 
 - outbound humano pelo Inbox e polling publico foram desenhados;
 - a implementacao foi dividida em etapas menores: 73H outbound controlado, 73I polling publico e 73J widget minimo;
-- flags futuras recomendadas: `webchatOutbound` e `webchatPolling`, ambas desligadas por padrao;
+- flag de outbound recomendada: `webchatOutbound=false`; polling publico usa `webchat=false` como rollback geral;
 - nenhuma funcionalidade runtime nova foi ativada nesta etapa.
 
 Status apos Sprint 73H:
@@ -77,6 +77,14 @@ Status apos Sprint 73H:
 - timeline do Inbox mostra a resposta humana;
 - sessoes invalidas/expiradas, site inativo e dominio nao permitido bloqueiam outbound;
 - visitante ainda nao recebe a resposta: polling publico e widget final seguem fora do runtime.
+
+Status apos Sprint 73I:
+
+- `GET /webchat/v1/messages` criado para polling publico do visitante;
+- retorno combina `InboundMessage` e `OutboundMessage` da conversa Webchat da sessao;
+- DTO publico nao expoe token, hash, IP, user-agent, `waId`, `externalUserRef`, payload bruto ou ids internos desnecessarios;
+- cursor opaco, `limit` seguro, rate limit e validacao de dominio/site/sessao foram implementados;
+- widget final, WebSocket/SSE, chatbot e IA seguem fora do runtime.
 
 ## Entidades Alvo
 
@@ -216,7 +224,6 @@ Fluxo alvo:
 Regras:
 
 - `webchatOutbound=false` bloqueia resposta humana;
-- `webchatPolling=false` bloqueia leitura publica;
 - `webchat=false` bloqueia tudo;
 - sessao expirada bloqueia outbound;
 - nenhum envio deve passar por WhatsApp, Messenger, Instagram ou templates Meta.
@@ -635,6 +642,8 @@ Disponibilizar mensagens ao visitante:
 - cursor/since;
 - rate limit;
 - status publico basico.
+
+Status: implementado como polling publico seguro. O proximo passo para E2E visual e o widget minimo.
 
 ### Sprint 73J - Webchat Realtime + Identification
 
