@@ -179,6 +179,7 @@ import {
   updateTelegramAccount,
 } from "../telegram/telegramService.js";
 import { persistTelegramInboundMessage } from "../telegram/telegramInboundService.js";
+import { createTelegramOutboundMessage } from "../telegram/telegramOutboundService.js";
 import {
   createWebchatSession,
   restoreWebchatSession,
@@ -3831,6 +3832,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                   requestId,
                   source: resolvedConversation.winner ?? undefined,
                 })
+              : resolvedChannel === "telegram"
+                ? await createTelegramOutboundMessage({
+                    prisma,
+                    waId: resolvedConversation.resolvedWaId,
+                    text,
+                    clientKey: client.clientKey,
+                    clientId: client.id,
+                    requestId,
+                    source: resolvedConversation.winner ?? undefined,
+                  })
               : await adminSendMessage({
                   waId: resolvedConversation.resolvedWaId,
                   text,
@@ -3872,11 +3883,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: payload.waId ?? resolvedConversation.resolvedWaId,
         waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
         ...serializeInboxChannelFields(resolvedConversation.winner ?? undefined),
-        channelOutboundEnabled: getConversationChannelOutboundEnabled(
-          (await getTenants())[client.clientKey],
-          resolvedConversation.winner ?? undefined,
-          getFeatures(client)
-        ),
+        channelOutboundEnabled:
+          resolvedChannel === "telegram"
+            ? await getTelegramConversationOutboundEnabled({
+                prisma,
+                clientId: client.id,
+                source: resolvedConversation.winner ?? undefined,
+                features: getFeatures(client),
+              })
+            : getConversationChannelOutboundEnabled(
+                (await getTenants())[client.clientKey],
+                resolvedConversation.winner ?? undefined,
+                getFeatures(client)
+              ),
         message: {
           messageId: result.messageId,
           status: result.status,
@@ -3962,7 +3981,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       if (
         isConversationOutboundBlocked(resolvedConversation.winner) ||
         resolvedChannel === "messenger" ||
-        resolvedChannel === "webchat"
+        resolvedChannel === "webchat" ||
+        resolvedChannel === "telegram"
       ) {
         json(res, 409, {
           error: "channel_outbound_not_enabled",
@@ -17931,12 +17951,22 @@ async function buildConversationActionPayload(
       })
     : null;
 
+  const channelOutboundEnabled =
+    serializeInboxChannelFields(channelSource ?? undefined).channel === "telegram"
+      ? await getTelegramConversationOutboundEnabled({
+          prisma,
+          clientId: params.clientId,
+          source: channelSource,
+          features: clientFeatures,
+        })
+      : getConversationChannelOutboundEnabled(tenant, channelSource, clientFeatures);
+
   return {
     ok: true,
     waId: conversation?.waId ?? null,
     waIdCanonical: conversation?.waIdCanonical ?? null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
-    channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, channelSource, clientFeatures),
+    channelOutboundEnabled,
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName,
@@ -18548,8 +18578,11 @@ function serializeInboxChannelFields(source?: {
 function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
   return (
-    channel === "telegram" ||
-    (channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram" && channel !== "webchat")
+    channel !== "whatsapp" &&
+    channel !== "messenger" &&
+    channel !== "instagram" &&
+    channel !== "webchat" &&
+    channel !== "telegram"
   );
 }
 
@@ -18583,8 +18616,35 @@ function getConversationChannelOutboundEnabled(
   if (channelFields.channel === "webchat") {
     return features?.webchat === true && features?.webchatOutbound === true;
   }
-  if (channelFields.channel === "telegram") return false;
   return false;
+}
+
+async function getTelegramConversationOutboundEnabled(params: {
+  prisma: ReturnType<typeof getPrisma>;
+  clientId: string;
+  source?: { channel?: string | null; provider?: string | null; channelAccountId?: string | null } | null;
+  features?: { telegram?: boolean; telegramOutbound?: boolean } | null;
+}) {
+  const channelFields = serializeInboxChannelFields(params.source ?? undefined);
+  if (channelFields.channel !== "telegram") return false;
+  if (params.features?.telegram !== true || params.features?.telegramOutbound !== true) return false;
+  if (!channelFields.channelAccountId) return false;
+  const account = await params.prisma.channelAccount.findFirst({
+    where: {
+      clientId: params.clientId,
+      channel: "telegram",
+      provider: "telegram",
+      channelAccountId: channelFields.channelAccountId,
+      enabled: true,
+      runtimeEnabled: true,
+      outboundEnabled: true,
+      status: "connected",
+      tokenStatus: "configured",
+      secrets: { some: { secretKind: "telegramBotToken", status: "configured", secretCiphertext: { not: null } } },
+    },
+    select: { id: true },
+  });
+  return Boolean(account);
 }
 
 async function findMessengerAccountForOutbound(params: {
@@ -19273,7 +19333,7 @@ async function buildConversationListPayload(
     }
   }
 
-  const allItems = winners.map((conversation) => {
+  const allItems = await Promise.all(winners.map(async (conversation) => {
     const key = conversation.waIdCanonical;
     const lead = leadByWaId.get(key);
     const latestInbound = latestInboundByWaId.get(key);
@@ -19322,11 +19382,21 @@ async function buildConversationListPayload(
             }
           : null;
 
+    const channelOutboundEnabled =
+      serializeInboxChannelFields(conversation).channel === "telegram"
+        ? await getTelegramConversationOutboundEnabled({
+            prisma,
+            clientId: params.clientId,
+            source: conversation,
+            features: clientFeatures,
+          })
+        : getConversationChannelOutboundEnabled(tenant, conversation, clientFeatures);
+
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
       ...serializeInboxChannelFields(conversation),
-      channelOutboundEnabled: getConversationChannelOutboundEnabled(tenant, conversation, clientFeatures),
+      channelOutboundEnabled,
       lastMessage,
       leadId: lead?.id ?? null,
       leadStatus: lead?.status ?? null,
@@ -19343,7 +19413,7 @@ async function buildConversationListPayload(
         : 0,
       updatedAt: conversation.updatedAt,
     };
-  });
+  }));
   const filteredItems = sortConversationItemsByRecent(
     allItems.filter(
       (item) =>
@@ -19573,16 +19643,22 @@ async function buildConversationDetailPayload(
   const clientFeatures = getFeatures(client);
   params.latency?.duration("detailTenantConfig", tenantsStartedAt);
 
+  const channelOutboundEnabled =
+    serializeInboxChannelFields(resolved.winner ?? undefined).channel === "telegram"
+      ? await getTelegramConversationOutboundEnabled({
+          prisma,
+          clientId: params.clientId,
+          source: resolved.winner ?? undefined,
+          features: clientFeatures,
+        })
+      : getConversationChannelOutboundEnabled(tenant, resolved.winner ?? undefined, clientFeatures);
+
   return {
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
-    channelOutboundEnabled: getConversationChannelOutboundEnabled(
-      tenant,
-      resolved.winner ?? undefined,
-      clientFeatures
-    ),
+    channelOutboundEnabled,
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName: assignedUser?.name ?? null,

@@ -65,7 +65,7 @@ Estado consolidado atual:
 - Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI, ainda sem scheduler automatico;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
-- Telegram: auditado, desenhado, com schema/settings em `/app/telegram`, webhook shadow e inbound texto MVP persistido no Inbox/timeline; ainda sem outbound, midia, grupos ou Bot API send.
+- Telegram: auditado, desenhado, com schema/settings em `/app/telegram`, webhook shadow, inbound texto no Inbox/timeline e outbound humano texto-only via Bot API `sendMessage`; ainda sem midia, grupos, registro automatico de webhook ou automacao.
 
 Aderencia consolidada estimada:
 
@@ -84,7 +84,7 @@ Aderencia consolidada estimada:
 | Aripuana/MT | ATENDE COM AJUSTE | 74% | 77% | +3 pp | Webchat MVP melhora aderencia multicanal, mas escala, storage 600 GB, prova de 400 usuarios, 30 numeros WhatsApp e possivel mobile nativo seguem sensiveis. |
 | Cabreuva/SP | ATENDE COM AJUSTE | 86% | 88% | +2 pp | Forte para atendimento WhatsApp, setores, dashboard/SLA, relatorios, API read-only e POC. Webchat deixou de ser lacuna se o TR aceitar MVP com polling. |
 | Quatro Barras/PR | ATENDE COM AJUSTE | 85% | 87% | +2 pp | Bom alvo para WhatsApp/SLA/relatorios/POC. Webchat MVP reduz risco em requisito de chat web; Telegram e NPS automatico seguem condicionais. |
-| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 73% | 78% | +5 pp | Maior ganho relativo, pois o edital-guia avancado valoriza multicanal. Ainda pode bloquear por Telegram, OTP, NPS automatico, transcricao, busca avancada e multiagentes IA formais. |
+| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 73% | 79% | +6 pp | Maior ganho relativo, pois o edital-guia avancado valoriza multicanal. Telegram texto humano reduz o gap, mas ainda pode bloquear por midia/grupos, OTP, NPS automatico, transcricao, busca avancada e multiagentes IA formais. |
 
 ## Impacto Dos Modulos Recentes
 
@@ -114,7 +114,7 @@ Aderencia consolidada estimada:
 | Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI; falta automacao segura de lembretes e integracoes. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD em `/app/satisfaction`; falta disparo/link publico/relatorio NPS/CSAT. |
 | Webchat | ATENDE COM AJUSTE | Alto quando exigido | MVP operacional: widget JS, sessao, inbound, Inbox, outbound humano e polling. Falta camada avancada de UX, roteamento, identidade e realtime. |
-| Telegram | NAO ATENDE | Alto quando exigido | Schema/settings, token criptografado e webhook shadow prontos; faltam inbound e outbound Bot API. |
+| Telegram | ATENDE COM AJUSTE | Medio/alto quando exigido | Schema/settings, token criptografado, webhook shadow, inbound texto e outbound humano texto-only prontos; faltam midia, grupos e registro operacional de webhook. |
 | Relatorios | ATENDE | Alto | Reports operacionais e export. |
 | Dashboard | ATENDE COM AJUSTE | Medio | Operacional; nao e BI completo. |
 | SLA | ATENDE | Alto | `SLAConfig`, metricas e reports. |
@@ -141,7 +141,7 @@ Aderencia consolidada estimada:
 
 | Gap | Status | Impacto | Bloqueia participacao? | Proxima acao |
 | --- | --- | --- | --- | --- |
-| Telegram funcional | Schema/settings e webhook shadow concluidos; mensagens nao implementadas | Alto quando exigido | Sim, se obrigatorio | Proxima etapa: inbound texto antes de outbound. |
+| Telegram funcional | Inbound texto e outbound humano texto-only concluidos | Medio/alto quando exigido | Parcial, conforme TR | Proxima etapa: registro/teste de webhook e midia somente se exigida. |
 | NPS funcional completo | Parcial estrutural | Alto quando exigido | Pode bloquear se TR exigir pesquisa operacional | Sprint 72D: disparo manual/por encerramento, link publico e relatorio. |
 | Agendamento com envio real | Piloto controlado | Alto em editais com lembrete | Pode bloquear se automatizacao for obrigatoria | Proximo passo: UI manual e/ou scheduler controlado com flags. |
 | OTP/MFA cidadao | Nao implementado | Medio/alto | Sim, se exigido | Sprint especifica de autenticacao/validacao. |
@@ -169,7 +169,7 @@ Aderencia consolidada estimada:
 
 ### P2 - Canais e requisitos avancados
 
-1. **Telegram**: inbound texto e outbound humano.
+1. **Telegram**: registro/teste de webhook e hardening operacional; midia apenas se edital exigir.
 2. **OTP/MFA cidadao**.
 3. **Transcricao de audio**.
 4. **Busca textual avancada**.
@@ -255,7 +255,7 @@ Gaps principais:
 - escala 400 usuarios e 30 WhatsApps precisa prova;
 - 600 GB midia requer plano de storage;
 - app mobile nativo pode ser problema se PWA nao bastar;
-- Telegram, NPS automatico e OTP nao funcionais;
+- Telegram limitado a texto humano, NPS automatico e OTP nao funcionais;
 - ambiente EAD nao existe.
 
 Decisao: viavel somente com proposta tecnica conservadora, precificacao de infra e esclarecimentos sobre mobile/storage/garantia.
@@ -323,7 +323,7 @@ Pontos fortes:
 
 Gaps principais:
 
-- Telegram operacional;
+- Telegram avancado, se o TR exigir midia/grupos;
 - NPS funcional;
 - multiagentes IA formais;
 - OTP;
@@ -343,6 +343,6 @@ Proximos 5 gaps prioritarios:
 2. Scheduling com envio controlado de lembretes;
 3. Public API webhooks outbound;
 4. Webchat refinado para POC/editais: identidade, roteamento e acessibilidade;
-5. Telegram inbound texto, antes de outbound humano.
+5. Telegram hardening operacional, antes de midia/grupos.
 
-Com isso, a versao **Government Ready v1** fica bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, Webchat E2E humano e Telegram com fundacao administrativa, webhook shadow e roadmap tecnico claro.
+Com isso, a versao **Government Ready v1** fica bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, Webchat E2E humano e Telegram com inbound/outbound humano texto em escopo controlado.

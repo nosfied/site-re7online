@@ -33,7 +33,7 @@ Pontuacao usada na leitura percentual consolidada:
 
 O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio e API publica com escrita/webhooks.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio e API publica com escrita/webhooks.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -183,11 +183,11 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Agendamento | ATENDE PARCIALMENTE | 68% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingRemindersSend`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e envio controlado WhatsApp por CLI | Ainda nao ha scheduler automatico, consumo por chatbot/IA, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71I/71J |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
 | Webchat | ATENDE PARCIALMENTE | 85% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
-| Telegram | ATENDE PARCIALMENTE | 45% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram`, webhook shadow e inbound texto MVP persistido no Inbox/timeline | Criar outbound controlado, registro webhook, midia se exigida e smoke com Bot real | Alto | Alto | Sprint 74F+ |
+| Telegram | ATENDE PARCIALMENTE | 60% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram`, webhook shadow, inbound texto no Inbox/timeline e outbound humano texto-only via Bot API | Registrar/testar webhook, validar smoke com Bot real e adicionar midia/grupos somente se exigido | Alto | Medio/alto | Sprint 74G+ |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |
 
-Pontuacao simples atualizada: 78%.
+Pontuacao simples atualizada: 79%.
 
 ## Aderencia Por Edital
 
@@ -200,7 +200,7 @@ Sem os TRs completos versionados, a estimativa abaixo considera padroes recorren
 | Aripuana/MT | Atendimento digital municipal com POC | 77% | POC demo ajuda; escala, storage, mobile nativo e Telegram continuam sensiveis. |
 | Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 83% | Precisa reforcar NPS funcional, envio real de lembretes, transcricao/busca e documentos. |
 | Quatro Barras/PR | Atendimento e relatorios | 87% | Aderente para WhatsApp/SLA/filas; Webchat MVP reduz risco em canal web. |
-| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 78% | Webchat, API e modulos estruturais melhoraram; Telegram, OTP, NPS automatico e busca/transcricao ainda reduzem aderencia. |
+| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 79% | Webchat, API, Telegram texto humano e modulos estruturais melhoraram; OTP, NPS automatico, Telegram avancado e busca/transcricao ainda reduzem aderencia. |
 
 ## Documentacao Existente Reaproveitavel
 
@@ -251,7 +251,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Public API webhooks outbound | Alto se exigido | Medio/alto | Medio | P1 |
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
-| Telegram | Alto se exigido | Alto | Alto | P2, design concluido |
+| Telegram | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
 ## O Que Ja Existe Mas Pode Estar Escondido Por Profile/Feature
@@ -380,9 +380,12 @@ Status pos-Sprint 74B:
 - flags `telegram`, `telegramInbound`, `telegramOutbound`, todas `false` por padrao;
 - `/app/telegram` permite cadastro, ativacao/desativacao, rotacao de token e diagnostico placeholder;
 - `POST /telegram/webhook/:tenantOrAlias` valida payload em shadow e, com `telegram=true` + `telegramInbound=true`, persiste texto inbound em `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`, `ConversationRuntimeState` e `InboundMessage`;
-- Inbox reconhece `channel=telegram` com filtro/label/icone, mas outbound continua bloqueado.
+- Inbox reconhece `channel=telegram` com filtro/label/icone;
+- com `telegramOutbound=true`, operador responde texto pelo Inbox via Bot API `sendMessage`;
+- `OutboundMessage channel=telegram provider=telegram` registra status `sent`/`failed`, `message_id` e erro redigido;
+- midia, audio, anexos, grupos, IA/chatbot e automacao continuam fora do escopo.
 
-Telegram continua **NAO ATENDE** funcionalmente ate existir inbound/outbound real.
+Telegram passa a **ATENDE PARCIALMENTE** como canal texto humano controlado. Ainda nao atende plenamente editais que exijam midia, grupos, registro operacional completo de webhook ou bot com automacao.
 
 Objetivo: cobrir canal adicional quando edital exigir expressamente.
 
@@ -408,6 +411,6 @@ Ordem recomendada:
 3. criar POC/runbook B2G pos-Webchat MVP;
 4. adicionar Public API webhooks outbound se o edital exigir eventos externos;
 5. refinar Webchat para identificacao/roteamento/acessibilidade;
-6. iniciar Telegram apenas se o edital-alvo exigir expressamente.
+6. completar hardening Telegram apenas se o edital-alvo exigir expressamente.
 
-Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram, OTP, transcricao/busca, webhooks Public API e multiagentes IA antes de afirmar aderencia plena.
+Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP, Telegram texto humano controlado e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram avancado se exigido, OTP, transcricao/busca, webhooks Public API e multiagentes IA antes de afirmar aderencia plena.

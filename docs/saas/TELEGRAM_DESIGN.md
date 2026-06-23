@@ -1,8 +1,8 @@
-# Sprint 74B/74C - Telegram Design + Settings Foundation
+# Sprint 74B-74F - Telegram Design + Controlled Text Runtime
 
 Data: 2026-06-23
 
-Escopo: desenho tecnico e funcional do canal Telegram no Converta e registro da fundacao administrativa criada na Sprint 74C. A 74C nao implementa runtime, webhooks, Bot API, inbound, outbound, chatbot, IA ou Public API.
+Escopo: desenho tecnico e funcional do canal Telegram no Converta, registro da fundacao administrativa criada na Sprint 74C, webhook shadow da Sprint 74D, inbound texto da Sprint 74E e outbound humano texto-only da Sprint 74F. Telegram continua sem midia, grupos, IA/chatbot, automacao e registro automatico de webhook.
 
 ## Resumo Executivo
 
@@ -20,7 +20,7 @@ Estado alvo:
 - texto apenas no MVP;
 - sem grupos, midia, IA/chatbot ou automacao no primeiro ciclo.
 
-O reaproveitamento estimado continua em torno de 40%: modelos de canal, secrets, aliases, conversa, contato, Inbox, timeline, eventos e RBAC ajudam, mas o adapter Telegram, webhook, Bot API, tenant resolution e contratos de canal ainda precisam nascer.
+O reaproveitamento estimado subiu para cerca de 60% apos o runtime texto-only: modelos de canal, secrets, aliases, conversa, contato, Inbox, timeline, eventos e RBAC foram reaproveitados. Midia, grupos, registro de webhook e automacoes seguem como desenvolvimento futuro.
 
 ## Decisoes De Design
 
@@ -496,7 +496,7 @@ PARCIAL como configuracao/governanca/shadow
 
 So deve mudar para `ATENDE COM AJUSTE` apos inbound e outbound texto estarem funcionais em tenant piloto.
 
-## Status Pos-74C/74D/74E
+## Status Pos-74C/74D/74E/74F
 
 Implementado:
 
@@ -518,25 +518,30 @@ Implementado:
 - `Conversation.channel=telegram` e `InboundMessage.channel=telegram` aparecem no Inbox/timeline;
 - filtro/label/icone Telegram no Inbox;
 - eventos `telegram.inbound.persisted`, `telegram.contact.created` e `telegram.conversation.created`.
+- outbound humano controlado pelo Inbox quando `telegram=true` + `telegramOutbound=true`;
+- envio texto-only via Telegram Bot API `sendMessage`;
+- persistencia de `OutboundMessage channel=telegram provider=telegram`;
+- status `sent`/`failed`, `message_id` do provider quando disponivel e erro redigido;
+- eventos `telegram.outbound.sent`, `telegram.outbound.failed` e `telegram.outbound.blocked`;
+- bloqueio de midia, audio, anexos, automacao, IA/chatbot e grupos.
 
 Nao implementado:
 
-- chamada `getMe` ou qualquer chamada Bot API;
-- outbound;
-- envio `sendMessage`;
+- chamada `getMe`, teste de conexao ou registro automatico de webhook;
+- chamadas Bot API alem de `sendMessage` texto-only controlado;
 - midia;
 - grupos;
 - IA/chatbot;
-- outbound;
 - polling;
-- integracao com Inbox/timeline.
+- registro/atualizacao automatica de webhook no Telegram.
 
 ## Veredito
 
-Sprint 74B concluiu o desenho do canal Telegram, a Sprint 74C criou a fundacao sem runtime e a Sprint 74D adicionou webhook shadow sem persistencia. A implementacao segue incremental:
+Sprint 74B concluiu o desenho do canal Telegram, a Sprint 74C criou a fundacao sem runtime, a Sprint 74D adicionou webhook shadow sem persistencia, a Sprint 74E persistiu inbound texto e a Sprint 74F adicionou outbound humano controlado texto-only. A implementacao segue incremental:
 
-1. inbound texto;
-2. outbound humano;
-3. midia somente depois.
+1. inbound texto: concluido;
+2. outbound humano texto-only: concluido;
+3. registro de webhook/teste de conexao;
+4. midia somente depois, se edital exigir.
 
-Nao houve chamada Bot API, Conversation, Contact, InboundMessage, OutboundMessage, inbound real ou outbound na Sprint 74D.
+Nao houve IA/chatbot, midia, grupos, polling, cron, automacao ou impacto em WhatsApp/Messenger/Instagram/Webchat na Sprint 74F.

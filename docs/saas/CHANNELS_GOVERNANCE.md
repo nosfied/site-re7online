@@ -157,7 +157,7 @@ Feature flags:
 
 ## Telegram
 
-Telegram has a configuration foundation after Sprint 74C, a webhook shadow endpoint after Sprint 74D, and text-only inbound persistence after Sprint 74E. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
+Telegram has a configuration foundation after Sprint 74C, a webhook shadow endpoint after Sprint 74D, text-only inbound persistence after Sprint 74E, and controlled human text outbound after Sprint 74F. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
 
 Target model:
 
@@ -210,13 +210,22 @@ Implemented in Sprint 74E:
 - creation/resolution of `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`, `ConversationRuntimeState` and `InboundMessage`;
 - Inbox/timeline support for `channel=telegram`;
 - redacted events `telegram.inbound.persisted`, `telegram.contact.created` and `telegram.conversation.created`;
-- no Bot API calls and no outbound.
+- no outbound in Sprint 74E.
+
+Implemented in Sprint 74F:
+
+- human outbound from the Inbox for `Conversation.channel=telegram`;
+- requires `telegram=true`, `telegramOutbound=true`, active account, encrypted bot token and resolved chat id;
+- sends text-only through Telegram Bot API `sendMessage`;
+- persists `OutboundMessage channel=telegram provider=telegram`;
+- records provider `message_id` when available and redacted provider errors on failure;
+- blocks media, audio, attachments, empty messages, missing chat id, inactive bot and missing token;
+- redacted events `telegram.outbound.sent`, `telegram.outbound.failed` and `telegram.outbound.blocked`;
+- no IA/chatbot, no automation, no groups and no impact on WhatsApp/Messenger/Instagram/Webchat.
 
 Not implemented:
 
 - webhook registration in Telegram;
-- Bot API calls;
-- outbound;
 - media/groups;
 - IA/chatbot.
 
