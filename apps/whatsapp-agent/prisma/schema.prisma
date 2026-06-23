@@ -102,6 +102,8 @@ model Client {
   webchatAllowedDomains WebchatAllowedDomain[]
   webchatVisitors WebchatVisitor[]
   webchatSessions WebchatSession[]
+  audioTranscriptions AudioTranscription[]
+  audioTranscriptionJobs AudioTranscriptionJob[]
 }
 
 model User {
@@ -1175,6 +1177,52 @@ model SatisfactionResponse {
   @@index([clientId, conversationId])
   @@index([clientId, contactId])
   @@index([clientId, leadId])
+}
+
+model AudioTranscription {
+  id             String   @id @default(cuid())
+  clientId       String   @db.Uuid
+  messageId      String
+  conversationId String?
+  channel        String
+  language       String?
+  transcript     String?
+  confidence     Float?
+  provider       String?
+  status         String   @default("pending")
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobs AudioTranscriptionJob[]
+
+  @@unique([clientId, messageId])
+  @@index([clientId, status, createdAt])
+  @@index([clientId, channel, createdAt])
+  @@index([clientId, conversationId])
+  @@index([clientId, provider, createdAt])
+}
+
+model AudioTranscriptionJob {
+  id              String   @id @default(cuid())
+  clientId        String   @db.Uuid
+  transcriptionId String
+  provider        String?
+  status          String   @default("pending")
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  error           String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  transcription AudioTranscription @relation(fields: [transcriptionId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, status, createdAt])
+  @@index([clientId, transcriptionId])
+  @@index([clientId, provider, createdAt])
 }
 
 model WebchatSite {

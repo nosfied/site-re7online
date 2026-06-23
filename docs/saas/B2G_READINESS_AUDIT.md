@@ -2,7 +2,7 @@
 
 Status: auditoria de aderencia para editais publicos baseada no codigo atual. Este documento nao altera runtime.
 
-Data: 2026-06-17. Atualizacao de aderencia: 2026-06-22, apos Webchat MVP operacional.
+Data: 2026-06-17. Atualizacao de aderencia: 2026-06-23, apos Telegram MVP operacional.
 
 ## Escopo
 
@@ -31,7 +31,7 @@ Pontuacao usada na leitura percentual consolidada:
 
 ## Resumo Executivo
 
-O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP e POC controlada.
+O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP, Telegram texto humano e POC controlada.
 
 O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio e API publica com escrita/webhooks.
 
@@ -49,10 +49,10 @@ Leitura final:
 
 | Dimensao | Aderencia |
 | --- | ---: |
-| Grupo A medio, WhatsApp-first | 88% |
-| Grupo A com multicanal Meta, Webchat e POC | 83% |
-| Sao Jose do Rio Preto como edital-guia avancado | 78% |
-| Aderencia consolidada ponderada | 84% |
+| Grupo A medio, WhatsApp-first | 89% |
+| Grupo A com multicanal Meta, Webchat, Telegram e POC | 85% |
+| Sao Jose do Rio Preto como edital-guia avancado | 82% |
+| Aderencia consolidada ponderada | 86% |
 
 ## Perfis B2B x B2G
 
@@ -130,6 +130,12 @@ Fonte: `apps/whatsapp-agent/src/features/clientFeatures.ts`.
 | `satisfaction` | NPS/Satisfacao | off | off | Alta, rollout controlado |
 | `webchat` | Webchat | off | off | Alta quando edital exigir canal web |
 | `webchatOutbound` | Resposta humana Webchat | off | off | Alta quando Webchat estiver habilitado |
+| `telegram` | Telegram | off | off | Alta quando edital exigir canal adicional |
+| `telegramInbound` | Inbound Telegram | off | off | Alta para atendimento Telegram texto |
+| `telegramOutbound` | Resposta humana Telegram | off | off | Alta para atendimento Telegram texto |
+| `webhooks` | Webhooks Public API | off | off | Media/alta para integracoes externas |
+| `webhookDispatch` | Dispatch manual Webhooks | off | off | Media/alta, piloto controlado |
+| `webhookDispatchExecute` | Execucao real Webhooks | off | off | Alta sensibilidade; manter desligado por padrao |
 
 ### Flags frontend futuras/reservadas
 
@@ -150,7 +156,6 @@ Ainda nao existem flags oficiais para:
 - CRM;
 - auditoria;
 - LGPD/retencao;
-- Telegram;
 - multiagentes IA;
 - OTP;
 - transcricao de audio;
@@ -179,15 +184,15 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Exportacao Excel/CSV | ATENDE PARCIALMENTE | 50% | Exportacao CSV/text em relatorios | Excel/XLSX nativo nao evidenciado | Medio | Baixo | Sprint 69 |
 | LGPD/retencao | ATENDE | 100% | `RetentionConfig`, privacy settings, delete/anonymize | Documentar politica por contrato publico | Baixo | Baixo | Sprint 69 |
 | Auditoria/logs | ATENDE PARCIALMENTE | 50% | `Event`, logs estruturados, eventos de feature denied/conversa | Falta tela/relatorio de auditoria formal para cliente | Medio | Medio | Sprint 70 |
-| API para integracao externa | ATENDE PARCIALMENTE | 80% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI, contatos, conversas e mensagens read-only | Falta webhooks outbound, escrita controlada e envio por API | Alto | Medio/alto | Sprint 70G |
+| API para integracao externa | ATENDE PARCIALMENTE | 85% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI, contatos, conversas e mensagens read-only; webhooks com cadastro, segredo criptografado, rotacao, shadow e dispatch controlado | Falta acoplar webhooks automaticamente a eventos reais, escrita controlada e envio por API | Alto | Medio/alto | Sprint 70L+ |
 | Agendamento | ATENDE PARCIALMENTE | 68% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingRemindersSend`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e envio controlado WhatsApp por CLI | Ainda nao ha scheduler automatico, consumo por chatbot/IA, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71I/71J |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
 | Webchat | ATENDE PARCIALMENTE | 85% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
-| Telegram | ATENDE PARCIALMENTE | 60% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram`, webhook shadow, inbound texto no Inbox/timeline e outbound humano texto-only via Bot API | Registrar/testar webhook, validar smoke com Bot real e adicionar midia/grupos somente se exigido | Alto | Medio/alto | Sprint 74G+ |
+| Telegram | ATENDE PARCIALMENTE | 70% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram`, webhook shadow, inbound texto no Inbox/timeline e outbound humano texto-only via Bot API | Registrar/testar webhook operacional, validar smoke com Bot real e adicionar midia/grupos somente se exigido | Alto | Medio/alto | Sprint 74G+ |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |
 
-Pontuacao simples atualizada: 79%.
+Pontuacao simples atualizada: 82%.
 
 ## Aderencia Por Edital
 
@@ -196,11 +201,11 @@ Sem os TRs completos versionados, a estimativa abaixo considera padroes recorren
 | Edital | Perfil provavel | Aderencia atual | Leitura |
 | --- | --- | ---: | --- |
 | Pinheiros/ES | WhatsApp-first, atendimento municipal, relatorios | 88% | Bom encaixe; Webchat MVP e API read-only fortalecem POC se exigidos. |
-| Cabreuva/SP | WhatsApp, setores, dashboard/SLA | 88% | Forte em operacao; API publica e Webchat MVP ja sao demonstraveis. |
-| Aripuana/MT | Atendimento digital municipal com POC | 77% | POC demo ajuda; escala, storage, mobile nativo e Telegram continuam sensiveis. |
-| Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 83% | Precisa reforcar NPS funcional, envio real de lembretes, transcricao/busca e documentos. |
-| Quatro Barras/PR | Atendimento e relatorios | 87% | Aderente para WhatsApp/SLA/filas; Webchat MVP reduz risco em canal web. |
-| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 79% | Webchat, API, Telegram texto humano e modulos estruturais melhoraram; OTP, NPS automatico, Telegram avancado e busca/transcricao ainda reduzem aderencia. |
+| Cabreuva/SP | WhatsApp, setores, dashboard/SLA | 89% | Forte em operacao; API publica, Webchat MVP e Telegram texto ja sao demonstraveis. |
+| Aripuana/MT | Atendimento digital municipal com POC | 79% | POC demo ajuda; escala, storage, mobile nativo e HA continuam sensiveis. |
+| Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 84% | Precisa reforcar NPS funcional, transcricao/busca e documentos. |
+| Quatro Barras/PR | Atendimento e relatorios | 88% | Aderente para WhatsApp/SLA/filas; Webchat e Telegram reduzem risco multicanal. |
+| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 82% | Webchat, API, Telegram texto humano e modulos estruturais melhoraram; OTP, NPS automatico e busca/transcricao ainda reduzem aderencia. |
 
 ## Documentacao Existente Reaproveitavel
 
@@ -251,7 +256,8 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Public API webhooks outbound | Alto se exigido | Medio/alto | Medio | P1 |
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
-| Telegram | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado |
+| Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, schema/settings criados; falta shadow/runtime |
+| Telegram avancado | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado; midia/grupos se exigidos |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
 ## O Que Ja Existe Mas Pode Estar Escondido Por Profile/Feature
@@ -270,6 +276,8 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Scheduling | `scheduling`; default off | Estrutural em producao, habilitar por tenant piloto. |
 | Satisfaction/NPS | `satisfaction`; default off | Estrutural em producao, falta disparo/link/relatorio. |
 | Webchat | `webchat` e `webchatOutbound`; default off | MVP operacional, habilitar por tenant/site/dominio. |
+| Telegram | `telegram`, `telegramInbound` e `telegramOutbound`; default off | MVP operacional texto-only, habilitar por tenant/bot. |
+| Public API Webhooks | `webhooks`, `webhookDispatch`, `webhookDispatchExecute`; default off | Dispatch real apenas manual/piloto. |
 | POC | flag frontend reservada; demo por script | Nao e modulo exposto como feature final. |
 
 ## Roadmap Sem Retrabalho
@@ -368,9 +376,25 @@ Entregas:
 
 Risco: medio/alto.
 
+### P1 - Audio Transcription
+
+Status pos-Sprint 75F:
+
+- design tecnico criado em `docs/saas/AUDIO_TRANSCRIPTION_DESIGN.md`;
+- fundacao criada com `AudioTranscription`, `AudioTranscriptionJob`, feature `audioTranscription=false`, feature `audioTranscriptionRuntime=false` e tela `/app/audio-transcriptions`;
+- reaproveitamento identificado: `MessageType.AUDIO`, `InboundMessage`, `OutboundMessage`, timeline do Inbox, endpoint de media e CRM timeline;
+- MVP recomendado: WhatsApp inbound audio apenas;
+- flags atuais: `audioTranscription`, `audioTranscriptionRuntime`, ambas `false` por padrao;
+- flags futuras propostas: `audioTranscriptionShadow`, `audioTranscriptionSearch`, ambas `false` por padrao quando implementadas;
+- roadmap definido: schema/settings, shadow pipeline, runtime controlado e busca.
+
+Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel, mas continua **NAO ATENDE** quando o TR exigir transcricao operacional real com processamento, exibicao de transcript no Inbox e busca. O design e o schema reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
+
+Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de dados sensiveis.
+
 ### P2 - Telegram
 
-Status pos-Sprint 74B:
+Status pos-Sprint 74F:
 
 - design tecnico criado em `docs/saas/TELEGRAM_DESIGN.md`;
 - canal alvo definido como `channel=telegram` e `provider=telegram`;

@@ -13,6 +13,8 @@ export type ClientFeatureKey =
   | "schedulingRemindersSend"
   | "schedulingConfirmation"
   | "satisfaction"
+  | "audioTranscription"
+  | "audioTranscriptionRuntime"
   | "webchat"
   | "webchatOutbound"
   | "telegram"
@@ -42,6 +44,8 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  audioTranscription: false,
+  audioTranscriptionRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -68,6 +72,8 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  audioTranscription: false,
+  audioTranscriptionRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -122,6 +128,10 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     schedulingConfirmation:
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
+    audioTranscription:
+      normalizeFeatureValue(input.audioTranscription) ?? defaults.audioTranscription,
+    audioTranscriptionRuntime:
+      normalizeFeatureValue(input.audioTranscriptionRuntime) ?? defaults.audioTranscriptionRuntime,
     webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeFeatureValue(input.webchatOutbound) ?? defaults.webchatOutbound,
     telegram: normalizeFeatureValue(input.telegram) ?? defaults.telegram,

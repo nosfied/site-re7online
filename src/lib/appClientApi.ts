@@ -638,6 +638,37 @@ export type AppSatisfactionResponsePayload = {
   respondedAt?: string | null;
 };
 
+export type AppAudioTranscription = {
+  id: string;
+  messageId: string;
+  conversationId: string | null;
+  channel: string;
+  language: string | null;
+  transcript: string | null;
+  confidence: number | null;
+  provider: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppAudioTranscriptionJob = {
+  id: string;
+  transcriptionId: string;
+  provider: string | null;
+  status: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppAudioTranscriptionsPayload = {
+  transcriptions: AppAudioTranscription[];
+  jobs: AppAudioTranscriptionJob[];
+};
+
 export type AppWebchatSiteStatus = "active" | "inactive" | "archived";
 
 export type AppWebchatSite = {
@@ -2063,6 +2094,12 @@ export async function createAppSatisfactionResponse(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchAppAudioTranscriptions(
+  session: AppSession
+): Promise<{ ok: true } & AppAudioTranscriptionsPayload> {
+  return requestAppJson(session, "/app/audio-transcriptions");
 }
 
 export async function fetchAppWebchat(session: AppSession): Promise<{ ok: true } & AppWebchatPayload> {

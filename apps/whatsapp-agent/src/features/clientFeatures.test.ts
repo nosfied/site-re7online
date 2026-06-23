@@ -25,6 +25,13 @@ test("satisfaction is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).satisfaction, false);
 });
 
+test("audio transcription is disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).audioTranscription, false);
+  assert.equal(getFeatures({ profile: "government" }).audioTranscription, false);
+  assert.equal(getFeatures({ profile: "business" }).audioTranscriptionRuntime, false);
+  assert.equal(getFeatures({ profile: "government" }).audioTranscriptionRuntime, false);
+});
+
 test("webchat is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webchat, false);
   assert.equal(getFeatures({ profile: "government" }).webchat, false);
@@ -83,6 +90,17 @@ test("satisfaction can be enabled by tenant feature override", () => {
   const client = { profile: "government", features: { satisfaction: true } };
   assert.equal(getFeatures(client).satisfaction, true);
   assert.equal(hasFeature(client, "satisfaction"), true);
+});
+
+test("audio transcription can be enabled by tenant feature override", () => {
+  const client = {
+    profile: "government",
+    features: { audioTranscription: true, audioTranscriptionRuntime: true },
+  };
+  assert.equal(getFeatures(client).audioTranscription, true);
+  assert.equal(getFeatures(client).audioTranscriptionRuntime, true);
+  assert.equal(hasFeature(client, "audioTranscription"), true);
+  assert.equal(hasFeature(client, "audioTranscriptionRuntime"), true);
 });
 
 test("webchat can be enabled by tenant feature override", () => {

@@ -15,6 +15,8 @@ export type AppFeatureKey =
   | "schedulingRemindersShadow"
   | "schedulingConfirmation"
   | "satisfaction"
+  | "audioTranscription"
+  | "audioTranscriptionRuntime"
   | "webchat"
   | "webchatOutbound"
   | "telegram"
@@ -45,6 +47,8 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  audioTranscription: false,
+  audioTranscriptionRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -68,6 +72,8 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   schedulingRemindersShadow: false,
   schedulingConfirmation: false,
   satisfaction: false,
+  audioTranscription: false,
+  audioTranscriptionRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -121,6 +127,9 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     schedulingConfirmation:
       normalizeBoolean(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeBoolean(input.satisfaction) ?? defaults.satisfaction,
+    audioTranscription: normalizeBoolean(input.audioTranscription) ?? defaults.audioTranscription,
+    audioTranscriptionRuntime:
+      normalizeBoolean(input.audioTranscriptionRuntime) ?? defaults.audioTranscriptionRuntime,
     webchat: normalizeBoolean(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeBoolean(input.webchatOutbound) ?? defaults.webchatOutbound,
     telegram: normalizeBoolean(input.telegram) ?? defaults.telegram,

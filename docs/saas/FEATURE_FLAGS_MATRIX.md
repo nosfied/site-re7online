@@ -29,6 +29,8 @@ Status: current-state documentation based on code inspection. This file does not
 | `schedulingRemindersSend` | false | false | controlled rollout via `Client.features` | CLI controlled send only | no customer UI yet |
 | `schedulingConfirmation` | false | false | controlled rollout via `Client.features` | reserved for future confirmation runtime | no runtime yet |
 | `satisfaction` | false | false | controlled rollout via `Client.features` | yes, satisfaction routes | yes |
+| `audioTranscription` | false | false | controlled rollout via `Client.features` | yes, audio transcription read route | yes |
+| `audioTranscriptionRuntime` | false | false | controlled rollout via `Client.features` | reserved for future STT runtime | no runtime yet |
 | `webchat` | false | false | controlled rollout via `Client.features` | yes, webchat settings routes | yes |
 
 ## Frontend-Only/Future Flags

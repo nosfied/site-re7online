@@ -163,6 +163,7 @@ import {
   updateSatisfactionQuestion,
   updateSatisfactionSurvey,
 } from "../satisfaction/satisfactionService.js";
+import { listAudioTranscriptions } from "../audio/audioTranscriptionService.js";
 import {
   createWebchatAllowedDomain,
   createWebchatSite,
@@ -5408,6 +5409,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       logger.error({
         event: "app.satisfaction.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (pathname === "/app/audio-transcriptions") {
+    const prisma = getPrisma();
+    const access = await requireAudioTranscriptionAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    try {
+      if (req.method === "GET") {
+        const result = await listAudioTranscriptions({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      logger.error({
+        event: "app.audio_transcriptions.error",
         message: (error as Error).message,
         requestId,
       });
@@ -16833,6 +16856,39 @@ async function requireSatisfactionAppAccess(
     client,
     userId: clientAuth.userId,
     feature: "satisfaction",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
+async function requireAudioTranscriptionAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can view audio transcriptions."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "audioTranscription",
     endpoint,
     requestId,
   });

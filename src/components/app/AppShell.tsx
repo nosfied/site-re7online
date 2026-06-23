@@ -109,6 +109,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Satisfacao", government: "Satisfacao" },
   },
   {
+    href: "/app/audio-transcriptions",
+    icon: "🎙️",
+    group: "operation",
+    feature: "audioTranscription",
+    minRole: "SUPERVISOR",
+    labels: { business: "Transcricoes", government: "Transcricoes" },
+  },
+  {
     href: "/app/webchat",
     icon: "💬",
     group: "operation",
