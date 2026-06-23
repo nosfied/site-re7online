@@ -256,7 +256,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Public API webhooks outbound | Alto se exigido | Medio/alto | Medio | P1 |
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
-| Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, schema/settings criados; falta shadow/runtime |
+| Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, shadow pipeline criado; falta runtime/STT/busca |
 | Telegram avancado | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado; midia/grupos se exigidos |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
@@ -382,13 +382,14 @@ Status pos-Sprint 75F:
 
 - design tecnico criado em `docs/saas/AUDIO_TRANSCRIPTION_DESIGN.md`;
 - fundacao criada com `AudioTranscription`, `AudioTranscriptionJob`, feature `audioTranscription=false`, feature `audioTranscriptionRuntime=false` e tela `/app/audio-transcriptions`;
+- shadow pipeline criado com `npm run audio-transcriptions:shadow`, dry-run default e `--record` opcional para registros `shadow/skipped`;
 - reaproveitamento identificado: `MessageType.AUDIO`, `InboundMessage`, `OutboundMessage`, timeline do Inbox, endpoint de media e CRM timeline;
 - MVP recomendado: WhatsApp inbound audio apenas;
 - flags atuais: `audioTranscription`, `audioTranscriptionRuntime`, ambas `false` por padrao;
 - flags futuras propostas: `audioTranscriptionShadow`, `audioTranscriptionSearch`, ambas `false` por padrao quando implementadas;
-- roadmap definido: schema/settings, shadow pipeline, runtime controlado e busca.
+- roadmap definido: runtime controlado e busca.
 
-Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel, mas continua **NAO ATENDE** quando o TR exigir transcricao operacional real com processamento, exibicao de transcript no Inbox e busca. O design e o schema reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
+Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao operacional real com processamento STT, exibicao de transcript no Inbox e busca. O design, o schema e o shadow reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
 
 Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de dados sensiveis.
 

@@ -137,7 +137,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | Auditoria/logs | ATENDE COM AJUSTE | Medio/alto | Eventos/logs existem; falta tela/relatorio formal de auditoria para cliente. |
 | POC/demo | ATENDE | Alto | `demo-prefeitura`, scripts e documentos existem. Webchat e Telegram podem entrar na POC. |
 | OTP/MFA cidadao | NAO ATENDE | Medio/alto | Nao ha modulo licitatorio de OTP. |
-| Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E concluido e fundacao 75F criada com `AudioTranscription`, `AudioTranscriptionJob`, feature `audioTranscription=false` e tela `/app/audio-transcriptions`; ainda sem provider, jobs reais, runtime, transcript no Inbox ou busca. |
+| Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E, fundacao 75F e shadow pipeline 75G criados; CLI localiza audios elegiveis e pode registrar shadow/skipped sem download, provider ou transcript real. Ainda sem STT, runtime, transcript no Inbox ou busca. |
 | Busca textual avancada em dialogos | NAO ATENDE | Medio | Nao formalizada como modulo. |
 | Storage 600 GB midia | ATENDE COM AJUSTE | Alto em Aripuana | Requer contrato/plano de infra, custo e backup. |
 | HA/carga/observabilidade | ATENDE COM AJUSTE | Alto em editais grandes | Produto opera, mas faltam evidencias formais de carga, HA e runbooks de incidentes. |
@@ -159,7 +159,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 
 | Gap | Status | Impacto | Proxima acao |
 | --- | --- | --- | --- |
-| Transcricao de audio | Schema/settings criados, sem processamento real | Medio/alto quando TR exige acessibilidade/registro integral | Sprint 75G: shadow pipeline; depois runtime controlado e busca. |
+| Transcricao de audio | Shadow pipeline criado, sem processamento real | Medio/alto quando TR exige acessibilidade/registro integral | Sprint 75H: runtime controlado; depois busca. |
 | Busca avancada | Nao formalizada | Medio/alto para auditoria e ouvidoria | Criar busca por conversa/mensagem com filtros por canal, setor e periodo. |
 | OTP/MFA cidadao | Nao implementado | Alto se edital exigir validacao ativa de usuario | Sprint especifica de autenticacao/OTP. |
 | NPS refinado | Estrutural | Alto quando pesquisa pos-atendimento e exigida | Disparo, link publico, coleta externa e relatorio NPS/CSAT. |
@@ -348,7 +348,7 @@ Itens seguintes:
 ## Top 5 Investimentos Recomendados
 
 1. **NPS operacional**: disparo por encerramento, link publico, resposta anonima/identificada e dashboard NPS/CSAT.
-2. **Busca avancada + transcricao**: shadow pipeline de transcricao, runtime controlado e busca por texto/canal/contato/setor/periodo.
+2. **Busca avancada + transcricao**: runtime controlado de transcricao e busca por texto/canal/contato/setor/periodo.
 3. **Observabilidade/escala**: benchmark, dashboards de latencia, provider errors, filas, storage e plano HA/RTO/RPO.
 4. **OTP/MFA**: desenho e MVP para validacao de cidadao quando edital exigir.
 5. **Pacote de habilitacao**: matriz edital-item, evidencias, prints, runbook de POC, certidoes e atestados.

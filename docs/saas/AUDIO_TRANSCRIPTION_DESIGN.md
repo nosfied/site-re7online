@@ -373,12 +373,19 @@ Status: implementada como fundacao inerte.
 
 ### Sprint 75G - Shadow Pipeline
 
-- identificar audios elegiveis;
-- dry-run/CLI;
-- criar jobs shadow/skipped;
-- nao baixar audio;
-- nao chamar provider;
-- medir volume/custo estimado.
+Status: implementada como pipeline shadow/manual.
+
+- CLI `npm run audio-transcriptions:shadow`;
+- `--tenant` obrigatorio;
+- `--limit`, `--message`, `--json`;
+- dry-run por padrao;
+- `--record` opcional cria `AudioTranscription.status=shadow` e `AudioTranscriptionJob.status=skipped`;
+- elegibilidade WhatsApp inbound audio primeiro;
+- idempotencia por `clientId + messageId`;
+- nao baixa audio;
+- nao chama provider;
+- nao gera transcript real;
+- mede volume/custo estimado por candidatos e razoes de skip.
 
 ### Sprint 75H - Controlled Runtime
 

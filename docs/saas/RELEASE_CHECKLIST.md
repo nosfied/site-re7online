@@ -86,6 +86,19 @@ npm run scheduling-reminders:send -- --tenant demo-prefeitura --json
 - Nao criar cron, worker ou scheduler automatico sem sprint propria.
 - Nao enviar lembrete sem template aprovado no MVP controlado.
 
+Audio transcription:
+
+- Releases que toquem transcricao devem manter `audioTranscriptionRuntime=false` por padrao.
+- `npm run audio-transcriptions:shadow` deve operar em dry-run por default.
+- `--record` pode criar apenas registros `shadow/skipped`; nao deve baixar midia, chamar provider STT ou gerar transcript real.
+- Smoke recomendado:
+
+```bash
+npm run audio-transcriptions:shadow -- --tenant demo-prefeitura --json
+```
+
+- Processamento real de audio exige sprint propria, provider aprovado, politica LGPD/retencao e rollback por flag.
+
 ## Frontend
 
 Diretorio raiz do repo:
