@@ -451,9 +451,10 @@ Eventos devem conter:
 
 ### Webhook Shadow
 
-- setWebhook com secret;
-- enviar mensagem privada para bot;
+- POST shadow em `/telegram/webhook/:tenantOrAlias`;
+- enviar payload Telegram simulado ou encaminhado manualmente;
 - confirmar `telegram.webhook.received`;
+- confirmar `telegram.webhook.shadow_parsed`;
 - confirmar tenant/account correto;
 - confirmar dedupe.
 
@@ -486,16 +487,16 @@ Nao apagar `ChannelAccount`/secrets durante incidente sem backup, para preservar
 
 ## Impacto Em Editais
 
-Com a Sprint 74C, Telegram passa de "roadmap definido" para "fundacao administrativa criada", mas continua:
+Com a Sprint 74D, Telegram passa de "fundacao administrativa criada" para "webhook shadow validavel", mas continua:
 
 ```text
 NAO ATENDE como canal funcional
-PARCIAL como configuracao/governanca
+PARCIAL como configuracao/governanca/shadow
 ```
 
 So deve mudar para `ATENDE COM AJUSTE` apos inbound e outbound texto estarem funcionais em tenant piloto.
 
-## Status Pos-74C
+## Status Pos-74C/74D
 
 Implementado:
 
@@ -505,11 +506,16 @@ Implementado:
 - flags `telegram`, `telegramInbound` e `telegramOutbound`, todas `false` por padrao;
 - CRUD tenant-scoped em `/app/telegram`;
 - rotacao segura do token;
-- diagnostico placeholder informando que webhook/Bot API/runtime ainda nao existem.
+- diagnostico placeholder informando que Bot API/runtime ainda nao existem;
+- endpoint shadow `POST /telegram/webhook/:tenantOrAlias`;
+- resolucao por `ChannelAccount` ou `ChannelAccountAlias`;
+- validacao de `telegram=true`, `telegramInbound=true`, account ativa e token configurado;
+- parsing redigido de `update_id`, `chat.id`, `message_id`, `from.id` e presenca/tamanho de `text`;
+- replay protection em memoria por `update_id`;
+- eventos `telegram.webhook.received`, `telegram.webhook.shadow_parsed` e `telegram.webhook.shadow_failed`.
 
 Nao implementado:
 
-- webhook Telegram;
 - chamada `getMe` ou qualquer chamada Bot API;
 - inbound;
 - outbound;
@@ -518,11 +524,10 @@ Nao implementado:
 
 ## Veredito
 
-Sprint 74B concluiu o desenho do canal Telegram e a Sprint 74C criou a fundacao sem runtime. A implementacao segue incremental:
+Sprint 74B concluiu o desenho do canal Telegram, a Sprint 74C criou a fundacao sem runtime e a Sprint 74D adicionou webhook shadow sem persistencia. A implementacao segue incremental:
 
-1. webhook shadow;
-2. inbound texto;
-3. outbound humano;
-4. midia somente depois.
+1. inbound texto;
+2. outbound humano;
+3. midia somente depois.
 
-Nao houve chamada Bot API, webhook, inbound ou outbound na Sprint 74C.
+Nao houve chamada Bot API, Conversation, Contact, InboundMessage, OutboundMessage, inbound real ou outbound na Sprint 74D.

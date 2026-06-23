@@ -157,7 +157,7 @@ Feature flags:
 
 ## Telegram
 
-Telegram has a configuration foundation after Sprint 74C, but no runtime yet. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
+Telegram has a configuration foundation after Sprint 74C and a webhook shadow endpoint after Sprint 74D, but no message runtime yet. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
 
 Target model:
 
@@ -166,7 +166,8 @@ Target model:
 - bot/account stored as `ChannelAccount`;
 - bot username/id stored as metadata and/or aliases;
 - bot token stored only as encrypted `ChannelAccountSecret.secretKind=telegramBotToken`;
-- inbound through Telegram Bot API webhook in a future sprint;
+- shadow webhook through `POST /telegram/webhook/:tenantOrAlias`;
+- inbound persistence through Telegram Bot API webhook in a future sprint;
 - outbound through Bot API `sendMessage`;
 - text-only human 1:1 MVP;
 - no groups, media, IA/chatbot or automation in the first runtime phase.
@@ -192,9 +193,18 @@ Implemented in Sprint 74C:
 - encrypted token creation/rotation;
 - placeholder diagnostics.
 
+Implemented in Sprint 74D:
+
+- public shadow endpoint `POST /telegram/webhook/:tenantOrAlias`;
+- tenant/account resolution by `ChannelAccount` or `ChannelAccountAlias`;
+- validation of `telegram`, `telegramInbound`, account flags and token presence;
+- safe parsing of `update_id`, `chat.id`, `message_id`, `from.id` and text metadata;
+- in-memory replay protection by `update_id`;
+- redacted shadow events.
+
 Not implemented:
 
-- webhook registration or validation;
+- webhook registration in Telegram;
 - Bot API calls;
 - inbound/outbound;
 - Inbox/timeline integration.

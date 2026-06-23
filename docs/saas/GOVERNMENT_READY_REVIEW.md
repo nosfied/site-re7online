@@ -65,7 +65,7 @@ Estado consolidado atual:
 - Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI, ainda sem scheduler automatico;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
-- Telegram: auditado, desenhado e com schema/settings em `/app/telegram`; ainda sem webhook, inbound ou outbound.
+- Telegram: auditado, desenhado, com schema/settings em `/app/telegram` e webhook shadow; ainda sem inbound ou outbound real.
 
 Aderencia consolidada estimada:
 
@@ -114,7 +114,7 @@ Aderencia consolidada estimada:
 | Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI; falta automacao segura de lembretes e integracoes. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD em `/app/satisfaction`; falta disparo/link publico/relatorio NPS/CSAT. |
 | Webchat | ATENDE COM AJUSTE | Alto quando exigido | MVP operacional: widget JS, sessao, inbound, Inbox, outbound humano e polling. Falta camada avancada de UX, roteamento, identidade e realtime. |
-| Telegram | NAO ATENDE | Alto quando exigido | Schema/settings e token criptografado prontos; faltam webhook shadow, adapter, inbound e outbound Bot API. |
+| Telegram | NAO ATENDE | Alto quando exigido | Schema/settings, token criptografado e webhook shadow prontos; faltam inbound e outbound Bot API. |
 | Relatorios | ATENDE | Alto | Reports operacionais e export. |
 | Dashboard | ATENDE COM AJUSTE | Medio | Operacional; nao e BI completo. |
 | SLA | ATENDE | Alto | `SLAConfig`, metricas e reports. |
@@ -141,7 +141,7 @@ Aderencia consolidada estimada:
 
 | Gap | Status | Impacto | Bloqueia participacao? | Proxima acao |
 | --- | --- | --- | --- | --- |
-| Telegram funcional | Schema/settings concluido, runtime nao implementado | Alto quando exigido | Sim, se obrigatorio | Proxima etapa: webhook shadow antes de inbound/outbound. |
+| Telegram funcional | Schema/settings e webhook shadow concluidos; mensagens nao implementadas | Alto quando exigido | Sim, se obrigatorio | Proxima etapa: inbound texto antes de outbound. |
 | NPS funcional completo | Parcial estrutural | Alto quando exigido | Pode bloquear se TR exigir pesquisa operacional | Sprint 72D: disparo manual/por encerramento, link publico e relatorio. |
 | Agendamento com envio real | Piloto controlado | Alto em editais com lembrete | Pode bloquear se automatizacao for obrigatoria | Proximo passo: UI manual e/ou scheduler controlado com flags. |
 | OTP/MFA cidadao | Nao implementado | Medio/alto | Sim, se exigido | Sprint especifica de autenticacao/validacao. |
@@ -169,7 +169,7 @@ Aderencia consolidada estimada:
 
 ### P2 - Canais e requisitos avancados
 
-1. **Telegram**: webhook shadow, inbound e outbound.
+1. **Telegram**: inbound texto e outbound humano.
 2. **OTP/MFA cidadao**.
 3. **Transcricao de audio**.
 4. **Busca textual avancada**.
@@ -343,6 +343,6 @@ Proximos 5 gaps prioritarios:
 2. Scheduling com envio controlado de lembretes;
 3. Public API webhooks outbound;
 4. Webchat refinado para POC/editais: identidade, roteamento e acessibilidade;
-5. Telegram webhook shadow, antes de adapter runtime completo.
+5. Telegram inbound texto, antes de outbound humano.
 
-Com isso, a versao **Government Ready v1** fica bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, Webchat E2E humano e Telegram com fundacao administrativa e roadmap tecnico claro.
+Com isso, a versao **Government Ready v1** fica bem definida: WhatsApp/Meta forte, API publica demonstravel, agendamento e satisfacao funcionais, KB pronta para IA supervisionada, Webchat E2E humano e Telegram com fundacao administrativa, webhook shadow e roadmap tecnico claro.

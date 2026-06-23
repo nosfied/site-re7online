@@ -103,6 +103,7 @@ import {
 import {
   buildSessionExpiredMessage,
   createExclusiveAppSession,
+  hashSensitiveValue,
   requestPasswordReset,
   resetPasswordWithToken,
   revokeAppSession,
@@ -177,6 +178,7 @@ import {
   rotateTelegramToken,
   updateTelegramAccount,
 } from "../telegram/telegramService.js";
+import { handleTelegramWebhookShadow } from "../telegram/telegramWebhookShadow.js";
 import {
   createWebchatSession,
   restoreWebchatSession,
@@ -1194,6 +1196,77 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
     }
     json(res, 200, { ok: true });
+    return;
+  }
+
+  const telegramWebhookMatch = pathname.match(/^\/telegram\/webhook\/([^/]+)$/);
+  if (req.method === "POST" && telegramWebhookMatch) {
+    const prisma = getPrisma();
+    const tenantOrAlias = decodeURIComponent(telegramWebhookMatch[1] ?? "");
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      logger.info({
+        event: "telegram.webhook.received",
+        route: "/telegram/webhook/:tenantOrAlias",
+        tenantOrAliasHash: hashSensitiveValue(tenantOrAlias),
+        requestId,
+      });
+      const result = await handleTelegramWebhookShadow({
+        prisma,
+        tenantOrAlias,
+        payload: body as Record<string, unknown>,
+      });
+      if (!result.ok) {
+        logger.warn({
+          event: "telegram.webhook.shadow_failed",
+          route: "/telegram/webhook/:tenantOrAlias",
+          requestId,
+          reason: result.error,
+          resolution: result.resolution ?? null,
+        });
+        json(res, result.status, httpError(result.error, "Telegram webhook shadow rejected"));
+        return;
+      }
+      logger.info({
+        event: "telegram.webhook.shadow_parsed",
+        route: "/telegram/webhook/:tenantOrAlias",
+        requestId,
+        tenantKey: result.tenantKey,
+        clientId: result.clientId,
+        channelAccountId: result.channelAccountId,
+        resolution: result.resolution,
+        replay: result.replay,
+        updateId: result.parsed.updateId,
+        messageId: result.parsed.messageId,
+        chatIdHash: hashSensitiveValue(result.parsed.chatId),
+        fromIdHash: result.parsed.fromId ? hashSensitiveValue(result.parsed.fromId) : null,
+        textPresent: result.parsed.textPresent,
+        textLength: result.parsed.textLength,
+      });
+      json(res, 200, {
+        ok: true,
+        shadow: true,
+        replay: result.replay,
+        tenantKey: result.tenantKey,
+        channelAccountId: result.channelAccountId,
+        parsed: {
+          updateId: result.parsed.updateId,
+          messageId: result.parsed.messageId,
+          textPresent: result.parsed.textPresent,
+          textLength: result.parsed.textLength,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "telegram.webhook.shadow_failed",
+        route: "/telegram/webhook/:tenantOrAlias",
+        requestId,
+        reason: "server_error",
+        message: (error as Error).message,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
     return;
   }
 
