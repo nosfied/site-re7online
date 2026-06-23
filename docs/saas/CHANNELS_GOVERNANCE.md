@@ -157,7 +157,7 @@ Feature flags:
 
 ## Telegram
 
-Telegram has a configuration foundation after Sprint 74C and a webhook shadow endpoint after Sprint 74D, but no message runtime yet. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
+Telegram has a configuration foundation after Sprint 74C, a webhook shadow endpoint after Sprint 74D, and text-only inbound persistence after Sprint 74E. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
 
 Target model:
 
@@ -167,7 +167,7 @@ Target model:
 - bot username/id stored as metadata and/or aliases;
 - bot token stored only as encrypted `ChannelAccountSecret.secretKind=telegramBotToken`;
 - shadow webhook through `POST /telegram/webhook/:tenantOrAlias`;
-- inbound persistence through Telegram Bot API webhook in a future sprint;
+- inbound text persistence through Telegram Bot API webhook;
 - outbound through Bot API `sendMessage`;
 - text-only human 1:1 MVP;
 - no groups, media, IA/chatbot or automation in the first runtime phase.
@@ -202,12 +202,23 @@ Implemented in Sprint 74D:
 - in-memory replay protection by `update_id`;
 - redacted shadow events.
 
+Implemented in Sprint 74E:
+
+- text-only inbound persistence through `POST /telegram/webhook/:tenantOrAlias`;
+- tenant/account resolution from `ChannelAccount`/`ChannelAccountAlias`;
+- in-memory replay protection by `accountId:update_id`;
+- creation/resolution of `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`, `ConversationRuntimeState` and `InboundMessage`;
+- Inbox/timeline support for `channel=telegram`;
+- redacted events `telegram.inbound.persisted`, `telegram.contact.created` and `telegram.conversation.created`;
+- no Bot API calls and no outbound.
+
 Not implemented:
 
 - webhook registration in Telegram;
 - Bot API calls;
-- inbound/outbound;
-- Inbox/timeline integration.
+- outbound;
+- media/groups;
+- IA/chatbot.
 
 ## Shared Governance Requirements
 

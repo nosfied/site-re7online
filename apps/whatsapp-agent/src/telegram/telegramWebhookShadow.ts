@@ -7,6 +7,18 @@ const MAX_REPLAY_CACHE_SIZE = 2000;
 
 type TelegramShadowPayload = Record<string, unknown>;
 
+export type TelegramWebhookParsedPayload = {
+  updateId: number;
+  chatId: string;
+  messageId: string;
+  fromId: string | null;
+  text: string | null;
+  textPresent: boolean;
+  textLength: number;
+  displayName: string | null;
+  username: string | null;
+};
+
 export type TelegramWebhookShadowResult =
   | {
       ok: true;
@@ -31,7 +43,7 @@ export type TelegramWebhookShadowResult =
       resolution?: "not_found" | "matched_channel_account" | "matched_alias";
     };
 
-type ResolvedAccount = {
+export type ResolvedTelegramAccount = {
   resolution: "matched_channel_account" | "matched_alias";
   account: {
     id: string;
@@ -83,7 +95,33 @@ function valueToString(value: unknown) {
   return null;
 }
 
-function parseTelegramShadowPayload(payload: unknown) {
+function normalizeTelegramText(input: unknown, maxLength: number) {
+  if (typeof input !== "string") return null;
+  const normalized = input.trim().replace(/\r\n/g, "\n").replace(/\r/g, "\n").slice(0, maxLength);
+  return normalized || null;
+}
+
+function normalizeTelegramNamePart(input: unknown) {
+  return typeof input === "string" ? input.trim().replace(/\s+/g, " ").slice(0, 80) : "";
+}
+
+function normalizeTelegramUsername(input: unknown) {
+  const value = normalizeTelegramNamePart(input).replace(/^@+/, "").toLowerCase();
+  return value || null;
+}
+
+function buildTelegramDisplayName(from: Record<string, unknown> | null, chat: Record<string, unknown> | null) {
+  const firstName = normalizeTelegramNamePart(from?.first_name);
+  const lastName = normalizeTelegramNamePart(from?.last_name);
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").replace(/\s+/g, " ").slice(0, 160);
+  if (fullName) return fullName;
+  const username = normalizeTelegramUsername(from?.username ?? chat?.username);
+  if (username) return `@${username}`;
+  const title = normalizeTelegramNamePart(chat?.title);
+  return title || null;
+}
+
+export function parseTelegramWebhookPayload(payload: unknown) {
   if (!isRecord(payload)) return { ok: false as const, error: "telegram_payload_invalid" };
   const rawUpdateId = payload.update_id;
   if (typeof rawUpdateId !== "number" || !Number.isSafeInteger(rawUpdateId)) {
@@ -100,7 +138,8 @@ function parseTelegramShadowPayload(payload: unknown) {
   if (!chatId) return { ok: false as const, error: "telegram_chat_id_missing" };
   const from = isRecord(message.from) ? message.from : null;
   const fromId = from ? valueToString(from.id) : null;
-  const text = typeof message.text === "string" ? message.text : "";
+  const text = normalizeTelegramText(message.text, 4_000);
+  const username = normalizeTelegramUsername(from?.username ?? chat?.username);
   return {
     ok: true as const,
     parsed: {
@@ -108,16 +147,19 @@ function parseTelegramShadowPayload(payload: unknown) {
       chatId,
       messageId: String(rawMessageId),
       fromId,
-      textPresent: Boolean(text.trim()),
-      textLength: text.length,
-    },
+      text,
+      textPresent: Boolean(text),
+      textLength: text?.length ?? 0,
+      displayName: buildTelegramDisplayName(from, chat),
+      username,
+    } satisfies TelegramWebhookParsedPayload,
   };
 }
 
-async function resolveTelegramAccount(params: {
+export async function resolveTelegramAccount(params: {
   prisma: PrismaClient;
   tenantOrAlias: string;
-}): Promise<ResolvedAccount | null> {
+}): Promise<ResolvedTelegramAccount | null> {
   const alias = normalizeAlias(params.tenantOrAlias);
   if (!alias) return null;
   const direct = await params.prisma.channelAccount.findFirst({
@@ -152,7 +194,7 @@ async function resolveTelegramAccount(params: {
     : null;
 }
 
-function hasConfiguredTelegramToken(account: ResolvedAccount["account"]) {
+export function hasConfiguredTelegramToken(account: ResolvedTelegramAccount["account"]) {
   return account.secrets.some(
     (secret) =>
       secret.secretKind === TELEGRAM_SECRET_KIND &&
@@ -163,6 +205,23 @@ function hasConfiguredTelegramToken(account: ResolvedAccount["account"]) {
 
 export function clearTelegramWebhookReplayCache() {
   replayCache.clear();
+}
+
+export function markTelegramWebhookReplay(params: {
+  accountId: string;
+  updateId: number;
+  now?: number;
+  replayTtlMs?: number;
+}) {
+  const currentTime = params.now ?? nowMs();
+  pruneReplayCache(currentTime);
+  const replayKey = `${params.accountId}:${params.updateId}`;
+  const replay = replayCache.has(replayKey);
+  if (!replay) {
+    replayCache.set(replayKey, currentTime + (params.replayTtlMs ?? DEFAULT_REPLAY_TTL_MS));
+    pruneReplayCache(currentTime);
+  }
+  return replay;
 }
 
 export async function handleTelegramWebhookShadow(params: {
@@ -194,19 +253,17 @@ export async function handleTelegramWebhookShadow(params: {
     return { ok: false, status: 403, error: "telegram_token_missing", resolution: resolved.resolution };
   }
 
-  const parsed = parseTelegramShadowPayload(params.payload);
+  const parsed = parseTelegramWebhookPayload(params.payload);
   if (!parsed.ok) {
     return { ok: false, status: 400, error: parsed.error, resolution: resolved.resolution };
   }
 
-  const currentTime = params.now ?? nowMs();
-  pruneReplayCache(currentTime);
-  const replayKey = `${account.id}:${parsed.parsed.updateId}`;
-  const replay = replayCache.has(replayKey);
-  if (!replay) {
-    replayCache.set(replayKey, currentTime + (params.replayTtlMs ?? DEFAULT_REPLAY_TTL_MS));
-    pruneReplayCache(currentTime);
-  }
+  const replay = markTelegramWebhookReplay({
+    accountId: account.id,
+    updateId: parsed.parsed.updateId,
+    now: params.now,
+    replayTtlMs: params.replayTtlMs,
+  });
 
   return {
     ok: true,
@@ -215,6 +272,13 @@ export async function handleTelegramWebhookShadow(params: {
     tenantKey: account.client.clientKey,
     clientId: account.clientId,
     channelAccountId: account.channelAccountId,
-    parsed: parsed.parsed,
+    parsed: {
+      updateId: parsed.parsed.updateId,
+      chatId: parsed.parsed.chatId,
+      messageId: parsed.parsed.messageId,
+      fromId: parsed.parsed.fromId,
+      textPresent: parsed.parsed.textPresent,
+      textLength: parsed.parsed.textLength,
+    },
   };
 }

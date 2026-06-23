@@ -496,7 +496,7 @@ PARCIAL como configuracao/governanca/shadow
 
 So deve mudar para `ATENDE COM AJUSTE` apos inbound e outbound texto estarem funcionais em tenant piloto.
 
-## Status Pos-74C/74D
+## Status Pos-74C/74D/74E
 
 Implementado:
 
@@ -512,12 +512,21 @@ Implementado:
 - validacao de `telegram=true`, `telegramInbound=true`, account ativa e token configurado;
 - parsing redigido de `update_id`, `chat.id`, `message_id`, `from.id` e presenca/tamanho de `text`;
 - replay protection em memoria por `update_id`;
-- eventos `telegram.webhook.received`, `telegram.webhook.shadow_parsed` e `telegram.webhook.shadow_failed`.
+- eventos `telegram.webhook.received`, `telegram.webhook.shadow_parsed` e `telegram.webhook.shadow_failed`;
+- inbound texto MVP por `POST /telegram/webhook/:tenantOrAlias`;
+- criacao/resolucao tenant-scoped de `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`, `ConversationRuntimeState` e `InboundMessage`;
+- `Conversation.channel=telegram` e `InboundMessage.channel=telegram` aparecem no Inbox/timeline;
+- filtro/label/icone Telegram no Inbox;
+- eventos `telegram.inbound.persisted`, `telegram.contact.created` e `telegram.conversation.created`.
 
 Nao implementado:
 
 - chamada `getMe` ou qualquer chamada Bot API;
-- inbound;
+- outbound;
+- envio `sendMessage`;
+- midia;
+- grupos;
+- IA/chatbot;
 - outbound;
 - polling;
 - integracao com Inbox/timeline.

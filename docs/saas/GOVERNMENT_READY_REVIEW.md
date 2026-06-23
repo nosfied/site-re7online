@@ -65,7 +65,7 @@ Estado consolidado atual:
 - Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI, ainda sem scheduler automatico;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
-- Telegram: auditado, desenhado, com schema/settings em `/app/telegram` e webhook shadow; ainda sem inbound ou outbound real.
+- Telegram: auditado, desenhado, com schema/settings em `/app/telegram`, webhook shadow e inbound texto MVP persistido no Inbox/timeline; ainda sem outbound, midia, grupos ou Bot API send.
 
 Aderencia consolidada estimada:
 

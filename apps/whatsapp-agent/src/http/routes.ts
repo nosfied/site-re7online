@@ -178,7 +178,7 @@ import {
   rotateTelegramToken,
   updateTelegramAccount,
 } from "../telegram/telegramService.js";
-import { handleTelegramWebhookShadow } from "../telegram/telegramWebhookShadow.js";
+import { persistTelegramInboundMessage } from "../telegram/telegramInboundService.js";
 import {
   createWebchatSession,
   restoreWebchatSession,
@@ -1212,10 +1212,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantOrAliasHash: hashSensitiveValue(tenantOrAlias),
         requestId,
       });
-      const result = await handleTelegramWebhookShadow({
+      const result = await persistTelegramInboundMessage({
         prisma,
         tenantOrAlias,
         payload: body as Record<string, unknown>,
+        requestId,
       });
       if (!result.ok) {
         logger.warn({
@@ -1229,27 +1230,53 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         return;
       }
       logger.info({
-        event: "telegram.webhook.shadow_parsed",
+        event: result.persisted ? "telegram.inbound.persisted" : "telegram.webhook.shadow_parsed",
         route: "/telegram/webhook/:tenantOrAlias",
         requestId,
         tenantKey: result.tenantKey,
         clientId: result.clientId,
         channelAccountId: result.channelAccountId,
-        resolution: result.resolution,
         replay: result.replay,
+        persisted: result.persisted,
+        reason: result.persisted ? "persisted" : result.reason,
         updateId: result.parsed.updateId,
         messageId: result.parsed.messageId,
-        chatIdHash: hashSensitiveValue(result.parsed.chatId),
-        fromIdHash: result.parsed.fromId ? hashSensitiveValue(result.parsed.fromId) : null,
         textPresent: result.parsed.textPresent,
         textLength: result.parsed.textLength,
+        syntheticWaId: result.persisted ? result.syntheticWaId : null,
+        conversationId: result.persisted ? result.conversationId : null,
+        inboundMessageId: result.persisted ? result.inboundMessageId : null,
       });
+      if (result.persisted && result.contactCreated) {
+        logger.info({
+          event: "telegram.contact.created",
+          requestId,
+          tenantKey: result.tenantKey,
+          clientId: result.clientId,
+          channelAccountId: result.channelAccountId,
+          contactId: result.contactId,
+        });
+      }
+      if (result.persisted && result.conversationCreated) {
+        logger.info({
+          event: "telegram.conversation.created",
+          requestId,
+          tenantKey: result.tenantKey,
+          clientId: result.clientId,
+          channelAccountId: result.channelAccountId,
+          conversationId: result.conversationId,
+        });
+      }
       json(res, 200, {
         ok: true,
-        shadow: true,
+        shadow: !result.persisted,
+        persisted: result.persisted,
         replay: result.replay,
         tenantKey: result.tenantKey,
         channelAccountId: result.channelAccountId,
+        conversationId: result.persisted ? result.conversationId : null,
+        inboundMessageId: result.persisted ? result.inboundMessageId : null,
+        reason: result.persisted ? null : result.reason,
         parsed: {
           updateId: result.parsed.updateId,
           messageId: result.parsed.messageId,
@@ -3711,6 +3738,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message:
             resolvedChannel === "webchat"
               ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
+              : resolvedChannel === "telegram"
+              ? "Envio por Telegram ainda não está habilitado neste canal."
               : resolvedChannel === "instagram"
               ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
               : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
@@ -3940,6 +3969,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           message:
             resolvedChannel === "webchat"
               ? WEBCHAT_OUTBOUND_DISABLED_MESSAGE
+              : resolvedChannel === "telegram"
+              ? "Envio por Telegram ainda não está habilitado neste canal."
               : resolvedChannel === "instagram"
               ? INSTAGRAM_OUTBOUND_DISABLED_MESSAGE
               : MESSENGER_OUTBOUND_DISABLED_MESSAGE,
@@ -14960,11 +14991,15 @@ function parseConversationReportPeriod(query: Record<string, string>) {
   return parseConversationReportRange(query.range);
 }
 
-type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | null;
+type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
 
 function normalizeReportChannelFilter(rawValue: unknown): ReportChannelFilter {
   const normalized = String(rawValue ?? "").trim().toLowerCase();
-  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram"
+  return normalized === "whatsapp" ||
+    normalized === "messenger" ||
+    normalized === "instagram" ||
+    normalized === "webchat" ||
+    normalized === "telegram"
     ? normalized
     : null;
 }
@@ -14974,6 +15009,7 @@ function normalizeReportChannelLabel(rawValue?: string | null) {
   if (channel === "messenger") return { channel: "messenger" as const, channelName: "Facebook/Messenger" };
   if (channel === "instagram") return { channel: "instagram" as const, channelName: "Instagram" };
   if (channel === "webchat") return { channel: "webchat" as const, channelName: "Webchat" };
+  if (channel === "telegram") return { channel: "telegram" as const, channelName: "Telegram" };
   if (channel === "whatsapp" || !channel) return { channel: "whatsapp" as const, channelName: "WhatsApp" };
   return { channel: "unknown" as const, channelName: "Desconhecido" };
 }
@@ -15331,7 +15367,11 @@ function getReportDepartmentBucket(
 function buildConversationReportChannelSummary(metrics: Array<{ conversation: { channel?: string | null } }>) {
   const byChannel = new Map<
     string,
-    { channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "unknown"; channelName: string; conversations: number }
+    {
+      channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "unknown";
+      channelName: string;
+      conversations: number;
+    }
   >();
   for (const item of metrics) {
     const normalized = normalizeReportChannelLabel(item.conversation.channel);
@@ -18328,7 +18368,7 @@ async function buildAppDashboardOverview(
 
 type ConversationListFilters = {
   status: ConversationOperationalStatus | null;
-  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | null;
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
   departmentId: string | null;
   assignedUserId: string | null;
   unassigned: boolean;
@@ -18472,7 +18512,11 @@ function normalizeConversationStatusFilter(value: unknown): ConversationOperatio
 
 function normalizeConversationChannelFilter(value: unknown): ConversationListFilters["channel"] {
   const normalized = String(value ?? "").trim().toLowerCase();
-  return normalized === "whatsapp" || normalized === "messenger" || normalized === "instagram" || normalized === "webchat"
+  return normalized === "whatsapp" ||
+    normalized === "messenger" ||
+    normalized === "instagram" ||
+    normalized === "webchat" ||
+    normalized === "telegram"
     ? normalized
     : null;
 }
@@ -18483,9 +18527,19 @@ function serializeInboxChannelFields(source?: {
   channelAccountId?: string | null;
 }) {
   const channel = source?.channel?.trim().toLowerCase() || "whatsapp";
-  const provider = source?.provider?.trim().toLowerCase() || (channel === "whatsapp" ? "meta" : null);
+  const normalizedChannel =
+    channel === "messenger" ||
+    channel === "instagram" ||
+    channel === "webchat" ||
+    channel === "telegram" ||
+    channel === "whatsapp"
+      ? channel
+      : "whatsapp";
+  const provider =
+    source?.provider?.trim().toLowerCase() ||
+    (normalizedChannel === "whatsapp" ? "meta" : normalizedChannel === "telegram" ? "telegram" : null);
   return {
-    channel,
+    channel: normalizedChannel,
     provider,
     channelAccountId: source?.channelAccountId ?? null,
   };
@@ -18493,7 +18547,10 @@ function serializeInboxChannelFields(source?: {
 
 function isConversationOutboundBlocked(source?: { channel?: string | null } | null) {
   const channel = serializeInboxChannelFields(source ?? undefined).channel;
-  return channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram" && channel !== "webchat";
+  return (
+    channel === "telegram" ||
+    (channel !== "whatsapp" && channel !== "messenger" && channel !== "instagram" && channel !== "webchat")
+  );
 }
 
 function findTenantChannelAccountForConversation(
@@ -18526,6 +18583,7 @@ function getConversationChannelOutboundEnabled(
   if (channelFields.channel === "webchat") {
     return features?.webchat === true && features?.webchatOutbound === true;
   }
+  if (channelFields.channel === "telegram") return false;
   return false;
 }
 

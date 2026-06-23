@@ -346,6 +346,7 @@ function getChannelEmptyStateLabel(channel: ConversationChannelFilter) {
   if (channel === "instagram") return "Instagram";
   if (channel === "whatsapp") return "WhatsApp";
   if (channel === "webchat") return "Webchat";
+  if (channel === "telegram") return "Telegram";
   return "Todos os canais";
 }
 
@@ -672,6 +673,7 @@ const CONVERSATION_CHANNEL_FILTERS: Array<{ value: InboxChannel; label: string }
   { value: "instagram", label: "Instagram" },
   { value: "messenger", label: "Facebook/Messenger" },
   { value: "webchat", label: "Webchat" },
+  { value: "telegram", label: "Telegram" },
 ];
 
 const CONVERSATION_QUICK_FILTERS = [
@@ -1411,7 +1413,9 @@ function getConversationStatusClassForItem(
 
 function getConversationChannel(item: Pick<InboxConversationItem, "channel"> | null): InboxChannel {
   const channel = String(item?.channel ?? "").trim().toLowerCase();
-  if (channel === "messenger" || channel === "instagram" || channel === "webchat") return channel;
+  if (channel === "messenger" || channel === "instagram" || channel === "webchat" || channel === "telegram") {
+    return channel;
+  }
   return "whatsapp";
 }
 
@@ -1423,6 +1427,8 @@ function getConversationChannelLabel(item: Pick<InboxConversationItem, "channel"
       return "Instagram";
     case "webchat":
       return "Webchat";
+    case "telegram":
+      return "Telegram";
     default:
       return "WhatsApp";
   }
@@ -1436,6 +1442,8 @@ function getConversationChannelBadgeClass(item: Pick<InboxConversationItem, "cha
       return "border-pink-300/40 bg-white";
     case "webchat":
       return "border-sky-300/40 bg-white";
+    case "telegram":
+      return "border-[#229ED9]/25 bg-white";
     default:
       return "border-[#25D366]/25 bg-white";
   }
@@ -1487,6 +1495,16 @@ function ConversationChannelLogo({
           <circle cx="11.5" cy="13.5" r="1.2" fill="#0EA5E9" />
           <circle cx="16" cy="13.5" r="1.2" fill="#0EA5E9" />
           <circle cx="20.5" cy="13.5" r="1.2" fill="#0EA5E9" />
+        </svg>
+      );
+    case "telegram":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#229ED9" />
+          <path
+            fill="#fff"
+            d="M24.7 9.1 21.9 22c-.2.9-.8 1.1-1.6.7l-4.4-3.2-2.1 2c-.2.2-.4.4-.9.4l.3-4.5 8.2-7.4c.4-.3-.1-.5-.5-.2l-10.1 6.4-4.4-1.4c-1-.3-1-.9.2-1.3l17.1-6.6c.8-.3 1.5.2 1.2 1.2z"
+          />
         </svg>
       );
     default:
@@ -3530,6 +3548,8 @@ export default function AppInboxPage() {
   const selectedConversationOutboundDisabledMessage =
     selectedConversationChannel === "webchat"
       ? "Envio por Webchat ainda não está habilitado neste canal."
+      : selectedConversationChannel === "telegram"
+      ? "Envio por Telegram ainda não está habilitado neste canal."
       : selectedConversationChannel === "instagram"
       ? "Envio por Instagram ainda não está habilitado neste canal."
       : "Envio por Facebook/Messenger ainda não está habilitado neste canal.";

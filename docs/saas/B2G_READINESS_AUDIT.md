@@ -183,7 +183,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Agendamento | ATENDE PARCIALMENTE | 68% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingRemindersSend`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e envio controlado WhatsApp por CLI | Ainda nao ha scheduler automatico, consumo por chatbot/IA, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71I/71J |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
 | Webchat | ATENDE PARCIALMENTE | 85% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
-| Telegram | NAO ATENDE | 25% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram` e webhook shadow implementados; nao ha inbound ou outbound real | Criar inbound, outbound e tenant resolution runtime persistente | Alto | Alto | Sprint 74E+ |
+| Telegram | ATENDE PARCIALMENTE | 45% | Audit/design prontos; schema/settings, token criptografado, `/app/telegram`, webhook shadow e inbound texto MVP persistido no Inbox/timeline | Criar outbound controlado, registro webhook, midia se exigida e smoke com Bot real | Alto | Alto | Sprint 74F+ |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |
 
@@ -379,7 +379,8 @@ Status pos-Sprint 74B:
 - bot token usa `ChannelAccountSecret.secretKind=telegramBotToken`;
 - flags `telegram`, `telegramInbound`, `telegramOutbound`, todas `false` por padrao;
 - `/app/telegram` permite cadastro, ativacao/desativacao, rotacao de token e diagnostico placeholder;
-- `POST /telegram/webhook/:tenantOrAlias` valida payload em shadow, sem persistir mensagem.
+- `POST /telegram/webhook/:tenantOrAlias` valida payload em shadow e, com `telegram=true` + `telegramInbound=true`, persiste texto inbound em `Contact`, `ContactChannelIdentity`, `Lead`, `Conversation`, `ConversationRuntimeState` e `InboundMessage`;
+- Inbox reconhece `channel=telegram` com filtro/label/icone, mas outbound continua bloqueado.
 
 Telegram continua **NAO ATENDE** funcionalmente ate existir inbound/outbound real.
 
