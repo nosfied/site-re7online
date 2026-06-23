@@ -26,6 +26,7 @@ Status: current-state documentation based on code inspection. This file does not
 | `scheduling` | false | false | controlled rollout via `Client.features` | yes, scheduling routes | yes |
 | `schedulingReminders` | false | false | controlled rollout via `Client.features` | yes, scheduling reminders routes | yes |
 | `schedulingRemindersShadow` | false | false | controlled rollout via `Client.features` | CLI shadow eligibility only | no customer UI yet |
+| `schedulingRemindersSend` | false | false | controlled rollout via `Client.features` | CLI controlled send only | no customer UI yet |
 | `schedulingConfirmation` | false | false | controlled rollout via `Client.features` | reserved for future confirmation runtime | no runtime yet |
 | `satisfaction` | false | false | controlled rollout via `Client.features` | yes, satisfaction routes | yes |
 | `webchat` | false | false | controlled rollout via `Client.features` | yes, webchat settings routes | yes |

@@ -61,7 +61,7 @@ Estado consolidado atual:
 
 - Knowledge Base: schema/CRUD em producao, runtime ainda desenhado;
 - Public API: API keys, OpenAPI, health, contatos, conversas e mensagens read-only em producao; infraestrutura de webhooks com cadastro, segredo criptografado/rotacao, shadow/manual e dispatch HTTP controlado por CLI/flags, ainda sem dispatch automatico;
-- Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e design de envio controlado;
+- Scheduling: schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI, ainda sem scheduler automatico;
 - NPS/Satisfacao: schema/CRUD MVP em producao, sem disparo/link/relatorio operacional completo;
 - Webchat: MVP operacional com widget minimo e atendimento humano E2E por polling;
 - Telegram: auditado, ainda nao implementado.
@@ -91,7 +91,7 @@ Aderencia consolidada estimada:
 | --- | --- | --- | --- |
 | Webchat MVP | Operacional e demonstravel | Alto para editais multicanal e POC | Widget minimo, polling simples, sem roteamento avancado, sem IA/chatbot e sem refinamento visual completo |
 | Public API | Read-only completa para contatos, conversas e mensagens; webhooks infra + segredo criptografado + shadow MVP | Alto para integracoes e transparencias tecnicas | Sem dispatch automatico de webhooks, sem escrita e sem envio por API |
-| Scheduling | CRUD + reminders manuais + shadow | Medio/alto para editais com agendamento | Sem envio real de lembretes, sem chatbot/IA, sem Google Calendar e sem API publica |
+| Scheduling | CRUD + reminders manuais + shadow + envio controlado | Medio/alto para editais com agendamento | Envio real existe apenas como CLI piloto, sem cron/scheduler automatico, sem chatbot/IA, sem Google Calendar e sem API publica |
 | NPS/Satisfacao | CRUD estrutural | Medio/alto quando pesquisa pos-atendimento e exigida | Sem disparo por encerramento, link publico, coleta externa e relatorio NPS/CSAT completo |
 | Knowledge Base | CRUD e desenho runtime | Medio/alto para IA e CAC | IA/chatbot ainda nao consome KB |
 
@@ -110,7 +110,7 @@ Aderencia consolidada estimada:
 | IA supervisionada | ATENDE COM AJUSTE | Medio/alto | Config DB-first; multiagentes formais ainda nao. |
 | Base de conhecimento | ATENDE COM AJUSTE | Medio/alto | Schema/CRUD em producao; runtime IA/chatbot ainda desenhado, nao ligado. |
 | Public API | ATENDE COM AJUSTE | Alto | API keys, OpenAPI, health, contatos, conversas e mensagens read-only; webhooks possuem cadastro, segredo criptografado, rotacao e shadow/manual, mas faltam dispatch outbound e escrita controlada. |
-| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD, lembretes manuais, scheduler shadow e design de envio; falta envio real de lembretes e integracoes. |
+| Agendamento | ATENDE COM AJUSTE | Alto | Schema/CRUD, lembretes manuais, scheduler shadow e envio controlado WhatsApp por CLI; falta automacao segura de lembretes e integracoes. |
 | NPS/Satisfacao | ATENDE COM AJUSTE | Alto quando exigido | Schema/CRUD em `/app/satisfaction`; falta disparo/link publico/relatorio NPS/CSAT. |
 | Webchat | ATENDE COM AJUSTE | Alto quando exigido | MVP operacional: widget JS, sessao, inbound, Inbox, outbound humano e polling. Falta camada avancada de UX, roteamento, identidade e realtime. |
 | Telegram | NAO ATENDE | Alto quando exigido | Audit pronto; falta design/schema/adapter/Bot API. |
@@ -142,7 +142,7 @@ Aderencia consolidada estimada:
 | --- | --- | --- | --- | --- |
 | Telegram funcional | Nao implementado | Alto quando exigido | Sim, se obrigatorio | Sprint 74B/74C: design e schema/config antes de adapter. |
 | NPS funcional completo | Parcial estrutural | Alto quando exigido | Pode bloquear se TR exigir pesquisa operacional | Sprint 72D: disparo manual/por encerramento, link publico e relatorio. |
-| Agendamento com envio real | Parcial estrutural | Alto em editais com lembrete | Pode bloquear se automatizacao for obrigatoria | Sprint 71H: envio controlado de lembrete por tenant. |
+| Agendamento com envio real | Piloto controlado | Alto em editais com lembrete | Pode bloquear se automatizacao for obrigatoria | Proximo passo: UI manual e/ou scheduler controlado com flags. |
 | OTP/MFA cidadao | Nao implementado | Medio/alto | Sim, se exigido | Sprint especifica de autenticacao/validacao. |
 | Transcricao de audio | Nao implementado | Medio/alto | Sim, se exigida | Design de transcricao, custo e LGPD antes de implementar. |
 | Busca avancada em dialogos | Nao formalizada | Medio | Pode bloquear se literal | Criar busca indexada por conversa/mensagem. |

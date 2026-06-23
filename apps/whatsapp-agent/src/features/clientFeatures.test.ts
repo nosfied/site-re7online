@@ -14,6 +14,8 @@ test("scheduling is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).schedulingReminders, false);
   assert.equal(getFeatures({ profile: "business" }).schedulingRemindersShadow, false);
   assert.equal(getFeatures({ profile: "government" }).schedulingRemindersShadow, false);
+  assert.equal(getFeatures({ profile: "business" }).schedulingRemindersSend, false);
+  assert.equal(getFeatures({ profile: "government" }).schedulingRemindersSend, false);
   assert.equal(getFeatures({ profile: "business" }).schedulingConfirmation, false);
   assert.equal(getFeatures({ profile: "government" }).schedulingConfirmation, false);
 });
@@ -52,16 +54,19 @@ test("scheduling can be enabled by tenant feature override", () => {
       scheduling: true,
       schedulingReminders: true,
       schedulingRemindersShadow: true,
+      schedulingRemindersSend: true,
       schedulingConfirmation: true,
     },
   };
   assert.equal(getFeatures(client).scheduling, true);
   assert.equal(getFeatures(client).schedulingReminders, true);
   assert.equal(getFeatures(client).schedulingRemindersShadow, true);
+  assert.equal(getFeatures(client).schedulingRemindersSend, true);
   assert.equal(getFeatures(client).schedulingConfirmation, true);
   assert.equal(hasFeature(client, "scheduling"), true);
   assert.equal(hasFeature(client, "schedulingReminders"), true);
   assert.equal(hasFeature(client, "schedulingRemindersShadow"), true);
+  assert.equal(hasFeature(client, "schedulingRemindersSend"), true);
   assert.equal(hasFeature(client, "schedulingConfirmation"), true);
 });
 

@@ -425,3 +425,23 @@ Ela manteve o runtime intacto e definiu:
 - rollback por flag, sem migration.
 
 A proxima sprint de implementacao deve ser a 71H, com envio real apenas para tenant teste e `--execute` explicito.
+
+## Status Pos-Sprint 71H
+
+A etapa de envio controlado foi implementada sem automacao permanente:
+
+- flag `schedulingRemindersSend=false` por padrao;
+- CLI manual `npm run scheduling-reminders:send`;
+- dry-run default sem mutacao;
+- execute explicito com tenant obrigatorio;
+- WhatsApp apenas;
+- template obrigatorio no MVP;
+- eventos de auditoria redigidos;
+- atualizacao de `AppointmentReminder` somente em execute;
+- sem cron, worker, scheduler automatico, chatbot, IA, Webchat ou Public API.
+
+O modulo continua separado em tres camadas:
+
+1. CRUD/manual de lembretes: `schedulingReminders`;
+2. elegibilidade sem envio: `schedulingRemindersShadow`;
+3. envio real manual/piloto: `schedulingRemindersSend`.

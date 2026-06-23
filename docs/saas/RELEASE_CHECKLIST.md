@@ -72,6 +72,20 @@ Webhooks Public API:
 - Releases futuras que executem dispatch HTTP externo de webhooks devem exigir flags explicitas por tenant, com dry-run default, SSRF reforcado, timeout curto e smoke contra endpoint controlado.
 - Nenhum deploy deve ativar `webhookDispatchExecute` por padrao.
 
+Scheduling reminders:
+
+- Releases que toquem envio de lembretes devem manter `schedulingRemindersSend=false` por padrao.
+- `npm run scheduling-reminders:send` deve operar em dry-run por default.
+- Qualquer envio real exige `--tenant`, `--execute`, limite baixo e tenant piloto com `schedulingRemindersSend=true`.
+- O smoke de producao deve validar primeiro:
+
+```bash
+npm run scheduling-reminders:send -- --tenant demo-prefeitura --json
+```
+
+- Nao criar cron, worker ou scheduler automatico sem sprint propria.
+- Nao enviar lembrete sem template aprovado no MVP controlado.
+
 ## Frontend
 
 Diretorio raiz do repo:

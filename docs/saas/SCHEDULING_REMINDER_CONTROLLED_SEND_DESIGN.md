@@ -338,3 +338,38 @@ Antes de enviar:
 ## Veredito
 
 O primeiro envio real deve ser tratado como operacao controlada, nao como scheduler automatico. A proxima sprint segura e implementar `schedulingRemindersSend` e CLI de envio com `--dry-run` default, `--execute` restrito a tenant piloto, WhatsApp apenas, template obrigatorio quando necessario, limites baixos e rollback por flag.
+
+## Status Pos-Sprint 71H
+
+A Sprint 71H implementou o primeiro envio real controlado de lembretes:
+
+- feature flag `schedulingRemindersSend=false` por padrao;
+- comando manual `npm run scheduling-reminders:send`;
+- `--dry-run` como default;
+- `--execute` explicito e dependente da flag do tenant;
+- tenant obrigatorio;
+- WhatsApp como unico canal suportado no MVP;
+- envio via pipeline existente de template WhatsApp;
+- idempotencia por `AppointmentReminder.status=pending`, `sentAt=null` e `requestId=null`;
+- persistencia em `AppointmentReminder.status`, `sentAt`, `error`, `requestId` e `metadata`;
+- eventos redigidos:
+  - `appointment.reminder.send_started`;
+  - `appointment.reminder.sent`;
+  - `appointment.reminder.failed`;
+  - `appointment.reminder.skipped`;
+- nenhum cron, worker ou scheduler automatico.
+
+Nesta primeira versao, a politica operacional e conservadora: o envio real exige `templateName` e `templateLang`. Texto livre dentro da janela de 24h fica fora do MVP para evitar criar um caminho paralelo de envio e manter a validacao de App/Meta mais previsivel.
+
+Uso:
+
+```bash
+npm run scheduling-reminders:send -- --tenant demo-prefeitura --json
+npm run scheduling-reminders:send -- --tenant demo-prefeitura --limit 1 --execute --json
+```
+
+Rollback imediato:
+
+1. Definir `schedulingRemindersSend=false` no tenant.
+2. Manter `schedulingReminders` e `schedulingRemindersShadow` se o tenant continuar usando CRUD/shadow.
+3. Revisar reminders `failed`/`skipped` antes de qualquer nova tentativa.

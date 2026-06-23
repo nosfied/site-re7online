@@ -10,6 +10,7 @@ export type ClientFeatureKey =
   | "scheduling"
   | "schedulingReminders"
   | "schedulingRemindersShadow"
+  | "schedulingRemindersSend"
   | "schedulingConfirmation"
   | "satisfaction"
   | "webchat"
@@ -35,6 +36,7 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   scheduling: false,
   schedulingReminders: false,
   schedulingRemindersShadow: false,
+  schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
   webchat: false,
@@ -57,6 +59,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   scheduling: false,
   schedulingReminders: false,
   schedulingRemindersShadow: false,
+  schedulingRemindersSend: false,
   schedulingConfirmation: false,
   satisfaction: false,
   webchat: false,
@@ -105,6 +108,8 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     schedulingReminders: normalizeFeatureValue(input.schedulingReminders) ?? defaults.schedulingReminders,
     schedulingRemindersShadow:
       normalizeFeatureValue(input.schedulingRemindersShadow) ?? defaults.schedulingRemindersShadow,
+    schedulingRemindersSend:
+      normalizeFeatureValue(input.schedulingRemindersSend) ?? defaults.schedulingRemindersSend,
     schedulingConfirmation:
       normalizeFeatureValue(input.schedulingConfirmation) ?? defaults.schedulingConfirmation,
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
