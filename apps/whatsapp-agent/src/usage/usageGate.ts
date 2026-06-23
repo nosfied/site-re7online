@@ -32,6 +32,13 @@ function getMonthRangeUtc(now: Date) {
   return { from, to, period };
 }
 
+function maskWaId(value: string | undefined) {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length <= 4) return "***";
+  return `***${digits.slice(-4)}`;
+}
+
 export async function checkUsageGate(params: UsageGateParams): Promise<UsageGateResult> {
   const prisma = getPrisma();
   const tenant = await getTenant(params.clientKey);
@@ -82,7 +89,7 @@ export async function checkUsageGate(params: UsageGateParams): Promise<UsageGate
       messagesSent,
       messagesLimit,
       requestId: params.requestId,
-      waId: params.waId ?? null,
+      waId: maskWaId(params.waId),
     });
     return {
       allowed: false,
@@ -112,7 +119,7 @@ export async function checkUsageGate(params: UsageGateParams): Promise<UsageGate
     templatesSent,
     messagesLimit,
     requestId: params.requestId,
-    waId: params.waId ?? null,
+    waId: maskWaId(params.waId),
   });
 
   return {
