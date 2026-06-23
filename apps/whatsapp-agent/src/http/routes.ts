@@ -171,6 +171,13 @@ import {
   upsertWebchatSettings,
 } from "../webchat/webchatService.js";
 import {
+  createTelegramAccount,
+  getTelegramDiagnostics,
+  listTelegramAccounts,
+  rotateTelegramToken,
+  updateTelegramAccount,
+} from "../telegram/telegramService.js";
+import {
   createWebchatSession,
   restoreWebchatSession,
 } from "../webchat/webchatSessionService.js";
@@ -5084,6 +5091,121 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       logger.error({
         event: "app.webchat.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  const telegramMatch = pathname.match(/^\/app\/telegram(?:\/bots(?:\/([^/]+)(?:\/(rotate-token|diagnostics))?)?)?$/);
+  if (telegramMatch) {
+    const prisma = getPrisma();
+    const access = await requireTelegramAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    const accountId = telegramMatch[1] ? decodeURIComponent(telegramMatch[1]) : null;
+    const action = telegramMatch[2] as "rotate-token" | "diagnostics" | undefined;
+    try {
+      if (req.method === "GET" && !accountId) {
+        const result = await listTelegramAccounts({ prisma, clientId: access.client.id });
+        json(res, 200, { ok: true, ...result });
+        return;
+      }
+      if (req.method === "POST" && !accountId) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await createTelegramAccount({
+          prisma,
+          clientId: access.client.id,
+          input: body as Record<string, unknown>,
+        });
+        if (!result.ok) {
+          json(res, telegramErrorStatus(result.error), httpError(result.error, "Invalid Telegram payload"));
+          return;
+        }
+        logger.info({
+          event: "telegram.account.created",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          channelAccountId: result.account.id,
+          requestId,
+        });
+        json(res, 201, { ok: true, account: result.account });
+        return;
+      }
+      if (req.method === "PUT" && accountId && !action) {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await updateTelegramAccount({
+          prisma,
+          clientId: access.client.id,
+          accountId,
+          input: body as Record<string, unknown>,
+        });
+        if (!result.ok) {
+          json(res, telegramErrorStatus(result.error), httpError(result.error, "Invalid Telegram payload"));
+          return;
+        }
+        logger.info({
+          event: "telegram.account.updated",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          channelAccountId: result.account.id,
+          requestId,
+        });
+        json(res, 200, { ok: true, account: result.account });
+        return;
+      }
+      if (req.method === "POST" && accountId && action === "rotate-token") {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await rotateTelegramToken({
+          prisma,
+          clientId: access.client.id,
+          accountId,
+          input: body as Record<string, unknown>,
+        });
+        if (!result.ok) {
+          json(res, telegramErrorStatus(result.error), httpError(result.error, "Could not rotate Telegram token"));
+          return;
+        }
+        logger.info({
+          event: "telegram.secret.rotated",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          channelAccountId: result.account.id,
+          requestId,
+        });
+        json(res, 200, { ok: true, account: result.account });
+        return;
+      }
+      if (req.method === "GET" && accountId && action === "diagnostics") {
+        const result = await getTelegramDiagnostics({
+          prisma,
+          clientId: access.client.id,
+          accountId,
+        });
+        if (!result.ok) {
+          json(res, telegramErrorStatus(result.error), httpError(result.error, "Telegram account not found"));
+          return;
+        }
+        json(res, 200, { ok: true, diagnostics: result.diagnostics });
+        return;
+      }
+      json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    } catch (error) {
+      const known = error as { code?: string; message?: string };
+      if (known.code === "P2002") {
+        json(res, 409, httpError("duplicate_telegram_account", "Duplicate Telegram account"));
+        return;
+      }
+      if (known.message === "channel_account_secret_key_missing") {
+        json(res, 500, httpError("channel_account_secret_key_missing", "Telegram token encryption key is not configured"));
+        return;
+      }
+      logger.error({
+        event: "app.telegram.error",
         message: (error as Error).message,
         requestId,
       });
@@ -16651,6 +16773,39 @@ async function requireWebhooksAppAccess(
   return { clientAuth, client };
 }
 
+async function requireTelegramAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage Telegram settings."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "telegram",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
 function schedulingErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
 }
@@ -16704,6 +16859,12 @@ function webchatResponseKey(entity: "sites" | "settings" | "domains") {
 
 function webchatResponseValue(result: Record<string, unknown>) {
   return result.site ?? result.settings ?? result.domain;
+}
+
+function telegramErrorStatus(error: string) {
+  if (error.endsWith("_not_found")) return 404;
+  if (error === "duplicate_telegram_account") return 409;
+  return 400;
 }
 
 function satisfactionErrorStatus(error: string) {

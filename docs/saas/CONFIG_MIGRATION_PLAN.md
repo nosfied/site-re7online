@@ -222,6 +222,22 @@ The command must be part of pre-release for any future tenant config migration. 
 - `ChannelAccount` coverage for tenants that use Messenger/Instagram;
 - JSON fallback intentionally disabled unless rollback is being executed.
 
+## New Channels After DB-Authoritative Runtime
+
+Telegram, designed in Sprint 74B, must not be introduced through `.data/tenants.json`.
+
+When implemented, Telegram should be DB-first from day one:
+
+- `ChannelAccount.channel=telegram`;
+- `ChannelAccount.provider=telegram`;
+- `ChannelAccountAlias` for bot username/id when needed;
+- `ChannelAccountSecret.secretKind=telegramBotToken`;
+- no JSON backfill, because there is no legacy Telegram runtime;
+- feature flags `telegram`, `telegramInbound` and `telegramOutbound` default `false`;
+- rollback through DB flags and feature flags, not JSON edits.
+
+This keeps the completed tenants.json retirement work from regressing when a new channel is added.
+
 ## Documentation To Treat Carefully
 
 Partially current:

@@ -699,6 +699,56 @@ export type AppWebchatAllowedDomainPayload = {
   active?: boolean;
 };
 
+export type AppTelegramAccountStatus = "pending" | "connected" | "disabled" | "error";
+
+export type AppTelegramAccount = {
+  id: string;
+  displayName: string | null;
+  channel: "telegram";
+  provider: "telegram";
+  channelAccountId: string;
+  botUsername: string | null;
+  botId: string | null;
+  webhookStatus: string;
+  tokenConfigured: boolean;
+  tokenStatus: string;
+  enabled: boolean;
+  automationEnabled: boolean;
+  runtimeEnabled: boolean;
+  inboundPersistenceEnabled: boolean;
+  outboundEnabled: boolean;
+  aiEnabled: boolean;
+  handoffEnabled: boolean;
+  status: AppTelegramAccountStatus;
+  aliases: Array<{ alias: string; aliasType: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppTelegramPayload = {
+  accounts: AppTelegramAccount[];
+  diagnostics: {
+    runtimeImplemented: boolean;
+    webhookImplemented: boolean;
+    botApiCallsEnabled: boolean;
+    webhookStatus: string;
+  };
+};
+
+export type AppTelegramAccountPayload = {
+  displayName: string;
+  channelAccountId?: string | null;
+  botUsername?: string | null;
+  botId?: string | null;
+  token?: string | null;
+  enabled?: boolean;
+  runtimeEnabled?: boolean;
+  inboundPersistenceEnabled?: boolean;
+  outboundEnabled?: boolean;
+  handoffEnabled?: boolean;
+  status?: AppTelegramAccountStatus;
+};
+
 export type AppAutomationSettings = {
   disableAutoReply: boolean;
   disableChatbot: boolean;
@@ -2069,6 +2119,58 @@ export async function updateAppWebchatAllowedDomain(
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchAppTelegram(session: AppSession): Promise<{ ok: true } & AppTelegramPayload> {
+  return requestAppJson(session, "/app/telegram");
+}
+
+export async function createAppTelegramAccount(
+  session: AppSession,
+  payload: AppTelegramAccountPayload
+): Promise<{ ok: true; account: AppTelegramAccount }> {
+  return requestAppJson(session, "/app/telegram/bots", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppTelegramAccount(
+  session: AppSession,
+  accountId: string,
+  payload: AppTelegramAccountPayload
+): Promise<{ ok: true; account: AppTelegramAccount }> {
+  return requestAppJson(session, `/app/telegram/bots/${encodeURIComponent(accountId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rotateAppTelegramToken(
+  session: AppSession,
+  accountId: string,
+  token: string
+): Promise<{ ok: true; account: AppTelegramAccount }> {
+  return requestAppJson(session, `/app/telegram/bots/${encodeURIComponent(accountId)}/rotate-token`, {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function fetchAppTelegramDiagnostics(
+  session: AppSession,
+  accountId: string
+): Promise<{
+  ok: true;
+  diagnostics: {
+    account: AppTelegramAccount;
+    webhookImplemented: boolean;
+    botApiCallsEnabled: boolean;
+    runtimeImplemented: boolean;
+    message: string;
+  };
+}> {
+  return requestAppJson(session, `/app/telegram/bots/${encodeURIComponent(accountId)}/diagnostics`);
 }
 
 export async function fetchAppConversationReport(

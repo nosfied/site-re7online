@@ -15,6 +15,9 @@ export type ClientFeatureKey =
   | "satisfaction"
   | "webchat"
   | "webchatOutbound"
+  | "telegram"
+  | "telegramInbound"
+  | "telegramOutbound"
   | "webhooks"
   | "webhookDispatch"
   | "webhookDispatchExecute"
@@ -41,6 +44,9 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   satisfaction: false,
   webchat: false,
   webchatOutbound: false,
+  telegram: false,
+  telegramInbound: false,
+  telegramOutbound: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -64,6 +70,9 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   satisfaction: false,
   webchat: false,
   webchatOutbound: false,
+  telegram: false,
+  telegramInbound: false,
+  telegramOutbound: false,
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
@@ -115,6 +124,9 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     satisfaction: normalizeFeatureValue(input.satisfaction) ?? defaults.satisfaction,
     webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeFeatureValue(input.webchatOutbound) ?? defaults.webchatOutbound,
+    telegram: normalizeFeatureValue(input.telegram) ?? defaults.telegram,
+    telegramInbound: normalizeFeatureValue(input.telegramInbound) ?? defaults.telegramInbound,
+    telegramOutbound: normalizeFeatureValue(input.telegramOutbound) ?? defaults.telegramOutbound,
     webhooks: normalizeFeatureValue(input.webhooks) ?? defaults.webhooks,
     webhookDispatch: normalizeFeatureValue(input.webhookDispatch) ?? defaults.webhookDispatch,
     webhookDispatchExecute:

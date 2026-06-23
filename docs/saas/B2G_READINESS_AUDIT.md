@@ -183,7 +183,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Agendamento | ATENDE PARCIALMENTE | 68% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingRemindersSend`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e envio controlado WhatsApp por CLI | Ainda nao ha scheduler automatico, consumo por chatbot/IA, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71I/71J |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
 | Webchat | ATENDE PARCIALMENTE | 85% | Schema/settings MVP, feature `webchat`, CRUD `/app/webchat`, dominios permitidos, bootstrap de sessao publica, inbound texto persistido no Inbox, outbound humano controlado persistido, polling publico seguro e widget JS minimo embutivel | Refinar widget, roteamento, identificacao, acessibilidade avancada e empacotamento de implantacao por edital | Alto | Medio/alto | Sprint 73K+ |
-| Telegram | NAO ATENDE | 0% | Nao ha adapter/rotas Telegram | Criar canal, token, webhook, outbound, tenant resolution | Alto | Alto | Sprint 76 |
+| Telegram | NAO ATENDE | 15% | Audit/design prontos; schema/settings, token criptografado e `/app/telegram` implementados; nao ha webhook, inbound ou outbound | Criar webhook shadow, inbound, outbound e tenant resolution runtime | Alto | Alto | Sprint 74D+ |
 | Multiagentes IA | ATENDE PARCIALMENTE | 50% | AI profile/config por tenant; POC tem agentes humanos por area | Nao ha 3 agentes IA independentes/especializados com roteamento formal | Alto | Medio/alto | Sprint 71 |
 | POC/demo | ATENDE | 100% | `docs/DEMO_SCRIPT.md`, `seed-demo.mjs`, `demo-prefeitura` | Atualizar POC para requisitos Grupo A e labels municipais | Baixo | Baixo | Sprint 69 |
 
@@ -251,7 +251,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Public API webhooks outbound | Alto se exigido | Medio/alto | Medio | P1 |
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
-| Telegram | Alto se exigido | Alto | Alto | P2 |
+| Telegram | Alto se exigido | Alto | Alto | P2, design concluido |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
 ## O Que Ja Existe Mas Pode Estar Escondido Por Profile/Feature
@@ -369,6 +369,18 @@ Entregas:
 Risco: medio/alto.
 
 ### P2 - Telegram
+
+Status pos-Sprint 74B:
+
+- design tecnico criado em `docs/saas/TELEGRAM_DESIGN.md`;
+- canal alvo definido como `channel=telegram` e `provider=telegram`;
+- MVP definido como atendimento humano 1:1, texto apenas;
+- `ChannelAccount`, `ChannelAccountAlias` e `ChannelAccountSecret` serao reaproveitados;
+- bot token usa `ChannelAccountSecret.secretKind=telegramBotToken`;
+- flags `telegram`, `telegramInbound`, `telegramOutbound`, todas `false` por padrao;
+- `/app/telegram` permite cadastro, ativacao/desativacao, rotacao de token e diagnostico placeholder.
+
+Telegram continua **NAO ATENDE** funcionalmente ate existir inbound/outbound real.
 
 Objetivo: cobrir canal adicional quando edital exigir expressamente.
 

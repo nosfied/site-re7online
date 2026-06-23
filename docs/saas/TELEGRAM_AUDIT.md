@@ -8,7 +8,9 @@ Nao houve alteracao de codigo, banco, migration, runtime, canais, chatbot, IA, A
 
 ## Resumo Executivo
 
-O Converta **nao possui canal Telegram implementado** hoje.
+O Converta **nao possui canal Telegram funcional** hoje.
+
+Atualizacao pos-74C: ja existe fundacao administrativa em `/app/telegram`, usando `ChannelAccount`, `ChannelAccountAlias` e `ChannelAccountSecret.secretKind=telegramBotToken` criptografado. Ainda nao existe webhook, inbound, outbound, Bot API, polling ou integracao com Inbox/timeline.
 
 Nao foram encontrados:
 
@@ -36,7 +38,7 @@ Existe reaproveitamento relevante, mas limitado:
 
 Classificacao atual: **NAO ATENDE**.
 
-Aderencia atual estimada: **0% como Telegram funcional**, **40% como infraestrutura reaproveitavel**.
+Aderencia atual estimada pos-74C: **15% como Telegram funcional/governanca**, **45% como infraestrutura reaproveitavel**.
 
 ## Evidencias No Codigo
 
@@ -421,3 +423,24 @@ Recorte recomendado:
 - definir identidade `from.id/chat.id`;
 - manter feature flag `telegram=false`;
 - nao alterar WhatsApp, Messenger, Instagram, Webchat, IA, chatbot ou Public API existente.
+
+## Status Pos-Sprint 74B
+
+A Sprint 74B criou o desenho tecnico em `docs/saas/TELEGRAM_DESIGN.md`.
+
+Decisoes consolidadas:
+
+- Telegram sera `channel=telegram` e `provider=telegram`;
+- o MVP sera atendimento humano 1:1, texto apenas;
+- grupos, midia, IA/chatbot e automacao ficam fora do primeiro ciclo;
+- bot token deve ficar em `ChannelAccountSecret.secretKind=telegramBotToken`;
+- tenant resolution deve ocorrer por `ChannelAccount`/alias do bot;
+- inbound deve criar `Contact`, `ContactChannelIdentity`, `Conversation channel=telegram` e `InboundMessage`;
+- outbound deve usar Bot API `sendMessage` e persistir `OutboundMessage`;
+- flags futuras: `telegram`, `telegramInbound`, `telegramOutbound`, todas `false` por padrao.
+
+Classificacao apos o design:
+
+- Telegram funcional: **NAO ATENDE**;
+- arquitetura desenhada: **PARCIAL**;
+- proxima etapa segura: **Sprint 74C - Telegram Schema/Settings**.

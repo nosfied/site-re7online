@@ -117,6 +117,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Webchat", government: "Webchat" },
   },
   {
+    href: "/app/telegram",
+    icon: "✈️",
+    group: "operation",
+    feature: "telegram",
+    minRole: "SUPERVISOR",
+    labels: { business: "Telegram", government: "Telegram" },
+  },
+  {
     href: "/app/reports",
     icon: "📈",
     group: "operation",

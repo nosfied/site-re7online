@@ -32,6 +32,15 @@ test("webchat is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).webchatOutbound, false);
 });
 
+test("telegram is disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).telegram, false);
+  assert.equal(getFeatures({ profile: "government" }).telegram, false);
+  assert.equal(getFeatures({ profile: "business" }).telegramInbound, false);
+  assert.equal(getFeatures({ profile: "government" }).telegramInbound, false);
+  assert.equal(getFeatures({ profile: "business" }).telegramOutbound, false);
+  assert.equal(getFeatures({ profile: "government" }).telegramOutbound, false);
+});
+
 test("webhooks is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).webhooks, false);
   assert.equal(getFeatures({ profile: "government" }).webhooks, false);
@@ -82,6 +91,19 @@ test("webchat can be enabled by tenant feature override", () => {
   assert.equal(getFeatures(client).webchatOutbound, true);
   assert.equal(hasFeature(client, "webchat"), true);
   assert.equal(hasFeature(client, "webchatOutbound"), true);
+});
+
+test("telegram can be enabled by tenant feature override", () => {
+  const client = {
+    profile: "government",
+    features: { telegram: true, telegramInbound: true, telegramOutbound: true },
+  };
+  assert.equal(getFeatures(client).telegram, true);
+  assert.equal(getFeatures(client).telegramInbound, true);
+  assert.equal(getFeatures(client).telegramOutbound, true);
+  assert.equal(hasFeature(client, "telegram"), true);
+  assert.equal(hasFeature(client, "telegramInbound"), true);
+  assert.equal(hasFeature(client, "telegramOutbound"), true);
 });
 
 test("webhooks can be enabled by tenant feature override", () => {

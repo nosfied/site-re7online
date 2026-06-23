@@ -6,8 +6,8 @@ Status: current-state documentation based on code inspection. This document does
 
 The Converta channel model uses:
 
-- `channel`: `whatsapp`, `messenger`, `instagram`
-- `provider`: usually `meta`
+- `channel`: currently operational `whatsapp`, `messenger`, `instagram`, plus `webchat` for the Webchat MVP
+- `provider`: usually `meta`; Webchat uses Converta-owned runtime
 - tenant/client identity through `Client`
 - operational records in DB with `channel`, `provider`, `channelAccountId`, `externalUserHash`, `externalUserRef`, `legacyWaId`
 - channel technical configuration in `TenantConfig.channelAccounts` for Messenger and Instagram
@@ -133,6 +133,71 @@ Current Instagram policy:
 - signed Meta webhook
 - alias resolution
 - inbound/outbound services
+
+## Webchat
+
+Webchat is a Converta-owned channel, not a third-party provider integration.
+
+Current Webchat state:
+
+- site/settings/domain configuration in DB;
+- public session bootstrap;
+- inbound visitor message persisted into Inbox/timeline;
+- controlled human outbound persisted in timeline;
+- visitor polling endpoint;
+- minimal embeddable widget;
+- no IA/chatbot integration yet;
+- no media/upload yet;
+- no websocket/SSE yet.
+
+Feature flags:
+
+- `webchat`;
+- `webchatOutbound`.
+
+## Telegram
+
+Telegram has a configuration foundation after Sprint 74C, but no runtime yet. Sprint 74B defines the target design in `docs/saas/TELEGRAM_DESIGN.md`.
+
+Target model:
+
+- `channel=telegram`;
+- `provider=telegram`;
+- bot/account stored as `ChannelAccount`;
+- bot username/id stored as metadata and/or aliases;
+- bot token stored only as encrypted `ChannelAccountSecret.secretKind=telegramBotToken`;
+- inbound through Telegram Bot API webhook in a future sprint;
+- outbound through Bot API `sendMessage`;
+- text-only human 1:1 MVP;
+- no groups, media, IA/chatbot or automation in the first runtime phase.
+
+Feature flags:
+
+- `telegram=false`;
+- `telegramInbound=false`;
+- `telegramOutbound=false`.
+
+Governance requirements before implementation:
+
+- keep all Telegram secrets encrypted and redacted;
+- validate webhook secret token;
+- dedupe by `update_id`;
+- resolve tenant through `ChannelAccount`, never by payload trust alone;
+- keep rollback by flags and account `enabled/runtime/outbound` controls.
+
+Implemented in Sprint 74C:
+
+- tenant-scoped CRUD in `/app/telegram`;
+- bot display name, username/id and status metadata;
+- encrypted token creation/rotation;
+- placeholder diagnostics.
+
+Not implemented:
+
+- webhook registration or validation;
+- Bot API calls;
+- inbound/outbound;
+- Inbox/timeline integration.
 
 ## Shared Governance Requirements
 

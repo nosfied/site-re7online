@@ -17,6 +17,9 @@ export type AppFeatureKey =
   | "satisfaction"
   | "webchat"
   | "webchatOutbound"
+  | "telegram"
+  | "telegramInbound"
+  | "telegramOutbound"
   | "webhooks";
 
 export type FutureAppFeatureKey =
@@ -44,6 +47,9 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   satisfaction: false,
   webchat: false,
   webchatOutbound: false,
+  telegram: false,
+  telegramInbound: false,
+  telegramOutbound: false,
   webhooks: false,
 };
 
@@ -64,6 +70,9 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   satisfaction: false,
   webchat: false,
   webchatOutbound: false,
+  telegram: false,
+  telegramInbound: false,
+  telegramOutbound: false,
   webhooks: false,
 };
 
@@ -114,6 +123,9 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     satisfaction: normalizeBoolean(input.satisfaction) ?? defaults.satisfaction,
     webchat: normalizeBoolean(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeBoolean(input.webchatOutbound) ?? defaults.webchatOutbound,
+    telegram: normalizeBoolean(input.telegram) ?? defaults.telegram,
+    telegramInbound: normalizeBoolean(input.telegramInbound) ?? defaults.telegramInbound,
+    telegramOutbound: normalizeBoolean(input.telegramOutbound) ?? defaults.telegramOutbound,
     webhooks: normalizeBoolean(input.webhooks) ?? defaults.webhooks,
     governmentReports:
       normalizeBoolean(input.governmentReports) ?? DEFAULT_FUTURE_APP_FEATURES.governmentReports,
