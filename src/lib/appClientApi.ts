@@ -675,6 +675,7 @@ export type AppSearchIndex = {
   entityId: string;
   title: string | null;
   body: string | null;
+  snippet: string | null;
   channel: string | null;
   source: string | null;
   language: string | null;
@@ -696,6 +697,8 @@ export type AppSearchPayload = {
     source: string | null;
     language: string | null;
   };
+  mode: "diagnostic" | "runtime";
+  runtimeEnabled: boolean;
 };
 
 export type AppWebchatSiteStatus = "active" | "inactive" | "archived";

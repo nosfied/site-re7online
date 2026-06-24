@@ -2,10 +2,19 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
+const SNIPPET_LENGTH = 280;
+
+export class AdvancedSearchRuntimeDisabledError extends Error {
+  constructor() {
+    super("advanced_search_runtime_disabled");
+    this.name = "AdvancedSearchRuntimeDisabledError";
+  }
+}
 
 export type AdvancedSearchListParams = {
   prisma: PrismaClient;
   clientId: string;
+  runtimeEnabled?: boolean;
   query?: string | null;
   entityType?: string | null;
   channel?: string | null;
@@ -27,6 +36,13 @@ function normalizeLimit(value: number | null | undefined) {
   return Math.min(normalized, MAX_LIMIT);
 }
 
+function buildSnippet(value: string | null | undefined) {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  if (normalized.length <= SNIPPET_LENGTH) return normalized;
+  return `${normalized.slice(0, SNIPPET_LENGTH - 3)}...`;
+}
+
 function serializeIndex(item: {
   id: string;
   entityType: string;
@@ -44,7 +60,8 @@ function serializeIndex(item: {
     entityType: item.entityType,
     entityId: item.entityId,
     title: item.title,
-    body: item.body,
+    body: buildSnippet(item.body),
+    snippet: buildSnippet(item.body),
     channel: item.channel,
     source: item.source,
     language: item.language,
@@ -56,6 +73,9 @@ function serializeIndex(item: {
 export async function listSearchIndexes(params: AdvancedSearchListParams) {
   const limit = normalizeLimit(params.limit);
   const query = normalizeString(params.query);
+  if (query && !params.runtimeEnabled) {
+    throw new AdvancedSearchRuntimeDisabledError();
+  }
   const entityType = normalizeString(params.entityType);
   const channel = normalizeString(params.channel);
   const source = normalizeString(params.source);
@@ -73,7 +93,6 @@ export async function listSearchIndexes(params: AdvancedSearchListParams) {
           OR: [
             { title: { contains: query, mode: "insensitive" } },
             { body: { contains: query, mode: "insensitive" } },
-            { entityId: { contains: query, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -114,5 +133,7 @@ export async function listSearchIndexes(params: AdvancedSearchListParams) {
       source,
       language,
     },
+    mode: query ? "runtime" : "diagnostic",
+    runtimeEnabled: params.runtimeEnabled === true,
   };
 }

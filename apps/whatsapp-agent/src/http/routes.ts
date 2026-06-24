@@ -164,7 +164,10 @@ import {
   updateSatisfactionSurvey,
 } from "../satisfaction/satisfactionService.js";
 import { listAudioTranscriptions } from "../audio/audioTranscriptionService.js";
-import { listSearchIndexes } from "../search/advancedSearchService.js";
+import {
+  AdvancedSearchRuntimeDisabledError,
+  listSearchIndexes,
+} from "../search/advancedSearchService.js";
 import {
   createWebchatAllowedDomain,
   createWebchatSite,
@@ -5449,6 +5452,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         const result = await listSearchIndexes({
           prisma,
           clientId: access.client.id,
+          runtimeEnabled: hasFeature(access.client, "advancedSearchRuntime"),
           query: parsedUrl.searchParams.get("q") ?? parsedUrl.searchParams.get("query"),
           entityType: parsedUrl.searchParams.get("entityType"),
           channel: parsedUrl.searchParams.get("channel"),
@@ -5462,6 +5466,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       json(res, 405, httpError("method_not_allowed", "Method not allowed"));
     } catch (error) {
+      if (error instanceof AdvancedSearchRuntimeDisabledError) {
+        json(
+          res,
+          403,
+          httpError(
+            "advanced_search_runtime_disabled",
+            "Advanced search runtime is disabled for this tenant."
+          )
+        );
+        return;
+      }
       logger.error({
         event: "app.search.error",
         message: (error as Error).message,

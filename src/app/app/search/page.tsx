@@ -22,6 +22,9 @@ function canViewAdvancedSearch(role: string) {
 
 function normalizeError(error: AppApiError) {
   if (error.status === 401) return "Sessao expirada. Faca login novamente.";
+  if (error.errorCode === "advanced_search_runtime_disabled") {
+    return "Busca textual ainda nao esta habilitada para este tenant. A tela permanece em modo diagnostico.";
+  }
   if (error.status === 403 || error.errorCode === "feature_not_enabled") {
     return "Busca avancada nao esta habilitada para este tenant.";
   }
@@ -49,6 +52,8 @@ export default function SearchPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
   const [indexes, setIndexes] = useState<AppSearchIndex[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [runtimeEnabled, setRuntimeEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error), () => setError(null));
@@ -69,7 +74,8 @@ export default function SearchPage() {
   }, [router]);
 
   const loadSearch = useCallback(
-    async (activeSession: AppSession, nextFilters: SearchFilters) => {
+    async (activeSession: AppSession, nextFilters: SearchFilters, cursor: string | null = null) => {
+      const append = Boolean(cursor);
       setLoading(true);
       setError(null);
       try {
@@ -79,16 +85,19 @@ export default function SearchPage() {
           channel: nextFilters.channel,
           source: nextFilters.source,
           language: nextFilters.language,
+          cursor: cursor ?? undefined,
           limit: 50,
         });
-        setIndexes(response.indexes);
+        setRuntimeEnabled(response.runtimeEnabled);
+        setNextCursor(response.pageInfo.nextCursor);
+        setIndexes((current) => (append ? [...current, ...response.indexes] : response.indexes));
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
           handleUnauthorized();
           return;
         }
-        if (typed.status === 403) {
+        if (typed.status === 403 && typed.errorCode !== "advanced_search_runtime_disabled") {
           router.replace("/app/inbox");
           return;
         }
@@ -121,13 +130,18 @@ export default function SearchPage() {
     void loadSearch(session, filters);
   }
 
+  function handleLoadMore() {
+    if (!session || !nextCursor) return;
+    void loadSearch(session, filters, nextCursor);
+  }
+
   if (!session) return null;
 
   return (
     <AppShell
       session={session}
       title="Busca avancada"
-      subtitle="Indice tenant-scoped para a futura busca unificada. Nesta fase, a tela apenas consulta registros existentes."
+      subtitle="Busca tenant-scoped sobre o indice operacional. Sem IA, sem semantica e sem indexacao automatica."
     >
       {error ? <FeedbackToast variant="error" message={error} {...toastHandlers} /> : null}
 
@@ -136,6 +150,13 @@ export default function SearchPage() {
         <Metric label="Entidades" value={stats.entityTypes} />
         <Metric label="Canais" value={stats.channels} />
       </section>
+
+      {!runtimeEnabled ? (
+        <div className="mt-5 rounded-lg border border-amber-300/25 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+          Modo diagnostico ativo. A busca textual sera liberada para tenants piloto; filtros sem texto continuam
+          disponiveis para validacao do indice.
+        </div>
+      ) : null}
 
       <section className="mt-5 rounded-lg border border-white/10 bg-white/[0.03] p-4">
         <form className="grid gap-3 md:grid-cols-6" onSubmit={handleSubmit}>
@@ -183,6 +204,7 @@ export default function SearchPage() {
               type="button"
               onClick={() => {
                 setFilters(initialFilters);
+                setNextCursor(null);
                 void loadSearch(session, initialFilters);
               }}
               className="rounded-md border border-white/15 px-4 py-2 text-sm hover:bg-white/10"
@@ -197,7 +219,7 @@ export default function SearchPage() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">Indice</h2>
-            <p className="mt-1 text-sm theme-muted">Registros criados por pipelines futuros de indexacao.</p>
+            <p className="mt-1 text-sm theme-muted">Resultados do SearchIndex com filtros e snippet limitado.</p>
           </div>
           <button
             type="button"
@@ -244,7 +266,7 @@ export default function SearchPage() {
                     <td className="px-3 py-3">{item.source ?? "Nao definido"}</td>
                     <td className="px-3 py-3">{item.title ?? "Sem titulo"}</td>
                     <td className="max-w-lg px-3 py-3">
-                      <p className="line-clamp-3">{item.body ?? "Sem corpo indexado."}</p>
+                      <p className="line-clamp-3">{item.snippet ?? item.body ?? "Sem corpo indexado."}</p>
                       {item.language ? <p className="mt-1 text-xs theme-muted">{item.language}</p> : null}
                     </td>
                     <td className="px-3 py-3">{formatDateTime(item.createdAt)}</td>
@@ -254,6 +276,17 @@ export default function SearchPage() {
             </tbody>
           </table>
         </div>
+        {nextCursor && !loading ? (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              className="rounded-md border border-white/15 px-4 py-2 text-sm hover:bg-white/10"
+            >
+              Carregar mais
+            </button>
+          </div>
+        ) : null}
       </section>
     </AppShell>
   );

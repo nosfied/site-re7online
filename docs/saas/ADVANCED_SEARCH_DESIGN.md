@@ -8,6 +8,8 @@ Atualizacao Sprint 76B: fundacao formal criada com `SearchIndex`, feature flags 
 
 Atualizacao Sprint 76C: criado indexador shadow manual `npm run search:index-shadow`, com `--tenant`, `--source`, `--limit`, `--record` e `--json`. O comando trabalha em dry-run por padrao, exige `advancedSearch=true`, exige `advancedSearchRuntime=false`, cobre apenas `Conversation`, `InboundMessage` e `OutboundMessage`, e nao altera Inbox, IA, canais ou runtime de busca.
 
+Atualizacao Sprint 76D: criado runtime MVP em `GET /app/search` e tela `/app/search`, usando `SearchIndex` ja populado. Busca textual com `q` exige `advancedSearch=true` e `advancedSearchRuntime=true`; sem runtime, a tela permanece em modo diagnostico sem busca textual. O MVP inclui filtros por entidade, canal, fonte e idioma, paginacao por cursor e snippet limitado. Continua sem IA, sem busca semantica, sem indexacao automatica, sem cron/worker, sem alteracao de Inbox e sem alteracao de canais.
+
 ## Objetivo
 
 Projetar a busca unificada do Converta antes de qualquer implementacao.
@@ -213,7 +215,7 @@ Limites recomendados:
 | --- | --- | --- |
 | 76B - Search Schema + Settings | Criar schema/flags/configuracao do indice | Concluida como fundacao diagnostica, sem runtime de busca. |
 | 76C - Search Shadow | Backfill dry-run/record e comparacao com fontes | Concluida para Conversation, InboundMessage e OutboundMessage, sem runtime. |
-| 76D - Search Runtime MVP | Busca textual interna no `/app` | Inbox/CRM primeiro. |
+| 76D - Search Runtime MVP | Busca textual interna no `/app` | Concluida sobre `SearchIndex`, com filtros, cursor e snippet limitado; sem IA, sem semantica e sem indexacao automatica. |
 | 76E - Search + Audio | Indexar transcricoes concluidas | Depende de 75K/piloto real. |
 | 76F - Search + IA | Consumo supervisionado por IA | Depende de evaluation/replay. |
 

@@ -407,21 +407,26 @@ Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de 
 
 ### P1 - Advanced Search
 
-Status pos-Sprint 76C:
+Status pos-Sprint 76D:
 
 - design tecnico criado em `docs/saas/ADVANCED_SEARCH_DESIGN.md`;
 - fundacao criada com `SearchIndex`, migration `20260624110000_add_advanced_search`, feature `advancedSearch=false`, feature `advancedSearchRuntime=false`, API diagnostica `GET /app/search` e tela `/app/search`;
 - shadow indexer criado com `npm run search:index-shadow`, dry-run default e `--record` opcional;
 - fontes MVP do shadow: `Conversation`, `InboundMessage` e `OutboundMessage`;
+- runtime MVP criado em `GET /app/search` com busca textual simples em `SearchIndex.title/body`;
+- busca textual exige `advancedSearch=true` e `advancedSearchRuntime=true`;
+- quando `advancedSearchRuntime=false`, `/app/search` permanece como diagnostico e bloqueia consultas com `q`;
+- filtros MVP: `entityType`, `channel`, `source`, `language`, `limit` e `cursor`;
+- resultados retornam snippet limitado, sem `rawPayload`, tokens, segredos ou payload de provider;
 - fontes auditadas: `Contact`, `Lead`, `Conversation`, `InboundMessage`, `OutboundMessage`, `Event`, Knowledge Base, Campaign, Scheduling, AudioTranscription e Public API;
 - busca atual e fragmentada: filtros do Inbox, busca local da Knowledge Base, filtros de reports e endpoints read-only da Public API;
 - arquitetura recomendada: PostgreSQL full text com tabela dedicada de indice tenant-scoped;
 - `pg_trgm` e OpenSearch ficam como evolucoes futuras, nao como dependencia inicial;
 - MVP definido: busca textual simples, filtros por canal/periodo/departamento/atendente/status/sourceType e paginacao por cursor;
 - busca semantica, embeddings, IA e indexacao de transcricao ficam fora do MVP inicial;
-- proximo passo recomendado: Sprint 76D, com busca runtime interna controlada, apenas se o shadow estiver consistente.
+- proximo passo recomendado: ampliar indexacao/fontes e preparar integracao operacional mais rica sem ligar IA ou busca semantica.
 
-Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como fundacao governada com shadow**. Continua nao atendendo editais que exijam busca operacional demonstravel, mas o schema, as flags, a tela diagnostica e o indexador shadow reduzem risco de retrabalho e preparam o runtime controlado.
+Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como MVP operacional controlado**. Ja e demonstravel para busca textual simples em indice tenant-scoped, mas ainda nao atende plenamente editais que exijam busca ampla em todos os objetos, experiencia integrada ao Inbox, transcricoes, exportacao avancada ou relevancia semantica.
 
 Risco: medio/alto por isolamento multi-tenant, volume de mensagens, LGPD, retencao e necessidade de nao indexar `rawPayload` ou dados sensiveis indevidos.
 

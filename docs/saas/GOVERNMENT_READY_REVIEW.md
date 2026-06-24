@@ -141,7 +141,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | POC/demo | ATENDE | Alto | `demo-prefeitura`, scripts e documentos existem. Webchat e Telegram podem entrar na POC. |
 | OTP/MFA cidadao | NAO ATENDE | Medio/alto | Nao ha modulo licitatorio de OTP. |
 | Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E, fundacao 75F, shadow pipeline 75G, runtime design 75H, runtime controlado 75I e piloto real 75J desenhado. CLI processa WhatsApp inbound audio manualmente com OpenAI STT, `--dry-run` default, `--execute` explicito e cleanup temporario. Ainda sem audio real validado, cron/worker, busca, IA ou exibicao no Inbox. |
-| Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A, fundacao 76B e shadow 76C criados: `SearchIndex`, flags, API/tela diagnostica `/app/search` e CLI `search:index-shadow`. Ainda sem indexacao automatica, runtime ou busca operacional ampla. |
+| Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A, fundacao 76B, shadow 76C e runtime MVP 76D criados: `SearchIndex`, flags, CLI `search:index-shadow` e busca textual simples em `/app/search`. Ainda sem indexacao automatica, Inbox integrado, IA, busca semantica ou fontes ampliadas. |
 | Storage 600 GB midia | ATENDE COM AJUSTE | Alto em Aripuana | Requer contrato/plano de infra, custo e backup. |
 | HA/carga/observabilidade | ATENDE COM AJUSTE | Alto em editais grandes | Produto opera, mas faltam evidencias formais de carga, HA e runbooks de incidentes. |
 
@@ -336,7 +336,7 @@ Decisao: continua como edital-guia avancado. A distancia caiu com Webchat + Tele
 | Prioridade | Gap | Tipo | Motivo |
 | --- | --- | --- | --- |
 | 1 | NPS/Satisfacao funcional | Funcional | Alto impacto em editais e clientes privados; escopo incremental sobre modulo ja criado. |
-| 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; shadow 76C ja prepara indice manual tenant-scoped. |
+| 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; runtime 76D ja demonstra busca textual simples, mas falta ampliar fontes e integrar melhor a experiencia operacional. |
 | 3 | Escala/observabilidade/HA | Operacional | Necessario para Aripuana/Rio Preto e contratos maiores. |
 | 4 | OTP/MFA cidadao | Funcional | Pode ser bloqueador quando edital exige validacao ativa. |
 | 5 | Dossie licitatorio/atestados/certidoes | Documental | Sem isso, aderencia tecnica nao vira habilitacao real. |

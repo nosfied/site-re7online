@@ -114,6 +114,9 @@ Advanced search:
 - Releases que toquem busca avancada devem manter `advancedSearchRuntime=false` por padrao.
 - `npm run search:index-shadow` deve operar em dry-run por default.
 - `--record` pode criar apenas registros `SearchIndex`; nao deve alterar Inbox, IA, canais ou runtime de busca.
+- Busca textual em `/app/search?q=...` exige `advancedSearchRuntime=true` no tenant piloto.
+- Com `advancedSearchRuntime=false`, `/app/search` deve continuar acessivel em modo diagnostico e bloquear apenas consultas textuais com `q`.
+- O runtime 76D nao pode criar indice automaticamente, nao pode alterar Inbox, nao pode chamar IA e nao pode consultar canais.
 - Smoke recomendado:
 
 ```bash
@@ -122,7 +125,7 @@ npm run search:index-shadow -- --tenant demo-prefeitura --json --record
 ```
 
 - Execute `--record` somente em tenant piloto com `advancedSearch=true` e `advancedSearchRuntime=false`.
-- Busca operacional no `/app` exige sprint propria apos validacao do shadow.
+- Para smoke runtime, habilite temporariamente `advancedSearchRuntime=true`, valide `/app/search` com texto/filtros/paginacao, e retorne a flag para `false` se a busca ainda nao for ficar disponivel para usuarios finais.
 
 ## Frontend
 
