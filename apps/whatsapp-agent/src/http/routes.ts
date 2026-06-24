@@ -123,6 +123,7 @@ import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
 } from "../metrics/conversationMetrics.js";
+import { getMetricsSnapshot, metrics } from "../metrics/internalMetrics.js";
 import {
   getClientProfile,
   getFeatures,
@@ -8577,10 +8578,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (req.method === "GET" && pathname === "/admin/health") {
       try {
         await prisma.$queryRaw`SELECT 1`;
+        metrics.gauge("health.db.status", 1, { module: "admin", status: "ok" });
         json(res, 200, { ok: true, db: true });
       } catch {
+        metrics.gauge("health.db.status", 0, { module: "admin", status: "error" });
         json(res, 200, { ok: true, db: false });
       }
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/ops/metrics") {
+      metrics.counter("ops.metrics.snapshot", {
+        module: "ops",
+        tenantId: adminAuth.clientId ?? "superadmin",
+      });
+      json(res, 200, getMetricsSnapshot());
       return;
     }
 

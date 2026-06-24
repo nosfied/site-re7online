@@ -1,5 +1,6 @@
 import http from "node:http";
 import { handleRequest } from "./routes.js";
+import { classifyMetricModule, metrics, normalizeMetricRoute } from "../metrics/internalMetrics.js";
 
 const ALLOWED_ORIGIN = "http://localhost:3000";
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -20,6 +21,24 @@ function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
 
 export function createServer() {
   return http.createServer((req, res) => {
+    const startedAt = Date.now();
+    const url = req.url ?? "/";
+    const pathname = url.startsWith("http") ? new URL(url).pathname : new URL(url, "http://localhost").pathname;
+    res.once("finish", () => {
+      const labels = {
+        method: req.method ?? "GET",
+        module: classifyMetricModule(pathname),
+        route: normalizeMetricRoute(pathname),
+        statusCode: String(res.statusCode),
+      };
+      metrics.counter("http.requests", labels);
+      if (res.statusCode >= 500) {
+        metrics.counter("http.errors", { ...labels, status: "server_error" });
+      } else if (res.statusCode >= 400) {
+        metrics.counter("http.errors", { ...labels, status: "client_error" });
+      }
+      metrics.timing("http.request.duration", Date.now() - startedAt, labels);
+    });
     applyCors(req, res);
     if (req.method === "OPTIONS") {
       res.writeHead(204);

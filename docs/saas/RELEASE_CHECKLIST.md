@@ -277,6 +277,13 @@ Instagram:
 - Validar apenas se a release tocou Instagram.
 - Nao ativar outbound/flags em smoke sem escopo explicito.
 
+### Metrics Foundation
+
+- `GET /admin/ops/metrics` deve permanecer protegido pelo mesmo fluxo de `/admin/*`.
+- O snapshot de metricas nao deve conter token, secret, cookie, Authorization, telefone, e-mail, waId, transcript, mediaUrl ou raw payload.
+- Smokes de release devem validar `/health`, uma chamada autenticada a `/admin/ops/metrics` e presenca de `http.requests`, `http.request.duration` e `health.db.status` quando houver trafego.
+- Metricas da 78C sao em memoria e podem zerar em reload PM2; nao usar como fonte historica contratual ate sprint de dashboards/exportacao.
+
 ## Pos-Deploy
 
 Verificar:

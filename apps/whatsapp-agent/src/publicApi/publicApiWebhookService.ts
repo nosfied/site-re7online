@@ -4,6 +4,7 @@ import https from "node:https";
 import net from "node:net";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getFeatures } from "../features/clientFeatures.js";
+import { metrics } from "../metrics/internalMetrics.js";
 
 export const PUBLIC_API_WEBHOOK_EVENTS = [
   "contact.created",
@@ -470,7 +471,18 @@ export async function generateWebhookShadowDelivery(params: {
   recordAttempts?: boolean;
   requestId: string;
 }) {
+  metrics.counter("webhook.shadow.requests", {
+    module: "webhook",
+    event: params.eventType,
+    tenantId: params.clientId,
+  });
   if (!isPublicApiWebhookEvent(params.eventType)) {
+    metrics.counter("webhook.shadow.outcomes", {
+      module: "webhook",
+      event: params.eventType,
+      tenantId: params.clientId,
+      status: "denied",
+    });
     await recordWebhookShadowAudit(params.prisma, {
       clientId: params.clientId,
       requestId: `${params.requestId}:webhook-shadow-denied:invalid-event`,
@@ -483,9 +495,16 @@ export async function generateWebhookShadowDelivery(params: {
     where: { id: params.clientId },
     select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
-  if (!client) return { ok: false as const, error: "client_not_found" };
-  if (client.status !== "ACTIVE") return { ok: false as const, error: "client_inactive" };
+  if (!client) {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: params.clientId, status: "denied" });
+    return { ok: false as const, error: "client_not_found" };
+  }
+  if (client.status !== "ACTIVE") {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
+    return { ok: false as const, error: "client_inactive" };
+  }
   if (!getFeatures(client).webhooks) {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookShadowAudit(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-shadow-denied:feature-disabled`,
@@ -503,6 +522,7 @@ export async function generateWebhookShadowDelivery(params: {
         orderBy: { createdAt: "desc" },
       });
   if (!endpoint) {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "skipped" });
     await recordWebhookShadowAudit(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-shadow-skipped:no-endpoint`,
@@ -512,6 +532,7 @@ export async function generateWebhookShadowDelivery(params: {
     return { ok: false as const, error: "webhook_endpoint_not_found" };
   }
   if (!endpoint.active) {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "skipped" });
     await recordWebhookShadowAudit(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-shadow-skipped:inactive-endpoint:${endpoint.id}`,
@@ -528,6 +549,7 @@ export async function generateWebhookShadowDelivery(params: {
     });
   const payloadIssue = assertPublicWebhookPayload(payload);
   if (payloadIssue) {
+    metrics.counter("webhook.shadow.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookShadowAudit(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-shadow-denied:unsafe-payload`,
@@ -583,6 +605,12 @@ export async function generateWebhookShadowDelivery(params: {
       signatureMode,
     },
   });
+  metrics.counter("webhook.shadow.outcomes", {
+    module: "webhook",
+    event: params.eventType,
+    tenantId: client.id,
+    status: params.recordAttempts ? "recorded" : "dry_run",
+  });
   return {
     ok: true as const,
     endpoint: serializeWebhookEndpoint(endpoint),
@@ -614,17 +642,31 @@ export async function dispatchWebhookDelivery(params: {
   httpPost?: typeof postWebhookPayload;
 }) {
   const execute = Boolean(params.execute);
+  metrics.counter("webhook.dispatch.requests", {
+    module: "webhook",
+    event: params.eventType,
+    tenantId: params.clientId,
+    status: execute ? "execute" : "dry_run",
+  });
   if (!isPublicApiWebhookEvent(params.eventType)) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: params.clientId, status: "denied" });
     return { ok: false as const, error: "invalid_event_type" };
   }
   const client = await params.prisma.client.findUnique({
     where: { id: params.clientId },
     select: { id: true, clientKey: true, status: true, features: true, profile: true },
   });
-  if (!client) return { ok: false as const, error: "client_not_found" };
-  if (client.status !== "ACTIVE") return { ok: false as const, error: "client_inactive" };
+  if (!client) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: params.clientId, status: "denied" });
+    return { ok: false as const, error: "client_not_found" };
+  }
+  if (client.status !== "ACTIVE") {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
+    return { ok: false as const, error: "client_inactive" };
+  }
   const features = getFeatures(client);
   if (!features.webhooks || !features.webhookDispatch) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-denied:feature-disabled`,
@@ -634,6 +676,7 @@ export async function dispatchWebhookDelivery(params: {
     return { ok: false as const, error: "feature_disabled" };
   }
   if (execute && !features.webhookDispatchExecute) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-denied:execute-disabled`,
@@ -645,8 +688,12 @@ export async function dispatchWebhookDelivery(params: {
   const endpoint = await params.prisma.webhookEndpoint.findFirst({
     where: { id: params.endpointId, clientId: client.id },
   });
-  if (!endpoint) return { ok: false as const, error: "webhook_endpoint_not_found" };
+  if (!endpoint) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
+    return { ok: false as const, error: "webhook_endpoint_not_found" };
+  }
   if (!endpoint.active) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "skipped" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-skipped:inactive-endpoint:${endpoint.id}`,
@@ -657,6 +704,7 @@ export async function dispatchWebhookDelivery(params: {
   }
   const decryptedSecret = decryptWebhookSigningSecret(endpoint.signingSecretCiphertext);
   if (!decryptedSecret) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "skipped" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-skipped:secret-not-encrypted:${endpoint.id}`,
@@ -667,6 +715,7 @@ export async function dispatchWebhookDelivery(params: {
   }
   const urlResult = validateWebhookEndpointUrl(endpoint.url);
   if (!urlResult.ok) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-skipped:invalid-url:${endpoint.id}`,
@@ -683,6 +732,7 @@ export async function dispatchWebhookDelivery(params: {
     });
   const payloadIssue = assertPublicWebhookPayload(payload);
   if (payloadIssue) {
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "denied" });
     await recordWebhookAuditEvent(params.prisma, {
       clientId: client.id,
       requestId: `${params.requestId}:webhook-dispatch-denied:unsafe-payload:${endpoint.id}`,
@@ -716,6 +766,7 @@ export async function dispatchWebhookDelivery(params: {
         execute: false,
       },
     });
+    metrics.counter("webhook.dispatch.outcomes", { module: "webhook", event: params.eventType, tenantId: client.id, status: "dry_run" });
     return {
       ok: true as const,
       executed: false,
@@ -795,6 +846,18 @@ export async function dispatchWebhookDelivery(params: {
       errorCode: dispatchResult.ok ? null : dispatchResult.errorCode,
       redirected: dispatchResult.redirected ?? false,
     },
+  });
+  metrics.counter("webhook.dispatch.outcomes", {
+    module: "webhook",
+    event: params.eventType,
+    tenantId: client.id,
+    status,
+  });
+  metrics.timing("webhook.dispatch.duration", dispatchResult.durationMs, {
+    module: "webhook",
+    event: params.eventType,
+    tenantId: client.id,
+    status,
   });
   return {
     ok: true as const,

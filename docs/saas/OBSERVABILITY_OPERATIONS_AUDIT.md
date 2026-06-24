@@ -66,8 +66,8 @@ Arquivos e areas observadas:
 | Request correlation | ATENDE COM AJUSTE | `requestId`, `correlationId` e `tenantId` sao normalizados no logger central; `tenantId` cai para `clientId` quando necessario | nem todos os endpoints e CLIs garantem correlacao uniforme com canal/provider/duration | Medio | 78C |
 | Auditoria | ATENDE COM AJUSTE | `Event` tenant-scoped, eventos por canais, MFA, webhooks, search, audio, scheduling | falta tela/relatorio formal de auditoria operacional para cliente e operador interno | Medio/alto | 78E |
 | Metricas de atendimento/SLA | ATENDE | `ConversationMetrics`, `SLAConfig`, reports/dashboard, breach logs | precisa consolidar visao operacional por tenant/canal/atendente | Medio | 78E |
-| Metricas tecnicas | ATENDE COM AJUSTE | `/admin/metrics`, scripts de summary, events e contadores ad hoc | nao ha Prometheus/OpenTelemetry/endpoint padronizado nem series historicas tecnicas | Alto | 78C |
-| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio/alto | 78C |
+| Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing`, snapshot `/admin/ops/metrics`, request count/duration/error por modulo/rota, gauges de health e contadores de webhooks | ainda nao ha historico persistente, Prometheus/OpenTelemetry, alertas ou dashboard visual | Medio/alto | 78D/78E |
+| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime e alimenta gauges internos `health.db.status` e `process.uptime.seconds` | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio | 78D |
 | Monitoramento PM2 | ATENDE COM AJUSTE | `ecosystem.config.cjs`, autorestart, max memory 300M, runbooks com `pm2 logs/status` | sem alertas automaticos de memoria/CPU/restart/disk; instancia unica | Alto | 78D/78F |
 | Deploy | ATENDE COM AJUSTE | `deploy-vps.sh`, migrate/build/reload/health, checklist e deploy controlado | script padrao roda build frontend/backend; VPS exige builds sequenciais; rollback ainda manual | Medio | 78B |
 | Rollback | ATENDE COM AJUSTE | feature flags e runbooks; rollback por flag em modulos sensiveis | rollback de migration/restore nao e exercitado automaticamente; sem playbook por severidade | Medio/alto | 78B/78F |
@@ -359,6 +359,8 @@ Resultado esperado:
 
 - capacidade de diagnostico sem depender apenas de logs manuais.
 
+Status: implementado como fundacao interna em memoria. Foram criados `metrics.counter`, `metrics.gauge`, `metrics.timing`, sanitizacao de labels, endpoint protegido `GET /admin/ops/metrics`, instrumentacao HTTP por rota/modulo/status/duracao, gauges de health/db e contadores de webhook shadow/dispatch. Documento oficial: `docs/saas/METRICS_FOUNDATION.md`.
+
 ### 78D - Observability Runtime
 
 Objetivo:
@@ -405,7 +407,7 @@ Resultado esperado:
 ## Ordem Otima
 
 1. **78B Logging Hardening**: reduz risco imediato de LGPD/secrets.
-2. **78C Metrics Foundation**: cria medicao objetiva antes de dashboards.
+2. **78C Metrics Foundation**: implementada com metricas internas e endpoint diagnostico protegido.
 3. **78D Observability Runtime**: adiciona correlacao/tracing/alertas.
 4. **78E Dashboards**: transforma dados em operacao e prova licitatoria.
 5. **78F HA / Scale**: prepara Aripuana/Rio Preto e contratos grandes.
