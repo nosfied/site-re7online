@@ -854,6 +854,29 @@ export type AppAutomationSettings = {
   intentClassifierLocked?: boolean;
 };
 
+export type AppMfaStatus = {
+  featureEnabled: boolean;
+  required: boolean;
+  enforced: boolean;
+  enrolled: boolean;
+  enabled: boolean;
+  enrolledAt: string | null;
+  lastUsedAt: string | null;
+  recoveryCodes: {
+    configured: boolean;
+    total: number;
+    unused: number;
+  };
+};
+
+export type AppMfaProvisioning = {
+  type: "totp";
+  issuer: string;
+  accountName: string;
+  otpauthUrl: string;
+  secret: string;
+};
+
 export type HandoffLeadNotificationRecipient = {
   id: string;
   waId: string;
@@ -1778,6 +1801,19 @@ export function rotateAppWebhookEndpointSecret(
   endpointId: string
 ): Promise<AppWebhookEndpointCreateResponse> {
   return requestAppJson(session, `/app/webhooks/${encodeURIComponent(endpointId)}/rotate-secret`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function fetchAppMfaStatus(session: AppSession): Promise<{ ok: true; status: AppMfaStatus }> {
+  return requestAppJson(session, "/app/mfa");
+}
+
+export function startAppMfaEnrollment(
+  session: AppSession
+): Promise<{ ok: true; status: AppMfaStatus; provisioning: AppMfaProvisioning; message: string }> {
+  return requestAppJson(session, "/app/mfa/enrollment", {
     method: "POST",
     body: JSON.stringify({}),
   });

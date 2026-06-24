@@ -109,6 +109,7 @@ import {
   revokeAppSession,
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
+import { getMfaStatus, startMfaEnrollment } from "../auth/mfaService.js";
 import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
@@ -1580,6 +1581,78 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       return;
     }
+  }
+
+  if (pathname === "/app/mfa") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "GET") {
+      try {
+        const result = await getMfaStatus({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+        });
+        if (!result.ok) {
+          json(res, mfaErrorStatus(result.error), httpError(result.error, "MFA is not available."));
+          return;
+        }
+        json(res, 200, { ok: true, status: result.status });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.status.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
+  }
+
+  if (pathname === "/app/mfa/enrollment") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "POST") {
+      try {
+        const result = await startMfaEnrollment({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, mfaErrorStatus(result.error), httpError(result.error, "Could not start MFA enrollment."));
+          return;
+        }
+        json(res, 201, {
+          ok: true,
+          status: result.status,
+          provisioning: result.provisioning,
+          message: "Guarde ou escaneie este segredo agora. Ele nao sera exibido novamente apos o enrollment.",
+        });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.enrollment.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
   }
 
   const webhookEndpointMatch = pathname.match(/^\/app\/webhooks\/([^/]+)$/);
@@ -17043,6 +17116,39 @@ async function requireWebhooksAppAccess(
   return { clientAuth, client };
 }
 
+async function requireMfaAppAccess(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requestId: string,
+  endpoint: string
+) {
+  const prisma = getPrisma();
+  const clientAuth = requireClientAuth(req, res);
+  if (!clientAuth) return null;
+  if (isAgentRole(clientAuth.role)) {
+    json(res, 403, httpError("forbidden", "Only supervisor or admin can manage MFA settings."));
+    return null;
+  }
+  const client = await getScopedClientById(prisma, clientAuth.clientId);
+  if (!client) {
+    json(res, 404, httpError("client_not_found", "Client not found"));
+    return null;
+  }
+  if (client.status !== "ACTIVE") {
+    json(res, 403, httpError("client_inactive", "Client inactive"));
+    return null;
+  }
+  const enabled = await enforceAppFeature(prisma, res, {
+    client,
+    userId: clientAuth.userId,
+    feature: "mfa",
+    endpoint,
+    requestId,
+  });
+  if (!enabled) return null;
+  return { clientAuth, client };
+}
+
 async function requireTelegramAppAccess(
   req: IncomingMessage,
   res: ServerResponse,
@@ -17078,6 +17184,14 @@ async function requireTelegramAppAccess(
 
 function schedulingErrorStatus(error: string) {
   return error.endsWith("_not_found") ? 404 : 400;
+}
+
+function mfaErrorStatus(error: string) {
+  if (error === "forbidden") return 403;
+  if (error === "user_not_found") return 404;
+  if (error === "client_inactive" || error === "mfa_feature_disabled") return 403;
+  if (error === "mfa_secret_encryption_key_missing_or_weak") return 500;
+  return 400;
 }
 
 function schedulingResponseKey(entity: "services" | "resources" | "availabilities" | "appointments" | "reminders") {

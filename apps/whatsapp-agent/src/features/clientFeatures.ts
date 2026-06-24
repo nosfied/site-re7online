@@ -25,6 +25,9 @@ export type ClientFeatureKey =
   | "webhooks"
   | "webhookDispatch"
   | "webhookDispatchExecute"
+  | "mfa"
+  | "mfaRequired"
+  | "mfaEnforced"
   | "sla";
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
@@ -58,6 +61,9 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
+  mfa: false,
+  mfaRequired: false,
+  mfaEnforced: false,
 };
 
 export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
@@ -88,6 +94,9 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   webhooks: false,
   webhookDispatch: false,
   webhookDispatchExecute: false,
+  mfa: false,
+  mfaRequired: false,
+  mfaEnforced: false,
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
@@ -150,6 +159,9 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
     webhookDispatch: normalizeFeatureValue(input.webhookDispatch) ?? defaults.webhookDispatch,
     webhookDispatchExecute:
       normalizeFeatureValue(input.webhookDispatchExecute) ?? defaults.webhookDispatchExecute,
+    mfa: normalizeFeatureValue(input.mfa) ?? defaults.mfa,
+    mfaRequired: normalizeFeatureValue(input.mfaRequired) ?? defaults.mfaRequired,
+    mfaEnforced: normalizeFeatureValue(input.mfaEnforced) ?? defaults.mfaEnforced,
   };
 }
 

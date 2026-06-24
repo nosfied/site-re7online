@@ -35,6 +35,7 @@ Este review consolida o estado atual documentado em:
 - `docs/saas/AUDIO_TRANSCRIPTION_CONTROLLED_RUNTIME_DESIGN.md`;
 - `docs/saas/AUDIO_TRANSCRIPTION_REAL_MEDIA_PILOT_DESIGN.md`;
 - `docs/saas/ADVANCED_SEARCH_DESIGN.md`;
+- `docs/saas/MFA_OTP_DESIGN.md`;
 - `docs/saas/CHANNELS_GOVERNANCE.md`;
 - `docs/saas/PRODUCT_MAP_CURRENT.md`.
 
@@ -84,7 +85,7 @@ Estado consolidado atual:
 | Editais multicanal avancados | 75% | 79% | +4 pp |
 | Aderencia consolidada ponderada | 84% | 86% | +2 pp |
 
-Leitura executiva: a evolucao principal esta em editais multicanal, porque agora a demonstracao pode cobrir Meta + Webchat + Telegram. A aderencia ainda nao chega a plena para editais avancados por causa de OTP/MFA, transcricao, busca avancada, NPS operacional completo, escala/HA e provas documentais.
+Leitura executiva: a evolucao principal esta em editais multicanal, porque agora a demonstracao pode cobrir Meta + Webchat + Telegram. A aderencia ainda nao chega a plena para editais avancados por causa de MFA/OTP operacional, transcricao, busca avancada, NPS operacional completo, escala/HA e provas documentais.
 
 ## Aderencia Atual Por Edital
 
@@ -94,7 +95,7 @@ Leitura executiva: a evolucao principal esta em editais multicanal, porque agora
 | Aripuana/MT | ATENDE COM AJUSTE | 77% | 79% | +2 pp | Telegram reduz risco multicanal, mas escala, storage 600 GB, prova de 400 usuarios, 30 numeros WhatsApp, HA e possivel mobile nativo seguem sensiveis. |
 | Cabreuva/SP | ATENDE COM AJUSTE | 88% | 89% | +1 pp | Forte para atendimento WhatsApp, setores, dashboard/SLA, relatorios, API read-only, POC, Webchat e Telegram texto se exigido. |
 | Quatro Barras/PR | ATENDE COM AJUSTE | 87% | 88% | +1 pp | Bom alvo para WhatsApp/SLA/relatorios/POC. Webchat e Telegram reduzem risco multicanal; NPS automatico ainda e condicional. |
-| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 79% | 82% | +3 pp | Maior ganho relativo, pois o edital-guia avancado valoriza multicanal. Telegram texto humano melhora a leitura, mas ainda pode bloquear por OTP, NPS automatico, transcricao, busca avancada, escala e multiagentes IA formais. |
+| Sao Jose do Rio Preto/SP | ATENDE COM AJUSTE | 79% | 82% | +3 pp | Maior ganho relativo, pois o edital-guia avancado valoriza multicanal. Telegram texto humano melhora a leitura, mas ainda pode bloquear por MFA/OTP operacional, NPS automatico, transcricao, busca avancada, escala e multiagentes IA formais. |
 
 ## Impacto Especifico Do Telegram
 
@@ -139,7 +140,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | LGPD/retencao | ATENDE | Alto | Retencao/anonymizacao/documentacao. |
 | Auditoria/logs | ATENDE COM AJUSTE | Medio/alto | Eventos/logs existem; falta tela/relatorio formal de auditoria para cliente. |
 | POC/demo | ATENDE | Alto | `demo-prefeitura`, scripts e documentos existem. Webchat e Telegram podem entrar na POC. |
-| OTP/MFA cidadao | NAO ATENDE | Medio/alto | Nao ha modulo licitatorio de OTP. |
+| OTP/MFA | ATENDE COM AJUSTE | Medio/alto | Sprint 77A desenha MFA/TOTP e Sprint 77B cria schema/settings/enrollment para usuarios internos. Ainda nao ha validacao de codigo, enforcement no login nem OTP cidadao. |
 | Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E, fundacao 75F, shadow pipeline 75G, runtime design 75H, runtime controlado 75I e piloto real 75J desenhado. CLI processa WhatsApp inbound audio manualmente com OpenAI STT, `--dry-run` default, `--execute` explicito e cleanup temporario. Sprint 76E indexa transcricoes `completed` no SearchIndex. Ainda sem audio real validado, cron/worker, IA ou exibicao no Inbox. |
 | Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A, fundacao 76B, shadow 76C, runtime MVP 76D e audio indexing 76E criados: `SearchIndex`, flags, CLI `search:index-shadow`, `search:index-audio` e busca textual simples em `/app/search`. Ainda sem indexacao automatica, Inbox integrado, IA, busca semantica ou fontes ampliadas. |
 | Storage 600 GB midia | ATENDE COM AJUSTE | Alto em Aripuana | Requer contrato/plano de infra, custo e backup. |
@@ -164,7 +165,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | --- | --- | --- | --- |
 | Transcricao de audio | Runtime controlado/manual criado; piloto real desenhado | Medio/alto quando TR exige acessibilidade/registro integral | Proxima etapa: Sprint 75K com 1 a 3 audios reais controlados; busca/exibicao no Inbox somente depois. |
 | Busca avancada | Shadow criado, sem runtime | Medio/alto para auditoria e ouvidoria | Proxima etapa: Sprint 76D com busca interna controlada, se shadow estiver consistente. |
-| OTP/MFA cidadao | Nao implementado | Alto se edital exigir validacao ativa de usuario | Sprint especifica de autenticacao/OTP. |
+| MFA operador / OTP cidadao | MFA estrutural criado; OTP cidadao nao implementado | Alto se edital exigir autenticacao reforcada | Proxima etapa: 77C TOTP shadow e 77D runtime MFA. OTP cidadao deve ser sprint separada se TR exigir. |
 | NPS refinado | Estrutural | Alto quando pesquisa pos-atendimento e exigida | Disparo, link publico, coleta externa e relatorio NPS/CSAT. |
 | Scheduling refinado | Parcial operacional | Alto em editais com agenda/lembrete | Scheduler controlado, confirmacao/cancelamento e relatorio. |
 | Telegram avancado | Texto-only | Medio se TR exigir midia/grupos | Midia/grupos somente se edital exigir. |
@@ -249,7 +250,7 @@ Gaps principais:
 - escala 400 usuarios e 30 WhatsApps precisa prova;
 - 600 GB midia requer plano de storage;
 - app mobile nativo pode ser problema se PWA nao bastar;
-- OTP/MFA nao funcional;
+- MFA/OTP sem enforcement; Sprint 77B criou schema/settings/enrollment, mas ainda nao ha validacao de codigo ou OTP cidadao;
 - ambiente EAD nao existe;
 - HA/carga/documentacao operacional.
 
@@ -323,7 +324,7 @@ Gaps principais:
 
 - NPS funcional;
 - multiagentes IA formais;
-- OTP/MFA;
+- MFA/OTP: schema/settings prontos para usuarios internos; sem runtime/enforcement e sem OTP cidadao;
 - API publica com webhooks automaticos/escrita, se exigido;
 - transcricao/busca avancada;
 - escala/HA/documentacao operacional;
@@ -338,7 +339,7 @@ Decisao: continua como edital-guia avancado. A distancia caiu com Webchat + Tele
 | 1 | NPS/Satisfacao funcional | Funcional | Alto impacto em editais e clientes privados; escopo incremental sobre modulo ja criado. |
 | 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; runtime 76D ja demonstra busca textual simples, mas falta ampliar fontes e integrar melhor a experiencia operacional. |
 | 3 | Escala/observabilidade/HA | Operacional | Necessario para Aripuana/Rio Preto e contratos maiores. |
-| 4 | OTP/MFA cidadao | Funcional | Pode ser bloqueador quando edital exige validacao ativa. |
+| 4 | MFA operador / OTP cidadao | Funcional | MFA interno tem fundacao estrutural na 77B; ainda pode bloquear quando edital exige enforcement real ou OTP cidadao. |
 | 5 | Dossie licitatorio/atestados/certidoes | Documental | Sem isso, aderencia tecnica nao vira habilitacao real. |
 
 Itens seguintes:
@@ -353,7 +354,7 @@ Itens seguintes:
 1. **NPS operacional**: disparo por encerramento, link publico, resposta anonima/identificada e dashboard NPS/CSAT.
 2. **Busca avancada + transcricao**: shadow/backfill de busca por texto/canal/contato/setor/periodo e, depois, indexacao de transcricoes concluidas.
 3. **Observabilidade/escala**: benchmark, dashboards de latencia, provider errors, filas, storage e plano HA/RTO/RPO.
-4. **OTP/MFA**: desenho e MVP para validacao de cidadao quando edital exigir.
+4. **MFA/OTP**: concluir TOTP shadow/runtime para usuarios internos; tratar OTP cidadao em sprint separada quando edital exigir.
 5. **Pacote de habilitacao**: matriz edital-item, evidencias, prints, runbook de POC, certidoes e atestados.
 
 ## Recomendacao Final

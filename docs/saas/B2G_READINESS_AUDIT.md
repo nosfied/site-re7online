@@ -33,7 +33,7 @@ Pontuacao usada na leitura percentual consolidada:
 
 O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP, Telegram texto humano e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio em escala, busca avancada operacional e API publica com escrita/webhooks automaticos.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, MFA/OTP operacional, transcricao de audio em escala, busca avancada operacional e API publica com escrita/webhooks automaticos.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -141,6 +141,16 @@ Fonte: `apps/whatsapp-agent/src/features/clientFeatures.ts`.
 | `webhookDispatch` | Dispatch manual Webhooks | off | off | Media/alta, piloto controlado |
 | `webhookDispatchExecute` | Execucao real Webhooks | off | off | Alta sensibilidade; manter desligado por padrao |
 
+### Flags de autenticacao planejadas
+
+A Sprint 77A desenhou, mas ainda nao implementou, as flags:
+
+| Flag | Modulo | Default recomendado | Utilidade B2G |
+| --- | --- | ---: | --- |
+| `mfa` | MFA/TOTP usuarios internos | off | Alta para acesso administrativo seguro |
+| `mfaRequired` | Obrigatoriedade MFA | off | Alta para tenants governamentais em rollout |
+| `mfaEnforced` | Enforcement de login MFA | off | Alta sensibilidade; ligar apenas apos shadow/recovery |
+
 ### Flags frontend futuras/reservadas
 
 Fonte: `src/lib/appFeatures.ts`.
@@ -161,7 +171,7 @@ Ainda nao existem flags oficiais para:
 - auditoria;
 - LGPD/retencao;
 - multiagentes IA;
-- OTP;
+- MFA/OTP;
 - transcricao de audio;
 - busca avancada operacional.
 
@@ -188,6 +198,7 @@ Parte desses modulos existe sem flag dedicada; outros nao existem.
 | Exportacao Excel/CSV | ATENDE PARCIALMENTE | 50% | Exportacao CSV/text em relatorios | Excel/XLSX nativo nao evidenciado | Medio | Baixo | Sprint 69 |
 | LGPD/retencao | ATENDE | 100% | `RetentionConfig`, privacy settings, delete/anonymize | Documentar politica por contrato publico | Baixo | Baixo | Sprint 69 |
 | Auditoria/logs | ATENDE PARCIALMENTE | 50% | `Event`, logs estruturados, eventos de feature denied/conversa | Falta tela/relatorio de auditoria formal para cliente | Medio | Medio | Sprint 70 |
+| MFA/OTP | ATENDE PARCIALMENTE | 35% | Sprint 77A desenha MFA/TOTP e Sprint 77B cria `MfaTotpSecret`, `MfaRecoveryCode`, flags `mfa`/`mfaRequired`/`mfaEnforced`, endpoint `/app/mfa`, enrollment TOTP criptografado e tela `/app/settings/security` | Ainda nao ha validacao de codigo, desafio no login, enforcement, recovery codes reais nem OTP cidadao | Medio/alto | Medio | Sprint 77C/77D/77E |
 | API para integracao externa | ATENDE PARCIALMENTE | 85% | `/public-api/v1` com API keys tenant-scoped, scopes, rate limit, auditoria, health autenticado, OpenAPI, contatos, conversas e mensagens read-only; webhooks com cadastro, segredo criptografado, rotacao, shadow e dispatch controlado | Falta acoplar webhooks automaticamente a eventos reais, escrita controlada e envio por API | Alto | Medio/alto | Sprint 70L+ |
 | Agendamento | ATENDE PARCIALMENTE | 68% | `SchedulingService`, `SchedulingResource`, `SchedulingAvailability`, `Appointment`, `AppointmentReminder`, feature `scheduling`, CRUD `/app/scheduling`, flags `schedulingReminders`/`schedulingRemindersShadow`/`schedulingRemindersSend`/`schedulingConfirmation`, CRUD manual de lembretes, elegibilidade shadow tenant-scoped e envio controlado WhatsApp por CLI | Ainda nao ha scheduler automatico, consumo por chatbot/IA, Google Calendar, API publica ou regras avancadas de conflito de agenda | Alto | Medio/alto | Sprint 71I/71J |
 | NPS/pesquisa satisfacao | ATENDE PARCIALMENTE | 55% | `SatisfactionQuestion`, `SatisfactionSurvey`, `SatisfactionResponse`, feature `satisfaction`, CRUD `/app/satisfaction` tenant-scoped | Ainda nao ha disparo automatico pos-atendimento, link publico, chatbot/IA, relatorio NPS/CSAT ou dashboard | Alto | Medio | Sprint 72D/72E |
@@ -209,7 +220,7 @@ Sem os TRs completos versionados, a estimativa abaixo considera padroes recorren
 | Aripuana/MT | Atendimento digital municipal com POC | 79% | POC demo ajuda; escala, storage, mobile nativo e HA continuam sensiveis. |
 | Conselheiro Lafaiete/MG | Atendimento multissetorial e governanca | 84% | Precisa reforcar NPS funcional, transcricao/busca e documentos. |
 | Quatro Barras/PR | Atendimento e relatorios | 88% | Aderente para WhatsApp/SLA/filas; Webchat e Telegram reduzem risco multicanal. |
-| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 82% | Webchat, API, Telegram texto humano e modulos estruturais melhoraram; OTP, NPS automatico e busca/transcricao ainda reduzem aderencia. |
+| Sao Jose do Rio Preto/SP | Edital-guia avancado, multicanal e recursos amplos | 82% | Webchat, API, Telegram texto humano e modulos estruturais melhoraram; MFA/OTP, NPS automatico e busca/transcricao ainda reduzem aderencia. |
 
 ## Documentacao Existente Reaproveitavel
 
@@ -263,7 +274,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, shadow pipeline criado; falta runtime/STT/busca |
 | Busca avancada | Medio/alto para auditoria/ouvidoria | Medio/alto | Medio | P1, shadow criado; falta runtime operacional |
 | Telegram avancado | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado; midia/grupos se exigidos |
-| OTP/MFA | Medio | Medio | Medio | P2 |
+| MFA/OTP | Medio/alto | Medio | Medio | P2 |
 
 ## O Que Ja Existe Mas Pode Estar Escondido Por Profile/Feature
 
@@ -477,4 +488,4 @@ Ordem recomendada:
 5. refinar Webchat para identificacao/roteamento/acessibilidade;
 6. completar hardening Telegram apenas se o edital-alvo exigir expressamente.
 
-Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP, Telegram texto humano controlado e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram avancado se exigido, OTP, transcricao operacional, busca avancada operacional, webhooks Public API automaticos e multiagentes IA antes de afirmar aderencia plena.
+Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP, Telegram texto humano controlado e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram avancado se exigido, MFA/OTP operacional, transcricao operacional, busca avancada operacional, webhooks Public API automaticos e multiagentes IA antes de afirmar aderencia plena.

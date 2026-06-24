@@ -64,6 +64,15 @@ test("webhooks is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "government" }).webhookDispatchExecute, false);
 });
 
+test("mfa is disabled by default for controlled rollout", () => {
+  assert.equal(getFeatures({ profile: "business" }).mfa, false);
+  assert.equal(getFeatures({ profile: "government" }).mfa, false);
+  assert.equal(getFeatures({ profile: "business" }).mfaRequired, false);
+  assert.equal(getFeatures({ profile: "government" }).mfaRequired, false);
+  assert.equal(getFeatures({ profile: "business" }).mfaEnforced, false);
+  assert.equal(getFeatures({ profile: "government" }).mfaEnforced, false);
+});
+
 test("knowledgeBase can be enabled by tenant feature override", () => {
   const client = { profile: "business", features: { knowledgeBase: true } };
   assert.equal(getFeatures(client).knowledgeBase, true);
@@ -153,4 +162,17 @@ test("webhooks can be enabled by tenant feature override", () => {
   assert.equal(hasFeature(client, "webhooks"), true);
   assert.equal(hasFeature(client, "webhookDispatch"), true);
   assert.equal(hasFeature(client, "webhookDispatchExecute"), true);
+});
+
+test("mfa can be enabled by tenant feature override", () => {
+  const client = {
+    profile: "government",
+    features: { mfa: true, mfaRequired: true, mfaEnforced: true },
+  };
+  assert.equal(getFeatures(client).mfa, true);
+  assert.equal(getFeatures(client).mfaRequired, true);
+  assert.equal(getFeatures(client).mfaEnforced, true);
+  assert.equal(hasFeature(client, "mfa"), true);
+  assert.equal(hasFeature(client, "mfaRequired"), true);
+  assert.equal(hasFeature(client, "mfaEnforced"), true);
 });

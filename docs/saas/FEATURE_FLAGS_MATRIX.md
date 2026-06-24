@@ -34,6 +34,16 @@ Status: current-state documentation based on code inspection. This file does not
 | `advancedSearch` | false | false | controlled rollout via `Client.features` | yes, advanced search diagnostic route | yes |
 | `advancedSearchRuntime` | false | false | controlled rollout via `Client.features` | reserved for future search runtime/indexer | no runtime yet |
 | `webchat` | false | false | controlled rollout via `Client.features` | yes, webchat settings routes | yes |
+| `webchatOutbound` | false | false | controlled rollout via `Client.features` | yes, webchat outbound guard | yes |
+| `telegram` | false | false | controlled rollout via `Client.features` | yes, Telegram settings/webhook routes | yes |
+| `telegramInbound` | false | false | controlled rollout via `Client.features` | yes, Telegram inbound guard | no separate customer UI |
+| `telegramOutbound` | false | false | controlled rollout via `Client.features` | yes, Telegram outbound guard | no separate customer UI |
+| `webhooks` | false | false | controlled rollout via `Client.features` | yes, webhook endpoint routes | yes |
+| `webhookDispatch` | false | false | controlled rollout via `Client.features` | CLI/manual dispatch guard | no customer execution UI |
+| `webhookDispatchExecute` | false | false | controlled rollout via `Client.features` | real dispatch execution guard | no customer execution UI |
+| `mfa` | false | false | controlled rollout via `Client.features` | yes, `/app/mfa` and enrollment route | yes |
+| `mfaRequired` | false | false | controlled rollout via `Client.features` | no login runtime yet; policy flag reserved | visible in MFA status |
+| `mfaEnforced` | false | false | controlled rollout via `Client.features` | no login runtime yet; enforcement reserved | visible in MFA status |
 
 ## Frontend-Only/Future Flags
 
@@ -59,3 +69,4 @@ These are typed in the frontend feature model but are not part of backend `Clien
 - Backend and frontend currently duplicate the default matrix in separate files.
 - Any new production feature flag must be added to both backend and frontend definitions unless a shared package is introduced later.
 - Tenant-level automation flags in `tenants.json` are not the same as `Client.features`; they are operational configuration, not module availability.
+- MFA flags are structural in Sprint 77B. They do not change `/auth/login`, JWT issuance or `AppAuthSession` behavior until a future runtime sprint.

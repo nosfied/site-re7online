@@ -24,7 +24,10 @@ export type AppFeatureKey =
   | "telegram"
   | "telegramInbound"
   | "telegramOutbound"
-  | "webhooks";
+  | "webhooks"
+  | "mfa"
+  | "mfaRequired"
+  | "mfaEnforced";
 
 export type FutureAppFeatureKey =
   | "governmentReports"
@@ -59,6 +62,9 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   telegramInbound: false,
   telegramOutbound: false,
   webhooks: false,
+  mfa: false,
+  mfaRequired: false,
+  mfaEnforced: false,
 };
 
 export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
@@ -86,6 +92,9 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   telegramInbound: false,
   telegramOutbound: false,
   webhooks: false,
+  mfa: false,
+  mfaRequired: false,
+  mfaEnforced: false,
 };
 
 export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> = {
@@ -145,6 +154,9 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     telegramInbound: normalizeBoolean(input.telegramInbound) ?? defaults.telegramInbound,
     telegramOutbound: normalizeBoolean(input.telegramOutbound) ?? defaults.telegramOutbound,
     webhooks: normalizeBoolean(input.webhooks) ?? defaults.webhooks,
+    mfa: normalizeBoolean(input.mfa) ?? defaults.mfa,
+    mfaRequired: normalizeBoolean(input.mfaRequired) ?? defaults.mfaRequired,
+    mfaEnforced: normalizeBoolean(input.mfaEnforced) ?? defaults.mfaEnforced,
     governmentReports:
       normalizeBoolean(input.governmentReports) ?? DEFAULT_FUTURE_APP_FEATURES.governmentReports,
     poc: normalizeBoolean(input.poc) ?? DEFAULT_FUTURE_APP_FEATURES.poc,
