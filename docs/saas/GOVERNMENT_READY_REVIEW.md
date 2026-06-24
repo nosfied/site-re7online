@@ -141,7 +141,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | POC/demo | ATENDE | Alto | `demo-prefeitura`, scripts e documentos existem. Webchat e Telegram podem entrar na POC. |
 | OTP/MFA cidadao | NAO ATENDE | Medio/alto | Nao ha modulo licitatorio de OTP. |
 | Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E, fundacao 75F, shadow pipeline 75G, runtime design 75H, runtime controlado 75I e piloto real 75J desenhado. CLI processa WhatsApp inbound audio manualmente com OpenAI STT, `--dry-run` default, `--execute` explicito e cleanup temporario. Ainda sem audio real validado, cron/worker, busca, IA ou exibicao no Inbox. |
-| Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A e fundacao 76B criados: `SearchIndex`, flags `advancedSearch`/`advancedSearchRuntime`, API/tela diagnostica `/app/search`. Ainda sem indexacao automatica, shadow, runtime ou busca operacional. |
+| Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A, fundacao 76B e shadow 76C criados: `SearchIndex`, flags, API/tela diagnostica `/app/search` e CLI `search:index-shadow`. Ainda sem indexacao automatica, runtime ou busca operacional ampla. |
 | Storage 600 GB midia | ATENDE COM AJUSTE | Alto em Aripuana | Requer contrato/plano de infra, custo e backup. |
 | HA/carga/observabilidade | ATENDE COM AJUSTE | Alto em editais grandes | Produto opera, mas faltam evidencias formais de carga, HA e runbooks de incidentes. |
 
@@ -163,7 +163,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | Gap | Status | Impacto | Proxima acao |
 | --- | --- | --- | --- |
 | Transcricao de audio | Runtime controlado/manual criado; piloto real desenhado | Medio/alto quando TR exige acessibilidade/registro integral | Proxima etapa: Sprint 75K com 1 a 3 audios reais controlados; busca/exibicao no Inbox somente depois. |
-| Busca avancada | Fundacao criada, sem runtime | Medio/alto para auditoria e ouvidoria | Proxima etapa: Sprint 76C com shadow/backfill de indice tenant-scoped, ainda sem busca operacional ampla. |
+| Busca avancada | Shadow criado, sem runtime | Medio/alto para auditoria e ouvidoria | Proxima etapa: Sprint 76D com busca interna controlada, se shadow estiver consistente. |
 | OTP/MFA cidadao | Nao implementado | Alto se edital exigir validacao ativa de usuario | Sprint especifica de autenticacao/OTP. |
 | NPS refinado | Estrutural | Alto quando pesquisa pos-atendimento e exigida | Disparo, link publico, coleta externa e relatorio NPS/CSAT. |
 | Scheduling refinado | Parcial operacional | Alto em editais com agenda/lembrete | Scheduler controlado, confirmacao/cancelamento e relatorio. |
@@ -336,7 +336,7 @@ Decisao: continua como edital-guia avancado. A distancia caiu com Webchat + Tele
 | Prioridade | Gap | Tipo | Motivo |
 | --- | --- | --- | --- |
 | 1 | NPS/Satisfacao funcional | Funcional | Alto impacto em editais e clientes privados; escopo incremental sobre modulo ja criado. |
-| 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; schema 76B ja prepara indice dedicado tenant-scoped. |
+| 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; shadow 76C ja prepara indice manual tenant-scoped. |
 | 3 | Escala/observabilidade/HA | Operacional | Necessario para Aripuana/Rio Preto e contratos maiores. |
 | 4 | OTP/MFA cidadao | Funcional | Pode ser bloqueador quando edital exige validacao ativa. |
 | 5 | Dossie licitatorio/atestados/certidoes | Documental | Sem isso, aderencia tecnica nao vira habilitacao real. |

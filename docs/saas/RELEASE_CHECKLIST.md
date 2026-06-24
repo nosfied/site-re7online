@@ -109,6 +109,21 @@ npm run audio-transcriptions:process -- --tenant demo-prefeitura --message <mess
 - Piloto com midia real deve seguir `docs/saas/AUDIO_TRANSCRIPTION_REAL_MEDIA_PILOT_DESIGN.md`: audio autorizado, ate 3 audios iniciais, ate 60 segundos por audio, `messageId` explicito, revisao de logs, cleanup confirmado e `audioTranscriptionRuntime=false` ao final.
 - Processamento real de audio exige provider aprovado, politica LGPD/retencao, limpeza de arquivo temporario e rollback por flag.
 
+Advanced search:
+
+- Releases que toquem busca avancada devem manter `advancedSearchRuntime=false` por padrao.
+- `npm run search:index-shadow` deve operar em dry-run por default.
+- `--record` pode criar apenas registros `SearchIndex`; nao deve alterar Inbox, IA, canais ou runtime de busca.
+- Smoke recomendado:
+
+```bash
+npm run search:index-shadow -- --tenant demo-prefeitura --json
+npm run search:index-shadow -- --tenant demo-prefeitura --json --record
+```
+
+- Execute `--record` somente em tenant piloto com `advancedSearch=true` e `advancedSearchRuntime=false`.
+- Busca operacional no `/app` exige sprint propria apos validacao do shadow.
+
 ## Frontend
 
 Diretorio raiz do repo:

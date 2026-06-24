@@ -42,6 +42,7 @@
     "scheduling-reminders:send": "node --import tsx scripts/run-scheduling-reminders-send.ts",
     "audio-transcriptions:shadow": "node --import tsx scripts/audio-transcriptions-shadow.ts",
     "audio-transcriptions:process": "node --import tsx scripts/audio-transcriptions-process.ts",
+    "search:index-shadow": "node --import tsx scripts/search-index-shadow.ts",
     "webhooks:shadow": "node --import tsx scripts/webhooks-shadow.ts",
     "webhooks:dispatch": "node --import tsx scripts/webhooks-dispatch.ts",
     "demo:seed": "node scripts/seed-demo.mjs",

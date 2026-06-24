@@ -261,7 +261,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
 | Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, shadow pipeline criado; falta runtime/STT/busca |
-| Busca avancada | Medio/alto para auditoria/ouvidoria | Medio/alto | Medio | P1, schema/settings criado; falta shadow/indexacao/runtime |
+| Busca avancada | Medio/alto para auditoria/ouvidoria | Medio/alto | Medio | P1, shadow criado; falta runtime operacional |
 | Telegram avancado | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado; midia/grupos se exigidos |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
@@ -407,19 +407,21 @@ Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de 
 
 ### P1 - Advanced Search
 
-Status pos-Sprint 76B:
+Status pos-Sprint 76C:
 
 - design tecnico criado em `docs/saas/ADVANCED_SEARCH_DESIGN.md`;
 - fundacao criada com `SearchIndex`, migration `20260624110000_add_advanced_search`, feature `advancedSearch=false`, feature `advancedSearchRuntime=false`, API diagnostica `GET /app/search` e tela `/app/search`;
+- shadow indexer criado com `npm run search:index-shadow`, dry-run default e `--record` opcional;
+- fontes MVP do shadow: `Conversation`, `InboundMessage` e `OutboundMessage`;
 - fontes auditadas: `Contact`, `Lead`, `Conversation`, `InboundMessage`, `OutboundMessage`, `Event`, Knowledge Base, Campaign, Scheduling, AudioTranscription e Public API;
 - busca atual e fragmentada: filtros do Inbox, busca local da Knowledge Base, filtros de reports e endpoints read-only da Public API;
 - arquitetura recomendada: PostgreSQL full text com tabela dedicada de indice tenant-scoped;
 - `pg_trgm` e OpenSearch ficam como evolucoes futuras, nao como dependencia inicial;
 - MVP definido: busca textual simples, filtros por canal/periodo/departamento/atendente/status/sourceType e paginacao por cursor;
 - busca semantica, embeddings, IA e indexacao de transcricao ficam fora do MVP inicial;
-- proximo passo recomendado: Sprint 76C, com shadow/backfill de indice e feature desligada por padrao.
+- proximo passo recomendado: Sprint 76D, com busca runtime interna controlada, apenas se o shadow estiver consistente.
 
-Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como fundacao governada**. Continua nao atendendo editais que exijam busca operacional demonstravel, mas o schema, as flags e a tela diagnostica reduzem risco de retrabalho e preparam a indexacao shadow.
+Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como fundacao governada com shadow**. Continua nao atendendo editais que exijam busca operacional demonstravel, mas o schema, as flags, a tela diagnostica e o indexador shadow reduzem risco de retrabalho e preparam o runtime controlado.
 
 Risco: medio/alto por isolamento multi-tenant, volume de mensagens, LGPD, retencao e necessidade de nao indexar `rawPayload` ou dados sensiveis indevidos.
 
