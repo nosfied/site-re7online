@@ -91,13 +91,22 @@ Audio transcription:
 - Releases que toquem transcricao devem manter `audioTranscriptionRuntime=false` por padrao.
 - `npm run audio-transcriptions:shadow` deve operar em dry-run por default.
 - `--record` pode criar apenas registros `shadow/skipped`; nao deve baixar midia, chamar provider STT ou gerar transcript real.
+- Processamento real usa CLI manual `npm run audio-transcriptions:process`, com `--dry-run` default e `--execute` explicito.
+- Antes de executar provider, confirmar custo vigente, DPA/LGPD, `OPENAI_API_KEY`, limites por tenant e rollback por `audioTranscriptionRuntime=false`.
 - Smoke recomendado:
 
 ```bash
 npm run audio-transcriptions:shadow -- --tenant demo-prefeitura --json
+npm run audio-transcriptions:process -- --tenant demo-prefeitura --json
 ```
 
-- Processamento real de audio exige sprint propria, provider aprovado, politica LGPD/retencao e rollback por flag.
+- Execute real deve ser feito apenas em tenant piloto:
+
+```bash
+npm run audio-transcriptions:process -- --tenant demo-prefeitura --message <messageId> --execute --json
+```
+
+- Processamento real de audio exige provider aprovado, politica LGPD/retencao, limpeza de arquivo temporario e rollback por flag.
 
 ## Frontend
 

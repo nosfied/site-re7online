@@ -4,7 +4,7 @@ Data: 2026-06-23
 
 Status: design concluido, sem implementacao.
 
-Escopo: projetar o modulo futuro de transcricao de audio do Converta e registrar a fundacao criada na Sprint 75F. Ainda nao existe runtime, provider STT, download automatico, job real, integracao externa ou consumo por IA/busca.
+Escopo: projetar o modulo futuro de transcricao de audio do Converta e registrar a fundacao criada nas Sprints 75F, 75G, 75H e 75I. O runtime controlado/manual existe; ainda nao ha processamento automatico, cron, worker permanente, busca, consumo por IA ou exibicao no Inbox.
 
 Nao houve alteracao de codigo, banco, migration, runtime, canais, IA, chatbot, Inbox ou integracao externa nesta sprint.
 
@@ -28,8 +28,11 @@ O que nao existe hoje:
 
 - entidade formal de transcricao: **criada na Sprint 75F**;
 - job/queue estrutural de transcricao: **criada na Sprint 75F**, sem processamento real;
-- provider de speech-to-text;
-- download controlado para transcricao;
+- shadow pipeline de elegibilidade: **criado na Sprint 75G**, sem download/provider/transcript;
+- design de runtime controlado: **criado na Sprint 75H** em `docs/saas/AUDIO_TRANSCRIPTION_CONTROLLED_RUNTIME_DESIGN.md`;
+- runtime controlado/manual: **criado na Sprint 75I** com CLI `npm run audio-transcriptions:process`;
+- provider de speech-to-text ativo apenas em modo manual/piloto com `--execute` e `OPENAI_API_KEY`;
+- download controlado implementado para transcricao manual;
 - indice de busca sobre transcript;
 - UI no Inbox para mostrar transcript;
 - permissao/retencao especifica para transcript;
@@ -387,20 +390,51 @@ Status: implementada como pipeline shadow/manual.
 - nao gera transcript real;
 - mede volume/custo estimado por candidatos e razoes de skip.
 
-### Sprint 75H - Controlled Runtime
+### Sprint 75H - Controlled Runtime Design
+
+Status: design concluido, sem implementacao.
+
+- documento criado em `docs/saas/AUDIO_TRANSCRIPTION_CONTROLLED_RUNTIME_DESIGN.md`;
+- provider MVP recomendado: OpenAI Speech-to-Text;
+- runtime futuro por CLI manual `audio-transcriptions:process`;
+- `--dry-run` default e `--execute` explicito;
+- WhatsApp inbound audio apenas;
+- limites iniciais: 15 MB, 5 minutos, baixa concorrencia, limite diario por tenant;
+- arquivo temporario em `/tmp/converta/audio-transcriptions`, com limpeza obrigatoria;
+- rollback por `audioTranscriptionRuntime=false`;
+- sem codigo, banco, provider, download real, transcript real, busca, IA ou alteracao de canais.
+
+### Sprint 75I - Controlled Runtime MVP
+
+Status: implementada como runtime manual/piloto.
 
 - download controlado de audio WhatsApp;
-- provider configurado em ambiente;
-- processamento manual/piloto;
-- transcript no Inbox;
+- provider OpenAI Speech-to-Text configurado por `OPENAI_API_KEY`;
+- CLI `npm run audio-transcriptions:process`;
+- `--dry-run` default;
+- `--execute` explicito;
+- tenant obrigatorio;
+- processamento manual/piloto, sem cron/worker;
+- transcript persistido;
+- `AudioTranscription.status=processing|completed|failed|skipped`;
+- `AudioTranscriptionJob.status=processing|completed|failed`;
+- cleanup obrigatorio de arquivo temporario;
+- testes com provider mockado;
 - sem busca ainda.
 
-### Sprint 75I - Search Integration
+### Sprint 75J - Search Integration
 
 - criar indice de busca;
 - indexar transcripts completos;
 - UI de busca por conversa/mensagem;
 - filtros por canal, departamento, periodo e contato.
+
+### Sprint 75K - AI Integration
+
+- consumo de transcript por IA somente com flag dedicada;
+- resumo/classificacao;
+- evaluation com casos de audio;
+- sugestao de FAQ/KB apenas com revisao humana.
 
 ## Impacto Nos Editais
 
@@ -414,13 +448,14 @@ Status: implementada como pipeline shadow/manual.
 
 ## Veredito
 
-Transcricao de audio deve ser implementada depois de designar explicitamente provider, custo, retencao e limites por tenant.
+Transcricao de audio deve ser implementada depois de validar explicitamente provider, custo, retencao e limites por tenant no pre-release da Sprint 75I.
 
 MVP recomendado:
 
 1. WhatsApp inbound audio apenas.
 2. Shadow/dry-run antes de provider externo.
-3. Transcript exibido no Inbox.
-4. Busca somente em sprint posterior.
+3. Runtime controlado por CLI, sem cron/worker.
+4. Transcript persistido antes de entrar no Inbox.
+5. Busca somente em sprint posterior.
 
 Confirmacao: esta sprint nao alterou codigo, banco, runtime, IA, chatbot, canais ou integracoes externas.

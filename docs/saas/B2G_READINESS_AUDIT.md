@@ -383,13 +383,18 @@ Status pos-Sprint 75F:
 - design tecnico criado em `docs/saas/AUDIO_TRANSCRIPTION_DESIGN.md`;
 - fundacao criada com `AudioTranscription`, `AudioTranscriptionJob`, feature `audioTranscription=false`, feature `audioTranscriptionRuntime=false` e tela `/app/audio-transcriptions`;
 - shadow pipeline criado com `npm run audio-transcriptions:shadow`, dry-run default e `--record` opcional para registros `shadow/skipped`;
+- runtime controlado desenhado em `docs/saas/AUDIO_TRANSCRIPTION_CONTROLLED_RUNTIME_DESIGN.md`;
+- provider MVP recomendado: OpenAI Speech-to-Text, condicionado a pre-release de custo/LGPD e chave segura;
+- runtime controlado implementado com `npm run audio-transcriptions:process`, `--dry-run` default e `--execute` explicito;
+- download temporario WhatsApp e cleanup obrigatorio implementados para modo manual/piloto;
+- transcript real pode ser persistido em `AudioTranscription` quando `audioTranscriptionRuntime=true` e `OPENAI_API_KEY` estiver configurada;
 - reaproveitamento identificado: `MessageType.AUDIO`, `InboundMessage`, `OutboundMessage`, timeline do Inbox, endpoint de media e CRM timeline;
 - MVP recomendado: WhatsApp inbound audio apenas;
 - flags atuais: `audioTranscription`, `audioTranscriptionRuntime`, ambas `false` por padrao;
 - flags futuras propostas: `audioTranscriptionShadow`, `audioTranscriptionSearch`, ambas `false` por padrao quando implementadas;
-- roadmap definido: runtime controlado e busca.
+- roadmap definido: busca 75J e consumo IA 75K.
 
-Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao operacional real com processamento STT, exibicao de transcript no Inbox e busca. O design, o schema e o shadow reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
+Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao automatica em escala, exibicao no Inbox e busca avancada. O design, o schema, o shadow e o runtime controlado reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
 
 Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de dados sensiveis.
 
