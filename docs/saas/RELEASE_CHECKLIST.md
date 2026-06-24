@@ -106,6 +106,7 @@ npm run audio-transcriptions:process -- --tenant demo-prefeitura --json
 npm run audio-transcriptions:process -- --tenant demo-prefeitura --message <messageId> --execute --json
 ```
 
+- Piloto com midia real deve seguir `docs/saas/AUDIO_TRANSCRIPTION_REAL_MEDIA_PILOT_DESIGN.md`: audio autorizado, ate 3 audios iniciais, ate 60 segundos por audio, `messageId` explicito, revisao de logs, cleanup confirmado e `audioTranscriptionRuntime=false` ao final.
 - Processamento real de audio exige provider aprovado, politica LGPD/retencao, limpeza de arquivo temporario e rollback por flag.
 
 ## Frontend

@@ -117,6 +117,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Transcricoes", government: "Transcricoes" },
   },
   {
+    href: "/app/search",
+    icon: "🔎",
+    group: "operation",
+    feature: "advancedSearch",
+    minRole: "SUPERVISOR",
+    labels: { business: "Busca", government: "Busca" },
+  },
+  {
     href: "/app/webchat",
     icon: "💬",
     group: "operation",

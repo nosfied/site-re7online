@@ -669,6 +669,35 @@ export type AppAudioTranscriptionsPayload = {
   jobs: AppAudioTranscriptionJob[];
 };
 
+export type AppSearchIndex = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  title: string | null;
+  body: string | null;
+  channel: string | null;
+  source: string | null;
+  language: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppSearchPayload = {
+  indexes: AppSearchIndex[];
+  pageInfo: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
+  filters: {
+    query: string | null;
+    entityType: string | null;
+    channel: string | null;
+    source: string | null;
+    language: string | null;
+  };
+};
+
 export type AppWebchatSiteStatus = "active" | "inactive" | "archived";
 
 export type AppWebchatSite = {
@@ -2100,6 +2129,32 @@ export async function fetchAppAudioTranscriptions(
   session: AppSession
 ): Promise<{ ok: true } & AppAudioTranscriptionsPayload> {
   return requestAppJson(session, "/app/audio-transcriptions");
+}
+
+export async function fetchAppSearch(
+  session: AppSession,
+  filters: {
+    query?: string;
+    entityType?: string;
+    channel?: string;
+    source?: string;
+    language?: string;
+    cursor?: string;
+    limit?: number;
+  } = {}
+): Promise<{ ok: true } & AppSearchPayload> {
+  const params = new URLSearchParams();
+  if (filters.query?.trim()) params.set("q", filters.query.trim());
+  if (filters.entityType?.trim()) params.set("entityType", filters.entityType.trim());
+  if (filters.channel?.trim()) params.set("channel", filters.channel.trim());
+  if (filters.source?.trim()) params.set("source", filters.source.trim());
+  if (filters.language?.trim()) params.set("language", filters.language.trim());
+  if (filters.cursor?.trim()) params.set("cursor", filters.cursor.trim());
+  if (typeof filters.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.trunc(filters.limit)));
+  }
+  const query = params.toString();
+  return requestAppJson(session, `/app/search${query ? `?${query}` : ""}`);
 }
 
 export async function fetchAppWebchat(session: AppSession): Promise<{ ok: true } & AppWebchatPayload> {

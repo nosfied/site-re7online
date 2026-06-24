@@ -31,6 +31,8 @@ Status: current-state documentation based on code inspection. This file does not
 | `satisfaction` | false | false | controlled rollout via `Client.features` | yes, satisfaction routes | yes |
 | `audioTranscription` | false | false | controlled rollout via `Client.features` | yes, audio transcription read route | yes |
 | `audioTranscriptionRuntime` | false | false | controlled rollout via `Client.features` | reserved for future STT runtime | no runtime yet |
+| `advancedSearch` | false | false | controlled rollout via `Client.features` | yes, advanced search diagnostic route | yes |
+| `advancedSearchRuntime` | false | false | controlled rollout via `Client.features` | reserved for future search runtime/indexer | no runtime yet |
 | `webchat` | false | false | controlled rollout via `Client.features` | yes, webchat settings routes | yes |
 
 ## Frontend-Only/Future Flags

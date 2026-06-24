@@ -15,6 +15,8 @@ export type ClientFeatureKey =
   | "satisfaction"
   | "audioTranscription"
   | "audioTranscriptionRuntime"
+  | "advancedSearch"
+  | "advancedSearchRuntime"
   | "webchat"
   | "webchatOutbound"
   | "telegram"
@@ -46,6 +48,8 @@ export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   satisfaction: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
+  advancedSearch: false,
+  advancedSearchRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -74,6 +78,8 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
   satisfaction: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
+  advancedSearch: false,
+  advancedSearchRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -132,6 +138,9 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
       normalizeFeatureValue(input.audioTranscription) ?? defaults.audioTranscription,
     audioTranscriptionRuntime:
       normalizeFeatureValue(input.audioTranscriptionRuntime) ?? defaults.audioTranscriptionRuntime,
+    advancedSearch: normalizeFeatureValue(input.advancedSearch) ?? defaults.advancedSearch,
+    advancedSearchRuntime:
+      normalizeFeatureValue(input.advancedSearchRuntime) ?? defaults.advancedSearchRuntime,
     webchat: normalizeFeatureValue(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeFeatureValue(input.webchatOutbound) ?? defaults.webchatOutbound,
     telegram: normalizeFeatureValue(input.telegram) ?? defaults.telegram,

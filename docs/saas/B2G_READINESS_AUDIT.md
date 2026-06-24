@@ -33,7 +33,7 @@ Pontuacao usada na leitura percentual consolidada:
 
 O Converta esta forte para editais cujo nucleo seja WhatsApp Oficial, atendimento humano multiatendente, filas/setores, chatbot configuravel, IA supervisionada, relatorios, SLA, dashboard operacional, LGPD/retencao, Public API read-only, Webchat MVP, Telegram texto humano e POC controlada.
 
-O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio e API publica com escrita/webhooks.
+O produto ainda nao atende de forma plena editais que exijam canais adicionais avancados fora da Meta ou recursos tipicos de plataforma municipal mais ampla, como Telegram com midia/grupos/automacao, Webchat avancado com roteamento/identificacao/realtime, NPS com disparo automatico/relatorios consolidados, agendamento integrado ao chatbot, OTP, transcricao de audio em escala, busca avancada operacional e API publica com escrita/webhooks automaticos.
 
 O projeto ja possui uma base importante para B2G:
 
@@ -128,6 +128,10 @@ Fonte: `apps/whatsapp-agent/src/features/clientFeatures.ts`.
 | `schedulingRemindersSend` | Envio controlado de lembretes | off | off | Media/alta, piloto manual sem cron |
 | `schedulingConfirmation` | Confirmacao de agendamento | off | off | Media, reservado |
 | `satisfaction` | NPS/Satisfacao | off | off | Alta, rollout controlado |
+| `audioTranscription` | Transcricao de audio | off | off | Media/alta, rollout controlado |
+| `audioTranscriptionRuntime` | Runtime de transcricao | off | off | Alta sensibilidade; manter desligado por padrao |
+| `advancedSearch` | Busca avancada | off | off | Media/alta, rollout controlado |
+| `advancedSearchRuntime` | Runtime de busca | off | off | Alta sensibilidade; manter desligado por padrao |
 | `webchat` | Webchat | off | off | Alta quando edital exigir canal web |
 | `webchatOutbound` | Resposta humana Webchat | off | off | Alta quando Webchat estiver habilitado |
 | `telegram` | Telegram | off | off | Alta quando edital exigir canal adicional |
@@ -159,7 +163,7 @@ Ainda nao existem flags oficiais para:
 - multiagentes IA;
 - OTP;
 - transcricao de audio;
-- busca avancada.
+- busca avancada operacional.
 
 Parte desses modulos existe sem flag dedicada; outros nao existem.
 
@@ -257,6 +261,7 @@ Conforme `DOCUMENTATION_INDEX.md`, estes documentos sao historicos ou parcialmen
 | Webchat refinado para edital/POC | Alto se exigido | Medio | Medio | P1 |
 | Multiagentes IA / base de conhecimento runtime | Alto em editais com IA | Alto | Medio/alto | P1 |
 | Transcricao de audio | Medio/alto se exigida | Alto | Medio/alto | P1, shadow pipeline criado; falta runtime/STT/busca |
+| Busca avancada | Medio/alto para auditoria/ouvidoria | Medio/alto | Medio | P1, schema/settings criado; falta shadow/indexacao/runtime |
 | Telegram avancado | Medio/alto se exigido | Alto | Medio/alto | P2, texto humano controlado; midia/grupos se exigidos |
 | OTP/MFA | Medio | Medio | Medio | P2 |
 
@@ -388,15 +393,35 @@ Status pos-Sprint 75F:
 - runtime controlado implementado com `npm run audio-transcriptions:process`, `--dry-run` default e `--execute` explicito;
 - download temporario WhatsApp e cleanup obrigatorio implementados para modo manual/piloto;
 - transcript real pode ser persistido em `AudioTranscription` quando `audioTranscriptionRuntime=true` e `OPENAI_API_KEY` estiver configurada;
+- piloto com midia real desenhado em `docs/saas/AUDIO_TRANSCRIPTION_REAL_MEDIA_PILOT_DESIGN.md`;
+- proximo passo recomendado: executar apenas 1 a 3 audios reais controlados, com consentimento, custo monitorado e runtime desligado ao final;
 - reaproveitamento identificado: `MessageType.AUDIO`, `InboundMessage`, `OutboundMessage`, timeline do Inbox, endpoint de media e CRM timeline;
 - MVP recomendado: WhatsApp inbound audio apenas;
 - flags atuais: `audioTranscription`, `audioTranscriptionRuntime`, ambas `false` por padrao;
 - flags futuras propostas: `audioTranscriptionShadow`, `audioTranscriptionSearch`, ambas `false` por padrao quando implementadas;
-- roadmap definido: busca 75J e consumo IA 75K.
+- roadmap definido: piloto real 75K, busca 75L e consumo IA 75M.
 
-Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao automatica em escala, exibicao no Inbox e busca avancada. O design, o schema, o shadow e o runtime controlado reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
+Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao automatica em escala, exibicao no Inbox e busca avancada. O design, o schema, o shadow, o runtime controlado e o plano de piloto real reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
 
 Risco: medio/alto por LGPD, custo de provider, retencao e possivel exposicao de dados sensiveis.
+
+### P1 - Advanced Search
+
+Status pos-Sprint 76B:
+
+- design tecnico criado em `docs/saas/ADVANCED_SEARCH_DESIGN.md`;
+- fundacao criada com `SearchIndex`, migration `20260624110000_add_advanced_search`, feature `advancedSearch=false`, feature `advancedSearchRuntime=false`, API diagnostica `GET /app/search` e tela `/app/search`;
+- fontes auditadas: `Contact`, `Lead`, `Conversation`, `InboundMessage`, `OutboundMessage`, `Event`, Knowledge Base, Campaign, Scheduling, AudioTranscription e Public API;
+- busca atual e fragmentada: filtros do Inbox, busca local da Knowledge Base, filtros de reports e endpoints read-only da Public API;
+- arquitetura recomendada: PostgreSQL full text com tabela dedicada de indice tenant-scoped;
+- `pg_trgm` e OpenSearch ficam como evolucoes futuras, nao como dependencia inicial;
+- MVP definido: busca textual simples, filtros por canal/periodo/departamento/atendente/status/sourceType e paginacao por cursor;
+- busca semantica, embeddings, IA e indexacao de transcricao ficam fora do MVP inicial;
+- proximo passo recomendado: Sprint 76C, com shadow/backfill de indice e feature desligada por padrao.
+
+Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como fundacao governada**. Continua nao atendendo editais que exijam busca operacional demonstravel, mas o schema, as flags e a tela diagnostica reduzem risco de retrabalho e preparam a indexacao shadow.
+
+Risco: medio/alto por isolamento multi-tenant, volume de mensagens, LGPD, retencao e necessidade de nao indexar `rawPayload` ou dados sensiveis indevidos.
 
 ### P2 - Telegram
 
@@ -443,4 +468,4 @@ Ordem recomendada:
 5. refinar Webchat para identificacao/roteamento/acessibilidade;
 6. completar hardening Telegram apenas se o edital-alvo exigir expressamente.
 
-Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP, Telegram texto humano controlado e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram avancado se exigido, OTP, transcricao/busca, webhooks Public API e multiagentes IA antes de afirmar aderencia plena.
+Veredito: o Converta esta pronto para disputar editais WhatsApp-first com atendimento humano, chatbot, IA supervisionada, SLA, relatorios, Public API read-only, Webchat MVP, Telegram texto humano controlado e POC. Para editais do Grupo A mais avancados, especialmente Sao Jose do Rio Preto/SP como guia, ainda precisa completar NPS funcional, agendamento com envio real, Telegram avancado se exigido, OTP, transcricao operacional, busca avancada operacional, webhooks Public API automaticos e multiagentes IA antes de afirmar aderencia plena.

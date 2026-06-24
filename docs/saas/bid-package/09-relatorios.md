@@ -29,6 +29,12 @@ Relatorios podem considerar:
 - tenant;
 - perfil de atendimento.
 
+## Busca E Auditoria
+
+O produto possui filtros operacionais e consultas por modulo. A busca avancada unificada esta desenhada em `docs/saas/ADVANCED_SEARCH_DESIGN.md` e ja possui fundacao tecnica com `SearchIndex`, flags de rollout e tela diagnostica `/app/search`, com recomendacao de indice tenant-scoped em PostgreSQL, filtros por canal, periodo, setor, atendente e fonte de dado.
+
+Essa busca unificada ainda nao deve ser apresentada como funcionalidade operacional entregue antes da sprint de indexacao/runtime correspondente.
+
 ## Exportacao
 
 O Converta possui recursos de exportacao e geracao de evidencias operacionais, incluindo CSV/PDF conforme modulo e permissao.
@@ -50,4 +56,3 @@ Relatorios podem apoiar:
 - Retencao curta pode reduzir historico visivel.
 - Relatorios de alto volume exigem dimensionamento de banco e indices.
 - Indicadores especificos do edital devem ser validados em matriz de aderencia.
-

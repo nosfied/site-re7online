@@ -2,7 +2,7 @@
 
 Data: 2026-06-23
 
-Status: design concluido na Sprint 75H; runtime controlado implementado na Sprint 75I.
+Status: design concluido na Sprint 75H; runtime controlado implementado na Sprint 75I; piloto com midia real desenhado na Sprint 75J.
 
 Escopo: projetar o primeiro runtime controlado de transcricao de audio do Converta. Esta sprint nao cria codigo, migration, provider real, download de midia, transcript real, job automatico, cron, worker, alteracao de Inbox, alteracao de canais, IA ou busca.
 
@@ -389,14 +389,32 @@ Validar:
 - sem busca;
 - sem IA.
 
-### Sprint 75J - Search Integration
+### Sprint 75J - Real Media Pilot Design
+
+- plano de piloto com audio real controlado;
+- tenant piloto;
+- consentimento/LGPD;
+- limites de quantidade, duracao e custo;
+- criterios de sucesso;
+- rollback por flag;
+- sem processamento real nesta etapa.
+
+### Sprint 75K - Real Media Pilot
+
+- executar 1 a 3 audios reais controlados;
+- medir custo/latencia;
+- validar transcript;
+- confirmar cleanup/log redigido;
+- manter runtime desligado ao final.
+
+### Sprint 75L - Search Integration
 
 - indice de busca;
 - transcript pesquisavel;
 - filtros por canal/departamento/periodo;
 - resultado apontando para mensagem.
 
-### Sprint 75K - AI Integration
+### Sprint 75M - AI Integration
 
 - consumo de transcript por IA apenas com flag;
 - resumo/classificacao;

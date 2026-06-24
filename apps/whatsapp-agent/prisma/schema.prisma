@@ -104,6 +104,7 @@ model Client {
   webchatSessions WebchatSession[]
   audioTranscriptions AudioTranscription[]
   audioTranscriptionJobs AudioTranscriptionJob[]
+  searchIndexes SearchIndex[]
 }
 
 model User {
@@ -1223,6 +1224,30 @@ model AudioTranscriptionJob {
   @@index([clientId, status, createdAt])
   @@index([clientId, transcriptionId])
   @@index([clientId, provider, createdAt])
+}
+
+model SearchIndex {
+  id           String                  @id @default(cuid())
+  clientId     String                  @db.Uuid
+  entityType   String
+  entityId     String
+  title        String?
+  body         String?                 @db.Text
+  channel      String?
+  source       String?
+  language     String?
+  searchVector Unsupported("tsvector")?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, entityType, entityId])
+  @@index([clientId, entityType, createdAt])
+  @@index([clientId, channel, createdAt])
+  @@index([clientId, source, createdAt])
+  @@index([clientId, language])
+  @@index([clientId, createdAt])
 }
 
 model WebchatSite {

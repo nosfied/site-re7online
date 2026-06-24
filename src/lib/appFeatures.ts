@@ -17,6 +17,8 @@ export type AppFeatureKey =
   | "satisfaction"
   | "audioTranscription"
   | "audioTranscriptionRuntime"
+  | "advancedSearch"
+  | "advancedSearchRuntime"
   | "webchat"
   | "webchatOutbound"
   | "telegram"
@@ -49,6 +51,8 @@ export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   satisfaction: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
+  advancedSearch: false,
+  advancedSearchRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -74,6 +78,8 @@ export const DEFAULT_GOVERNMENT_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   satisfaction: false,
   audioTranscription: false,
   audioTranscriptionRuntime: false,
+  advancedSearch: false,
+  advancedSearchRuntime: false,
   webchat: false,
   webchatOutbound: false,
   telegram: false,
@@ -130,6 +136,9 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
     audioTranscription: normalizeBoolean(input.audioTranscription) ?? defaults.audioTranscription,
     audioTranscriptionRuntime:
       normalizeBoolean(input.audioTranscriptionRuntime) ?? defaults.audioTranscriptionRuntime,
+    advancedSearch: normalizeBoolean(input.advancedSearch) ?? defaults.advancedSearch,
+    advancedSearchRuntime:
+      normalizeBoolean(input.advancedSearchRuntime) ?? defaults.advancedSearchRuntime,
     webchat: normalizeBoolean(input.webchat) ?? defaults.webchat,
     webchatOutbound: normalizeBoolean(input.webchatOutbound) ?? defaults.webchatOutbound,
     telegram: normalizeBoolean(input.telegram) ?? defaults.telegram,
