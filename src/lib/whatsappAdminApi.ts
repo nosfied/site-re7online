@@ -307,6 +307,65 @@ export type ConversationReportResponse = {
   byChannel?: ConversationReportByChannelItem[];
 };
 
+export type OpsMetricLabels = Record<string, string>;
+
+export type OpsCounterMetric = {
+  name: string;
+  labels: OpsMetricLabels;
+  value: number;
+};
+
+export type OpsGaugeMetric = {
+  name: string;
+  labels: OpsMetricLabels;
+  value: number;
+};
+
+export type OpsTimingMetric = {
+  name: string;
+  labels: OpsMetricLabels;
+  count: number;
+  totalMs: number;
+  avgMs: number;
+  p95Ms: number;
+  minMs: number;
+  maxMs: number;
+  lastMs: number;
+};
+
+export type OpsAverageMetric = {
+  name: string;
+  labels: OpsMetricLabels;
+  count: number;
+  avgMs: number;
+  p95Ms: number;
+  minMs: number;
+  maxMs: number;
+};
+
+export type OpsMetricsSnapshot = {
+  ok: true;
+  generatedAt: string;
+  process?: {
+    uptimeSeconds?: number;
+    memory?: {
+      rss?: number;
+      heapTotal?: number;
+      heapUsed?: number;
+      external?: number;
+      arrayBuffers?: number;
+    };
+    cpu?: {
+      user?: number;
+      system?: number;
+    };
+  };
+  counters: OpsCounterMetric[];
+  gauges: OpsGaugeMetric[];
+  timings: OpsTimingMetric[];
+  averages?: OpsAverageMetric[];
+};
+
 export type LeadStatus =
   | "NEW"
   | "QUALIFIED"
@@ -818,6 +877,12 @@ export async function fetchConversationReport(
     query.set("departmentId", params.departmentId);
   }
   return requestJson(connection, `/admin/reports/conversations?${query.toString()}`);
+}
+
+export async function fetchOpsMetrics(
+  connection: AdminConnection
+): Promise<OpsMetricsSnapshot> {
+  return requestJson(connection, "/admin/ops/metrics");
 }
 
 export async function exportConversationReportCsv(

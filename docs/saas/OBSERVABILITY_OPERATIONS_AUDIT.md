@@ -66,7 +66,7 @@ Arquivos e areas observadas:
 | Request correlation | ATENDE COM AJUSTE | `requestId`, `correlationId` e `tenantId` sao normalizados no logger central; `tenantId` cai para `clientId` quando necessario | nem todos os endpoints e CLIs garantem correlacao uniforme com canal/provider/duration | Medio | 78C |
 | Auditoria | ATENDE COM AJUSTE | `Event` tenant-scoped, eventos por canais, MFA, webhooks, search, audio, scheduling | falta tela/relatorio formal de auditoria operacional para cliente e operador interno | Medio/alto | 78E |
 | Metricas de atendimento/SLA | ATENDE | `ConversationMetrics`, `SLAConfig`, reports/dashboard, breach logs | precisa consolidar visao operacional por tenant/canal/atendente | Medio | 78E |
-| Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing` e `/admin/ops/metrics`; Sprint 78E amplia snapshot com p95 aproximado, averages, memoria/CPU/uptime, `request_count`, `request_duration`, `module_duration`, `route_duration`, `db_duration` e `dependency_duration` | ainda nao ha historico persistente, Prometheus/OpenTelemetry, alertas ou dashboard visual | Medio/alto | 78F/78G |
+| Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing` e `/admin/ops/metrics`; Sprint 78E amplia snapshot com p95 aproximado, averages, memoria/CPU/uptime, `request_count`, `request_duration`, `module_duration`, `route_duration`, `db_duration` e `dependency_duration`; Sprint 78F cria `/admin/ops` como dashboard interno visual | ainda nao ha historico persistente, Prometheus/OpenTelemetry, alertas ou dashboard NOC externo | Medio/alto | 78G |
 | Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime, alimenta gauges internos e agora mede `db_duration`/`dependency_duration` para DB | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio | 78F |
 | Monitoramento PM2 | ATENDE COM AJUSTE | `ecosystem.config.cjs`, autorestart, max memory 300M, runbooks com `pm2 logs/status` | sem alertas automaticos de memoria/CPU/restart/disk; instancia unica | Alto | 78D/78F |
 | Deploy | ATENDE COM AJUSTE | `deploy-vps.sh`, migrate/build/reload/health, checklist e deploy controlado | script padrao roda build frontend/backend; VPS exige builds sequenciais; rollback ainda manual | Medio | 78B |
@@ -74,7 +74,7 @@ Arquivos e areas observadas:
 | Backup/restore | ATENDE COM AJUSTE | `backup-data.sh`, `restore-data.sh`, docs com `pg_dump`; backup `.data` com retencao 14 dias | falta politica formal DB+media, restore drill, RPO/RTO e storage externo | Alto | 78F |
 | Feature flags | ATENDE | `Client.features`, defaults conservadores, flags por modulo, rollout por tenant | falta dashboard operacional de flags/riscos por tenant | Baixo/medio | 78E |
 | Smoke/replay/shadow | ATENDE | `evaluation:replay`, shadow compares, scripts de smoke, CLIs dry-run/execute | precisa consolidar suite operacional unica por release | Medio | 78B |
-| Observabilidade por tenant | ATENDE COM AJUSTE | tenant/clientId em eventos e dados; metrics/admin por clientKey | sem dashboard tecnico por tenant/canal/provider | Medio/alto | 78E |
+| Observabilidade por tenant | ATENDE COM AJUSTE | tenant/clientId em eventos e dados; metrics/admin por clientKey; `/admin/ops` mostra snapshot tecnico interno | sem dashboard historico por tenant/canal/provider | Medio/alto | 78G/78H |
 | Tracing distribuido | NAO ATENDE | nao localizado OpenTelemetry/traces/span model | sem spans cross-endpoint/provider/DB | Medio/alto | 78D |
 | Alertas | NAO ATENDE | runbook manual e PM2 local | sem alertas ativos para health, DB, disco, latencia, provider, filas, erros | Alto | 78D |
 | HA/escala | ATENDE COM AJUSTE | app roda em PM2, DB Postgres, scripts e flags | instancia unica, sem balanceamento, sem replica/standby documentado, sem teste 400 usuarios/30 numeros | Alto | 78F |
@@ -406,6 +406,8 @@ Resultado esperado:
 
 - evidencias comerciais e operacionais para editais.
 
+Status: implementado como MVP interno na Sprint 78F. A rota `/admin/ops` consome apenas `GET /admin/ops/metrics`, sem API nova, sem polling, sem stack externa e sem persistencia historica. Documento oficial: `docs/saas/OPERATIONAL_DASHBOARD.md`.
+
 ### 78G - Alerting
 
 Objetivo:
@@ -441,7 +443,7 @@ Resultado esperado:
 2. **78C Metrics Foundation**: implementada com metricas internas e endpoint diagnostico protegido.
 3. **78D Runtime Observability Design**: concluida como arquitetura, export strategy, dashboards e alertas.
 4. **78E Runtime Metrics**: implementada como MVP interno com p95 aproximado, process metrics e dependency timing DB.
-5. **78F Dashboards**: transforma dados em operacao e prova licitatoria.
+5. **78F Dashboards**: implementada como dashboard operacional interno inicial.
 6. **78G Alerting**: reduz tempo de deteccao com regras e runbooks.
 7. **78H HA / Scale**: prepara Aripuana/Rio Preto e contratos grandes.
 

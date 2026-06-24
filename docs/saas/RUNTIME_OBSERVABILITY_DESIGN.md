@@ -553,6 +553,8 @@ Resultado esperado:
 - operacao visual para contratos pequenos/medios;
 - material demonstravel para editais.
 
+Status: implementado como MVP interno na Sprint 78F. A rota `/admin/ops` exibe health, DB, uptime, CPU, memoria, requests, errors, avg, p95 e tabela por modulo. Ainda nao ha historico, alertas, NOC externo ou graficos complexos.
+
 ### 78G - Alerting
 
 Objetivo:
