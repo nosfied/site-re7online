@@ -353,10 +353,13 @@ Status 77B: implementado como fundacao. Foram criados `MfaTotpSecret`, `MfaRecov
 
 ### 77C - TOTP Shadow
 
-- gerar/confirmar fator TOTP em tenant piloto;
-- simular politica de obrigatoriedade;
-- registrar `login.mfa_required` em shadow sem bloquear login;
-- medir usuarios afetados.
+- validar codigo TOTP em endpoint autenticado `/app/mfa/verify-shadow`;
+- manter login, JWT e `AppAuthSession` inalterados;
+- registrar `mfa.shadow.verify_success`, `mfa.shadow.verify_failed` e `mfa.shadow.verify_denied`;
+- exibir teste de codigo em `/app/settings/security`;
+- manter `mfaRequired` e `mfaEnforced` sem efeito sobre login.
+
+Status 77C: implementado como validacao shadow. O endpoint `/app/mfa/verify-shadow` valida TOTP descriptografando o segredo tenant-scoped, retorna apenas `valid=true/false`, aplica rate limit simples e audita eventos redigidos. A tela `/app/settings/security` permite testar o codigo sem ativar MFA obrigatorio. Login, JWT, `AppAuthSession`, password reset e enforcement permanecem inalterados.
 
 ### 77D - MFA Runtime MVP
 
@@ -377,7 +380,7 @@ Status 77B: implementado como fundacao. Foram criados `MfaTotpSecret`, `MfaRecov
 1. Criar schema e configuracao sem enforcement.
 2. Habilitar `mfa=true` em tenant piloto.
 3. Permitir setup TOTP para `ADMIN`.
-4. Rodar shadow para detectar quem seria bloqueado.
+4. Rodar verificacao TOTP shadow para validar codigos sem bloquear login.
 5. Ativar `mfaRequired=true` para `ADMIN`.
 6. Ativar `mfaEnforced=true` somente apos recovery e smoke de login.
 

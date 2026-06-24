@@ -14,6 +14,7 @@ import {
   loadAppSession,
   saveAppSession,
   startAppMfaEnrollment,
+  verifyAppMfaShadow,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -52,6 +53,9 @@ export default function SecuritySettingsPage() {
   const [provisioning, setProvisioning] = useState<AppMfaProvisioning | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [shadowCode, setShadowCode] = useState("");
+  const [shadowResult, setShadowResult] = useState<"valid" | "invalid" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || success), () => {
@@ -124,6 +128,33 @@ export default function SecuritySettingsPage() {
       setError(typed.message || "Nao foi possivel iniciar enrollment MFA.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const verifyShadowCode = async () => {
+    if (!session) return;
+    const code = shadowCode.replace(/\D/g, "").slice(0, 6);
+    if (code.length !== 6) {
+      setError("Informe um codigo TOTP de 6 digitos.");
+      return;
+    }
+    setVerifying(true);
+    setError(null);
+    setSuccess(null);
+    setShadowResult(null);
+    try {
+      const response = await verifyAppMfaShadow(session, code);
+      setShadowResult(response.status);
+      setSuccess(response.valid ? "Codigo valido em modo teste." : "Codigo invalido em modo teste.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Nao foi possivel validar o codigo em modo teste.");
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -224,6 +255,37 @@ export default function SecuritySettingsPage() {
                 Nenhum payload gerado nesta sessao. Inicie o enrollment para gerar o segredo criptografado no backend.
               </p>
             )}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
+          <h3 className="text-sm font-semibold">Verificacao shadow</h3>
+          <p className="mt-1 text-sm theme-muted">
+            Testa o codigo TOTP sem alterar login, sessao ou obrigatoriedade de MFA.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              value={shadowCode}
+              onChange={(event) => {
+                setShadowCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                setShadowResult(null);
+              }}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm outline-none transition focus:border-emerald-300/50 sm:w-40"
+            />
+            <button
+              type="button"
+              onClick={verifyShadowCode}
+              disabled={verifying || shadowCode.length !== 6}
+              className="theme-button-secondary h-10 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {verifying ? "Verificando..." : "Verificar em modo teste"}
+            </button>
+            {shadowResult ? (
+              <StatusPill enabled={shadowResult === "valid"} label={shadowResult === "valid" ? "Codigo valido" : "Codigo invalido"} />
+            ) : null}
           </div>
         </div>
       </section>

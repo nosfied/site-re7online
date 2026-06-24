@@ -60,6 +60,31 @@ export type StartMfaEnrollmentResult =
     }
   | { ok: false; error: "mfa_feature_disabled" | "forbidden" | "user_not_found" | "client_inactive" | "mfa_secret_encryption_key_missing_or_weak" };
 
+export type VerifyMfaTotpShadowResult =
+  | {
+      ok: true;
+      valid: boolean;
+      status: "valid" | "invalid";
+    }
+  | {
+      ok: false;
+      error:
+        | "mfa_feature_disabled"
+        | "forbidden"
+        | "user_not_found"
+        | "client_inactive"
+        | "mfa_totp_not_enrolled"
+        | "mfa_secret_unavailable"
+        | "rate_limited";
+    };
+
+const TOTP_PERIOD_SECONDS = 30;
+const TOTP_DIGITS = 6;
+const TOTP_WINDOW = 1;
+const SHADOW_RATE_LIMIT_WINDOW_MS = 60_000;
+const SHADOW_RATE_LIMIT_MAX = 10;
+const shadowVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
+
 function normalizeRole(role: string | null | undefined) {
   return String(role || "").trim().toUpperCase();
 }
@@ -121,6 +146,59 @@ function generateBase32Secret(byteLength = 20) {
     output += BASE32_ALPHABET[Number.parseInt(chunk, 2)] ?? "";
   }
   return output;
+}
+
+function decodeBase32(value: string) {
+  const normalized = value.toUpperCase().replace(/=+$/g, "").replace(/\s+/g, "");
+  let bits = "";
+  for (const char of normalized) {
+    const index = BASE32_ALPHABET.indexOf(char);
+    if (index < 0) return null;
+    bits += index.toString(2).padStart(5, "0");
+  }
+  const bytes: number[] = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function hotp(secret: string, counter: number) {
+  const key = decodeBase32(secret);
+  if (!key) return null;
+  const counterBuffer = Buffer.alloc(8);
+  counterBuffer.writeBigUInt64BE(BigInt(counter));
+  const hmac = crypto.createHmac("sha1", key).update(counterBuffer).digest();
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const binary =
+    ((hmac[offset] & 0x7f) << 24) |
+    ((hmac[offset + 1] & 0xff) << 16) |
+    ((hmac[offset + 2] & 0xff) << 8) |
+    (hmac[offset + 3] & 0xff);
+  return String(binary % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
+}
+
+export function verifyTotpCode(params: {
+  secret: string;
+  code: string;
+  nowMs?: number;
+  window?: number;
+}) {
+  const code = String(params.code ?? "").trim().replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(code)) return false;
+  const nowMs = params.nowMs ?? Date.now();
+  const counter = Math.floor(nowMs / 1000 / TOTP_PERIOD_SECONDS);
+  const window = params.window ?? TOTP_WINDOW;
+  const submitted = Buffer.from(code);
+  for (let offset = -window; offset <= window; offset += 1) {
+    const expected = hotp(params.secret, counter + offset);
+    if (!expected) continue;
+    const expectedBuffer = Buffer.from(expected);
+    if (expectedBuffer.length === submitted.length && crypto.timingSafeEqual(expectedBuffer, submitted)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildOtpAuthUrl(params: { issuer: string; accountName: string; secret: string }) {
@@ -191,6 +269,19 @@ async function getScopedUser(params: {
       },
     },
   }) as Promise<UserWithClient | null>;
+}
+
+function checkShadowRateLimit(clientId: string, userId: string) {
+  const key = `${clientId}:${userId}`;
+  const now = Date.now();
+  const current = shadowVerifyAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    shadowVerifyAttempts.set(key, { count: 1, resetAt: now + SHADOW_RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (current.count >= SHADOW_RATE_LIMIT_MAX) return false;
+  current.count += 1;
+  return true;
 }
 
 export async function getMfaStatus(params: {
@@ -312,5 +403,89 @@ export async function startMfaEnrollment(params: {
       otpauthUrl: buildOtpAuthUrl({ issuer, accountName: user.email, secret }),
       secret,
     },
+  };
+}
+
+export async function verifyMfaTotpShadow(params: {
+  prisma: MfaServicePrisma;
+  clientId: string;
+  userId: string;
+  role: string;
+  code: string;
+  requestId?: string | null;
+  nowMs?: number;
+}): Promise<VerifyMfaTotpShadowResult> {
+  if (!canManageOwnMfa(params.role)) {
+    return { ok: false, error: "forbidden" };
+  }
+  const user = await getScopedUser(params);
+  if (!user) return { ok: false, error: "user_not_found" };
+  if (user.client.status !== "ACTIVE" || !user.isActive) {
+    return { ok: false, error: "client_inactive" };
+  }
+  if (!hasFeature(user.client, "mfa")) {
+    logger.info({
+      event: "mfa.shadow.verify_denied",
+      reason: "feature_disabled",
+      clientId: params.clientId,
+      userId: params.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: "mfa_feature_disabled" };
+  }
+  if (!checkShadowRateLimit(params.clientId, params.userId)) {
+    logger.info({
+      event: "mfa.shadow.verify_denied",
+      reason: "rate_limited",
+      clientId: params.clientId,
+      userId: params.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: "rate_limited" };
+  }
+  const secret = await params.prisma.mfaTotpSecret.findUnique({
+    where: {
+      clientId_userId: {
+        clientId: params.clientId,
+        userId: params.userId,
+      },
+    },
+    select: {
+      secretCiphertext: true,
+    },
+  });
+  if (!secret) {
+    logger.info({
+      event: "mfa.shadow.verify_denied",
+      reason: "not_enrolled",
+      clientId: params.clientId,
+      userId: params.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: "mfa_totp_not_enrolled" };
+  }
+  const plainSecret = decryptMfaSecret(secret.secretCiphertext);
+  if (!plainSecret) {
+    logger.warn({
+      event: "mfa.shadow.verify_denied",
+      reason: "secret_unavailable",
+      clientId: params.clientId,
+      userId: params.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: "mfa_secret_unavailable" };
+  }
+  const valid = verifyTotpCode({ secret: plainSecret, code: params.code, nowMs: params.nowMs });
+  logger.info({
+    event: valid ? "mfa.shadow.verify_success" : "mfa.shadow.verify_failed",
+    clientId: params.clientId,
+    userId: params.userId,
+    role: normalizeRole(params.role),
+    requestId: params.requestId,
+  });
+  return {
+    ok: true,
+    valid,
+    status: valid ? "valid" : "invalid",
   };
 }

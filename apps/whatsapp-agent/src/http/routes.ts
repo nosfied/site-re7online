@@ -109,7 +109,7 @@ import {
   revokeAppSession,
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
-import { getMfaStatus, startMfaEnrollment } from "../auth/mfaService.js";
+import { getMfaStatus, startMfaEnrollment, verifyMfaTotpShadow } from "../auth/mfaService.js";
 import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
@@ -1642,6 +1642,48 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "app.mfa.enrollment.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
+  }
+
+  if (pathname === "/app/mfa/verify-shadow") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "POST") {
+      try {
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const result = await verifyMfaTotpShadow({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+          code: String((body as { code?: unknown }).code ?? ""),
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, mfaErrorStatus(result.error), httpError(result.error, "Could not verify MFA code in shadow mode."));
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          valid: result.valid,
+          status: result.status,
+          mode: "shadow",
+        });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.verify_shadow.error",
           clientId: access.client.id,
           userId: access.clientAuth.userId,
           requestId,
@@ -17126,6 +17168,15 @@ async function requireMfaAppAccess(
   const clientAuth = requireClientAuth(req, res);
   if (!clientAuth) return null;
   if (isAgentRole(clientAuth.role)) {
+    if (endpoint === "/app/mfa/verify-shadow") {
+      logger.info({
+        event: "mfa.shadow.verify_denied",
+        reason: "forbidden",
+        clientId: clientAuth.clientId,
+        userId: clientAuth.userId,
+        requestId,
+      });
+    }
     json(res, 403, httpError("forbidden", "Only supervisor or admin can manage MFA settings."));
     return null;
   }
@@ -17145,7 +17196,18 @@ async function requireMfaAppAccess(
     endpoint,
     requestId,
   });
-  if (!enabled) return null;
+  if (!enabled) {
+    if (endpoint === "/app/mfa/verify-shadow") {
+      logger.info({
+        event: "mfa.shadow.verify_denied",
+        reason: "feature_disabled",
+        clientId: client.id,
+        userId: clientAuth.userId,
+        requestId,
+      });
+    }
+    return null;
+  }
   return { clientAuth, client };
 }
 
@@ -17190,7 +17252,8 @@ function mfaErrorStatus(error: string) {
   if (error === "forbidden") return 403;
   if (error === "user_not_found") return 404;
   if (error === "client_inactive" || error === "mfa_feature_disabled") return 403;
-  if (error === "mfa_secret_encryption_key_missing_or_weak") return 500;
+  if (error === "mfa_secret_encryption_key_missing_or_weak" || error === "mfa_secret_unavailable") return 500;
+  if (error === "rate_limited") return 429;
   return 400;
 }
 

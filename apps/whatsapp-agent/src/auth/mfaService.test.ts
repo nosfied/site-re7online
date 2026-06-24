@@ -5,6 +5,8 @@ import {
   encryptMfaSecret,
   getMfaStatus,
   startMfaEnrollment,
+  verifyMfaTotpShadow,
+  verifyTotpCode,
 } from "./mfaService.js";
 
 const TEST_KEY = Buffer.from("0123456789abcdef0123456789abcdef").toString("base64");
@@ -190,4 +192,92 @@ test("mfa enrollment blocks missing encryption key", async () => {
     if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
     else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
   }
+});
+
+test("totp verifier accepts RFC-compatible six digit code inside the time window", () => {
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  assert.equal(verifyTotpCode({ secret, code: "287082", nowMs: 59_000 }), true);
+  assert.equal(verifyTotpCode({ secret, code: "000000", nowMs: 59_000 }), false);
+  assert.equal(verifyTotpCode({ secret, code: "abc123", nowMs: 59_000 }), false);
+});
+
+test("mfa shadow verification blocks disabled feature", async () => {
+  const client = makeClient({ mfa: false });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const result = await verifyMfaTotpShadow({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+    code: "123456",
+  });
+  assert.deepEqual(result, { ok: false, error: "mfa_feature_disabled" });
+});
+
+test("mfa shadow verification blocks missing enrollment", async () => {
+  const { prisma } = makePrisma();
+  const result = await verifyMfaTotpShadow({
+    prisma,
+    clientId: makeClient().id,
+    userId: "user-1",
+    role: "ADMIN",
+    code: "123456",
+  });
+  assert.deepEqual(result, { ok: false, error: "mfa_totp_not_enrolled" });
+});
+
+test("mfa shadow verification validates decrypted TOTP secret without enabling MFA", async () => {
+  const previous = process.env.MFA_SECRET_ENCRYPTION_KEY;
+  process.env.MFA_SECRET_ENCRYPTION_KEY = TEST_KEY;
+  try {
+    const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+    const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+    const encrypted = encryptMfaSecret(secret, TEST_KEY);
+    const { prisma } = makePrisma({
+      user: makeUser({ client }),
+      secret: {
+        clientId: client.id,
+        userId: "user-1",
+        enabled: false,
+        enrolledAt: null,
+        lastUsedAt: null,
+        secretCiphertext: encrypted,
+      },
+    });
+    const valid = await verifyMfaTotpShadow({
+      prisma,
+      clientId: client.id,
+      userId: "user-1",
+      role: "ADMIN",
+      code: "287082",
+      nowMs: 59_000,
+    });
+    assert.deepEqual(valid, { ok: true, valid: true, status: "valid" });
+
+    const invalid = await verifyMfaTotpShadow({
+      prisma,
+      clientId: client.id,
+      userId: "user-1",
+      role: "ADMIN",
+      code: "000000",
+      nowMs: 59_000,
+    });
+    assert.deepEqual(invalid, { ok: true, valid: false, status: "invalid" });
+  } finally {
+    if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
+    else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("mfa shadow verification preserves tenant isolation", async () => {
+  const otherClient = makeClient();
+  const { prisma } = makePrisma({ user: makeUser({ client: otherClient }) });
+  const result = await verifyMfaTotpShadow({
+    prisma,
+    clientId: "22222222-2222-4222-8222-222222222222",
+    userId: "user-1",
+    role: "ADMIN",
+    code: "123456",
+  });
+  assert.deepEqual(result, { ok: false, error: "user_not_found" });
 });

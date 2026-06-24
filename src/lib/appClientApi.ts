@@ -877,6 +877,13 @@ export type AppMfaProvisioning = {
   secret: string;
 };
 
+export type AppMfaShadowVerification = {
+  ok: true;
+  valid: boolean;
+  status: "valid" | "invalid";
+  mode: "shadow";
+};
+
 export type HandoffLeadNotificationRecipient = {
   id: string;
   waId: string;
@@ -1816,6 +1823,13 @@ export function startAppMfaEnrollment(
   return requestAppJson(session, "/app/mfa/enrollment", {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+export function verifyAppMfaShadow(session: AppSession, code: string): Promise<AppMfaShadowVerification> {
+  return requestAppJson(session, "/app/mfa/verify-shadow", {
+    method: "POST",
+    body: JSON.stringify({ code }),
   });
 }
 

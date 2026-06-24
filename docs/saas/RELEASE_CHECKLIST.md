@@ -72,6 +72,22 @@ Webhooks Public API:
 - Releases futuras que executem dispatch HTTP externo de webhooks devem exigir flags explicitas por tenant, com dry-run default, SSRF reforcado, timeout curto e smoke contra endpoint controlado.
 - Nenhum deploy deve ativar `webhookDispatchExecute` por padrao.
 
+MFA/TOTP:
+
+- Releases que toquem MFA devem manter `mfaRequired=false` e `mfaEnforced=false` por padrao ate sprint propria de runtime.
+- `MFA_SECRET_ENCRYPTION_KEY` deve estar configurada, forte e estavel em producao antes de enrollment ou verificacao TOTP.
+- `/app/mfa/verify-shadow` deve validar codigo TOTP sem alterar login, JWT, `AppAuthSession`, password reset ou enforcement.
+- O smoke de producao deve validar:
+
+```bash
+GET /app/mfa
+POST /app/mfa/enrollment
+POST /app/mfa/verify-shadow
+```
+
+- Confirmar que segredo, ciphertext e codigo TOTP nao aparecem em resposta, log ou listagem.
+- MFA obrigatorio em login so pode ser ativado em sprint/runtime propria com rollback por `mfaEnforced=false`.
+
 Scheduling reminders:
 
 - Releases que toquem envio de lembretes devem manter `schedulingRemindersSend=false` por padrao.
