@@ -7,12 +7,15 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppMfaProvisioning,
+  AppMfaRecoveryCodeStatus,
   AppMfaRuntimeStatus,
   AppMfaStatus,
   AppSession,
   clearAppSession,
+  fetchAppMfaRecoveryCodeStatus,
   fetchAppMfaRuntimeStatus,
   fetchAppMfaStatus,
+  generateAppMfaRecoveryCodes,
   loadAppSession,
   saveAppSession,
   startAppMfaEnrollment,
@@ -53,9 +56,12 @@ export default function SecuritySettingsPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [status, setStatus] = useState<AppMfaStatus | null>(null);
   const [runtimeStatus, setRuntimeStatus] = useState<AppMfaRuntimeStatus | null>(null);
+  const [recoveryStatus, setRecoveryStatus] = useState<AppMfaRecoveryCodeStatus | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [provisioning, setProvisioning] = useState<AppMfaProvisioning | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generatingRecovery, setGeneratingRecovery] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [shadowCode, setShadowCode] = useState("");
   const [shadowResult, setShadowResult] = useState<"valid" | "invalid" | null>(null);
@@ -76,12 +82,14 @@ export default function SecuritySettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [mfaResponse, runtimeResponse] = await Promise.all([
+        const [mfaResponse, runtimeResponse, recoveryResponse] = await Promise.all([
           fetchAppMfaStatus(activeSession),
           fetchAppMfaRuntimeStatus(activeSession),
+          fetchAppMfaRecoveryCodeStatus(activeSession),
         ]);
         setStatus(mfaResponse.status);
         setRuntimeStatus(runtimeResponse.status);
+        setRecoveryStatus(recoveryResponse.status);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -125,8 +133,12 @@ export default function SecuritySettingsPage() {
       const response = await startAppMfaEnrollment(session);
       setStatus(response.status);
       setProvisioning(response.provisioning);
-      const runtimeResponse = await fetchAppMfaRuntimeStatus(session);
+      const [runtimeResponse, recoveryResponse] = await Promise.all([
+        fetchAppMfaRuntimeStatus(session),
+        fetchAppMfaRecoveryCodeStatus(session),
+      ]);
       setRuntimeStatus(runtimeResponse.status);
+      setRecoveryStatus(recoveryResponse.status);
       setSuccess("Enrollment TOTP preparado.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -137,6 +149,41 @@ export default function SecuritySettingsPage() {
       setError(typed.message || "Nao foi possivel iniciar enrollment MFA.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const generateRecoveryCodes = async () => {
+    if (!session) return;
+    setGeneratingRecovery(true);
+    setError(null);
+    setSuccess(null);
+    setRecoveryCodes([]);
+    try {
+      const response = await generateAppMfaRecoveryCodes(session);
+      setRecoveryStatus(response.status);
+      setStatus((current) =>
+        current
+          ? {
+              ...current,
+              recoveryCodes: {
+                configured: response.status.configured,
+                total: response.status.total,
+                unused: response.status.available,
+              },
+            }
+          : current
+      );
+      setRecoveryCodes(response.recoveryCodes);
+      setSuccess(response.regenerated ? "Codigos de recuperacao regenerados." : "Codigos de recuperacao gerados.");
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setError(typed.message || "Nao foi possivel gerar codigos de recuperacao.");
+    } finally {
+      setGeneratingRecovery(false);
     }
   };
 
@@ -172,9 +219,9 @@ export default function SecuritySettingsPage() {
       feature: status?.featureEnabled ? "Ativa" : "Inativa",
       enrolled: status?.enrolled ? "Sim" : "Nao",
       required: status?.required ? "Sim" : "Nao",
-      recovery: status?.recoveryCodes.unused ?? 0,
+      recovery: recoveryStatus?.available ?? status?.recoveryCodes.unused ?? 0,
     };
-  }, [status]);
+  }, [recoveryStatus, status]);
 
   if (!session) return null;
 
@@ -233,7 +280,13 @@ export default function SecuritySettingsPage() {
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="theme-muted">Recovery codes</dt>
-                <dd>{status?.recoveryCodes.configured ? `${status.recoveryCodes.unused}/${status.recoveryCodes.total}` : "Placeholder"}</dd>
+                <dd>
+                  {recoveryStatus?.configured
+                    ? `${recoveryStatus.available}/${recoveryStatus.total}`
+                    : status?.recoveryCodes.configured
+                      ? `${status.recoveryCodes.unused}/${status.recoveryCodes.total}`
+                      : "Nao configurado"}
+                </dd>
               </div>
             </dl>
           </div>
@@ -265,6 +318,51 @@ export default function SecuritySettingsPage() {
               </p>
             )}
           </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold">Codigos de recuperacao</h3>
+              <p className="mt-1 text-sm theme-muted">
+                Gere codigos hash-only para reduzir risco de lockout futuro. Eles ainda nao sao usados no login nesta sprint.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={generateRecoveryCodes}
+              disabled={generatingRecovery}
+              className="theme-button-secondary h-10 rounded-md px-4 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingRecovery
+                ? "Gerando..."
+                : recoveryStatus?.configured
+                  ? "Regenerar codigos"
+                  : "Gerar codigos"}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <Metric label="Disponiveis" value={recoveryStatus?.available ?? 0} />
+            <Metric label="Usados" value={recoveryStatus?.used ?? 0} />
+            <Metric label="Total" value={recoveryStatus?.total ?? 0} />
+          </div>
+
+          {recoveryCodes.length > 0 ? (
+            <div className="mt-4 rounded-md border border-amber-300/20 bg-amber-500/10 p-4">
+              <p className="text-sm font-semibold text-amber-100">Exibidos uma unica vez</p>
+              <p className="mt-1 text-sm text-amber-100/75">
+                Armazene estes codigos agora. Depois desta tela, apenas o status sera exibido.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {recoveryCodes.map((code) => (
+                  <code key={code} className="rounded-md border border-white/10 bg-black/30 p-2 text-sm">
+                    {code}
+                  </code>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">

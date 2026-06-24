@@ -83,14 +83,21 @@ MFA/TOTP:
 GET /app/mfa
 POST /app/mfa/enrollment
 POST /app/mfa/verify-shadow
+GET /app/mfa/recovery-codes/status
+POST /app/mfa/recovery-codes/generate
 ```
 
 - Confirmar que segredo, ciphertext e codigo TOTP nao aparecem em resposta, log ou listagem.
+- Recovery codes devem ser exibidos apenas na resposta de geracao/regeneracao, armazenados somente como hash e nunca retornados por status/listagem.
+- O smoke de recovery codes deve cobrir: `mfa=false` bloqueado, geracao com `mfa=true`, status sem codigos/hash, regeneracao invalida codigos antigos nao usados, `AGENT` bloqueado e login ainda funcionando sem MFA obrigatorio.
 - MFA obrigatorio em login so pode ser ativado em sprint/runtime propria com rollback por `mfaEnforced=false`.
 - A primeira sprint de runtime deve ser shadow: avaliar politica e auditar `login.mfa_shadow_required`/`login.mfa_shadow_not_required`/`login.mfa_shadow_skipped` sem bloquear login.
 - Runtime shadow de MFA deve preservar resposta atual de `/auth/login`, emissao de JWT e criacao de `AppAuthSession`; o smoke deve comparar que login continua 200 sem `mfaRequired` bloqueante.
 - Enforcement de login exige tenant piloto, perfil inicial `ADMIN`, desafio temporario com TTL curto, maximo de tentativas, smoke de login/MFA e plano de rollback por `mfaEnforced=false`.
 - Nao expandir enforcement para `SUPERVISOR`/`AGENT` antes de recovery codes ou procedimento assistido aprovado.
+- Sprint de enforcement deve validar que `/auth/login` nao emite JWT final nem cria `AppAuthSession` final antes do TOTP valido quando `mfaEnforced=true`.
+- O smoke de enforcement deve cobrir: challenge criado, codigo invalido, codigo valido, challenge expirado, excesso de tentativas, rollback `mfaEnforced=false` e login ADMIN recuperado.
+- Nao ligar enforcement se houver risco de travar o ultimo ADMIN do tenant piloto.
 
 Scheduling reminders:
 

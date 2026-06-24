@@ -4,6 +4,8 @@ import {
   decryptMfaSecret,
   encryptMfaSecret,
   evaluateMfaRuntimeShadow,
+  generateMfaRecoveryCodes,
+  getMfaRecoveryCodeStatus,
   getMfaStatus,
   startMfaEnrollment,
   verifyMfaTotpShadow,
@@ -44,6 +46,7 @@ function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?
     upserts: [] as any[],
   };
   const prisma = {
+    $transaction: async (operations: Promise<any>[]) => Promise.all(operations),
     user: {
       findFirst: async ({ where }: any) => {
         if (!state.user) return null;
@@ -76,7 +79,38 @@ function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?
     },
     mfaRecoveryCode: {
       findMany: async ({ where }: any) => {
-        return state.recoveryCodes.filter((item) => item.clientId === where.clientId && item.userId === where.userId);
+        let result = state.recoveryCodes.filter((item) => item.clientId === where.clientId && item.userId === where.userId);
+        if (where.usedAt === null) {
+          result = result.filter((item) => item.usedAt === null);
+        }
+        return result;
+      },
+      count: async ({ where }: any) => {
+        let result = state.recoveryCodes.filter((item) => item.clientId === where.clientId && item.userId === where.userId);
+        if (where.usedAt === null) {
+          result = result.filter((item) => item.usedAt === null);
+        }
+        return result.length;
+      },
+      deleteMany: async ({ where }: any) => {
+        const before = state.recoveryCodes.length;
+        state.recoveryCodes = state.recoveryCodes.filter((item) => {
+          if (item.clientId !== where.clientId || item.userId !== where.userId) return true;
+          if (where.usedAt === null) return item.usedAt !== null;
+          return false;
+        });
+        return { count: before - state.recoveryCodes.length };
+      },
+      createMany: async ({ data }: any) => {
+        state.recoveryCodes.push(
+          ...data.map((item: any, index: number) => ({
+            id: `recovery-${state.recoveryCodes.length + index + 1}`,
+            usedAt: null,
+            createdAt: new Date(),
+            ...item,
+          }))
+        );
+        return { count: data.length };
       },
     },
   };
@@ -193,6 +227,124 @@ test("mfa enrollment blocks missing encryption key", async () => {
     if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
     else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
   }
+});
+
+test("mfa recovery code status blocks disabled feature", async () => {
+  const client = makeClient({ mfa: false });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const result = await getMfaRecoveryCodeStatus({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+  });
+  assert.deepEqual(result, { ok: false, error: "mfa_feature_disabled" });
+});
+
+test("mfa recovery code status is safe and never returns code hashes", async () => {
+  const client = makeClient({ mfa: true });
+  const { prisma } = makePrisma({
+    user: makeUser({ client }),
+    recoveryCodes: [
+      { clientId: client.id, userId: "user-1", codeHash: "scrypt$unused", usedAt: null },
+      { clientId: client.id, userId: "user-1", codeHash: "scrypt$used", usedAt: new Date("2026-06-24T12:00:00.000Z") },
+      { clientId: "22222222-2222-4222-8222-222222222222", userId: "user-1", codeHash: "scrypt$other", usedAt: null },
+    ],
+  });
+  const result = await getMfaRecoveryCodeStatus({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "SUPERVISOR",
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.status, {
+    configured: true,
+    total: 2,
+    used: 1,
+    available: 1,
+  });
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes("scrypt$"), false);
+});
+
+test("mfa recovery code generation stores only hashes and returns plain codes once", async () => {
+  const client = makeClient({ mfa: true });
+  const { prisma, state } = makePrisma({ user: makeUser({ client }) });
+  const result = await generateMfaRecoveryCodes({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.recoveryCodes.length, 10);
+  assert.equal(result.regenerated, false);
+  assert.deepEqual(result.status, {
+    configured: true,
+    total: 10,
+    used: 0,
+    available: 10,
+  });
+  assert.equal(state.recoveryCodes.length, 10);
+  for (const code of result.recoveryCodes) {
+    assert.match(code, /^[A-F0-9]{8}-[A-F0-9]{8}$/);
+    assert.equal(state.recoveryCodes.some((stored) => stored.codeHash === code), false);
+    assert.equal(state.recoveryCodes.some((stored) => String(stored.codeHash).includes(code)), false);
+  }
+  assert.equal(state.recoveryCodes.every((stored) => String(stored.codeHash).startsWith("scrypt$")), true);
+});
+
+test("mfa recovery code regeneration replaces unused codes and keeps used audit rows", async () => {
+  const client = makeClient({ mfa: true });
+  const usedAt = new Date("2026-06-24T12:00:00.000Z");
+  const { prisma, state } = makePrisma({
+    user: makeUser({ client }),
+    recoveryCodes: [
+      { clientId: client.id, userId: "user-1", codeHash: "scrypt$old-unused", usedAt: null },
+      { clientId: client.id, userId: "user-1", codeHash: "scrypt$old-used", usedAt },
+    ],
+  });
+  const result = await generateMfaRecoveryCodes({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.regenerated, true);
+  assert.deepEqual(result.status, {
+    configured: true,
+    total: 11,
+    used: 1,
+    available: 10,
+  });
+  assert.equal(state.recoveryCodes.some((stored) => stored.codeHash === "scrypt$old-unused"), false);
+  assert.equal(state.recoveryCodes.some((stored) => stored.codeHash === "scrypt$old-used" && stored.usedAt === usedAt), true);
+  assert.equal(state.recoveryCodes.filter((stored) => stored.clientId === client.id && stored.userId === "user-1" && stored.usedAt === null).length, 10);
+});
+
+test("mfa recovery codes preserve tenant isolation and RBAC", async () => {
+  const client = makeClient({ mfa: true });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const agent = await generateMfaRecoveryCodes({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "AGENT",
+  });
+  assert.deepEqual(agent, { ok: false, error: "forbidden" });
+
+  const otherTenant = await generateMfaRecoveryCodes({
+    prisma,
+    clientId: "22222222-2222-4222-8222-222222222222",
+    userId: "user-1",
+    role: "ADMIN",
+  });
+  assert.deepEqual(otherTenant, { ok: false, error: "user_not_found" });
 });
 
 test("totp verifier accepts RFC-compatible six digit code inside the time window", () => {

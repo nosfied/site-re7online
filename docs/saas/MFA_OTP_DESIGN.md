@@ -541,26 +541,280 @@ Resultado:
 
 Sprint 77D e design-only. Nao altera codigo, banco, login, JWT, `AppAuthSession`, password reset ou enforcement.
 
-### 77E - Recovery Codes
-
-Renomeada no roadmap pos-77D para **77G - Recovery Codes**, porque a implementacao de runtime deve ser dividida em shadow e enforcement controlado:
-
-- gerar recovery codes;
-- usar recovery em login;
-- reset administrativo;
-- revogacao de sessoes apos recovery/reset.
-
 ### 77E - MFA Runtime Shadow
 
 - instrumentar `/auth/login` para avaliar politica sem bloquear;
-- registrar `login.mfa_required` e `login.mfa_bypassed`;
-- nao retornar `mfaRequired` ao frontend ainda ou retornar apenas em tenant piloto;
+- registrar `login.mfa_shadow_required`, `login.mfa_shadow_not_required` e `login.mfa_shadow_skipped`;
+- expor `/app/mfa/runtime-status` para diagnostico;
 - login continua emitindo JWT final;
 - nenhuma obrigatoriedade.
 
 Status 77E: implementado como runtime shadow sem enforcement. Apos senha valida, `/auth/login` avalia `mfa` + `mfaRequired` para o perfil MVP `ADMIN`, registra `login.mfa_shadow_required`, `login.mfa_shadow_not_required` ou `login.mfa_shadow_skipped`, e continua criando `AppAuthSession` e JWT exatamente como antes. O endpoint `/app/mfa/runtime-status` retorna `enrolled`, `enabled`, `wouldRequireMfa`, `mode=shadow` e `reason` para diagnostico na tela `/app/settings/security`. A flag `mfaEnforced` permanece sem efeito nesta sprint.
 
-### 77F - MFA Runtime Controlled Enforcement
+### 77F - MFA Controlled Enforcement Design
+
+- criar desafio temporario MFA;
+- definir armazenamento/TTL/tentativas;
+- definir endpoint futuro `/auth/mfa/verify`;
+- definir rollback por `mfaEnforced=false`;
+- documentar escopo piloto `ADMIN` + tenant piloto;
+- nao alterar login nesta sprint.
+
+Status 77F: design-only. Define enforcement controlado antes de alterar `/auth/login`, JWT ou `AppAuthSession`.
+
+#### Fluxo De Enforcement Controlado
+
+```text
+POST /auth/login
+↓
+senha valida + usuario ativo + tenant ativo
+↓
+avaliar mfa=true + mfaRequired=true + mfaEnforced=true
+↓
+confirmar perfil elegivel: ADMIN no MVP
+↓
+confirmar fator TOTP existente e descriptografavel
+↓
+criar MfaChallenge temporario
+↓
+nao criar AppAuthSession final
+↓
+nao emitir JWT final
+↓
+retornar { mfaRequired: true, challengeToken, expiresAt, methods: ["totp"] }
+↓
+POST /auth/mfa/verify
+↓
+validar challengeToken + tenant + user + expiracao + tentativas
+↓
+validar codigo TOTP
+↓
+marcar challenge como verified
+↓
+createExclusiveAppSession()
+↓
+issueClientAuthToken()
+↓
+retornar contrato final atual de login
+```
+
+Se a politica nao exigir MFA, ou se `mfaEnforced=false`, o login segue exatamente o fluxo atual.
+
+#### Desafio Temporario
+
+Opcao aprovada para implementacao governamental: tabela tenant-scoped `MfaChallenge`, mesmo que exista um `challengeToken` assinado. A tabela evita depender apenas de memoria local e permite auditoria, tentativas e rollback limpo.
+
+Campos recomendados:
+
+| Campo | Uso |
+| --- | --- |
+| `id` | Identificador interno do desafio. |
+| `clientId` | Isolamento multi-tenant obrigatorio. |
+| `userId` | Usuario autenticado por senha. |
+| `status` | `pending`, `verified`, `failed`, `expired`, `cancelled`. |
+| `attemptCount` | Contador para lockout por desafio. |
+| `expiresAt` | TTL curto; recomendado 5 minutos. |
+| `verifiedAt` | Preenchido no sucesso. |
+| `ipHash` | Auditoria sem IP bruto. |
+| `userAgentHash` | Auditoria sem user-agent bruto. |
+| `createdAt` / `updatedAt` | Operacao e troubleshooting. |
+
+`challengeToken` deve conter apenas referencia assinada ao desafio:
+
+- `typ=mfa_challenge`;
+- `challengeId`;
+- `clientId`;
+- `userId`;
+- `iat`;
+- `exp`.
+
+O token nao deve conter segredo TOTP, codigo, email completo ou dados sensiveis.
+
+#### Endpoint Futuro
+
+```text
+POST /auth/mfa/verify
+```
+
+Entrada:
+
+```json
+{
+  "challengeToken": "...",
+  "code": "123456"
+}
+```
+
+Resposta de sucesso:
+
+```json
+{
+  "ok": true,
+  "token": "...",
+  "user": {},
+  "features": {},
+  "profile": "government"
+}
+```
+
+Resposta de falha:
+
+- `401` para desafio invalido, expirado ou codigo invalido;
+- `429` para excesso de tentativas/rate limit;
+- mensagem generica: `codigo_invalido_ou_expirado`;
+- nunca retornar se o usuario existe, segredo, ciphertext, codigo enviado ou detalhes do fator.
+
+#### Comportamento Das Flags
+
+| Condicao | Resultado |
+| --- | --- |
+| `mfa=false` | Login atual, sem shadow/enforcement. |
+| `mfa=true`, `mfaRequired=false` | Login atual; setup/verificacao disponiveis. |
+| `mfa=true`, `mfaRequired=true`, `mfaEnforced=false` | Runtime shadow: login atual + auditoria. |
+| `mfa=true`, `mfaRequired=true`, `mfaEnforced=true` | Enforcement controlado para perfis elegiveis. |
+
+`mfaEnforced` so deve ser ligado em tenant piloto depois de:
+
+- todos os `ADMIN` elegiveis terem enrollment TOTP;
+- smoke de `/app/mfa/verify-shadow` passar;
+- plano de rollback validado;
+- equipe operacional presente para reset manual.
+
+#### Escopo Piloto
+
+MVP:
+
+- tenant piloto: `demo-prefeitura` ou tenant governamental controlado;
+- perfil: `ADMIN`;
+- fator: TOTP apenas;
+- usuarios sem enrollment: nao devem ser incluidos no piloto ou devem receber erro controlado `mfa_setup_required` com rollback imediato disponivel;
+- `SUPERVISOR` e `AGENT`: fora do enforcement.
+
+Nao implementar nesta fase:
+
+- recovery codes;
+- enforcement para `SUPERVISOR`;
+- OTP cidadao;
+- email/SMS/WhatsApp OTP;
+- obrigatoriedade global.
+
+#### Fallback Operacional
+
+Sem recovery codes, o fallback e operacional:
+
+1. Desligar `mfaEnforced=false` no tenant.
+2. Manter `mfa=true` e `mfaRequired=true` para continuar medindo.
+3. Login volta imediatamente ao fluxo atual.
+4. Challenges pendentes devem ser ignorados e expirar naturalmente.
+5. Se necessario, admin plataforma reseta fator TOTP do usuario em procedimento assistido.
+
+Regra de seguranca: nao ligar enforcement se houver risco de travar o ultimo ADMIN de um tenant.
+
+#### Frontend
+
+Fluxo:
+
+1. `/app/login` recebe `mfaRequired=true`.
+2. Nao salva sessao final.
+3. Guarda `challengeToken` em memoria ou `sessionStorage` de curta duracao.
+4. Exibe tela intermediaria de codigo.
+5. Chama `/auth/mfa/verify`.
+6. Em sucesso, salva a sessao final atual.
+7. Em expiracao, limpa o challenge e volta ao login.
+
+Estados:
+
+- aguardando codigo;
+- codigo invalido;
+- desafio expirado;
+- muitas tentativas;
+- voltar ao login.
+
+#### Auditoria
+
+Eventos planejados:
+
+| Evento | Quando |
+| --- | --- |
+| `login.mfa_challenge_created` | Senha valida e enforcement exige MFA. |
+| `login.mfa_challenge_verified` | TOTP valido e sessao final emitida. |
+| `login.mfa_challenge_failed` | Codigo invalido ou tentativa falha. |
+| `login.mfa_challenge_expired` | Challenge expirado. |
+| `login.mfa_enforcement_bypassed` | Enforcement desligado/rollback ou usuario fora do escopo. |
+
+Campos permitidos:
+
+- `clientId`;
+- `userId`;
+- `role`;
+- `challengeId`;
+- `requestId`;
+- `reason`;
+- `attemptCount`;
+- `ipHash` quando aplicavel.
+
+Campos proibidos:
+
+- codigo TOTP;
+- segredo TOTP;
+- ciphertext;
+- QR URI;
+- recovery code;
+- senha;
+- IP bruto;
+- user-agent bruto.
+
+#### Seguranca
+
+Controles obrigatorios:
+
+- TTL 5 minutos;
+- maximo 5 tentativas por challenge;
+- rate limit por `clientId:userId`, `challengeId` e IP hash;
+- invalidar challenge apos sucesso;
+- invalidar ou marcar failed apos excesso de tentativas;
+- nao emitir JWT final antes do TOTP valido;
+- nao criar `AppAuthSession` final antes do TOTP valido;
+- resposta generica para falhas;
+- rollback por flag sem migration rollback.
+
+#### Rollback
+
+Passo a passo:
+
+```text
+mfaEnforced=false
+```
+
+Depois:
+
+- recarregar backend se flags estiverem cacheadas;
+- confirmar `/auth/login` 200 para ADMIN;
+- confirmar `/app/mfa/runtime-status` ainda mostra shadow;
+- manter challenges pendentes ate expirarem;
+- nao apagar fatores TOTP.
+
+#### Criterios Para Implementar 77H
+
+- 77F aprovado;
+- `MFA_SECRET_ENCRYPTION_KEY` presente em producao;
+- pelo menos um ADMIN piloto com enrollment validado;
+- smoke de `verify-shadow` passando;
+- rollback por `mfaEnforced=false` testado;
+- decisao explicita sobre `MfaChallenge` migration.
+
+### 77G - Recovery Codes
+
+- criar recovery codes hash-only;
+- gerar e regenerar codigos em `/app/mfa/recovery-codes/generate`;
+- expor apenas status seguro em `/app/mfa/recovery-codes/status`;
+- exibir codigos em claro uma unica vez;
+- manter recovery fora do login ate a sprint de enforcement;
+- preparar reset administrativo futuro.
+
+Status 77G: implementado como MVP de seguranca pre-enforcement. A tela `/app/settings/security` permite gerar/regenerar 10 codigos de recuperacao, exibidos uma unica vez. O backend salva apenas hashes `scrypt`, remove codigos antigos nao usados na regeneracao e preserva contadores seguros de disponiveis/usados/total. Os eventos `mfa.recovery.generated`, `mfa.recovery.regenerated` e `mfa.recovery.status_viewed` sao redigidos. Login, JWT, `AppAuthSession`, password reset, `mfaRequired` e `mfaEnforced` permanecem inalterados; recovery codes ainda nao sao aceitos no login.
+
+### 77H - MFA Runtime Controlled Enforcement MVP
 
 - criar desafio temporario MFA;
 - retornar `mfaRequired=true` para `ADMIN` em tenant piloto;
@@ -568,12 +822,16 @@ Status 77E: implementado como runtime shadow sem enforcement. Apos senha valida,
 - emitir JWT final somente apos TOTP valido;
 - rollback por `mfaEnforced=false`.
 
-### 77G - Recovery Codes
+### 77I - Supervisor Enforcement
 
-- criar recovery codes hash-only;
-- uso unico no login MFA;
-- reset administrativo;
-- revogar sessoes apos recovery/reset.
+- expandir enforcement para `SUPERVISOR` somente apos recovery codes e piloto ADMIN estavel.
+
+### 77J - Admin Console Recovery
+
+- diagnostico de MFA por usuario;
+- reset administrativo auditado;
+- revogacao de sessoes apos reset;
+- procedimento especial para ultimo ADMIN do tenant.
 
 ## MVP Recomendado Para Implementacao
 
@@ -582,12 +840,14 @@ Status 77E: implementado como runtime shadow sem enforcement. Apos senha valida,
 3. Permitir setup TOTP para `ADMIN`.
 4. Rodar verificacao TOTP shadow para validar codigos sem bloquear login.
 5. Executar 77E em runtime shadow para medir impacto de `mfaRequired=true`.
-6. Ativar enforcement controlado somente para `ADMIN` em tenant piloto.
-7. Implementar recovery codes antes de expandir para `SUPERVISOR` ou varios tenants.
+6. Concluir 77F design de enforcement controlado.
+7. Implementar recovery codes antes de enforcement amplo.
+8. Ativar enforcement controlado somente para `ADMIN` em tenant piloto.
+9. Expandir para `SUPERVISOR` somente depois de piloto e recovery estaveis.
 
 ## Confirmacao De Escopo
 
-Esta sprint 77A/77D de design:
+Sprints de design 77A/77D/77F:
 
 - nao altera codigo;
 - nao altera banco;

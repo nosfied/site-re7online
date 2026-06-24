@@ -109,7 +109,14 @@ import {
   revokeAppSession,
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
-import { evaluateMfaRuntimeShadow, getMfaStatus, startMfaEnrollment, verifyMfaTotpShadow } from "../auth/mfaService.js";
+import {
+  evaluateMfaRuntimeShadow,
+  generateMfaRecoveryCodes,
+  getMfaRecoveryCodeStatus,
+  getMfaStatus,
+  startMfaEnrollment,
+  verifyMfaTotpShadow,
+} from "../auth/mfaService.js";
 import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
@@ -1687,6 +1694,80 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "app.mfa.runtime_status.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
+  }
+
+  if (pathname === "/app/mfa/recovery-codes/status") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "GET") {
+      try {
+        const result = await getMfaRecoveryCodeStatus({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, mfaErrorStatus(result.error), httpError(result.error, "Could not load MFA recovery code status."));
+          return;
+        }
+        json(res, 200, { ok: true, status: result.status });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.recovery_status.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
+  }
+
+  if (pathname === "/app/mfa/recovery-codes/generate") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "POST") {
+      try {
+        const result = await generateMfaRecoveryCodes({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+          requestId,
+        });
+        if (!result.ok) {
+          json(res, mfaErrorStatus(result.error), httpError(result.error, "Could not generate MFA recovery codes."));
+          return;
+        }
+        json(res, 201, {
+          ok: true,
+          recoveryCodes: result.recoveryCodes,
+          status: result.status,
+          regenerated: result.regenerated,
+          message: "Guarde estes codigos agora. Eles nao serao exibidos novamente.",
+        });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.recovery_generate.error",
           clientId: access.client.id,
           userId: access.clientAuth.userId,
           requestId,

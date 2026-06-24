@@ -9,7 +9,7 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 export type MfaServicePrisma = Pick<
   PrismaClient,
-  "client" | "user" | "mfaTotpSecret" | "mfaRecoveryCode"
+  "$transaction" | "client" | "user" | "mfaTotpSecret" | "mfaRecoveryCode"
 >;
 
 type ClientWithFeatures = {
@@ -94,6 +94,7 @@ export type MfaRuntimeShadowStatus = {
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 const TOTP_WINDOW = 1;
+const RECOVERY_CODE_COUNT = 10;
 const SHADOW_RATE_LIMIT_WINDOW_MS = 60_000;
 const SHADOW_RATE_LIMIT_MAX = 10;
 const shadowVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -159,6 +160,16 @@ function generateBase32Secret(byteLength = 20) {
     output += BASE32_ALPHABET[Number.parseInt(chunk, 2)] ?? "";
   }
   return output;
+}
+
+function generateRecoveryCode() {
+  return `${crypto.randomBytes(4).toString("hex")}-${crypto.randomBytes(4).toString("hex")}`.toUpperCase();
+}
+
+function hashRecoveryCode(code: string) {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.scryptSync(code, salt, 64);
+  return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
 }
 
 function decodeBase32(value: string) {
@@ -339,6 +350,120 @@ export async function getMfaStatus(params: {
   return {
     ok: true as const,
     status: formatStatus({ client: user.client, secret, recoveryCodes }),
+  };
+}
+
+export async function getMfaRecoveryCodeStatus(params: {
+  prisma: MfaServicePrisma;
+  clientId: string;
+  userId: string;
+  role: string;
+  requestId?: string | null;
+}) {
+  if (!canManageOwnMfa(params.role)) {
+    return { ok: false as const, error: "forbidden" as const };
+  }
+  const user = await getScopedUser(params);
+  if (!user) return { ok: false as const, error: "user_not_found" as const };
+  if (user.client.status !== "ACTIVE" || !user.isActive) {
+    return { ok: false as const, error: "client_inactive" as const };
+  }
+  if (!hasFeature(user.client, "mfa")) {
+    return { ok: false as const, error: "mfa_feature_disabled" as const };
+  }
+  const recoveryCodes = await params.prisma.mfaRecoveryCode.findMany({
+    where: {
+      clientId: params.clientId,
+      userId: params.userId,
+    },
+    select: { usedAt: true },
+  });
+  const total = recoveryCodes.length;
+  const used = recoveryCodes.filter((code) => code.usedAt).length;
+  const available = total - used;
+  logger.info({
+    event: "mfa.recovery.status_viewed",
+    clientId: params.clientId,
+    userId: params.userId,
+    role: normalizeRole(params.role),
+    total,
+    available,
+    requestId: params.requestId,
+  });
+  return {
+    ok: true as const,
+    status: {
+      configured: total > 0,
+      total,
+      used,
+      available,
+    },
+  };
+}
+
+export async function generateMfaRecoveryCodes(params: {
+  prisma: MfaServicePrisma;
+  clientId: string;
+  userId: string;
+  role: string;
+  requestId?: string | null;
+}) {
+  if (!canManageOwnMfa(params.role)) {
+    return { ok: false as const, error: "forbidden" as const };
+  }
+  const user = await getScopedUser(params);
+  if (!user) return { ok: false as const, error: "user_not_found" as const };
+  if (user.client.status !== "ACTIVE" || !user.isActive) {
+    return { ok: false as const, error: "client_inactive" as const };
+  }
+  if (!hasFeature(user.client, "mfa")) {
+    return { ok: false as const, error: "mfa_feature_disabled" as const };
+  }
+
+  const existingCodes = await params.prisma.mfaRecoveryCode.findMany({
+    where: {
+      clientId: params.clientId,
+      userId: params.userId,
+    },
+    select: { usedAt: true },
+  });
+  const usedExistingCount = existingCodes.filter((code) => code.usedAt).length;
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, () => generateRecoveryCode());
+  await params.prisma.$transaction([
+    params.prisma.mfaRecoveryCode.deleteMany({
+      where: {
+        clientId: params.clientId,
+        userId: params.userId,
+        usedAt: null,
+      },
+    }),
+    params.prisma.mfaRecoveryCode.createMany({
+      data: codes.map((code) => ({
+        clientId: params.clientId,
+        userId: params.userId,
+        codeHash: hashRecoveryCode(code),
+      })),
+    }),
+  ]);
+  const total = usedExistingCount + codes.length;
+  logger.info({
+    event: existingCodes.length > 0 ? "mfa.recovery.regenerated" : "mfa.recovery.generated",
+    clientId: params.clientId,
+    userId: params.userId,
+    role: normalizeRole(params.role),
+    count: codes.length,
+    requestId: params.requestId,
+  });
+  return {
+    ok: true as const,
+    recoveryCodes: codes,
+    status: {
+      configured: true,
+      total,
+      used: usedExistingCount,
+      available: codes.length,
+    },
+    regenerated: existingCodes.length > 0,
   };
 }
 

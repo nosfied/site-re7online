@@ -897,6 +897,13 @@ export type AppMfaRuntimeStatus = {
     | "admin_required_pending_enrollment";
 };
 
+export type AppMfaRecoveryCodeStatus = {
+  configured: boolean;
+  total: number;
+  used: number;
+  available: number;
+};
+
 export type HandoffLeadNotificationRecipient = {
   id: string;
   waId: string;
@@ -1836,10 +1843,31 @@ export function fetchAppMfaRuntimeStatus(
   return requestAppJson(session, "/app/mfa/runtime-status");
 }
 
+export function fetchAppMfaRecoveryCodeStatus(
+  session: AppSession
+): Promise<{ ok: true; status: AppMfaRecoveryCodeStatus }> {
+  return requestAppJson(session, "/app/mfa/recovery-codes/status");
+}
+
 export function startAppMfaEnrollment(
   session: AppSession
 ): Promise<{ ok: true; status: AppMfaStatus; provisioning: AppMfaProvisioning; message: string }> {
   return requestAppJson(session, "/app/mfa/enrollment", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function generateAppMfaRecoveryCodes(
+  session: AppSession
+): Promise<{
+  ok: true;
+  recoveryCodes: string[];
+  status: AppMfaRecoveryCodeStatus;
+  regenerated: boolean;
+  message: string;
+}> {
+  return requestAppJson(session, "/app/mfa/recovery-codes/generate", {
     method: "POST",
     body: JSON.stringify({}),
   });
