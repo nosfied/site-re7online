@@ -7,9 +7,11 @@ import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/F
 import {
   AppApiError,
   AppMfaProvisioning,
+  AppMfaRuntimeStatus,
   AppMfaStatus,
   AppSession,
   clearAppSession,
+  fetchAppMfaRuntimeStatus,
   fetchAppMfaStatus,
   loadAppSession,
   saveAppSession,
@@ -50,6 +52,7 @@ export default function SecuritySettingsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
   const [status, setStatus] = useState<AppMfaStatus | null>(null);
+  const [runtimeStatus, setRuntimeStatus] = useState<AppMfaRuntimeStatus | null>(null);
   const [provisioning, setProvisioning] = useState<AppMfaProvisioning | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,8 +76,12 @@ export default function SecuritySettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetchAppMfaStatus(activeSession);
-        setStatus(response.status);
+        const [mfaResponse, runtimeResponse] = await Promise.all([
+          fetchAppMfaStatus(activeSession),
+          fetchAppMfaRuntimeStatus(activeSession),
+        ]);
+        setStatus(mfaResponse.status);
+        setRuntimeStatus(runtimeResponse.status);
       } catch (err) {
         const typed = err as AppApiError;
         if (typed.status === 401) {
@@ -118,6 +125,8 @@ export default function SecuritySettingsPage() {
       const response = await startAppMfaEnrollment(session);
       setStatus(response.status);
       setProvisioning(response.provisioning);
+      const runtimeResponse = await fetchAppMfaRuntimeStatus(session);
+      setRuntimeStatus(runtimeResponse.status);
       setSuccess("Enrollment TOTP preparado.");
     } catch (err) {
       const typed = err as AppApiError;
@@ -255,6 +264,27 @@ export default function SecuritySettingsPage() {
                 Nenhum payload gerado nesta sessao. Inicie o enrollment para gerar o segredo criptografado no backend.
               </p>
             )}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
+          <h3 className="text-sm font-semibold">Runtime shadow</h3>
+          <p className="mt-1 text-sm theme-muted">
+            O login continua normal. Esta leitura apenas informa se MFA seria exigido pela politica atual.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-[0.2em] theme-muted">Modo</p>
+              <p className="mt-1 text-sm font-semibold">{runtimeStatus?.mode ?? "shadow"}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-[0.2em] theme-muted">Seria exigido</p>
+              <p className="mt-1 text-sm font-semibold">{runtimeStatus?.wouldRequireMfa ? "Sim" : "Nao"}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-[0.2em] theme-muted">Motivo</p>
+              <p className="mt-1 break-words text-sm font-semibold">{runtimeStatus?.reason ?? "mfa_not_required"}</p>
+            </div>
           </div>
         </div>
 

@@ -884,6 +884,19 @@ export type AppMfaShadowVerification = {
   mode: "shadow";
 };
 
+export type AppMfaRuntimeStatus = {
+  enrolled: boolean;
+  enabled: boolean;
+  wouldRequireMfa: boolean;
+  mode: "shadow";
+  reason:
+    | "mfa_disabled"
+    | "mfa_not_required"
+    | "role_not_eligible"
+    | "admin_required_enrolled"
+    | "admin_required_pending_enrollment";
+};
+
 export type HandoffLeadNotificationRecipient = {
   id: string;
   waId: string;
@@ -1815,6 +1828,12 @@ export function rotateAppWebhookEndpointSecret(
 
 export function fetchAppMfaStatus(session: AppSession): Promise<{ ok: true; status: AppMfaStatus }> {
   return requestAppJson(session, "/app/mfa");
+}
+
+export function fetchAppMfaRuntimeStatus(
+  session: AppSession
+): Promise<{ ok: true; status: AppMfaRuntimeStatus }> {
+  return requestAppJson(session, "/app/mfa/runtime-status");
 }
 
 export function startAppMfaEnrollment(

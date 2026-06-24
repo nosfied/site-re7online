@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   decryptMfaSecret,
   encryptMfaSecret,
+  evaluateMfaRuntimeShadow,
   getMfaStatus,
   startMfaEnrollment,
   verifyMfaTotpShadow,
@@ -280,4 +281,88 @@ test("mfa shadow verification preserves tenant isolation", async () => {
     code: "123456",
   });
   assert.deepEqual(result, { ok: false, error: "user_not_found" });
+});
+
+test("mfa runtime shadow skips disabled feature without requiring MFA", async () => {
+  const client = makeClient({ mfa: false, mfaRequired: true });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const result = await evaluateMfaRuntimeShadow({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+    client,
+  });
+  assert.deepEqual(result, {
+    enrolled: false,
+    enabled: false,
+    wouldRequireMfa: false,
+    mode: "shadow",
+    reason: "mfa_disabled",
+  });
+});
+
+test("mfa runtime shadow marks admin as required when policy is enabled without blocking login", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const result = await evaluateMfaRuntimeShadow({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+    client,
+  });
+  assert.deepEqual(result, {
+    enrolled: false,
+    enabled: false,
+    wouldRequireMfa: true,
+    mode: "shadow",
+    reason: "admin_required_pending_enrollment",
+  });
+});
+
+test("mfa runtime shadow detects admin enrollment without enforcing login", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true });
+  const { prisma } = makePrisma({
+    user: makeUser({ client }),
+    secret: {
+      clientId: client.id,
+      userId: "user-1",
+      enabled: false,
+      enrolledAt: null,
+    },
+  });
+  const result = await evaluateMfaRuntimeShadow({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+    client,
+  });
+  assert.deepEqual(result, {
+    enrolled: true,
+    enabled: false,
+    wouldRequireMfa: true,
+    mode: "shadow",
+    reason: "admin_required_enrolled",
+  });
+});
+
+test("mfa runtime shadow does not require supervisor in the MVP policy", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true });
+  const { prisma } = makePrisma({ user: makeUser({ client, role: "SUPERVISOR" }) });
+  const result = await evaluateMfaRuntimeShadow({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "SUPERVISOR",
+    client,
+  });
+  assert.deepEqual(result, {
+    enrolled: false,
+    enabled: false,
+    wouldRequireMfa: false,
+    mode: "shadow",
+    reason: "role_not_eligible",
+  });
 });

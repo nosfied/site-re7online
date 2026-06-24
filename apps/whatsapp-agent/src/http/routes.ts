@@ -109,7 +109,7 @@ import {
   revokeAppSession,
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
-import { getMfaStatus, startMfaEnrollment, verifyMfaTotpShadow } from "../auth/mfaService.js";
+import { evaluateMfaRuntimeShadow, getMfaStatus, startMfaEnrollment, verifyMfaTotpShadow } from "../auth/mfaService.js";
 import {
   recordConversationAgentOutboundMetrics,
   recordConversationClosedMetrics,
@@ -1033,6 +1033,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           },
           client: {
             select: {
+              id: true,
+              clientKey: true,
+              name: true,
               status: true,
               features: true,
               profile: true,
@@ -1070,6 +1073,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 401, { error: "invalid_credentials" });
         return;
       }
+
+      await evaluateMfaRuntimeShadow({
+        prisma,
+        clientId: user.clientId,
+        userId: user.id,
+        role: user.role,
+        client: user.client,
+        requestId,
+        emitAudit: true,
+      });
 
       const session = await createExclusiveAppSession({
         clientId: user.clientId,
@@ -1642,6 +1655,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "app.mfa.enrollment.error",
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          requestId,
+          message: (error as Error).message,
+        });
+        json(res, 500, httpError("server_error", "Server error"));
+      }
+      return;
+    }
+    json(res, 405, httpError("method_not_allowed", "Method not allowed"));
+    return;
+  }
+
+  if (pathname === "/app/mfa/runtime-status") {
+    const prisma = getPrisma();
+    const access = await requireMfaAppAccess(req, res, requestId, pathname);
+    if (!access) return;
+    if (req.method === "GET") {
+      try {
+        const status = await evaluateMfaRuntimeShadow({
+          prisma,
+          clientId: access.client.id,
+          userId: access.clientAuth.userId,
+          role: access.clientAuth.role,
+          client: access.client,
+          requestId,
+          emitAudit: false,
+        });
+        json(res, 200, { ok: true, status });
+      } catch (error) {
+        logger.error({
+          event: "app.mfa.runtime_status.error",
           clientId: access.client.id,
           userId: access.clientAuth.userId,
           requestId,
@@ -16946,7 +16991,7 @@ type ScopedClientRecord = {
   id: string;
   clientKey: string;
   status: "ACTIVE" | "INACTIVE";
-  features: unknown;
+  features: Prisma.JsonValue | null;
   profile: string | null;
 };
 

@@ -87,6 +87,10 @@ POST /app/mfa/verify-shadow
 
 - Confirmar que segredo, ciphertext e codigo TOTP nao aparecem em resposta, log ou listagem.
 - MFA obrigatorio em login so pode ser ativado em sprint/runtime propria com rollback por `mfaEnforced=false`.
+- A primeira sprint de runtime deve ser shadow: avaliar politica e auditar `login.mfa_shadow_required`/`login.mfa_shadow_not_required`/`login.mfa_shadow_skipped` sem bloquear login.
+- Runtime shadow de MFA deve preservar resposta atual de `/auth/login`, emissao de JWT e criacao de `AppAuthSession`; o smoke deve comparar que login continua 200 sem `mfaRequired` bloqueante.
+- Enforcement de login exige tenant piloto, perfil inicial `ADMIN`, desafio temporario com TTL curto, maximo de tentativas, smoke de login/MFA e plano de rollback por `mfaEnforced=false`.
+- Nao expandir enforcement para `SUPERVISOR`/`AGENT` antes de recovery codes ou procedimento assistido aprovado.
 
 Scheduling reminders:
 

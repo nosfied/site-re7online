@@ -78,6 +78,19 @@ export type VerifyMfaTotpShadowResult =
         | "rate_limited";
     };
 
+export type MfaRuntimeShadowStatus = {
+  enrolled: boolean;
+  enabled: boolean;
+  wouldRequireMfa: boolean;
+  mode: "shadow";
+  reason:
+    | "mfa_disabled"
+    | "mfa_not_required"
+    | "role_not_eligible"
+    | "admin_required_enrolled"
+    | "admin_required_pending_enrollment";
+};
+
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 const TOTP_WINDOW = 1;
@@ -327,6 +340,117 @@ export async function getMfaStatus(params: {
     ok: true as const,
     status: formatStatus({ client: user.client, secret, recoveryCodes }),
   };
+}
+
+export async function evaluateMfaRuntimeShadow(params: {
+  prisma: MfaServicePrisma;
+  clientId: string;
+  userId: string;
+  role: string;
+  client: ClientWithFeatures;
+  requestId?: string | null;
+  emitAudit?: boolean;
+}): Promise<MfaRuntimeShadowStatus> {
+  const mfaEnabled = hasFeature(params.client, "mfa");
+  if (!mfaEnabled) {
+    const status: MfaRuntimeShadowStatus = {
+      enrolled: false,
+      enabled: false,
+      wouldRequireMfa: false,
+      mode: "shadow",
+      reason: "mfa_disabled",
+    };
+    if (params.emitAudit) {
+      logger.info({
+        event: "login.mfa_shadow_skipped",
+        reason: status.reason,
+        clientId: params.clientId,
+        userId: params.userId,
+        role: normalizeRole(params.role),
+        requestId: params.requestId,
+      });
+    }
+    return status;
+  }
+
+  const secret = await params.prisma.mfaTotpSecret.findUnique({
+    where: {
+      clientId_userId: {
+        clientId: params.clientId,
+        userId: params.userId,
+      },
+    },
+    select: {
+      enabled: true,
+      enrolledAt: true,
+    },
+  });
+  const enrolled = Boolean(secret);
+  const enabled = Boolean(secret?.enabled || secret?.enrolledAt);
+
+  const required = hasFeature(params.client, "mfaRequired");
+  if (!required) {
+    const status: MfaRuntimeShadowStatus = {
+      enrolled,
+      enabled,
+      wouldRequireMfa: false,
+      mode: "shadow",
+      reason: "mfa_not_required",
+    };
+    if (params.emitAudit) {
+      logger.info({
+        event: "login.mfa_shadow_not_required",
+        reason: status.reason,
+        clientId: params.clientId,
+        userId: params.userId,
+        role: normalizeRole(params.role),
+        requestId: params.requestId,
+      });
+    }
+    return status;
+  }
+
+  const role = normalizeRole(params.role);
+  if (role !== "ADMIN") {
+    const status: MfaRuntimeShadowStatus = {
+      enrolled,
+      enabled,
+      wouldRequireMfa: false,
+      mode: "shadow",
+      reason: "role_not_eligible",
+    };
+    if (params.emitAudit) {
+      logger.info({
+        event: "login.mfa_shadow_not_required",
+        reason: status.reason,
+        clientId: params.clientId,
+        userId: params.userId,
+        role,
+        requestId: params.requestId,
+      });
+    }
+    return status;
+  }
+
+  const status: MfaRuntimeShadowStatus = {
+    enrolled,
+    enabled,
+    wouldRequireMfa: true,
+    mode: "shadow",
+    reason: enrolled ? "admin_required_enrolled" : "admin_required_pending_enrollment",
+  };
+  if (params.emitAudit) {
+    logger.info({
+      event: "login.mfa_shadow_required",
+      reason: status.reason,
+      clientId: params.clientId,
+      userId: params.userId,
+      role,
+      enrolled,
+      requestId: params.requestId,
+    });
+  }
+  return status;
 }
 
 export async function startMfaEnrollment(params: {
