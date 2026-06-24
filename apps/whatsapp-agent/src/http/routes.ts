@@ -8576,12 +8576,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     };
 
     if (req.method === "GET" && pathname === "/admin/health") {
+      const dbStartedAt = Date.now();
       try {
         await prisma.$queryRaw`SELECT 1`;
+        const dbDurationMs = Date.now() - dbStartedAt;
         metrics.gauge("health.db.status", 1, { module: "admin", status: "ok" });
+        metrics.timing("db_duration", dbDurationMs, { module: "admin", operation: "select_1", status: "ok" });
+        metrics.timing("dependency_duration", dbDurationMs, { dependency: "db", module: "admin", operation: "select_1", status: "ok" });
         json(res, 200, { ok: true, db: true });
       } catch {
+        const dbDurationMs = Date.now() - dbStartedAt;
         metrics.gauge("health.db.status", 0, { module: "admin", status: "error" });
+        metrics.timing("db_duration", dbDurationMs, { module: "admin", operation: "select_1", status: "error" });
+        metrics.timing("dependency_duration", dbDurationMs, { dependency: "db", module: "admin", operation: "select_1", status: "error" });
         json(res, 200, { ok: true, db: false });
       }
       return;

@@ -18,6 +18,7 @@ type TimingRecord = {
   count: number;
   totalMs: number;
   avgMs: number;
+  p95Ms: number;
   minMs: number;
   maxMs: number;
   lastMs: number;
@@ -25,14 +26,17 @@ type TimingRecord = {
 
 const counters = new Map<string, CounterRecord>();
 const gauges = new Map<string, GaugeRecord>();
-const timings = new Map<string, Omit<TimingRecord, "avgMs">>();
+const timings = new Map<string, Omit<TimingRecord, "avgMs" | "p95Ms"> & { samples: number[] }>();
+const MAX_TIMING_SAMPLES = 256;
 
 const ALLOWED_LABELS = new Set([
   "channel",
+  "dependency",
   "event",
   "feature",
   "method",
   "module",
+  "operation",
   "provider",
   "route",
   "source",
@@ -95,6 +99,8 @@ export const metrics = {
       existing.minMs = Math.min(existing.minMs, safeDuration);
       existing.maxMs = Math.max(existing.maxMs, safeDuration);
       existing.lastMs = safeDuration;
+      existing.samples.push(safeDuration);
+      if (existing.samples.length > MAX_TIMING_SAMPLES) existing.samples.shift();
       return;
     }
     timings.set(key, {
@@ -105,23 +111,44 @@ export const metrics = {
       minMs: safeDuration,
       maxMs: safeDuration,
       lastMs: safeDuration,
+      samples: [safeDuration],
     });
   },
 };
 
 export function getMetricsSnapshot() {
+  collectProcessMetrics();
   const generatedAt = new Date().toISOString();
+  const timingRecords = Array.from(timings.values())
+    .map((item): TimingRecord => {
+      const { samples, ...record } = item;
+      return {
+        ...record,
+        avgMs: record.count > 0 ? Math.round(record.totalMs / record.count) : 0,
+        p95Ms: approximateP95(samples),
+      };
+    })
+    .sort(compareMetricRecords);
   return {
     ok: true,
     generatedAt,
+    process: {
+      uptimeSeconds: Math.round(process.uptime()),
+      memory: process.memoryUsage(),
+      cpu: process.cpuUsage(),
+    },
     counters: Array.from(counters.values()).sort(compareMetricRecords),
     gauges: Array.from(gauges.values()).sort(compareMetricRecords),
-    timings: Array.from(timings.values())
-      .map((item): TimingRecord => ({
-        ...item,
-        avgMs: item.count > 0 ? Math.round(item.totalMs / item.count) : 0,
-      }))
-      .sort(compareMetricRecords),
+    timings: timingRecords,
+    averages: timingRecords.map((item) => ({
+      name: item.name,
+      labels: item.labels,
+      count: item.count,
+      avgMs: item.avgMs,
+      p95Ms: item.p95Ms,
+      minMs: item.minMs,
+      maxMs: item.maxMs,
+    })),
   };
 }
 
@@ -135,6 +162,25 @@ function compareMetricRecords(a: { name: string; labels: Record<string, string> 
   const byName = a.name.localeCompare(b.name);
   if (byName !== 0) return byName;
   return JSON.stringify(a.labels).localeCompare(JSON.stringify(b.labels));
+}
+
+function approximateP95(samples: number[]) {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1);
+  return sorted[index] ?? 0;
+}
+
+function collectProcessMetrics() {
+  const memory = process.memoryUsage();
+  const cpu = process.cpuUsage();
+  const labels = { module: "process" };
+  metrics.gauge("process.uptime.seconds", Math.round(process.uptime()), labels);
+  metrics.gauge("process.memory.rss.bytes", memory.rss, labels);
+  metrics.gauge("process.memory.heap_used.bytes", memory.heapUsed, labels);
+  metrics.gauge("process.memory.heap_total.bytes", memory.heapTotal, labels);
+  metrics.gauge("process.cpu.user.micros", cpu.user, labels);
+  metrics.gauge("process.cpu.system.micros", cpu.system, labels);
 }
 
 export function normalizeMetricRoute(pathname: string) {
@@ -156,7 +202,8 @@ export function classifyMetricModule(pathname: string) {
   if (pathname.startsWith("/webhooks") || pathname.includes("/webhooks")) return "webhook";
   if (pathname.includes("/search")) return "search";
   if (pathname.includes("/audio-transcriptions")) return "audio";
-  if (pathname.includes("/mfa") || pathname.startsWith("/auth/")) return "mfa";
+  if (pathname.includes("/mfa") || pathname.startsWith("/auth/mfa")) return "mfa";
+  if (pathname.startsWith("/auth/")) return "auth";
   if (pathname.includes("/scheduling")) return "scheduling";
   if (pathname.includes("/telegram")) return "telegram";
   if (pathname.includes("/webchat")) return "webchat";

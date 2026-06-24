@@ -66,8 +66,8 @@ Arquivos e areas observadas:
 | Request correlation | ATENDE COM AJUSTE | `requestId`, `correlationId` e `tenantId` sao normalizados no logger central; `tenantId` cai para `clientId` quando necessario | nem todos os endpoints e CLIs garantem correlacao uniforme com canal/provider/duration | Medio | 78C |
 | Auditoria | ATENDE COM AJUSTE | `Event` tenant-scoped, eventos por canais, MFA, webhooks, search, audio, scheduling | falta tela/relatorio formal de auditoria operacional para cliente e operador interno | Medio/alto | 78E |
 | Metricas de atendimento/SLA | ATENDE | `ConversationMetrics`, `SLAConfig`, reports/dashboard, breach logs | precisa consolidar visao operacional por tenant/canal/atendente | Medio | 78E |
-| Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing`, snapshot `/admin/ops/metrics`, request count/duration/error por modulo/rota, gauges de health e contadores de webhooks | ainda nao ha historico persistente, Prometheus/OpenTelemetry, alertas ou dashboard visual | Medio/alto | 78D/78E |
-| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime e alimenta gauges internos `health.db.status` e `process.uptime.seconds` | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio | 78D |
+| Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing` e `/admin/ops/metrics`; Sprint 78E amplia snapshot com p95 aproximado, averages, memoria/CPU/uptime, `request_count`, `request_duration`, `module_duration`, `route_duration`, `db_duration` e `dependency_duration` | ainda nao ha historico persistente, Prometheus/OpenTelemetry, alertas ou dashboard visual | Medio/alto | 78F/78G |
+| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime, alimenta gauges internos e agora mede `db_duration`/`dependency_duration` para DB | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio | 78F |
 | Monitoramento PM2 | ATENDE COM AJUSTE | `ecosystem.config.cjs`, autorestart, max memory 300M, runbooks com `pm2 logs/status` | sem alertas automaticos de memoria/CPU/restart/disk; instancia unica | Alto | 78D/78F |
 | Deploy | ATENDE COM AJUSTE | `deploy-vps.sh`, migrate/build/reload/health, checklist e deploy controlado | script padrao roda build frontend/backend; VPS exige builds sequenciais; rollback ainda manual | Medio | 78B |
 | Rollback | ATENDE COM AJUSTE | feature flags e runbooks; rollback por flag em modulos sensiveis | rollback de migration/restore nao e exercitado automaticamente; sem playbook por severidade | Medio/alto | 78B/78F |
@@ -365,17 +365,36 @@ Status: implementado como fundacao interna em memoria. Foram criados `metrics.co
 
 Objetivo:
 
-- request correlation padronizada;
-- tracing leve ou OpenTelemetry;
-- spans para DB/provider/CLIs criticos;
-- alertas basicos;
-- export para ferramenta externa se aprovada.
+- desenhar request lifecycle, correlation, dependency timings e tracing futuro;
+- definir dashboards de API, canais, filas, Search, Audio, MFA, Webhooks, Public API e Scheduling;
+- projetar alertas de erro, latencia, fila, memoria, CPU, disco e banco;
+- definir MTTR, MTBF, SLA tecnico e SLO inicial;
+- comparar JSON interno, Prometheus, OpenTelemetry/OTLP e export externo;
+- separar roadmap 78E-78H.
 
 Resultado esperado:
 
-- incidentes ficam rastreaveis ponta a ponta.
+- incidentes passam a ter arquitetura de rastreabilidade ponta a ponta antes da implementacao runtime.
 
-### 78E - Dashboards
+Status: concluido como design documental. A Sprint 78D criou `docs/saas/RUNTIME_OBSERVABILITY_DESIGN.md`, recomendando manter JSON interno como MVP, evoluir primeiro runtime metrics/readiness/dependency timing e deixar Prometheus/OpenTelemetry/Grafana para etapa posterior. Nao houve alteracao funcional.
+
+### 78E - Runtime Metrics
+
+Objetivo:
+
+- ampliar metricas canonicas de request, rota, modulo, DB e dependencia;
+- adicionar p95 aproximado em timings;
+- expor uptime, memoria e CPU no snapshot protegido;
+- manter endpoint admin e labels redigidos;
+- nao criar dependencia externa.
+
+Resultado esperado:
+
+- diagnostico runtime mais completo sem Prometheus/Grafana/OpenTelemetry.
+
+Status: implementado como MVP interno. Documento oficial: `docs/saas/RUNTIME_METRICS_FOUNDATION.md`.
+
+### 78F - Dashboards
 
 Objetivo:
 
@@ -387,7 +406,19 @@ Resultado esperado:
 
 - evidencias comerciais e operacionais para editais.
 
-### 78F - HA / Scale
+### 78G - Alerting
+
+Objetivo:
+
+- regras de alerta para health, DB, erro, latencia, disco, memoria, CPU, PM2 restart e provider;
+- canal de notificacao interno;
+- runbooks por severidade.
+
+Resultado esperado:
+
+- reduzir tempo de deteccao e iniciar MTTR real.
+
+### 78H - HA / Scale
 
 Objetivo:
 
@@ -408,9 +439,11 @@ Resultado esperado:
 
 1. **78B Logging Hardening**: reduz risco imediato de LGPD/secrets.
 2. **78C Metrics Foundation**: implementada com metricas internas e endpoint diagnostico protegido.
-3. **78D Observability Runtime**: adiciona correlacao/tracing/alertas.
-4. **78E Dashboards**: transforma dados em operacao e prova licitatoria.
-5. **78F HA / Scale**: prepara Aripuana/Rio Preto e contratos grandes.
+3. **78D Runtime Observability Design**: concluida como arquitetura, export strategy, dashboards e alertas.
+4. **78E Runtime Metrics**: implementada como MVP interno com p95 aproximado, process metrics e dependency timing DB.
+5. **78F Dashboards**: transforma dados em operacao e prova licitatoria.
+6. **78G Alerting**: reduz tempo de deteccao com regras e runbooks.
+7. **78H HA / Scale**: prepara Aripuana/Rio Preto e contratos grandes.
 
 ## Impacto Em Editais
 
