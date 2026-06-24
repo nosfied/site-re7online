@@ -71,6 +71,7 @@ model Client {
   pushSubscriptions PushSubscription[]
   mfaTotpSecrets MfaTotpSecret[]
   mfaRecoveryCodes MfaRecoveryCode[]
+  mfaChallenges MfaChallenge[]
   runtimeStates ConversationRuntimeState[]
   departments   Department[]
   queues        Queue[]
@@ -127,6 +128,7 @@ model User {
   pushSubscriptions PushSubscription[]
   mfaTotpSecrets MfaTotpSecret[]
   mfaRecoveryCodes MfaRecoveryCode[]
+  mfaChallenges MfaChallenge[]
   schedulingResources SchedulingResource[]
   appointmentsCreated Appointment[] @relation("AppointmentCreatedBy")
   appointmentsUpdated Appointment[] @relation("AppointmentUpdatedBy")
@@ -231,6 +233,26 @@ model MfaRecoveryCode {
 
   @@unique([clientId, userId, codeHash])
   @@index([clientId, userId, usedAt])
+}
+
+model MfaChallenge {
+  id                 String    @id @default(cuid())
+  clientId           String    @db.Uuid
+  userId             String
+  challengeTokenHash String    @unique
+  expiresAt          DateTime
+  attempts           Int       @default(0)
+  status             String    @default("pending")
+  ipHash             String?
+  userAgentHash      String?
+  createdAt          DateTime  @default(now())
+  verifiedAt         DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, userId, status])
+  @@index([expiresAt])
 }
 
 model WaPhoneNumber {

@@ -11,6 +11,7 @@ import {
   loadAppSession,
   loginAppUser,
   saveAppSession,
+  verifyAppMfaLoginChallenge,
 } from "@/lib/appClientApi";
 
 const MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY = "converta_mobile_notification_notice_after_login";
@@ -23,6 +24,13 @@ export default function AppLoginPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    challengeToken: string;
+    expiresAt: string;
+    email: string;
+    userName: string;
+  } | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
     let fallbackTimer: number | null = null;
@@ -55,6 +63,17 @@ export default function AppLoginPage() {
     setError(null);
     try {
       const response = await loginAppUser(normalizedEmail, password);
+      if (response.mfaRequired) {
+        setMfaChallenge({
+          challengeToken: response.challengeToken,
+          expiresAt: response.expiresAt,
+          email: normalizedEmail,
+          userName: response.user.name || normalizedEmail,
+        });
+        setPassword("");
+        setMfaCode("");
+        return;
+      }
       const session: AppSession = {
         baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
         token: response.token,
@@ -73,6 +92,44 @@ export default function AppLoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMfaSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!mfaChallenge) return;
+    const code = mfaCode.replace(/\D/g, "").slice(0, 6);
+    if (code.length !== 6) {
+      setError("Informe o codigo de 6 digitos.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await verifyAppMfaLoginChallenge(mfaChallenge.challengeToken, code);
+      const session: AppSession = {
+        baseUrl: process.env.NEXT_PUBLIC_WHATSAPP_AGENT_BASE_URL || "/agent-api",
+        token: response.token,
+        user: response.user,
+        features: response.features,
+        profile: response.profile,
+      };
+      saveAppSession(session);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(MOBILE_NOTIFICATION_NOTICE_AFTER_LOGIN_KEY, "1");
+      }
+      router.replace("/app/inbox");
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Nao foi possivel validar o codigo MFA.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetMfaChallenge = () => {
+    setMfaChallenge(null);
+    setMfaCode("");
+    setError(null);
   };
 
   return (
@@ -102,7 +159,7 @@ export default function AppLoginPage() {
 
         {checkingSession ? <p className="theme-muted text-sm">Verificando acesso...</p> : null}
 
-        {!checkingSession ? (
+        {!checkingSession && !mfaChallenge ? (
           <form className="grid gap-3 sm:gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1 text-sm">
               <span className="theme-muted">Email</span>
@@ -144,6 +201,47 @@ export default function AppLoginPage() {
               className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Entrando..." : "Entrar"}
+            </button>
+          </form>
+        ) : null}
+
+        {!checkingSession && mfaChallenge ? (
+          <form className="grid gap-3 sm:gap-4" onSubmit={handleMfaSubmit}>
+            <div className="rounded-md border border-white/10 bg-black/10 p-3 text-sm">
+              <p className="font-semibold">Verificacao MFA</p>
+              <p className="theme-muted mt-1">
+                Informe o codigo do autenticador para {mfaChallenge.userName}. O desafio expira em poucos minutos.
+              </p>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="theme-muted">Codigo de 6 digitos</span>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                className="theme-select w-full min-w-0 rounded-md px-3 py-2 text-center text-lg outline-none focus:border-re7-sky"
+                value={mfaCode}
+                maxLength={6}
+                onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+            </label>
+            {error ? (
+              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+                {error}
+              </p>
+            ) : null}
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Validando..." : "Validar codigo"}
+            </button>
+            <button
+              type="button"
+              onClick={resetMfaChallenge}
+              className="theme-button-secondary rounded-md px-4 py-2 text-sm font-semibold"
+            >
+              Voltar ao login
             </button>
           </form>
         ) : null}

@@ -9,7 +9,7 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
 export type MfaServicePrisma = Pick<
   PrismaClient,
-  "$transaction" | "client" | "user" | "mfaTotpSecret" | "mfaRecoveryCode"
+  "$transaction" | "client" | "user" | "mfaTotpSecret" | "mfaRecoveryCode" | "mfaChallenge"
 >;
 
 type ClientWithFeatures = {
@@ -91,10 +91,55 @@ export type MfaRuntimeShadowStatus = {
     | "admin_required_pending_enrollment";
 };
 
+export type MfaLoginChallengeResult =
+  | {
+      required: true;
+      challengeToken: string;
+      expiresAt: string;
+    }
+  | {
+      required: false;
+      reason:
+        | "mfa_disabled"
+        | "mfa_not_required"
+        | "mfa_not_enforced"
+        | "role_not_eligible"
+        | "not_enrolled";
+    };
+
+export type VerifyMfaChallengeResult =
+  | {
+      ok: true;
+      user: {
+        id: string;
+        clientId: string;
+        name: string;
+        email: string;
+        role: string;
+        departmentId: string | null;
+        department: { name: string | null } | null;
+        client: ClientWithFeatures;
+      };
+    }
+  | {
+      ok: false;
+      error:
+        | "bad_request"
+        | "invalid_challenge"
+        | "challenge_expired"
+        | "challenge_locked"
+        | "invalid_code"
+        | "mfa_secret_unavailable"
+        | "client_inactive"
+        | "user_inactive";
+    };
+
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 const TOTP_WINDOW = 1;
 const RECOVERY_CODE_COUNT = 10;
+const MFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+const MFA_CHALLENGE_MAX_ATTEMPTS = 5;
 const SHADOW_RATE_LIMIT_WINDOW_MS = 60_000;
 const SHADOW_RATE_LIMIT_MAX = 10;
 const shadowVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -170,6 +215,14 @@ function hashRecoveryCode(code: string) {
   const salt = crypto.randomBytes(16);
   const derived = crypto.scryptSync(code, salt, 64);
   return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
+
+function generateChallengeToken() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function hashChallengeToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 function decodeBase32(value: string) {
@@ -576,6 +629,246 @@ export async function evaluateMfaRuntimeShadow(params: {
     });
   }
   return status;
+}
+
+export async function createMfaLoginChallengeIfRequired(params: {
+  prisma: MfaServicePrisma;
+  clientId: string;
+  userId: string;
+  role: string;
+  client: ClientWithFeatures;
+  ipHash?: string | null;
+  userAgentHash?: string | null;
+  requestId?: string | null;
+}): Promise<MfaLoginChallengeResult> {
+  if (!hasFeature(params.client, "mfa")) {
+    return { required: false, reason: "mfa_disabled" };
+  }
+  if (!hasFeature(params.client, "mfaRequired")) {
+    return { required: false, reason: "mfa_not_required" };
+  }
+  if (!hasFeature(params.client, "mfaEnforced")) {
+    return { required: false, reason: "mfa_not_enforced" };
+  }
+  const role = normalizeRole(params.role);
+  if (role !== "ADMIN") {
+    return { required: false, reason: "role_not_eligible" };
+  }
+
+  const secret = await params.prisma.mfaTotpSecret.findUnique({
+    where: {
+      clientId_userId: {
+        clientId: params.clientId,
+        userId: params.userId,
+      },
+    },
+    select: {
+      enabled: true,
+      enrolledAt: true,
+    },
+  });
+  if (!secret || (!secret.enabled && !secret.enrolledAt)) {
+    return { required: false, reason: "not_enrolled" };
+  }
+
+  const challengeToken = generateChallengeToken();
+  const challengeTokenHash = hashChallengeToken(challengeToken);
+  const expiresAt = new Date(Date.now() + MFA_CHALLENGE_TTL_MS);
+  await params.prisma.mfaChallenge.create({
+    data: {
+      clientId: params.clientId,
+      userId: params.userId,
+      challengeTokenHash,
+      expiresAt,
+      attempts: 0,
+      status: "pending",
+      ipHash: params.ipHash ?? null,
+      userAgentHash: params.userAgentHash ?? null,
+    },
+  });
+  logger.info({
+    event: "login.mfa_challenge_created",
+    clientId: params.clientId,
+    userId: params.userId,
+    role,
+    expiresAt: expiresAt.toISOString(),
+    requestId: params.requestId,
+  });
+  return {
+    required: true,
+    challengeToken,
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
+export async function verifyMfaLoginChallenge(params: {
+  prisma: MfaServicePrisma;
+  challengeToken: string;
+  code: string;
+  requestId?: string | null;
+  now?: Date;
+}): Promise<VerifyMfaChallengeResult> {
+  const challengeToken = String(params.challengeToken ?? "").trim();
+  const code = String(params.code ?? "").trim();
+  if (!challengeToken || !/^\d{6}$/.test(code.replace(/\s+/g, ""))) {
+    return { ok: false, error: "bad_request" };
+  }
+  const now = params.now ?? new Date();
+  const challenge = await params.prisma.mfaChallenge.findUnique({
+    where: { challengeTokenHash: hashChallengeToken(challengeToken) },
+    select: {
+      id: true,
+      clientId: true,
+      userId: true,
+      expiresAt: true,
+      attempts: true,
+      status: true,
+      user: {
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          departmentId: true,
+          department: { select: { name: true } },
+          client: {
+            select: {
+              id: true,
+              clientKey: true,
+              name: true,
+              status: true,
+              features: true,
+              profile: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!challenge) {
+    logger.warn({ event: "login.mfa_challenge_failed", reason: "invalid_challenge", requestId: params.requestId });
+    return { ok: false, error: "invalid_challenge" };
+  }
+  if (challenge.status !== "pending") {
+    logger.warn({
+      event: "login.mfa_challenge_failed",
+      reason: challenge.status,
+      clientId: challenge.clientId,
+      userId: challenge.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: challenge.status === "expired" ? "challenge_expired" : "challenge_locked" };
+  }
+  if (challenge.expiresAt <= now) {
+    await params.prisma.mfaChallenge.update({
+      where: { id: challenge.id },
+      data: { status: "expired" },
+    });
+    logger.warn({
+      event: "login.mfa_challenge_expired",
+      clientId: challenge.clientId,
+      userId: challenge.userId,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: "challenge_expired" };
+  }
+  if (challenge.attempts >= MFA_CHALLENGE_MAX_ATTEMPTS) {
+    await params.prisma.mfaChallenge.update({
+      where: { id: challenge.id },
+      data: { status: "failed" },
+    });
+    return { ok: false, error: "challenge_locked" };
+  }
+  if (challenge.user.client.status !== "ACTIVE") {
+    return { ok: false, error: "client_inactive" };
+  }
+  if (!challenge.user.isActive) {
+    return { ok: false, error: "user_inactive" };
+  }
+
+  const secret = await params.prisma.mfaTotpSecret.findUnique({
+    where: {
+      clientId_userId: {
+        clientId: challenge.clientId,
+        userId: challenge.userId,
+      },
+    },
+    select: {
+      enabled: true,
+      enrolledAt: true,
+      secretCiphertext: true,
+    },
+  });
+  const decrypted = decryptMfaSecret(secret?.secretCiphertext);
+  if (!secret || (!secret.enabled && !secret.enrolledAt) || !decrypted) {
+    return { ok: false, error: "mfa_secret_unavailable" };
+  }
+
+  const valid = verifyTotpCode({ secret: decrypted, code, nowMs: now.getTime() });
+  if (!valid) {
+    const nextAttempts = challenge.attempts + 1;
+    const locked = nextAttempts >= MFA_CHALLENGE_MAX_ATTEMPTS;
+    await params.prisma.mfaChallenge.update({
+      where: { id: challenge.id },
+      data: {
+        attempts: nextAttempts,
+        status: locked ? "failed" : "pending",
+      },
+    });
+    logger.warn({
+      event: "login.mfa_challenge_failed",
+      reason: locked ? "attempts_exceeded" : "invalid_code",
+      clientId: challenge.clientId,
+      userId: challenge.userId,
+      attempts: nextAttempts,
+      requestId: params.requestId,
+    });
+    return { ok: false, error: locked ? "challenge_locked" : "invalid_code" };
+  }
+
+  await params.prisma.$transaction([
+    params.prisma.mfaChallenge.update({
+      where: { id: challenge.id },
+      data: {
+        status: "verified",
+        verifiedAt: now,
+      },
+    }),
+    params.prisma.mfaTotpSecret.update({
+      where: {
+        clientId_userId: {
+          clientId: challenge.clientId,
+          userId: challenge.userId,
+        },
+      },
+      data: {
+        lastUsedAt: now,
+        enabled: true,
+        enrolledAt: secret.enrolledAt ?? now,
+      },
+    }),
+  ]);
+  logger.info({
+    event: "login.mfa_challenge_verified",
+    clientId: challenge.clientId,
+    userId: challenge.userId,
+    requestId: params.requestId,
+  });
+  return {
+    ok: true,
+    user: {
+      id: challenge.user.id,
+      clientId: challenge.user.clientId,
+      name: challenge.user.name,
+      email: challenge.user.email,
+      role: challenge.user.role,
+      departmentId: challenge.user.departmentId,
+      department: challenge.user.department,
+      client: challenge.user.client,
+    },
+  };
 }
 
 export async function startMfaEnrollment(params: {

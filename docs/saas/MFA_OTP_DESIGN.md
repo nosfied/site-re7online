@@ -820,7 +820,10 @@ Status 77G: implementado como MVP de seguranca pre-enforcement. A tela `/app/set
 - retornar `mfaRequired=true` para `ADMIN` em tenant piloto;
 - criar `/auth/mfa/verify`;
 - emitir JWT final somente apos TOTP valido;
+- manter recovery codes fora do login;
 - rollback por `mfaEnforced=false`.
+
+Status 77H: implementado como enforcement MVP controlado. Quando `mfa=true`, `mfaRequired=true`, `mfaEnforced=true`, o usuario `ADMIN` possui TOTP enrolled/enabled e a senha e valida, `/auth/login` cria `MfaChallenge`, retorna `mfaRequired=true`, `challengeToken`, `expiresAt` e nao cria `AppAuthSession` nem JWT final. O endpoint `/auth/mfa/verify` valida o TOTP, marca o challenge como verificado e so entao emite a sessao/JWT final pelo mesmo contrato de login existente. `SUPERVISOR` e `AGENT` permanecem fora do enforcement MVP. Recovery codes continuam gerados/hash-only, mas nao sao aceitos no login nesta sprint. Rollback imediato: `mfaEnforced=false`.
 
 ### 77I - Supervisor Enforcement
 

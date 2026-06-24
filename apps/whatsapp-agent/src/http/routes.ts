@@ -110,11 +110,13 @@ import {
   validateAppSessionFromRequest,
 } from "../auth/appSessionService.js";
 import {
+  createMfaLoginChallengeIfRequired,
   evaluateMfaRuntimeShadow,
   generateMfaRecoveryCodes,
   getMfaRecoveryCodeStatus,
   getMfaStatus,
   startMfaEnrollment,
+  verifyMfaLoginChallenge,
   verifyMfaTotpShadow,
 } from "../auth/mfaService.js";
 import {
@@ -1091,6 +1093,38 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         emitAudit: true,
       });
 
+      const mfaChallenge = await createMfaLoginChallengeIfRequired({
+        prisma,
+        clientId: user.clientId,
+        userId: user.id,
+        role: user.role,
+        client: user.client,
+        ipHash: hashSensitiveValue(getRequestIp(req) ?? ""),
+        userAgentHash: hashSensitiveValue(getUserAgent(req) ?? ""),
+        requestId,
+      });
+      if (mfaChallenge.required) {
+        json(res, 200, {
+          ok: true,
+          mfaRequired: true,
+          challengeToken: mfaChallenge.challengeToken,
+          expiresAt: mfaChallenge.expiresAt,
+          methods: ["totp"],
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            clientId: user.clientId,
+            role: user.role,
+            departmentId: user.departmentId,
+            departmentName: user.department?.name ?? null,
+          },
+          features: getFeatures(user.client),
+          profile: getClientProfile(user.client),
+        });
+        return;
+      }
+
       const session = await createExclusiveAppSession({
         clientId: user.clientId,
         userId: user.id,
@@ -1132,6 +1166,82 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "auth.login.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/auth/mfa/verify") {
+    const prisma = getPrisma();
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const challengeToken = String(body.challengeToken ?? "").trim();
+      const code = String(body.code ?? "").trim();
+      const result = await verifyMfaLoginChallenge({
+        prisma,
+        challengeToken,
+        code,
+        requestId,
+      });
+      if (!result.ok) {
+        const status =
+          result.error === "bad_request"
+            ? 400
+            : result.error === "client_inactive" || result.error === "user_inactive"
+              ? 403
+              : 401;
+        json(res, status, { ok: false, error: result.error });
+        return;
+      }
+
+      const user = result.user;
+      const session = await createExclusiveAppSession({
+        clientId: user.clientId,
+        userId: user.id,
+        req,
+      });
+      const token = issueClientAuthToken(
+        {
+          id: user.id,
+          clientId: user.clientId,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+        session.id
+      );
+
+      logger.info({
+        event: "auth.login.success",
+        reason: "mfa_verified",
+        clientId: user.clientId,
+        userId: user.id,
+        sessionId: session.id,
+        requestId,
+      });
+
+      json(res, 200, {
+        ok: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          clientId: user.clientId,
+          role: user.role,
+          departmentId: user.departmentId,
+          departmentName: user.department?.name ?? null,
+        },
+        features: getFeatures(user.client),
+        profile: getClientProfile(user.client),
+      });
+    } catch (error) {
+      logger.error({
+        event: "auth.mfa.verify.error",
         message: (error as Error).message,
         requestId,
       });

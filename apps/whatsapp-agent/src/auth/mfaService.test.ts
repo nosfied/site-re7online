@@ -4,10 +4,12 @@ import {
   decryptMfaSecret,
   encryptMfaSecret,
   evaluateMfaRuntimeShadow,
+  createMfaLoginChallengeIfRequired,
   generateMfaRecoveryCodes,
   getMfaRecoveryCodeStatus,
   getMfaStatus,
   startMfaEnrollment,
+  verifyMfaLoginChallenge,
   verifyMfaTotpShadow,
   verifyTotpCode,
 } from "./mfaService.js";
@@ -38,11 +40,12 @@ function makeUser(params: { client?: ReturnType<typeof makeClient>; role?: strin
   };
 }
 
-function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?: any; recoveryCodes?: any[] } = {}) {
+function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?: any; recoveryCodes?: any[]; challenges?: any[] } = {}) {
   const state = {
     user: params.user === undefined ? makeUser() : params.user,
     secret: params.secret ?? null,
     recoveryCodes: params.recoveryCodes ?? [],
+    challenges: params.challenges ?? [],
     upserts: [] as any[],
   };
   const prisma = {
@@ -73,6 +76,16 @@ function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?
           lastUsedAt: args.update.lastUsedAt,
           secretCiphertext: args.update.secretCiphertext,
           keyVersion: args.update.keyVersion,
+        };
+        return state.secret;
+      },
+      update: async (args: any) => {
+        if (!state.secret) throw new Error("secret_missing");
+        if (args.where.clientId_userId.clientId !== state.secret.clientId) throw new Error("secret_client_mismatch");
+        if (args.where.clientId_userId.userId !== state.secret.userId) throw new Error("secret_user_mismatch");
+        state.secret = {
+          ...state.secret,
+          ...args.data,
         };
         return state.secret;
       },
@@ -111,6 +124,34 @@ function makePrisma(params: { user?: ReturnType<typeof makeUser> | null; secret?
           }))
         );
         return { count: data.length };
+      },
+    },
+    mfaChallenge: {
+      create: async ({ data }: any) => {
+        const challenge = {
+          id: `challenge-${state.challenges.length + 1}`,
+          attempts: 0,
+          status: "pending",
+          createdAt: new Date(),
+          verifiedAt: null,
+          ...data,
+        };
+        state.challenges.push(challenge);
+        return challenge;
+      },
+      findUnique: async ({ where }: any) => {
+        const challenge = state.challenges.find((item) => item.challengeTokenHash === where.challengeTokenHash);
+        if (!challenge || !state.user) return null;
+        return {
+          ...challenge,
+          user: state.user,
+        };
+      },
+      update: async ({ where, data }: any) => {
+        const challenge = state.challenges.find((item) => item.id === where.id);
+        if (!challenge) throw new Error("challenge_missing");
+        Object.assign(challenge, data);
+        return challenge;
       },
     },
   };
@@ -517,4 +558,170 @@ test("mfa runtime shadow does not require supervisor in the MVP policy", async (
     mode: "shadow",
     reason: "role_not_eligible",
   });
+});
+
+test("mfa login challenge is skipped when enforcement is disabled", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: false });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const result = await createMfaLoginChallengeIfRequired({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "ADMIN",
+    client,
+  });
+  assert.deepEqual(result, { required: false, reason: "mfa_not_enforced" });
+});
+
+test("mfa login challenge is skipped for supervisor and agent in the MVP policy", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+  const { prisma } = makePrisma({ user: makeUser({ client }) });
+  const supervisor = await createMfaLoginChallengeIfRequired({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "SUPERVISOR",
+    client,
+  });
+  const agent = await createMfaLoginChallengeIfRequired({
+    prisma,
+    clientId: client.id,
+    userId: "user-1",
+    role: "AGENT",
+    client,
+  });
+  assert.deepEqual(supervisor, { required: false, reason: "role_not_eligible" });
+  assert.deepEqual(agent, { required: false, reason: "role_not_eligible" });
+});
+
+test("mfa login challenge requires admin enrollment and stores only token hash", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  const { prisma, state } = makePrisma({
+    user: makeUser({ client }),
+    secret: {
+      clientId: client.id,
+      userId: "user-1",
+      enabled: true,
+      enrolledAt: new Date("2026-06-24T12:00:00.000Z"),
+      lastUsedAt: null,
+      secretCiphertext: encryptMfaSecret(secret, TEST_KEY),
+    },
+  });
+  const previous = process.env.MFA_SECRET_ENCRYPTION_KEY;
+  process.env.MFA_SECRET_ENCRYPTION_KEY = TEST_KEY;
+  try {
+    const result = await createMfaLoginChallengeIfRequired({
+      prisma,
+      clientId: client.id,
+      userId: "user-1",
+      role: "ADMIN",
+      client,
+      ipHash: "ip-hash",
+      userAgentHash: "ua-hash",
+    });
+    assert.equal(result.required, true);
+    if (!result.required) return;
+    assert.match(result.challengeToken, /^[A-Za-z0-9_-]+$/);
+    assert.equal(state.challenges.length, 1);
+    assert.equal(state.challenges[0].challengeTokenHash === result.challengeToken, false);
+    assert.equal(state.challenges[0].challengeTokenHash.includes(result.challengeToken), false);
+    assert.equal(state.challenges[0].ipHash, "ip-hash");
+    assert.equal(state.challenges[0].userAgentHash, "ua-hash");
+  } finally {
+    if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
+    else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("mfa login challenge verifies TOTP and marks challenge verified", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  const previous = process.env.MFA_SECRET_ENCRYPTION_KEY;
+  process.env.MFA_SECRET_ENCRYPTION_KEY = TEST_KEY;
+  try {
+    const { prisma, state } = makePrisma({
+      user: makeUser({ client }),
+      secret: {
+        clientId: client.id,
+        userId: "user-1",
+        enabled: true,
+        enrolledAt: new Date("2026-06-24T12:00:00.000Z"),
+        lastUsedAt: null,
+        secretCiphertext: encryptMfaSecret(secret, TEST_KEY),
+      },
+    });
+    const challenge = await createMfaLoginChallengeIfRequired({
+      prisma,
+      clientId: client.id,
+      userId: "user-1",
+      role: "ADMIN",
+      client,
+    });
+    assert.equal(challenge.required, true);
+    if (!challenge.required) return;
+    const verified = await verifyMfaLoginChallenge({
+      prisma,
+      challengeToken: challenge.challengeToken,
+      code: "287082",
+      now: new Date(59_000),
+    });
+    assert.equal(verified.ok, true);
+    assert.equal(state.challenges[0].status, "verified");
+    assert.equal(Boolean(state.challenges[0].verifiedAt), true);
+    assert.equal(Boolean(state.secret.lastUsedAt), true);
+  } finally {
+    if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
+    else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
+  }
+});
+
+test("mfa login challenge rejects invalid and expired attempts", async () => {
+  const client = makeClient({ mfa: true, mfaRequired: true, mfaEnforced: true });
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  const previous = process.env.MFA_SECRET_ENCRYPTION_KEY;
+  process.env.MFA_SECRET_ENCRYPTION_KEY = TEST_KEY;
+  try {
+    const { prisma, state } = makePrisma({
+      user: makeUser({ client }),
+      secret: {
+        clientId: client.id,
+        userId: "user-1",
+        enabled: true,
+        enrolledAt: new Date("2026-06-24T12:00:00.000Z"),
+        lastUsedAt: null,
+        secretCiphertext: encryptMfaSecret(secret, TEST_KEY),
+      },
+    });
+    const challenge = await createMfaLoginChallengeIfRequired({
+      prisma,
+      clientId: client.id,
+      userId: "user-1",
+      role: "ADMIN",
+      client,
+    });
+    assert.equal(challenge.required, true);
+    if (!challenge.required) return;
+    const invalid = await verifyMfaLoginChallenge({
+      prisma,
+      challengeToken: challenge.challengeToken,
+      code: "000000",
+      now: new Date(59_000),
+    });
+    assert.deepEqual(invalid, { ok: false, error: "invalid_code" });
+    assert.equal(state.challenges[0].attempts, 1);
+
+    state.challenges[0].expiresAt = new Date(1);
+    const expired = await verifyMfaLoginChallenge({
+      prisma,
+      challengeToken: challenge.challengeToken,
+      code: "287082",
+      now: new Date(59_000),
+    });
+    assert.deepEqual(expired, { ok: false, error: "challenge_expired" });
+    assert.equal(state.challenges[0].status, "expired");
+  } finally {
+    if (previous === undefined) delete process.env.MFA_SECRET_ENCRYPTION_KEY;
+    else process.env.MFA_SECRET_ENCRYPTION_KEY = previous;
+  }
 });

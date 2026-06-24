@@ -85,6 +85,7 @@ POST /app/mfa/enrollment
 POST /app/mfa/verify-shadow
 GET /app/mfa/recovery-codes/status
 POST /app/mfa/recovery-codes/generate
+POST /auth/mfa/verify
 ```
 
 - Confirmar que segredo, ciphertext e codigo TOTP nao aparecem em resposta, log ou listagem.
@@ -97,6 +98,8 @@ POST /app/mfa/recovery-codes/generate
 - Nao expandir enforcement para `SUPERVISOR`/`AGENT` antes de recovery codes ou procedimento assistido aprovado.
 - Sprint de enforcement deve validar que `/auth/login` nao emite JWT final nem cria `AppAuthSession` final antes do TOTP valido quando `mfaEnforced=true`.
 - O smoke de enforcement deve cobrir: challenge criado, codigo invalido, codigo valido, challenge expirado, excesso de tentativas, rollback `mfaEnforced=false` e login ADMIN recuperado.
+- Na Sprint 77H, recovery codes nao entram no login; smoke deve confirmar que recovery code continua rejeitado em `/auth/login` e `/auth/mfa/verify`.
+- Rollback de 77H: desligar `mfaEnforced=false` no tenant piloto, recarregar backend se necessario e confirmar login ADMIN voltou ao contrato atual com JWT/sessao imediatos.
 - Nao ligar enforcement se houver risco de travar o ultimo ADMIN do tenant piloto.
 
 Scheduling reminders:

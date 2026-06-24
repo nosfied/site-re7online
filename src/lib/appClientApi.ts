@@ -1354,7 +1354,19 @@ async function requestAppBlob(
 export async function loginAppUser(
   email: string,
   password: string
-): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile }> {
+): Promise<
+  | { ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile; mfaRequired?: false }
+  | {
+      ok: true;
+      mfaRequired: true;
+      challengeToken: string;
+      expiresAt: string;
+      methods: string[];
+      user: AppSessionUser;
+      features: AppFeatures;
+      profile: AppProfile;
+    }
+> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), 10000);
@@ -1399,6 +1411,81 @@ export async function loginAppUser(
     error.status = res.status;
     if (res.status === 401) error.message = "Email ou senha invalidos.";
     if (res.status === 409) error.message = "Email ambiguo entre clientes.";
+    if (res.status >= 500) error.message = "Erro no servidor (5xx).";
+    throw error;
+  }
+
+  const payload = (await res.json()) as {
+    ok: true;
+    token?: string;
+    mfaRequired?: boolean;
+    challengeToken?: string;
+    expiresAt?: string;
+    methods?: string[];
+    user: AppSessionUser;
+    features?: Partial<AppFeatures> | null;
+    profile?: AppProfile | null;
+  };
+  if (payload.mfaRequired) {
+    return {
+      ok: true,
+      mfaRequired: true,
+      challengeToken: String(payload.challengeToken ?? ""),
+      expiresAt: String(payload.expiresAt ?? ""),
+      methods: Array.isArray(payload.methods) ? payload.methods.map(String) : ["totp"],
+      user: payload.user,
+      features: getAppFeatures({ features: payload.features ?? undefined }),
+      profile: getAppProfile({ profile: payload.profile ?? undefined }),
+    };
+  }
+  if (!payload.token) {
+    const error = new Error("Resposta de login invalida.") as AppApiError;
+    error.status = 500;
+    throw error;
+  }
+  const tokenUser = decodeClientAuthToken(payload.token);
+  return {
+    ...payload,
+    token: payload.token,
+    mfaRequired: false,
+    features: getAppFeatures({ features: payload.features ?? undefined }),
+    profile: getAppProfile({ profile: payload.profile ?? undefined }),
+    user: {
+      ...payload.user,
+      id: payload.user.id || tokenUser.id || "",
+      name: payload.user.name || tokenUser.name || "",
+      email: payload.user.email || tokenUser.email || "",
+      clientId: payload.user.clientId || tokenUser.clientId || "",
+      role: payload.user.role || tokenUser.role || "",
+      departmentId: payload.user.departmentId ?? tokenUser.departmentId ?? null,
+      departmentName: payload.user.departmentName ?? tokenUser.departmentName ?? null,
+    },
+  };
+}
+
+export async function verifyAppMfaLoginChallenge(
+  challengeToken: string,
+  code: string
+): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile }> {
+  const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
+  const res = await fetch(`${baseUrl}/auth/mfa/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken, code }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    let message = `MFA failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      message = body.message || body.error || message;
+    } catch {
+      // noop
+    }
+    const error = new Error(message) as AppApiError;
+    error.status = res.status;
+    if (res.status === 400) error.message = "Informe o codigo MFA.";
+    if (res.status === 401) error.message = "Codigo MFA invalido ou expirado.";
     if (res.status >= 500) error.message = "Erro no servidor (5xx).";
     throw error;
   }
