@@ -10,6 +10,8 @@ Atualizacao Sprint 76C: criado indexador shadow manual `npm run search:index-sha
 
 Atualizacao Sprint 76D: criado runtime MVP em `GET /app/search` e tela `/app/search`, usando `SearchIndex` ja populado. Busca textual com `q` exige `advancedSearch=true` e `advancedSearchRuntime=true`; sem runtime, a tela permanece em modo diagnostico sem busca textual. O MVP inclui filtros por entidade, canal, fonte e idioma, paginacao por cursor e snippet limitado. Continua sem IA, sem busca semantica, sem indexacao automatica, sem cron/worker, sem alteracao de Inbox e sem alteracao de canais.
 
+Atualizacao Sprint 76E: criado indexador controlado de transcricoes completas com `npm run search:index-audio`. O comando e dry-run por padrao, exige `advancedSearch=true`, `advancedSearchRuntime=true` e `audioTranscription=true`, e grava `SearchIndex` com `entityType=audio_transcription` e `source=audio_transcription` somente com `--record`. Nao baixa midia, nao chama STT, nao processa audio, nao altera Inbox, nao usa IA e nao cria runtime automatico.
+
 ## Objetivo
 
 Projetar a busca unificada do Converta antes de qualquer implementacao.
@@ -50,7 +52,7 @@ Recomendacao para MVP:
 | Knowledge Base | Existe com collections/articles | Sim, localmente no modulo KB | Sim, para busca unificada | Apenas artigos `published`; `draft` e `archived` ficam fora do runtime de busca. |
 | Campaign | Existe | Parcialmente por listas/filtros | Parcial | Indexar nome, status e metadados operacionais; nao indexar payloads brutos. |
 | Scheduling | Existe com services/resources/appointments/reminders | Parcialmente por CRUD | Sim | Indexar servico, recurso, compromisso e status quando `scheduling=true`. |
-| AudioTranscription | Existe desde 75F/75I | Ainda nao integrado | Sim, futuramente | Apenas transcricoes `completed`; `shadow`, `failed` e `skipped` ficam fora da busca textual. |
+| AudioTranscription | Existe desde 75F/75I | Sim, se indexada pela 76E | Parcial | `search:index-audio` indexa somente transcricoes `completed`; `shadow`, `failed`, `pending` e `skipped` ficam fora da busca textual. |
 | Public API | Existe para leitura de dados | Nao e fonte primaria | Futuro endpoint | A API deve consumir a busca depois que o modulo interno estiver estabilizado. |
 
 ## Casos De Uso
@@ -216,7 +218,7 @@ Limites recomendados:
 | 76B - Search Schema + Settings | Criar schema/flags/configuracao do indice | Concluida como fundacao diagnostica, sem runtime de busca. |
 | 76C - Search Shadow | Backfill dry-run/record e comparacao com fontes | Concluida para Conversation, InboundMessage e OutboundMessage, sem runtime. |
 | 76D - Search Runtime MVP | Busca textual interna no `/app` | Concluida sobre `SearchIndex`, com filtros, cursor e snippet limitado; sem IA, sem semantica e sem indexacao automatica. |
-| 76E - Search + Audio | Indexar transcricoes concluidas | Depende de 75K/piloto real. |
+| 76E - Search + Audio | Indexar transcricoes concluidas | Concluida com CLI manual `search:index-audio`, dry-run default e `--record` opcional; sem STT, sem download e sem runtime automatico. |
 | 76F - Search + IA | Consumo supervisionado por IA | Depende de evaluation/replay. |
 
 ## Riscos

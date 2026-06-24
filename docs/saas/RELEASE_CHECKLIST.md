@@ -126,6 +126,9 @@ npm run search:index-shadow -- --tenant demo-prefeitura --json --record
 
 - Execute `--record` somente em tenant piloto com `advancedSearch=true` e `advancedSearchRuntime=false`.
 - Para smoke runtime, habilite temporariamente `advancedSearchRuntime=true`, valide `/app/search` com texto/filtros/paginacao, e retorne a flag para `false` se a busca ainda nao for ficar disponivel para usuarios finais.
+- Indexacao de transcricoes deve usar `npm run search:index-audio` em dry-run por default.
+- `search:index-audio --record` exige `advancedSearch=true`, `advancedSearchRuntime=true` e `audioTranscription=true`, e so deve gravar transcricoes `completed` como `source=audio_transcription`.
+- `search:index-audio` nao pode baixar midia, chamar STT, processar audio, alterar Inbox, usar IA ou criar job automatico.
 
 ## Frontend
 

@@ -399,6 +399,7 @@ Status pos-Sprint 75F:
 - MVP recomendado: WhatsApp inbound audio apenas;
 - flags atuais: `audioTranscription`, `audioTranscriptionRuntime`, ambas `false` por padrao;
 - flags futuras propostas: `audioTranscriptionShadow`, `audioTranscriptionSearch`, ambas `false` por padrao quando implementadas;
+- Sprint 76E permite indexar transcricoes `completed` no `SearchIndex` por CLI manual `npm run search:index-audio`, sem baixar midia, sem chamar STT e sem processar audio;
 - roadmap definido: piloto real 75K, busca 75L e consumo IA 75M.
 
 Transcricao passa a **ATENDE COM AJUSTE** como fundacao demonstravel e governada, mas continua **NAO ATENDE** quando o TR exigir transcricao automatica em escala, exibicao no Inbox e busca avancada. O design, o schema, o shadow, o runtime controlado e o plano de piloto real reduzem risco de retrabalho e preparam a integracao futura com busca avancada, IA e auditoria.
@@ -414,10 +415,11 @@ Status pos-Sprint 76D:
 - shadow indexer criado com `npm run search:index-shadow`, dry-run default e `--record` opcional;
 - fontes MVP do shadow: `Conversation`, `InboundMessage` e `OutboundMessage`;
 - runtime MVP criado em `GET /app/search` com busca textual simples em `SearchIndex.title/body`;
+- Sprint 76E adicionou indexacao manual de `AudioTranscription.status=completed` com `source=audio_transcription`;
 - busca textual exige `advancedSearch=true` e `advancedSearchRuntime=true`;
 - quando `advancedSearchRuntime=false`, `/app/search` permanece como diagnostico e bloqueia consultas com `q`;
 - filtros MVP: `entityType`, `channel`, `source`, `language`, `limit` e `cursor`;
-- resultados retornam snippet limitado, sem `rawPayload`, tokens, segredos ou payload de provider;
+- resultados retornam snippet limitado, sem `rawPayload`, tokens, segredos, mediaUrl ou payload de provider;
 - fontes auditadas: `Contact`, `Lead`, `Conversation`, `InboundMessage`, `OutboundMessage`, `Event`, Knowledge Base, Campaign, Scheduling, AudioTranscription e Public API;
 - busca atual e fragmentada: filtros do Inbox, busca local da Knowledge Base, filtros de reports e endpoints read-only da Public API;
 - arquitetura recomendada: PostgreSQL full text com tabela dedicada de indice tenant-scoped;
@@ -426,7 +428,7 @@ Status pos-Sprint 76D:
 - busca semantica, embeddings, IA e indexacao de transcricao ficam fora do MVP inicial;
 - proximo passo recomendado: ampliar indexacao/fontes e preparar integracao operacional mais rica sem ligar IA ou busca semantica.
 
-Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como MVP operacional controlado**. Ja e demonstravel para busca textual simples em indice tenant-scoped, mas ainda nao atende plenamente editais que exijam busca ampla em todos os objetos, experiencia integrada ao Inbox, transcricoes, exportacao avancada ou relevancia semantica.
+Busca avancada passa de gap sem desenho para **ATENDE COM AJUSTE como MVP operacional controlado**. Ja e demonstravel para busca textual simples em indice tenant-scoped, inclusive com transcricoes completas quando previamente processadas e indexadas pela 76E. Ainda nao atende plenamente editais que exijam busca ampla em todos os objetos, experiencia integrada ao Inbox, transcricao automatica em escala, exportacao avancada ou relevancia semantica.
 
 Risco: medio/alto por isolamento multi-tenant, volume de mensagens, LGPD, retencao e necessidade de nao indexar `rawPayload` ou dados sensiveis indevidos.
 

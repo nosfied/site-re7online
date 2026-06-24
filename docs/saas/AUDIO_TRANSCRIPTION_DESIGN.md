@@ -4,7 +4,7 @@ Data: 2026-06-23
 
 Status: design concluido, sem implementacao.
 
-Escopo: projetar o modulo futuro de transcricao de audio do Converta e registrar a fundacao criada nas Sprints 75F, 75G, 75H e 75I. O runtime controlado/manual existe; ainda nao ha processamento automatico, cron, worker permanente, busca, consumo por IA ou exibicao no Inbox.
+Escopo: projetar o modulo futuro de transcricao de audio do Converta e registrar a fundacao criada nas Sprints 75F, 75G, 75H e 75I. O runtime controlado/manual existe; desde a Sprint 76E, transcricoes `completed` podem ser indexadas manualmente no `SearchIndex` via `npm run search:index-audio`. Ainda nao ha processamento automatico, cron, worker permanente, consumo por IA ou exibicao no Inbox.
 
 Nao houve alteracao de codigo, banco, migration, runtime, canais, IA, chatbot, Inbox ou integracao externa nesta sprint.
 
@@ -33,7 +33,7 @@ O que nao existe hoje:
 - runtime controlado/manual: **criado na Sprint 75I** com CLI `npm run audio-transcriptions:process`;
 - provider de speech-to-text ativo apenas em modo manual/piloto com `--execute` e `OPENAI_API_KEY`;
 - download controlado implementado para transcricao manual;
-- indice de busca sobre transcript;
+- indice de busca sobre transcript: **criado na Sprint 76E** para transcricoes `completed`, via CLI manual, dry-run default e `--record` opcional;
 - UI no Inbox para mostrar transcript;
 - permissao/retencao especifica para transcript;
 - eventos de auditoria `audio.transcription.*`.
@@ -159,7 +159,7 @@ Notas:
 | `audioTranscription` | false | habilita visualizacao do modulo `/app/audio-transcriptions` |
 | `audioTranscriptionRuntime` | false | permite processar audio real futuramente |
 | `audioTranscriptionShadow` | false | permite calcular elegibilidade sem chamar provider |
-| `audioTranscriptionSearch` | false | libera uso do transcript na busca futura |
+| `audioTranscriptionSearch` | false | proposta futura; na 76E a indexacao exige `advancedSearch`, `advancedSearchRuntime` e `audioTranscription` |
 
 Todas devem nascer desligadas por padrao.
 
