@@ -36,6 +36,7 @@ Este review consolida o estado atual documentado em:
 - `docs/saas/AUDIO_TRANSCRIPTION_REAL_MEDIA_PILOT_DESIGN.md`;
 - `docs/saas/ADVANCED_SEARCH_DESIGN.md`;
 - `docs/saas/MFA_OTP_DESIGN.md`;
+- `docs/saas/OBSERVABILITY_OPERATIONS_AUDIT.md`;
 - `docs/saas/CHANNELS_GOVERNANCE.md`;
 - `docs/saas/PRODUCT_MAP_CURRENT.md`.
 
@@ -85,7 +86,7 @@ Estado consolidado atual:
 | Editais multicanal avancados | 75% | 79% | +4 pp |
 | Aderencia consolidada ponderada | 84% | 86% | +2 pp |
 
-Leitura executiva: a evolucao principal esta em editais multicanal, porque agora a demonstracao pode cobrir Meta + Webchat + Telegram. A aderencia ainda nao chega a plena para editais avancados por causa de MFA/OTP operacional, transcricao, busca avancada, NPS operacional completo, escala/HA e provas documentais.
+Leitura executiva: a evolucao principal esta em editais multicanal, porque agora a demonstracao pode cobrir Meta + Webchat + Telegram. A aderencia ainda nao chega a plena para editais avancados por causa de MFA/OTP externo/cidadao, transcricao, busca avancada, NPS operacional completo, escala/HA e provas documentais. No MFA interno, o enforcement ADMIN ja existe e a Sprint 77I desenha o uso seguro de recovery codes no login, mas essa contingencia ainda nao esta implementada.
 
 ## Aderencia Atual Por Edital
 
@@ -140,11 +141,11 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | LGPD/retencao | ATENDE | Alto | Retencao/anonymizacao/documentacao. |
 | Auditoria/logs | ATENDE COM AJUSTE | Medio/alto | Eventos/logs existem; falta tela/relatorio formal de auditoria para cliente. |
 | POC/demo | ATENDE | Alto | `demo-prefeitura`, scripts e documentos existem. Webchat e Telegram podem entrar na POC. |
-| OTP/MFA | ATENDE COM AJUSTE | Medio/alto | Sprint 77A desenha MFA/TOTP, Sprint 77B cria schema/settings/enrollment, Sprint 77C adiciona verificacao TOTP shadow, Sprint 77E adiciona runtime shadow, Sprint 77G cria recovery codes hash-only e Sprint 77H cria enforcement ADMIN controlado. Ainda nao ha OTP cidadao nem recovery code no login. |
+| OTP/MFA | ATENDE COM AJUSTE | Medio/alto | Sprint 77A desenha MFA/TOTP, Sprint 77B cria schema/settings/enrollment, Sprint 77C adiciona verificacao TOTP shadow, Sprint 77E adiciona runtime shadow, Sprint 77G cria recovery codes hash-only, Sprint 77H cria enforcement ADMIN controlado e Sprint 77I desenha recovery code no login. Ainda nao ha OTP cidadao nem recovery runtime no login. |
 | Transcricao de audio | ATENDE COM AJUSTE | Medio/alto | Design 75E, fundacao 75F, shadow pipeline 75G, runtime design 75H, runtime controlado 75I e piloto real 75J desenhado. CLI processa WhatsApp inbound audio manualmente com OpenAI STT, `--dry-run` default, `--execute` explicito e cleanup temporario. Sprint 76E indexa transcricoes `completed` no SearchIndex. Ainda sem audio real validado, cron/worker, IA ou exibicao no Inbox. |
 | Busca textual avancada em dialogos | ATENDE COM AJUSTE | Medio | Design 76A, fundacao 76B, shadow 76C, runtime MVP 76D e audio indexing 76E criados: `SearchIndex`, flags, CLI `search:index-shadow`, `search:index-audio` e busca textual simples em `/app/search`. Ainda sem indexacao automatica, Inbox integrado, IA, busca semantica ou fontes ampliadas. |
 | Storage 600 GB midia | ATENDE COM AJUSTE | Alto em Aripuana | Requer contrato/plano de infra, custo e backup. |
-| HA/carga/observabilidade | ATENDE COM AJUSTE | Alto em editais grandes | Produto opera, mas faltam evidencias formais de carga, HA e runbooks de incidentes. |
+| HA/carga/observabilidade | ATENDE COM AJUSTE | Alto em editais grandes | Sprint 78A classifica maturidade operacional em 72%; Sprint 78B endurece logger/redaction e padroniza taxonomia. Logs estruturados, health, PM2, replay/shadow, flags e runbooks existem; faltam readiness/liveness separados, metricas padronizadas, alertas, dashboards, tracing, restore drill, HA e prova de carga. |
 
 ## Gaps Que Deixaram De Ser Bloqueadores
 
@@ -165,7 +166,7 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 | --- | --- | --- | --- |
 | Transcricao de audio | Runtime controlado/manual criado; piloto real desenhado | Medio/alto quando TR exige acessibilidade/registro integral | Proxima etapa: Sprint 75K com 1 a 3 audios reais controlados; busca/exibicao no Inbox somente depois. |
 | Busca avancada | Shadow criado, sem runtime | Medio/alto para auditoria e ouvidoria | Proxima etapa: Sprint 76D com busca interna controlada, se shadow estiver consistente. |
-| MFA operador / OTP cidadao | MFA interno com TOTP shadow, runtime shadow, recovery codes hash-only e enforcement ADMIN controlado; OTP cidadao nao implementado | Alto se edital exigir autenticacao reforcada externa | Proxima etapa deve ser recovery no login/admin recovery ou OTP cidadao em sprint separada se TR exigir. |
+| MFA operador / OTP cidadao | MFA interno com TOTP shadow, runtime shadow, recovery codes hash-only, enforcement ADMIN controlado e recovery login desenhado; OTP cidadao nao implementado | Alto se edital exigir autenticacao reforcada externa | Proxima etapa deve ser recovery runtime no login/admin recovery ou OTP cidadao em sprint separada se TR exigir. |
 | NPS refinado | Estrutural | Alto quando pesquisa pos-atendimento e exigida | Disparo, link publico, coleta externa e relatorio NPS/CSAT. |
 | Scheduling refinado | Parcial operacional | Alto em editais com agenda/lembrete | Scheduler controlado, confirmacao/cancelamento e relatorio. |
 | Telegram avancado | Texto-only | Medio se TR exigir midia/grupos | Midia/grupos somente se edital exigir. |
@@ -175,10 +176,10 @@ Conclusao: Telegram deixa de ser bloqueador arquitetural quando o edital exige c
 
 | Gap | Status | Impacto | Proxima acao |
 | --- | --- | --- | --- |
-| Escala/carga | Evidencia parcial | Alto em Aripuana/Rio Preto | Benchmark de 400 usuarios, 30 numeros WhatsApp e filas concorrentes. |
+| Escala/carga | Evidencia parcial | Alto em Aripuana/Rio Preto | Benchmark de 400 usuarios, 30 numeros WhatsApp e filas concorrentes; Sprint 78A recomenda 78F HA/Scale. |
 | Storage | Precisa plano | Alto se TR exigir 600 GB midia | Definir storage, backup, retencao, custo e SLA. |
-| Observabilidade | Parcial | Medio/alto | Dashboards de erro, latencia, fila, webhook e provider. |
-| HA | Parcial | Alto em contrato publico | Desenhar redundancia, backup/restore e RTO/RPO. |
+| Observabilidade | Parcial | Medio/alto | Sprint 78A confirma logs/Event/health/replay/shadow e Sprint 78B endurece logging/redaction; ainda falta stack de metricas, dashboards, tracing e alertas. Proxima ordem: 78C metrics, 78D runtime observability, 78E dashboards. |
+| HA | Parcial | Alto em contrato publico | Desenhar redundancia, backup/restore, restore drill e RTO/RPO; Sprint 78A classifica HA forte como ainda nao atendido para contratos grandes. |
 | Carga de canais | Parcial | Alto em multicanal | Teste de webhook/inbox por canal e limites por tenant. |
 | Push subscription warning | Divida pequena | Baixo/medio | Hardening de dados invalidos de pushSubscription. |
 
@@ -250,7 +251,7 @@ Gaps principais:
 - escala 400 usuarios e 30 WhatsApps precisa prova;
 - 600 GB midia requer plano de storage;
 - app mobile nativo pode ser problema se PWA nao bastar;
-- MFA/OTP com enforcement ADMIN controlado; Sprint 77H cria desafio TOTP antes de JWT/sessao final, mas ainda nao ha OTP cidadao nem recovery code no login;
+- MFA/OTP com enforcement ADMIN controlado; Sprint 77H cria desafio TOTP antes de JWT/sessao final e Sprint 77I desenha recovery code no login, mas ainda nao ha OTP cidadao nem recovery runtime;
 - ambiente EAD nao existe;
 - HA/carga/documentacao operacional.
 
@@ -324,7 +325,7 @@ Gaps principais:
 
 - NPS funcional;
 - multiagentes IA formais;
-- MFA/OTP: schema/settings, verificacao TOTP shadow, runtime shadow, recovery codes e enforcement ADMIN controlado prontos para usuarios internos; sem OTP cidadao e sem recovery code no login;
+- MFA/OTP: schema/settings, verificacao TOTP shadow, runtime shadow, recovery codes, enforcement ADMIN controlado e recovery login desenhado para usuarios internos; sem OTP cidadao e sem recovery runtime no login;
 - API publica com webhooks automaticos/escrita, se exigido;
 - transcricao/busca avancada;
 - escala/HA/documentacao operacional;
@@ -338,8 +339,8 @@ Decisao: continua como edital-guia avancado. A distancia caiu com Webchat + Tele
 | --- | --- | --- | --- |
 | 1 | NPS/Satisfacao funcional | Funcional | Alto impacto em editais e clientes privados; escopo incremental sobre modulo ja criado. |
 | 2 | Busca avancada em conversas | Funcional | Alto valor para CAC/ouvidoria, auditoria e prova documental; runtime 76D ja demonstra busca textual simples, mas falta ampliar fontes e integrar melhor a experiencia operacional. |
-| 3 | Escala/observabilidade/HA | Operacional | Necessario para Aripuana/Rio Preto e contratos maiores. |
-| 4 | MFA operador / OTP cidadao | Funcional | MFA interno tem fundacao estrutural, verificacao TOTP shadow, runtime shadow, recovery codes e enforcement ADMIN controlado; ainda pode bloquear quando edital exige OTP cidadao ou recovery operacional no login. |
+| 3 | Escala/observabilidade/HA | Operacional | Sprint 78A consolidou maturidade operacional em ATENDE COM AJUSTE/72% e a 78B reduziu risco de logs/PII; ainda e necessario para Aripuana/Rio Preto e contratos maiores. |
+| 4 | MFA operador / OTP cidadao | Funcional | MFA interno tem fundacao estrutural, verificacao TOTP shadow, runtime shadow, recovery codes, enforcement ADMIN controlado e recovery login desenhado; ainda pode bloquear quando edital exige OTP cidadao ou recovery operacional no login. |
 | 5 | Dossie licitatorio/atestados/certidoes | Documental | Sem isso, aderencia tecnica nao vira habilitacao real. |
 
 Itens seguintes:
@@ -353,8 +354,8 @@ Itens seguintes:
 
 1. **NPS operacional**: disparo por encerramento, link publico, resposta anonima/identificada e dashboard NPS/CSAT.
 2. **Busca avancada + transcricao**: shadow/backfill de busca por texto/canal/contato/setor/periodo e, depois, indexacao de transcricoes concluidas.
-3. **Observabilidade/escala**: benchmark, dashboards de latencia, provider errors, filas, storage e plano HA/RTO/RPO.
-4. **MFA/OTP**: adicionar recovery code no login/admin recovery apenas depois do piloto de enforcement; tratar OTP cidadao em sprint separada quando edital exigir.
+3. **Observabilidade/escala**: continuar roadmap 78C-78F: metrics foundation, observability runtime, dashboards e plano HA/RTO/RPO com prova de carga.
+4. **MFA/OTP**: implementar 77J recovery code no login com rollback por flag; tratar admin recovery e OTP cidadao em sprints separadas quando edital exigir.
 5. **Pacote de habilitacao**: matriz edital-item, evidencias, prints, runbook de POC, certidoes e atestados.
 
 ## Recomendacao Final

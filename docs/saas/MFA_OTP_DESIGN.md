@@ -825,11 +825,130 @@ Status 77G: implementado como MVP de seguranca pre-enforcement. A tela `/app/set
 
 Status 77H: implementado como enforcement MVP controlado. Quando `mfa=true`, `mfaRequired=true`, `mfaEnforced=true`, o usuario `ADMIN` possui TOTP enrolled/enabled e a senha e valida, `/auth/login` cria `MfaChallenge`, retorna `mfaRequired=true`, `challengeToken`, `expiresAt` e nao cria `AppAuthSession` nem JWT final. O endpoint `/auth/mfa/verify` valida o TOTP, marca o challenge como verificado e so entao emite a sessao/JWT final pelo mesmo contrato de login existente. `SUPERVISOR` e `AGENT` permanecem fora do enforcement MVP. Recovery codes continuam gerados/hash-only, mas nao sao aceitos no login nesta sprint. Rollback imediato: `mfaEnforced=false`.
 
-### 77I - Supervisor Enforcement
+### 77I - MFA Recovery Code Login Design
 
-- expandir enforcement para `SUPERVISOR` somente apos recovery codes e piloto ADMIN estavel.
+Objetivo: desenhar o uso de recovery codes como contingencia segura no login MFA, sem alterar codigo, banco, login, JWT, `AppAuthSession` ou enforcement.
 
-### 77J - Admin Console Recovery
+#### Fluxo Proposto
+
+```text
+Senha valida
+  -> MFA obrigatorio
+  -> desafio MFA existente
+  -> usuario escolhe:
+       - TOTP
+       - Recovery Code
+  -> validacao bem sucedida
+  -> JWT e AppAuthSession finais
+```
+
+Regras:
+
+- TOTP continua o caminho principal;
+- recovery code fica disponivel apenas quando o usuario ja esta em desafio MFA valido;
+- recovery code nao inicia login sozinho;
+- recovery code nao substitui senha;
+- JWT e `AppAuthSession` finais so podem ser emitidos apos sucesso de TOTP ou recovery code valido;
+- MVP restrito a `ADMIN`; `SUPERVISOR` e `AGENT` permanecem fora.
+
+#### Recovery Code
+
+Comportamento esperado:
+
+- uso unico;
+- armazenamento somente por hash;
+- comparacao em tempo constante quando aplicavel;
+- marcar `usedAt` imediatamente apos sucesso;
+- invalidar o challenge apos uso bem sucedido;
+- manter regeneracao em `/app/settings/security`;
+- quando todos os codigos acabarem, manter login MFA exigindo TOTP e orientar regeneracao apos acesso ou suporte administrativo.
+
+O backend nunca deve retornar:
+
+- codigo em claro fora da geracao/regeneracao;
+- hash;
+- indicacao especifica de qual codigo falhou;
+- diferenca observavel entre codigo inexistente, usado ou invalido.
+
+#### Seguranca
+
+Controles obrigatorios para implementacao futura:
+
+- usar o mesmo `MfaChallenge` do fluxo TOTP;
+- respeitar TTL do challenge;
+- compartilhar limite de tentativas entre TOTP e recovery;
+- lockout temporario ao exceder tentativas;
+- rate limit por `clientId:userId`, `challengeId` e IP hash;
+- nao logar codigo;
+- nao logar hash;
+- nao logar segredo TOTP;
+- respostas genericas;
+- redaction completa de auditoria;
+- nao revelar se o usuario possui recovery codes disponiveis durante login.
+
+#### Auditoria
+
+Eventos propostos:
+
+- `login.mfa_recovery_used`;
+- `login.mfa_recovery_failed`;
+- `login.mfa_recovery_exhausted`;
+- `login.mfa_recovery_regenerated`.
+
+Eventos devem conter apenas metadados redigidos:
+
+- `clientId`;
+- `userId`;
+- `challengeId` ou hash seguro;
+- motivo generico;
+- contagem restante apenas quando exibida ao usuario autenticado em tela interna, nunca em erro publico de login.
+
+#### Flags E Rollback
+
+Flags existentes:
+
+- `mfa`;
+- `mfaRequired`;
+- `mfaEnforced`.
+
+Flag futura recomendada:
+
+- `mfaRecoveryLogin=false` por padrao.
+
+Rollback:
+
+```text
+mfaRecoveryLogin=false
+```
+
+Com isso:
+
+- geracao e status de recovery codes continuam funcionando;
+- login volta a aceitar apenas TOTP no desafio MFA;
+- challenges pendentes expiram naturalmente;
+- nenhum rollback de banco e necessario.
+
+Status 77I: design-only. Recovery codes continuam gerados/hash-only, mas ainda nao sao aceitos no login. Nao houve alteracao funcional.
+
+### 77J - MFA Recovery Runtime MVP
+
+- aceitar recovery code em `/auth/mfa/verify` ou endpoint equivalente somente durante challenge MFA valido;
+- marcar codigo como usado imediatamente;
+- compartilhar tentativas/lockout com TOTP;
+- manter recovery codes fora de `SUPERVISOR`/`AGENT` no MVP;
+- rollback por `mfaRecoveryLogin=false`.
+
+### 77K - Supervisor MFA
+
+- expandir enforcement para `SUPERVISOR` somente apos recovery login e piloto ADMIN estaveis.
+
+### 77L - Tenant Enforcement
+
+- politica de enforcement por tenant;
+- perfis obrigatorios por tenant;
+- rollout controlado por tenant e perfil.
+
+### 77M - Admin Console Recovery
 
 - diagnostico de MFA por usuario;
 - reset administrativo auditado;
@@ -846,11 +965,14 @@ Status 77H: implementado como enforcement MVP controlado. Quando `mfa=true`, `mf
 6. Concluir 77F design de enforcement controlado.
 7. Implementar recovery codes antes de enforcement amplo.
 8. Ativar enforcement controlado somente para `ADMIN` em tenant piloto.
-9. Expandir para `SUPERVISOR` somente depois de piloto e recovery estaveis.
+9. Desenhar recovery code no login sem alterar runtime.
+10. Implementar recovery code no login com rollback por flag.
+11. Expandir para `SUPERVISOR` somente depois de piloto e recovery estaveis.
+12. Implementar enforcement por tenant/perfil.
 
 ## Confirmacao De Escopo
 
-Sprints de design 77A/77D/77F:
+Sprints de design 77A/77D/77F/77I:
 
 - nao altera codigo;
 - nao altera banco;

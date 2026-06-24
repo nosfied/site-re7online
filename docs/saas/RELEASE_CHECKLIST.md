@@ -100,6 +100,9 @@ POST /auth/mfa/verify
 - O smoke de enforcement deve cobrir: challenge criado, codigo invalido, codigo valido, challenge expirado, excesso de tentativas, rollback `mfaEnforced=false` e login ADMIN recuperado.
 - Na Sprint 77H, recovery codes nao entram no login; smoke deve confirmar que recovery code continua rejeitado em `/auth/login` e `/auth/mfa/verify`.
 - Rollback de 77H: desligar `mfaEnforced=false` no tenant piloto, recarregar backend se necessario e confirmar login ADMIN voltou ao contrato atual com JWT/sessao imediatos.
+- Recovery code no login deve entrar somente em sprint propria apos 77I, com flag dedicada recomendada `mfaRecoveryLogin=false` por padrao.
+- Smoke futuro de recovery login deve cobrir: TOTP continua funcionando, recovery valido emite sessao e marca `usedAt`, recovery reutilizado falha, recovery esgotado falha, erro generico sem revelar validade do codigo e rollback para TOTP-only.
+- Recovery login nunca deve logar codigo bruto, hash, segredo TOTP, ciphertext ou indicar se o codigo existe, ja foi usado ou pertence ao usuario.
 - Nao ligar enforcement se houver risco de travar o ultimo ADMIN do tenant piloto.
 
 Scheduling reminders:
