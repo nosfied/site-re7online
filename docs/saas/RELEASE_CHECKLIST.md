@@ -163,6 +163,45 @@ npm run search:index-shadow -- --tenant demo-prefeitura --json --record
 - `search:index-audio --record` exige `advancedSearch=true`, `advancedSearchRuntime=true` e `audioTranscription=true`, e so deve gravar transcricoes `completed` como `source=audio_transcription`.
 - `search:index-audio` nao pode baixar midia, chamar STT, processar audio, alterar Inbox, usar IA ou criar job automatico.
 
+PostgreSQL backup:
+
+- Releases com migration ou mudanca estrutural devem confirmar que existe backup PostgreSQL recente, valido e com checksum.
+- A rotina padrao e:
+
+```bash
+npm run backup:postgres
+```
+
+- O backup deve gerar:
+  - arquivo `.dump` em formato custom;
+  - arquivo `.dump.sha256`;
+  - entrada em `backups/postgres/manifest.jsonl`;
+  - status `backup.success`.
+- O backup deve rejeitar:
+  - dump vazio;
+  - dump menor que `POSTGRES_BACKUP_MIN_BYTES`;
+  - dump invalido em `pg_restore --list`;
+  - dump com menos objetos que `POSTGRES_BACKUP_MIN_OBJECTS`.
+- O cron recomendado, apos pre-release, e:
+
+```bash
+20 3 * * * cd /opt/re7online/site-re7online/apps/whatsapp-agent && npm run backup:postgres >> /opt/re7online/site-re7online/apps/whatsapp-agent/backups/postgres/postgres-backup-cron.log 2>&1
+```
+
+- O smoke operacional deve validar:
+
+```bash
+npm run backup:postgres
+tail -n 1 backups/postgres/manifest.jsonl
+sha256sum -c backups/postgres/*.dump.sha256
+pg_restore --list backups/postgres/<arquivo>.dump
+```
+
+- Em producao com PostgreSQL em Docker, o script usa por padrao o container `wa-agent-postgres`.
+- Em ambiente local sem Docker, usar `DATABASE_URL` com `POSTGRES_BACKUP_MODE=local`.
+- Dumps e manifestos nao devem ser commitados.
+- A 78L nao implementa offsite; copia externa criptografada segue como sprint propria.
+
 ## Frontend
 
 Diretorio raiz do repo:
@@ -241,6 +280,10 @@ Resultado esperado:
 - Confirmar que o snapshot nao expoe token, secret, cookie, Authorization, telefone, e-mail, waId, transcript, media URL ou raw payload.
 - Se a release tocar alerting futuro, validar primeiro com `alerting=false` e sem envio externo.
 - Alertas reais devem permanecer atras de flag explicita e rollback por flag.
+- Se a release tocar HA/escala/infra, registrar explicitamente: SPOFs afetados, backup antes da mudanca, plano de rollback, health pos-reload e impacto em PM2/Postgres/Nginx/DNS/storage.
+- Em VPS com pouca RAM, manter builds sequenciais e evitar build frontend/backend em paralelo.
+- Se a release tocar backup/restore, confirmar: ultimo backup valido, tamanho nao-zero, destino local/offsite, checksum quando existir, plano de restore e que nenhum secret/dump sera enviado por chat ou versionado no Git.
+- Restore validation deve usar banco temporario isolado e deve confirmar `TEMP_DB_REMAINING=0` ao final.
 
 ### Campaigns
 
