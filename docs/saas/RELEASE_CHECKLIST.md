@@ -193,7 +193,7 @@ npm run backup:postgres
 ```bash
 npm run backup:postgres
 tail -n 1 backups/postgres/manifest.jsonl
-sha256sum -c backups/postgres/*.dump.sha256
+(cd backups/postgres && sha256sum -c *.dump.sha256)
 pg_restore --list backups/postgres/<arquivo>.dump
 ```
 
