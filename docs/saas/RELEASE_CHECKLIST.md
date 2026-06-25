@@ -234,6 +234,14 @@ Resultado esperado:
 - Abrir `/app/dashboard`.
 - Validar que o perfil/feature do tenant permite ou nega corretamente.
 
+### Operacao / Observabilidade
+
+- Abrir `/admin/ops` quando a release tocar metricas, health, logging ou operacao.
+- Confirmar que `/admin/ops/metrics` segue protegido.
+- Confirmar que o snapshot nao expoe token, secret, cookie, Authorization, telefone, e-mail, waId, transcript, media URL ou raw payload.
+- Se a release tocar alerting futuro, validar primeiro com `alerting=false` e sem envio externo.
+- Alertas reais devem permanecer atras de flag explicita e rollback por flag.
+
 ### Campaigns
 
 - Abrir `/app/campaigns`.

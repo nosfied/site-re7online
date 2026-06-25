@@ -125,6 +125,11 @@ import {
 } from "../metrics/conversationMetrics.js";
 import { getMetricsSnapshot, metrics } from "../metrics/internalMetrics.js";
 import {
+  acknowledgeInternalAlert,
+  evaluateInternalAlerts,
+  getInternalAlertSnapshot,
+} from "../metrics/internalAlertManager.js";
+import {
   getClientProfile,
   getFeatures,
   hasFeature,
@@ -8600,6 +8605,37 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         tenantId: adminAuth.clientId ?? "superadmin",
       });
       json(res, 200, getMetricsSnapshot());
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/ops/alerts") {
+      metrics.counter("ops.alerts.snapshot", {
+        module: "ops",
+        tenantId: adminAuth.clientId ?? "superadmin",
+      });
+      evaluateInternalAlerts(getMetricsSnapshot());
+      json(res, 200, getInternalAlertSnapshot());
+      return;
+    }
+
+    const alertAckMatch = pathname.match(/^\/admin\/ops\/alerts\/([^/]+)\/ack$/);
+    if (req.method === "POST" && alertAckMatch) {
+      const alertId = decodeURIComponent(alertAckMatch[1] ?? "");
+      if (!alertId) {
+        json(res, 400, httpError("missing_alert_id", "Alert id is required."));
+        return;
+      }
+      evaluateInternalAlerts(getMetricsSnapshot());
+      const alert = acknowledgeInternalAlert(alertId);
+      if (!alert) {
+        json(res, 404, httpError("alert_not_found", "Alert not found."));
+        return;
+      }
+      metrics.counter("ops.alerts.ack", {
+        module: "ops",
+        tenantId: adminAuth.clientId ?? "superadmin",
+      });
+      json(res, 200, { ok: true, alert });
       return;
     }
 

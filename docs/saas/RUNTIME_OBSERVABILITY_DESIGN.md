@@ -559,15 +559,17 @@ Status: implementado como MVP interno na Sprint 78F. A rota `/admin/ops` exibe h
 
 Objetivo:
 
-- regras de alerta;
-- canal de notificacao interno;
-- alertas de health, DB, 5xx, latencia, disco, PM2 restart e provider;
-- runbooks por severidade.
+- desenhar regras de alerta;
+- definir severidade, thresholds, ACK, silence e storm protection;
+- mapear alertas de health, DB, 5xx, latencia, disco, PM2 restart e provider;
+- definir rollback por flag antes de qualquer envio real.
 
 Resultado esperado:
 
-- reduzir tempo de deteccao;
-- iniciar MTTR real.
+- arquitetura pronta para reduzir tempo de deteccao;
+- proxima sprint apta a implementar runtime alerting controlado.
+
+Status: design concluido na Sprint 78G em `docs/saas/ALERTING_NOTIFICATIONS_DESIGN.md`. A Sprint 78H implementa o avaliador runtime interno em memoria, com `GET /admin/ops/alerts` e `POST /admin/ops/alerts/:id/ack`. Ainda nao ha envio externo, Slack, e-mail, WhatsApp, cron, worker, persistencia, silence ou central visual de alertas.
 
 ### 78H - HA/Scale
 
