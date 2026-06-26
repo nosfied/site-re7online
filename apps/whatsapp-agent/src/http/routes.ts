@@ -378,7 +378,7 @@ async function loadWebchatConversationStateFromDb(
   const handoffStatus = String(state.handoffStatus || "NONE").toUpperCase();
   return {
     clientKey: params.clientKey,
-    conversationKey: state.conversationKey ?? `${params.clientKey}:${state.waId}`,
+    conversationKey: `${params.clientKey}:${state.waId}`,
     waId: state.waId,
     waIdCanonical: state.waIdCanonical ?? state.waId,
     firstSeenAt: state.firstSeenAt?.toISOString() ?? "",
