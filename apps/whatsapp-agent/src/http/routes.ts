@@ -334,7 +334,7 @@ function escapeHtml(value: string) {
 
 function normalizeConversationRouteId(input: string) {
   const raw = input.trim();
-  if (/^(messenger|instagram):[a-f0-9]{16,64}$/i.test(raw)) {
+  if (/^(messenger|instagram|webchat):[a-f0-9]{16,64}$/i.test(raw)) {
     return raw.toLowerCase();
   }
   return normalizeWaId(raw);
