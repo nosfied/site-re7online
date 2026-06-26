@@ -60,7 +60,8 @@ function parseEnvValue(value) {
 }
 
 function safeUrl(baseUrl, pathname, query = {}) {
-  const url = new URL(pathname, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  const relativePath = String(pathname || "").replace(/^\/+/, "");
+  const url = new URL(relativePath, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   }
