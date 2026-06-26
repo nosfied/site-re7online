@@ -178,7 +178,7 @@ async function createWebchatFixture(baseUrl, token, runId, origin) {
     },
     { Origin: origin }
   );
-  const sessionToken = sessionBody.sessionToken;
+  const sessionToken = sessionBody.sessionToken || sessionBody.token;
   if (!sessionToken) throw new Error("webchat_session_missing_token");
   const inboundBody = await requestJson(
     "POST",
@@ -204,6 +204,16 @@ async function createWebchatFixture(baseUrl, token, runId, origin) {
     { Authorization: `Bearer ${token}` }
   );
   return { site, sessionToken, conversationId, origin };
+}
+
+async function listWebchatSites(baseUrl, token) {
+  const body = await requestJson(
+    "GET",
+    safeUrl(baseUrl, "/app/webchat"),
+    undefined,
+    { Authorization: `Bearer ${token}` }
+  );
+  return Array.isArray(body.sites) ? body.sites : [];
 }
 
 async function archiveWebchatSite(baseUrl, token, siteId) {
@@ -378,6 +388,7 @@ async function cleanup(options) {
   const usersWithPasswords = JSON.parse(usersJson);
   const adminCandidate = usersWithPasswords.find((item) => /-01@/.test(item.email)) || usersWithPasswords[0];
   let adminJwt = "";
+  const archivedSiteIds = new Set();
   if (adminCandidate) {
     try {
       adminJwt = await login(baseUrl, adminCandidate.email, adminCandidate.password);
@@ -391,6 +402,18 @@ async function cleanup(options) {
     }
     if (manifest.webchat?.siteId) {
       await archiveWebchatSite(baseUrl, adminJwt, manifest.webchat.siteId).catch(() => null);
+      archivedSiteIds.add(manifest.webchat.siteId);
+    }
+    const sites = await listWebchatSites(baseUrl, adminJwt).catch(() => []);
+    for (const site of sites) {
+      if (
+        site?.id &&
+        !archivedSiteIds.has(site.id) &&
+        (String(site.slug || "").startsWith("load-test-") || String(site.name || "").startsWith("Load Test "))
+      ) {
+        await archiveWebchatSite(baseUrl, adminJwt, site.id).catch(() => null);
+        archivedSiteIds.add(site.id);
+      }
     }
   }
   for (const user of manifest.users || []) {
@@ -399,7 +422,7 @@ async function cleanup(options) {
   const searchIndexesDeleted = await cleanupSearchIndexes(tenant).catch(() => 0);
   await fs.rm(envPath, { force: true }).catch(() => null);
   await fs.rm(manifestPath, { force: true }).catch(() => null);
-  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: Boolean(manifest.webchat?.siteId && adminJwt), searchIndexesDeleted }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: archivedSiteIds.size, searchIndexesDeleted }, null, 2));
 }
 
 async function status(options) {
