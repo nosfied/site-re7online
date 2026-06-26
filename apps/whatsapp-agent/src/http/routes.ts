@@ -60,6 +60,7 @@ import {
 } from "../whatsapp/whatsapp.client.js";
 import { transcodeAudioToOggOpus } from "../media/audioTranscode.js";
 import { isWindowOpen } from "../conversation/conversation.service.js";
+import type { ConversationState } from "../conversation/conversation.types.js";
 import { clearAutomationRuntimeAnswers } from "../conversation/automationRuntime.js";
 import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { checkUsageGate } from "../usage/usageGate.js";
@@ -338,6 +339,73 @@ function normalizeConversationRouteId(input: string) {
     return raw.toLowerCase();
   }
   return normalizeWaId(raw);
+}
+
+async function loadWebchatConversationStateFromDb(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; clientKey: string; waId: string }
+): Promise<ConversationState | null> {
+  if (!params.waId.startsWith("webchat:")) return null;
+  const state = await prisma.conversationRuntimeState.findFirst({
+    where: {
+      clientId: params.clientId,
+      waId: params.waId,
+      channel: "webchat",
+    },
+    select: {
+      waId: true,
+      waIdCanonical: true,
+      conversationKey: true,
+      firstSeenAt: true,
+      windowIsOpen: true,
+      windowExpiresAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      lastInboundMessageId: true,
+      lastOutboundMessageId: true,
+      handoffStatus: true,
+      mode: true,
+      assignedUserId: true,
+      assignedTo: true,
+      assignedAt: true,
+      departmentId: true,
+      queueId: true,
+      status: true,
+      closedAt: true,
+    },
+  });
+  if (!state) return null;
+  const handoffStatus = String(state.handoffStatus || "NONE").toUpperCase();
+  return {
+    clientKey: params.clientKey,
+    conversationKey: state.conversationKey ?? `${params.clientKey}:${state.waId}`,
+    waId: state.waId,
+    waIdCanonical: state.waIdCanonical ?? state.waId,
+    firstSeenAt: state.firstSeenAt?.toISOString() ?? "",
+    lastInboundAt: state.lastInboundAt?.toISOString() ?? "",
+    lastOutboundAt: state.lastOutboundAt?.toISOString() ?? undefined,
+    lastInboundMessageId: state.lastInboundMessageId ?? undefined,
+    lastOutboundMessageId: state.lastOutboundMessageId ?? undefined,
+    window: {
+      isOpen: state.windowIsOpen,
+      expiresAt: state.windowExpiresAt?.toISOString() ?? undefined,
+    },
+    handoff: {
+      status: handoffStatus === "PENDING" ? "pending" : handoffStatus === "ACTIVE" ? "active" : "none",
+    },
+    templateNeeded: false,
+    demoStatus: "none",
+    chatbotActive: false,
+    answers: {},
+    mode: state.mode === "BOT" ? "BOT" : "HUMAN",
+    assignedUserId: state.assignedUserId ?? null,
+    assignedTo: state.assignedTo ?? null,
+    assignedAt: state.assignedAt?.toISOString() ?? null,
+    departmentId: state.departmentId ?? null,
+    queueId: state.queueId ?? null,
+    status: state.status ?? null,
+    closedAt: state.closedAt?.toISOString() ?? null,
+  };
 }
 
 function getRequestOrigin(req: IncomingMessage) {
@@ -3911,10 +3979,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_close_to_general",
       });
-      const conversation = await runtimeStorage.getConversation(
-        resolvedConversation.resolvedWaId,
-        client.clientKey
-      );
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      const conversation =
+        (await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey)) ??
+        (resolvedChannel === "webchat"
+          ? await loadWebchatConversationStateFromDb(prisma, {
+              clientId: client.id,
+              clientKey: client.clientKey,
+              waId: resolvedConversation.resolvedWaId,
+            })
+          : null);
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
@@ -4109,10 +4183,15 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         return;
       }
-      const currentConversation = await runtimeStorage.getConversation(
-        resolvedConversation.resolvedWaId,
-        client.clientKey
-      );
+      const currentConversation =
+        (await runtimeStorage.getConversation(resolvedConversation.resolvedWaId, client.clientKey)) ??
+        (resolvedChannel === "webchat"
+          ? await loadWebchatConversationStateFromDb(prisma, {
+              clientId: client.id,
+              clientKey: client.clientKey,
+              waId: resolvedConversation.resolvedWaId,
+            })
+          : null);
       if (!currentConversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;
