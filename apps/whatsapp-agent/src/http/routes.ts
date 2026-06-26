@@ -19926,7 +19926,12 @@ async function buildConversationListPayload(
   const runtimeConversations = await Promise.all(
     winners.map(async (item) => {
       const conversation = materializeConversationOperationalState(
-        await runtimeStorage.getConversation(item.waId, params.clientKey),
+        await loadInboxConversationState(prisma, {
+          clientId: params.clientId,
+          clientKey: params.clientKey,
+          waId: item.waId,
+          channel: serializeInboxChannelFields(item).channel,
+        }),
         defaults
       );
       return {
