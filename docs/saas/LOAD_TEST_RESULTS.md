@@ -541,6 +541,8 @@ Escopo:
 
 Status posterior: a Sprint 78N.2 implementou essas fixtures em `apps/whatsapp-agent/scripts/load-test-fixtures.mjs` e documentou o uso em `docs/saas/LOAD_TEST_FIXTURES.md`. A proxima execucao de carga autenticada deve usar `load-tests/k6/results/fixtures.env` gerado pelo `prepare` e executar `cleanup` ao final.
 
+Atualizacao 78N.2D: a preparacao passa a usar o tenant tecnico `loadtest-prefeitura`. O fluxo esperado e: status do tenant, bootstrap temporario com `advancedSearchRuntime=false`, `load-test:fixtures prepare`, `search:index-shadow --record`, bootstrap final com `advancedSearchRuntime=true`. Nenhuma carga deve ser executada nesta etapa.
+
 ## Result Report 78N.1
 
 - Scripts k6 funcionaram pelo dominio publico.

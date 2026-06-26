@@ -3,6 +3,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PrismaClient } from "@prisma/client";
+import dotenv from "dotenv";
 
 const DEFAULT_TENANT = "demo-prefeitura";
 const DEFAULT_BASE_URL = "http://127.0.0.1:3001";
@@ -11,6 +13,8 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "../../..");
 const DEFAULT_ENV_FILE = path.join(REPO_ROOT, "load-tests/k6/results/fixtures.env");
 const DEFAULT_MANIFEST_FILE = path.join(REPO_ROOT, "load-tests/k6/results/fixtures-manifest.json");
+
+dotenv.config({ path: path.join(SCRIPT_DIR, "..", ".env") });
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -201,6 +205,23 @@ async function archiveWebchatSite(baseUrl, token, siteId) {
   );
 }
 
+async function cleanupSearchIndexes(tenant) {
+  const prisma = new PrismaClient();
+  try {
+    const client = await prisma.client.findUnique({
+      where: { clientKey: tenant },
+      select: { id: true },
+    });
+    if (!client) return 0;
+    const result = await prisma.searchIndex.deleteMany({
+      where: { clientId: client.id },
+    });
+    return result.count;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function writeFixtureFiles(params) {
   const outputDir = path.dirname(params.out);
   await fs.mkdir(outputDir, { recursive: true });
@@ -361,9 +382,10 @@ async function cleanup(options) {
   for (const user of manifest.users || []) {
     await updateUser(baseUrl, adminToken, tenant, user.id, { isActive: false }).catch(() => null);
   }
+  const searchIndexesDeleted = await cleanupSearchIndexes(tenant).catch(() => 0);
   await fs.rm(envPath, { force: true }).catch(() => null);
   await fs.rm(manifestPath, { force: true }).catch(() => null);
-  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: Boolean(manifest.webchat?.siteId && adminJwt) }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: Boolean(manifest.webchat?.siteId && adminJwt), searchIndexesDeleted }, null, 2));
 }
 
 async function status(options) {

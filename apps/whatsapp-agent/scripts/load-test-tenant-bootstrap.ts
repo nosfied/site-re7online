@@ -11,6 +11,7 @@ type Options = {
   tenant: string;
   name: string;
   maxUsers: number;
+  advancedSearchRuntime: boolean;
   execute: boolean;
   json: boolean;
 };
@@ -19,27 +20,29 @@ const DEFAULT_TENANT = "loadtest-prefeitura";
 const DEFAULT_NAME = "Prefeitura Load Test";
 const DEFAULT_MAX_USERS = 60;
 
-const FEATURES = {
-  webchat: true,
-  webchatOutbound: true,
-  advancedSearch: true,
-  advancedSearchRuntime: true,
-  scheduling: false,
-  schedulingReminders: false,
-  webhooks: false,
-  webhookDispatch: false,
-  webhookDispatchExecute: false,
-  audioTranscription: false,
-  audioTranscriptionRuntime: false,
-  mfa: false,
-  mfaRequired: false,
-  mfaEnforced: false,
-  telegram: false,
-  telegramInbound: false,
-  telegramOutbound: false,
-  knowledgeBase: false,
-  satisfaction: false,
-};
+function buildFeatures(options: Pick<Options, "advancedSearchRuntime">) {
+  return {
+    webchat: true,
+    webchatOutbound: true,
+    advancedSearch: true,
+    advancedSearchRuntime: options.advancedSearchRuntime,
+    scheduling: false,
+    schedulingReminders: false,
+    webhooks: false,
+    webhookDispatch: false,
+    webhookDispatchExecute: false,
+    audioTranscription: false,
+    audioTranscriptionRuntime: false,
+    mfa: false,
+    mfaRequired: false,
+    mfaEnforced: false,
+    telegram: false,
+    telegramInbound: false,
+    telegramOutbound: false,
+    knowledgeBase: false,
+    satisfaction: false,
+  };
+}
 
 const DEPARTMENTS = [
   { name: "Load Test Atendimento", slug: "load-test-atendimento", queueName: "Fila Load Test" },
@@ -52,6 +55,7 @@ function parseArgs(argv: string[]): Options {
     tenant: DEFAULT_TENANT,
     name: DEFAULT_NAME,
     maxUsers: DEFAULT_MAX_USERS,
+    advancedSearchRuntime: true,
     execute: false,
     json: false,
   };
@@ -81,6 +85,13 @@ function parseArgs(argv: string[]): Options {
         options.maxUsers = Number(value(current));
         index += 2;
         break;
+      case "--advanced-search-runtime": {
+        const raw = value(current).trim().toLowerCase();
+        if (raw !== "true" && raw !== "false") throw new Error(`${current} must be true or false`);
+        options.advancedSearchRuntime = raw === "true";
+        index += 2;
+        break;
+      }
       case "--execute":
         options.execute = true;
         index += 1;
@@ -317,7 +328,7 @@ async function bootstrap(prisma: PrismaClient, options: Options) {
       name: options.name,
       status: "ACTIVE",
       profile: "government",
-      features: FEATURES as Prisma.InputJsonValue,
+      features: buildFeatures(options) as Prisma.InputJsonValue,
     },
     create: {
       clientKey: options.tenant,
@@ -325,7 +336,7 @@ async function bootstrap(prisma: PrismaClient, options: Options) {
       status: "ACTIVE",
       profile: "government",
       adminToken: crypto.randomBytes(32).toString("hex"),
-      features: FEATURES as Prisma.InputJsonValue,
+      features: buildFeatures(options) as Prisma.InputJsonValue,
     },
   });
   await upsertTenantConfig({ prisma, clientId: client.id });

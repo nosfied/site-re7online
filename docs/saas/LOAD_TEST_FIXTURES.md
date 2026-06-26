@@ -6,6 +6,8 @@ Atualizacao 78N.2B: o tenant recomendado para carga passa a ser `loadtest-prefei
 
 Atualizacao 78N.2C: antes de executar `prepare`, validar o tenant tecnico com `npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json`. O bootstrap fica documentado em `docs/saas/LOAD_TEST_TENANT_BOOTSTRAP.md`.
 
+Atualizacao 78N.2D: para popular SearchIndex, desligar temporariamente `advancedSearchRuntime` antes do `search:index-shadow --record` e religar ao final da preparacao. O cleanup remove API keys, usuarios temporarios, site Webchat, arquivos temporarios e `SearchIndex` do tenant tecnico.
+
 Escopo: criar fixtures representativas para carga autenticada sem alterar regra de negocio, seguranca, rate limit global, banco/schema ou runtime funcional.
 
 ## Auditoria
@@ -40,11 +42,14 @@ Comando:
 ```bash
 cd apps/whatsapp-agent
 npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime false --execute --json
 npm run load-test:fixtures -- prepare \
   --tenant loadtest-prefeitura \
   --base-url https://converta.re7online.com/agent-api \
   --users 20 \
   --api-keys 20
+npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
 ```
 
 Requisitos:
@@ -116,6 +121,7 @@ O cleanup:
 - revoga API keys temporarias;
 - arquiva o site Webchat temporario;
 - desativa usuarios temporarios.
+- remove `SearchIndex` do tenant tecnico;
 - remove `fixtures.env` e `fixtures-manifest.json` apos sucesso.
 
 Preservar o arquivo `fixtures.env` ate o cleanup. Ele contem os segredos temporarios necessarios para revogar API keys e arquivar o site pelo fluxo app. Se o arquivo for removido antes do cleanup, usar o manifest para localizar recursos pendentes e fazer saneamento manual.

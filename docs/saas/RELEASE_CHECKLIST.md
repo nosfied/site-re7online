@@ -369,8 +369,10 @@ Para carga autenticada controlada:
 ```bash
 cd apps/whatsapp-agent
 npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime false --execute --json
 npm run load-test:fixtures -- prepare --tenant loadtest-prefeitura --users 20 --api-keys 20
 npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
 ```
 
 Depois:
@@ -393,6 +395,7 @@ npm run load-test:fixtures -- cleanup --tenant loadtest-prefeitura
 ```
 
 Preservar `load-tests/k6/results/fixtures.env` ate o cleanup, porque ele contem segredos temporarios necessarios para revogar API keys e arquivar o site Webchat pelo fluxo app. Nunca versionar `fixtures.env` ou manifests com segredos temporarios.
+O cleanup tambem remove `SearchIndex` do tenant tecnico. Nao executar cleanup antes de concluir a carga planejada.
 
 Nao usar `demo-prefeitura` para carga. Esse tenant e reservado a demonstracoes, POC e validacao funcional. Testes de carga devem usar tenant tecnico dedicado, conforme `docs/saas/LOAD_TEST_TENANT_DESIGN.md`.
 
@@ -401,7 +404,7 @@ Bootstrap inicial do tenant tecnico:
 ```bash
 cd apps/whatsapp-agent
 npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --json
-npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --execute --json
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
 ```
 
 Nao executar carga na sprint de bootstrap. Primeiro validar status, features e quota.

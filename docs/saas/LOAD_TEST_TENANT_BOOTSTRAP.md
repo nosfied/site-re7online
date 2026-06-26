@@ -37,6 +37,18 @@ cd apps/whatsapp-agent
 npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --execute --json
 ```
 
+Para preparacao de fixtures com `search:index-shadow --record`, usar temporariamente:
+
+```bash
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime false --execute --json
+```
+
+Ao final da preparacao, religar para a carga externa futura:
+
+```bash
+npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
+```
+
 Dry-run:
 
 ```bash
@@ -58,7 +70,8 @@ Configura:
   - `webchat=true`;
   - `webchatOutbound=true`;
   - `advancedSearch=true`;
-  - `advancedSearchRuntime=true`;
+- `advancedSearchRuntime=true` para carga;
+- `advancedSearchRuntime=false` temporariamente para `search:index-shadow --record`;
 - features fora do escopo desligadas:
   - `scheduling=false`;
   - `webhooks=false`;
@@ -130,6 +143,7 @@ Reset completo do tenant tecnico deve ser uma acao operacional separada, nunca a
 
 - `--execute` e obrigatorio para aplicar.
 - Sem `--execute`, o script apenas reporta plano e estado atual.
+- `--advanced-search-runtime true|false` controla explicitamente se busca operacional fica ligada.
 - Se o guardrail de escrita do contrato de tenant config bloquear `maxActiveAppUsers`, o bootstrap deve parar antes de ser considerado pronto.
 - Nao executar carga nesta sprint.
 
