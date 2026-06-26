@@ -8,6 +8,8 @@ Atualizacao 78N.2C: antes de executar `prepare`, validar o tenant tecnico com `n
 
 Atualizacao 78N.2D: para popular SearchIndex, desligar temporariamente `advancedSearchRuntime` antes do `search:index-shadow --record` e religar ao final da preparacao. O cleanup remove API keys, usuarios temporarios, site Webchat, arquivos temporarios e `SearchIndex` do tenant tecnico.
 
+Atualizacao 78N.2E: o `prepare` nao tolera mais outbound Webchat ausente. O fluxo deve criar inbound, executar claim pelo Inbox, persistir outbound humano e deixar a timeline completa para o `inbox-detail`.
+
 Escopo: criar fixtures representativas para carga autenticada sem alterar regra de negocio, seguranca, rate limit global, banco/schema ou runtime funcional.
 
 ## Auditoria
@@ -85,6 +87,7 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
    - inbound;
    - claim pelo operador;
    - outbound humano;
+   - timeline com inbound + outbound;
    - `CONVERSATION_ID` para k6.
 
 4. Variaveis para Search:
@@ -144,6 +147,7 @@ npm run load-test:fixtures -- status
 | Fixture Webchat acumular historico | site temporario e arquivado no cleanup; conversas ficam como historico de teste do tenant tecnico. |
 | Search sem resultado representativo | rodar `search:index-shadow --record` apos o prepare para popular `SearchIndex` com dados recentes do tenant tecnico. |
 | Tenant de teste sem margem de usuarios | para smoke minimo, usar `--users 1` em tenant interno com margem; para carga representativa, reservar tenant piloto com limite suficiente para ADMIN/SUPERVISOR/AGENT temporarios. |
+| Claim/outbound Webchat falhar | o `prepare` deve falhar; nao executar carga ate corrigir o fluxo real de Inbox. |
 
 ## Result Report
 
@@ -151,6 +155,7 @@ npm run load-test:fixtures -- status
 - Usuarios de carga criados pelo endpoint `/admin/users`, nao por insert direto.
 - API keys criadas por `/app/api-keys`, com segredo exibido apenas no arquivo temporario.
 - Inbox fixture criada por Webchat runtime, gerando Conversation/Contact/Inbound/Outbound no fluxo normal.
+- 78N.2E corrigiu o bloqueio `claim_failed:500`; o criterio de aceite passa a ser inbound + claim + outbound + timeline completa.
 - k6 atualizado para suportar multiplos usuarios/API keys.
 - Cleanup definido.
 - Nenhuma regra de seguranca foi relaxada.

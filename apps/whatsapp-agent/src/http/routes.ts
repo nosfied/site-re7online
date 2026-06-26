@@ -6893,10 +6893,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         source: "app_conversation_claim",
       });
-      const conversation = await runtimeStorage.getConversation(
-        resolvedConversation.resolvedWaId,
-        client.clientKey
-      );
+      const resolvedChannel = serializeInboxChannelFields(resolvedConversation.winner ?? undefined).channel;
+      const conversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: resolvedChannel,
+      });
       if (!conversation) {
         json(res, 404, { error: "conversation_not_found" });
         return;

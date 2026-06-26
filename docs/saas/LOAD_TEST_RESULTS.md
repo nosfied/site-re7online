@@ -543,6 +543,8 @@ Status posterior: a Sprint 78N.2 implementou essas fixtures em `apps/whatsapp-ag
 
 Atualizacao 78N.2D: a preparacao passa a usar o tenant tecnico `loadtest-prefeitura`. O fluxo esperado e: status do tenant, bootstrap temporario com `advancedSearchRuntime=false`, `load-test:fixtures prepare`, `search:index-shadow --record`, bootstrap final com `advancedSearchRuntime=true`. Nenhuma carga deve ser executada nesta etapa.
 
+Atualizacao 78N.2E: antes da 78N.3, corrigir o bloqueio `claim_failed:500` observado no Webchat fixture. A proxima carga externa so deve iniciar depois de validar inbound Webchat, claim, outbound humano, timeline completa e cleanup sem erro.
+
 ## Result Report 78N.1
 
 - Scripts k6 funcionaram pelo dominio publico.

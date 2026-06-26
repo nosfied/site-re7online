@@ -375,6 +375,14 @@ npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record
 npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
 ```
 
+O `prepare` precisa confirmar o fluxo completo de Webchat:
+
+```text
+session -> inbound -> conversation -> claim -> outbound -> timeline
+```
+
+Se houver `claim_failed`, `conversation_not_found`, `conversation_not_assigned` ou ausencia de `OutboundMessage`, interromper a release de carga e corrigir o fluxo real antes da 78N.3.
+
 Depois:
 
 ```bash

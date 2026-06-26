@@ -191,26 +191,19 @@ async function createWebchatFixture(baseUrl, token, runId, origin) {
   );
   const conversationId = inboundBody.conversation?.waId || inboundBody.conversation?.id || "";
   if (!conversationId) throw new Error("webchat_conversation_missing_id");
-  let outboundCreated = false;
-  let outboundSkippedReason = null;
-  try {
-    await requestJson(
-      "POST",
-      safeUrl(baseUrl, `/app/conversation/${encodeURIComponent(conversationId)}/claim`),
-      {},
-      { Authorization: `Bearer ${token}` }
-    );
-    await requestJson(
-      "POST",
-      safeUrl(baseUrl, `/app/conversation/${encodeURIComponent(conversationId)}/send`),
-      { text: `Resposta outbound load test ${runId}` },
-      { Authorization: `Bearer ${token}` }
-    );
-    outboundCreated = true;
-  } catch (error) {
-    outboundSkippedReason = error instanceof Error ? error.message : "webchat_outbound_skipped";
-  }
-  return { site, sessionToken, conversationId, origin, outboundCreated, outboundSkippedReason };
+  await requestJson(
+    "POST",
+    safeUrl(baseUrl, `/app/conversation/${encodeURIComponent(conversationId)}/claim`),
+    {},
+    { Authorization: `Bearer ${token}` }
+  );
+  await requestJson(
+    "POST",
+    safeUrl(baseUrl, `/app/conversation/${encodeURIComponent(conversationId)}/send`),
+    { text: `Resposta outbound load test ${runId}` },
+    { Authorization: `Bearer ${token}` }
+  );
+  return { site, sessionToken, conversationId, origin, outboundCreated: true, outboundSkippedReason: null };
 }
 
 async function listWebchatSites(baseUrl, token) {
