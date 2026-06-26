@@ -776,7 +776,8 @@ Mudancas:
 | `APP_TOKENS_JSON` | podia ter menos tokens que VUs | passa a ter 1 token por usuario app |
 | `LOGIN_USERS_JSON` | podia revogar tokens de app | nao compartilha usuarios com `APP_TOKENS_JSON` |
 | k6 Search/Inbox | aceitava pool menor que VUs | falha cedo se tokens < VUs do perfil |
-| Geração de tokens | logins em sequencia rapida podiam bater rate limit | `--auth-delay-ms`, default `6000`, respeita a protecao real |
+| Criacao de usuarios | criacao administrativa em sequencia rapida podia bater rate limit | `--admin-delay-ms`, default `3000`, respeita a protecao real |
+| Geracao de tokens | logins em sequencia rapida podiam bater rate limit | `--auth-delay-ms`, default `6000`, respeita a protecao real |
 
 Resultado esperado:
 

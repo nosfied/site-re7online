@@ -310,6 +310,7 @@ async function prepare(options) {
   const userCount = Math.max(1, Math.min(Number(options.users || 20), 50));
   const loginUserCount = Math.max(1, Math.min(Number(options["login-users"] || 2), 10));
   const authDelayMs = Math.max(0, Math.min(Number(options["auth-delay-ms"] || 6000), 30000));
+  const adminDelayMs = Math.max(0, Math.min(Number(options["admin-delay-ms"] || 3000), 30000));
   const apiKeyCount = Math.max(1, Math.min(Number(options["api-keys"] || userCount), 50));
   const origin = String(options.origin || DEFAULT_ORIGIN);
   const out = String(options.out || DEFAULT_ENV_FILE);
@@ -349,6 +350,7 @@ async function prepare(options) {
         loginUsers: loginUsers.map(({ password, ...item }) => item),
         appTokenCount: appAuthTokens.length,
         authDelayMs,
+        adminDelayMs,
         publicApiKeys,
         webchat: webchat
           ? {
@@ -365,6 +367,7 @@ async function prepare(options) {
   };
 
   for (let index = 0; index < userCount; index += 1) {
+    if (index > 0 && adminDelayMs > 0) await sleep(adminDelayMs);
     const role = index === 0 ? "ADMIN" : "SUPERVISOR";
     const email = `loadtest-${runId}-${String(index + 1).padStart(2, "0")}@${tenant}.local`;
     const password = randomSecret();
@@ -381,6 +384,7 @@ async function prepare(options) {
   }
 
   for (let index = 0; index < loginUserCount; index += 1) {
+    if (adminDelayMs > 0) await sleep(adminDelayMs);
     const email = `loadtest-login-${runId}-${String(index + 1).padStart(2, "0")}@${tenant}.local`;
     const password = randomSecret();
     const user = await createUser(baseUrl, adminToken, tenant, {
@@ -430,6 +434,7 @@ async function prepare(options) {
     loginUsers: loginUsers.map(({ password, ...item }) => item),
     appTokenCount: appAuthTokens.length,
     authDelayMs,
+    adminDelayMs,
     publicApiKeys,
     webchat: {
       siteId: webchat.site.id,
@@ -452,7 +457,7 @@ async function prepare(options) {
     searchQuery: "load test",
     manifestData,
   });
-  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, authDelayMs, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, authDelayMs, adminDelayMs, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
 }
 
 async function cleanup(options) {
@@ -540,6 +545,7 @@ async function status(options) {
     loginUsers: manifest.loginUsers?.length ?? null,
     appTokenCount: manifest.appTokenCount ?? null,
     authDelayMs: manifest.authDelayMs ?? null,
+    adminDelayMs: manifest.adminDelayMs ?? null,
     apiKeys: manifest.publicApiKeys?.length ?? 0,
     hasConversationId: Boolean(manifest.webchat?.conversationId),
     envFile: manifest.envFile,
