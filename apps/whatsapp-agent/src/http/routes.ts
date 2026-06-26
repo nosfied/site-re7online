@@ -412,11 +412,12 @@ async function loadInboxConversationState(
   prisma: ReturnType<typeof getPrisma>,
   params: { clientId: string; clientKey: string; waId: string; channel: string | null }
 ): Promise<ConversationState | null> {
+  const isWebchat = params.channel === "webchat" || params.waId.startsWith("webchat:");
   try {
     const state = await runtimeStorage.getConversation(params.waId, params.clientKey);
     if (state) return state;
   } catch (error) {
-    if (params.channel !== "webchat") throw error;
+    if (!isWebchat) throw error;
     logger.warn({
       event: "webchat.runtime_storage.fallback",
       clientId: params.clientId,
@@ -426,7 +427,7 @@ async function loadInboxConversationState(
       error: (error as Error).message,
     });
   }
-  if (params.channel !== "webchat") return null;
+  if (!isWebchat) return null;
   return loadWebchatConversationStateFromDb(prisma, params);
 }
 
