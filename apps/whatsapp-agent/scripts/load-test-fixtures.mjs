@@ -93,6 +93,16 @@ async function createUser(baseUrl, adminToken, tenant, input) {
   return body.user;
 }
 
+async function listDepartments(baseUrl, adminToken, tenant) {
+  const body = await requestJson(
+    "GET",
+    safeUrl(baseUrl, "/admin/departments", { clientKey: tenant }),
+    undefined,
+    { "X-Admin-Token": adminToken }
+  );
+  return Array.isArray(body.items) ? body.items : [];
+}
+
 async function updateUser(baseUrl, adminToken, tenant, userId, input) {
   const body = await requestJson(
     "PATCH",
@@ -258,6 +268,9 @@ async function prepare(options) {
   const users = [];
   const publicApiKeys = [];
   const publicApiSecrets = [];
+  const departments = await listDepartments(baseUrl, adminToken, tenant);
+  const defaultDepartment = departments.find((item) => item?.isActive !== false) || departments[0];
+  if (!defaultDepartment?.id) throw new Error("fixture_department_required");
   let webchat = null;
   const persistPartial = async () => {
     await writeFixtureFiles({
@@ -299,9 +312,10 @@ async function prepare(options) {
       email,
       password,
       role,
+      ...(role === "AGENT" || role === "SUPERVISOR" ? { departmentId: defaultDepartment.id } : {}),
       isActive: true,
     });
-    users.push({ id: user.id, email, password, role });
+    users.push({ id: user.id, email, password, role, departmentId: user.departmentId ?? null });
     await persistPartial();
   }
 
