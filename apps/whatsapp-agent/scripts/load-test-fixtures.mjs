@@ -361,14 +361,25 @@ async function cleanup(options) {
   for (const user of manifest.users || []) {
     await updateUser(baseUrl, adminToken, tenant, user.id, { isActive: false }).catch(() => null);
   }
+  await fs.rm(envPath, { force: true }).catch(() => null);
+  await fs.rm(manifestPath, { force: true }).catch(() => null);
   console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: Boolean(manifest.webchat?.siteId && adminJwt) }, null, 2));
 }
 
 async function status(options) {
   const manifestPath = String(options.manifest || DEFAULT_MANIFEST_FILE);
-  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  const manifestText = await fs.readFile(manifestPath, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!manifestText) {
+    console.log(JSON.stringify({ ok: true, prepared: false, manifest: manifestPath }, null, 2));
+    return;
+  }
+  const manifest = JSON.parse(manifestText);
   console.log(JSON.stringify({
     ok: true,
+    prepared: true,
     runId: manifest.runId,
     tenant: manifest.tenant,
     users: manifest.users?.length ?? 0,

@@ -111,6 +111,7 @@ O cleanup:
 - revoga API keys temporarias;
 - arquiva o site Webchat temporario;
 - desativa usuarios temporarios.
+- remove `fixtures.env` e `fixtures-manifest.json` apos sucesso.
 
 Preservar o arquivo `fixtures.env` ate o cleanup. Ele contem os segredos temporarios necessarios para revogar API keys e arquivar o site pelo fluxo app. Se o arquivo for removido antes do cleanup, usar o manifest para localizar recursos pendentes e fazer saneamento manual.
 
