@@ -151,6 +151,7 @@ O cleanup:
 - revoga API keys temporarias;
 - arquiva o site Webchat temporario;
 - desativa usuarios temporarios.
+- desativa usuarios temporarios orfaos com padrao `loadtest-*` no tenant tecnico;
 - remove `SearchIndex` do tenant tecnico;
 - remove `fixtures.env` e `fixtures-manifest.json` apos sucesso.
 

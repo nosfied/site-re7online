@@ -139,6 +139,18 @@ async function updateUser(baseUrl, adminToken, tenant, userId, input) {
   return body.user;
 }
 
+async function listUsers(baseUrl, adminToken, tenant) {
+  const body = await requestJson(
+    "GET",
+    safeUrl(baseUrl, "/admin/users", { clientKey: tenant }),
+    undefined,
+    { "X-Admin-Token": adminToken }
+  );
+  if (Array.isArray(body.items)) return body.items;
+  if (Array.isArray(body.users)) return body.users;
+  throw new Error("fixture_users_unexpected_response");
+}
+
 async function createApiKey(baseUrl, token, name, scopes, expiresAt) {
   const body = await requestJson(
     "POST",
@@ -487,10 +499,20 @@ async function cleanup(options) {
   for (const user of manifest.users || []) {
     await updateUser(baseUrl, adminToken, tenant, user.id, { isActive: false }).catch(() => null);
   }
+  const staleUsers = await listUsers(baseUrl, adminToken, tenant).catch(() => []);
+  let staleUsersDeactivated = 0;
+  for (const user of staleUsers) {
+    const email = String(user.email || "");
+    const name = String(user.name || "");
+    if (user?.id && user.isActive !== false && (email.startsWith("loadtest-") || name.startsWith("Load Test "))) {
+      await updateUser(baseUrl, adminToken, tenant, user.id, { isActive: false }).catch(() => null);
+      staleUsersDeactivated += 1;
+    }
+  }
   const searchIndexesDeleted = await cleanupSearchIndexes(tenant).catch(() => 0);
   await fs.rm(envPath, { force: true }).catch(() => null);
   await fs.rm(manifestPath, { force: true }).catch(() => null);
-  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: archivedSiteIds.size, searchIndexesDeleted }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, staleUsersDeactivated, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: archivedSiteIds.size, searchIndexesDeleted }, null, 2));
 }
 
 async function status(options) {
