@@ -18684,7 +18684,7 @@ async function resolveConversationTarget(
   }
 ) {
   const exactRawWaId = params.rawWaId.trim();
-  const syntheticRawWaId = /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(exactRawWaId)
+  const syntheticRawWaId = /^(messenger|instagram|webchat):[a-f0-9]{16,64}$/i.test(exactRawWaId)
     ? exactRawWaId.toLowerCase()
     : null;
   const lookup = buildWaIdLookup(params.rawWaId);
