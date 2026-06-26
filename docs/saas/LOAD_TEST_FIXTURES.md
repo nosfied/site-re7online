@@ -2,6 +2,10 @@
 
 Status: implementado como preparacao de ambiente de teste.
 
+Atualizacao 78N.2B: o tenant recomendado para carga passa a ser `loadtest-prefeitura`. `demo-prefeitura` deve permanecer dedicado a demonstracoes, POC e validacao funcional.
+
+Atualizacao 78N.2C: antes de executar `prepare`, validar o tenant tecnico com `npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json`. O bootstrap fica documentado em `docs/saas/LOAD_TEST_TENANT_BOOTSTRAP.md`.
+
 Escopo: criar fixtures representativas para carga autenticada sem alterar regra de negocio, seguranca, rate limit global, banco/schema ou runtime funcional.
 
 ## Auditoria
@@ -35,8 +39,9 @@ Comando:
 
 ```bash
 cd apps/whatsapp-agent
+npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json
 npm run load-test:fixtures -- prepare \
-  --tenant demo-prefeitura \
+  --tenant loadtest-prefeitura \
   --base-url https://converta.re7online.com/agent-api \
   --users 20 \
   --api-keys 20
@@ -79,7 +84,7 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
 
 4. Variaveis para Search:
    - `SEARCH_QUERY`;
-   - opcionalmente rodar `npm run search:index-shadow -- --tenant demo-prefeitura --json --record` antes do k6 quando for necessario garantir indice fresco para a conversa fixture.
+   - opcionalmente rodar `npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record` antes do k6 quando for necessario garantir indice fresco para a conversa fixture.
 
 ## Uso Com k6
 
@@ -102,7 +107,7 @@ PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
 ```bash
 cd apps/whatsapp-agent
 npm run load-test:fixtures -- cleanup \
-  --tenant demo-prefeitura \
+  --tenant loadtest-prefeitura \
   --base-url https://converta.re7online.com/agent-api
 ```
 
@@ -130,8 +135,8 @@ npm run load-test:fixtures -- status
 | Usuario temporario ficar ativo | `cleanup` desativa todos os usuarios do manifest. |
 | API key temporaria ficar ativa | `cleanup` revoga todas as keys do manifest. |
 | Rate limit ainda acionar | usar `--users` e `--api-keys` compativeis com o perfil de VUs; nao reduzir protecoes globais. |
-| Fixture Webchat acumular historico | site temporario e arquivado no cleanup; conversas ficam como historico de teste do tenant demo. |
-| Search sem resultado representativo | rodar `search:index-shadow --record` apos o prepare para popular `SearchIndex` com dados recentes do tenant demo. |
+| Fixture Webchat acumular historico | site temporario e arquivado no cleanup; conversas ficam como historico de teste do tenant tecnico. |
+| Search sem resultado representativo | rodar `search:index-shadow --record` apos o prepare para popular `SearchIndex` com dados recentes do tenant tecnico. |
 | Tenant de teste sem margem de usuarios | para smoke minimo, usar `--users 1` em tenant interno com margem; para carga representativa, reservar tenant piloto com limite suficiente para ADMIN/SUPERVISOR/AGENT temporarios. |
 
 ## Result Report

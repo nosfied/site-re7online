@@ -26,6 +26,10 @@ Atualizacao 78N.1: executada validacao externa leve pelo dominio publico real, p
 
 Atualizacao 78N.2: criadas fixtures autenticadas para carga: `npm run load-test:fixtures -- prepare|status|cleanup`, usuarios temporarios via `/admin/users`, API keys temporarias via `/app/api-keys`, fixture de Inbox via Webchat runtime e k6 com suporte a listas de usuarios/API keys por VU. Documento: `docs/saas/LOAD_TEST_FIXTURES.md`.
 
+Atualizacao 78N.2B: definido tenant tecnico dedicado `loadtest-prefeitura` para carga, fixtures e benchmark. `demo-prefeitura` fica reservado para demonstracoes, POC e validacao funcional. Documento: `docs/saas/LOAD_TEST_TENANT_DESIGN.md`.
+
+Atualizacao 78N.2C: definido bootstrap idempotente para `loadtest-prefeitura`, com features minimas, quota de usuarios temporarios, departamentos/filas e checklist. Documento: `docs/saas/LOAD_TEST_TENANT_BOOTSTRAP.md`.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -493,7 +497,7 @@ Motivos:
 1. Ambiente isolado/staging com copia sanitizada.
 2. Rodar k6 a partir de maquina externa, nao da VPS alvo.
 3. Dataset controlado:
-   - tenant teste;
+- tenant tecnico `loadtest-prefeitura`;
    - usuarios teste;
    - conversas/mensagens seedadas;
    - SearchIndex populado;
@@ -558,7 +562,7 @@ Atualizacao 78N.1: caminho publico validado externamente ate 20 VUs. `health`, `
 
 ### 78N.2 - Authenticated Load Test Fixtures
 
-- criar usuarios de carga no tenant demo pelo fluxo da aplicacao;
+- criar usuarios de carga no tenant tecnico pelo fluxo da aplicacao;
 - evitar login repetido com o mesmo usuario;
 - criar API keys dedicadas ou calibrar rate limit sem desligar protecoes;
 - garantir conversa visivel para list/detail/timeline;
@@ -569,7 +573,7 @@ Status: implementado em `apps/whatsapp-agent/scripts/load-test-fixtures.mjs` e d
 ### 78O - Authenticated Load Test MVP
 
 - usar fixtures da 78N.2;
-- cenarios Login, Public API, Search e Inbox read/detail/timeline com tenant demo;
+- cenarios Login, Public API, Search e Inbox read/detail/timeline com tenant tecnico;
 - executar contra staging;
 - coletar `/admin/ops/metrics` antes/depois;
 - gerar relatorio com p95/p99/erro/CPU/memoria.
