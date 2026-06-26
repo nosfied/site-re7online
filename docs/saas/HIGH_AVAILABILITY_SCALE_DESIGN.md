@@ -518,6 +518,10 @@ Atualizacao 78N.1: o caminho publico real foi testado externamente ate 20 VUs. `
 
 Atualizacao 78N.3: com `loadtest-prefeitura` e fixtures completas, `health` e `public-api` passaram em `vu5`, mas `login` gerou 91,72% de erro HTTP e acionou alerta interno `runtime:error_rate`. O teste foi abortado conforme regra. O achado nao indica ainda saturacao de CPU/RAM/DB; indica que o plano de carga autenticada deve separar login/setup de sessao do loop principal antes de usar os resultados para decidir capacidade, swap ou HA.
 
+Atualizacao 78N.3 re-run: apos a 78N.4, o login saiu do loop principal. `health vu5` e `public-api vu5` passaram com 0% erro, PM2/RAM/health estaveis. `search vu5` falhou com 41,37% de erro por `401 session_replaced` em token da fixture, acionando `runtime:error_rate`. O achado ainda nao indica saturacao de infraestrutura; indica que as sessoes/tokens de carga precisam ser isolados por VU antes de usar o benchmark para decidir HA ou capacidade.
+
+Atualizacao 78N.5: as fixtures de carga foram ajustadas para respeitar sessao exclusiva por usuario: usuarios de carga app e usuarios de login agora sao separados, `APP_TOKENS_JSON` deve ter pelo menos um token por VU e os cenarios Search/Inbox falham cedo se o pool estiver insuficiente. A decisao de HA continua dependente de uma nova execucao limpa da 78N.3.
+
 ### 78O - Capacity/Swap Hardening
 
 - avaliar swap;
@@ -526,6 +530,8 @@ Atualizacao 78N.3: com `loadtest-prefeitura` e fixtures completas, `health` e `p
 - reduzir risco de OOM antes de carga.
 
 Observacao 78N.3: `Capacity/Swap Hardening` continua importante para build/deploy e estabilidade da VPS, mas o primeiro bloqueador do benchmark externo autenticado foi o cenario de login sob repeticao. A decisao de capacidade nao deve ser tomada com base na 78N.3 ate a estrategia de autenticacao estar corrigida.
+
+Observacao 78N.3 re-run: mesmo com login corrigido, a decisao de capacidade ainda nao deve ser tomada porque o teste parou em erro artificial de sessao (`session_replaced`) no Search. A 78O/Capacity-Swap permanece como hardening preventivo da VPS, nao como resposta a saturacao medida.
 
 ### 78P - Authenticated Load Test MVP
 

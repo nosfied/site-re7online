@@ -70,6 +70,14 @@ export function scenarioOptions(extraThresholds = {}) {
   };
 }
 
+export function profileVus() {
+  const vus = PROFILE_VUS[config.profile];
+  if (!vus) {
+    fail(`Invalid PROFILE=${config.profile}. Allowed: ${Object.keys(PROFILE_VUS).join(", ")}`);
+  }
+  return vus;
+}
+
 export function loginScenarioOptions(extraThresholds = {}) {
   return scenarioOptions({
     http_req_failed: [__ENV.LOGIN_HTTP_FAILED_THRESHOLD || "rate<0.20"],
@@ -215,6 +223,14 @@ export function loginAllAppUsers() {
     if (res.status === 200 && token) tokens.push(token);
   }
   if (tokens.length === 0) fail("No app auth tokens could be created from APP_USERS_JSON/APP_JWT");
+  return tokens;
+}
+
+export function requireAppTokensForProfile(tokens) {
+  const required = profileVus();
+  if (!Array.isArray(tokens) || tokens.length < required) {
+    fail(`APP_TOKENS_JSON must contain at least ${required} valid tokens for PROFILE=${config.profile}. Received ${Array.isArray(tokens) ? tokens.length : 0}`);
+  }
   return tokens;
 }
 

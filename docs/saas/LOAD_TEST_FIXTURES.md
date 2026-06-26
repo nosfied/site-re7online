@@ -96,10 +96,14 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
 
 5. Tokens para rotas autenticadas:
    - `APP_TOKENS_JSON` com tokens temporarios de ADMIN/SUPERVISOR;
+   - pelo menos 1 token por VU do perfil alvo;
+   - usuarios de `APP_TOKENS_JSON` nao devem aparecer em `LOGIN_USERS_JSON`;
    - os cenarios `search`, `inbox-read` e `inbox-detail` devem reutilizar esses tokens;
    - `/auth/login` fica fora do loop principal de carga.
 
 Atualizacao 78N.4: `fixtures.env` passou a ser gerado com quoting shell seguro, portanto pode ser carregado com `source` sem parser auxiliar. O arquivo continua sensivel e nao deve ser versionado.
+
+Atualizacao 78N.5: `prepare` separa usuarios de carga autenticada e usuarios exclusivos de login. Por padrao, `--users 20` cria 20 usuarios ADMIN/SUPERVISOR para `APP_TOKENS_JSON`, e `--login-users 2` cria usuarios AGENT separados para o cenario isolado de `/auth/login`. Isso evita que o smoke de login revogue sessoes usadas por Search/Inbox e elimina o falso erro `session_replaced`.
 
 ## Uso Com k6
 
@@ -130,6 +134,8 @@ PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
 ```
 
 Se `login` for executado com `PROFILE=vu5`, `vu10`, `vu20` ou `vu50`, o runner deve bloquear antes do k6. Isso evita repetir o erro da 78N.3, onde `/auth/login` foi martelado no loop e mediu protecao de autenticacao, nao capacidade das rotas autenticadas.
+
+Desde a 78N.5, `search`, `inbox-read` e `inbox-detail` tambem falham cedo se `APP_TOKENS_JSON` tiver menos tokens que os VUs do perfil. Exemplo: `PROFILE=vu20` exige pelo menos 20 tokens validos.
 
 ## Cleanup
 

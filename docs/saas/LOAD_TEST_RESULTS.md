@@ -10,6 +10,8 @@ A Sprint 78N criou a primeira suite k6 do Converta e executou um teste real mini
 
 Atualizacao 78N.3: a primeira execucao externa completa com fixtures autenticadas foi iniciada em 2026-06-26 usando o tenant tecnico `loadtest-prefeitura`, pelo caminho publico `https://converta.re7online.com/agent-api`. A execucao foi abortada ainda em `vu5`, conforme regra da sprint, porque o cenario `login` gerou 91,72% de erro HTTP e acionou o alerta interno `runtime:error_rate`. `health` e `public-api` passaram em `vu5`; `search`, `inbox-read`, `inbox-detail`, `vu10`, `vu20` e `vu50` nao foram considerados conclusivos porque a regra de parada foi acionada.
 
+Atualizacao 78N.3 re-run: apos a 78N.4 remover login do loop principal, a carga externa foi repetida com `APP_TOKENS_JSON`. `health vu5` e `public-api vu5` passaram com 0% erro. `search vu5` falhou com 41,37% de erro HTTP e acionou novamente `runtime:error_rate`; a verificacao posterior mostrou resposta `401 session_replaced` para token de app, enquanto os demais tokens respondiam 200. A parada ocorreu corretamente antes de `inbox-read`, `inbox-detail`, `vu10`, `vu20` e `vu50`. A leitura atual e que o proximo bloqueador e estrategia de sessoes/tokens das fixtures autenticadas, nao CPU, RAM, PM2, DB ou TLS.
+
 Resultado principal:
 
 - scripts k6 criados para `health`, `login`, `public-api`, `search` e `inbox-read`;
@@ -19,11 +21,14 @@ Resultado principal:
 - PM2 permaneceu online;
 - memoria permaneceu estavel;
 - primeiro sinal de gargalo observado: variabilidade de latencia/DB health em perfil intermediario, com p95 de 581 ms em 20 VUs.
-- na 78N.3, o primeiro bloqueador real do teste autenticado foi protecao/fluxo de login sob repeticao, nao CPU, RAM, DB ou Nginx.
+- na primeira 78N.3, o primeiro bloqueador real do teste autenticado foi protecao/fluxo de login sob repeticao, nao CPU, RAM, DB ou Nginx;
+- na 78N.3 re-run, com login fora do loop, o primeiro bloqueador passou a ser `session_replaced` em token de app usado no cenario `search`.
 
 Importante: este resultado **nao e benchmark contratual**. Ele mede health local no host alvo, com gerador de carga rodando na mesma VPS. Serve como smoke de carga e validacao de ferramenta, nao como prova de capacidade para 400 usuarios simultaneos.
 
 Atualizacao 78N.3: o teste externo autenticado tambem **ainda nao e benchmark contratual**, porque foi interrompido por criterio de seguranca antes de completar os perfis 5/10/20 VUs. Ele e valido como achado operacional: o fluxo de login/rate limit precisa ser tratado no plano de carga antes de medir capacidade geral.
+
+Atualizacao 78N.3 re-run: o teste continua **nao sendo benchmark contratual**, porque parou em `search vu5` por erro de sessao/token. Ele ja valida que health e Public API passam em baixa carga externa, mas ainda nao mede Inbox ou Search sob perfis 10/20 VUs.
 
 ## Confirmacao De Escopo
 
@@ -663,3 +668,125 @@ Status:
 - cenarios `search`, `inbox-read` e `inbox-detail` continuam usando tokens no loop, sem chamar `/auth/login`;
 - `public-api` continua usando API keys distribuidas;
 - a proxima repeticao da 78N.3 deve usar login apenas como smoke/protecao separado.
+
+## Re-run 78N.3 Pos-78N.4
+
+Data: 2026-06-26.
+
+Escopo executado:
+
+- tenant: `loadtest-prefeitura`;
+- fixtures: `prepared=true`;
+- usuarios temporarios ativos: 20;
+- API keys ativas: 20;
+- `APP_TOKENS_JSON`: presente;
+- SearchIndex: 22 registros;
+- login: fora do loop principal;
+- caminho: Cloudflare/TLS -> Nginx -> PM2 -> Backend -> PostgreSQL;
+- duracao por cenario: 30s;
+- perfil iniciado: `vu5`.
+
+Baseline limpo antes da carga:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~127,9 MiB |
+| PM2 frontend | online, ~58,7 MiB |
+| Memoria | 1.967 MiB total, ~1.074 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | 0 |
+| `demo-prefeitura` | preservado |
+
+Resultados executados:
+
+| Cenario | Perfil | Status | HTTP reqs | Error rate | Avg | p95 | p99 | Max | Observacao |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `health` | `vu5` | PASS | 150 | 0,00% | 29,07 ms | 170,09 ms | n/a | 363,03 ms | Health e DB OK. |
+| `public-api` | `vu5` | PASS | 300 | 0,00% | 174,74 ms | 609,86 ms | n/a | 1.728,76 ms | Public API com API keys distribuidas OK. |
+| `search` | `vu5` | FAIL | 145 | 41,37% | 49,98 ms | 259,28 ms | n/a | 454,51 ms | 60 checks falharam; investigacao apontou `401 session_replaced` em token de app. |
+| `inbox-read` | `vu5` | NAO EXECUTADO | n/a | n/a | n/a | n/a | n/a | n/a | Regra de parada acionada em `search`. |
+| `inbox-detail` | `vu5` | NAO EXECUTADO | n/a | n/a | n/a | n/a | n/a | n/a | Regra de parada acionada em `search`. |
+| Demais perfis | `vu10`/`vu20`/`vu50` | NAO EXECUTADO | n/a | n/a | n/a | n/a | n/a | n/a | Regra de parada acionada em `vu5`. |
+
+Snapshot depois da parada:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~136,9 MiB |
+| PM2 frontend | online, ~58,9 MiB |
+| Memoria | 1.967 MiB total, ~1.005 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | 1 |
+| Alerta | `runtime:error_rate`, `ERROR`, `errorCount=60`, `threshold=10` |
+
+Verificacao posterior do Search com os tokens da fixture:
+
+| Token | Status | Leitura |
+| --- | ---: | --- |
+| 1 | 401 | `session_replaced`: sessao encerrada por novo login em outro dispositivo. |
+| 2 | 200 | Search OK. |
+| 3 | 200 | Search OK. |
+| 4 | 200 | Search OK. |
+
+Interpretacao:
+
+- `health` e `public-api` estao saudaveis em `vu5` pelo caminho externo completo.
+- O AlertManager funcionou e abriu `runtime:error_rate` quando o limiar foi cruzado.
+- PM2, RAM e health permaneceram estaveis; nao houve sinal de saturacao de infraestrutura.
+- O bloqueador atual e a estrategia de sessoes das fixtures autenticadas: `search` reutilizou tokens que podem ser invalidados por politica de sessao unica ou por quantidade insuficiente de sessoes validas para o perfil.
+- A 78N.3 re-run nao justifica tuning, swap emergencial, HA ou alteracao de rate limit.
+- O `p99` nao foi emitido pelo summary k6 atual; a proxima reexecucao deve ajustar `summaryTrendStats`/output antes do teste completo.
+
+Decisao:
+
+Nao avancar para `vu10`, `vu20`, `vu50` ou cenarios Inbox enquanto `search vu5` nao estiver livre de `session_replaced` artificial.
+
+Proxima sprint recomendada:
+
+**78N.5 - Auth Session Fixture Strategy Hardening**.
+
+Objetivo:
+
+- garantir uma sessao valida por VU para cenarios autenticados;
+- evitar que o `prepare` ou o reuso de usuarios substitua sessoes ativas durante o teste;
+- manter login fora do loop principal;
+- nao enfraquecer rate limits globais nem regras de sessao;
+- repetir a 78N.3 somente depois de `search vu5` passar com 0% erro de autenticacao.
+
+## Atualizacao 78N.5 - Auth Session Fixture Strategy Hardening
+
+Data: 2026-06-26.
+
+Auditoria:
+
+- `AppAuthSession` usa sessao exclusiva por usuario;
+- novo login do mesmo usuario revoga sessoes anteriores com `revokeReason=replaced_by_new_login`;
+- a validacao de request traduz essa revogacao para `session_replaced`;
+- a fixture anterior gerava poucos tokens ADMIN/SUPERVISOR para os VUs e colocava os mesmos usuarios no pool de `LOGIN_USERS_JSON`;
+- o smoke isolado de `login` podia substituir o token ADMIN usado por `APP_TOKENS_JSON`.
+
+Mudancas:
+
+| Area | Antes | Depois |
+| --- | --- | --- |
+| Usuarios de carga app | ADMIN + poucos SUPERVISOR | `--users` cria usuarios ADMIN/SUPERVISOR suficientes para os VUs |
+| Usuarios de login | todos os usuarios temporarios | `--login-users` cria usuarios AGENT separados, exclusivos para `/auth/login` |
+| `APP_TOKENS_JSON` | podia ter menos tokens que VUs | passa a ter 1 token por usuario app |
+| `LOGIN_USERS_JSON` | podia revogar tokens de app | nao compartilha usuarios com `APP_TOKENS_JSON` |
+| k6 Search/Inbox | aceitava pool menor que VUs | falha cedo se tokens < VUs do perfil |
+
+Resultado esperado:
+
+- `PROFILE=vu5` deve usar 5 sessoes app distintas;
+- `PROFILE=vu20` deve usar 20 sessoes app distintas quando `--users 20`;
+- `login vu1` continua testando protecao de autenticacao sem invalidar tokens de Search/Inbox;
+- nenhuma regra de login, JWT, MFA, rate limit ou sessao foi alterada.
+
+Proxima validacao:
+
+- rodar `prepare` novamente no tenant `loadtest-prefeitura`;
+- confirmar `appTokenCount >= VUs` no `status`;
+- executar `login vu1` e depois validar que `search vu5` continua com 0% `session_replaced`;
+- repetir a 78N.3 somente depois de `search vu5`, `inbox-read vu5` e `inbox-detail vu5` passarem com 0% erro de autenticacao.

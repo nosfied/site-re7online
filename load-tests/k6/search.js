@@ -6,6 +6,7 @@ import {
   config,
   loginAllAppUsers,
   pickToken,
+  requireAppTokensForProfile,
   scenarioOptions,
   sleepBetweenRequests,
 } from "./lib/config.js";
@@ -15,7 +16,7 @@ export const options = scenarioOptions({
 });
 
 export function setup() {
-  return { tokens: loginAllAppUsers() };
+  return { tokens: requireAppTokensForProfile(loginAllAppUsers()) };
 }
 
 export default function (data) {

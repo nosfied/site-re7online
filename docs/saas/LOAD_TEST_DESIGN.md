@@ -34,6 +34,10 @@ Atualizacao 78N.3: executada carga externa autenticada inicial com `loadtest-pre
 
 Atualizacao 78N.4: a estrategia de autenticacao foi ajustada. `load-test:fixtures prepare` passa a emitir `APP_TOKENS_JSON` temporario para cenarios autenticados; `search`, `inbox-read` e `inbox-detail` reutilizam tokens e nao chamam `/auth/login` durante o loop; o runner bloqueia `login` em perfis `vu5+`; `login` fica restrito a `PROFILE=vu1`/`smoke1` com `SLEEP_SECONDS>=5` e thresholds proprios.
 
+Atualizacao 78N.3 re-run: com login fora do loop principal, `health vu5` e `public-api vu5` passaram com 0% erro pelo caminho externo completo. O cenario `search vu5` falhou com 41,37% de erro por `401 session_replaced` em token de app, acionando `runtime:error_rate`. A proxima etapa nao e tuning de infraestrutura: e endurecer as fixtures de sessao para garantir uma sessao valida por VU antes de medir Search/Inbox em `vu10` e `vu20`.
+
+Atualizacao 78N.5: a estrategia de fixture foi ajustada para respeitar a politica real de sessao exclusiva por usuario. `--users` passa a criar usuarios ADMIN/SUPERVISOR para carga autenticada, `--login-users` cria usuarios AGENT separados para o cenario isolado de login, e os cenarios Search/Inbox falham cedo quando `APP_TOKENS_JSON` tem menos tokens que os VUs do perfil. A proxima repeticao deve validar `search vu5` sem `session_replaced` antes de avancar para Inbox e `vu10/20`.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -596,6 +600,22 @@ Status 78N.4: estrategia ajustada. A proxima repeticao deve:
 - rodar `public-api`, `search`, `inbox-read` e `inbox-detail` com `vu5/10/20`, usando `APP_TOKENS_JSON`;
 - abortar somente se as rotas autenticadas falharem sem relacao com login/rate limit;
 - manter rate limits globais intactos.
+
+Status 78N.3 re-run: executado novamente apos a 78N.4. `health` e `public-api` passaram em `vu5`, mas `search` parou o teste por `401 session_replaced` em parte dos tokens da fixture. Antes de repetir a carga completa:
+
+- garantir tokens/sessoes suficientes para todos os VUs;
+- evitar reutilizar usuario em sessoes concorrentes quando a politica invalida sessao anterior;
+- manter `/auth/login` fora do loop principal;
+- validar `search vu5` com 0% erro de autenticacao antes de `vu10/20`;
+- nao alterar regra de sessao, rate limit ou MFA para acomodar teste.
+
+Status 78N.5: fixture corrigida para separar usuarios de login e usuarios de carga app. Antes da nova 78N.3, executar smoke de sessao:
+
+- `npm run load-test:fixtures -- prepare --tenant loadtest-prefeitura --users 20 --login-users 2`;
+- confirmar `appTokenCount >= 20`;
+- rodar `login vu1` sem invalidar tokens de app;
+- rodar `search vu5`, `inbox-read vu5`, `inbox-detail vu5` com 0% `401`;
+- so entao avancar para `vu10` e `vu20`.
 
 ### 78P - HA Runtime
 

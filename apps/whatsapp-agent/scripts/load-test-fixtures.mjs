@@ -264,10 +264,10 @@ async function cleanupSearchIndexes(tenant) {
 async function writeFixtureFiles(params) {
   const outputDir = path.dirname(params.out);
   await fs.mkdir(outputDir, { recursive: true });
-  const appUsers = params.users
+  const appUsers = params.appUsers
     .filter((item) => item.role === "ADMIN" || item.role === "SUPERVISOR")
     .map((item) => ({ email: item.email, password: item.password }));
-  const loginUsers = params.users.map((item) => ({ email: item.email, password: item.password }));
+  const loginUsers = params.loginUsers.map((item) => ({ email: item.email, password: item.password }));
   const env = {
     API_BASE_URL: params.baseUrl,
     LOGIN_USERS_JSON: JSON.stringify(loginUsers),
@@ -289,13 +289,15 @@ async function prepare(options) {
   if (!adminToken) throw new Error("missing_admin_token");
   const runId = String(options["run-id"] || `78n2-${Date.now().toString(36)}`).replace(/[^a-zA-Z0-9-]/g, "-");
   const userCount = Math.max(1, Math.min(Number(options.users || 20), 50));
+  const loginUserCount = Math.max(1, Math.min(Number(options["login-users"] || 2), 10));
   const apiKeyCount = Math.max(1, Math.min(Number(options["api-keys"] || userCount), 50));
   const origin = String(options.origin || DEFAULT_ORIGIN);
   const out = String(options.out || DEFAULT_ENV_FILE);
   const manifest = String(options.manifest || DEFAULT_MANIFEST_FILE);
   const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
 
-  const users = [];
+  const appUsers = [];
+  const loginUsers = [];
   const appAuthTokens = [];
   const publicApiKeys = [];
   const publicApiSecrets = [];
@@ -308,7 +310,8 @@ async function prepare(options) {
       out,
       manifest,
       baseUrl,
-      users,
+      appUsers,
+      loginUsers,
       appAuthTokens,
       publicApiSecrets,
       conversationId: webchat?.conversationId ?? "",
@@ -321,9 +324,12 @@ async function prepare(options) {
         createdAt: new Date().toISOString(),
         expiresAt,
         partial: !webchat,
-        users: users.map(({ password, ...item }) => item),
+        users: [...appUsers, ...loginUsers].map(({ password, ...item }) => item),
+        appUsers: appUsers.map(({ password, ...item }) => item),
+        loginUsers: loginUsers.map(({ password, ...item }) => item),
+        appTokenCount: appAuthTokens.length,
         publicApiKeys,
-            webchat: webchat
+        webchat: webchat
           ? {
               siteId: webchat.site.id,
               conversationId: webchat.conversationId,
@@ -338,7 +344,7 @@ async function prepare(options) {
   };
 
   for (let index = 0; index < userCount; index += 1) {
-    const role = index === 0 ? "ADMIN" : index % 5 === 0 ? "SUPERVISOR" : "AGENT";
+    const role = index === 0 ? "ADMIN" : "SUPERVISOR";
     const email = `loadtest-${runId}-${String(index + 1).padStart(2, "0")}@${tenant}.local`;
     const password = randomSecret();
     const user = await createUser(baseUrl, adminToken, tenant, {
@@ -349,14 +355,29 @@ async function prepare(options) {
       ...(role === "AGENT" || role === "SUPERVISOR" ? { departmentId: defaultDepartment.id } : {}),
       isActive: true,
     });
-    users.push({ id: user.id, email, password, role, departmentId: user.departmentId ?? null });
+    appUsers.push({ id: user.id, email, password, role, departmentId: user.departmentId ?? null, purpose: "app-load" });
     await persistPartial();
   }
 
-  const adminUser = users.find((item) => item.role === "ADMIN") || users[0];
+  for (let index = 0; index < loginUserCount; index += 1) {
+    const email = `loadtest-login-${runId}-${String(index + 1).padStart(2, "0")}@${tenant}.local`;
+    const password = randomSecret();
+    const user = await createUser(baseUrl, adminToken, tenant, {
+      name: `Load Test Login ${runId} ${index + 1}`,
+      email,
+      password,
+      role: "AGENT",
+      departmentId: defaultDepartment.id,
+      isActive: true,
+    });
+    loginUsers.push({ id: user.id, email, password, role: "AGENT", departmentId: user.departmentId ?? null, purpose: "login-only" });
+    await persistPartial();
+  }
+
+  const adminUser = appUsers.find((item) => item.role === "ADMIN") || appUsers[0];
   const adminJwt = await login(baseUrl, adminUser.email, adminUser.password);
   appAuthTokens.push(adminJwt);
-  for (const user of users.filter((item) => item.role === "SUPERVISOR")) {
+  for (const user of appUsers.filter((item) => item.role === "SUPERVISOR")) {
     appAuthTokens.push(await login(baseUrl, user.email, user.password));
   }
   await persistPartial();
@@ -382,7 +403,10 @@ async function prepare(options) {
     origin,
     createdAt: new Date().toISOString(),
     expiresAt,
-    users: users.map(({ password, ...item }) => item),
+    users: [...appUsers, ...loginUsers].map(({ password, ...item }) => item),
+    appUsers: appUsers.map(({ password, ...item }) => item),
+    loginUsers: loginUsers.map(({ password, ...item }) => item),
+    appTokenCount: appAuthTokens.length,
     publicApiKeys,
     webchat: {
       siteId: webchat.site.id,
@@ -397,14 +421,15 @@ async function prepare(options) {
     out,
     manifest,
     baseUrl,
-    users,
+    appUsers,
+    loginUsers,
     appAuthTokens,
     publicApiSecrets,
     conversationId: webchat.conversationId,
     searchQuery: "load test",
     manifestData,
   });
-  console.log(JSON.stringify({ ok: true, runId, tenant, users: users.length, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
 }
 
 async function cleanup(options) {
@@ -474,6 +499,9 @@ async function status(options) {
     runId: manifest.runId,
     tenant: manifest.tenant,
     users: manifest.users?.length ?? 0,
+    appUsers: manifest.appUsers?.length ?? null,
+    loginUsers: manifest.loginUsers?.length ?? null,
+    appTokenCount: manifest.appTokenCount ?? null,
     apiKeys: manifest.publicApiKeys?.length ?? 0,
     hasConversationId: Boolean(manifest.webchat?.conversationId),
     envFile: manifest.envFile,
