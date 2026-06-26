@@ -119,7 +119,9 @@ async function listDepartments(baseUrl, adminToken, tenant) {
     undefined,
     { "X-Admin-Token": adminToken }
   );
-  return Array.isArray(body.items) ? body.items : [];
+  if (Array.isArray(body.items)) return body.items;
+  if (Array.isArray(body.departments)) return body.departments;
+  throw new Error("fixture_departments_unexpected_response");
 }
 
 async function updateUser(baseUrl, adminToken, tenant, userId, input) {
