@@ -2,6 +2,8 @@ import http from "k6/http";
 import { check, fail, sleep } from "k6";
 
 const PROFILE_VUS = {
+  smoke1: 1,
+  vu1: 1,
   smoke5: 5,
   vu5: 5,
   vu10: 10,
@@ -19,6 +21,7 @@ export const config = {
   publicApiKey: __ENV.PUBLIC_API_KEY || "",
   publicApiKeys: parseJsonArray(__ENV.PUBLIC_API_KEYS_JSON || "") || splitCsv(__ENV.PUBLIC_API_KEYS || ""),
   appJwt: __ENV.APP_JWT || "",
+  appTokens: parseJsonArray(__ENV.APP_TOKENS_JSON || __ENV.LOAD_TEST_TOKENS_JSON || "") || splitCsv(__ENV.APP_TOKENS || ""),
   appUsers: parseJsonArray(__ENV.APP_USERS_JSON || __ENV.LOAD_TEST_USERS_JSON || "") || [],
   loginEmail: __ENV.LOGIN_EMAIL || "",
   loginPassword: __ENV.LOGIN_PASSWORD || "",
@@ -65,6 +68,24 @@ export function scenarioOptions(extraThresholds = {}) {
       ...extraThresholds,
     },
   };
+}
+
+export function loginScenarioOptions(extraThresholds = {}) {
+  return scenarioOptions({
+    http_req_failed: [__ENV.LOGIN_HTTP_FAILED_THRESHOLD || "rate<0.20"],
+    http_req_duration: ["p(95)<1000"],
+    ...extraThresholds,
+  });
+}
+
+export function validateLoginScenarioConfig() {
+  const allowedProfiles = new Set(["smoke1", "vu1"]);
+  if (!allowedProfiles.has(config.profile)) {
+    fail(`Login load scenario must use PROFILE=smoke1 or PROFILE=vu1. Received PROFILE=${config.profile}`);
+  }
+  if (config.sleepSeconds < 5) {
+    fail(`Login load scenario must use SLEEP_SECONDS>=5 to avoid hammering /auth/login. Received ${config.sleepSeconds}`);
+  }
 }
 
 export function requireEnv(name, value) {
@@ -174,6 +195,7 @@ export function loginAppUser() {
 
 export function loginAllAppUsers() {
   if (config.appJwt) return [config.appJwt];
+  if (Array.isArray(config.appTokens) && config.appTokens.length > 0) return config.appTokens;
   if (!Array.isArray(config.appUsers) || config.appUsers.length === 0) {
     requireEnv("APP_JWT", config.appJwt);
     return [];

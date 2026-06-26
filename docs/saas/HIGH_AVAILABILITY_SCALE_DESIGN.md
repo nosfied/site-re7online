@@ -516,12 +516,16 @@ Status: executado parcialmente na Sprint 78N em `docs/saas/LOAD_TEST_RESULTS.md`
 
 Atualizacao 78N.1: o caminho publico real foi testado externamente ate 20 VUs. `health`, `search` e `inbox list-only` ficaram sem erro HTTP; `login` e `public-api` acionaram protecoes de taxa/sessao. A proxima etapa recomendada e criar fixtures autenticadas adequadas antes de qualquer tuning ou HA.
 
+Atualizacao 78N.3: com `loadtest-prefeitura` e fixtures completas, `health` e `public-api` passaram em `vu5`, mas `login` gerou 91,72% de erro HTTP e acionou alerta interno `runtime:error_rate`. O teste foi abortado conforme regra. O achado nao indica ainda saturacao de CPU/RAM/DB; indica que o plano de carga autenticada deve separar login/setup de sessao do loop principal antes de usar os resultados para decidir capacidade, swap ou HA.
+
 ### 78O - Capacity/Swap Hardening
 
 - avaliar swap;
 - formalizar builds sequenciais;
 - medir memoria;
 - reduzir risco de OOM antes de carga.
+
+Observacao 78N.3: `Capacity/Swap Hardening` continua importante para build/deploy e estabilidade da VPS, mas o primeiro bloqueador do benchmark externo autenticado foi o cenario de login sob repeticao. A decisao de capacidade nao deve ser tomada com base na 78N.3 ate a estrategia de autenticacao estar corrigida.
 
 ### 78P - Authenticated Load Test MVP
 

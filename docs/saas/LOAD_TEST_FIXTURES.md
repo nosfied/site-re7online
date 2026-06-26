@@ -94,6 +94,13 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
    - `SEARCH_QUERY`;
    - opcionalmente rodar `npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record` antes do k6 quando for necessario garantir indice fresco para a conversa fixture.
 
+5. Tokens para rotas autenticadas:
+   - `APP_TOKENS_JSON` com tokens temporarios de ADMIN/SUPERVISOR;
+   - os cenarios `search`, `inbox-read` e `inbox-detail` devem reutilizar esses tokens;
+   - `/auth/login` fica fora do loop principal de carga.
+
+Atualizacao 78N.4: `fixtures.env` passou a ser gerado com quoting shell seguro, portanto pode ser carregado com `source` sem parser auxiliar. O arquivo continua sensivel e nao deve ser versionado.
+
 ## Uso Com k6
 
 Exemplo:
@@ -103,12 +110,26 @@ set -a
 source load-tests/k6/results/fixtures.env
 set +a
 
-PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh login
 PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh public-api
 PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh search
 PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-read
 PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
 ```
+
+Uso recomendado apos 78N.4:
+
+```bash
+# Login e um cenario de protecao/seguranca, nao throughput principal.
+PROFILE=vu1 DURATION=30s SLEEP_SECONDS=5 load-tests/k6/run-load-profile.sh login
+
+# Rotas autenticadas usam APP_TOKENS_JSON pre-obtido no prepare.
+PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh public-api
+PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh search
+PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-read
+PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
+```
+
+Se `login` for executado com `PROFILE=vu5`, `vu10`, `vu20` ou `vu50`, o runner deve bloquear antes do k6. Isso evita repetir o erro da 78N.3, onde `/auth/login` foi martelado no loop e mediu protecao de autenticacao, nao capacidade das rotas autenticadas.
 
 ## Cleanup
 

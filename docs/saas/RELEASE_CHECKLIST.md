@@ -389,12 +389,19 @@ Depois:
 set -a
 source ../../load-tests/k6/results/fixtures.env
 set +a
-PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh login
 PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh public-api
 PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh search
 PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-read
 PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-detail
 ```
+
+Desde a 78N.4, `login` e cenario separado de protecao:
+
+```bash
+PROFILE=vu1 DURATION=30s SLEEP_SECONDS=5 ../../load-tests/k6/run-load-profile.sh login
+```
+
+Nao executar `login` com `vu5`, `vu10`, `vu20` ou `vu50`. As rotas autenticadas devem reutilizar `APP_TOKENS_JSON` gerado pelo `prepare`, sem martelar `/auth/login`.
 
 Ao final, sempre executar:
 

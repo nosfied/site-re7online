@@ -8,12 +8,17 @@ PROFILE="${PROFILE:-vu5}"
 API_BASE_URL="${API_BASE_URL:-https://converta.re7online.com/agent-api}"
 
 case "${PROFILE}" in
-  smoke5|vu5|vu10|vu20|vu50) ;;
+  smoke1|vu1|smoke5|vu5|vu10|vu20|vu50) ;;
   *)
-    echo "[load-test] invalid PROFILE=${PROFILE}; allowed: smoke5, vu5, vu10, vu20, vu50" >&2
+    echo "[load-test] invalid PROFILE=${PROFILE}; allowed: smoke1, vu1, smoke5, vu5, vu10, vu20, vu50" >&2
     exit 2
     ;;
 esac
+
+if [[ "${SCENARIO}" == "login" && "${PROFILE}" != "smoke1" && "${PROFILE}" != "vu1" ]]; then
+  echo "[load-test] login is a security/protection scenario; use PROFILE=smoke1 or PROFILE=vu1" >&2
+  exit 2
+fi
 
 case "${SCENARIO}" in
   health|login|public-api|search|inbox-read|inbox-detail) ;;

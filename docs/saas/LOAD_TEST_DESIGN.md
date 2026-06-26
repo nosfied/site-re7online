@@ -30,6 +30,10 @@ Atualizacao 78N.2B: definido tenant tecnico dedicado `loadtest-prefeitura` para 
 
 Atualizacao 78N.2C: definido bootstrap idempotente para `loadtest-prefeitura`, com features minimas, quota de usuarios temporarios, departamentos/filas e checklist. Documento: `docs/saas/LOAD_TEST_TENANT_BOOTSTRAP.md`.
 
+Atualizacao 78N.3: executada carga externa autenticada inicial com `loadtest-prefeitura`. `health` e `public-api` passaram em `vu5`, mas `login` falhou com 91,72% de erro HTTP e acionou `runtime:error_rate`; por regra de seguranca, `vu10`, `vu20`, `vu50`, `inbox-read` e `inbox-detail` nao foram executados. A proxima etapa recomendada e endurecer a estrategia de carga autenticada para login, separando setup de sessao do loop principal sem enfraquecer rate limits globais.
+
+Atualizacao 78N.4: a estrategia de autenticacao foi ajustada. `load-test:fixtures prepare` passa a emitir `APP_TOKENS_JSON` temporario para cenarios autenticados; `search`, `inbox-read` e `inbox-detail` reutilizam tokens e nao chamam `/auth/login` durante o loop; o runner bloqueia `login` em perfis `vu5+`; `login` fica restrito a `PROFILE=vu1`/`smoke1` com `SLEEP_SECONDS>=5` e thresholds proprios.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -577,6 +581,21 @@ Status: implementado em `apps/whatsapp-agent/scripts/load-test-fixtures.mjs` e d
 - executar contra staging;
 - coletar `/admin/ops/metrics` antes/depois;
 - gerar relatorio com p95/p99/erro/CPU/memoria.
+
+Status 78N.3: iniciado em producao com escopo curto e abortado em `vu5` por erro alto no `login`. Antes de repetir 78O/78N.3 completo, ajustar a estrategia de autenticacao:
+
+- fazer login em fase de setup quando o objetivo for medir Search/Inbox/Public API autenticados;
+- limitar repeticao de `/auth/login` para um cenario proprio de seguranca;
+- nao desabilitar rate limit global;
+- manter usuarios/API keys distribuidos;
+- registrar 401/429/lockout como resultado esperado quando o teste for de protecao.
+
+Status 78N.4: estrategia ajustada. A proxima repeticao deve:
+
+- rodar `login` separadamente com `PROFILE=vu1 DURATION=30s SLEEP_SECONDS=5`;
+- rodar `public-api`, `search`, `inbox-read` e `inbox-detail` com `vu5/10/20`, usando `APP_TOKENS_JSON`;
+- abortar somente se as rotas autenticadas falharem sem relacao com login/rate limit;
+- manter rate limits globais intactos.
 
 ### 78P - HA Runtime
 

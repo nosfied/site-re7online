@@ -40,6 +40,25 @@ function randomSecret(prefix = "Lt78N2") {
   return `${prefix}-${crypto.randomBytes(14).toString("base64url")}!`;
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function parseEnvValue(value) {
+  const raw = String(value || "").trim();
+  if (raw.length >= 2 && raw.startsWith("'") && raw.endsWith("'")) {
+    return raw.slice(1, -1).replace(/'\\''/g, "'");
+  }
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw.slice(1, -1);
+    }
+  }
+  return raw;
+}
+
 function safeUrl(baseUrl, pathname, query = {}) {
   const url = new URL(pathname, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(query)) {
@@ -249,15 +268,16 @@ async function writeFixtureFiles(params) {
     .filter((item) => item.role === "ADMIN" || item.role === "SUPERVISOR")
     .map((item) => ({ email: item.email, password: item.password }));
   const loginUsers = params.users.map((item) => ({ email: item.email, password: item.password }));
-  const envLines = [
-    `API_BASE_URL=${params.baseUrl}`,
-    `LOGIN_USERS_JSON=${JSON.stringify(loginUsers)}`,
-    `APP_USERS_JSON=${JSON.stringify(appUsers)}`,
-    `PUBLIC_API_KEYS_JSON=${JSON.stringify(params.publicApiSecrets)}`,
-    `CONVERSATION_ID=${params.conversationId}`,
-    `SEARCH_QUERY=${params.searchQuery}`,
-    "",
-  ];
+  const env = {
+    API_BASE_URL: params.baseUrl,
+    LOGIN_USERS_JSON: JSON.stringify(loginUsers),
+    APP_USERS_JSON: JSON.stringify(appUsers),
+    APP_TOKENS_JSON: JSON.stringify(params.appAuthTokens || []),
+    PUBLIC_API_KEYS_JSON: JSON.stringify(params.publicApiSecrets),
+    CONVERSATION_ID: params.conversationId,
+    SEARCH_QUERY: params.searchQuery,
+  };
+  const envLines = Object.entries(env).map(([key, value]) => `${key}=${shellQuote(value)}`).concat("");
   await fs.writeFile(params.out, envLines.join("\n"), { mode: 0o600 });
   await fs.writeFile(params.manifest, `${JSON.stringify(params.manifestData, null, 2)}\n`, { mode: 0o600 });
 }
@@ -276,6 +296,7 @@ async function prepare(options) {
   const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
 
   const users = [];
+  const appAuthTokens = [];
   const publicApiKeys = [];
   const publicApiSecrets = [];
   const departments = await listDepartments(baseUrl, adminToken, tenant);
@@ -288,6 +309,7 @@ async function prepare(options) {
       manifest,
       baseUrl,
       users,
+      appAuthTokens,
       publicApiSecrets,
       conversationId: webchat?.conversationId ?? "",
       searchQuery: "load test",
@@ -333,6 +355,11 @@ async function prepare(options) {
 
   const adminUser = users.find((item) => item.role === "ADMIN") || users[0];
   const adminJwt = await login(baseUrl, adminUser.email, adminUser.password);
+  appAuthTokens.push(adminJwt);
+  for (const user of users.filter((item) => item.role === "SUPERVISOR")) {
+    appAuthTokens.push(await login(baseUrl, user.email, user.password));
+  }
+  await persistPartial();
   for (let index = 0; index < apiKeyCount; index += 1) {
     const created = await createApiKey(
       baseUrl,
@@ -371,6 +398,7 @@ async function prepare(options) {
     manifest,
     baseUrl,
     users,
+    appAuthTokens,
     publicApiSecrets,
     conversationId: webchat.conversationId,
     searchQuery: "load test",
@@ -388,7 +416,7 @@ async function cleanup(options) {
   const envPath = String(options.out || DEFAULT_ENV_FILE);
   const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
   const envText = await fs.readFile(envPath, "utf8").catch(() => "");
-  const usersJson = envText.match(/^LOGIN_USERS_JSON=(.*)$/m)?.[1] || "[]";
+  const usersJson = parseEnvValue(envText.match(/^LOGIN_USERS_JSON=(.*)$/m)?.[1] || "[]");
   const usersWithPasswords = JSON.parse(usersJson);
   const adminCandidate = usersWithPasswords.find((item) => /-01@/.test(item.email)) || usersWithPasswords[0];
   let adminJwt = "";

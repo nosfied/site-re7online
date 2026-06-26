@@ -1,9 +1,11 @@
 import { check } from "k6";
-import { login, scenarioOptions, sleepBetweenRequests } from "./lib/config.js";
+import { login, loginScenarioOptions, sleepBetweenRequests, validateLoginScenarioConfig } from "./lib/config.js";
 
-export const options = scenarioOptions({
-  http_req_duration: ["p(95)<1000"],
-});
+export const options = loginScenarioOptions();
+
+export function setup() {
+  validateLoginScenarioConfig();
+}
 
 export default function () {
   const token = login();

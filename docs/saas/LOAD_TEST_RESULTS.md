@@ -8,6 +8,8 @@ Escopo: primeiro teste de carga controlado do Converta, com scripts k6, sem alte
 
 A Sprint 78N criou a primeira suite k6 do Converta e executou um teste real minimo no cenario `health`, respeitando o limite maximo de 50 usuarios virtuais.
 
+Atualizacao 78N.3: a primeira execucao externa completa com fixtures autenticadas foi iniciada em 2026-06-26 usando o tenant tecnico `loadtest-prefeitura`, pelo caminho publico `https://converta.re7online.com/agent-api`. A execucao foi abortada ainda em `vu5`, conforme regra da sprint, porque o cenario `login` gerou 91,72% de erro HTTP e acionou o alerta interno `runtime:error_rate`. `health` e `public-api` passaram em `vu5`; `search`, `inbox-read`, `inbox-detail`, `vu10`, `vu20` e `vu50` nao foram considerados conclusivos porque a regra de parada foi acionada.
+
 Resultado principal:
 
 - scripts k6 criados para `health`, `login`, `public-api`, `search` e `inbox-read`;
@@ -17,8 +19,11 @@ Resultado principal:
 - PM2 permaneceu online;
 - memoria permaneceu estavel;
 - primeiro sinal de gargalo observado: variabilidade de latencia/DB health em perfil intermediario, com p95 de 581 ms em 20 VUs.
+- na 78N.3, o primeiro bloqueador real do teste autenticado foi protecao/fluxo de login sob repeticao, nao CPU, RAM, DB ou Nginx.
 
 Importante: este resultado **nao e benchmark contratual**. Ele mede health local no host alvo, com gerador de carga rodando na mesma VPS. Serve como smoke de carga e validacao de ferramenta, nao como prova de capacidade para 400 usuarios simultaneos.
+
+Atualizacao 78N.3: o teste externo autenticado tambem **ainda nao e benchmark contratual**, porque foi interrompido por criterio de seguranca antes de completar os perfis 5/10/20 VUs. Ele e valido como achado operacional: o fluxo de login/rate limit precisa ser tratado no plano de carga antes de medir capacidade geral.
 
 ## Confirmacao De Escopo
 
@@ -556,3 +561,105 @@ Atualizacao 78N.2E: antes da 78N.3, corrigir o bloqueio `claim_failed:500` obser
 - PM2 permaneceu online.
 - Health/DB permaneceram OK.
 - Nenhuma alteracao estrutural foi realizada.
+
+## Execucao 78N.3 - External Load Test Full Run
+
+Data: 2026-06-26.
+
+Escopo executado:
+
+- tenant: `loadtest-prefeitura`;
+- fixtures: `prepared=true`;
+- usuarios temporarios ativos: 20;
+- API keys ativas: 20;
+- Webchat fixture: inbound + claim + outbound + timeline validado;
+- SearchIndex: 19 registros;
+- caminho: Cloudflare/TLS -> Nginx -> PM2 -> Backend -> PostgreSQL;
+- duracao por cenario: 30s;
+- perfil iniciado: `vu5`.
+
+Baseline antes da carga:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online |
+| Memoria | 1.967 MiB total, 1.056 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | 0 |
+| `demo-prefeitura` | preservado |
+
+Resultados executados:
+
+| Cenario | Perfil | Status | HTTP reqs | Error rate | p95 | Max | Observacao |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| `health` | `vu5` | PASS | 150 | 0,00% | 12,81 ms | 24,71 ms | Health e DB OK. |
+| `login` | `vu5` | FAIL | 145 | 91,72% | 385,23 ms | 674,17 ms | Apenas 12/145 logins retornaram token; protecao/fluxo de login acionou erro alto. |
+| `public-api` | `vu5` | PASS | 345 | 0,00% | 478,92 ms | 737,10 ms | Public API health, contacts e conversations OK. |
+| `search` | `vu5` | ABORTADO | n/a | n/a | n/a | n/a | Iniciado por poucos segundos, interrompido quando o erro alto de login foi reconhecido. |
+| `inbox-read` | `vu5` | NAO EXECUTADO | n/a | n/a | n/a | n/a | Regra de parada acionada. |
+| `inbox-detail` | `vu5` | NAO EXECUTADO | n/a | n/a | n/a | n/a | Regra de parada acionada. |
+| Demais perfis | `vu10`/`vu20`/`vu50` | NAO EXECUTADO | n/a | n/a | n/a | n/a | Regra de parada acionada em `vu5`. |
+
+Snapshot depois da carga:
+
+| Item | Resultado |
+| --- | --- |
+| PM2 backend | online |
+| Memoria backend PM2 | 163,6 MiB |
+| Memoria sistema | 1.967 MiB total, 1.010 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | 1 |
+| Alerta | `runtime:error_rate`, `ERROR`, `errorCount=135`, `threshold=10` |
+
+Interpretacao:
+
+- O primeiro bloqueador da 78N.3 nao foi saturacao de CPU/RAM/DB.
+- O primeiro bloqueador foi erro alto no cenario `login`, compatível com protecao/rate limit/fluxo de autenticacao sob repeticao.
+- `public-api` passou em `vu5` com 0% erro usando API keys distribuidas.
+- `health` passou em `vu5` com latencia baixa.
+- A suite de fixtures esta pronta, mas o plano de login precisa evitar transformar protecao de seguranca em falso gargalo de performance.
+
+Decisao:
+
+Nao avancar para `vu10`, `vu20` ou `vu50` enquanto `login` nao tiver um desenho de carga compativel com a politica de seguranca.
+
+Proxima sprint recomendada:
+
+**78N.4 - Auth/Login Load Strategy Hardening**.
+
+Objetivo: definir e implementar uma estrategia segura para medir sessoes autenticadas sem enfraquecer rate limit global, por exemplo:
+
+- login setup separado do loop de carga;
+- reuse controlado de token por VU;
+- renovacao de token com baixa frequencia;
+- medicao separada de `auth/login` como cenario de seguranca, nao como throughput principal;
+- thresholds especificos para 401/429/lockout quando esperados.
+
+## Atualizacao 78N.4 - Auth/Login Load Strategy Hardening
+
+Data: 2026-06-26.
+
+Achado tratado:
+
+- a 78N.3 colocou `/auth/login` no loop principal de carga;
+- isso acionou protecao/rate limit em `vu5`;
+- o resultado media seguranca de autenticacao, nao capacidade das rotas autenticadas.
+
+Mudancas de estrategia:
+
+| Area | Antes | Depois |
+| --- | --- | --- |
+| `fixtures.env` | JSON sem quoting shell, exigia parser auxiliar | valores com quoting shell seguro, carregaveis por `source` |
+| Rotas autenticadas | podiam fazer login no setup quando nao havia token | usam `APP_TOKENS_JSON` pre-obtido pelo `prepare` |
+| `/auth/login` | podia ser executado em `vu5+` | bloqueado pelo runner para `vu5`, `vu10`, `vu20`, `vu50` |
+| Login load | misturado ao plano principal | cenario separado, `PROFILE=vu1`, `SLEEP_SECONDS>=5` |
+| Rate limits | risco de falso gargalo | preservados; nao houve relaxamento global |
+
+Status:
+
+- nenhuma regra de autenticacao foi alterada;
+- MFA, rate limit, JWT e login permanecem intactos;
+- cenarios `search`, `inbox-read` e `inbox-detail` continuam usando tokens no loop, sem chamar `/auth/login`;
+- `public-api` continua usando API keys distribuidas;
+- a proxima repeticao da 78N.3 deve usar login apenas como smoke/protecao separado.
