@@ -40,6 +40,10 @@ function randomSecret(prefix = "Lt78N2") {
   return `${prefix}-${crypto.randomBytes(14).toString("base64url")}!`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
@@ -293,6 +297,7 @@ async function prepare(options) {
   const runId = String(options["run-id"] || `78n2-${Date.now().toString(36)}`).replace(/[^a-zA-Z0-9-]/g, "-");
   const userCount = Math.max(1, Math.min(Number(options.users || 20), 50));
   const loginUserCount = Math.max(1, Math.min(Number(options["login-users"] || 2), 10));
+  const authDelayMs = Math.max(0, Math.min(Number(options["auth-delay-ms"] || 6000), 30000));
   const apiKeyCount = Math.max(1, Math.min(Number(options["api-keys"] || userCount), 50));
   const origin = String(options.origin || DEFAULT_ORIGIN);
   const out = String(options.out || DEFAULT_ENV_FILE);
@@ -331,6 +336,7 @@ async function prepare(options) {
         appUsers: appUsers.map(({ password, ...item }) => item),
         loginUsers: loginUsers.map(({ password, ...item }) => item),
         appTokenCount: appAuthTokens.length,
+        authDelayMs,
         publicApiKeys,
         webchat: webchat
           ? {
@@ -381,6 +387,7 @@ async function prepare(options) {
   const adminJwt = await login(baseUrl, adminUser.email, adminUser.password);
   appAuthTokens.push(adminJwt);
   for (const user of appUsers.filter((item) => item.role === "SUPERVISOR")) {
+    if (authDelayMs > 0) await sleep(authDelayMs);
     appAuthTokens.push(await login(baseUrl, user.email, user.password));
   }
   await persistPartial();
@@ -410,6 +417,7 @@ async function prepare(options) {
     appUsers: appUsers.map(({ password, ...item }) => item),
     loginUsers: loginUsers.map(({ password, ...item }) => item),
     appTokenCount: appAuthTokens.length,
+    authDelayMs,
     publicApiKeys,
     webchat: {
       siteId: webchat.site.id,
@@ -432,7 +440,7 @@ async function prepare(options) {
     searchQuery: "load test",
     manifestData,
   });
-  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, authDelayMs, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
 }
 
 async function cleanup(options) {
@@ -505,6 +513,7 @@ async function status(options) {
     appUsers: manifest.appUsers?.length ?? null,
     loginUsers: manifest.loginUsers?.length ?? null,
     appTokenCount: manifest.appTokenCount ?? null,
+    authDelayMs: manifest.authDelayMs ?? null,
     apiKeys: manifest.publicApiKeys?.length ?? 0,
     hasConversationId: Boolean(manifest.webchat?.conversationId),
     envFile: manifest.envFile,

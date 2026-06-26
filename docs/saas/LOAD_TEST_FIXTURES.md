@@ -103,7 +103,7 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
 
 Atualizacao 78N.4: `fixtures.env` passou a ser gerado com quoting shell seguro, portanto pode ser carregado com `source` sem parser auxiliar. O arquivo continua sensivel e nao deve ser versionado.
 
-Atualizacao 78N.5: `prepare` separa usuarios de carga autenticada e usuarios exclusivos de login. Por padrao, `--users 20` cria 20 usuarios ADMIN/SUPERVISOR para `APP_TOKENS_JSON`, e `--login-users 2` cria usuarios AGENT separados para o cenario isolado de `/auth/login`. Isso evita que o smoke de login revogue sessoes usadas por Search/Inbox e elimina o falso erro `session_replaced`.
+Atualizacao 78N.5: `prepare` separa usuarios de carga autenticada e usuarios exclusivos de login. Por padrao, `--users 20` cria 20 usuarios ADMIN/SUPERVISOR para `APP_TOKENS_JSON`, e `--login-users 2` cria usuarios AGENT separados para o cenario isolado de `/auth/login`. Isso evita que o smoke de login revogue sessoes usadas por Search/Inbox e elimina o falso erro `session_replaced`. O `prepare` tambem respeita o rate limit de login com `--auth-delay-ms` entre logins de usuarios app, default `6000`.
 
 ## Uso Com k6
 
