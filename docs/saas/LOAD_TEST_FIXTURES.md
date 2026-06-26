@@ -131,6 +131,7 @@ npm run load-test:fixtures -- status
 | Rate limit ainda acionar | usar `--users` e `--api-keys` compativeis com o perfil de VUs; nao reduzir protecoes globais. |
 | Fixture Webchat acumular historico | site temporario e arquivado no cleanup; conversas ficam como historico de teste do tenant demo. |
 | Search sem resultado representativo | rodar `search:index-shadow --record` apos o prepare para popular `SearchIndex` com dados recentes do tenant demo. |
+| Tenant de teste sem margem de usuarios | para smoke minimo, usar `--users 1` em tenant interno com margem; para carga representativa, reservar tenant piloto com limite suficiente para ADMIN/SUPERVISOR/AGENT temporarios. |
 
 ## Result Report
 

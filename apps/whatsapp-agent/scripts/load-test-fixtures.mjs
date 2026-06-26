@@ -227,7 +227,7 @@ async function prepare(options) {
   const adminToken = String(options["admin-token"] || process.env.ADMIN_TOKEN || "");
   if (!adminToken) throw new Error("missing_admin_token");
   const runId = String(options["run-id"] || `78n2-${Date.now().toString(36)}`).replace(/[^a-zA-Z0-9-]/g, "-");
-  const userCount = Math.max(3, Math.min(Number(options.users || 20), 50));
+  const userCount = Math.max(1, Math.min(Number(options.users || 20), 50));
   const apiKeyCount = Math.max(1, Math.min(Number(options["api-keys"] || userCount), 50));
   const origin = String(options.origin || DEFAULT_ORIGIN);
   const out = String(options.out || DEFAULT_ENV_FILE);
