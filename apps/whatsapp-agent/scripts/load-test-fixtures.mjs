@@ -462,7 +462,11 @@ async function cleanup(options) {
   if (!adminToken) throw new Error("missing_admin_token");
   const manifestPath = String(options.manifest || DEFAULT_MANIFEST_FILE);
   const envPath = String(options.out || DEFAULT_ENV_FILE);
-  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  const manifestText = await fs.readFile(manifestPath, "utf8").catch((error) => {
+    if (error?.code === "ENOENT") return "{}";
+    throw error;
+  });
+  const manifest = JSON.parse(manifestText);
   const envText = await fs.readFile(envPath, "utf8").catch(() => "");
   const usersJson = parseEnvValue(envText.match(/^LOGIN_USERS_JSON=(.*)$/m)?.[1] || "[]");
   const usersWithPasswords = JSON.parse(usersJson);
@@ -512,7 +516,7 @@ async function cleanup(options) {
   const searchIndexesDeleted = await cleanupSearchIndexes(tenant).catch(() => 0);
   await fs.rm(envPath, { force: true }).catch(() => null);
   await fs.rm(manifestPath, { force: true }).catch(() => null);
-  console.log(JSON.stringify({ ok: true, runId: manifest.runId, usersDeactivated: manifest.users?.length ?? 0, staleUsersDeactivated, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: archivedSiteIds.size, searchIndexesDeleted }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId: manifest.runId ?? null, usersDeactivated: manifest.users?.length ?? 0, staleUsersDeactivated, apiKeysRevoked: manifest.publicApiKeys?.length ?? 0, webchatArchived: archivedSiteIds.size, searchIndexesDeleted }, null, 2));
 }
 
 async function status(options) {
