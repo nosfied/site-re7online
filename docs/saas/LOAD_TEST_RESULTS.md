@@ -792,3 +792,88 @@ Proxima validacao:
 - confirmar `appTokenCount >= VUs` no `status`;
 - executar `login vu1` e depois validar que `search vu5` continua com 0% `session_replaced`;
 - repetir a 78N.3 somente depois de `search vu5`, `inbox-read vu5` e `inbox-detail vu5` passarem com 0% erro de autenticacao.
+
+## Re-run Final 78N.3 Pos-78N.5
+
+Data: 2026-06-26.
+
+Escopo executado:
+
+- tenant: `loadtest-prefeitura`;
+- fixtures: `prepared=true`;
+- `appUsers=20`;
+- `loginUsers=2`;
+- `appTokenCount=20`;
+- SearchIndex: populado via `search:index-shadow --record`;
+- login: fora do loop principal;
+- caminho: Cloudflare/TLS -> Nginx -> PM2 -> Backend -> PostgreSQL;
+- duracao por cenario: 30s;
+- perfil executado: `vu5`;
+- `vu10`, `vu20` e `vu50`: nao executados por regra de parada.
+
+Baseline:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| Alertas ativos | 0 |
+| PM2 backend | online, ~164,8 MiB |
+| PM2 frontend | online, ~59,5 MiB |
+| Memoria | 1.967 MiB total, ~1.054 MiB available |
+| Swap | 0 MiB |
+
+Resultados `vu5`:
+
+| Cenario | Status | HTTP reqs | Error rate | Avg | p90 | p95 | Max | Leitura |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `health` | PASS | 150 | 0,00% | 27,93 ms | 77,98 ms | 177,25 ms | 241,37 ms | Health/DB OK. |
+| `public-api` | PASS | 381 | 0,00% | 66,39 ms | 87,62 ms | 295,35 ms | 468,57 ms | API keys distribuidas OK. |
+| `search` | PASS | 145 | 0,00% | 36,31 ms | 52,71 ms | 88,94 ms | 399,94 ms | `session_replaced` eliminado. |
+| `inbox-read` | PASS | 117 | 0,00% | 315,00 ms | 546,57 ms | 768,28 ms | 863,38 ms | Listagem OK. |
+| `inbox-detail` | FAIL | 252 | 80,15% | 99,34 ms | 151,97 ms | 495,75 ms | 632,09 ms | Falha por RBAC/departamento da fixture. |
+
+Diagnostico do `inbox-detail`:
+
+| Token | Detail | Timeline | Leitura |
+| --- | ---: | ---: | --- |
+| 1 | 200 | 200 | usuario com acesso a conversa fixture. |
+| 2 | 403 | 403 | `Conversa fora do seu departamento.` |
+| 3 | 403 | 403 | `Conversa fora do seu departamento.` |
+| 4 | 403 | 403 | `Conversa fora do seu departamento.` |
+| 5 | 403 | 403 | `Conversa fora do seu departamento.` |
+
+Snapshot pos-parada:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~172,5 MiB |
+| PM2 frontend | online, ~59,6 MiB |
+| Memoria | 1.967 MiB total, ~1.040 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | 1 |
+| Alerta | `runtime:error_rate`, `ERROR`, `errorCount=205`, `threshold=10` |
+
+Interpretacao:
+
+- A 78N.5 resolveu o problema de sessao: `search vu5` passou com 0% erro e sem `session_replaced`.
+- `health`, `public-api`, `search` e `inbox-read` estao saudaveis em `vu5` pelo caminho externo completo.
+- PM2, RAM e health permaneceram estaveis; nao ha sinal de saturacao de VPS, DB ou TLS neste recorte.
+- O primeiro bloqueador real agora e o `inbox-detail`: os tokens distribuidos pertencem a usuarios de departamentos diferentes da conversa fixture.
+- O resultado mede controle de acesso/fixture de Inbox Detail, nao performance.
+
+Decisao:
+
+Nao avancar para `vu10`, `vu20` ou `vu50` ate a fixture de Inbox Detail garantir acesso legitimo de todos os VUs ao mesmo detalhe/timeline, ou ate o teste usar conversas distribuidas por departamento/usuario.
+
+Proxima sprint recomendada:
+
+**78N.6 - Inbox Detail Fixture Ownership Hardening**.
+
+Objetivo:
+
+- auditar regra de acesso do detalhe/timeline (`departamento`, `claim`, `ownership`);
+- garantir que os usuarios de `APP_TOKENS_JSON` usados no cenario `inbox-detail` tenham acesso legitimo a conversa fixture;
+- evitar bypass de RBAC;
+- preferir criar conversa por departamento ou alinhar todos os usuarios de carga ao departamento da fixture;
+- repetir `inbox-detail vu5` antes de qualquer `vu10/20`.

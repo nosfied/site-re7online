@@ -522,6 +522,8 @@ Atualizacao 78N.3 re-run: apos a 78N.4, o login saiu do loop principal. `health 
 
 Atualizacao 78N.5: as fixtures de carga foram ajustadas para respeitar sessao exclusiva por usuario: usuarios de carga app e usuarios de login agora sao separados, `APP_TOKENS_JSON` deve ter pelo menos um token por VU e os cenarios Search/Inbox falham cedo se o pool estiver insuficiente. A decisao de HA continua dependente de uma nova execucao limpa da 78N.3.
 
+Atualizacao 78N.3 re-run final: `health`, `public-api`, `search` e `inbox-read` passaram em `vu5` com 0% erro. A execucao parou em `inbox-detail vu5` por `403 Conversa fora do seu departamento` para tokens de usuarios fora do departamento da conversa fixture. O achado ainda nao indica necessidade de HA; indica ajuste de fixture/ownership antes de medir capacidade.
+
 ### 78O - Capacity/Swap Hardening
 
 - avaliar swap;

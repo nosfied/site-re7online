@@ -38,6 +38,8 @@ Atualizacao 78N.3 re-run: com login fora do loop principal, `health vu5` e `publ
 
 Atualizacao 78N.5: a estrategia de fixture foi ajustada para respeitar a politica real de sessao exclusiva por usuario. `--users` passa a criar usuarios ADMIN/SUPERVISOR para carga autenticada, `--login-users` cria usuarios AGENT separados para o cenario isolado de login, e os cenarios Search/Inbox falham cedo quando `APP_TOKENS_JSON` tem menos tokens que os VUs do perfil. A proxima repeticao deve validar `search vu5` sem `session_replaced` antes de avancar para Inbox e `vu10/20`.
 
+Atualizacao 78N.3 re-run final: com a 78N.5 validada, `health`, `public-api`, `search` e `inbox-read` passaram em `vu5` com 0% erro. O teste parou em `inbox-detail vu5` por `403 Conversa fora do seu departamento` para 4 de 5 tokens. O bloqueador atual e fixture de ownership/departamento do Inbox Detail, nao Search, Public API, sessao, PM2, RAM ou DB.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -616,6 +618,13 @@ Status 78N.5: fixture corrigida para separar usuarios de login e usuarios de car
 - rodar `login vu1` sem invalidar tokens de app;
 - rodar `search vu5`, `inbox-read vu5`, `inbox-detail vu5` com 0% `401`;
 - so entao avancar para `vu10` e `vu20`.
+
+Status 78N.3 re-run final: `search vu5` e `inbox-read vu5` passaram, mas `inbox-detail vu5` falhou por RBAC/departamento. Antes da proxima carga:
+
+- alinhar usuarios de carga ao departamento da conversa fixture, ou criar conversas distribuidas por departamento;
+- preservar RBAC real, sem bypass;
+- validar `inbox-detail vu5` com 0% `403`;
+- somente depois avancar para `vu10` e `vu20`.
 
 ### 78P - HA Runtime
 
