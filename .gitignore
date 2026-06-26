@@ -25,6 +25,7 @@
 .codex
 *.pem
 apps/whatsapp-agent/.data/
+load-tests/k6/results/
 
 # debug
 npm-debug.log*

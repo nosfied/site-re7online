@@ -478,14 +478,58 @@ Sem implementar agora.
 
 Status: design concluido na Sprint 78J em `docs/saas/BACKUP_RESTORE_HARDENING_DESIGN.md`. A auditoria confirmou backup `.data` diario local, mas backup PostgreSQL diario/offsite e restore drill ainda precisam nascer.
 
-### 78K - Load Test
+### 78K - Backup Restore Validation MVP
+
+- validar restore em banco temporario;
+- medir RTO tecnico inicial;
+- identificar defasagem de dump.
+
+Status: executado na Sprint 78K em `docs/saas/BACKUP_RESTORE_VALIDATION.md`.
+
+### 78L - PostgreSQL Backup Hardening
+
+- criar backup PostgreSQL verificavel;
+- checksum;
+- manifest;
+- validacao `pg_restore --list`;
+- rejeicao de dump invalido.
+
+Status: implementado na Sprint 78L.
+
+### 78M - Load Test Design
 
 - plano e scripts de carga;
 - cenarios Inbox/Public API/Search/Webchat/Telegram;
 - baseline atual;
 - limites seguros por VPS.
 
-### 78L - Scale Runtime
+Status: design concluido em `docs/saas/LOAD_TEST_DESIGN.md`. k6 e recomendado como ferramenta MVP, com carga real primeiro em staging/ambiente isolado.
+
+### 78N - Load Test MVP
+
+- scripts k6;
+- health/login/public-api/search/inbox-read;
+- primeira execucao controlada ate 50 VUs;
+- relatorio de resultados.
+
+Status: executado parcialmente na Sprint 78N em `docs/saas/LOAD_TEST_RESULTS.md`. O cenario `health` rodou com 5/10/20/50 VUs por 30s, 0% erro HTTP, PM2 online e memoria estavel. Os cenarios autenticados dependem de credenciais/tokens de teste e devem ser a proxima etapa.
+
+Atualizacao 78N.1: o caminho publico real foi testado externamente ate 20 VUs. `health`, `search` e `inbox list-only` ficaram sem erro HTTP; `login` e `public-api` acionaram protecoes de taxa/sessao. A proxima etapa recomendada e criar fixtures autenticadas adequadas antes de qualquer tuning ou HA.
+
+### 78O - Capacity/Swap Hardening
+
+- avaliar swap;
+- formalizar builds sequenciais;
+- medir memoria;
+- reduzir risco de OOM antes de carga.
+
+### 78P - Authenticated Load Test MVP
+
+- scripts k6;
+- Login, Public API, Search e Inbox read;
+- relatorio de p95/p99/erro/CPU/memoria.
+
+### 78Q - Scale Runtime
 
 - health live/ready/admin;
 - externalizar media/storage;
@@ -493,7 +537,7 @@ Status: design concluido na Sprint 78J em `docs/saas/BACKUP_RESTORE_HARDENING_DE
 - preparar multi-node;
 - reduzir dependencia de disco local.
 
-### 78M - HA Runtime
+### 78R - HA Runtime
 
 - blue/green ou rolling deploy;
 - load balancer;

@@ -202,6 +202,33 @@ pg_restore --list backups/postgres/<arquivo>.dump
 - Dumps e manifestos nao devem ser commitados.
 - A 78L nao implementa offsite; copia externa criptografada segue como sprint propria.
 
+Load test:
+
+- Carga real pesada nao deve ser executada diretamente na VPS de producao como primeira etapa.
+- O plano oficial esta em `docs/saas/LOAD_TEST_DESIGN.md`.
+- Antes de qualquer teste de carga, confirmar:
+  - backup PostgreSQL atual e valido;
+  - health OK;
+  - PM2 online;
+  - janela de execucao definida;
+  - comando de parada conhecido;
+  - dados de teste/sanitizados;
+  - provider externo real desabilitado ou controlado.
+- Producao deve receber apenas smoke de baixa intensidade, com limite de RPS e duracao curta.
+- Testes nominal, pico, stress, soak e spike devem rodar primeiro em staging/ambiente isolado.
+- Coletar antes/depois:
+  - `/admin/ops/metrics`;
+  - `/admin/ops/alerts`;
+  - PM2 status;
+  - health;
+  - disco/memoria/CPU.
+- Criterios minimos de abort:
+  - 5xx acima de 1% em smoke;
+  - p95 muito acima do baseline;
+  - memoria livre abaixo de 20%;
+  - DB health diferente de OK;
+  - restart PM2 inesperado.
+
 ## Frontend
 
 Diretorio raiz do repo:
@@ -334,6 +361,37 @@ Instagram:
 - O snapshot de metricas nao deve conter token, secret, cookie, Authorization, telefone, e-mail, waId, transcript, mediaUrl ou raw payload.
 - Smokes de release devem validar `/health`, uma chamada autenticada a `/admin/ops/metrics` e presenca de `http.requests`, `http.request.duration` e `health.db.status` quando houver trafego.
 - Metricas da 78C sao em memoria e podem zerar em reload PM2; nao usar como fonte historica contratual ate sprint de dashboards/exportacao.
+
+### Load Test Fixtures
+
+Para carga autenticada controlada:
+
+```bash
+cd apps/whatsapp-agent
+npm run load-test:fixtures -- prepare --tenant demo-prefeitura --users 20 --api-keys 20
+npm run search:index-shadow -- --tenant demo-prefeitura --json --record
+```
+
+Depois:
+
+```bash
+set -a
+source ../../load-tests/k6/results/fixtures.env
+set +a
+PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh login
+PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh public-api
+PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh search
+PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-read
+PROFILE=vu20 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-detail
+```
+
+Ao final, sempre executar:
+
+```bash
+npm run load-test:fixtures -- cleanup --tenant demo-prefeitura
+```
+
+Preservar `load-tests/k6/results/fixtures.env` ate o cleanup, porque ele contem segredos temporarios necessarios para revogar API keys e arquivar o site Webchat pelo fluxo app. Nunca versionar `fixtures.env` ou manifests com segredos temporarios.
 
 ## Pos-Deploy
 

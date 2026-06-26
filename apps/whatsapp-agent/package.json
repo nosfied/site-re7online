@@ -21,6 +21,7 @@
     "dev:webhook:help": "node scripts/send-signed-webhook.mjs --help",
     "media:cleanup": "node scripts/cleanup-local-media.mjs",
     "backup:postgres": "bash scripts/backup-postgres.sh",
+    "load-test:fixtures": "node scripts/load-test-fixtures.mjs",
     "departments:normalize-operational": "node scripts/normalize-operational-department.mjs",
     "retention:run": "tsx scripts/run-retention.ts",
     "storage:report": "tsx scripts/storage-report.ts",
