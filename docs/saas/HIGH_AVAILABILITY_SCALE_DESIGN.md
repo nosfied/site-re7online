@@ -542,6 +542,8 @@ Observacao 78N.3 final-final: o laboratorio de carga v1 foi encerrado. `health`,
 
 Observacao 78O.1: a auditoria de query path do Inbox confirma que o primeiro gargalo medido e especifico da composicao da listagem. A causa provavel combina overfetch `limit * 10 + 1`, N+1 em runtime state por conversa candidata, filtros/contadores/ordenacao em memoria e queries inbound/outbound com `OR` por `waIdCanonical/waId`. Nao ha indicio de necessidade imediata de PM2 cluster, Nginx tuning, Postgres global tuning ou HA para explicar esse p95.
 
+Observacao 78O.2: o primeiro hardening do Inbox atua no app, nao na infraestrutura: instrumentacao por etapa e batch de runtime state Webchat. A necessidade de indice, tuning Postgres ou HA deve ser reavaliada somente apos nova medicao de `inbox-read vu5/vu10/vu20`.
+
 ### 78P - Authenticated Load Test MVP
 
 - scripts k6;

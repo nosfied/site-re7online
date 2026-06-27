@@ -1088,3 +1088,40 @@ Conclusao diagnostica:
 - indices foram levantados apenas como diagnostico, sem migration.
 
 Nenhuma otimizacao foi aplicada nesta sprint. A proxima etapa recomendada e `78O.2 - Inbox Read Performance Hardening`, iniciando por instrumentacao por etapa antes de mudar query path.
+
+## 78O.2 - Inbox Read Performance Hardening
+
+Status: implementacao local concluida, aguardando pre-release/deploy controlado para medicao externa antes/depois.
+
+Mudancas:
+
+- instrumentacao interna por etapa para `GET /app/conversations`;
+- metricas `inbox.list.duration`, `inbox.list.query_count` e `inbox.list.response_bytes`;
+- batch de `ConversationRuntimeState` para candidatos Webchat;
+- fallback individual preservado;
+- sem cache, Redis, tuning global, indice ou migration.
+
+Baseline usado:
+
+```text
+inbox-read vu20
+p95: 2.085,30 ms
+erro HTTP: 0%
+```
+
+Medicao pos-mudanca pendente:
+
+```text
+inbox-read vu5
+inbox-read vu10
+inbox-read vu20
+```
+
+Coletar junto:
+
+- `/admin/ops/metrics` filtrando `inbox.list.duration`;
+- `inbox.list.query_count`;
+- `inbox.list.response_bytes`;
+- PM2/RAM/health/alerts.
+
+O resultado so deve ser considerado conclusivo apos rodar no tenant tecnico `loadtest-prefeitura`.

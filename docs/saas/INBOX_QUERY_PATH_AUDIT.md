@@ -372,16 +372,66 @@ Ordem cirurgica sugerida:
 6. Se assembly dominar:
    - reduzir trabalho antes do `slice(limit)` ou materializar campos de resumo.
 
-## Confirmacao De Nao Alteracao
+## Atualizacao 78O.2 - Performance Hardening
 
-A 78O.1 nao:
+Implementado no codigo:
 
-- altera codigo;
+- instrumentacao interna de `GET /app/conversations` usando `metrics.timing` e `metrics.counter`;
+- medicao de:
+  - `auth_rbac`;
+  - `defaults`;
+  - `base_query`;
+  - `last_message_lookup`;
+  - `runtime_state_lookup`;
+  - `assigned_user_lookup`;
+  - `operational_lookups`;
+  - `read_state`;
+  - `tenant_features`;
+  - `counters_unread`;
+  - `assembly`;
+  - `filtering_sorting`;
+  - `serialization_payload`;
+- gauge `inbox.list.response_bytes`;
+- contador aproximado `inbox.list.query_count`;
+- batch de `ConversationRuntimeState` para candidatos Webchat da listagem;
+- fallback individual preservado quando nao houver estado Webchat no batch.
+
+Decisao sobre overfetch:
+
+- `conversationFetchLimit = limit * 10 + 1` foi mantido nesta sprint;
+- o `slice(limit)` continua no final;
+- reduzir antes do `slice` pode alterar `filterCounts`, cursor, visibilidade por `historyVisibleAfter`, filtros de departamento/status e ordenacao final;
+- portanto, a reducao do overfetch fica para uma proxima mudanca, guiada pelos timings internos coletados apos pre-release.
+
+Decisao sobre indices:
+
+- nenhum indice foi criado;
+- nenhum migration foi criado;
+- indices continuam apenas como diagnostico ate haver `EXPLAIN ANALYZE`/timings internos suficientes.
+
+Metrica antes/depois:
+
+- baseline externo conhecido: `inbox-read vu20` p95 `2.085,30 ms`, 0% erro HTTP;
+- baseline interno por etapa nao existia antes da 78O.2;
+- os timings internos passam a existir apos deploy/pre-release desta sprint;
+- a comparacao numerica de p95 antes/depois deve ser feita na VPS com `inbox-read vu5 -> vu10 -> vu20`, sem login no loop principal.
+
+Risco preservado:
+
+- RBAC/departamento nao foi relaxado;
+- multitenancy nao foi alterado;
+- payload publico foi mantido;
+- nenhum cache, Redis, PM2/Nginx/Postgres tuning, HA ou infra foi introduzido.
+
+## Confirmacao De Nao Alteracao Funcional
+
+A 78O.1/78O.2 nao:
+
+- altera regra de negocio;
 - altera banco;
 - cria migration;
 - cria indice;
-- altera Prisma;
-- altera SQL;
+- altera schema Prisma;
 - cria cache;
 - altera Inbox funcional;
 - altera Search;

@@ -352,33 +352,46 @@ async function loadWebchatConversationStateFromDb(
       waId: params.waId,
       channel: "webchat",
     },
-    select: {
-      waId: true,
-      waIdCanonical: true,
-      conversationKey: true,
-      firstSeenAt: true,
-      windowIsOpen: true,
-      windowExpiresAt: true,
-      lastInboundAt: true,
-      lastOutboundAt: true,
-      lastInboundMessageId: true,
-      lastOutboundMessageId: true,
-      handoffStatus: true,
-      mode: true,
-      assignedUserId: true,
-      assignedTo: true,
-      assignedAt: true,
-      departmentId: true,
-      queueId: true,
-      status: true,
-      closedAt: true,
-    },
+    select: inboxRuntimeStateSelect,
   });
   if (!state) return null;
+  return runtimeStateRowToConversationState(state, params.clientKey);
+}
+
+const inboxRuntimeStateSelect = {
+  waId: true,
+  waIdCanonical: true,
+  conversationKey: true,
+  firstSeenAt: true,
+  windowIsOpen: true,
+  windowExpiresAt: true,
+  lastInboundAt: true,
+  lastOutboundAt: true,
+  lastInboundMessageId: true,
+  lastOutboundMessageId: true,
+  handoffStatus: true,
+  mode: true,
+  assignedUserId: true,
+  assignedTo: true,
+  assignedAt: true,
+  departmentId: true,
+  queueId: true,
+  status: true,
+  closedAt: true,
+} satisfies Prisma.ConversationRuntimeStateSelect;
+
+type InboxRuntimeStateRow = Prisma.ConversationRuntimeStateGetPayload<{
+  select: typeof inboxRuntimeStateSelect;
+}>;
+
+function runtimeStateRowToConversationState(
+  state: InboxRuntimeStateRow,
+  clientKey: string
+): ConversationState {
   const handoffStatus = String(state.handoffStatus || "NONE").toUpperCase();
   return {
-    clientKey: params.clientKey,
-    conversationKey: `${params.clientKey}:${state.waId}`,
+    clientKey,
+    conversationKey: state.conversationKey ?? `${clientKey}:${state.waId}`,
     waId: state.waId,
     waIdCanonical: state.waIdCanonical ?? state.waId,
     firstSeenAt: state.firstSeenAt?.toISOString() ?? "",
@@ -406,6 +419,23 @@ async function loadWebchatConversationStateFromDb(
     status: state.status ?? null,
     closedAt: state.closedAt?.toISOString() ?? null,
   };
+}
+
+async function loadWebchatConversationStatesFromDb(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; clientKey: string; waIds: string[] }
+) {
+  const waIds = Array.from(new Set(params.waIds.filter((value) => value.startsWith("webchat:"))));
+  if (waIds.length === 0) return new Map<string, ConversationState>();
+  const states = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      waId: { in: waIds },
+      channel: "webchat",
+    },
+    select: inboxRuntimeStateSelect,
+  });
+  return new Map(states.map((state) => [state.waId, runtimeStateRowToConversationState(state, params.clientKey)]));
 }
 
 async function loadInboxConversationState(
@@ -2660,6 +2690,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const unassignedFilter = String(query.unassigned ?? "").trim() === "true";
       const automationFilter = String(query.automation ?? "").trim() === "true";
       const searchFilter = String(query.search ?? "").trim();
+      const authRbacStartedAt = channelLatencyNow();
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
         json(res, 404, { error: "client_not_found" });
@@ -2674,8 +2705,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         userId: clientAuth.userId,
         role: clientAuth.role,
       });
+      recordInboxListTiming(client.id, "auth_rbac", authRbacStartedAt);
       if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
-        json(res, 200, {
+        const serializationStartedAt = channelLatencyNow();
+        jsonWithInboxReadMetrics(res, 200, {
           ok: true,
           count: 0,
           items: [],
@@ -2686,9 +2719,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             lastReadAtByConversationKey: {},
             manuallyUnreadByConversationKey: {},
           },
+        }, {
+          clientId: client.id,
+          serializationStartedAt,
         });
         return;
       }
+      const buildPayloadStartedAt = channelLatencyNow();
       const result = await buildConversationListPayload(prisma, {
         clientId: client.id,
         clientKey: client.clientKey,
@@ -2709,7 +2746,12 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         includeAssignedUserName: true,
         profile: getClientProfile(client),
       });
-      json(res, 200, result);
+      recordInboxListTiming(client.id, "total", buildPayloadStartedAt);
+      const serializationStartedAt = channelLatencyNow();
+      jsonWithInboxReadMetrics(res, 200, result, {
+        clientId: client.id,
+        serializationStartedAt,
+      });
     } catch (error) {
       logger.error({
         event: "app.conversations.error",
@@ -16462,6 +16504,56 @@ function json(res: ServerResponse, status: number, payload: unknown) {
   res.end(JSON.stringify(normalizeJsonPayload(status, payload)));
 }
 
+function jsonWithInboxReadMetrics(
+  res: ServerResponse,
+  status: number,
+  payload: unknown,
+  params: { clientId: string; serializationStartedAt: number }
+) {
+  const normalized = normalizeJsonPayload(status, payload);
+  const body = JSON.stringify(normalized);
+  recordInboxListTiming(params.clientId, "serialization_payload", params.serializationStartedAt);
+  metrics.gauge("inbox.list.response_bytes", Buffer.byteLength(body), {
+    module: "inbox",
+    route: "/app/conversations",
+    tenantId: params.clientId,
+  });
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(body);
+}
+
+function recordInboxListTiming(
+  clientId: string,
+  operation: string,
+  startedAt: number | null | undefined,
+  status: "ok" | "error" = "ok"
+) {
+  if (!startedAt) return;
+  metrics.timing("inbox.list.duration", Math.max(0, channelLatencyNow() - startedAt), {
+    module: "inbox",
+    route: "/app/conversations",
+    operation,
+    tenantId: clientId,
+    status,
+  });
+}
+
+function recordInboxListCount(
+  clientId: string,
+  operation: string,
+  increment: number,
+  status: "ok" | "error" = "ok"
+) {
+  if (increment <= 0) return;
+  metrics.counter("inbox.list.query_count", {
+    module: "inbox",
+    route: "/app/conversations",
+    operation,
+    tenantId: clientId,
+    status,
+  }, increment);
+}
+
 function defaultErrorMessage(code: string, status: number) {
   switch (code) {
     case "bad_request":
@@ -19754,7 +19846,9 @@ async function buildConversationListPayload(
     profile?: string | null;
   }
 ) {
+  const defaultsStartedAt = channelLatencyNow();
   const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
+  recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
   const conversationWhere: Prisma.ConversationWhereInput = {
@@ -19779,6 +19873,7 @@ async function buildConversationListPayload(
         }
       : {}),
   };
+  const baseQueryStartedAt = channelLatencyNow();
   const conversations = await prisma.conversation.findMany({
     where: conversationWhere,
     orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
@@ -19796,13 +19891,17 @@ async function buildConversationListPayload(
       historyVisibleAfter: true,
     },
   });
+  recordInboxListTiming(params.clientId, "base_query", baseQueryStartedAt);
+  recordInboxListCount(params.clientId, "base_query", 1);
   if (conversations.length === 0) {
+    const readStateStartedAt = channelLatencyNow();
     const readState = params.userId
       ? await getInboxReadState(params.clientId, params.userId)
       : {
           lastReadAtByConversationKey: {},
           manuallyUnreadByConversationKey: {},
         };
+    recordInboxListTiming(params.clientId, "read_state", readStateStartedAt);
     return {
       ok: true,
       count: 0,
@@ -19866,6 +19965,7 @@ async function buildConversationListPayload(
     return Number.isFinite(createdAtMs) && createdAtMs > cutoff.getTime();
   };
 
+  const lastMessageLookupStartedAt = channelLatencyNow();
   const [leads, inbound, outbound] = await Promise.all([
     prisma.lead.findMany({
       where: {
@@ -19923,8 +20023,29 @@ async function buildConversationListPayload(
       },
     }),
   ]);
+  recordInboxListTiming(params.clientId, "last_message_lookup", lastMessageLookupStartedAt);
+  recordInboxListCount(params.clientId, "last_message_lookup", 3);
+  const runtimeStateLookupStartedAt = channelLatencyNow();
+  const webchatCandidateWaIds = winners
+    .filter((item) => serializeInboxChannelFields(item).channel === "webchat" || item.waId.startsWith("webchat:"))
+    .map((item) => item.waId);
+  const webchatStateByWaId = await loadWebchatConversationStatesFromDb(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    waIds: webchatCandidateWaIds,
+  });
+  recordInboxListCount(params.clientId, "runtime_state_batch", webchatCandidateWaIds.length > 0 ? 1 : 0);
+  let runtimeStateFallbackCount = 0;
   const runtimeConversations = await Promise.all(
     winners.map(async (item) => {
+      const batchedWebchatState = webchatStateByWaId.get(item.waId);
+      if (batchedWebchatState) {
+        return {
+          waIdCanonical: item.waIdCanonical,
+          conversation: materializeConversationOperationalState(batchedWebchatState, defaults),
+        };
+      }
+      runtimeStateFallbackCount += 1;
       const conversation = materializeConversationOperationalState(
         await loadInboxConversationState(prisma, {
           clientId: params.clientId,
@@ -19940,6 +20061,8 @@ async function buildConversationListPayload(
       };
     })
   );
+  recordInboxListTiming(params.clientId, "runtime_state_lookup", runtimeStateLookupStartedAt);
+  recordInboxListCount(params.clientId, "runtime_state_fallback", runtimeStateFallbackCount);
   const runtimeByWaId = new Map(
     runtimeConversations.map((item) => [item.waIdCanonical, item.conversation])
   );
@@ -19954,23 +20077,35 @@ async function buildConversationListPayload(
     : [];
   const assignedUsers =
     params.includeAssignedUserName && assignedUserIds.length > 0
-      ? await prisma.user.findMany({
-          where: { clientId: params.clientId, id: { in: assignedUserIds } },
-          select: { id: true, name: true },
-        })
+      ? await (async () => {
+          const assignedUserStartedAt = channelLatencyNow();
+          const users = await prisma.user.findMany({
+            where: { clientId: params.clientId, id: { in: assignedUserIds } },
+            select: { id: true, name: true },
+          });
+          recordInboxListTiming(params.clientId, "assigned_user_lookup", assignedUserStartedAt);
+          recordInboxListCount(params.clientId, "assigned_user_lookup", 1);
+          return users;
+        })()
       : [];
   const assignedUserById = new Map(assignedUsers.map((item) => [item.id, item.name]));
+  const operationalLookupsStartedAt = channelLatencyNow();
   const operationalLookups = await loadConversationOperationalLookups(prisma, {
     clientId: params.clientId,
     states: runtimeConversations.map((item) => item.conversation),
     defaults,
   });
+  recordInboxListTiming(params.clientId, "operational_lookups", operationalLookupsStartedAt);
+  recordInboxListCount(params.clientId, "operational_lookups", 2);
+  const readStateStartedAt = channelLatencyNow();
   const readState = params.userId
     ? await getInboxReadState(params.clientId, params.userId)
     : {
         lastReadAtByConversationKey: {},
         manuallyUnreadByConversationKey: {},
       };
+  recordInboxListTiming(params.clientId, "read_state", readStateStartedAt);
+  const tenantFeaturesStartedAt = channelLatencyNow();
   const tenants = await getTenants();
   const tenant = tenants[params.clientKey];
   const client = await prisma.client.findUnique({
@@ -19978,7 +20113,10 @@ async function buildConversationListPayload(
     select: { features: true, profile: true },
   });
   const clientFeatures = getFeatures(client);
+  recordInboxListTiming(params.clientId, "tenant_features", tenantFeaturesStartedAt);
+  recordInboxListCount(params.clientId, "tenant_features", 1);
 
+  const unreadCountersStartedAt = channelLatencyNow();
   const unreadInboundCountByWaId = new Map<string, number>();
   for (const conversation of winners) {
     const key = conversation.waIdCanonical;
@@ -20002,7 +20140,9 @@ async function buildConversationListPayload(
     }
     unreadInboundCountByWaId.set(key, manualUnread ? Math.max(unreadCount, 1) : unreadCount);
   }
+  recordInboxListTiming(params.clientId, "counters_unread", unreadCountersStartedAt);
 
+  const assemblyStartedAt = channelLatencyNow();
   const leadByWaId = new Map<string, (typeof leads)[number]>();
   for (const item of leads) {
     const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
@@ -20123,6 +20263,8 @@ async function buildConversationListPayload(
       updatedAt: conversation.updatedAt,
     };
   }));
+  recordInboxListTiming(params.clientId, "assembly", assemblyStartedAt);
+  const filteringSortingStartedAt = channelLatencyNow();
   const filteredItems = sortConversationItemsByRecent(
     allItems.filter(
       (item) =>
@@ -20151,6 +20293,7 @@ async function buildConversationListPayload(
         conversationIdentity: getConversationListCursorIdentity(nextCursorSource),
       })
     : null;
+  recordInboxListTiming(params.clientId, "filtering_sorting", filteringSortingStartedAt);
 
   return {
     ok: true,

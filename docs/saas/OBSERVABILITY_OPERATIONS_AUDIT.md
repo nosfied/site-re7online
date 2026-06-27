@@ -81,6 +81,8 @@ Arquivos e areas observadas:
 
 Atualizacao 78O.1: a investigacao de `inbox-read` concluiu que o gargalo inicial e de query/payload assembly path, com N+1 em runtime state, overfetch de conversas candidatas e filtros em memoria. As metricas internas atuais mostram rota/modulo, mas ainda nao quebram a listagem por `conversationQuery`, `messageQuery`, `runtimeState`, `assembly` e `responseBytes`. Essa instrumentacao deve preceder a otimizacao na 78O.2.
 
+Atualizacao 78O.2: a listagem do Inbox passa a emitir timings internos por etapa via metricas em memoria: `auth_rbac`, `base_query`, `last_message_lookup`, `runtime_state_lookup`, `counters_unread`, `assembly`, `filtering_sorting`, `serialization_payload` e `response_bytes`. Isso permite medir o gargalo sem Prometheus/Grafana e sem expor PII.
+
 ## 1. Logging
 
 Classificacao: **ATENDE COM AJUSTE**.

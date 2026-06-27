@@ -442,6 +442,16 @@ Mudancas de performance na listagem do Inbox devem:
 - validar que `inbox-detail` continua respeitando departamento;
 - rodar `PROFILE=vu5` antes de `vu10`/`vu20`.
 
+Depois da 78O.2, validar tambem em `/admin/ops/metrics`:
+
+```text
+inbox.list.duration
+inbox.list.query_count
+inbox.list.response_bytes
+```
+
+Confirmar que os labels usam apenas `module`, `route`, `operation`, `tenantId` e `status`, sem telefone, e-mail, waId, token, transcript ou rawPayload.
+
 Bootstrap inicial do tenant tecnico:
 
 ```bash
