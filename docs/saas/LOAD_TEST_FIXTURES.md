@@ -95,15 +95,27 @@ Esses arquivos ficam em pasta ignorada pelo Git. Eles podem conter segredos temp
    - opcionalmente rodar `npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record` antes do k6 quando for necessario garantir indice fresco para a conversa fixture.
 
 5. Tokens para rotas autenticadas:
-   - `APP_TOKENS_JSON` com tokens temporarios de ADMIN/SUPERVISOR;
+   - `APP_TOKENS_JSON` com tokens temporarios de SUPERVISORs de carga;
    - pelo menos 1 token por VU do perfil alvo;
    - usuarios de `APP_TOKENS_JSON` nao devem aparecer em `LOGIN_USERS_JSON`;
    - os cenarios `search`, `inbox-read` e `inbox-detail` devem reutilizar esses tokens;
    - `/auth/login` fica fora do loop principal de carga.
 
+6. Matriz para Inbox Detail:
+   - `INBOX_DETAIL_CONVERSATIONS_JSON` mapeia indice do token/VU para uma conversa acessivel;
+   - cada entrada registra `userId`, `role`, `departmentId`, `conversationId` e `conversationDepartmentId`;
+   - o objetivo e reproduzir usuario e conversa no mesmo departamento, sem usar ADMIN como atalho e sem relaxar ACL.
+
+7. Credencial administrativa da fixture:
+   - `FIXTURE_ADMIN_JSON` fica apenas no `fixtures.env` sensivel;
+   - serve para cleanup/revogacao/archive pelo fluxo normal;
+   - nao e consumido pelos cenarios k6 de carga.
+
 Atualizacao 78N.4: `fixtures.env` passou a ser gerado com quoting shell seguro, portanto pode ser carregado com `source` sem parser auxiliar. O arquivo continua sensivel e nao deve ser versionado.
 
 Atualizacao 78N.5: `prepare` separa usuarios de carga autenticada e usuarios exclusivos de login. Por padrao, `--users 20` cria 20 usuarios ADMIN/SUPERVISOR para `APP_TOKENS_JSON`, e `--login-users 2` cria usuarios AGENT separados para o cenario isolado de `/auth/login`. Isso evita que o smoke de login revogue sessoes usadas por Search/Inbox e elimina o falso erro `session_replaced`. O `prepare` tambem respeita protecoes reais com `--admin-delay-ms` entre criacoes administrativas, default `3000`, e `--auth-delay-ms` entre logins de usuarios app, default `6000`.
+
+Atualizacao 78N.6: `prepare` passa a resolver o departamento real da conversa Webchat fixture, alinhar os usuarios SUPERVISOR de carga a esse departamento pelo endpoint administrativo normal e emitir `INBOX_DETAIL_CONVERSATIONS_JSON`. O cenario `inbox-detail` usa essa matriz por VU/token e mantem `CONVERSATION_ID` apenas como fallback. Isso preserva RBAC/departamento e evita o falso erro `403 Conversa fora do seu departamento` causado por fixture irreal.
 
 ## Uso Com k6
 
@@ -136,6 +148,15 @@ PROFILE=vu20 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
 Se `login` for executado com `PROFILE=vu5`, `vu10`, `vu20` ou `vu50`, o runner deve bloquear antes do k6. Isso evita repetir o erro da 78N.3, onde `/auth/login` foi martelado no loop e mediu protecao de autenticacao, nao capacidade das rotas autenticadas.
 
 Desde a 78N.5, `search`, `inbox-read` e `inbox-detail` tambem falham cedo se `APP_TOKENS_JSON` tiver menos tokens que os VUs do perfil. Exemplo: `PROFILE=vu20` exige pelo menos 20 tokens validos.
+
+Desde a 78N.6, `inbox-detail` tambem deve ter matriz presente no `fixtures.env`. O criterio minimo antes de repetir a 78N.3 e:
+
+```bash
+npm run load-test:fixtures -- status
+PROFILE=vu5 DURATION=30s load-tests/k6/run-load-profile.sh inbox-detail
+```
+
+Resultado esperado: `0%` erro HTTP, sem `401 session_replaced` e sem `403 Conversa fora do seu departamento`.
 
 ## Cleanup
 
@@ -176,6 +197,7 @@ npm run load-test:fixtures -- status
 | Search sem resultado representativo | rodar `search:index-shadow --record` apos o prepare para popular `SearchIndex` com dados recentes do tenant tecnico. |
 | Tenant de teste sem margem de usuarios | para smoke minimo, usar `--users 1` em tenant interno com margem; para carga representativa, reservar tenant piloto com limite suficiente para ADMIN/SUPERVISOR/AGENT temporarios. |
 | Claim/outbound Webchat falhar | o `prepare` deve falhar; nao executar carga ate corrigir o fluxo real de Inbox. |
+| Inbox Detail retornar 403 por departamento | regenerar a fixture; desde a 78N.6, o prepare alinha usuarios SUPERVISOR ao departamento da conversa e emite matriz por VU. |
 
 ## Result Report
 
@@ -184,6 +206,7 @@ npm run load-test:fixtures -- status
 - API keys criadas por `/app/api-keys`, com segredo exibido apenas no arquivo temporario.
 - Inbox fixture criada por Webchat runtime, gerando Conversation/Contact/Inbound/Outbound no fluxo normal.
 - 78N.2E corrigiu o bloqueio `claim_failed:500`; o criterio de aceite passa a ser inbound + claim + outbound + timeline completa.
+- 78N.6 corrigiu a representatividade de ownership/departamento para Inbox Detail sem alterar RBAC.
 - k6 atualizado para suportar multiplos usuarios/API keys.
 - Cleanup definido.
 - Nenhuma regra de seguranca foi relaxada.

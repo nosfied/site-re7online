@@ -244,6 +244,51 @@ async function createWebchatFixture(baseUrl, token, runId, origin) {
   return { site, sessionToken, conversationId, origin, outboundCreated: true, outboundSkippedReason: null };
 }
 
+async function getConversationDetail(baseUrl, token, conversationId) {
+  return requestJson(
+    "GET",
+    safeUrl(baseUrl, `/app/conversation/${encodeURIComponent(conversationId)}`),
+    undefined,
+    { Authorization: `Bearer ${token}` }
+  );
+}
+
+function extractConversationDepartmentId(detail) {
+  return (
+    detail?.departmentId ||
+    detail?.conversation?.departmentId ||
+    detail?.state?.departmentId ||
+    detail?.operational?.departmentId ||
+    detail?.runtimeState?.departmentId ||
+    null
+  );
+}
+
+function buildInboxDetailMatrix(appUsers, conversationId, departmentId) {
+  return appUsers
+    .filter((item) => item.purpose === "app-load")
+    .map((item, index) => ({
+      tokenIndex: index,
+      userId: item.id,
+      role: item.role,
+      departmentId: item.departmentId ?? null,
+      conversationId,
+      conversationDepartmentId: departmentId,
+    }));
+}
+
+async function alignAppUsersToConversationDepartment(baseUrl, adminToken, tenant, appUsers, departmentId) {
+  let aligned = 0;
+  for (const user of appUsers) {
+    if (user.purpose !== "app-load" || user.role !== "SUPERVISOR") continue;
+    if (user.departmentId === departmentId) continue;
+    const updated = await updateUser(baseUrl, adminToken, tenant, user.id, { departmentId });
+    user.departmentId = updated?.departmentId ?? departmentId;
+    aligned += 1;
+  }
+  return aligned;
+}
+
 async function listWebchatSites(baseUrl, token) {
   const body = await requestJson(
     "GET",
@@ -284,16 +329,19 @@ async function writeFixtureFiles(params) {
   const outputDir = path.dirname(params.out);
   await fs.mkdir(outputDir, { recursive: true });
   const appUsers = params.appUsers
-    .filter((item) => item.role === "ADMIN" || item.role === "SUPERVISOR")
+    .filter((item) => item.purpose === "app-load")
     .map((item) => ({ email: item.email, password: item.password }));
+  const fixtureAdmin = params.appUsers.find((item) => item.purpose === "fixture-admin");
   const loginUsers = params.loginUsers.map((item) => ({ email: item.email, password: item.password }));
   const env = {
     API_BASE_URL: params.baseUrl,
+    FIXTURE_ADMIN_JSON: JSON.stringify(fixtureAdmin ? { email: fixtureAdmin.email, password: fixtureAdmin.password } : null),
     LOGIN_USERS_JSON: JSON.stringify(loginUsers),
     APP_USERS_JSON: JSON.stringify(appUsers),
     APP_TOKENS_JSON: JSON.stringify(params.appAuthTokens || []),
     PUBLIC_API_KEYS_JSON: JSON.stringify(params.publicApiSecrets),
     CONVERSATION_ID: params.conversationId,
+    INBOX_DETAIL_CONVERSATIONS_JSON: JSON.stringify(params.inboxDetailConversations || []),
     SEARCH_QUERY: params.searchQuery,
   };
   const envLines = Object.entries(env).map(([key, value]) => `${key}=${shellQuote(value)}`).concat("");
@@ -326,7 +374,11 @@ async function prepare(options) {
   const defaultDepartment = departments.find((item) => item?.isActive !== false) || departments[0];
   if (!defaultDepartment?.id) throw new Error("fixture_department_required");
   let webchat = null;
+  let inboxDetail = null;
   const persistPartial = async () => {
+    const inboxDetailConversations = inboxDetail
+      ? buildInboxDetailMatrix(appUsers, inboxDetail.conversationId, inboxDetail.departmentId)
+      : [];
     await writeFixtureFiles({
       out,
       manifest,
@@ -336,6 +388,7 @@ async function prepare(options) {
       appAuthTokens,
       publicApiSecrets,
       conversationId: webchat?.conversationId ?? "",
+      inboxDetailConversations,
       searchQuery: "load test",
       manifestData: {
         runId,
@@ -346,7 +399,10 @@ async function prepare(options) {
         expiresAt,
         partial: !webchat,
         users: [...appUsers, ...loginUsers].map(({ password, ...item }) => item),
-        appUsers: appUsers.map(({ password, ...item }) => item),
+        appUsers: appUsers.filter((item) => item.purpose === "app-load").map(({ password, ...item }) => item),
+        fixtureAdmin: appUsers.find((item) => item.purpose === "fixture-admin")
+          ? (({ password, ...item }) => item)(appUsers.find((item) => item.purpose === "fixture-admin"))
+          : null,
         loginUsers: loginUsers.map(({ password, ...item }) => item),
         appTokenCount: appAuthTokens.length,
         authDelayMs,
@@ -361,14 +417,34 @@ async function prepare(options) {
               origin,
             }
           : null,
+        inboxDetail,
         envFile: out,
       },
     });
   };
 
+  const adminEmail = `loadtest-${runId}-admin@${tenant}.local`;
+  const adminPassword = randomSecret();
+  const adminFixtureUser = await createUser(baseUrl, adminToken, tenant, {
+    name: `Load Test ${runId} Admin`,
+    email: adminEmail,
+    password: adminPassword,
+    role: "ADMIN",
+    isActive: true,
+  });
+  appUsers.push({
+    id: adminFixtureUser.id,
+    email: adminEmail,
+    password: adminPassword,
+    role: "ADMIN",
+    departmentId: adminFixtureUser.departmentId ?? null,
+    purpose: "fixture-admin",
+  });
+  await persistPartial();
+
   for (let index = 0; index < userCount; index += 1) {
-    if (index > 0 && adminDelayMs > 0) await sleep(adminDelayMs);
-    const role = index === 0 ? "ADMIN" : "SUPERVISOR";
+    if (adminDelayMs > 0) await sleep(adminDelayMs);
+    const role = "SUPERVISOR";
     const email = `loadtest-${runId}-${String(index + 1).padStart(2, "0")}@${tenant}.local`;
     const password = randomSecret();
     const user = await createUser(baseUrl, adminToken, tenant, {
@@ -376,7 +452,7 @@ async function prepare(options) {
       email,
       password,
       role,
-      ...(role === "AGENT" || role === "SUPERVISOR" ? { departmentId: defaultDepartment.id } : {}),
+      departmentId: defaultDepartment.id,
       isActive: true,
     });
     appUsers.push({ id: user.id, email, password, role, departmentId: user.departmentId ?? null, purpose: "app-load" });
@@ -399,13 +475,8 @@ async function prepare(options) {
     await persistPartial();
   }
 
-  const adminUser = appUsers.find((item) => item.role === "ADMIN") || appUsers[0];
+  const adminUser = appUsers.find((item) => item.purpose === "fixture-admin") || appUsers[0];
   const adminJwt = await login(baseUrl, adminUser.email, adminUser.password);
-  appAuthTokens.push(adminJwt);
-  for (const user of appUsers.filter((item) => item.role === "SUPERVISOR")) {
-    if (authDelayMs > 0) await sleep(authDelayMs);
-    appAuthTokens.push(await login(baseUrl, user.email, user.password));
-  }
   await persistPartial();
   for (let index = 0; index < apiKeyCount; index += 1) {
     const created = await createApiKey(
@@ -421,6 +492,27 @@ async function prepare(options) {
   }
 
   webchat = await createWebchatFixture(baseUrl, adminJwt, runId, origin);
+  const conversationDetail = await getConversationDetail(baseUrl, adminJwt, webchat.conversationId);
+  const conversationDepartmentId = extractConversationDepartmentId(conversationDetail);
+  if (!conversationDepartmentId) throw new Error("fixture_conversation_department_required");
+  const appUsersAligned = await alignAppUsersToConversationDepartment(
+    baseUrl,
+    adminToken,
+    tenant,
+    appUsers,
+    conversationDepartmentId
+  );
+  inboxDetail = {
+    conversationId: webchat.conversationId,
+    departmentId: conversationDepartmentId,
+    appUsersAligned,
+  };
+  const inboxDetailConversations = buildInboxDetailMatrix(appUsers, webchat.conversationId, conversationDepartmentId);
+  for (const user of appUsers.filter((item) => item.purpose === "app-load")) {
+    if (authDelayMs > 0) await sleep(authDelayMs);
+    appAuthTokens.push(await login(baseUrl, user.email, user.password));
+  }
+  await persistPartial();
 
   const manifestData = {
     runId,
@@ -430,7 +522,10 @@ async function prepare(options) {
     createdAt: new Date().toISOString(),
     expiresAt,
     users: [...appUsers, ...loginUsers].map(({ password, ...item }) => item),
-    appUsers: appUsers.map(({ password, ...item }) => item),
+    appUsers: appUsers.filter((item) => item.purpose === "app-load").map(({ password, ...item }) => item),
+    fixtureAdmin: appUsers.find((item) => item.purpose === "fixture-admin")
+      ? (({ password, ...item }) => item)(appUsers.find((item) => item.purpose === "fixture-admin"))
+      : null,
     loginUsers: loginUsers.map(({ password, ...item }) => item),
     appTokenCount: appAuthTokens.length,
     authDelayMs,
@@ -443,6 +538,7 @@ async function prepare(options) {
       outboundSkippedReason: webchat.outboundSkippedReason,
       origin,
     },
+    inboxDetail,
     envFile: out,
   };
   await writeFixtureFiles({
@@ -454,10 +550,11 @@ async function prepare(options) {
     appAuthTokens,
     publicApiSecrets,
     conversationId: webchat.conversationId,
+    inboxDetailConversations,
     searchQuery: "load test",
     manifestData,
   });
-  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, authDelayMs, adminDelayMs, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, envFile: out, manifest }, null, 2));
+  console.log(JSON.stringify({ ok: true, runId, tenant, users: appUsers.length + loginUsers.length, appUsers: appUsers.filter((item) => item.purpose === "app-load").length, loginUsers: loginUsers.length, appTokens: appAuthTokens.length, authDelayMs, adminDelayMs, apiKeys: publicApiKeys.length, conversationId: webchat.conversationId, inboxDetail, envFile: out, manifest }, null, 2));
 }
 
 async function cleanup(options) {
@@ -474,8 +571,17 @@ async function cleanup(options) {
   const manifest = JSON.parse(manifestText);
   const envText = await fs.readFile(envPath, "utf8").catch(() => "");
   const usersJson = parseEnvValue(envText.match(/^LOGIN_USERS_JSON=(.*)$/m)?.[1] || "[]");
+  const appUsersJson = parseEnvValue(envText.match(/^APP_USERS_JSON=(.*)$/m)?.[1] || "[]");
+  const fixtureAdminJson = parseEnvValue(envText.match(/^FIXTURE_ADMIN_JSON=(.*)$/m)?.[1] || "null");
   const usersWithPasswords = JSON.parse(usersJson);
-  const adminCandidate = usersWithPasswords.find((item) => /-01@/.test(item.email)) || usersWithPasswords[0];
+  const appUsersWithPasswords = JSON.parse(appUsersJson);
+  const fixtureAdmin = JSON.parse(fixtureAdminJson);
+  const adminCandidate =
+    (fixtureAdmin?.email && fixtureAdmin?.password ? fixtureAdmin : null) ||
+    appUsersWithPasswords.find((item) => /-01@/.test(item.email)) ||
+    appUsersWithPasswords[0] ||
+    usersWithPasswords.find((item) => /-01@/.test(item.email)) ||
+    usersWithPasswords[0];
   let adminJwt = "";
   const archivedSiteIds = new Set();
   if (adminCandidate) {
@@ -548,6 +654,7 @@ async function status(options) {
     adminDelayMs: manifest.adminDelayMs ?? null,
     apiKeys: manifest.publicApiKeys?.length ?? 0,
     hasConversationId: Boolean(manifest.webchat?.conversationId),
+    inboxDetail: manifest.inboxDetail ?? null,
     envFile: manifest.envFile,
     expiresAt: manifest.expiresAt,
   }, null, 2));

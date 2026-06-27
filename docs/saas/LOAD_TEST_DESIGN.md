@@ -40,6 +40,8 @@ Atualizacao 78N.5: a estrategia de fixture foi ajustada para respeitar a politic
 
 Atualizacao 78N.3 re-run final: com a 78N.5 validada, `health`, `public-api`, `search` e `inbox-read` passaram em `vu5` com 0% erro. O teste parou em `inbox-detail vu5` por `403 Conversa fora do seu departamento` para 4 de 5 tokens. O bloqueador atual e fixture de ownership/departamento do Inbox Detail, nao Search, Public API, sessao, PM2, RAM ou DB.
 
+Atualizacao 78N.6: a fixture de Inbox Detail foi ajustada para respeitar o modelo real de departamento. O `prepare` resolve o departamento da conversa Webchat, alinha usuarios SUPERVISOR de carga a esse departamento pelo endpoint administrativo e grava `INBOX_DETAIL_CONVERSATIONS_JSON`. O cenario `inbox-detail` usa essa matriz por VU/token. Nao houve bypass de RBAC nem alteracao de ACL.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -625,6 +627,14 @@ Status 78N.3 re-run final: `search vu5` e `inbox-read vu5` passaram, mas `inbox-
 - preservar RBAC real, sem bypass;
 - validar `inbox-detail vu5` com 0% `403`;
 - somente depois avancar para `vu10` e `vu20`.
+
+Status 78N.6: fixture ajustada pelo caminho de alinhamento de departamento. Antes da 78N.3 final-final:
+
+- rodar `prepare` novamente;
+- confirmar `inboxDetail` no manifest/status;
+- confirmar `INBOX_DETAIL_CONVERSATIONS_JSON` no `fixtures.env`;
+- rodar `inbox-detail vu1` e `inbox-detail vu5`;
+- exigir 0% erro, 0 `session_replaced` e 0 `Conversa fora do seu departamento`.
 
 ### 78P - HA Runtime
 

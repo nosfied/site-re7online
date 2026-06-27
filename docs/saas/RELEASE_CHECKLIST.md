@@ -370,7 +370,7 @@ Para carga autenticada controlada:
 cd apps/whatsapp-agent
 npm run load-test:tenant:bootstrap -- status --tenant loadtest-prefeitura --json
 npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime false --execute --json
-npm run load-test:fixtures -- prepare --tenant loadtest-prefeitura --users 20 --api-keys 20
+npm run load-test:fixtures -- prepare --tenant loadtest-prefeitura --users 20 --login-users 2 --api-keys 20
 npm run search:index-shadow -- --tenant loadtest-prefeitura --json --record
 npm run load-test:tenant:bootstrap -- bootstrap --tenant loadtest-prefeitura --max-users 60 --advanced-search-runtime true --execute --json
 ```
@@ -382,6 +382,16 @@ session -> inbound -> conversation -> claim -> outbound -> timeline
 ```
 
 Se houver `claim_failed`, `conversation_not_found`, `conversation_not_assigned` ou ausencia de `OutboundMessage`, interromper a release de carga e corrigir o fluxo real antes da 78N.3.
+
+Desde a 78N.6, o `prepare` tambem precisa confirmar `inboxDetail` e gerar `INBOX_DETAIL_CONVERSATIONS_JSON`. Antes de repetir carga maior, validar:
+
+```bash
+npm run load-test:fixtures -- status
+PROFILE=vu1 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-detail
+PROFILE=vu5 DURATION=30s ../../load-tests/k6/run-load-profile.sh inbox-detail
+```
+
+O resultado esperado e `0%` erro, sem `session_replaced` e sem `Conversa fora do seu departamento`.
 
 Depois:
 

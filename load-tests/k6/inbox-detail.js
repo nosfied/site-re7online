@@ -5,6 +5,7 @@ import {
   appAuthHeadersForToken,
   config,
   loginAllAppUsers,
+  pickInboxDetailConversation,
   pickToken,
   requireEnv,
   requireAppTokensForProfile,
@@ -21,7 +22,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const conversationId = requireEnv("CONVERSATION_ID", config.conversationId);
+  const conversationId = requireEnv("CONVERSATION_ID", pickInboxDetailConversation() || config.conversationId);
   const params = appAuthHeadersForToken(pickToken(data.tokens));
 
   const detail = http.get(apiUrl(`/app/conversation/${encodeURIComponent(conversationId)}`), params);

@@ -877,3 +877,67 @@ Objetivo:
 - evitar bypass de RBAC;
 - preferir criar conversa por departamento ou alinhar todos os usuarios de carga ao departamento da fixture;
 - repetir `inbox-detail vu5` antes de qualquer `vu10/20`.
+
+## Atualizacao 78N.6 - Inbox Detail Fixture Ownership Hardening
+
+Data: 2026-06-26.
+
+Auditoria:
+
+- o endpoint `/app/conversation/:id` e `/timeline` carrega `departmentAccess` do usuario autenticado e valida o departamento da conversa;
+- o `claim` e o `send` Webchat ja estavam usando o fallback correto de `ConversationRuntimeState`;
+- a fixture criava uma unica conversa Webchat usando o usuario ADMIN;
+- o k6 usava o mesmo `CONVERSATION_ID` para todos os VUs;
+- o token 1 acessava porque era ADMIN;
+- os tokens 2-5 recebiam 403 porque eram SUPERVISOR em departamento diferente do departamento operacional da conversa Webchat.
+
+Respostas obrigatorias:
+
+| Pergunta | Resposta |
+| --- | --- |
+| Por que token 1 acessa? | Porque token 1 pertence ao usuario ADMIN da fixture, que passa pela regra de acesso administrativo. |
+| Por que tokens 2-5 recebem 403? | Porque pertencem a usuarios SUPERVISOR cujo `departmentId` nao correspondia ao `departmentId` da conversa Webchat fixture. |
+| A conversa fixture pertence a qual departamento? | Ao departamento operacional resolvido pelo runtime Webchat/Inbox para a conversa criada no prepare. A 78N.6 passa a registrar esse `departmentId` em `inboxDetail.departmentId`. |
+| Os usuarios dos tokens estao em quais departamentos? | Antes da 78N.6, os supervisores ficavam no primeiro departamento ativo retornado pelo admin; isso podia divergir do departamento da conversa. |
+| O k6 esta escolhendo a mesma conversa para todos? | Sim. Antes da 78N.6, `inbox-detail` usava apenas `CONVERSATION_ID` global. |
+| Menor correcao fiel ao modelo real | Alinhar os usuarios SUPERVISOR de carga ao departamento real da conversa fixture via endpoint administrativo e emitir `INBOX_DETAIL_CONVERSATIONS_JSON` para selecao por VU/token. |
+
+Mudancas:
+
+- `load-test-fixtures.mjs` busca o detalhe da conversa Webchat apos criar inbound/claim/outbound;
+- extrai o `departmentId` real da conversa;
+- atualiza usuarios SUPERVISOR de carga para esse departamento pelo endpoint `/admin/users/:id`;
+- remove o ADMIN do pool de carga; o ADMIN fica apenas em `FIXTURE_ADMIN_JSON` para prepare/cleanup;
+- grava `inboxDetail` no manifest;
+- grava `INBOX_DETAIL_CONVERSATIONS_JSON` no `fixtures.env`;
+- `inbox-detail.js` passa a escolher a conversa via matriz por VU/token, mantendo `CONVERSATION_ID` como fallback.
+
+O que nao foi alterado:
+
+- RBAC;
+- ACL;
+- regra de departamento;
+- autenticacao;
+- MFA;
+- rate limit;
+- endpoint de Inbox;
+- runtime de canais.
+
+Validacao esperada na VPS:
+
+```text
+prepare/status:
+prepared=true
+appUsers>=20
+appTokenCount>=20
+inboxDetail presente
+
+inbox-detail vu1: PASS
+inbox-detail vu5: PASS
+403 departamento: 0
+401/session_replaced: 0
+```
+
+Decisao:
+
+Se `inbox-detail vu5` passar limpo, repetir a 78N.3 final-final com `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` em `vu5 -> vu10 -> vu20`.

@@ -23,6 +23,7 @@ export const config = {
   appJwt: __ENV.APP_JWT || "",
   appTokens: parseJsonArray(__ENV.APP_TOKENS_JSON || __ENV.LOAD_TEST_TOKENS_JSON || "") || splitCsv(__ENV.APP_TOKENS || ""),
   appUsers: parseJsonArray(__ENV.APP_USERS_JSON || __ENV.LOAD_TEST_USERS_JSON || "") || [],
+  inboxDetailConversations: parseJsonArray(__ENV.INBOX_DETAIL_CONVERSATIONS_JSON || "") || [],
   loginEmail: __ENV.LOGIN_EMAIL || "",
   loginPassword: __ENV.LOGIN_PASSWORD || "",
   loginUsers: parseJsonArray(__ENV.LOGIN_USERS_JSON || __ENV.LOAD_TEST_USERS_JSON || "") || [],
@@ -48,7 +49,7 @@ function parseJsonArray(value) {
   }
 }
 
-function pickByVu(items) {
+export function pickByVu(items) {
   if (!Array.isArray(items) || items.length === 0) return null;
   const vu = Number(__VU || 1);
   return items[(Math.max(vu, 1) - 1) % items.length] || items[0];
@@ -236,6 +237,12 @@ export function requireAppTokensForProfile(tokens) {
 
 export function pickToken(tokens) {
   return pickByVu(tokens);
+}
+
+export function pickInboxDetailConversation() {
+  const selected = pickByVu(config.inboxDetailConversations);
+  if (!selected || typeof selected !== "object") return config.conversationId;
+  return String(selected.conversationId || config.conversationId || "");
 }
 
 export function safeJson(response) {
