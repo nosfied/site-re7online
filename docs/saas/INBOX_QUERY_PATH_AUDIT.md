@@ -416,6 +416,49 @@ Metrica antes/depois:
 - os timings internos passam a existir apos deploy/pre-release desta sprint;
 - a comparacao numerica de p95 antes/depois deve ser feita na VPS com `inbox-read vu5 -> vu10 -> vu20`, sem login no loop principal.
 
+Resultado do pre-release VPS:
+
+| Perfil | Requests | Erro HTTP | Avg | p95 | p99 | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `vu5` | 115 | 0% | 348,39 ms | 549,89 ms | 625,26 ms | 631,40 ms |
+| `vu10` | 193 | 0% | 556,24 ms | 952,54 ms | 1.216,57 ms | 1.316,93 ms |
+| `vu20` | 343 | 0% | 762,46 ms | 1.272,26 ms | 1.293,26 ms | 1.301,25 ms |
+
+Comparacao:
+
+```text
+78N.3 final-final: inbox-read vu20 p95 2.085,30 ms
+78O.2 pre-release: inbox-read vu20 p95 1.272,26 ms
+ganho aproximado: 39,0%
+```
+
+Timings internos pos-pre-release:
+
+| Operacao | p95 maximo observado | Diagnostico |
+| --- | ---: | --- |
+| `runtime_state_lookup` | 616 ms | principal gargalo remanescente |
+| `auth_rbac` | 433 ms | custo relevante em um dos tenants medidos |
+| `defaults` | 369 ms | custo relevante de preparacao |
+| `last_message_lookup` | 126 ms | custo medio ainda visivel |
+| `base_query` | 104 ms | nao dominou a latencia |
+| `assembly` | 5 ms | nao dominou a latencia |
+| `filtering_sorting` | 3 ms | nao dominou a latencia |
+| `serialization_payload` | 3 ms | nao dominou a latencia |
+
+Contadores relevantes:
+
+- `runtime_state_batch`: 651 chamadas;
+- `runtime_state_fallback`: 53.251 chamadas;
+- `last_message_lookup`: 3.507 chamadas;
+- `inbox.list.response_bytes`: ate ~79 KiB por resposta.
+
+Leitura:
+
+- o batching de `ConversationRuntimeState` reduziu significativamente o p95 externo;
+- ainda ha caminho individual de fallback em volume alto;
+- a proxima otimizacao deve investigar por que parte das conversas nao entra no batch, antes de mexer em overfetch, payload ou indices;
+- `assembly`, `filtering_sorting` e `serialization_payload` nao sao os gargalos dominantes nesta medicao.
+
 Risco preservado:
 
 - RBAC/departamento nao foi relaxado;

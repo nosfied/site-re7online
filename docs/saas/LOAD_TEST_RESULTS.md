@@ -1091,7 +1091,7 @@ Nenhuma otimizacao foi aplicada nesta sprint. A proxima etapa recomendada e `78O
 
 ## 78O.2 - Inbox Read Performance Hardening
 
-Status: implementacao local concluida, aguardando pre-release/deploy controlado para medicao externa antes/depois.
+Status: pre-release/deploy controlado na VPS concluido e medido.
 
 Mudancas:
 
@@ -1109,19 +1109,77 @@ p95: 2.085,30 ms
 erro HTTP: 0%
 ```
 
-Medicao pos-mudanca pendente:
+Validacoes de deploy:
+
+| Validacao | Resultado |
+| --- | --- |
+| `git pull` na VPS | OK, commit `ff5d0e3` |
+| `prisma validate` | OK |
+| `prisma generate` | OK |
+| `prisma migrate status` | OK, schema atualizado |
+| backend build sequencial | OK |
+| testes focados Inbox/HTTP/metrics | OK, 9/9 |
+| `evaluation:replay` | OK, 9/9 |
+| PM2 reload backend | OK |
+| health | OK, DB OK |
+
+Medicao externa pos-mudanca, 30s por perfil, via dominio publico:
+
+| Cenario | Perfil | Requests | Erro HTTP | Avg | p95 | p99 | Max |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `inbox-read` | `vu5` | 115 | 0% | 348,39 ms | 549,89 ms | 625,26 ms | 631,40 ms |
+| `inbox-read` | `vu10` | 193 | 0% | 556,24 ms | 952,54 ms | 1.216,57 ms | 1.316,93 ms |
+| `inbox-read` | `vu20` | 343 | 0% | 762,46 ms | 1.272,26 ms | 1.293,26 ms | 1.301,25 ms |
+
+Comparacao com baseline:
 
 ```text
-inbox-read vu5
-inbox-read vu10
-inbox-read vu20
+baseline 78N.3 final-final:
+inbox-read vu20 p95 = 2.085,30 ms
+
+pos 78O.2:
+inbox-read vu20 p95 = 1.272,26 ms
+
+ganho aproximado:
+-813,04 ms
+-39,0%
 ```
 
-Coletar junto:
+Snapshot operacional pos-teste:
 
-- `/admin/ops/metrics` filtrando `inbox.list.duration`;
-- `inbox.list.query_count`;
-- `inbox.list.response_bytes`;
-- PM2/RAM/health/alerts.
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~145,6 MiB |
+| PM2 frontend | online, ~42,5 MiB |
+| Memoria | 1.9 GiB total, ~1.1 GiB available |
+| Swap | 2.0 GiB, ~32 MiB usados |
+| Alertas ativos | 0 |
 
-O resultado so deve ser considerado conclusivo apos rodar no tenant tecnico `loadtest-prefeitura`.
+Metricas internas relevantes:
+
+| Operacao | p95 maximo observado | Leitura |
+| --- | ---: | --- |
+| `runtime_state_lookup` | 616 ms | ainda e o principal gargalo remanescente; existe fallback individual alto em parte do trafego |
+| `auth_rbac` | 433 ms | segundo maior custo em um dos tenants medidos |
+| `defaults` | 369 ms | custo relevante de preparacao/parametros |
+| `last_message_lookup` | 126 ms | custo ainda visivel, mas menor que runtime state |
+| `base_query` | 104 ms | aceitavel nesta rodada |
+| `assembly` | 5 ms | montagem nao dominou |
+| `filtering_sorting` | 3 ms | filtro/ordenacao em memoria nao dominou nesta medicao |
+| `serialization_payload` | 3 ms | serializacao nao dominou |
+
+Contadores:
+
+- `runtime_state_batch`: 651 chamadas;
+- `runtime_state_fallback`: 53.251 chamadas;
+- `last_message_lookup`: 3.507 chamadas;
+- `response_bytes`: ate ~79 KiB por resposta no snapshot.
+
+Conclusao 78O.2:
+
+- a mudanca reduziu o p95 de `inbox-read vu20` de `2.085,30 ms` para `1.272,26 ms`, mantendo 0% erro;
+- o batching confirmou ganho relevante;
+- o proximo gargalo nao e assembly, serializacao ou filtering/sorting;
+- o principal item remanescente e reduzir/eliminar o caminho `runtime_state_fallback` e revisar por que parte das conversas ainda cai no lookup individual;
+- indices/migrations continuam fora desta sprint.
