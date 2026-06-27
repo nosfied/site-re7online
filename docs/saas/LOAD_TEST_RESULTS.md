@@ -1183,3 +1183,52 @@ Conclusao 78O.2:
 - o proximo gargalo nao e assembly, serializacao ou filtering/sorting;
 - o principal item remanescente e reduzir/eliminar o caminho `runtime_state_fallback` e revisar por que parte das conversas ainda cai no lookup individual;
 - indices/migrations continuam fora desta sprint.
+
+## 78O.3 - Inbox Runtime State Fallback Reduction
+
+Status: implementacao local concluida, aguardando pre-release/deploy controlado para medicao externa.
+
+Auditoria:
+
+- o fallback alto da 78O.2 nao indicava apenas ausencia real de estado;
+- o batch anterior era restrito a candidatos `webchat`;
+- candidatos WhatsApp/Messenger/Instagram/Telegram continuavam usando fallback individual;
+- o caminho correto e consultar `ConversationRuntimeState` em lote por `clientId + waId/waIdCanonical`, preservando o fallback individual para estados legados/ausentes.
+
+Mudancas:
+
+- batch de runtime state ampliado para todos os candidatos do Inbox;
+- mapeamento por `getWaIdGroupKey`, `waId` e `waIdCanonical`;
+- fallback individual preservado;
+- novas metricas:
+  - `inbox.list.runtime_state_batch_candidates`;
+  - `inbox.list.runtime_state_batch_hits`;
+  - `inbox.list.runtime_state_fallback_count`;
+  - `inbox.list.runtime_state_fallback_reason`.
+
+Baseline para pre-release:
+
+```text
+inbox-read vu20 p95 atual: 1.272,26 ms
+runtime_state_fallback snapshot atual: 53.251
+erro HTTP: 0%
+```
+
+Validacao local:
+
+| Validacao | Resultado |
+| --- | --- |
+| `prisma validate` | OK |
+| `prisma generate` | OK |
+| backend build | OK |
+| testes focados Inbox/HTTP/metrics | OK, 9/9 |
+| `evaluation:replay` | OK, 9/9 |
+
+Pre-release pendente:
+
+- deploy na VPS;
+- PM2 reload backend;
+- health OK;
+- `inbox-read vu5/vu10/vu20`;
+- coletar `/admin/ops/metrics`;
+- comparar fallback e p95 contra a 78O.2.

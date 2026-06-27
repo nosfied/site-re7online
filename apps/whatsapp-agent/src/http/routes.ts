@@ -361,6 +361,7 @@ async function loadWebchatConversationStateFromDb(
 const inboxRuntimeStateSelect = {
   waId: true,
   waIdCanonical: true,
+  channel: true,
   conversationKey: true,
   firstSeenAt: true,
   windowIsOpen: true,
@@ -436,6 +437,40 @@ async function loadWebchatConversationStatesFromDb(
     select: inboxRuntimeStateSelect,
   });
   return new Map(states.map((state) => [state.waId, runtimeStateRowToConversationState(state, params.clientKey)]));
+}
+
+async function loadInboxConversationStatesFromDb(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    candidates: Array<{ waId: string; waIdCanonical: string; channel: string | null }>;
+  }
+) {
+  const identities = Array.from(
+    new Set(
+      params.candidates
+        .flatMap((item) => [item.waId, item.waIdCanonical])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (identities.length === 0) return new Map<string, ConversationState>();
+  const states = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: params.clientId,
+      OR: [{ waId: { in: identities } }, { waIdCanonical: { in: identities } }],
+    },
+    select: inboxRuntimeStateSelect,
+  });
+  const stateByIdentity = new Map<string, ConversationState>();
+  for (const state of states) {
+    const conversationState = runtimeStateRowToConversationState(state, params.clientKey);
+    stateByIdentity.set(getWaIdGroupKey(state.waId, state.waIdCanonical), conversationState);
+    stateByIdentity.set(state.waId, conversationState);
+    if (state.waIdCanonical) stateByIdentity.set(state.waIdCanonical, conversationState);
+  }
+  return stateByIdentity;
 }
 
 async function loadInboxConversationState(
@@ -16554,6 +16589,23 @@ function recordInboxListCount(
   }, increment);
 }
 
+function recordInboxRuntimeStateCounter(
+  clientId: string,
+  name: string,
+  increment: number,
+  labels: { operation?: string; channel?: string | null; status?: "ok" | "error" } = {}
+) {
+  if (increment <= 0) return;
+  metrics.counter(name, {
+    module: "inbox",
+    route: "/app/conversations",
+    tenantId: clientId,
+    operation: labels.operation ?? "all",
+    channel: labels.channel ?? "all",
+    status: labels.status ?? "ok",
+  }, increment);
+}
+
 function defaultErrorMessage(code: string, status: number) {
   switch (code) {
     case "bad_request":
@@ -20026,33 +20078,56 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "last_message_lookup", lastMessageLookupStartedAt);
   recordInboxListCount(params.clientId, "last_message_lookup", 3);
   const runtimeStateLookupStartedAt = channelLatencyNow();
-  const webchatCandidateWaIds = winners
-    .filter((item) => serializeInboxChannelFields(item).channel === "webchat" || item.waId.startsWith("webchat:"))
-    .map((item) => item.waId);
-  const webchatStateByWaId = await loadWebchatConversationStatesFromDb(prisma, {
+  const runtimeStateCandidates = winners.map((item) => {
+    const channel = serializeInboxChannelFields(item).channel;
+    return {
+      waId: item.waId,
+      waIdCanonical: item.waIdCanonical,
+      channel,
+    };
+  });
+  const runtimeStateByIdentity = await loadInboxConversationStatesFromDb(prisma, {
     clientId: params.clientId,
     clientKey: params.clientKey,
-    waIds: webchatCandidateWaIds,
+    candidates: runtimeStateCandidates,
   });
-  recordInboxListCount(params.clientId, "runtime_state_batch", webchatCandidateWaIds.length > 0 ? 1 : 0);
+  recordInboxListCount(params.clientId, "runtime_state_batch", runtimeStateCandidates.length > 0 ? 1 : 0);
+  recordInboxRuntimeStateCounter(
+    params.clientId,
+    "inbox.list.runtime_state_batch_candidates",
+    runtimeStateCandidates.length
+  );
   let runtimeStateFallbackCount = 0;
+  let runtimeStateBatchHitCount = 0;
+  const runtimeStateFallbackReasons = new Map<string, number>();
+  const recordRuntimeStateFallbackReason = (reason: string) => {
+    runtimeStateFallbackReasons.set(reason, (runtimeStateFallbackReasons.get(reason) ?? 0) + 1);
+  };
   const runtimeConversations = await Promise.all(
     winners.map(async (item) => {
-      const batchedWebchatState = webchatStateByWaId.get(item.waId);
-      if (batchedWebchatState) {
+      const channel = serializeInboxChannelFields(item).channel;
+      const key = getWaIdGroupKey(item.waId, item.waIdCanonical);
+      const batchedState =
+        runtimeStateByIdentity.get(key) ??
+        runtimeStateByIdentity.get(item.waId) ??
+        runtimeStateByIdentity.get(item.waIdCanonical);
+      if (batchedState) {
+        runtimeStateBatchHitCount += 1;
         return {
           waIdCanonical: item.waIdCanonical,
-          conversation: materializeConversationOperationalState(batchedWebchatState, defaults),
+          conversation: materializeConversationOperationalState(batchedState, defaults),
         };
       }
       runtimeStateFallbackCount += 1;
+      const fallbackState = await loadInboxConversationState(prisma, {
+        clientId: params.clientId,
+        clientKey: params.clientKey,
+        waId: item.waId,
+        channel,
+      });
+      recordRuntimeStateFallbackReason(fallbackState ? "legacy_runtime_storage" : "legacy_no_runtime_state");
       const conversation = materializeConversationOperationalState(
-        await loadInboxConversationState(prisma, {
-          clientId: params.clientId,
-          clientKey: params.clientKey,
-          waId: item.waId,
-          channel: serializeInboxChannelFields(item).channel,
-        }),
+        fallbackState,
         defaults
       );
       return {
@@ -20061,6 +20136,24 @@ async function buildConversationListPayload(
       };
     })
   );
+  recordInboxRuntimeStateCounter(
+    params.clientId,
+    "inbox.list.runtime_state_batch_hits",
+    runtimeStateBatchHitCount
+  );
+  recordInboxRuntimeStateCounter(
+    params.clientId,
+    "inbox.list.runtime_state_fallback_count",
+    runtimeStateFallbackCount
+  );
+  for (const [reason, count] of runtimeStateFallbackReasons.entries()) {
+    recordInboxRuntimeStateCounter(
+      params.clientId,
+      "inbox.list.runtime_state_fallback_reason",
+      count,
+      { operation: reason }
+    );
+  }
   recordInboxListTiming(params.clientId, "runtime_state_lookup", runtimeStateLookupStartedAt);
   recordInboxListCount(params.clientId, "runtime_state_fallback", runtimeStateFallbackCount);
   const runtimeByWaId = new Map(

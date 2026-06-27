@@ -466,9 +466,62 @@ Risco preservado:
 - payload publico foi mantido;
 - nenhum cache, Redis, PM2/Nginx/Postgres tuning, HA ou infra foi introduzido.
 
+## Atualizacao 78O.3 - Runtime State Fallback Reduction
+
+Auditoria:
+
+- a 78O.2 criou batch apenas para candidatos `webchat`;
+- a listagem do Inbox contem candidatos de multiplos canais;
+- os candidatos nao-Webchat continuavam chamando `loadInboxConversationState` individualmente;
+- por isso o contador `runtime_state_fallback` continuava alto mesmo apos o ganho de batching inicial;
+- a chave segura para batch e `clientId + (waId/waIdCanonical)`, usando `getWaIdGroupKey` para mapear o retorno.
+
+Mudanca aplicada:
+
+- o batch de `ConversationRuntimeState` passou a cobrir todos os candidatos da listagem;
+- a consulta usa `clientId` e `OR` por `waId`/`waIdCanonical`;
+- o mapa interno registra:
+  - `getWaIdGroupKey(state.waId, state.waIdCanonical)`;
+  - `state.waId`;
+  - `state.waIdCanonical`, quando existir;
+- o fallback individual permanece ativo para casos legados ou estado realmente ausente.
+
+Metricas adicionadas:
+
+- `inbox.list.runtime_state_batch_candidates`;
+- `inbox.list.runtime_state_batch_hits`;
+- `inbox.list.runtime_state_fallback_count`;
+- `inbox.list.runtime_state_fallback_reason`.
+
+Motivos de fallback:
+
+| Motivo | Significado |
+| --- | --- |
+| `legacy_runtime_storage` | batch DB nao encontrou, mas fallback individual encontrou estado legado/runtimeStorage |
+| `legacy_no_runtime_state` | batch DB e fallback individual nao encontraram estado operacional |
+
+Decisoes preservadas:
+
+- nenhum indice criado;
+- nenhuma migration criada;
+- nenhum cache/Redis;
+- nenhuma alteracao de RBAC, departamento, ownership, payload publico ou isolamento multitenant;
+- fallback individual nao foi removido.
+
+Medicao antes/depois esperada:
+
+```text
+78O.2:
+inbox-read vu20 p95 = 1.272,26 ms
+runtime_state_fallback = 53.251 no snapshot pos-teste
+
+78O.3:
+medir novamente em pre-release VPS com inbox-read vu5/vu10/vu20
+```
+
 ## Confirmacao De Nao Alteracao Funcional
 
-A 78O.1/78O.2 nao:
+A 78O.1/78O.2/78O.3 nao:
 
 - altera regra de negocio;
 - altera banco;
