@@ -42,6 +42,8 @@ Atualizacao 78N.3 re-run final: com a 78N.5 validada, `health`, `public-api`, `s
 
 Atualizacao 78N.6: a fixture de Inbox Detail foi ajustada para respeitar o modelo real de departamento. O `prepare` resolve o departamento da conversa Webchat, alinha usuarios SUPERVISOR de carga a esse departamento pelo endpoint administrativo e grava `INBOX_DETAIL_CONVERSATIONS_JSON`. O cenario `inbox-detail` usa essa matriz por VU/token. Nao houve bypass de RBAC nem alteracao de ACL.
 
+Atualizacao 78N.3 final-final: laboratorio estabilizado. `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` passaram em `vu5`; os mesmos cenarios passaram em `vu10`; em `vu20`, `health`, `public-api` e `search` passaram com 0% erro, mas `inbox-read` cruzou threshold de latencia com p95 `2.085 ms`. O primeiro gargalo real medido e a listagem do Inbox, nao autenticacao, RBAC, Search, Public API ou infraestrutura caindo.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 Esta sprint nao:
@@ -635,6 +637,13 @@ Status 78N.6: fixture ajustada pelo caminho de alinhamento de departamento. Ante
 - confirmar `INBOX_DETAIL_CONVERSATIONS_JSON` no `fixtures.env`;
 - rodar `inbox-detail vu1` e `inbox-detail vu5`;
 - exigir 0% erro, 0 `session_replaced` e 0 `Conversa fora do seu departamento`.
+
+Status 78N.3 final-final: executado. A metodologia do laboratorio de carga v1 esta estabilizada. Proximos passos:
+
+- nao executar `vu50` neste ciclo;
+- abrir 78O para Capacity & Swap Hardening preventivo;
+- abrir investigacao tecnica para `inbox-read`/query path antes de declarar capacidade contratual acima de `vu10`;
+- manter fixtures congeladas salvo mudanca funcional relevante no produto.
 
 ### 78P - HA Runtime
 

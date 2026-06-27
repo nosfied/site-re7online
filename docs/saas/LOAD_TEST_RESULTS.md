@@ -995,3 +995,81 @@ Confirmacoes:
 Decisao:
 
 78N.6 atende ao criterio de encerramento. A proxima rodada pode ser a 78N.3 final-final, com `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` em `vu5 -> vu10 -> vu20`, mantendo login fora do loop principal.
+
+## 78N.3 Final-Final - External Load Test Full Run
+
+Data: 2026-06-27.
+
+Escopo:
+
+- tenant: `loadtest-prefeitura`;
+- fixture: `78n2-mqwazjt2`;
+- `appUsers=20`;
+- `loginUsers=2`;
+- `appTokenCount=20`;
+- `apiKeys=20`;
+- `inboxDetail.appUsersAligned=20`;
+- SearchIndex populado via `search:index-shadow --record`;
+- login fora do loop principal;
+- caminho: Cloudflare/TLS -> Nginx -> PM2 -> Backend -> PostgreSQL;
+- duracao por cenario: 30s;
+- perfis: `vu5`, `vu10`, `vu20`;
+- `vu50`: nao executado.
+
+Baseline:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~210 MiB |
+| PM2 frontend | online, ~58 MiB |
+| Memoria | 1.967 MiB total, ~946 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | `runtime:error_rate` acumulado de execucoes anteriores, `errorCount=222` |
+
+Resultados:
+
+| Cenario | Perfil | Status | HTTP reqs | Error rate | Avg | p90 | p95 | Max | Checks |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `health` | `vu5` | PASS | 150 | 0,00% | 9,80 ms | 10,47 ms | 13,01 ms | 120,33 ms | 300/300 |
+| `public-api` | `vu5` | PASS | 369 | 0,00% | 76,58 ms | 183,31 ms | 415,58 ms | 802,43 ms | 492/492 |
+| `search` | `vu5` | PASS | 123 | 0,00% | 242,52 ms | 683,27 ms | 778,56 ms | 1.215,22 ms | 246/246 |
+| `inbox-read` | `vu5` | PASS | 86 | 0,00% | 827,62 ms | 1.044,00 ms | 1.190,15 ms | 1.359,65 ms | 172/172 |
+| `inbox-detail` | `vu5` | PASS | 204 | 0,00% | 269,87 ms | 651,37 ms | 720,69 ms | 902,14 ms | 204/204 |
+| `health` | `vu10` | PASS | 300 | 0,00% | 28,61 ms | 46,15 ms | 219,37 ms | 274,93 ms | 600/600 |
+| `public-api` | `vu10` | PASS | 639 | 0,00% | 152,86 ms | 478,98 ms | 568,55 ms | 725,96 ms | 852/852 |
+| `search` | `vu10` | PASS | 284 | 0,00% | 68,84 ms | 143,96 ms | 466,84 ms | 615,14 ms | 568/568 |
+| `inbox-read` | `vu10` | PASS | 166 | 0,00% | 879,59 ms | 1.128,43 ms | 1.164,78 ms | 1.242,50 ms | 332/332 |
+| `inbox-detail` | `vu10` | PASS | 320 | 0,00% | 478,59 ms | 828,32 ms | 886,04 ms | 978,84 ms | 320/320 |
+| `health` | `vu20` | PASS | 600 | 0,00% | 17,11 ms | 48,71 ms | 97,55 ms | 230,42 ms | 1.200/1.200 |
+| `public-api` | `vu20` | PASS | 1.098 | 0,00% | 222,96 ms | 475,33 ms | 548,75 ms | 769,87 ms | 1.464/1.464 |
+| `search` | `vu20` | PASS | 574 | 0,00% | 59,46 ms | 119,91 ms | 358,73 ms | 618,06 ms | 1.148/1.148 |
+| `inbox-read` | `vu20` | FAIL LATENCIA | 278 | 0,00% | 1.231,17 ms | 1.723,71 ms | 2.085,30 ms | 2.385,33 ms | 556/556 |
+| `inbox-detail` | `vu20` | INTERROMPIDO | n/a | n/a | n/a | n/a | n/a | n/a | Regra de parada apos `inbox-read vu20`. |
+
+Snapshot pos-parada:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~213 MiB |
+| PM2 frontend | online, ~58 MiB |
+| Memoria | 1.967 MiB total, ~991 MiB available |
+| Swap | 0 MiB |
+| Alertas ativos | mesmo `runtime:error_rate` acumulado, `errorCount=222` |
+
+Interpretacao:
+
+- O laboratorio de carga v1 esta representativo: nao houve `session_replaced`, nao houve `403` de departamento, nao houve erro de Public API, Search ou Inbox Detail ate `vu10`.
+- A plataforma passou `health`, `public-api` e `search` ate `vu20` com 0% erro e p95 dentro dos thresholds.
+- `inbox-read` passou funcionalmente ate `vu20`, mas cruzou o threshold de latencia: p95 `2.085,30 ms` contra limite `1.500 ms`.
+- O primeiro gargalo real medido e a listagem do Inbox sob `20 VUs`, provavelmente relacionado a consulta/materializacao da lista/timeline operacional e volume de conversas historicas do tenant tecnico.
+- Nao ha evidencia nesta rodada de saturacao de PM2, queda de health, erro HTTP, problema de RBAC, problema de sessao, problema de rate limit ou falha de API keys.
+- Como a VPS ainda opera com `1.9 GiB RAM` e `0 swap`, a 78O continua recomendada como hardening preventivo, mas o primeiro foco tecnico de performance deve incluir `inbox-read`/query path.
+
+Decisao:
+
+- Encerrar a fase de ajuste metodologico do laboratorio de carga v1.
+- Nao executar `vu50`.
+- Abrir **78O - Capacity & Swap Hardening** como hardening preventivo.
+- Abrir item tecnico posterior para investigar/otimizar `inbox-read` antes de tratar resultados como benchmark contratual para 20+ VUs.
