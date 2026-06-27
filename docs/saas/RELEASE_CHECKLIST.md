@@ -29,6 +29,7 @@ Antes de executar, classificar a mudanca conforme `docs/saas/CHANGE_POLICY.md`:
 - Confirmar que nao existem secrets, dumps, `.data`, tokens ou temporarios no diff.
 - Rodar `git diff --check`.
 - Conferir se a mudanca exige update documental.
+- Se tocar capacidade, swap, PM2, banco, HA, build ou carga, atualizar `docs/saas/OPERATIONAL_BASELINE.md`.
 - Se tocar automacao/IA, rodar `npm run evaluation:replay` em `apps/whatsapp-agent`.
 - Se tocar canais, rodar testes focados de canais/webhooks quando aplicavel.
 
@@ -46,6 +47,8 @@ Validacoes:
 npm run db:generate
 npm run build
 ```
+
+Em VPS com cerca de 2 GiB RAM, executar o build backend antes do frontend. Nao rodar build backend/frontend em paralelo enquanto `docs/saas/OPERATIONAL_BASELINE.md` indicar baixa memoria ou ausencia de swap.
 
 Lint:
 
@@ -309,6 +312,7 @@ Resultado esperado:
 - Alertas reais devem permanecer atras de flag explicita e rollback por flag.
 - Se a release tocar HA/escala/infra, registrar explicitamente: SPOFs afetados, backup antes da mudanca, plano de rollback, health pos-reload e impacto em PM2/Postgres/Nginx/DNS/storage.
 - Em VPS com pouca RAM, manter builds sequenciais e evitar build frontend/backend em paralelo.
+- Se a release tocar swap, confirmar `free -m`, `swapon --show`, rollback por `swapoff` e atualizar `OPERATIONAL_BASELINE.md`. Criacao de swap exige acesso administrativo; nao simular por caminho paralelo.
 - Se a release tocar backup/restore, confirmar: ultimo backup valido, tamanho nao-zero, destino local/offsite, checksum quando existir, plano de restore e que nenhum secret/dump sera enviado por chat ou versionado no Git.
 - Restore validation deve usar banco temporario isolado e deve confirmar `TEMP_DB_REMAINING=0` ao final.
 

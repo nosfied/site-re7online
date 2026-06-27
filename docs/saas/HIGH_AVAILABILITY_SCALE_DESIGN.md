@@ -526,14 +526,19 @@ Atualizacao 78N.3 re-run final: `health`, `public-api`, `search` e `inbox-read` 
 
 ### 78O - Capacity/Swap Hardening
 
-- avaliar swap;
-- formalizar builds sequenciais;
-- medir memoria;
-- reduzir risco de OOM antes de carga.
+- baseline operacional registrado em `docs/saas/OPERATIONAL_BASELINE.md`;
+- VPS atual: DigitalOcean Droplet, 2 vCPU, 1.967 MiB RAM, 0 MiB swap, disco raiz 58 GiB com 30% de uso;
+- PostgreSQL 16.12 em Docker local, DB atual ~80 MB e 11 conexoes no baseline;
+- PM2 single instance: frontend ~58 MiB, backend ~215 MiB;
+- health publico OK e `/admin/ops/metrics` respondendo;
+- build sequencial backend -> frontend formalizado como regra operacional enquanto a VPS permanecer nessa classe de memoria;
+- criacao de swap ainda pendente porque `deploy` nao possui `sudo -n`; a aplicacao exige acesso administrativo e nao deve ser simulada por caminho paralelo.
 
 Observacao 78N.3: `Capacity/Swap Hardening` continua importante para build/deploy e estabilidade da VPS, mas o primeiro bloqueador do benchmark externo autenticado foi o cenario de login sob repeticao. A decisao de capacidade nao deve ser tomada com base na 78N.3 ate a estrategia de autenticacao estar corrigida.
 
 Observacao 78N.3 re-run: mesmo com login corrigido, a decisao de capacidade ainda nao deve ser tomada porque o teste parou em erro artificial de sessao (`session_replaced`) no Search. A 78O/Capacity-Swap permanece como hardening preventivo da VPS, nao como resposta a saturacao medida.
+
+Observacao 78N.3 final-final: o laboratorio de carga v1 foi encerrado. `health`, `public-api` e `search` passaram ate `vu20`; `inbox-read` passou funcionalmente em `vu20` com 0% erro, mas cruzou p95 `2.085,30 ms` contra threshold `1.500 ms`. Esse gargalo deve ser tratado em investigacao propria de query path; nao faz parte da 78O.
 
 ### 78P - Authenticated Load Test MVP
 
