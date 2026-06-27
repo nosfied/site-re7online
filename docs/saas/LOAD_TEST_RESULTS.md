@@ -1186,7 +1186,7 @@ Conclusao 78O.2:
 
 ## 78O.3 - Inbox Runtime State Fallback Reduction
 
-Status: implementacao local concluida, aguardando pre-release/deploy controlado para medicao externa.
+Status: pre-release/deploy controlado na VPS concluido e medido.
 
 Auditoria:
 
@@ -1224,11 +1224,85 @@ Validacao local:
 | testes focados Inbox/HTTP/metrics | OK, 9/9 |
 | `evaluation:replay` | OK, 9/9 |
 
-Pre-release pendente:
+Validacoes de deploy:
 
-- deploy na VPS;
-- PM2 reload backend;
-- health OK;
-- `inbox-read vu5/vu10/vu20`;
-- coletar `/admin/ops/metrics`;
-- comparar fallback e p95 contra a 78O.2.
+| Validacao | Resultado |
+| --- | --- |
+| `git pull` na VPS | OK, commit `2c17b54` |
+| `prisma validate` | OK |
+| `prisma generate` | OK |
+| `prisma migrate status` | OK, schema atualizado |
+| backend build sequencial | OK |
+| testes focados Inbox/HTTP/metrics | OK, 9/9 |
+| `evaluation:replay` | OK, 9/9 |
+| PM2 reload backend | OK |
+| health | OK, DB OK |
+| alertas ativos | 0 |
+
+Medicao externa pos-mudanca, 30s por perfil, via dominio publico:
+
+| Cenario | Perfil | Requests | Erro HTTP | Avg | p95 | p99 | Max |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `inbox-read` | `vu5` | 122 | 0% | 253,09 ms | 366,56 ms | 555,18 ms | 670,70 ms |
+| `inbox-read` | `vu10` | 240 | 0% | 267,32 ms | 393,31 ms | 636,83 ms | 709,96 ms |
+| `inbox-read` | `vu20` | 463 | 0% | 309,47 ms | 584,93 ms | 789,37 ms | 972,28 ms |
+
+Comparacao com baseline 78O.2:
+
+```text
+78O.2:
+inbox-read vu20 p95 = 1.272,26 ms
+
+78O.3:
+inbox-read vu20 p95 = 584,93 ms
+
+ganho aproximado:
+-687,33 ms
+-54,0%
+```
+
+Comparacao com baseline original 78N.3:
+
+```text
+78N.3 final-final:
+inbox-read vu20 p95 = 2.085,30 ms
+
+78O.3:
+inbox-read vu20 p95 = 584,93 ms
+
+ganho aproximado:
+-1.500,37 ms
+-71,9%
+```
+
+Metricas internas pos-teste:
+
+| Metrica | Resultado |
+| --- | --- |
+| `runtime_state_batch_candidates` | 21.849 |
+| `runtime_state_batch_hits` | 21.849 |
+| `runtime_state_fallback_count` | nao registrado no snapshot, equivalente a 0 |
+| `runtime_state_fallback_reason` | nenhum motivo registrado |
+| `runtime_state_lookup` p95 maximo | 34 ms |
+| `inbox.list.duration total` p95 maximo | 182 ms |
+| `response_bytes` maximo observado | ~71 KiB |
+
+Snapshot operacional pos-teste:
+
+| Item | Resultado |
+| --- | --- |
+| Health publico | OK, DB OK |
+| PM2 backend | online, ~134,9 MiB |
+| PM2 frontend | online, ~42,9 MiB |
+| Memoria | 1.9 GiB total, ~1.1 GiB available |
+| Swap | 2.0 GiB, ~65 MiB usados |
+| Alertas ativos | 0 |
+
+Conclusao 78O.3:
+
+- a ampliacao do batch eliminou o fallback mensuravel no snapshot;
+- o `inbox-read vu20` ficou muito abaixo da meta de `1.2s`;
+- nao houve erro HTTP;
+- nao houve alerta ativo;
+- RBAC, multitenancy, payload e infraestrutura foram preservados;
+- a trilha de performance do Inbox pode ser encerrada por agora, sem insistir em novas otimizacoes antes da fase de Versao Licitavel 1.0.

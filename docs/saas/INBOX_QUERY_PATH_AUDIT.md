@@ -519,6 +519,41 @@ runtime_state_fallback = 53.251 no snapshot pos-teste
 medir novamente em pre-release VPS com inbox-read vu5/vu10/vu20
 ```
 
+Resultado do pre-release VPS:
+
+| Perfil | Requests | Erro HTTP | Avg | p95 | p99 | Max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `vu5` | 122 | 0% | 253,09 ms | 366,56 ms | 555,18 ms | 670,70 ms |
+| `vu10` | 240 | 0% | 267,32 ms | 393,31 ms | 636,83 ms | 709,96 ms |
+| `vu20` | 463 | 0% | 309,47 ms | 584,93 ms | 789,37 ms | 972,28 ms |
+
+Comparacao:
+
+```text
+78N.3 final-final: inbox-read vu20 p95 2.085,30 ms
+78O.2 pre-release: inbox-read vu20 p95 1.272,26 ms
+78O.3 pre-release: inbox-read vu20 p95 584,93 ms
+```
+
+Metricas internas pos-78O.3:
+
+| Metrica | Resultado |
+| --- | --- |
+| `runtime_state_batch_candidates` | 21.849 |
+| `runtime_state_batch_hits` | 21.849 |
+| `runtime_state_fallback_count` | 0 mensuravel no snapshot |
+| `runtime_state_fallback_reason` | nenhum motivo registrado |
+| `runtime_state_lookup` p95 maximo | 34 ms |
+| `inbox.list.duration total` p95 maximo | 182 ms |
+
+Leitura:
+
+- a causa do fallback alto foi confirmada como cobertura incompleta do batch;
+- a ampliacao do batch para todos os canais removeu o fallback mensuravel nesta rodada;
+- o `runtime_state_lookup` deixou de ser gargalo dominante;
+- `inbox-read vu20` ficou abaixo da meta de `1.2s` com ampla margem;
+- nao ha justificativa tecnica para continuar otimizando Inbox antes da fase de empacotamento/licitacao, salvo novo achado de carga.
+
 ## Confirmacao De Nao Alteracao Funcional
 
 A 78O.1/78O.2/78O.3 nao:
