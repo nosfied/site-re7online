@@ -2,7 +2,7 @@
 
 Status: baseline operacional permanente do Converta.
 
-Ultima atualizacao: 2026-06-27, Sprint 78O - Capacity & Swap Hardening.
+Ultima atualizacao: 2026-06-27, Sprint 78O - Capacity & Swap Hardening concluida.
 
 Este documento registra a fotografia oficial de producao para comparar futuras mudancas de capacidade, VPS, HA, banco, build, backup e laboratorio de carga. Ele nao altera runtime, banco, infraestrutura ou comportamento funcional.
 
@@ -31,7 +31,7 @@ Nao foram criados mecanismos paralelos de observabilidade, carga, alerta, PM2, b
 
 ## Ambiente Atual
 
-Baseline coletado em 2026-06-27 12:27 UTC.
+Baseline inicial coletado em 2026-06-27 12:27 UTC.
 
 ```text
 host: re7online-api-01
@@ -42,7 +42,9 @@ virtualization: kvm
 uptime: 142 dias
 CPU: 2 vCPU
 RAM: 1.967 MiB
-swap: 0 MiB
+swap inicial: 0 MiB
+swap atual: 2 GiB
+swappiness: 10
 disco raiz: 58 GiB
 uso do disco raiz: 17 GiB / 58 GiB (30%)
 ```
@@ -63,7 +65,7 @@ Mem used:         969 MiB
 Mem free:         133 MiB
 Buff/cache:     1.173 MiB
 Mem available:   998 MiB
-Swap total:        0 MiB
+Swap total:        0 MiB no baseline inicial
 ```
 
 I/O observado por `vmstat 1 3`:
@@ -98,6 +100,13 @@ cpu: variavel no snapshot, ~29.3%
 
 Decisao operacional: manter PM2 single instance nesta sprint. PM2 cluster, HA e tuning de processo continuam fora do escopo da 78O.
 
+Validacao pos-swap em 2026-06-27 13:06 UTC:
+
+```text
+re7-admin-front: online, ~59.0 MiB
+re7-whatsapp-agent: online, ~211.4 MiB
+```
+
 ## PostgreSQL
 
 ```text
@@ -117,6 +126,12 @@ Health publico:
 
 ```json
 {"ok":true,"db":"ok","uptime":46979}
+```
+
+Health pos-swap em 2026-06-27 13:06 UTC:
+
+```json
+{"ok":true,"db":"ok","uptime":49271}
 ```
 
 Metricas internas:
@@ -176,7 +191,10 @@ Enquanto a VPS permanecer com cerca de 2 GiB de RAM, builds backend/frontend nao
 Estado atual:
 
 ```text
-swap: 0 MiB
+swap: 2 GiB
+arquivo: /swapfile
+uso no smoke: 780 KiB
+swappiness: 10
 ```
 
 Objetivo da 78O:
@@ -190,9 +208,10 @@ Status de execucao:
 
 - baseline auditado;
 - `sudo -n true` com usuario `deploy` retornou `sudo: a password is required`;
-- swap ainda nao foi criado porque a acao exige privilegio administrativo na VPS.
+- swap aplicado posteriormente com usuario administrativo/root;
+- validacao confirmou `/swapfile` ativo, PM2 online e health OK.
 
-Plano recomendado quando houver acesso administrativo:
+Comandos de referencia usados para o hardening:
 
 ```bash
 sudo fallocate -l 2G /swapfile
@@ -235,12 +254,12 @@ No baseline da 78O:
 | PM2 frontend | ~58 MiB |
 | Runtime metrics RSS | ~223 MB |
 | PostgreSQL DB size | 80 MB |
-| Swap | 0 MiB |
+| Swap | 2 GiB |
 
 Leitura:
 
 - a VPS opera com margem normal em repouso;
-- o risco principal nao e saturacao em idle, mas picos de build/deploy/processamento sem swap;
+- o risco principal nao e saturacao em idle, mas picos de build/deploy/processamento; o swap reduz risco de OOM, nao substitui HA ou aumento real de RAM;
 - `inbox-read` deve ser investigado separadamente em 78O.1, sem misturar com swap/capacity.
 
 ## Fora Do Escopo Da 78O
@@ -264,24 +283,20 @@ A 78O nao altera:
 
 ## Smoke Pos-Hardening
 
-Quando o swap for aplicado com acesso administrativo, validar:
+Validacao executada apos aplicacao do swap:
 
 ```text
 health publico OK
-/admin/ops/metrics protegido e respondendo
-/admin/ops/alerts protegido e respondendo
 PM2 backend/frontend online
-free -m mostra swap ativo
+free -h mostra Swap 2.0 GiB
 swapon --show mostra /swapfile
-backend build concluido
-frontend build concluido depois do backend
+swappiness = 10
 ```
 
 Nao executar carga nesta sprint.
 
 ## Proximos Itens
 
-1. Concluir aplicacao do swap quando houver acesso administrativo.
-2. Registrar novo baseline pos-swap neste documento.
-3. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
-4. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
+1. Abrir `78O.1 - Inbox Read Query Path Investigation` para investigar p95 `2.085,30 ms` em `20 VUs`.
+2. Manter `OPERATIONAL_BASELINE.md` atualizado em toda mudanca de VPS, swap, PM2, PostgreSQL, build, HA ou laboratorio de carga.
+3. Continuar build sequencial backend -> frontend enquanto a VPS permanecer nessa classe de memoria.

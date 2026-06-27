@@ -532,7 +532,7 @@ Atualizacao 78N.3 re-run final: `health`, `public-api`, `search` e `inbox-read` 
 - PM2 single instance: frontend ~58 MiB, backend ~215 MiB;
 - health publico OK e `/admin/ops/metrics` respondendo;
 - build sequencial backend -> frontend formalizado como regra operacional enquanto a VPS permanecer nessa classe de memoria;
-- criacao de swap ainda pendente porque `deploy` nao possui `sudo -n`; a aplicacao exige acesso administrativo e nao deve ser simulada por caminho paralelo.
+- swap aplicado com acesso administrativo: `/swapfile` de 2 GiB, `swappiness=10`, PM2 online e health OK.
 
 Observacao 78N.3: `Capacity/Swap Hardening` continua importante para build/deploy e estabilidade da VPS, mas o primeiro bloqueador do benchmark externo autenticado foi o cenario de login sob repeticao. A decisao de capacidade nao deve ser tomada com base na 78N.3 ate a estrategia de autenticacao estar corrigida.
 
