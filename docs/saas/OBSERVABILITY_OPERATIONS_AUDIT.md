@@ -79,6 +79,8 @@ Arquivos e areas observadas:
 | Alertas | ATENDE COM AJUSTE | Sprint 78G cria o desenho de alerting com fontes, severidade, thresholds, ACK, silence, dedupe, rollback e roadmap; Sprint 78H cria AlertManager interno em memoria com DB offline, health NOK, erro elevado, latencia alta, memoria alta, ACK e resolve automatico | ainda nao ha persistencia, silence, notificacoes reais ou central visual de alertas | Alto | 78I/78J |
 | HA/escala | ATENDE COM AJUSTE | app roda em PM2, DB Postgres em Docker local, scripts, flags, health, metrics, dashboard e alert engine; Sprint 78I documenta arquitetura, SPOFs, capacity, load test e DR; Sprint 78M detalha estrategia de load test; Sprint 78N cria scripts k6; Sprints 78N.3-78N.6 estabilizam laboratorio autenticado, sessoes e RBAC; 78N.3 final-final valida `health`, `public-api` e `search` ate `vu20`, com `inbox-read` funcional em `vu20` mas p95 `2.085,30 ms`; Sprint 78O cria baseline operacional permanente e aplica swap controlado de 2 GiB com `swappiness=10` | instancia unica, sem balanceamento, sem replica/standby, sem storage externo formal; primeiro gargalo real medido e `inbox-read` em `20 VUs`; swap reduz risco de OOM mas nao substitui HA ou aumento real de RAM | Alto | 78O.1-78P |
 
+Atualizacao 78O.1: a investigacao de `inbox-read` concluiu que o gargalo inicial e de query/payload assembly path, com N+1 em runtime state, overfetch de conversas candidatas e filtros em memoria. As metricas internas atuais mostram rota/modulo, mas ainda nao quebram a listagem por `conversationQuery`, `messageQuery`, `runtimeState`, `assembly` e `responseBytes`. Essa instrumentacao deve preceder a otimizacao na 78O.2.
+
 ## 1. Logging
 
 Classificacao: **ATENDE COM AJUSTE**.

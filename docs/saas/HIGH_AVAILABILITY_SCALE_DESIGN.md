@@ -540,6 +540,8 @@ Observacao 78N.3 re-run: mesmo com login corrigido, a decisao de capacidade aind
 
 Observacao 78N.3 final-final: o laboratorio de carga v1 foi encerrado. `health`, `public-api` e `search` passaram ate `vu20`; `inbox-read` passou funcionalmente em `vu20` com 0% erro, mas cruzou p95 `2.085,30 ms` contra threshold `1.500 ms`. Esse gargalo deve ser tratado em investigacao propria de query path; nao faz parte da 78O.
 
+Observacao 78O.1: a auditoria de query path do Inbox confirma que o primeiro gargalo medido e especifico da composicao da listagem. A causa provavel combina overfetch `limit * 10 + 1`, N+1 em runtime state por conversa candidata, filtros/contadores/ordenacao em memoria e queries inbound/outbound com `OR` por `waIdCanonical/waId`. Nao ha indicio de necessidade imediata de PM2 cluster, Nginx tuning, Postgres global tuning ou HA para explicar esse p95.
+
 ### 78P - Authenticated Load Test MVP
 
 - scripts k6;

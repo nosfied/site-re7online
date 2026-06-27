@@ -428,6 +428,20 @@ O cleanup tambem remove `SearchIndex` do tenant tecnico. Nao executar cleanup an
 
 Nao usar `demo-prefeitura` para carga. Esse tenant e reservado a demonstracoes, POC e validacao funcional. Testes de carga devem usar tenant tecnico dedicado, conforme `docs/saas/LOAD_TEST_TENANT_DESIGN.md`.
 
+### Inbox Read Performance
+
+Antes de qualquer otimizacao em `/app/conversations`, consultar `docs/saas/INBOX_QUERY_PATH_AUDIT.md`.
+
+Mudancas de performance na listagem do Inbox devem:
+
+- preservar multitenancy, RBAC, departamento e ownership;
+- nao usar ADMIN como bypass;
+- medir `inbox-read` antes/depois;
+- manter `health`, `public-api` e `search` fora do escopo da mudanca;
+- nao criar indice/migration sem `EXPLAIN ANALYZE` ou evidencia equivalente;
+- validar que `inbox-detail` continua respeitando departamento;
+- rodar `PROFILE=vu5` antes de `vu10`/`vu20`.
+
 Bootstrap inicial do tenant tecnico:
 
 ```bash

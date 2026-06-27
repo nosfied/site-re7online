@@ -1073,3 +1073,18 @@ Decisao:
 - Nao executar `vu50`.
 - Abrir **78O - Capacity & Swap Hardening** como hardening preventivo.
 - Abrir item tecnico posterior para investigar/otimizar `inbox-read` antes de tratar resultados como benchmark contratual para 20+ VUs.
+
+## 78O.1 - Inbox Read Query Path Investigation
+
+Status: auditoria concluida em `docs/saas/INBOX_QUERY_PATH_AUDIT.md`.
+
+Conclusao diagnostica:
+
+- o gargalo de `inbox-read vu20` nao foi erro HTTP, autenticacao, sessao, RBAC, PM2, Search ou Public API;
+- o caminho de listagem monta uma visao operacional rica antes do `limit` final;
+- para `limit=20`, o endpoint busca ate 201 conversas candidatas e ate 402 inbound/outbound;
+- ha N+1 confirmado na resolucao de `ConversationRuntimeState`/runtime state por conversa candidata;
+- filtros de departamento, visibilidade, contadores, unread, last message e ordenacao final acontecem em memoria;
+- indices foram levantados apenas como diagnostico, sem migration.
+
+Nenhuma otimizacao foi aplicada nesta sprint. A proxima etapa recomendada e `78O.2 - Inbox Read Performance Hardening`, iniciando por instrumentacao por etapa antes de mudar query path.
