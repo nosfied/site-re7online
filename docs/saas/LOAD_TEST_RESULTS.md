@@ -941,3 +941,57 @@ inbox-detail vu5: PASS
 Decisao:
 
 Se `inbox-detail vu5` passar limpo, repetir a 78N.3 final-final com `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` em `vu5 -> vu10 -> vu20`.
+
+### Pre-release VPS 78N.6
+
+Data: 2026-06-27.
+
+Host: `/opt/re7online/site-re7online`.
+
+Validacoes executadas:
+
+| Item | Resultado |
+| --- | --- |
+| `git pull` | OK, fast-forward ate `73a2ef6` |
+| `prisma validate` | OK |
+| `prisma generate` | OK |
+| `prisma migrate status` | OK, schema atualizado |
+| `node --check scripts/load-test-fixtures.mjs` | OK |
+| `k6 inspect inbox-detail.js` | OK usando `/tmp/k6` |
+| `cleanup` fixture anterior | OK |
+| `prepare --users 20 --login-users 2 --api-keys 20` | OK |
+
+Fixture nova:
+
+| Campo | Resultado |
+| --- | --- |
+| `runId` | `78n2-mqvmakbh` |
+| `prepared` | true |
+| `appUsers` | 20 |
+| `loginUsers` | 2 |
+| `appTokenCount` | 20 |
+| `apiKeys` | 20 |
+| `conversationId` | `webchat:eb97ff1e397901c24d65311703e8e5cb` |
+| `inboxDetail.departmentId` | `cmqv1x7ji008l4sqyqs0raioe` |
+| `inboxDetail.appUsersAligned` | 20 |
+| `INBOX_DETAIL_CONVERSATIONS_JSON` | presente |
+
+Smokes:
+
+| Cenario | Perfil | Status | HTTP reqs | Error rate | Avg | p90 | p95 | Max | Checks |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `inbox-detail` | `vu1` | PASS | 52 | 0,00% | 91,70 ms | 184,64 ms | 296,95 ms | 486,99 ms | 52/52 |
+| `inbox-detail` | `vu5` | PASS | 230 | 0,00% | 164,73 ms | 296,61 ms | 449,97 ms | 710,79 ms | 230/230 |
+
+Confirmacoes:
+
+- `403 Conversa fora do seu departamento`: 0;
+- `401/session_replaced`: 0;
+- detail/timeline: 100% 200;
+- health publico: OK, DB OK;
+- memoria: 1.967 MiB total, ~1.062 MiB available, 0 swap;
+- `runtime:error_rate` continuou ativo como alerta acumulado das falhas anteriores do laboratorio, nao como novo erro do smoke 78N.6.
+
+Decisao:
+
+78N.6 atende ao criterio de encerramento. A proxima rodada pode ser a 78N.3 final-final, com `health`, `public-api`, `search`, `inbox-read` e `inbox-detail` em `vu5 -> vu10 -> vu20`, mantendo login fora do loop principal.
