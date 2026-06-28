@@ -22,6 +22,17 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/runbook-re7.md` | parcialmente atual | Runbook especifico Re7; revisar com governanca de configuracao |
 | `docs/saas/tenant-contract.md` | parcialmente atual | Contrato atual de `tenants.json`; manter enquanto JSON for fonte ativa |
 
+## Fase IV - Bid Readiness
+
+| Documento | Status | Uso |
+| --- | --- | --- |
+| `docs/saas/BID_COMPLIANCE_MATRIX.md` | atual | Matriz mestre de aderencia por requisito, reutilizavel em editais, propostas e PoC |
+| `docs/saas/LICITABLE_VERSION_1_0_CHECKLIST.md` | atual | Checklist executivo para declarar a Versao Licitavel 1.0 |
+| `docs/saas/DOCUMENTATION_INVENTORY.md` | atual | Inventario consolidado dos documentos SaaS e lacunas documentais |
+| `docs/saas/BID_READINESS_GAP_ANALYSIS.md` | atual | Separacao entre pendencias de produto, documentais, comerciais, juridicas e operacionais |
+| `docs/saas/TECHNICAL_POSITIONING.md` | atual | Narrativa tecnica institucional para comissoes, PoCs e diligencias |
+| `docs/saas/LICITABLE_VERSION_ROADMAP.md` | atual | Roadmap executivo para fechar a Versao Licitavel 1.0 |
+
 ## Documentos Meta
 
 | Documento | Status | Uso |
@@ -137,3 +148,13 @@ Para deploy, usar:
 1. `CHANGE_POLICY.md`
 2. `RELEASE_CHECKLIST.md`
 3. `RUNBOOK_WHATSAPP_AGENT.md` quando houver migration ou producao sensivel
+
+Para licitacoes, propostas tecnicas, PoCs e diligencias, usar primeiro:
+
+1. `BID_COMPLIANCE_MATRIX.md`
+2. `LICITABLE_VERSION_1_0_CHECKLIST.md`
+3. `DOCUMENTATION_INVENTORY.md`
+4. `BID_READINESS_GAP_ANALYSIS.md`
+5. `TECHNICAL_POSITIONING.md`
+6. `LICITABLE_VERSION_ROADMAP.md`
+7. `bid-package/*` como material modular reutilizavel
