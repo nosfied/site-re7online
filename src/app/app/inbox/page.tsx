@@ -1280,9 +1280,10 @@ function getLatestInboundConversationTimestamp(items: InboxConversationItem[]) {
 function applyConversationOperationalPayload(
   item: InboxConversationItem,
   payload: {
-    waId?: string | null;
-    waIdCanonical?: string | null;
-    channel?: string | null;
+	    waId?: string | null;
+	    waIdCanonical?: string | null;
+	    protocol?: string | null;
+	    channel?: string | null;
     provider?: string | null;
     channelAccountId?: string | null;
     channelOutboundEnabled?: boolean;
@@ -1310,9 +1311,10 @@ function applyConversationOperationalPayload(
     nextAssignedUserId && payload.status === "WAITING" ? ("IN_PROGRESS" as const) : payload.status;
   return {
     ...item,
-    waId: payload.waId ?? item.waId,
-    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
-    channel: payload.channel ?? item.channel,
+	    waId: payload.waId ?? item.waId,
+	    waIdCanonical: payload.waIdCanonical ?? item.waIdCanonical,
+	    protocol: payload.protocol ?? item.protocol ?? null,
+	    channel: payload.channel ?? item.channel,
     provider: payload.provider ?? item.provider,
     channelAccountId: payload.channelAccountId ?? item.channelAccountId,
     channelOutboundEnabled: payload.channelOutboundEnabled ?? item.channelOutboundEnabled,
@@ -5029,13 +5031,14 @@ export default function AppInboxPage() {
                   {getConversationModeLabel(selectedConversation)}
                   {" • "}
                   {getConversationStatusLabelForItem(selectedConversation)}
-                  {selectedConversation.assignedUserName
-                    ? ` • ${selectedConversation.assignedUserName}`
-                    : selectedConversation.assignedTo
-                      ? ` • ${selectedConversation.assignedTo}`
-                      : ""}
-                </p>
-              ) : null}
+	                  {selectedConversation.assignedUserName
+	                    ? ` • ${selectedConversation.assignedUserName}`
+	                    : selectedConversation.assignedTo
+	                      ? ` • ${selectedConversation.assignedTo}`
+	                      : ""}
+	                  {selectedConversation.protocol ? ` • Protocolo ${selectedConversation.protocol}` : ""}
+	                </p>
+	              ) : null}
             </div>
             <div className="relative hidden shrink-0 items-center gap-1.5 max-md:flex">
               <button

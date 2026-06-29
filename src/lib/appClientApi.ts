@@ -193,6 +193,7 @@ type AppConversationOperationalPayload = {
   ok: true;
   waId: string;
   waIdCanonical?: string | null;
+  protocol?: string | null;
   channel?: string | null;
   provider?: string | null;
   channelAccountId?: string | null;

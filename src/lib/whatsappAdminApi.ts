@@ -47,6 +47,7 @@ export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat" | 
 export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
+  protocol?: string | null;
   channel?: InboxChannel | string | null;
   provider?: string | null;
   channelAccountId?: string | null;
@@ -299,6 +300,8 @@ export type ConversationReportResponse = {
   userId: string | null;
   departmentId: string | null;
   totalConversations: number;
+  automatedConversations?: number;
+  humanTransferCount?: number;
   avgFirstResponseTimeSec: number | null;
   avgResolutionTimeSec: number | null;
   slaBreaches: number;

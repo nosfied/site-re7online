@@ -223,6 +223,11 @@ import {
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
 } from "../inbox/readStateStore.js";
+import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
+import {
+  getHumanTransferReportCount,
+  isAutomatedConversationReportState,
+} from "../reports/conversationReportCounters.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   getPushStatus,
@@ -6742,9 +6747,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           dedupe,
           channel: channelFilter,
           userId: requestedUserId || null,
-          departmentId: null,
-          totalConversations: 0,
-          avgFirstResponseTimeSec: null,
+	          departmentId: null,
+	          totalConversations: 0,
+	          automatedConversations: 0,
+	          humanTransferCount: 0,
+	          avgFirstResponseTimeSec: null,
           avgResolutionTimeSec: null,
           slaBreaches: 0,
           byAgent: [],
@@ -15698,6 +15705,9 @@ function buildReportRuntimeStateMap(
 ) {
   return new Map(
     runtimeStates.map((item) => {
+      const assignmentCount =
+        item.assignments?.filter((assignment) => typeof assignment.toUserId === "string" && assignment.toUserId.length > 0)
+          .length ?? 0;
       const assignedUserIds = Array.from(
         new Set(
           [
@@ -15713,6 +15723,7 @@ function buildReportRuntimeStateMap(
           assignedUserIds,
           status: item.status ?? null,
           mode: item.mode ?? null,
+          assignmentCount,
         },
       ] as const;
     })
@@ -15981,6 +15992,14 @@ function buildConversationReportSummary(options: {
     current.responseCount += item.responseCount ?? 0;
     byDepartmentMap.set(key, current);
   }
+  const automatedConversations = options.filteredMetrics.reduce((count, item) => {
+    const state = options.stateByWaId.get(item.conversation.waId);
+    return count + (isAutomatedConversationReportState(state) ? 1 : 0);
+  }, 0);
+  const humanTransferCount = options.filteredMetrics.reduce((count, item) => {
+    const state = options.stateByWaId.get(item.conversation.waId);
+    return count + getHumanTransferReportCount(state);
+  }, 0);
   return {
     ok: true,
     range: options.rangeKey,
@@ -15991,6 +16010,8 @@ function buildConversationReportSummary(options: {
     userId: options.requestedUserId,
     departmentId: options.requestedDepartmentId,
     totalConversations,
+    automatedConversations,
+    humanTransferCount,
     avgFirstResponseTimeSec,
     avgResolutionTimeSec,
     slaBreaches,
@@ -16107,6 +16128,8 @@ function buildConversationReportCsv(options: {
       "departmentName",
       "assignedUserId",
       "status",
+      "automated",
+      "assignmentCount",
       "firstResponseTimeSec",
       "resolutionTimeSec",
       "createdAt",
@@ -16123,6 +16146,8 @@ function buildConversationReportCsv(options: {
         csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
         csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
         csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
+        csvCell(isAutomatedConversationReportState(runtimeState) ? "true" : "false"),
+        csvCell(getHumanTransferReportCount(runtimeState)),
         csvCell(item.firstResponseTimeSec),
         csvCell(item.resolutionTimeSec),
         csvCell(item.startedAt.toISOString()),
@@ -18795,7 +18820,7 @@ async function buildConversationActionPayload(
             ...(conversation.waIdCanonical ? [{ waIdCanonical: conversation.waIdCanonical }] : []),
           ],
         },
-        select: { channel: true, provider: true, channelAccountId: true },
+        select: { id: true, channel: true, provider: true, channelAccountId: true, createdAt: true },
       })
     : null;
 
@@ -18813,6 +18838,7 @@ async function buildConversationActionPayload(
     ok: true,
     waId: conversation?.waId ?? null,
     waIdCanonical: conversation?.waIdCanonical ?? null,
+    protocol: channelSource ? buildConversationProtocol(channelSource) : null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
     channelOutboundEnabled,
     ...serializeConversationOperationalFields({
@@ -19904,10 +19930,10 @@ async function buildConversationListPayload(
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
   const conversationWhere: Prisma.ConversationWhereInput = {
-    clientId: params.clientId,
-    deletedAt: null,
-    anonymizedAt: null,
-    lastInboundAt: { not: null },
+      clientId: params.clientId,
+      deletedAt: null,
+      anonymizedAt: null,
+      lastInboundAt: { not: null },
     ...(params.cursor
       ? {
           OR: [
@@ -19931,12 +19957,14 @@ async function buildConversationListPayload(
     orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
     take: conversationFetchLimit,
     select: {
+      id: true,
       waId: true,
       waIdCanonical: true,
       channel: true,
       provider: true,
       channelAccountId: true,
       departmentId: true,
+      createdAt: true,
       updatedAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
@@ -19969,11 +19997,13 @@ async function buildConversationListPayload(
     string,
     {
       waId: string;
+      id: string;
       waIdCanonical: string;
       channel: string | null;
       provider: string | null;
       channelAccountId: string | null;
       departmentId: string | null;
+      createdAt: Date;
       updatedAt: Date;
       lastInboundAt: Date | null;
       lastOutboundAt: Date | null;
@@ -19985,12 +20015,14 @@ async function buildConversationListPayload(
     const current = groupedConversations.get(key);
     if (!current || compareConversationLookupPriority(conversation, current) < 0) {
       groupedConversations.set(key, {
+        id: conversation.id,
         waId: conversation.waId,
         waIdCanonical: key,
         channel: conversation.channel,
         provider: conversation.provider,
         channelAccountId: conversation.channelAccountId,
         departmentId: conversation.departmentId,
+        createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
@@ -20337,6 +20369,7 @@ async function buildConversationListPayload(
     return {
       waId: conversation.waId,
       waIdCanonical: conversation.waIdCanonical,
+      protocol: buildConversationProtocol(conversation),
       ...serializeInboxChannelFields(conversation),
       channelOutboundEnabled,
       lastMessage,

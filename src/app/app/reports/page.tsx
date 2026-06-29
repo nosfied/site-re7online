@@ -337,7 +337,7 @@ export default function AppReportsPage() {
             .generated { text-align: right; color: #64748b; font-size: 11px; }
             .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; margin: 18px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; font-size: 12px; }
             .meta strong { color: #0f172a; }
-            .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+	            .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
             .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; background: #fff; }
             .card span { display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; }
             .card strong { display: block; margin-top: 8px; font-size: 20px; color: #0f172a; }
@@ -379,10 +379,12 @@ export default function AppReportsPage() {
           </section>
           <section class="cards">
             <div class="card"><span>Conversas</span><strong>${escapeHtml(report.totalConversations)}</strong></div>
-            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
-            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
-            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
-          </section>
+	            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
+	            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
+	            <div class="card"><span>Automatizados</span><strong>${escapeHtml(report.automatedConversations ?? 0)}</strong></div>
+	            <div class="card"><span>Transferencias humano</span><strong>${escapeHtml(report.humanTransferCount ?? 0)}</strong></div>
+	            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
+	          </section>
           <h2>Por canal</h2>
           <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
           <h2>Por setor</h2>
@@ -568,10 +570,10 @@ export default function AppReportsPage() {
 
       {loading ? <p className="text-sm text-white/70">Carregando relatorios...</p> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
+	      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+	          <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
+	          <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
         </article>
         <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Primeira resposta media</p>
@@ -579,15 +581,23 @@ export default function AppReportsPage() {
             {formatSeconds(report?.avgFirstResponseTimeSec ?? null)}
           </p>
         </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {formatSeconds(report?.avgResolutionTimeSec ?? null)}
-          </p>
-        </article>
-        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
-          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
+	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+	          <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
+	          <p className="mt-2 text-2xl font-semibold">
+	            {formatSeconds(report?.avgResolutionTimeSec ?? null)}
+	          </p>
+	        </article>
+	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+	          <p className="text-xs uppercase tracking-wide text-white/50">Automatizados</p>
+	          <p className="mt-2 text-2xl font-semibold">{report?.automatedConversations ?? "-"}</p>
+	        </article>
+	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+	          <p className="text-xs uppercase tracking-wide text-white/50">Transferencias humano</p>
+	          <p className="mt-2 text-2xl font-semibold">{report?.humanTransferCount ?? "-"}</p>
+	        </article>
+	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+	          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
+	          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>
       </section>
 
