@@ -231,4 +231,6 @@ test("requireCapability throws a typed error when disabled", () => {
   const client = { profile: "business", features: { catalog: false } };
   assert.throws(() => requireCapability(client, "catalog"), CapabilityRequiredError);
   assert.equal(requireCapability({ profile: "business", features: { catalog: true } }, "catalog").catalog, true);
+  assert.equal(requireCapability({ profile: "business" }, "crm").crm, true);
+  assert.throws(() => requireCapability({ profile: "government" }, "crm"), CapabilityRequiredError);
 });

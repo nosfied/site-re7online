@@ -1,6 +1,6 @@
 # Business Capability Design
 
-Status: architectural contract. Runtime adoption for `crm` began in Sprint 82A.
+Status: architectural contract. Runtime adoption for `crm` began in Sprint 82A; backend app-route enforcement began in Sprint 82B.
 
 Sprint: 81E - Business Capability Design.
 
@@ -49,7 +49,7 @@ Business capabilities must follow the same invariants already defined in `MARKET
 
 | Capability | Default for `business` | Purpose | Description | Dependencies | Relationship with Core | Relationship with Feature Packs |
 | --- | --- | --- | --- | --- | --- | --- |
-| `crm` | on | Commercial relationship management | Enables CRM-oriented navigation and customer/opportunity surfaces. In Sprint 82A, it replaced the previous `profiles: ["business"]` filter for `/app/settings/crm`. | Contacts, Leads, Inbox timeline, users/RBAC | Uses Core contacts, leads, conversations, notes and RBAC. Core does not know the market. | Base capability for `CRM Pack`, often bundled with `salesPipeline`, `catalog`, `quotes` and `campaigns`. |
+| `crm` | on | Commercial relationship management | Enables CRM-oriented navigation and customer/opportunity surfaces. In Sprint 82A, it replaced the previous `profiles: ["business"]` filter for `/app/settings/crm`; in Sprint 82B, app CRM/lead routes started enforcing the capability in the backend. | Contacts, Leads, Inbox timeline, users/RBAC | Uses Core contacts, leads, conversations, notes and RBAC. Core does not know the market. | Base capability for `CRM Pack`, often bundled with `salesPipeline`, `catalog`, `quotes` and `campaigns`. |
 | `catalog` | off by default until runtime adoption | Product/service catalog | Enables catalog surfaces for products, services, SKUs, descriptions and commercial reference data. | Templates, campaigns, CRM context | Uses Core tenant storage and message/template composition. | Belongs to `Catalog Pack` or `Business Pack`. May be bundled with campaigns and quotes. |
 | `salesPipeline` | off by default until runtime adoption | Sales funnel management | Enables pipeline stages, opportunities, qualification and conversion reporting. | CRM, users, contacts/leads, reports | Uses Core Lead and reporting foundations. | Belongs to `Sales Pack` or `CRM Pack`. |
 | `campaigns` | on | Commercial outbound campaigns | Enables campaign planning and execution for business tenants. | Templates, contacts/leads, channel rules, Meta policy | Uses Core message governance, templates, contacts and channel restrictions. | Can be sold as `Campaign Pack`; may remain enabled in business base where contract includes campaigns. |
@@ -298,6 +298,8 @@ Rules:
 - do not duplicate RBAC;
 - do not weaken tenant isolation;
 - do not gate shared Core data behind business-only assumptions.
+
+Status: started in Sprint 82B for app CRM settings, CRM campaign-recipient export and app lead edit/status/notes routes.
 
 ### Phase 5 - Feature Pack Mapping
 

@@ -134,8 +134,10 @@ import {
   getClientProfile,
   getFeatures,
   hasFeature,
+  requireCapability,
   type ClientFeatureKey,
   type ClientProfile,
+  type TenantCapabilityKey,
 } from "../features/clientFeatures.js";
 import {
   buildWaIdLookup,
@@ -6436,6 +6438,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, httpError("client_inactive", "Client inactive"));
         return;
       }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/settings",
+          requestId,
+        }))
+      ) {
+        return;
+      }
       const tenants = await getTenants();
       const tenant = tenants[client.clientKey];
       if (!tenant) {
@@ -6494,6 +6507,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/settings",
+          requestId,
+        }))
+      ) {
         return;
       }
       const body = await readJsonBody(req, res);
@@ -6560,6 +6584,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/campaign-recipients",
+          requestId,
+        }))
+      ) {
         return;
       }
       const tenants = await getTenants();
@@ -8149,6 +8184,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/lead/:id",
+          requestId,
+        }))
+      ) {
+        return;
+      }
       const body = await readJsonBody(req, res);
       if (!body) return;
       const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
@@ -8222,6 +8268,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/lead/:id/status",
+          requestId,
+        }))
+      ) {
         return;
       }
       const body = await readJsonBody(req, res);
@@ -8310,6 +8367,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 403, { error: "client_inactive" });
         return;
       }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/lead/:id/notes",
+          requestId,
+        }))
+      ) {
+        return;
+      }
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, tenantId: client.id },
         select: { id: true, waId: true, waIdCanonical: true },
@@ -8382,6 +8450,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       }
       if (client.status !== "ACTIVE") {
         json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/lead/:id/notes",
+          requestId,
+        }))
+      ) {
         return;
       }
       const lead = await prisma.lead.findFirst({
@@ -18228,6 +18307,69 @@ async function enforceAppFeature(
     feature: params.feature,
   });
   return false;
+}
+
+async function enforceAppCapability(
+  prisma: ReturnType<typeof getPrisma>,
+  res: ServerResponse,
+  params: {
+    client: { id: string; features?: unknown; profile?: unknown };
+    userId: string;
+    capability: TenantCapabilityKey;
+    endpoint: string;
+    requestId: string;
+  }
+) {
+  try {
+    requireCapability(params.client, params.capability);
+    return true;
+  } catch {
+    const timestamp = new Date().toISOString();
+    logger.warn({
+      event: "capability.denied",
+      clientId: params.client.id,
+      userId: params.userId,
+      capability: params.capability,
+      route: params.endpoint,
+      timestamp,
+      requestId: params.requestId,
+    });
+    try {
+      await prisma.event.create({
+        data: {
+          clientId: params.client.id,
+          requestId: `${params.requestId}:capability.denied:${params.capability}`,
+          eventName: "capability.denied",
+          payloadJson: {
+            userId: params.userId,
+            clientId: params.client.id,
+            capability: params.capability,
+            route: params.endpoint,
+            timestamp,
+            action: "capability.denied",
+          },
+        },
+      });
+    } catch (error) {
+      logger.warn({
+        event: "capability.denied.audit_failed",
+        clientId: params.client.id,
+        userId: params.userId,
+        capability: params.capability,
+        route: params.endpoint,
+        requestId: params.requestId,
+        message: (error as Error).message,
+      });
+    }
+    json(res, 403, {
+      error: {
+        code: "capability_not_enabled",
+        message: `Capability '${params.capability}' is not enabled for this tenant`,
+      },
+      capability: params.capability,
+    });
+    return false;
+  }
 }
 
 function isConversationInHumanFlow(conversation: {
