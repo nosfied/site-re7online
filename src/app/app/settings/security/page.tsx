@@ -21,6 +21,7 @@ import {
   startAppMfaEnrollment,
   verifyAppMfaShadow,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canManageSecurity(role: string) {
@@ -114,7 +115,7 @@ export default function SecuritySettingsPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canManageSecurity(stored.user.role) || !stored.features.mfa) {
+    if (!canManageSecurity(stored.user.role) || !hasCapability(stored, "mfa")) {
       router.replace("/app/inbox");
       return;
     }

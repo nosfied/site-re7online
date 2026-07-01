@@ -18,6 +18,7 @@ import {
   saveAppSession,
   updateAppTelegramAccount,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 type TelegramForm = {
@@ -167,7 +168,7 @@ export default function TelegramPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canManageTelegram(stored.user.role) || !stored.features.telegram) {
+    if (!canManageTelegram(stored.user.role) || !hasCapability(stored, "telegram")) {
       router.replace("/app/inbox");
       return;
     }

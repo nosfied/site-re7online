@@ -13,6 +13,7 @@ import {
   loadAppSession,
   saveAppSession,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canViewAdvancedSearch(role: string) {
@@ -115,7 +116,7 @@ export default function SearchPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canViewAdvancedSearch(stored.user.role) || !stored.features.advancedSearch) {
+    if (!canViewAdvancedSearch(stored.user.role) || !hasCapability(stored, "advancedSearch")) {
       router.replace("/app/inbox");
       return;
     }

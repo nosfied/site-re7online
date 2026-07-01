@@ -12,7 +12,12 @@ import {
   logoutAppSession,
   unsubscribeAppPush,
 } from "@/lib/appClientApi";
-import { getAppFeatures, getAppProfile, type AppFeatureKey, type AppProfile } from "@/lib/appFeatures";
+import {
+  getAppProfile,
+  getTenantCapabilities,
+  type AppProfile,
+  type TenantCapabilityKey,
+} from "@/lib/appFeatures";
 
 type AppShellProps = {
   session: AppSession;
@@ -27,7 +32,7 @@ type NavItem = {
   icon: string;
   group: "operation" | "administration";
   labels: Record<AppProfile, string>;
-  feature?: AppFeatureKey;
+  feature?: TenantCapabilityKey;
   profiles?: AppProfile[];
   minRole?: "SUPERVISOR" | "ADMIN";
 };
@@ -57,7 +62,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/dashboard",
     icon: "📊",
     group: "operation",
-    profiles: ["government"],
+    feature: "dashboard",
     minRole: "SUPERVISOR",
     labels: { business: "Dashboard", government: "Dashboard" },
   },
@@ -66,14 +71,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     icon: "📢",
     group: "operation",
     feature: "campaigns",
-    profiles: ["business"],
     labels: { business: "Campanhas", government: "Comunicados" },
   },
   {
     href: "/app/templates",
     icon: "🧾",
     group: "operation",
-    profiles: ["business"],
+    feature: "templates",
     labels: { business: "Templates", government: "Templates" },
   },
   {
@@ -220,7 +224,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     profile: AppProfile;
   } | null>(null);
   const canViewAdministration = isSupervisorRole(session.user.role) || isAdminRole(session.user.role);
-  const features = getAppFeatures(session);
+  const capabilities = getTenantCapabilities(session);
   const profile = tenantSummary?.profile ?? getAppProfile(session);
 
   useEffect(() => {
@@ -264,7 +268,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
 
   const visibleNavItems = APP_NAV_ITEMS.filter((item) => {
     if (item.profiles && !item.profiles.includes(profile)) return false;
-    if (item.feature && !features[item.feature]) return false;
+    if (item.feature && !capabilities[item.feature]) return false;
     if (item.minRole === "ADMIN" && !isAdminRole(session.user.role)) return false;
     if (item.minRole === "SUPERVISOR" && !canViewAdministration) return false;
     return true;

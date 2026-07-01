@@ -18,6 +18,7 @@ import {
   saveAppSession,
   updateAppWebhookEndpoint,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canManageWebhooks(role: string) {
@@ -109,7 +110,7 @@ export default function AppWebhooksPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canManageWebhooks(stored.user.role) || !stored.features.webhooks) {
+    if (!canManageWebhooks(stored.user.role) || !hasCapability(stored, "webhooks")) {
       router.replace("/app/inbox");
       return;
     }

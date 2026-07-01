@@ -14,6 +14,7 @@ import {
   loadAppSession,
   saveAppSession,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
 function canViewAudioTranscriptions(role: string) {
@@ -97,7 +98,7 @@ export default function AudioTranscriptionsPage() {
       router.replace("/app/login");
       return;
     }
-    if (!canViewAudioTranscriptions(stored.user.role) || !stored.features.audioTranscription) {
+    if (!canViewAudioTranscriptions(stored.user.role) || !hasCapability(stored, "audioTranscription")) {
       router.replace("/app/inbox");
       return;
     }

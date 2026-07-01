@@ -28,6 +28,7 @@ import {
   updateAppSchedulingResource,
   updateAppSchedulingService,
 } from "@/lib/appClientApi";
+import { hasCapability } from "@/lib/appFeatures";
 
 type TabKey = "services" | "resources" | "availability" | "appointments" | "reminders";
 
@@ -220,7 +221,7 @@ export default function SchedulingPage() {
     () => appointments.filter((item) => item.status !== "cancelled" && item.status !== "completed").length,
     [appointments]
   );
-  const remindersEnabled = Boolean(session?.features.schedulingReminders);
+  const remindersEnabled = hasCapability(session, "schedulingReminders");
   const pendingReminders = useMemo(
     () => reminders.filter((item) => item.status === "pending").length,
     [reminders]
