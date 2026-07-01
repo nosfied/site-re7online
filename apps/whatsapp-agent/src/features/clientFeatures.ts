@@ -32,6 +32,14 @@ export type ClientFeatureKey =
 
 export type ClientFeatures = Record<ClientFeatureKey, boolean>;
 export type ClientProfile = "business" | "government";
+export type TenantCapabilityKey =
+  | ClientFeatureKey
+  | "protocols"
+  | "catalog"
+  | "salesPipeline"
+  | "governmentReports";
+export type TenantCapabilities = ClientFeatures &
+  Record<Exclude<TenantCapabilityKey, ClientFeatureKey>, boolean>;
 
 export const DEFAULT_BUSINESS_CLIENT_FEATURES: ClientFeatures = {
   dashboard: false,
@@ -100,6 +108,12 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
 };
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
+const DEFAULT_ADDITIONAL_CAPABILITIES: Record<Exclude<TenantCapabilityKey, ClientFeatureKey>, boolean> = {
+  protocols: true,
+  catalog: false,
+  salesPipeline: false,
+  governmentReports: false,
+};
 
 type ClientWithFeatures = {
   features?: unknown;
@@ -165,11 +179,52 @@ export function getFeatures(client: ClientWithFeatures | null | undefined): Clie
   };
 }
 
+export function resolveTenantCapabilities(
+  client: ClientWithFeatures | null | undefined
+): TenantCapabilities {
+  const features = getFeatures(client);
+  const raw = client?.features;
+  const input = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  return {
+    ...features,
+    protocols: normalizeFeatureValue(input.protocols) ?? DEFAULT_ADDITIONAL_CAPABILITIES.protocols,
+    catalog: normalizeFeatureValue(input.catalog) ?? DEFAULT_ADDITIONAL_CAPABILITIES.catalog,
+    salesPipeline:
+      normalizeFeatureValue(input.salesPipeline) ?? DEFAULT_ADDITIONAL_CAPABILITIES.salesPipeline,
+    governmentReports:
+      normalizeFeatureValue(input.governmentReports) ?? DEFAULT_ADDITIONAL_CAPABILITIES.governmentReports,
+  };
+}
+
+export function hasCapability(
+  client: ClientWithFeatures | null | undefined,
+  capabilityName: TenantCapabilityKey
+) {
+  return resolveTenantCapabilities(client)[capabilityName];
+}
+
+export class CapabilityRequiredError extends Error {
+  constructor(readonly capability: TenantCapabilityKey) {
+    super(`capability_not_enabled:${capability}`);
+    this.name = "CapabilityRequiredError";
+  }
+}
+
+export function requireCapability(
+  client: ClientWithFeatures | null | undefined,
+  capabilityName: TenantCapabilityKey
+) {
+  if (!hasCapability(client, capabilityName)) {
+    throw new CapabilityRequiredError(capabilityName);
+  }
+  return resolveTenantCapabilities(client);
+}
+
 export function hasFeature(
   client: ClientWithFeatures | null | undefined,
   featureName: ClientFeatureKey
 ) {
-  return getFeatures(client)[featureName];
+  return hasCapability(client, featureName);
 }
 
 export function getClientProfile(client: ClientWithProfile | null | undefined): ClientProfile {

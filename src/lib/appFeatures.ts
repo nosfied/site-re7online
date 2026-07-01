@@ -36,6 +36,12 @@ export type FutureAppFeatureKey =
   | "instagramIntegration";
 
 export type AppFeatures = Record<AppFeatureKey | FutureAppFeatureKey, boolean>;
+export type TenantCapabilityKey =
+  | AppFeatureKey
+  | FutureAppFeatureKey
+  | "protocols"
+  | "catalog";
+export type TenantCapabilities = AppFeatures & Record<"protocols" | "catalog", boolean>;
 
 export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   dashboard: false,
@@ -104,6 +110,11 @@ export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> =
   instagramIntegration: false,
 };
 
+const DEFAULT_ADDITIONAL_CAPABILITIES: Record<"protocols" | "catalog", boolean> = {
+  protocols: true,
+  catalog: false,
+};
+
 export const DEFAULT_APP_FEATURES: AppFeatures = {
   ...DEFAULT_BUSINESS_APP_FEATURES,
   ...DEFAULT_FUTURE_APP_FEATURES,
@@ -167,8 +178,23 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
   };
 }
 
+export function getTenantCapabilities(session: SessionLike): TenantCapabilities {
+  const features = getAppFeatures(session);
+  const raw = session?.features;
+  const input = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  return {
+    ...features,
+    protocols: normalizeBoolean(input.protocols) ?? DEFAULT_ADDITIONAL_CAPABILITIES.protocols,
+    catalog: normalizeBoolean(input.catalog) ?? DEFAULT_ADDITIONAL_CAPABILITIES.catalog,
+  };
+}
+
+export function hasCapability(session: SessionLike, capabilityName: TenantCapabilityKey) {
+  return getTenantCapabilities(session)[capabilityName];
+}
+
 export function hasAppFeature(session: SessionLike, featureName: AppFeatureKey) {
-  return getAppFeatures(session)[featureName];
+  return hasCapability(session, featureName);
 }
 
 export function getAppProfile(session: { profile?: unknown } | null | undefined): AppProfile {

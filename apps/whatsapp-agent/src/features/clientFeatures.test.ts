@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getFeatures, hasFeature } from "./clientFeatures.js";
+import {
+  CapabilityRequiredError,
+  getFeatures,
+  hasCapability,
+  hasFeature,
+  requireCapability,
+  resolveTenantCapabilities,
+} from "./clientFeatures.js";
 
 test("knowledgeBase is disabled by default for controlled rollout", () => {
   assert.equal(getFeatures({ profile: "business" }).knowledgeBase, false);
@@ -175,4 +182,48 @@ test("mfa can be enabled by tenant feature override", () => {
   assert.equal(hasFeature(client, "mfa"), true);
   assert.equal(hasFeature(client, "mfaRequired"), true);
   assert.equal(hasFeature(client, "mfaEnforced"), true);
+});
+
+test("resolveTenantCapabilities preserves current feature defaults and adds platform capabilities", () => {
+  const business = resolveTenantCapabilities({ profile: "business" });
+  const government = resolveTenantCapabilities({ profile: "government" });
+
+  assert.equal(business.dashboard, false);
+  assert.equal(government.dashboard, true);
+  assert.equal(business.departments, true);
+  assert.equal(government.departments, true);
+  assert.equal(business.protocols, true);
+  assert.equal(government.protocols, true);
+  assert.equal(business.catalog, false);
+  assert.equal(government.catalog, false);
+  assert.equal(business.salesPipeline, false);
+  assert.equal(government.governmentReports, false);
+});
+
+test("tenant capability overrides win without changing profile defaults", () => {
+  const client = {
+    profile: "business",
+    features: {
+      dashboard: true,
+      protocols: false,
+      catalog: true,
+      salesPipeline: true,
+      governmentReports: true,
+    },
+  };
+
+  const capabilities = resolveTenantCapabilities(client);
+  assert.equal(capabilities.dashboard, true);
+  assert.equal(capabilities.protocols, false);
+  assert.equal(capabilities.catalog, true);
+  assert.equal(capabilities.salesPipeline, true);
+  assert.equal(capabilities.governmentReports, true);
+  assert.equal(hasCapability(client, "catalog"), true);
+  assert.equal(hasCapability(client, "protocols"), false);
+});
+
+test("requireCapability throws a typed error when disabled", () => {
+  const client = { profile: "business", features: { catalog: false } };
+  assert.throws(() => requireCapability(client, "catalog"), CapabilityRequiredError);
+  assert.equal(requireCapability({ profile: "business", features: { catalog: true } }, "catalog").catalog, true);
 });
