@@ -7,6 +7,8 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | Documento | Status | Uso |
 | --- | --- | --- |
 | `docs/saas/PRODUCT_MAP_CURRENT.md` | atual | Fotografia atual do produto e modulos |
+| `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` | atual | Arquitetura oficial de Core Platform, Market Profiles, Feature Packs, Tenant Configuration e capabilities |
+| `docs/saas/BUSINESS_CAPABILITY_DESIGN.md` | atual | Contrato das capabilities do mercado privado e plano para substituir o ultimo filtro business por capability |
 | `docs/saas/FEATURE_FLAGS_MATRIX.md` | atual | Matriz oficial de features por profile |
 | `docs/saas/GOVERNANCE_CONFIG.md` | atual | Governanca de configuracao DB vs `tenants.json` |
 | `docs/saas/CHANNELS_GOVERNANCE.md` | atual | Governanca WhatsApp/Messenger/Instagram |
@@ -137,11 +139,13 @@ Devem ser revisados antes de uso operacional:
 Para estado atual do produto, usar primeiro:
 
 1. `PRODUCT_MAP_CURRENT.md`
-2. `GOVERNANCE_CONFIG.md`
-3. `CHANNELS_GOVERNANCE.md`
-4. `CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md` quando o assunto for migracao de canais
-5. `FEATURE_FLAGS_MATRIX.md`
-6. `FEATURE_LIFECYCLE.md`
+2. `MARKET_PROFILE_ARCHITECTURE.md` quando o assunto for profiles, packs, tenant capabilities ou evolucao por segmento
+3. `BUSINESS_CAPABILITY_DESIGN.md` quando o assunto for CRM, catalogo, funil, campanhas ou capabilities privadas
+4. `GOVERNANCE_CONFIG.md`
+5. `CHANNELS_GOVERNANCE.md`
+6. `CHANNEL_ACCOUNTS_MIGRATION_DESIGN.md` quando o assunto for migracao de canais
+7. `FEATURE_FLAGS_MATRIX.md`
+8. `FEATURE_LIFECYCLE.md`
 
 Para deploy, usar:
 
