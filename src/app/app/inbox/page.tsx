@@ -301,6 +301,8 @@ function getTimelineKindClass(item: AppContactTimelineItem) {
 
 function getMessageContentLabel(item: InboxMessageItem) {
   switch (item.type?.toUpperCase()) {
+    case "LOCATION":
+      return "Localizacao";
     case "AUDIO":
       return "Audio";
     case "IMAGE":
@@ -324,6 +326,8 @@ function getConversationPreviewText(item: InboxConversationItem) {
   const directionLabel = item.lastMessage.direction === "OUTBOUND" ? "enviado" : "recebido";
   const directionLabelFemale = item.lastMessage.direction === "OUTBOUND" ? "enviada" : "recebida";
   switch (item.lastMessage.type?.toUpperCase()) {
+    case "LOCATION":
+      return `Localizacao ${directionLabelFemale}`;
     case "AUDIO":
       return `Audio ${directionLabel}`;
     case "IMAGE":
@@ -352,6 +356,36 @@ function getChannelEmptyStateLabel(channel: ConversationChannelFilter) {
 
 function isUnsupportedMessage(item: InboxMessageItem) {
   return item.type === "UNKNOWN" && !item.bodyText && !item.media;
+}
+
+function LocationBubble({ location }: { location: NonNullable<InboxMessageItem["location"]> }) {
+  return (
+    <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-slate-800">
+      <p className="font-semibold">{location.name || "Localizacao compartilhada"}</p>
+      {location.address ? <p className="mt-1 text-xs leading-relaxed text-slate-700">{location.address}</p> : null}
+      <p className="mt-1 font-mono text-[11px] text-slate-600">
+        {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+        <a
+          href={location.googleMapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md bg-re7-sky px-2.5 py-1 text-white hover:brightness-110"
+        >
+          Google Maps
+        </a>
+        <a
+          href={location.openStreetMapUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md border border-sky-300 px-2.5 py-1 text-sky-800 hover:bg-sky-100"
+        >
+          OpenStreetMap
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function MediaBubble({
@@ -5418,7 +5452,7 @@ export default function AppInboxPage() {
                           <p className="wa-bubble-text text-sm leading-relaxed">
                             {item.bodyText}
                           </p>
-                        ) : item.media ? null : isUnsupportedMessage(item) ? (
+                        ) : item.media || item.location ? null : isUnsupportedMessage(item) ? (
                           <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                             <p className="font-semibold">Mensagem nao suportada</p>
                             <p className="mt-1 text-xs leading-relaxed">
@@ -5428,6 +5462,7 @@ export default function AppInboxPage() {
                         ) : (
                           <p className="text-sm italic text-slate-700">{getMessageContentLabel(item)}</p>
                         )}
+                        {item.location ? <LocationBubble location={item.location} /> : null}
                         {item.media ? (
                           <MediaBubble
                             session={session}

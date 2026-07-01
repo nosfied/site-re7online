@@ -116,3 +116,44 @@ test("normalizeWebhook extrai fileName e caption de document", () => {
     },
   });
 });
+
+test("normalizeWebhook extrai metadados de location", () => {
+  const result = normalizeWebhook({
+    entry: [
+      {
+        changes: [
+          {
+            value: {
+              messages: [
+                {
+                  id: "wamid.location.1",
+                  from: "5511777777777",
+                  timestamp: "1776816000",
+                  type: "location",
+                  location: {
+                    latitude: -27.3435,
+                    longitude: -51.6112,
+                    name: "SIMAE Capinzal",
+                    address: "Rua Domingos Omizollo, 447",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.messages[0]?.type, "location");
+  assert.deepEqual(result.messages[0]?.raw, {
+    id: "wamid.location.1",
+    type: "location",
+    location: {
+      latitude: -27.3435,
+      longitude: -51.6112,
+      name: "SIMAE Capinzal",
+      address: "Rua Domingos Omizollo, 447",
+    },
+  });
+});

@@ -89,6 +89,14 @@ test("listPublicConversationMessages returns only safe normalized fields", async
             channel: null,
             type: "TEXT",
             bodyText: "Ola",
+            rawPayload: {
+              location: {
+                latitude: -27.343,
+                longitude: -51.61,
+                name: "SIMAE Capinzal",
+                address: "Capinzal, SC",
+              },
+            },
             createdAt: now,
             waId: "558499999999",
             messageId: "provider_message",
@@ -126,6 +134,14 @@ test("listPublicConversationMessages returns only safe normalized fields", async
   assert.equal(result?.data[0]?.id, "message_1");
   assert.equal(result?.data[0]?.channel, "instagram");
   assert.equal(result?.data[0]?.text, "Ola");
+  assert.deepEqual(result?.data[0]?.location, {
+    latitude: -27.343,
+    longitude: -51.61,
+    name: "SIMAE Capinzal",
+    address: "Capinzal, SC",
+    googleMapsUrl: "https://www.google.com/maps/search/?api=1&query=-27.343%2C-51.61",
+    openStreetMapUrl: "https://www.openstreetmap.org/?mlat=-27.343&mlon=-51.61#map=18/-27.343/-51.61",
+  });
   assert.equal(result?.data[0]?.senderRole, "contact");
   assert.equal(result?.page.hasMore, true);
   assert.equal(typeof result?.page.nextCursor, "string");
@@ -145,6 +161,7 @@ test("listPublicConversationMessages returns only safe normalized fields", async
   assert.equal(inboundArgs.where.clientId, "client_a");
   assert.equal(Array.isArray(inboundArgs.where.OR), true);
   assert.equal(inboundArgs.select.bodyText, true);
+  assert.equal(inboundArgs.select.rawPayload, true);
   assert.equal("waId" in inboundArgs.select, false);
   assert.equal("messageId" in inboundArgs.select, false);
   assert.equal("metaMessageId" in inboundArgs.select, false);

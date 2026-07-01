@@ -130,6 +130,7 @@ import { checkUsageGate } from "../usage/usageGate.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 import { recordConversationInboundMetrics } from "../metrics/conversationMetrics.js";
 import { buildInboxMessageMedia } from "../http/inboxMedia.js";
+import { extractMessageLocation } from "../inbox/messageLocation.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   isWhatsAppMultichannelShadowWriteEnabled,
@@ -1573,6 +1574,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
             status: "RECEIVED",
             intent: null,
             bodyText: params.bodyText ?? null,
+            location: extractMessageLocation(params.rawPayload),
             media: buildInboxMessageMedia({
               type: params.type,
               rawPayload: params.rawPayload,
@@ -7714,6 +7716,7 @@ function mapMessageType(type: string): MessageType {
   if (type === "audio") return MessageType.AUDIO;
   if (type === "video") return MessageType.VIDEO;
   if (type === "document") return MessageType.DOCUMENT;
+  if (type === "location") return MessageType.LOCATION;
   if (type === "template") return MessageType.TEMPLATE;
   return MessageType.UNKNOWN;
 }

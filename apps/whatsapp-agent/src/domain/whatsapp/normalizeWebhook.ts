@@ -38,6 +38,12 @@ type IncomingPayload = {
             sha256?: string;
             filename?: string;
           };
+          location?: {
+            latitude?: number;
+            longitude?: number;
+            name?: string;
+            address?: string;
+          };
         }>;
       };
     }>;
@@ -54,6 +60,7 @@ function mapType(type?: string): MessageType {
   if (type === "audio") return "audio";
   if (type === "video") return "video";
   if (type === "document") return "document";
+  if (type === "location") return "location";
   return "unknown";
 }
 
@@ -101,6 +108,23 @@ function normalizeMediaPayload(message: IncomingMessagePayload, type: MessageTyp
   return null;
 }
 
+function normalizeLocationPayload(message: IncomingMessagePayload) {
+  const location = message.location;
+  if (!location) return null;
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    name: typeof location.name === "string" && location.name.trim() ? location.name.trim().slice(0, 160) : null,
+    address:
+      typeof location.address === "string" && location.address.trim()
+        ? location.address.trim().replace(/\s+/g, " ").slice(0, 300)
+        : null,
+  };
+}
+
 export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
   const value = payload.entry?.[0]?.changes?.[0]?.value;
   const messages = value?.messages;
@@ -122,6 +146,7 @@ export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
       : new Date().toISOString();
     const type = mapType(message.type);
     const media = normalizeMediaPayload(message, type);
+    const location = type === "location" ? normalizeLocationPayload(message) : null;
 
     return {
       messageId: message.id ?? "unknown",
@@ -134,6 +159,7 @@ export function normalizeWebhook(payload: IncomingPayload): NormalizeResult {
         id: message.id,
         type: message.type,
         ...(media ? { media } : {}),
+        ...(location ? { location } : {}),
       },
     };
   });

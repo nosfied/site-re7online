@@ -217,6 +217,7 @@ import {
   AI_ASSISTANT_SIMPLE_QUESTION_STARTERS,
 } from "../agent/controlledAssistant.js";
 import { buildInboxMessageMedia, extractRawMediaId } from "./inboxMedia.js";
+import { extractMessageLocation, formatMessageLocationText } from "../inbox/messageLocation.js";
 import {
   getInboxReadState,
   markInboxConversationRead,
@@ -15018,7 +15019,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               type: true,
               requestId: true,
               bodyText: true,
-              rawPayload: includeRaw,
+              rawPayload: true,
             },
           }),
           prisma.outboundMessage.findMany({
@@ -15036,7 +15037,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               templateLang: true,
               metaMessageId: true,
               errorBody: true,
-              rawPayload: includeRaw,
+              rawPayload: true,
             },
           }),
         ]);
@@ -15048,6 +15049,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             status: "RECEIVED",
             intent: null,
             bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+            location: extractMessageLocation(item.rawPayload),
             templateName: null,
             templateLang: null,
             requestId: item.requestId,
@@ -15063,6 +15065,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             status: item.status,
             intent: null,
             bodyText: item.bodyText ? item.bodyText.slice(0, 300) : null,
+            location: extractMessageLocation(item.rawPayload),
             templateName: item.templateName,
             templateLang: item.templateLang,
             requestId: item.requestId,
@@ -19328,6 +19331,8 @@ function getTimelineMessageTitle(direction: "INBOUND" | "OUTBOUND", type: Messag
       return `Video ${prefix}`;
     case "DOCUMENT":
       return `Documento ${prefix}`;
+    case "LOCATION":
+      return `Localizacao ${prefix}`;
     case "TEMPLATE":
       return `Template ${prefix}`;
     case "TEXT":
@@ -19387,8 +19392,14 @@ const CONTACT_TIMELINE_VISIBLE_EVENT_NAMES = [
   "conversation.status_changed",
 ] as const;
 
-function getTimelineMessageBody(type: MessageType, bodyText?: string | null, templateName?: string | null) {
+function getTimelineMessageBody(
+  type: MessageType,
+  bodyText?: string | null,
+  templateName?: string | null,
+  rawPayload?: unknown
+) {
   if (bodyText?.trim()) return bodyText;
+  if (type === "LOCATION") return formatMessageLocationText(extractMessageLocation(rawPayload));
   if (templateName?.trim()) return `Template: ${templateName}`;
   switch (type) {
     case "IMAGE":
@@ -20084,6 +20095,7 @@ async function buildConversationListPayload(
         messageId: true,
         type: true,
         bodyText: true,
+        rawPayload: true,
         createdAt: true,
       },
     }),
@@ -20337,6 +20349,7 @@ async function buildConversationListPayload(
               status: "RECEIVED",
               messageId: latestInbound.messageId,
               bodyText: latestInbound.bodyText ? latestInbound.bodyText.slice(0, 300) : null,
+              location: extractMessageLocation(latestInbound.rawPayload),
               templateName: null,
               createdAt: latestInbound.createdAt,
             }
@@ -20351,6 +20364,7 @@ async function buildConversationListPayload(
               ),
               messageId: latestOutbound.messageId,
               bodyText: latestOutbound.bodyText ? latestOutbound.bodyText.slice(0, 300) : null,
+              location: extractMessageLocation(latestOutbound.rawPayload),
               templateName: latestOutbound.templateName ?? null,
               createdAt: latestOutbound.createdAt,
             }
@@ -20554,6 +20568,7 @@ async function buildConversationDetailPayload(
       status: "RECEIVED",
       intent: null,
       bodyText: item.bodyText ?? null,
+      location: extractMessageLocation(item.rawPayload),
       media: buildInboxMessageMedia({
         type: item.type,
         rawPayload: item.rawPayload,
@@ -20578,6 +20593,7 @@ async function buildConversationDetailPayload(
         status: normalizeInboxMessageStatus(metaStatus.lastStatus, item.status),
         intent: null,
         bodyText: item.bodyText ?? null,
+        location: extractMessageLocation(item.rawPayload),
         media: buildInboxMessageMedia({
           type: item.type,
           rawPayload: item.rawPayload,
@@ -20747,6 +20763,7 @@ async function buildContactTimelinePayload(
         messageId: true,
         type: true,
         bodyText: true,
+        rawPayload: true,
         createdAt: true,
       },
     }),
@@ -20768,6 +20785,7 @@ async function buildContactTimelinePayload(
         status: true,
         bodyText: true,
         templateName: true,
+        rawPayload: true,
         createdAt: true,
       },
     }),
@@ -20817,11 +20835,12 @@ async function buildContactTimelinePayload(
       kind: "message",
       direction: "INBOUND",
       title: getTimelineMessageTitle("INBOUND", item.type),
-      body: getTimelineMessageBody(item.type, item.bodyText),
+      body: getTimelineMessageBody(item.type, item.bodyText, null, item.rawPayload),
       createdAt: item.createdAt,
       metadata: {
         type: item.type,
         messageId: item.messageId,
+        location: extractMessageLocation(item.rawPayload),
       },
     })),
     ...outbound.map((item) => ({
@@ -20829,13 +20848,14 @@ async function buildContactTimelinePayload(
       kind: "message",
       direction: "OUTBOUND",
       title: getTimelineMessageTitle("OUTBOUND", item.type),
-      body: getTimelineMessageBody(item.type, item.bodyText, item.templateName),
+      body: getTimelineMessageBody(item.type, item.bodyText, item.templateName, item.rawPayload),
       createdAt: item.createdAt,
       metadata: {
         type: item.type,
         status: item.status,
         messageId: item.messageId,
         metaMessageId: item.metaMessageId,
+        location: extractMessageLocation(item.rawPayload),
       },
     })),
     ...events.map((item) => ({

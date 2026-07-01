@@ -1,4 +1,4 @@
-export type MessageType = "text" | "image" | "audio" | "video" | "document" | "unknown" | "template";
+export type MessageType = "text" | "image" | "audio" | "video" | "document" | "location" | "unknown" | "template";
 
 export type NormalizedMediaPayload = {
   mediaId?: string;

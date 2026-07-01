@@ -4,6 +4,7 @@ export type InboxRealtimeMessage = {
   status: "RECEIVED";
   intent: null;
   bodyText: string | null;
+  location?: unknown;
   media?: unknown;
   templateName: null;
   templateLang: null;

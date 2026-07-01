@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { extractMessageLocation } from "../inbox/messageLocation.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -17,6 +18,7 @@ type MessageRow = {
   channel: string | null;
   type: string;
   bodyText: string | null;
+  rawPayload?: unknown;
   status: string;
   createdAt: Date;
   source: "inbound" | "outbound";
@@ -68,6 +70,7 @@ function serializePublicMessage(message: MessageRow, conversation: ConversationR
     channel: message.channel ?? conversation.channel ?? "whatsapp",
     type: message.type,
     text: message.bodyText,
+    location: extractMessageLocation(message.rawPayload),
     createdAt: message.createdAt.toISOString(),
     status: message.status,
     senderRole: senderRoleFromDirection(message.direction),
@@ -145,6 +148,7 @@ export async function listPublicConversationMessages(params: {
             channel: true,
             type: true,
             bodyText: true,
+            rawPayload: true,
             createdAt: true,
           },
         })
@@ -159,6 +163,7 @@ export async function listPublicConversationMessages(params: {
             channel: true,
             type: true,
             bodyText: true,
+            rawPayload: true,
             status: true,
             createdAt: true,
           },

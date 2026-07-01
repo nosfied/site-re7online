@@ -25,6 +25,14 @@ export type InboxMessageItem = {
   status: string;
   intent: string | null;
   bodyText: string | null;
+  location?: {
+    latitude: number;
+    longitude: number;
+    name: string | null;
+    address: string | null;
+    googleMapsUrl: string;
+    openStreetMapUrl: string;
+  } | null;
   media?: {
     kind: "image" | "audio" | "video" | "document";
     mimeType?: string;
@@ -58,6 +66,7 @@ export type InboxConversationItem = {
     status: string;
     messageId?: string | null;
     bodyText: string | null;
+    location?: InboxMessageItem["location"];
     templateName: string | null;
     createdAt: string;
   } | null;

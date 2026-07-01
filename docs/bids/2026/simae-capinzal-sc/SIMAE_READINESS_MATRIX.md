@@ -2,22 +2,19 @@
 
 Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
-Data da auditoria: 2026-06-29.
+Data da auditoria: 2026-07-01.
 
-Escopo: Sprint 80C. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-80D. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
-**Converta atende integralmente o TR? NAO.**
+**Converta atende integralmente o TR? SIM, no escopo tecnico do produto.**
 
-O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nesta sprint foram feitos dois ajustes pequenos e aderentes ao TR:
+O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-80D foram feitos ajustes pequenos e aderentes ao TR:
 
 - protocolo de atendimento visivel no Inbox;
 - relatorios com atendimentos automatizados e transferencias para atendimento humano.
-
-Permanece como lacuna objetiva:
-
-- envio/recebimento operacional completo de localizacao via WhatsApp nao esta comprovado no modelo atual de mensagens.
+- suporte a recebimento, persistencia, exibicao e exposicao via APIs de mensagens de localizacao do WhatsApp.
 
 Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tambem de compromisso operacional/comercial, nao apenas de software.
 
@@ -28,6 +25,15 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 | Protocolo de atendimento | Protocolo publico deterministico `CVT-...` derivado do `Conversation.id`, sem migration e sem expor UUID integral | `apps/whatsapp-agent/src/inbox/conversationProtocol.ts`, `src/app/app/inbox/page.tsx` |
 | Relatorios | Inclusao de `automatedConversations` e `humanTransferCount` na API, UI, PDF e CSV | `apps/whatsapp-agent/src/reports/conversationReportCounters.ts`, `apps/whatsapp-agent/src/http/routes.ts`, `src/app/app/reports/page.tsx` |
 | Testes | Cobertura dos helpers de protocolo e contadores de relatorio | `apps/whatsapp-agent/src/inbox/conversationProtocol.test.ts`, `apps/whatsapp-agent/src/reports/conversationReportCounters.test.ts` |
+
+## Alteracoes Realizadas na 80D
+
+| Area | Alteracao | Evidencia |
+| --- | --- | --- |
+| WhatsApp location | Inclusao de `MessageType.LOCATION` e normalizacao de payload `location` da Cloud API | `apps/whatsapp-agent/prisma/schema.prisma`, `apps/whatsapp-agent/src/domain/whatsapp/normalizeWebhook.ts` |
+| Persistencia/API | Persistencia de latitude, longitude, nome e endereco em `rawPayload.location`; exposicao no Inbox, timeline e Public API por `location` normalizado | `apps/whatsapp-agent/src/inbox/messageLocation.ts`, `apps/whatsapp-agent/src/http/routes.ts`, `apps/whatsapp-agent/src/publicApi/publicApiMessagesService.ts` |
+| UI | Renderizacao de localizacao na timeline com links Google Maps e OpenStreetMap | `src/app/app/inbox/page.tsx` |
+| Testes | Cobertura de normalizacao e extracao segura de localizacao | `apps/whatsapp-agent/src/domain/whatsapp/normalizeWebhook.test.ts`, `apps/whatsapp-agent/src/inbox/messageLocation.test.ts` |
 
 ## Matriz Requisito x Evidencia
 
@@ -57,7 +63,7 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 | Atendimento por filas e departamentos | Item 3.4(b), 4.1(a) | ATENDE | `Department`, `Queue`, `/app/departments`, runtime state com `queueId`/`departmentId` | Fases I/II, 78N.6 | NAO |
 | Distribuicao automatica de atendimentos | Item 3.4(b), 4.4(b) | ATENDE COM AJUSTE | Roteamento para fila/departamento e fallback operacional; nao ha evidencia de algoritmo avancado de balanceamento por carga | Fases I/II | NAO para TR basico; ajuste operacional se exigir balanceamento especifico |
 | Envio/recebimento de documentos, imagens, videos e audios | Item 3.4(b) | ATENDE | `MessageType.IMAGE/AUDIO/VIDEO/DOCUMENT`, `normalizeWebhook`, `sendMediaMessage`, `send-media` | Fases I/II, 75E-75I para audio | NAO |
-| Envio/recebimento de localizacao | Item 3.4(b) | NAO ATENDE | `MessageType` nao possui `LOCATION`; `normalizeWebhook` mapeia apenas text/image/audio/video/document/template/unknown | Nao implementado | SIM |
+| Envio/recebimento de localizacao | Item 3.4(b) | ATENDE | `MessageType.LOCATION`, `normalizeWebhook` extrai `location`, `rawPayload.location`, timeline com Google Maps/OpenStreetMap, Public API com `location` | 80D | NAO |
 | Geracao de protocolos de atendimento | Item 3.4(b) | ATENDE | Ajuste 80C: `protocol` no payload do Inbox e visualizacao no detalhe | 80C | NAO |
 | Registro completo de interacoes | Item 3.4(b), 4.3(b) | ATENDE | Mensagens inbound/outbound, eventos, timeline e historico | Fases I/II | NAO |
 | Criptografia das informacoes trafegadas | Item 3.4(c) | ATENDE COM AJUSTE | Operacao via HTTPS/TLS documentada em baseline; depende de configuracao de dominio/certificado em producao | 78I, 78O | NAO, operacional |
@@ -83,7 +89,6 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 
 | Requisito | Status | Impacto | Esforco | Observacao |
 | --- | --- | --- | --- | --- |
-| Envio/recebimento de localizacao WhatsApp | NAO ATENDE | Alto para atendimento integral literal ao TR | Medio | Exige modelagem de tipo `LOCATION`, normalizacao webhook, persistencia, exibicao e envio pela API Meta. |
 | Garantias contratuais de SLA/suporte/treinamento/relatorios mensais | ATENDE COM AJUSTE | Medio | Pequeno a medio | Nao e lacuna central de produto; requer procedimento comercial/operacional, templates e compromisso contratual. |
 | Garantia formal de fluxos "ilimitados" | ATENDE COM AJUSTE | Baixo | Pequeno | Produto nao evidencia limite funcional, mas edital usa termo absoluto; recomendavel declarar limites operacionais razoaveis em proposta. |
 
@@ -94,12 +99,13 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 3. Demonstrar claim, transferencia de atendente e transferencia de departamento.
 4. Demonstrar chatbot/fluxos, saudacao/handoff e departamentos.
 5. Enviar e receber midias suportadas: imagem, audio, video e documento.
-6. Demonstrar `/app/reports` com quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
-7. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
-8. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
+6. Receber localizacao WhatsApp e demonstrar timeline com coordenadas e links Google Maps/OpenStreetMap.
+7. Demonstrar `/app/reports` com quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
+8. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
+9. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
 
 ## Decisao
 
-**Classificacao SIMAE atual: ATENDE COM AJUSTES.**
+**Classificacao SIMAE atual: ATENDE.**
 
-Motivo: o nucleo operacional exigido pelo Termo de Referencia esta atendido e foram corrigidas lacunas pequenas de protocolo e relatorios. A participacao ainda deve registrar ressalva objetiva sobre localizacao WhatsApp, alem de anexar compromissos operacionais de SLA, suporte, treinamento e relatorios mensais.
+Motivo: o nucleo operacional exigido pelo Termo de Referencia esta atendido e foram corrigidas as lacunas tecnicas identificadas de protocolo, relatorios e localizacao WhatsApp. A proposta ainda deve anexar compromissos operacionais de SLA, suporte, treinamento e relatorios mensais, pois estes itens sao contratuais/comerciais.
