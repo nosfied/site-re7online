@@ -171,7 +171,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     href: "/app/settings/crm",
     icon: "📌",
     group: "administration",
-    profiles: ["business"],
+    feature: "crm",
     minRole: "SUPERVISOR",
     labels: { business: "CRM", government: "CRM" },
   },

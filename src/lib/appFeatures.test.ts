@@ -8,8 +8,14 @@ test("tenant capabilities preserve current app defaults", () => {
   assert.equal(capabilities.dashboard, true);
   assert.equal(capabilities.departments, true);
   assert.equal(capabilities.templates, false);
+  assert.equal(capabilities.crm, false);
   assert.equal(capabilities.protocols, true);
   assert.equal(capabilities.catalog, false);
+});
+
+test("business profile receives crm by default and government does not", () => {
+  assert.equal(hasCapability({ profile: "business" }, "crm"), true);
+  assert.equal(hasCapability({ profile: "government" }, "crm"), false);
 });
 
 test("tenant feature overrides win over profile defaults", () => {
@@ -17,12 +23,14 @@ test("tenant feature overrides win over profile defaults", () => {
     profile: "government",
     features: {
       dashboard: false,
+      crm: true,
       webchat: true,
       catalog: true,
     },
   };
 
   assert.equal(hasAppFeature(session, "dashboard"), false);
+  assert.equal(hasCapability(session, "crm"), true);
   assert.equal(hasCapability(session, "webchat"), true);
   assert.equal(hasCapability(session, "catalog"), true);
 });

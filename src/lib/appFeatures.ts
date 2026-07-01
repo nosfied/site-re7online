@@ -39,9 +39,10 @@ export type AppFeatures = Record<AppFeatureKey | FutureAppFeatureKey, boolean>;
 export type TenantCapabilityKey =
   | AppFeatureKey
   | FutureAppFeatureKey
+  | "crm"
   | "protocols"
   | "catalog";
-export type TenantCapabilities = AppFeatures & Record<"protocols" | "catalog", boolean>;
+export type TenantCapabilities = AppFeatures & Record<"crm" | "protocols" | "catalog", boolean>;
 
 export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   dashboard: false,
@@ -110,7 +111,8 @@ export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> =
   instagramIntegration: false,
 };
 
-const DEFAULT_ADDITIONAL_CAPABILITIES: Record<"protocols" | "catalog", boolean> = {
+const DEFAULT_ADDITIONAL_CAPABILITIES: Record<"crm" | "protocols" | "catalog", boolean> = {
+  crm: false,
   protocols: true,
   catalog: false,
 };
@@ -124,6 +126,13 @@ type SessionLike = { features?: unknown; profile?: unknown } | null | undefined;
 
 function normalizeBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function getAdditionalCapabilityDefaults(profile: AppProfile): Record<"crm" | "protocols" | "catalog", boolean> {
+  return {
+    ...DEFAULT_ADDITIONAL_CAPABILITIES,
+    crm: profile === "business",
+  };
 }
 
 export function getAppFeatures(session: SessionLike): AppFeatures {
@@ -180,12 +189,14 @@ export function getAppFeatures(session: SessionLike): AppFeatures {
 
 export function getTenantCapabilities(session: SessionLike): TenantCapabilities {
   const features = getAppFeatures(session);
+  const additionalDefaults = getAdditionalCapabilityDefaults(getAppProfile(session));
   const raw = session?.features;
   const input = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   return {
     ...features,
-    protocols: normalizeBoolean(input.protocols) ?? DEFAULT_ADDITIONAL_CAPABILITIES.protocols,
-    catalog: normalizeBoolean(input.catalog) ?? DEFAULT_ADDITIONAL_CAPABILITIES.catalog,
+    crm: normalizeBoolean(input.crm) ?? additionalDefaults.crm,
+    protocols: normalizeBoolean(input.protocols) ?? additionalDefaults.protocols,
+    catalog: normalizeBoolean(input.catalog) ?? additionalDefaults.catalog,
   };
 }
 

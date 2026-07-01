@@ -192,6 +192,8 @@ test("resolveTenantCapabilities preserves current feature defaults and adds plat
   assert.equal(government.dashboard, true);
   assert.equal(business.departments, true);
   assert.equal(government.departments, true);
+  assert.equal(business.crm, true);
+  assert.equal(government.crm, false);
   assert.equal(business.protocols, true);
   assert.equal(government.protocols, true);
   assert.equal(business.catalog, false);
@@ -205,6 +207,7 @@ test("tenant capability overrides win without changing profile defaults", () => 
     profile: "business",
     features: {
       dashboard: true,
+      crm: false,
       protocols: false,
       catalog: true,
       salesPipeline: true,
@@ -214,11 +217,13 @@ test("tenant capability overrides win without changing profile defaults", () => 
 
   const capabilities = resolveTenantCapabilities(client);
   assert.equal(capabilities.dashboard, true);
+  assert.equal(capabilities.crm, false);
   assert.equal(capabilities.protocols, false);
   assert.equal(capabilities.catalog, true);
   assert.equal(capabilities.salesPipeline, true);
   assert.equal(capabilities.governmentReports, true);
   assert.equal(hasCapability(client, "catalog"), true);
+  assert.equal(hasCapability(client, "crm"), false);
   assert.equal(hasCapability(client, "protocols"), false);
 });
 

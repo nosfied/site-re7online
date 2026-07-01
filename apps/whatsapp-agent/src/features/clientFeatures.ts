@@ -34,6 +34,7 @@ export type ClientFeatures = Record<ClientFeatureKey, boolean>;
 export type ClientProfile = "business" | "government";
 export type TenantCapabilityKey =
   | ClientFeatureKey
+  | "crm"
   | "protocols"
   | "catalog"
   | "salesPipeline"
@@ -109,6 +110,7 @@ export const DEFAULT_GOVERNMENT_CLIENT_FEATURES: ClientFeatures = {
 
 export const DEFAULT_CLIENT_FEATURES = DEFAULT_BUSINESS_CLIENT_FEATURES;
 const DEFAULT_ADDITIONAL_CAPABILITIES: Record<Exclude<TenantCapabilityKey, ClientFeatureKey>, boolean> = {
+  crm: false,
   protocols: true,
   catalog: false,
   salesPipeline: false,
@@ -126,6 +128,13 @@ type ClientWithProfile = {
 
 function normalizeFeatureValue(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function getAdditionalCapabilityDefaults(profile: ClientProfile): Record<Exclude<TenantCapabilityKey, ClientFeatureKey>, boolean> {
+  return {
+    ...DEFAULT_ADDITIONAL_CAPABILITIES,
+    crm: profile === "business",
+  };
 }
 
 export function getFeatures(client: ClientWithFeatures | null | undefined): ClientFeatures {
@@ -183,16 +192,18 @@ export function resolveTenantCapabilities(
   client: ClientWithFeatures | null | undefined
 ): TenantCapabilities {
   const features = getFeatures(client);
+  const additionalDefaults = getAdditionalCapabilityDefaults(getClientProfile(client));
   const raw = client?.features;
   const input = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   return {
     ...features,
-    protocols: normalizeFeatureValue(input.protocols) ?? DEFAULT_ADDITIONAL_CAPABILITIES.protocols,
-    catalog: normalizeFeatureValue(input.catalog) ?? DEFAULT_ADDITIONAL_CAPABILITIES.catalog,
+    crm: normalizeFeatureValue(input.crm) ?? additionalDefaults.crm,
+    protocols: normalizeFeatureValue(input.protocols) ?? additionalDefaults.protocols,
+    catalog: normalizeFeatureValue(input.catalog) ?? additionalDefaults.catalog,
     salesPipeline:
-      normalizeFeatureValue(input.salesPipeline) ?? DEFAULT_ADDITIONAL_CAPABILITIES.salesPipeline,
+      normalizeFeatureValue(input.salesPipeline) ?? additionalDefaults.salesPipeline,
     governmentReports:
-      normalizeFeatureValue(input.governmentReports) ?? DEFAULT_ADDITIONAL_CAPABILITIES.governmentReports,
+      normalizeFeatureValue(input.governmentReports) ?? additionalDefaults.governmentReports,
   };
 }
 

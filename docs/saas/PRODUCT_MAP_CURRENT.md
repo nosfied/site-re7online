@@ -34,13 +34,13 @@ Converta
 
 Current runtime uses `Client.profile` plus `Client.features`. Future work should treat profile as default capability selection, not as direct product branching. Core modules should ask for capabilities/features and preserve RBAC and tenant isolation.
 
-As of Sprint 81E, the remaining legitimate business-profile navigation filter is CRM. The target replacement is a future `crm` capability. Until that runtime capability exists, the current `profiles: ["business"]` guard for CRM is documented as transitional, not architectural debt.
+As of Sprint 82A, the CRM navigation guard uses the `crm` capability instead of the previous `profiles: ["business"]` transitional filter.
 
 ### Business
 
 Default business profile favors commercial operations:
 
-- CRM: business-only navigation today; target `crm` capability
+- CRM: business-only by default through the `crm` capability
 - dashboard: off by default
 - departments: on
 - users: on

@@ -1,6 +1,6 @@
 # Business Capability Design
 
-Status: architectural contract. No runtime behavior is changed by this document.
+Status: architectural contract. Runtime adoption for `crm` began in Sprint 82A.
 
 Sprint: 81E - Business Capability Design.
 
@@ -49,7 +49,7 @@ Business capabilities must follow the same invariants already defined in `MARKET
 
 | Capability | Default for `business` | Purpose | Description | Dependencies | Relationship with Core | Relationship with Feature Packs |
 | --- | --- | --- | --- | --- | --- | --- |
-| `crm` | on | Commercial relationship management | Enables CRM-oriented navigation and customer/opportunity surfaces. It is the capability that should replace the current `profiles: ["business"]` filter for `/app/settings/crm`. | Contacts, Leads, Inbox timeline, users/RBAC | Uses Core contacts, leads, conversations, notes and RBAC. Core does not know the market. | Base capability for `CRM Pack`, often bundled with `salesPipeline`, `catalog`, `quotes` and `campaigns`. |
+| `crm` | on | Commercial relationship management | Enables CRM-oriented navigation and customer/opportunity surfaces. In Sprint 82A, it replaced the previous `profiles: ["business"]` filter for `/app/settings/crm`. | Contacts, Leads, Inbox timeline, users/RBAC | Uses Core contacts, leads, conversations, notes and RBAC. Core does not know the market. | Base capability for `CRM Pack`, often bundled with `salesPipeline`, `catalog`, `quotes` and `campaigns`. |
 | `catalog` | off by default until runtime adoption | Product/service catalog | Enables catalog surfaces for products, services, SKUs, descriptions and commercial reference data. | Templates, campaigns, CRM context | Uses Core tenant storage and message/template composition. | Belongs to `Catalog Pack` or `Business Pack`. May be bundled with campaigns and quotes. |
 | `salesPipeline` | off by default until runtime adoption | Sales funnel management | Enables pipeline stages, opportunities, qualification and conversion reporting. | CRM, users, contacts/leads, reports | Uses Core Lead and reporting foundations. | Belongs to `Sales Pack` or `CRM Pack`. |
 | `campaigns` | on | Commercial outbound campaigns | Enables campaign planning and execution for business tenants. | Templates, contacts/leads, channel rules, Meta policy | Uses Core message governance, templates, contacts and channel restrictions. | Can be sold as `Campaign Pack`; may remain enabled in business base where contract includes campaigns. |
@@ -74,7 +74,7 @@ This matrix is a contract for future implementation. It does not change the curr
 
 | Capability | Business default target | Current runtime equivalent | Implementation status |
 | --- | --- | --- | --- |
-| `crm` | on | `profiles: ["business"]` in `AppShell` for `/app/settings/crm` | Target capability, not implemented yet |
+| `crm` | on | `feature: "crm"` in `AppShell` for `/app/settings/crm` | Runtime/frontend capability adopted in Sprint 82A |
 | `campaigns` | on | `campaigns` feature/capability | Implemented |
 | `templates` | on | `templates` feature/capability | Implemented |
 | `catalog` | off | reserved capability in runtime | Structural capability only |
@@ -117,13 +117,13 @@ Future relationship:
 
 ### `crm`
 
-Decision: create as the capability that replaces the current business-profile navigation filter.
+Decision: use `crm` as the capability that replaces the previous business-profile navigation filter.
 
 Reason:
 
-- The current frontend still has a legitimate `profiles: ["business"]` filter for `/app/settings/crm`.
-- That profile dependency is not debt while `crm` capability does not exist.
-- Future adoption should replace the profile filter with `feature: "crm"` or equivalent capability once the runtime contract includes it.
+- The frontend previously had a legitimate `profiles: ["business"]` filter for `/app/settings/crm`.
+- Sprint 82A introduced `crm` in the capability runtime and replaced that filter with `feature: "crm"`.
+- Profile remains valid for terminology and tenant configuration, but no longer drives CRM navigation visibility.
 
 ### `catalog`
 
@@ -156,7 +156,7 @@ Reason:
 
 ## 4. CRM Transitional State
 
-Current state:
+Previous transitional state:
 
 ```ts
 profiles: ["business"]
@@ -168,23 +168,15 @@ Location:
 src/components/app/AppShell.tsx
 ```
 
-This is acceptable temporarily because there is no implemented `crm` capability yet.
-
-Target state:
+Current target state:
 
 ```ts
 feature: "crm"
 ```
 
-or:
+This is the expected frontend navigation model after Sprint 82A.
 
-```ts
-capability: "crm"
-```
-
-depending on the naming used in the frontend navigation model at implementation time.
-
-Rules for the future replacement:
+Rules preserved by the replacement:
 
 - Do not change the visible CRM behavior for current business tenants.
 - Default `crm=true` for `business` when the capability is introduced.
@@ -275,6 +267,8 @@ Rules:
 - set `crm=false` for government defaults;
 - keep reserved capabilities disabled until implemented.
 
+Status: `crm` was implemented in Sprint 82A. `orders`, `quotes` and `inventory` remain future capabilities.
+
 ### Phase 3 - Frontend Adoption
 
 Replace:
@@ -292,6 +286,8 @@ feature: "crm"
 or equivalent capability field.
 
 Do this only after Phase 2 exists and tests prove current business tenants still see CRM.
+
+Status: completed for `crm` in Sprint 82A.
 
 ### Phase 4 - Backend Adoption
 
