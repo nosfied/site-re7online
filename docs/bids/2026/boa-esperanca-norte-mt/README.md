@@ -22,6 +22,12 @@ Este pacote nao cria produto separado, nao altera o Core do Converta, nao hardco
 | `TRAINING_16H_PLAN.md` | Plano de treinamento de 16 horas para ate 15 servidores. |
 | `SUPPORT_SLA_PLAN.md` | Plano de suporte, chamados, severidades, manutencao e comunicacao de incidentes. |
 | `WHATSAPP_COSTS_PREMISES.md` | Premissas de volume, categorias de mensagens e custos WhatsApp/Meta. |
+| `HABILITATION_CHECKLIST.md` | Matriz de habilitacao juridica, fiscal, economico-financeira, tecnica e declaracoes. |
+| `TECHNICAL_PROPOSAL_DRAFT.md` | Estrutura base da proposta tecnica. |
+| `COMMERCIAL_PROPOSAL_PREMISES.md` | Premissas comerciais, preco, custos e cenarios. |
+| `TECHNICAL_CAPACITY_CERTIFICATE_TENDENCIA_DRAFT.md` | Minuta de atestado tecnico para avaliacao da Tendencia Modas. |
+| `PARTICIPATION_DECISION_MATRIX.md` | Matriz de decisao, riscos e pendencias antes da participacao. |
+| `POC_OPERATIONAL_CHECKLIST.md` | Checklist operacional da POC remota. |
 
 ## Resultado Executivo
 
