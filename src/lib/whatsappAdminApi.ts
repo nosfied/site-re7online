@@ -299,6 +299,20 @@ export type ConversationReportByChannelItem = {
   conversations: number;
 };
 
+export type ConversationReportConversationItem = {
+  conversationId: string;
+  protocol: string;
+  waId: string;
+  channel: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | "unknown";
+  channelName: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  assignedUserIds: string[];
+  status: string | null;
+  startedAt: string;
+  closedAt: string | null;
+};
+
 export type ConversationReportResponse = {
   ok: true;
   range: ConversationReportRange;
@@ -317,6 +331,7 @@ export type ConversationReportResponse = {
   byAgent: ConversationReportByAgentItem[];
   byDepartment: ConversationReportByDepartmentItem[];
   byChannel?: ConversationReportByChannelItem[];
+  conversations?: ConversationReportConversationItem[];
 };
 
 export type OpsMetricLabels = Record<string, string>;

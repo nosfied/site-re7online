@@ -3461,6 +3461,7 @@ export default function AppInboxPage() {
       const searchTerm = conversationSearch.trim().toLowerCase();
       if (searchTerm) {
         const haystack = [
+          item.protocol,
           item.leadName,
           item.leadPhone,
           item.waId,

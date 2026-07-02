@@ -226,7 +226,12 @@ import {
   markInboxConversationUnread,
   markInboxConversationUnreadFromActivity,
 } from "../inbox/readStateStore.js";
-import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
+import {
+  buildConversationProtocol,
+  buildConversationProtocolNotice,
+  getConversationIdPrefixFromProtocol,
+  normalizeConversationProtocol,
+} from "../inbox/conversationProtocol.js";
 import {
   getHumanTransferReportCount,
   isAutomatedConversationReportState,
@@ -6912,6 +6917,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           [
             [
               "conversationId",
+              "protocol",
               "waId",
               "channel",
               "departmentId",
@@ -7166,6 +7172,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         waId: nextState.waIdCanonical ?? nextState.waId,
         assignedUserId: nextState.assignedUserId,
         fromUserId: conversation.assignedUserId ?? null,
+      });
+      const protocol = resolvedConversation.winner
+        ? buildConversationProtocol(resolvedConversation.winner)
+        : null;
+      await sendConversationProtocolNoticeIfNeeded(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        requestId,
+        waId: nextState.waId,
+        waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        channel: resolvedConversation.winner?.channel ?? null,
+        protocol,
       });
       const payload = await buildConversationActionPayload(prisma, {
         clientId: client.id,
@@ -15985,6 +16003,8 @@ function buildConversationReportSummary(options: {
     responseCount: number | null;
     avgResponseTimeSec: number | null;
     resolutionTimeSec: number | null;
+    startedAt: Date;
+    closedAt?: Date | null;
     conversation: {
       waId: string;
       waIdCanonical?: string | null;
@@ -16082,6 +16102,23 @@ function buildConversationReportSummary(options: {
     const state = options.stateByWaId.get(item.conversation.waId);
     return count + getHumanTransferReportCount(state);
   }, 0);
+  const conversations = options.filteredMetrics.map((item) => {
+    const runtimeState = options.stateByWaId.get(item.conversation.waId);
+    const departmentBucket = getReportDepartmentBucket(item, options.stateByWaId, options.departmentNameById);
+    return {
+      conversationId: item.conversationId,
+      protocol: buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt }),
+      waId: item.conversation.waId,
+      channel: normalizeReportChannelLabel(item.conversation.channel).channel,
+      channelName: normalizeReportChannelLabel(item.conversation.channel).channelName,
+      departmentId: departmentBucket.departmentId,
+      departmentName: departmentBucket.departmentName,
+      assignedUserIds: runtimeState?.assignedUserIds ?? [],
+      status: runtimeState?.status ?? null,
+      startedAt: item.startedAt.toISOString(),
+      closedAt: "closedAt" in item && item.closedAt instanceof Date ? item.closedAt.toISOString() : null,
+    };
+  });
   return {
     ok: true,
     range: options.rangeKey,
@@ -16111,6 +16148,7 @@ function buildConversationReportSummary(options: {
         item.responseCount > 0 ? Math.round(item.totalResponseTimeSec / item.responseCount) : null,
     })),
     byChannel: buildConversationReportChannelSummary(options.filteredMetrics),
+    conversations,
   };
 }
 
@@ -16204,6 +16242,7 @@ function buildConversationReportCsv(options: {
   return [
     [
       "conversationId",
+      "protocol",
       "waId",
       "channel",
       "departmentId",
@@ -16222,6 +16261,7 @@ function buildConversationReportCsv(options: {
       const departmentId = item.conversation.departmentId ?? null;
       return [
         csvCell(item.conversationId),
+        csvCell(buildConversationProtocol({ id: item.conversationId, createdAt: item.startedAt })),
         csvCell(item.conversation.waId),
         csvCell(normalizeReportChannelLabel(item.conversation.channel).channelName),
         csvCell(departmentId),
@@ -18995,6 +19035,69 @@ async function buildConversationActionPayload(
   };
 }
 
+async function sendConversationProtocolNoticeIfNeeded(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    clientKey: string;
+    requestId: string;
+    waId: string;
+    waIdCanonical?: string | null;
+    channel?: string | null;
+    protocol: string | null;
+  }
+) {
+  if (!params.protocol) return { sent: false as const, reason: "missing_protocol" as const };
+  if (params.channel && serializeInboxChannelFields({ channel: params.channel }).channel !== "whatsapp") {
+    return { sent: false as const, reason: "non_whatsapp_channel" as const };
+  }
+  const lookup = Array.from(new Set([params.waId, params.waIdCanonical].filter(Boolean))) as string[];
+  const alreadySent = await prisma.outboundMessage.findFirst({
+    where: {
+      clientId: params.clientId,
+      ...(lookup.length ? { OR: [{ waId: { in: lookup } }, { waIdCanonical: { in: lookup } }] } : { waId: params.waId }),
+      bodyText: { contains: params.protocol },
+    },
+    select: { id: true },
+  });
+  if (alreadySent) return { sent: false as const, reason: "already_sent" as const };
+
+  try {
+    const result = await adminSendMessage({
+      waId: params.waId,
+      text: buildConversationProtocolNotice(params.protocol),
+      clientKey: params.clientKey,
+      clientId: params.clientId,
+      requestId: `${params.requestId}:protocol`,
+    });
+    logger.info({
+      event: result.ok ? "conversation.protocol.notice.sent" : "conversation.protocol.notice.skipped",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waIdCanonical ?? params.waId),
+      protocol: params.protocol,
+      status: result.ok ? result.status : null,
+      reason: result.ok ? null : result.error,
+    });
+    return result.ok
+      ? { sent: true as const, status: result.status }
+      : { sent: false as const, reason: result.error };
+  } catch (error) {
+    logger.warn({
+      event: "conversation.protocol.notice.skipped",
+      requestId: params.requestId,
+      clientId: params.clientId,
+      clientKey: params.clientKey,
+      waId: maskWaId(params.waIdCanonical ?? params.waId),
+      protocol: params.protocol,
+      reason: "send_error",
+      message: (error as Error).message,
+    });
+    return { sent: false as const, reason: "send_error" as const };
+  }
+}
+
 function buildScopedWaIdWhere(rawWaId: string) {
   const lookup = buildWaIdLookup(rawWaId);
   const exactRaw = rawWaId.trim();
@@ -19850,6 +19953,7 @@ function conversationMatchesListFilters(item: {
   lastMessage: { bodyText: string | null } | null;
   leadName: string | null;
   leadPhone: string | null;
+  protocol?: string | null;
   waId: string;
   channel?: string | null;
   status: ConversationOperationalStatus | null;
@@ -19869,11 +19973,14 @@ function conversationMatchesListFilters(item: {
   if (filters.assignedUserId && item.assignedUserId !== filters.assignedUserId) return false;
   if (filters.unassigned && item.assignedUserId) return false;
   if (filters.search) {
-    const haystack = [item.leadName, item.leadPhone, item.waId, item.lastMessage?.bodyText]
+    const normalizedProtocol = normalizeConversationProtocol(filters.search);
+    const protocolMatches =
+      normalizedProtocol !== null && item.protocol?.toUpperCase() === normalizedProtocol;
+    const haystack = [item.protocol, item.leadName, item.leadPhone, item.waId, item.lastMessage?.bodyText]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    if (!haystack.includes(filters.search.toLowerCase())) return false;
+    if (!protocolMatches && !haystack.includes(filters.search.toLowerCase())) return false;
   }
   return true;
 }
@@ -20082,11 +20189,13 @@ async function buildConversationListPayload(
   recordInboxListTiming(params.clientId, "defaults", defaultsStartedAt);
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
+  const protocolIdPrefix = getConversationIdPrefixFromProtocol(params.filters.search);
   const conversationWhere: Prisma.ConversationWhereInput = {
       clientId: params.clientId,
       deletedAt: null,
       anonymizedAt: null,
       lastInboundAt: { not: null },
+    ...(protocolIdPrefix ? { id: { startsWith: protocolIdPrefix } } : {}),
     ...(params.cursor
       ? {
           OR: [
@@ -20793,6 +20902,7 @@ async function buildConversationDetailPayload(
     ok: true,
     waId: conversation?.waId ?? resolved.resolvedWaId,
     waIdCanonical: resolved.resolvedWaIdCanonical,
+    protocol: resolved.winner ? buildConversationProtocol(resolved.winner) : null,
     ...serializeInboxChannelFields(resolved.winner ?? undefined),
     channelOutboundEnabled,
     ...serializeConversationOperationalFields({

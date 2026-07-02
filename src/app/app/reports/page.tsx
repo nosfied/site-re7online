@@ -320,6 +320,21 @@ export default function AppReportsPage() {
           )
           .join("")
       : `<tr><td colspan="2">Nenhum dado por canal.</td></tr>`;
+    const protocolRows = report.conversations?.length
+      ? report.conversations
+          .slice(0, 100)
+          .map(
+            (item) => `
+              <tr>
+                <td>${escapeHtml(item.protocol)}</td>
+                <td>${escapeHtml(item.channelName)}</td>
+                <td>${escapeHtml(item.departmentName ?? "-")}</td>
+                <td>${escapeHtml(item.status ?? "-")}</td>
+                <td>${escapeHtml(formatDateTime(item.startedAt))}</td>
+              </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="5">Nenhum protocolo no periodo selecionado.</td></tr>`;
     const html = `<!doctype html>
       <html lang="pt-BR">
         <head>
@@ -384,7 +399,9 @@ export default function AppReportsPage() {
 	            <div class="card"><span>Automatizados</span><strong>${escapeHtml(report.automatedConversations ?? 0)}</strong></div>
 	            <div class="card"><span>Transferencias humano</span><strong>${escapeHtml(report.humanTransferCount ?? 0)}</strong></div>
 	            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
-	          </section>
+          </section>
+          <h2>Protocolos de atendimento</h2>
+          <table><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Status</th><th>Inicio</th></tr></thead><tbody>${protocolRows}</tbody></table>
           <h2>Por canal</h2>
           <table><thead><tr><th>Canal</th><th>Conversas</th></tr></thead><tbody>${byChannelRows}</tbody></table>
           <h2>Por setor</h2>
@@ -599,6 +616,38 @@ export default function AppReportsPage() {
 	          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
 	          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
         </article>
+      </section>
+
+      <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+        <div className="border-b border-white/10 px-4 py-3">
+          <h2 className="text-sm font-semibold">Protocolos</h2>
+        </div>
+        {report?.conversations?.length ? (
+          <table className="w-full min-w-[780px] text-sm">
+            <thead className="bg-white/10 text-left">
+              <tr>
+                <th className="px-3 py-2">Protocolo</th>
+                <th className="px-3 py-2">Canal</th>
+                <th className="px-3 py-2">Setor</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Inicio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.conversations.slice(0, 100).map((item) => (
+                <tr key={item.conversationId} className="border-t border-white/10">
+                  <td className="px-3 py-2 font-mono text-xs">{item.protocol}</td>
+                  <td className="px-3 py-2">{item.channelName}</td>
+                  <td className="px-3 py-2">{item.departmentName ?? "-"}</td>
+                  <td className="px-3 py-2">{item.status ?? "-"}</td>
+                  <td className="px-3 py-2">{formatDateTime(item.startedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="p-4 text-sm text-white/70">Nenhum protocolo no periodo selecionado.</p>
+        )}
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
