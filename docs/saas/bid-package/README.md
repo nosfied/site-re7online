@@ -41,4 +41,4 @@ Este material descreve o Converta como plataforma SaaS de atendimento digital, a
 - A proposta final deve refletir o ambiente contratado, incluindo infraestrutura, volume, retencao, canais e limites.
 - Exigencias como 400 usuarios simultaneos, 30 canais WhatsApp, 5 Instagrams, 600 GB de midia, app nativo, NPS, OTP, Telegram ou Webchat exigem matriz de aderencia especifica.
 - Tokens, segredos, chaves, IDs sensiveis e dados pessoais nao devem ser incluidos em anexos publicos.
-
+- Pacotes especificos de certame devem ficar em `docs/bids/<ano>/<orgao>/` e referenciar este pacote institucional, sem duplicar conteudo tecnico.

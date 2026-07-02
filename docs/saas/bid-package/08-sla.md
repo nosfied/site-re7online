@@ -57,3 +57,8 @@ Para proposta publica, anexar:
 - periodicidade de relatorios;
 - responsaveis por acompanhamento.
 
+Para o SIMAE Capinzal/SC DE 36/2026, o pacote operacional especifico fica em:
+
+- `docs/bids/2026/simae-capinzal-sc/SIMAE_SUPPORT_SLA_TRAINING_PACK.md`.
+
+Esse documento consolida severidades, primeira resposta critica em ate 1 hora, meta de resolucao critica em ate 24 horas, treinamento inicial, manutencao programada, comunicacao de incidentes e checklist de implantacao/aceite.

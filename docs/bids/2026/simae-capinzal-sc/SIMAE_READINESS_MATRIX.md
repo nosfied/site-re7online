@@ -4,13 +4,13 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-83E. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83F. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
 **Converta atende integralmente o TR? SIM, no escopo tecnico do produto.**
 
-O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-83E foram feitos ajustes pequenos e aderentes ao TR:
+O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-83F foram feitos ajustes pequenos e aderentes ao TR:
 
 - protocolo de atendimento visivel no Inbox;
 - relatorios com atendimentos automatizados e transferencias para atendimento humano.
@@ -61,6 +61,12 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | --- | --- | --- |
 | Backup offsite e restore drill | `backup:postgres` passa a aceitar destino offsite opcional por `POSTGRES_BACKUP_OFFSITE_TARGET`; `backup:evidence status` identifica backup ausente/antigo/checksum/offsite; `backup:evidence restore-drill` registra evidencia JSONL de drill em ambiente isolado sem segredos | `apps/whatsapp-agent/scripts/backup-postgres.sh`, `apps/whatsapp-agent/src/ops/backupEvidence.ts`, `apps/whatsapp-agent/scripts/backup-evidence.ts` |
 
+## Evidencia Adicionada na 83F
+
+| Area | Evidencia | Arquivo |
+| --- | --- | --- |
+| Suporte, SLA, treinamento e aceite | Pacote operacional SIMAE com severidades, primeira resposta, resolucao critica, escalonamento, comunicacao de incidentes, treinamento inicial, checklist de implantacao/aceite e manutencao programada | `docs/bids/2026/simae-capinzal-sc/SIMAE_SUPPORT_SLA_TRAINING_PACK.md` |
+
 ## Matriz Requisito x Evidencia
 
 | Requisito do TR | Trecho do TR | Status | Evidencia objetiva | Sprint/Modulo | Necessita desenvolvimento? |
@@ -105,9 +111,9 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Relatorio: transferencias para atendimento humano | Item 3.4(d), 4.1(c) | ATENDE | Ajuste 80C: `humanTransferCount`, `assignmentCount`, UI/PDF/CSV | 80C | NAO |
 | Relatorios por atendente e setor | Item 3.4(d) | ATENDE | `byAgent`, `byDepartment` na API e UI | Fases I/II | NAO |
 | Exportacao em formato digital | Item 3.4(d) | ATENDE | PDF e CSV em `/app/reports` | Fases I/II | NAO |
-| Suporte tecnico, manutencao preventiva/corretiva/evolutiva | Itens 3.5, 4.2 | ATENDE COM AJUSTE | Observabilidade, alerts, backup, release checklist; 83D inclui incident log e maintenance log protegidos; depende de contrato/equipe/escala de atendimento | 78A-78O, 83D | NAO, comercial/operacional |
-| Atendimento emergencial em ate 1h e resolucao critica em 24h | Itens 3.5(d), 4.2(c) | ATENDE COM AJUSTE | Capacidade operacional documentada; 83D registra incidente com severidade, impacto, inicio/fim, causa, acao e comunicacao ao cliente; requer compromisso de SLA e escala humana | 78A-78O, 83D | NAO, comercial/operacional |
-| Treinamento inicial dos colaboradores | Item 4.1(b) | ATENDE COM AJUSTE | Documentacao de produto existe; treinamento presencial/remoto exige plano comercial/operacional por contrato | 79A, bid-package | NAO, documental/comercial |
+| Suporte tecnico, manutencao preventiva/corretiva/evolutiva | Itens 3.5, 4.2 | ATENDE COM AJUSTE | Observabilidade, alerts, backup, release checklist; 83D inclui incident log e maintenance log protegidos; 83F consolida plano operacional de suporte, severidades, escalonamento e manutencao programada | 78A-78O, 83D-83F | NAO, comercial/operacional |
+| Atendimento emergencial em ate 1h e resolucao critica em 24h | Itens 3.5(d), 4.2(c) | ATENDE COM AJUSTE | 83F formaliza primeira resposta critica em ate 1h, meta de resolucao critica em ate 24h quando tecnicamente possivel, registro de inicio/fim, causa, impacto, acao e comunicacao ao cliente | 78A-78O, 83D-83F | NAO, comercial/operacional |
+| Treinamento inicial dos colaboradores | Item 4.1(b) | ATENDE COM AJUSTE | 83F consolida roteiro de treinamento inicial com login, Inbox, atendimento humano, claim/release, transferencias, departamentos/filas, chatbot, relatorios, protocolos, suporte e LGPD | 79A, bid-package, 83F | NAO, documental/comercial |
 | Relatorios mensais ao SIMAE | Item 4.1(c) | ATENDE COM AJUSTE | Periodo mensal fechado `month`, PDF/CSV exportaveis e campos contratuais existem; envio mensal ao fiscal depende de rotina operacional | 83B + 80C + Fases I/II | NAO, operacional |
 | Estabilidade em alta demanda simultanea e baixa latencia | Itens 4.3(b), 4.4(b) | ATENDE | Load Lab v1, 78O.2/78O.3: Public API/Search/Inbox testados; `inbox-read vu20 p95 0.585s` apos hardening | 78N-78O.3 | NAO |
 
@@ -131,6 +137,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 9. Demonstrar backup PostgreSQL com checksum/manifest, status operacional, offsite configuravel e evidencia de restore drill.
 10. Como evidencia tecnica complementar, executar `node --import tsx src/http/simae25UsersAcceptance.test.ts` em `apps/whatsapp-agent` para comprovar o aceite automatizado de 25 usuarios/atendentes, quotas, RBAC, departamentos, filas e transferencias.
 11. Demonstrar `/admin/ops/sla/monthly`, `/admin/ops/incidents` e `/admin/ops/maintenances` como evidencia operacional de disponibilidade, incidentes, comunicacao e manutencao programada.
+12. Anexar `SIMAE_SUPPORT_SLA_TRAINING_PACK.md` ao dossie operacional para suporte, treinamento, manutencao e aceite.
 
 ## Decisao
 

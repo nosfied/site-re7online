@@ -297,6 +297,21 @@ SLA/incidentes operacionais:
   - se houver janela programada, registrar manutencao com periodo, motivo, impacto esperado e comunicacao previa.
 - A evidencia 83D e interna/em memoria; para contrato com exigencia de historico formal, exportar/anexar o snapshot mensal ao dossie operacional ou evoluir para persistencia aprovada.
 
+Pacote operacional SIMAE:
+
+- Antes de go-live SIMAE, revisar `docs/bids/2026/simae-capinzal-sc/SIMAE_SUPPORT_SLA_TRAINING_PACK.md`.
+- Confirmar:
+  - canais oficiais de suporte;
+  - horario de atendimento;
+  - severidades e escalonamento;
+  - primeira resposta critica em ate 1 hora;
+  - meta de resolucao critica em ate 24 horas quando tecnicamente possivel;
+  - roteiro de treinamento inicial;
+  - checklist de implantacao/aceite;
+  - procedimento de manutencao programada;
+  - modelo de comunicacao de incidente.
+- Nao incluir telefones pessoais, credenciais, tokens, dumps ou dados privados no dossie do contrato.
+
 ## Frontend
 
 Diretorio raiz do repo:
