@@ -4,7 +4,7 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-83C. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83D. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
@@ -49,6 +49,12 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | --- | --- | --- |
 | Multiatendimento 25 usuarios | Teste de aceite cria tenant isolado com `maxActiveAppUsers=25`, provisiona 25 usuarios via API `/app/users`, bloqueia o 26o usuario, valida departamentos, filas, claim, transferencia entre atendentes, transferencia entre departamentos, RBAC por setor e isolamento multitenant | `apps/whatsapp-agent/src/http/simae25UsersAcceptance.test.ts` |
 
+## Evidencia Adicionada na 83D
+
+| Area | Evidencia | Arquivo |
+| --- | --- | --- |
+| SLA/incidentes/manutencao | `/health` registra snapshots internos de disponibilidade; endpoints protegidos `/admin/ops/incidents`, `/admin/ops/maintenances` e `/admin/ops/sla/monthly` permitem registrar incidentes, manutencoes programadas e compor evidencia mensal sem schema novo | `apps/whatsapp-agent/src/metrics/operationalSlaEvidence.ts`, `apps/whatsapp-agent/src/http/health.route.ts`, `apps/whatsapp-agent/src/http/routes.ts` |
+
 ## Matriz Requisito x Evidencia
 
 | Requisito do TR | Trecho do TR | Status | Evidencia objetiva | Sprint/Modulo | Necessita desenvolvimento? |
@@ -65,7 +71,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Atendimento em tempo real | Item 3.4(a) | ATENDE | Realtime hub, polling/WS, Inbox operacional; `src/lib/appRealtime.ts` | Fases I/II | NAO |
 | Funcionamento via navegador, sem instalacao local obrigatoria | Item 3.4(a) | ATENDE | Next.js web app `/app/login`, `/app/inbox` | Fases I/II | NAO |
 | Compatibilidade com computadores e dispositivos moveis | Item 3.4(a) | ATENDE COM AJUSTE | UI web responsiva; nao ha certificacao formal de matriz de dispositivos no repo | Frontend | NAO, mas requer validacao documental/PoC |
-| SLA mensal 99,5% e 99,9% | Itens 3.4(a), 4.3(a), 4.4(a) | ATENDE COM AJUSTE | Health, metrics, dashboard, alerts, swap, backup; SLA e penalidades sao compromisso operacional/comercial | 78A-78O | NAO, mas requer SLA contratual |
+| SLA mensal 99,5% e 99,9% | Itens 3.4(a), 4.3(a), 4.4(a) | ATENDE COM AJUSTE | Health, metrics, dashboard, alerts, swap, backup; 83D adiciona evidencia operacional mensal por `/admin/ops/sla/monthly`; SLA e penalidades seguem como compromisso operacional/comercial | 78A-78O, 83D | NAO, mas requer SLA contratual |
 | Chatbot funcional com menus e fluxos inteligentes | Item 3.4(b) | ATENDE | `/app/chatbot/flows`, `chatbotFlow.ts`, automacao/handoff | Fases I/II | NAO |
 | Direcionamento automatico para setores especificos | Item 3.4(b) | ATENDE | `ConversationRuntimeState.departmentId`, roteamento em webhook, departamentos | Fases I/II | NAO |
 | Criacao ilimitada de fluxos automatizados | Item 3.4(b) | ATENDE COM AJUSTE | Fluxos configuraveis existentes; nao ha evidencia de garantia formal de "ilimitado" sob qualquer volume | Fases I/II | NAO, mas requer parametrizacao/limites contratuais |
@@ -82,9 +88,9 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Registro completo de interacoes | Item 3.4(b), 4.3(b) | ATENDE | Mensagens inbound/outbound, eventos, timeline e historico | Fases I/II | NAO |
 | Criptografia das informacoes trafegadas | Item 3.4(c) | ATENDE COM AJUSTE | Operacao via HTTPS/TLS documentada em baseline; depende de configuracao de dominio/certificado em producao | 78I, 78O | NAO, operacional |
 | Backup periodico de conversas e registros | Item 3.4(c) | ATENDE | `backup:postgres`, `backup-postgres.sh`, manifest/checksum, restore validado | 78J-78L | NAO |
-| Monitoramento continuo de disponibilidade | Item 3.4(c), 4.4(b) | ATENDE | `/health`, `/admin/ops/metrics`, `/admin/ops/alerts`, dashboard operacional | 78A-78H | NAO |
+| Monitoramento continuo de disponibilidade | Item 3.4(c), 4.4(b) | ATENDE | `/health`, `/admin/ops/metrics`, `/admin/ops/alerts`, dashboard operacional; 83D registra snapshots internos de health para evidencia mensal | 78A-78H, 83D | NAO |
 | Protecao contra perda de dados | Item 3.4(c) | ATENDE COM AJUSTE | Backup/restore validado; offsite/HA ainda dependem de arquitetura operacional futura | 78J-78L | NAO para MVP, operacional para reforco |
-| Atualizacoes automaticas de seguranca | Item 3.4(c), 3.5(c) | ATENDE COM AJUSTE | Processo de deploy/manutencao documentado; "automaticas" depende de rotina operacional da contratada | 78A-78O | NAO, operacional |
+| Atualizacoes automaticas de seguranca | Item 3.4(c), 3.5(c) | ATENDE COM AJUSTE | Processo de deploy/manutencao documentado; 83D inclui registro de manutencao programada; "automaticas" depende de rotina operacional da contratada | 78A-78O, 83D | NAO, operacional |
 | Adequacao LGPD | Item 3.4(c) | ATENDE | Privacy retention, redaction, RBAC, MFA, logs sem PII, docs LGPD | Fases II/III, 77B-77H, 78B | NAO |
 | Relatorio: quantidade de atendimentos | Item 3.4(d), 4.1(c) | ATENDE | `totalConversations` em `/app/reports/conversations` | Fases I/II | NAO |
 | Relatorio: tempo medio de resposta | Item 3.4(d), 4.1(c) | ATENDE | `avgFirstResponseTimeSec`, PDF/CSV/UI | Fases I/II | NAO |
@@ -93,8 +99,8 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Relatorio: transferencias para atendimento humano | Item 3.4(d), 4.1(c) | ATENDE | Ajuste 80C: `humanTransferCount`, `assignmentCount`, UI/PDF/CSV | 80C | NAO |
 | Relatorios por atendente e setor | Item 3.4(d) | ATENDE | `byAgent`, `byDepartment` na API e UI | Fases I/II | NAO |
 | Exportacao em formato digital | Item 3.4(d) | ATENDE | PDF e CSV em `/app/reports` | Fases I/II | NAO |
-| Suporte tecnico, manutencao preventiva/corretiva/evolutiva | Itens 3.5, 4.2 | ATENDE COM AJUSTE | Observabilidade, alerts, backup, release checklist; depende de contrato/equipe/escala de atendimento | 78A-78O | NAO, comercial/operacional |
-| Atendimento emergencial em ate 1h e resolucao critica em 24h | Itens 3.5(d), 4.2(c) | ATENDE COM AJUSTE | Capacidade operacional documentada; requer compromisso de SLA e escala humana | 78A-78O | NAO, comercial/operacional |
+| Suporte tecnico, manutencao preventiva/corretiva/evolutiva | Itens 3.5, 4.2 | ATENDE COM AJUSTE | Observabilidade, alerts, backup, release checklist; 83D inclui incident log e maintenance log protegidos; depende de contrato/equipe/escala de atendimento | 78A-78O, 83D | NAO, comercial/operacional |
+| Atendimento emergencial em ate 1h e resolucao critica em 24h | Itens 3.5(d), 4.2(c) | ATENDE COM AJUSTE | Capacidade operacional documentada; 83D registra incidente com severidade, impacto, inicio/fim, causa, acao e comunicacao ao cliente; requer compromisso de SLA e escala humana | 78A-78O, 83D | NAO, comercial/operacional |
 | Treinamento inicial dos colaboradores | Item 4.1(b) | ATENDE COM AJUSTE | Documentacao de produto existe; treinamento presencial/remoto exige plano comercial/operacional por contrato | 79A, bid-package | NAO, documental/comercial |
 | Relatorios mensais ao SIMAE | Item 4.1(c) | ATENDE COM AJUSTE | Periodo mensal fechado `month`, PDF/CSV exportaveis e campos contratuais existem; envio mensal ao fiscal depende de rotina operacional | 83B + 80C + Fases I/II | NAO, operacional |
 | Estabilidade em alta demanda simultanea e baixa latencia | Itens 4.3(b), 4.4(b) | ATENDE | Load Lab v1, 78O.2/78O.3: Public API/Search/Inbox testados; `inbox-read vu20 p95 0.585s` apos hardening | 78N-78O.3 | NAO |
@@ -118,6 +124,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 8. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
 9. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
 10. Como evidencia tecnica complementar, executar `node --import tsx src/http/simae25UsersAcceptance.test.ts` em `apps/whatsapp-agent` para comprovar o aceite automatizado de 25 usuarios/atendentes, quotas, RBAC, departamentos, filas e transferencias.
+11. Demonstrar `/admin/ops/sla/monthly`, `/admin/ops/incidents` e `/admin/ops/maintenances` como evidencia operacional de disponibilidade, incidentes, comunicacao e manutencao programada.
 
 ## Decisao
 

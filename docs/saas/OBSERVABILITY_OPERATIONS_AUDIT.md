@@ -67,7 +67,7 @@ Arquivos e areas observadas:
 | Auditoria | ATENDE COM AJUSTE | `Event` tenant-scoped, eventos por canais, MFA, webhooks, search, audio, scheduling | falta tela/relatorio formal de auditoria operacional para cliente e operador interno | Medio/alto | 78E |
 | Metricas de atendimento/SLA | ATENDE | `ConversationMetrics`, `SLAConfig`, reports/dashboard, breach logs | precisa consolidar visao operacional por tenant/canal/atendente | Medio | 78E |
 | Metricas tecnicas | ATENDE COM AJUSTE | Sprint 78C cria `metrics.counter/gauge/timing` e `/admin/ops/metrics`; Sprint 78E amplia snapshot com p95 aproximado, averages, memoria/CPU/uptime, `request_count`, `request_duration`, `module_duration`, `route_duration`, `db_duration` e `dependency_duration`; Sprint 78F cria `/admin/ops` como dashboard interno visual; Sprint 78G desenha alerting, thresholds, ACK, silence e storm protection; Sprint 78H cria AlertManager interno em memoria com snapshot/ACK/resolve | ainda nao ha historico persistente, Prometheus/OpenTelemetry, notificacoes externas ou dashboard NOC externo | Medio/alto | 78I |
-| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime, alimenta gauges internos e agora mede `db_duration`/`dependency_duration` para DB | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend | Medio | 78F |
+| Health check | ATENDE COM AJUSTE | `/health` testa DB e uptime, alimenta gauges internos, mede `db_duration`/`dependency_duration` para DB e, desde 83D, registra snapshots internos de disponibilidade para evidencia mensal | nao separa liveness/readiness; nao cobre providers, storage, filas, PM2/frontend; historico ainda e em memoria | Medio | 78F/83D |
 | Monitoramento PM2 | ATENDE COM AJUSTE | `ecosystem.config.cjs`, autorestart, max memory 300M, runbooks com `pm2 logs/status` | sem alertas automaticos de memoria/CPU/restart/disk; instancia unica | Alto | 78D/78F |
 | Deploy | ATENDE COM AJUSTE | `deploy-vps.sh`, migrate/build/reload/health, checklist e deploy controlado | script padrao roda build frontend/backend; VPS exige builds sequenciais; rollback ainda manual | Medio | 78B |
 | Rollback | ATENDE COM AJUSTE | feature flags e runbooks; rollback por flag em modulos sensiveis | rollback de migration/restore nao e exercitado automaticamente; sem playbook por severidade | Medio/alto | 78B/78F |
@@ -76,7 +76,7 @@ Arquivos e areas observadas:
 | Smoke/replay/shadow | ATENDE | `evaluation:replay`, shadow compares, scripts de smoke, CLIs dry-run/execute | precisa consolidar suite operacional unica por release | Medio | 78B |
 | Observabilidade por tenant | ATENDE COM AJUSTE | tenant/clientId em eventos e dados; metrics/admin por clientKey; `/admin/ops` mostra snapshot tecnico interno | sem dashboard historico por tenant/canal/provider | Medio/alto | 78G/78H |
 | Tracing distribuido | NAO ATENDE | nao localizado OpenTelemetry/traces/span model | sem spans cross-endpoint/provider/DB | Medio/alto | 78D |
-| Alertas | ATENDE COM AJUSTE | Sprint 78G cria o desenho de alerting com fontes, severidade, thresholds, ACK, silence, dedupe, rollback e roadmap; Sprint 78H cria AlertManager interno em memoria com DB offline, health NOK, erro elevado, latencia alta, memoria alta, ACK e resolve automatico | ainda nao ha persistencia, silence, notificacoes reais ou central visual de alertas | Alto | 78I/78J |
+| Alertas/incidentes | ATENDE COM AJUSTE | Sprint 78G cria o desenho de alerting com fontes, severidade, thresholds, ACK, silence, dedupe, rollback e roadmap; Sprint 78H cria AlertManager interno em memoria com DB offline, health NOK, erro elevado, latencia alta, memoria alta, ACK e resolve automatico; Sprint 83D adiciona incident log e maintenance log internos em `/admin/ops/incidents`, `/admin/ops/maintenances` e composicao mensal em `/admin/ops/sla/monthly` | ainda nao ha persistencia, silence, notificacoes reais, central visual de alertas ou historico externo de uptime | Alto | 78I/78J |
 | HA/escala | ATENDE COM AJUSTE | app roda em PM2, DB Postgres em Docker local, scripts, flags, health, metrics, dashboard e alert engine; Sprint 78I documenta arquitetura, SPOFs, capacity, load test e DR; Sprint 78M detalha estrategia de load test; Sprint 78N cria scripts k6; Sprints 78N.3-78N.6 estabilizam laboratorio autenticado, sessoes e RBAC; 78N.3 final-final valida `health`, `public-api` e `search` ate `vu20`, com `inbox-read` funcional em `vu20` mas p95 `2.085,30 ms`; Sprint 78O cria baseline operacional permanente e aplica swap controlado de 2 GiB com `swappiness=10` | instancia unica, sem balanceamento, sem replica/standby, sem storage externo formal; primeiro gargalo real medido e `inbox-read` em `20 VUs`; swap reduz risco de OOM mas nao substitui HA ou aumento real de RAM | Alto | 78O.1-78P |
 
 Atualizacao 78O.1: a investigacao de `inbox-read` concluiu que o gargalo inicial e de query/payload assembly path, com N+1 em runtime state, overfetch de conversas candidatas e filtros em memoria. As metricas internas atuais mostram rota/modulo, mas ainda nao quebram a listagem por `conversationQuery`, `messageQuery`, `runtimeState`, `assembly` e `responseBytes`. Essa instrumentacao deve preceder a otimizacao na 78O.2.
@@ -258,10 +258,10 @@ Evidencias:
 
 Gaps:
 
-- disponibilidade, MTTR e MTBF nao estao medidos automaticamente;
+- disponibilidade passa a ter evidencia interna por snapshots de `/health` na Sprint 83D, mas ainda sem persistencia duravel;
 - SLO por tenant/canal nao formalizado;
 - alertas de breach ou provider outage nao existem;
-- nao ha relatorio executivo de SLA contratual completo por periodo.
+- relatorio executivo de SLA contratual completo por periodo passa a ter composicao tecnica minima em `/admin/ops/sla/monthly`, mas ainda depende de anexacao/export operacional e assinatura contratual.
 
 ## 8. Seguranca Operacional
 

@@ -255,6 +255,24 @@ Load test:
   - DB health diferente de OK;
   - restart PM2 inesperado.
 
+SLA/incidentes operacionais:
+
+- Releases que toquem health, metricas, alertas, deploy, PM2, banco ou canais criticos devem registrar evidencia operacional do periodo.
+- Endpoints protegidos:
+  - `GET /admin/ops/sla/monthly?month=YYYY-MM`
+  - `GET /admin/ops/incidents?month=YYYY-MM`
+  - `POST /admin/ops/incidents`
+  - `GET /admin/ops/maintenances?month=YYYY-MM`
+  - `POST /admin/ops/maintenances`
+- Smoke minimo:
+  - consultar `/health`;
+  - consultar `/admin/ops/metrics`;
+  - consultar `/admin/ops/alerts`;
+  - consultar `/admin/ops/sla/monthly?month=YYYY-MM`;
+  - se houver falha real, registrar incidente com severidade, impacto, inicio/fim, causa provavel, acao adotada e comunicacao ao cliente;
+  - se houver janela programada, registrar manutencao com periodo, motivo, impacto esperado e comunicacao previa.
+- A evidencia 83D e interna/em memoria; para contrato com exigencia de historico formal, exportar/anexar o snapshot mensal ao dossie operacional ou evoluir para persistencia aprovada.
+
 ## Frontend
 
 Diretorio raiz do repo:

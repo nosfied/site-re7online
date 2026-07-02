@@ -131,6 +131,13 @@ import {
   getInternalAlertSnapshot,
 } from "../metrics/internalAlertManager.js";
 import {
+  createOperationalIncident,
+  createScheduledMaintenance,
+  getSlaMonthlyEvidence,
+  listOperationalIncidents,
+  listScheduledMaintenances,
+} from "../metrics/operationalSlaEvidence.js";
+import {
   getClientProfile,
   getFeatures,
   hasFeature,
@@ -8900,6 +8907,116 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       });
       evaluateInternalAlerts(getMetricsSnapshot());
       json(res, 200, getInternalAlertSnapshot());
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/ops/incidents") {
+      const tenantId =
+        adminAuth.clientId ??
+        (typeof query.tenantId === "string" && query.tenantId.trim() ? query.tenantId.trim() : null);
+      metrics.counter("ops.incidents.snapshot", {
+        module: "ops",
+        tenantId: tenantId ?? "superadmin",
+      });
+      json(res, 200, {
+        ok: true,
+        incidents: listOperationalIncidents({
+          tenantId,
+          month: typeof query.month === "string" ? query.month : null,
+        }),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/ops/incidents") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const tenantId =
+        adminAuth.clientId ??
+        (typeof body.tenantId === "string" && body.tenantId.trim() ? body.tenantId.trim() : null);
+      const incident = createOperationalIncident({
+        tenantId,
+        service: typeof body.service === "string" ? body.service : null,
+        severity: typeof body.severity === "string" ? body.severity : null,
+        status: typeof body.status === "string" ? body.status : null,
+        description: typeof body.description === "string" ? body.description : null,
+        impact: typeof body.impact === "string" ? body.impact : null,
+        startedAt: typeof body.startedAt === "string" ? body.startedAt : null,
+        endedAt: typeof body.endedAt === "string" ? body.endedAt : null,
+        probableCause: typeof body.probableCause === "string" ? body.probableCause : null,
+        actionTaken: typeof body.actionTaken === "string" ? body.actionTaken : null,
+        customerCommunication:
+          typeof body.customerCommunication === "string" ? body.customerCommunication : null,
+      });
+      metrics.counter("ops.incidents.created", {
+        module: "ops",
+        tenantId: tenantId ?? "superadmin",
+        status: incident.status,
+      });
+      json(res, 201, { ok: true, incident });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/ops/maintenances") {
+      const tenantId =
+        adminAuth.clientId ??
+        (typeof query.tenantId === "string" && query.tenantId.trim() ? query.tenantId.trim() : null);
+      metrics.counter("ops.maintenances.snapshot", {
+        module: "ops",
+        tenantId: tenantId ?? "superadmin",
+      });
+      json(res, 200, {
+        ok: true,
+        maintenances: listScheduledMaintenances({
+          tenantId,
+          month: typeof query.month === "string" ? query.month : null,
+        }),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/ops/maintenances") {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const tenantId =
+        adminAuth.clientId ??
+        (typeof body.tenantId === "string" && body.tenantId.trim() ? body.tenantId.trim() : null);
+      const maintenance = createScheduledMaintenance({
+        tenantId,
+        service: typeof body.service === "string" ? body.service : null,
+        status: typeof body.status === "string" ? body.status : null,
+        windowStart: typeof body.windowStart === "string" ? body.windowStart : null,
+        windowEnd: typeof body.windowEnd === "string" ? body.windowEnd : null,
+        reason: typeof body.reason === "string" ? body.reason : null,
+        expectedImpact: typeof body.expectedImpact === "string" ? body.expectedImpact : null,
+        customerCommunication:
+          typeof body.customerCommunication === "string" ? body.customerCommunication : null,
+      });
+      metrics.counter("ops.maintenances.created", {
+        module: "ops",
+        tenantId: tenantId ?? "superadmin",
+        status: maintenance.status,
+      });
+      json(res, 201, { ok: true, maintenance });
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/admin/ops/sla/monthly") {
+      const tenantId =
+        adminAuth.clientId ??
+        (typeof query.tenantId === "string" && query.tenantId.trim() ? query.tenantId.trim() : null);
+      metrics.counter("ops.sla.monthly.snapshot", {
+        module: "ops",
+        tenantId: tenantId ?? "superadmin",
+      });
+      json(
+        res,
+        200,
+        getSlaMonthlyEvidence({
+          tenantId,
+          month: typeof query.month === "string" ? query.month : null,
+        })
+      );
       return;
     }
 
