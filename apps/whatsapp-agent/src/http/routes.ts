@@ -236,6 +236,10 @@ import {
   getHumanTransferReportCount,
   isAutomatedConversationReportState,
 } from "../reports/conversationReportCounters.js";
+import {
+  parseConversationReportPeriod,
+  parseConversationReportRange,
+} from "../reports/conversationReportPeriod.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   getPushStatus,
@@ -15737,40 +15741,6 @@ function parseQuery(parsed: URL) {
   return query;
 }
 
-function parseConversationReportRange(rawValue: string | undefined) {
-  switch (String(rawValue ?? "").trim()) {
-    case "1d":
-      return { key: "1d" as const, since: new Date(Date.now() - 24 * 60 * 60 * 1000), until: null };
-    case "30d":
-      return { key: "30d" as const, since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), until: null };
-    case "7d":
-    case "":
-      return { key: "7d" as const, since: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), until: null };
-    default:
-      return null;
-  }
-}
-
-function parseConversationReportDate(rawValue: unknown) {
-  const value = String(rawValue ?? "").trim();
-  if (!value) return null;
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return null;
-  return new Date(timestamp);
-}
-
-function parseConversationReportPeriod(query: Record<string, string>) {
-  const from = parseConversationReportDate(query.from);
-  const to = parseConversationReportDate(query.to);
-  if (from || to) {
-    const since = from ?? new Date(0);
-    const until = to ?? null;
-    if (until && until.getTime() < since.getTime()) return null;
-    return { key: "custom" as const, since, until };
-  }
-  return parseConversationReportRange(query.range);
-}
-
 type ReportChannelFilter = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
 
 function normalizeReportChannelFilter(rawValue: unknown): ReportChannelFilter {
@@ -15989,7 +15959,7 @@ async function loadConversationReportData(
 }
 
 function buildConversationReportSummary(options: {
-  rangeKey: "1d" | "7d" | "30d" | "custom";
+  rangeKey: "1d" | "7d" | "30d" | "month" | "custom";
   periodFrom: Date;
   periodTo?: Date | null;
   dedupe: boolean;

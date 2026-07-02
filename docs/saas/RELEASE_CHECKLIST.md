@@ -166,6 +166,18 @@ npm run search:index-shadow -- --tenant demo-prefeitura --json --record
 - `search:index-audio --record` exige `advancedSearch=true`, `advancedSearchRuntime=true` e `audioTranscription=true`, e so deve gravar transcricoes `completed` como `source=audio_transcription`.
 - `search:index-audio` nao pode baixar midia, chamar STT, processar audio, alterar Inbox, usar IA ou criar job automatico.
 
+Relatorios mensais:
+
+- Releases que toquem `/app/reports` ou `/app/reports/conversations` devem validar o periodo `Mes fechado anterior`.
+- O smoke minimo e:
+  - abrir `/app/reports`;
+  - selecionar `Mes fechado anterior`;
+  - confirmar indicadores de conversas, primeira resposta, resolucao, automatizados, transferencias, por atendente e por setor;
+  - gerar PDF;
+  - exportar CSV;
+  - confirmar coluna `protocol` no CSV quando houver conversas.
+- O envio mensal ao fiscal do contrato e uma rotina operacional/comercial; esta release nao cria scheduler, e-mail automatico ou cron de envio.
+
 PostgreSQL backup:
 
 - Releases com migration ou mudanca estrutural devem confirmar que existe backup PostgreSQL recente, valido e com checksum.

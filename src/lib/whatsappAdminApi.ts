@@ -138,7 +138,7 @@ export type AdminClientItem = {
   }>;
 };
 
-export type ConversationReportRange = "1d" | "7d" | "30d" | "custom";
+export type ConversationReportRange = "1d" | "7d" | "30d" | "month" | "custom";
 
 export type AdminChatbotFlowItem = {
   id: string;

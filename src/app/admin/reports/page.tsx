@@ -19,7 +19,15 @@ import {
   fetchUsers,
 } from "@/lib/whatsappAdminApi";
 
-const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d"];
+const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d", "month"];
+
+const REPORT_RANGE_LABELS: Record<ConversationReportRange, string> = {
+  "1d": "Ultimas 24 horas",
+  "7d": "Ultimos 7 dias",
+  "30d": "Ultimos 30 dias",
+  month: "Mes fechado anterior",
+  custom: "Periodo exato",
+};
 
 function formatSeconds(value: number | null) {
   if (value === null || value === undefined) return "-";
@@ -229,7 +237,7 @@ export default function AdminReportsPage() {
               >
                 {REPORT_RANGES.map((item) => (
                   <option key={item} value={item}>
-                    {item}
+                    {REPORT_RANGE_LABELS[item]}
                   </option>
                 ))}
               </select>

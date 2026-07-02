@@ -25,12 +25,13 @@ import type {
   ConversationReportResponse,
 } from "@/lib/whatsappAdminApi";
 
-const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d"];
+const REPORT_RANGES: ConversationReportRange[] = ["1d", "7d", "30d", "month"];
 
 const RANGE_LABELS: Record<ConversationReportRange, string> = {
   "1d": "Ultimas 24 horas",
   "7d": "Ultimos 7 dias",
   "30d": "Ultimos 30 dias",
+  month: "Mes fechado anterior",
   custom: "Periodo exato",
 };
 

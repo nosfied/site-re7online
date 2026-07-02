@@ -4,7 +4,7 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-80D. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83B. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
@@ -16,7 +16,7 @@ O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, depa
 - relatorios com atendimentos automatizados e transferencias para atendimento humano.
 - suporte a recebimento, persistencia, exibicao e exposicao via APIs de mensagens de localizacao do WhatsApp.
 
-Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tambem de compromisso operacional/comercial, nao apenas de software.
+Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso operacional/comercial, nao apenas de software. O relatorio mensal possui periodo mensal fechado e exportacao digital; o envio recorrente ao fiscal do contrato permanece como rotina operacional.
 
 ## Alteracoes Realizadas na 80C
 
@@ -34,6 +34,14 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 | Persistencia/API | Persistencia de latitude, longitude, nome e endereco em `rawPayload.location`; exposicao no Inbox, timeline e Public API por `location` normalizado | `apps/whatsapp-agent/src/inbox/messageLocation.ts`, `apps/whatsapp-agent/src/http/routes.ts`, `apps/whatsapp-agent/src/publicApi/publicApiMessagesService.ts` |
 | UI | Renderizacao de localizacao na timeline com links Google Maps e OpenStreetMap | `src/app/app/inbox/page.tsx` |
 | Testes | Cobertura de normalizacao e extracao segura de localizacao | `apps/whatsapp-agent/src/domain/whatsapp/normalizeWebhook.test.ts`, `apps/whatsapp-agent/src/inbox/messageLocation.test.ts` |
+
+## Alteracoes Realizadas na 83B
+
+| Area | Alteracao | Evidencia |
+| --- | --- | --- |
+| Relatorio mensal | Inclusao do periodo `month` para mes fechado anterior em `/app/reports` e `/admin/reports` | `apps/whatsapp-agent/src/reports/conversationReportPeriod.ts`, `src/app/app/reports/page.tsx`, `src/app/admin/reports/page.tsx` |
+| Exportacao mensal | CSV/PDF reutilizam o mesmo pacote contratual com protocolo, indicadores, atendente, setor, automatizados e transferencias | `apps/whatsapp-agent/src/http/routes.ts`, `src/app/app/reports/page.tsx` |
+| Testes | Cobertura do periodo mensal fechado e validacao de periodo custom | `apps/whatsapp-agent/src/reports/conversationReportPeriod.test.ts` |
 
 ## Matriz Requisito x Evidencia
 
@@ -82,7 +90,7 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 | Suporte tecnico, manutencao preventiva/corretiva/evolutiva | Itens 3.5, 4.2 | ATENDE COM AJUSTE | Observabilidade, alerts, backup, release checklist; depende de contrato/equipe/escala de atendimento | 78A-78O | NAO, comercial/operacional |
 | Atendimento emergencial em ate 1h e resolucao critica em 24h | Itens 3.5(d), 4.2(c) | ATENDE COM AJUSTE | Capacidade operacional documentada; requer compromisso de SLA e escala humana | 78A-78O | NAO, comercial/operacional |
 | Treinamento inicial dos colaboradores | Item 4.1(b) | ATENDE COM AJUSTE | Documentacao de produto existe; treinamento presencial/remoto exige plano comercial/operacional por contrato | 79A, bid-package | NAO, documental/comercial |
-| Relatorios mensais ao SIMAE | Item 4.1(c) | ATENDE COM AJUSTE | Relatorios exportaveis existem; envio mensal e formato institucional dependem de procedimento operacional | 80C + Fases I/II | NAO, operacional/documental |
+| Relatorios mensais ao SIMAE | Item 4.1(c) | ATENDE COM AJUSTE | Periodo mensal fechado `month`, PDF/CSV exportaveis e campos contratuais existem; envio mensal ao fiscal depende de rotina operacional | 83B + 80C + Fases I/II | NAO, operacional |
 | Estabilidade em alta demanda simultanea e baixa latencia | Itens 4.3(b), 4.4(b) | ATENDE | Load Lab v1, 78O.2/78O.3: Public API/Search/Inbox testados; `inbox-read vu20 p95 0.585s` apos hardening | 78N-78O.3 | NAO |
 
 ## Requisitos Pendentes
@@ -100,7 +108,7 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 4. Demonstrar chatbot/fluxos, saudacao/handoff e departamentos.
 5. Enviar e receber midias suportadas: imagem, audio, video e documento.
 6. Receber localizacao WhatsApp e demonstrar timeline com coordenadas e links Google Maps/OpenStreetMap.
-7. Demonstrar `/app/reports` com quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
+7. Demonstrar `/app/reports` com periodo "Mes fechado anterior", quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
 8. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
 9. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
 
@@ -108,4 +116,4 @@ Itens de SLA, suporte presencial, treinamento e relatorios mensais dependem tamb
 
 **Classificacao SIMAE atual: ATENDE.**
 
-Motivo: o nucleo operacional exigido pelo Termo de Referencia esta atendido e foram corrigidas as lacunas tecnicas identificadas de protocolo, relatorios e localizacao WhatsApp. A proposta ainda deve anexar compromissos operacionais de SLA, suporte, treinamento e relatorios mensais, pois estes itens sao contratuais/comerciais.
+Motivo: o nucleo operacional exigido pelo Termo de Referencia esta atendido e foram corrigidas as lacunas tecnicas identificadas de protocolo, relatorios mensais e localizacao WhatsApp. A proposta ainda deve anexar compromissos operacionais de SLA, suporte, treinamento e envio mensal ao fiscal, pois estes itens sao contratuais/comerciais.
