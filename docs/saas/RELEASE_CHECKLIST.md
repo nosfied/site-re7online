@@ -300,7 +300,13 @@ SLA/incidentes operacionais:
 Pacote operacional SIMAE:
 
 - Antes de go-live SIMAE, revisar `docs/bids/2026/simae-capinzal-sc/SIMAE_SUPPORT_SLA_TRAINING_PACK.md`.
+- Para provisionamento do tenant, revisar `docs/bids/2026/simae-capinzal-sc/SIMAE_TENANT_PROVISIONING_PACK.md`.
 - Confirmar:
+  - slug/clientKey aprovado;
+  - capabilities e limites do contrato;
+  - ate 25 usuarios, roles e departamentos;
+  - filas e fluxo inicial de chatbot;
+  - canal WhatsApp oficial Meta, WABA, webhook e templates;
   - canais oficiais de suporte;
   - horario de atendimento;
   - severidades e escalonamento;

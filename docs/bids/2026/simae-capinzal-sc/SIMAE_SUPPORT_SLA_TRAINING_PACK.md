@@ -109,7 +109,7 @@ Evidencia recomendada:
 
 | Etapa | Evidencia esperada | Status |
 | --- | --- | --- |
-| Tenant SIMAE provisionado | tenant criado/validado no console interno | pendente de go-live |
+| Tenant SIMAE provisionado | seguir `SIMAE_TENANT_PROVISIONING_PACK.md` e validar no console interno | pendente de go-live |
 | Canal WhatsApp oficial Meta configurado | `TenantMetaConfig`, `WaPhoneNumber`, WABA inscrita e inbound real | pendente de go-live |
 | Ate 25 usuarios criados | usuarios ADMIN/SUPERVISOR/AGENT conforme organograma | pendente de go-live |
 | Departamentos/setores configurados | setores administrativos do SIMAE | pendente de go-live |
@@ -181,6 +181,7 @@ Evidencia anexada:
 ## 8. Limites E Premissas
 
 - Este pacote nao substitui a proposta comercial nem o contrato.
+- O provisionamento detalhado do tenant SIMAE fica em `docs/bids/2026/simae-capinzal-sc/SIMAE_TENANT_PROVISIONING_PACK.md`.
 - Atendimento presencial depende de previsao contratual, disponibilidade e localidade.
 - Prazos de resolucao critica dependem de a causa estar sob controle da contratada.
 - Incidentes causados por indisponibilidade da Meta/WhatsApp, internet do contratante, DNS externo ou provedor de nuvem devem ser comunicados e acompanhados, mas podem depender de terceiros.

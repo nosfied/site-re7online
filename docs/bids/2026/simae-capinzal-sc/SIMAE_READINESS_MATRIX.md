@@ -4,13 +4,13 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-83F. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83G. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
 **Converta atende integralmente o TR? SIM, no escopo tecnico do produto.**
 
-O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-83F foram feitos ajustes pequenos e aderentes ao TR:
+O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-83G foram feitos ajustes pequenos e aderentes ao TR:
 
 - protocolo de atendimento visivel no Inbox;
 - relatorios com atendimentos automatizados e transferencias para atendimento humano.
@@ -67,12 +67,18 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | --- | --- | --- |
 | Suporte, SLA, treinamento e aceite | Pacote operacional SIMAE com severidades, primeira resposta, resolucao critica, escalonamento, comunicacao de incidentes, treinamento inicial, checklist de implantacao/aceite e manutencao programada | `docs/bids/2026/simae-capinzal-sc/SIMAE_SUPPORT_SLA_TRAINING_PACK.md` |
 
+## Evidencia Adicionada na 83G
+
+| Area | Evidencia | Arquivo |
+| --- | --- | --- |
+| Provisionamento do tenant SIMAE | Pacote operacional com slug sugerido, capabilities, ate 25 usuarios/RBAC, departamentos/filas, fluxo inicial de chatbot, canal WhatsApp oficial Meta e checklist de go-live/aceite | `docs/bids/2026/simae-capinzal-sc/SIMAE_TENANT_PROVISIONING_PACK.md` |
+
 ## Matriz Requisito x Evidencia
 
 | Requisito do TR | Trecho do TR | Status | Evidencia objetiva | Sprint/Modulo | Necessita desenvolvimento? |
 | --- | --- | --- | --- | --- | --- |
 | Plataforma de atendimento digital automatizado via WhatsApp | Item 3.1 | ATENDE | `apps/whatsapp-agent/src/whatsapp/webhook.controller.ts`, `apps/whatsapp-agent/src/whatsapp/whatsapp.client.ts`, `/app/inbox` | Fases I/II | NAO |
-| Multiatendimento simultaneo para ate 25 usuarios/atendentes | Itens 3.1, 3.4(a), 4.1(a) | ATENDE | `User`, `ConversationRuntimeState.assignedUserId`, `assignedUserIds`, `ConversationAssignment`; teste de aceite 83C valida tenant com 25 usuarios ativos, bloqueio do 26o usuario, departamentos, filas, claim, transferencias, RBAC e multitenancy | Fases I, 78N, 83C | NAO |
+| Multiatendimento simultaneo para ate 25 usuarios/atendentes | Itens 3.1, 3.4(a), 4.1(a) | ATENDE | `User`, `ConversationRuntimeState.assignedUserId`, `assignedUserIds`, `ConversationAssignment`; teste de aceite 83C valida tenant com 25 usuarios ativos, bloqueio do 26o usuario, departamentos, filas, claim, transferencias, RBAC e multitenancy; 83G define plano operacional de ate 25 usuarios para go-live | Fases I, 78N, 83C, 83G | NAO |
 | Solucao em nuvem acessivel pela internet | Itens 3.1, 3.4(c) | ATENDE COM AJUSTE | `HIGH_AVAILABILITY_SCALE_DESIGN.md`, `OPERATIONAL_BASELINE.md`; depende de compromisso de operacao do contrato | 78I, 78O | NAO, mas requer compromisso operacional |
 | Integracao oficial com WhatsApp Business API da Meta; vedado WhatsApp Web/QR | Itens 3.3, 3.4(c), 4.1(a) | ATENDE | `whatsapp.client.ts`, `meta/onboarding.service.ts`, templates Meta, ausencia de dependencia WhatsApp Web/QR | Fases I/II | NAO |
 | Controle de acesso por niveis de permissao | Item 3.4(a) | ATENDE | `User.role`, `requireClientAuth`, bloqueios por `ADMIN`, `SUPERVISOR`, `AGENT` | Fases I/II, 77B-77H | NAO |
@@ -92,7 +98,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Encaminhamento para atendimento humano | Item 3.4(b) | ATENDE | Handoff, `routeConversationToHumanQueue`, claim/release/transfer | Fases I/II | NAO |
 | Mensagens automaticas de saudacao, ausencia e encerramento | Item 3.4(b) | ATENDE | Configuracoes operacionais de tenant/chatbot e templates de handoff | Fases I/II | NAO |
 | Menus interativos | Item 3.4(b) | ATENDE | Chatbot flows e mensagens/template Meta | Fases I/II | NAO |
-| Atendimento por filas e departamentos | Item 3.4(b), 4.1(a) | ATENDE | `Department`, `Queue`, `/app/departments`, runtime state com `queueId`/`departmentId`; teste 83C valida conversas direcionadas a fila/departamento e bloqueio cross-department | Fases I/II, 78N.6, 83C | NAO |
+| Atendimento por filas e departamentos | Item 3.4(b), 4.1(a) | ATENDE | `Department`, `Queue`, `/app/departments`, runtime state com `queueId`/`departmentId`; teste 83C valida conversas direcionadas a fila/departamento e bloqueio cross-department; 83G sugere estrutura inicial de departamentos/filas para SIMAE | Fases I/II, 78N.6, 83C, 83G | NAO |
 | Distribuicao automatica de atendimentos | Item 3.4(b), 4.4(b) | ATENDE COM AJUSTE | Roteamento para fila/departamento e fallback operacional; nao ha evidencia de algoritmo avancado de balanceamento por carga | Fases I/II | NAO para TR basico; ajuste operacional se exigir balanceamento especifico |
 | Envio/recebimento de documentos, imagens, videos e audios | Item 3.4(b) | ATENDE | `MessageType.IMAGE/AUDIO/VIDEO/DOCUMENT`, `normalizeWebhook`, `sendMediaMessage`, `send-media` | Fases I/II, 75E-75I para audio | NAO |
 | Envio/recebimento de localizacao | Item 3.4(b) | ATENDE | `MessageType.LOCATION`, `normalizeWebhook` extrai `location`, `rawPayload.location`, timeline com Google Maps/OpenStreetMap, Public API com `location` | 80D | NAO |
@@ -138,6 +144,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 10. Como evidencia tecnica complementar, executar `node --import tsx src/http/simae25UsersAcceptance.test.ts` em `apps/whatsapp-agent` para comprovar o aceite automatizado de 25 usuarios/atendentes, quotas, RBAC, departamentos, filas e transferencias.
 11. Demonstrar `/admin/ops/sla/monthly`, `/admin/ops/incidents` e `/admin/ops/maintenances` como evidencia operacional de disponibilidade, incidentes, comunicacao e manutencao programada.
 12. Anexar `SIMAE_SUPPORT_SLA_TRAINING_PACK.md` ao dossie operacional para suporte, treinamento, manutencao e aceite.
+13. Usar `SIMAE_TENANT_PROVISIONING_PACK.md` como checklist de provisionamento, canal Meta, usuarios, departamentos, chatbot, relatorios, backup, SLA e go-live.
 
 ## Decisao
 
