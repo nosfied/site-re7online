@@ -84,6 +84,37 @@ Usar em conjunto com `WHATSAPP_COSTS_PREMISES.md`.
 | Agressivo | R$ 3.900,00 | R$ 46.800,00 | Usar somente se limites de IA/Meta/suporte presencial estiverem bem definidos. |
 | Nao recomendado | abaixo de R$ 3.000,00 | abaixo de R$ 36.000,00 | Risco alto frente a suporte, treinamento, Meta, IA e manutencao. |
 
+## Recomendacao 84C
+
+| Decisao | Recomendacao |
+| --- | --- |
+| Preco preferencial | Faixa competitiva segura entre R$ 4.800,00 e R$ 6.000,00 mensais. |
+| Quando usar R$ 6.000,00 | Se houver risco de deslocamento, maior suporte, maior consumo IA/WhatsApp ou manutencao presencial recorrente. |
+| Quando usar R$ 4.800,00 | Se custos Meta/IA forem controlados, POC remota for aceita e manutencao recorrente for remota mensal. |
+| Quando usar R$ 3.900,00 | Apenas com limites explicitos de IA, WhatsApp, suporte e sem obrigacao presencial quinzenal. |
+| Quando nao participar | Se a disputa exigir valor abaixo de R$ 3.000,00 mensais ou presencialidade quinzenal sem cobertura de custo. |
+
+## Gate De Custos Antes Do Envio
+
+| Item | Pergunta | Bloqueia envio? |
+| --- | --- | --- |
+| WhatsApp/Meta | O preco absorve 15k recebidas, 20k enviadas e pico de +50%? | Sim |
+| IA/OpenAI | Ha limite mensal e fallback sem IA generativa ilimitada? | Sim |
+| Hospedagem/backup | O ambiente e offsite operacional estao contemplados no custo? | Sim |
+| Suporte | A janela e SLA 1h/4h/8h/24h estao cobertos pela equipe? | Sim |
+| Treinamento 16h | A carga hibrida para ate 15 servidores esta precificada? | Sim |
+| Viagem/presencialidade | Eventual visita ou manutencao presencial tem custo previsto? | Sim |
+| Margem minima | A diretoria aprovou margem apos custos diretos e indiretos? | Sim |
+
+## Manutencao Presencial Versus TR Corrigido
+
+Existe risco documental porque o Anexo III menciona manutencao preventiva quinzenal presencial, enquanto o Termo de Referencia Corrigido aponta manutencao preventiva remota mensal. Antes do envio, escolher uma das estrategias:
+
+1. pedir esclarecimento formal;
+2. assumir manutencao remota mensal e registrar aderencia ao TR corrigido;
+3. precificar presencialidade recorrente no cenario conservador;
+4. nao participar se a presencialidade quinzenal for obrigatoria sem remuneracao suficiente.
+
 ## Formula De Verificacao Interna
 
 Antes de fechar preco:

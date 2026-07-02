@@ -31,17 +31,22 @@ Este pacote nao cria produto separado, nao altera o Core do Converta, nao hardco
 
 ## Resultado Executivo
 
-Classificacao recomendada: **Participar com ajustes documentais e demonstrativos**.
+Classificacao recomendada apos a 84C: **participar somente se pendencias bloqueantes forem fechadas antes do envio**.
 
 O Converta Platform possui aderencia forte ao nucleo do certame: SaaS web, WhatsApp oficial Meta, Webchat, chatbot, fluxos, handoff humano, base de conhecimento tenant-scoped, Public API, webhooks, dashboard, relatorios, LGPD, RBAC, observabilidade, backup e suporte operacional.
 
 Os principais pontos que exigem atencao antes da sessao de POC sao:
 
+- obter atestado tecnico assinado e compativel;
+- validar certidoes, documentos societarios e declaracoes;
+- aprovar preco/margem considerando Meta, IA, treinamento, suporte e presencialidade;
 - demonstrar base de conhecimento alimentando respostas automatizadas;
 - demonstrar integracao com API externa em simulacao controlada;
 - apresentar plano formal de suporte/chamados com status;
 - apresentar plano de treinamento 16h e material de apoio;
 - tratar a divergencia entre TR corrigido e Anexo III sobre manutencao preventiva.
+
+Se esses bloqueios forem resolvidos, a recomendacao operacional passa para **participar**. Sem atestado, documentos validos, preco aprovado ou ensaio KB/API, a recomendacao permanece **nao enviar proposta**.
 
 ## Pontuacao Tecnica Conservadora
 

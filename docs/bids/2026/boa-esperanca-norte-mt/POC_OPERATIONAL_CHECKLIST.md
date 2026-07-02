@@ -25,6 +25,40 @@ Usar em conjunto com `POC_REMOTE_SCRIPT.md` e `ANEXO_III_EVIDENCE_MATRIX.md`.
 | Suporte/SLA demonstravel | pendente | Incident/maintenance/status. |
 | Plano B com prints | pendente | Em caso de instabilidade de internet/Meta. |
 
+## Gate De Ensaio 84C
+
+Antes de autorizar participacao, executar um ensaio interno com tempo cronometrado e registrar o resultado fora do repositorio, sem dados reais de cidadaos.
+
+| Bloco | Evidencia esperada | Status minimo para envio |
+| --- | --- | --- |
+| WhatsApp Business oficial | Webhook/Cloud API, timeline e midias demonstraveis sem WhatsApp Web | Obrigatorio |
+| Website/Webchat | Widget ou pagina demonstrativa de portal institucional | Obrigatorio |
+| Fluxo automatizado | Saudacao, menu, triagem, ausencia, encerramento e handoff | Obrigatorio |
+| NLP/IA | Pergunta livre com resposta controlada ou fallback seguro | Obrigatorio |
+| KB/base de conhecimento | Artigo institucional alimentando resposta ou demonstracao assistida com fonte | Obrigatorio |
+| API externa simulada | Mock HTTP recebendo/enviando dado em fluxo controlado | Obrigatorio |
+| Handoff humano | Claim, atendimento por agente, transferencia e encerramento | Obrigatorio |
+| Logs/interacoes | Timeline, protocolo, eventos e historico da conversa | Obrigatorio |
+| Administracao | Usuarios, departamentos, filas, roles e RBAC | Obrigatorio |
+| Relatorios/indicadores | Periodo mensal, CSV/PDF e metricas principais | Obrigatorio |
+| Seguranca/LGPD | RBAC, isolamento tenant, redaction e backup/restore como evidencia | Obrigatorio |
+| Multiplos usuarios | Admin, supervisor e agente em sessoes separadas | Obrigatorio |
+| Suporte/chamados/status | Plano SLA, severidade, incidente/manutencao e status | Obrigatorio |
+
+Itens amarelos aceitaveis no ensaio:
+
+- integracao real com sistema da Camara, desde que a simulacao controlada esteja pronta;
+- manutencao presencial quinzenal, desde que o tratamento comercial/juridico esteja definido;
+- portal externo de chamados dedicado, desde que haja canal formal e registro de status.
+
+Itens vermelhos que bloqueiam envio:
+
+- nao demonstrar KB/API externa;
+- usar WhatsApp Web/QR persistente como base da POC;
+- expor dados reais, tokens, credenciais ou documentos pessoais;
+- nao conseguir demonstrar RBAC/multitenancy;
+- preco aprovado abaixo do custo operacional minimo.
+
 ## Sequencia Recomendada
 
 1. Abertura institucional e arquitetura.

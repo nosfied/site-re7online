@@ -19,6 +19,48 @@ Taxonomia:
 | Nao comprovado | 3 |
 | Total | 97 |
 
+## Gate 84C - Leitura Executiva Da Matriz
+
+Esta matriz deve ser usada como fonte de fala da proposta tecnica e da POC. O objetivo nao e declarar 97 pontos como plenamente atendidos, mas maximizar pontuacao com evidencia verificavel e evitar prometer integracao ou operacao que dependa de terceiros.
+
+| Grupo | Criterios | Leitura de risco | Tratamento na POC/proposta |
+| --- | --- | --- | --- |
+| Pontos praticamente seguros | Itens classificados como `Atende` | Baixo | Demonstrar produto, tela, rota, documento ou teste existente. |
+| Pontos que dependem de demonstracao | Itens `Atende com demonstracao` | Baixo/medio | Ensaiar antes da sessao e manter prints/plano B. |
+| Pontos com risco de perda parcial | Itens `Parcial` | Medio | Explicar limite atual e demonstrar simulacao controlada quando o TR permitir. |
+| Pontos nao comprovados | Itens `Nao comprovado` | Alto | Nao prometer como entregue; tratar como dependente de integracao, esclarecimento ou contrato. |
+
+## Pontos Que Exigem Fala Especifica Na POC
+
+| Tema | Criterios | Risco | Fala recomendada |
+| --- | --- | --- | --- |
+| Escalabilidade horizontal | 4 | Perda parcial | "A plataforma e modular e preparada para escala; o ambiente atual atende a volumetria prevista, com roadmap de HA documentado." |
+| Fluxos ilimitados | 21 | Perda parcial | "Nao ha limite funcional pequeno hardcoded; a operacao sera dimensionada por storage, performance e escopo contratual." |
+| KB alimentando resposta | 35 | Perda parcial se nao ensaiar | "A base e editavel pelo tenant e sera demonstrada com pergunta/resposta institucional controlada." |
+| Sistemas externos | 41-47, 49-52, 54, 57 | Medio/alto | "A integracao real depende de API e credenciais da Camara; na POC sera demonstrado mock controlado e padrao de API/webhook." |
+| Suporte/chamados/status | 89-90 | Medio | "O atendimento sera registrado por severidade/status em canal formal, com evidencias operacionais e SLA contratual." |
+| Manutencao presencial quinzenal | 93 | Alto | "Existe divergencia com o TR corrigido, que aponta manutencao remota mensal; o tratamento deve ser esclarecido ou precificado." |
+
+## Criterios Que Podem Ser Perdidos Sem Nova Implementacao
+
+| Criterio | Motivo | Impacto |
+| ---: | --- | --- |
+| 42 | Sem integracao real com sistema administrativo da Camara antes de APIs/credenciais. | Alto se exigirem conector real na POC. |
+| 54 | Atualizacao automatica por APIs externas nao comprovada como conector generico pronto. | Medio/alto. |
+| 93 | Manutencao preventiva quinzenal presencial conflita com TR corrigido e exige decisao comercial. | Alto se for obrigatoria e nao precificada. |
+
+## Condicao Para Pontuacao Alta
+
+Para sustentar pontuacao tecnica competitiva, a POC precisa demonstrar, sem improviso:
+
+1. Webchat no portal institucional demonstrativo.
+2. WhatsApp oficial Meta, sem WhatsApp Web/QR persistente.
+3. Fluxo automatizado com NLP/IA e handoff humano.
+4. Base de conhecimento alimentando uma resposta institucional.
+5. API externa simulada recebendo ou retornando dados.
+6. Relatorios por periodo, exportacao e indicadores.
+7. Suporte/SLA/chamados/status e manutencao programada.
+
 ## Matriz Dos 97 Criterios
 
 | # | Criterio | Status | Evidencia Converta | Roteiro de demonstracao |

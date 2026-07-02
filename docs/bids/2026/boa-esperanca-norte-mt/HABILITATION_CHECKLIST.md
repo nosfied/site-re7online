@@ -88,6 +88,38 @@ Este checklist nao deve receber certidoes reais, documentos pessoais, dados banc
 8. Proposta comercial.
 9. Anexos tecnicos: matriz Anexo III, POC, SLA, treinamento, premissas WhatsApp.
 
+## Checklist Final De Documentos Reais
+
+Nao commitar estes documentos no repositorio. Conferir manualmente em pasta segura antes do upload.
+
+| Documento real | Status esperado antes do envio | Bloqueante? | Observacao |
+| --- | --- | --- | --- |
+| Atestado tecnico assinado | pronto | Sim | Deve citar servico similar de atendimento digital/chatbot/omnichannel de forma comprovavel. |
+| Certidao Federal/INSS/Divida Ativa | pronta e valida | Sim | Conferir data no dia do envio. |
+| Certidao Estadual e Divida Ativa Estadual | pronta e valida | Sim | Conforme UF da sede. |
+| Certidao Municipal da sede | pronta e valida | Sim | Incluir divida ativa quando exigido. |
+| FGTS/CRF | pronta e valida | Sim | Conferir validade. |
+| CNDT | pronta e valida | Sim | Conferir validade. |
+| CNPJ | pronto | Sim | Emissao recente. |
+| Contrato social/ato constitutivo | pronto | Sim | Deve comprovar poderes do assinante. |
+| Documento dos socios/representante | pronto | Sim | Nao armazenar no Git. |
+| Balanco/DEFIS/IRPJ/demonstracoes | pronto | Sim | Confirmar regime fiscal e exigencia aplicavel. |
+| Certidao falencia/recuperacao | pronta e valida | Sim | Observar regra de prazo do edital. |
+| Consulta TCU/CNJ/Portal da Transparencia | pronta e recente | Sim | Anexar evidencias da consulta. |
+| SICAF/CRC, se aplicavel | validar | Nao, salvo exigencia final | CRC Sorriso aparenta facultativo, mas pode reduzir risco. |
+| Declaracao unificada | pronta e assinada | Sim | Assinatura de representante com poderes. |
+| Proposta tecnica | pronta | Sim | Usar matriz Anexo III e POC como anexos. |
+| Proposta comercial | pronta | Sim | Valor mensal/global e validade preenchidos fora do Git. |
+
+Conferencia final:
+
+- documentos sem rasura e legiveis;
+- validade vigente no dia do envio;
+- nomes, CNPJ e poderes de assinatura consistentes;
+- arquivo unico ou pacote aceito pela plataforma;
+- indice seguindo a ordem do edital;
+- nenhuma credencial, token, documento pessoal ou dado bancario incluido neste repositorio.
+
 ## Riscos De Habilitacao
 
 | Risco | Impacto | Mitigacao |
