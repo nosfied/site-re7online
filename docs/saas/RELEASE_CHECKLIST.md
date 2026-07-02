@@ -178,6 +178,17 @@ Relatorios mensais:
   - confirmar coluna `protocol` no CSV quando houver conversas.
 - O envio mensal ao fiscal do contrato e uma rotina operacional/comercial; esta release nao cria scheduler, e-mail automatico ou cron de envio.
 
+SIMAE 25 usuarios:
+
+- Releases que toquem usuarios app, departamentos, filas, claim/release ou transferencia devem repetir a prova tecnica de aceite SIMAE:
+
+```bash
+cd apps/whatsapp-agent
+node --import tsx src/http/simae25UsersAcceptance.test.ts
+```
+
+- O teste deve comprovar tenant isolado com `maxActiveAppUsers=25`, 25 usuarios ativos permitidos, 26o usuario bloqueado, RBAC por departamento, isolamento multitenant, claim, transferencia entre atendentes e transferencia entre departamentos.
+
 PostgreSQL backup:
 
 - Releases com migration ou mudanca estrutural devem confirmar que existe backup PostgreSQL recente, valido e com checksum.

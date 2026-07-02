@@ -4,7 +4,7 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-83B. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83C. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
@@ -43,19 +43,25 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Exportacao mensal | CSV/PDF reutilizam o mesmo pacote contratual com protocolo, indicadores, atendente, setor, automatizados e transferencias | `apps/whatsapp-agent/src/http/routes.ts`, `src/app/app/reports/page.tsx` |
 | Testes | Cobertura do periodo mensal fechado e validacao de periodo custom | `apps/whatsapp-agent/src/reports/conversationReportPeriod.test.ts` |
 
+## Evidencia Adicionada na 83C
+
+| Area | Evidencia | Arquivo |
+| --- | --- | --- |
+| Multiatendimento 25 usuarios | Teste de aceite cria tenant isolado com `maxActiveAppUsers=25`, provisiona 25 usuarios via API `/app/users`, bloqueia o 26o usuario, valida departamentos, filas, claim, transferencia entre atendentes, transferencia entre departamentos, RBAC por setor e isolamento multitenant | `apps/whatsapp-agent/src/http/simae25UsersAcceptance.test.ts` |
+
 ## Matriz Requisito x Evidencia
 
 | Requisito do TR | Trecho do TR | Status | Evidencia objetiva | Sprint/Modulo | Necessita desenvolvimento? |
 | --- | --- | --- | --- | --- | --- |
 | Plataforma de atendimento digital automatizado via WhatsApp | Item 3.1 | ATENDE | `apps/whatsapp-agent/src/whatsapp/webhook.controller.ts`, `apps/whatsapp-agent/src/whatsapp/whatsapp.client.ts`, `/app/inbox` | Fases I/II | NAO |
-| Multiatendimento simultaneo para ate 25 usuarios/atendentes | Itens 3.1, 3.4(a), 4.1(a) | ATENDE | `User`, `ConversationRuntimeState.assignedUserId`, `assignedUserIds`, `ConversationAssignment`; load lab validado ate 20 VUs | Fases I, 78N | NAO |
+| Multiatendimento simultaneo para ate 25 usuarios/atendentes | Itens 3.1, 3.4(a), 4.1(a) | ATENDE | `User`, `ConversationRuntimeState.assignedUserId`, `assignedUserIds`, `ConversationAssignment`; teste de aceite 83C valida tenant com 25 usuarios ativos, bloqueio do 26o usuario, departamentos, filas, claim, transferencias, RBAC e multitenancy | Fases I, 78N, 83C | NAO |
 | Solucao em nuvem acessivel pela internet | Itens 3.1, 3.4(c) | ATENDE COM AJUSTE | `HIGH_AVAILABILITY_SCALE_DESIGN.md`, `OPERATIONAL_BASELINE.md`; depende de compromisso de operacao do contrato | 78I, 78O | NAO, mas requer compromisso operacional |
 | Integracao oficial com WhatsApp Business API da Meta; vedado WhatsApp Web/QR | Itens 3.3, 3.4(c), 4.1(a) | ATENDE | `whatsapp.client.ts`, `meta/onboarding.service.ts`, templates Meta, ausencia de dependencia WhatsApp Web/QR | Fases I/II | NAO |
 | Controle de acesso por niveis de permissao | Item 3.4(a) | ATENDE | `User.role`, `requireClientAuth`, bloqueios por `ADMIN`, `SUPERVISOR`, `AGENT` | Fases I/II, 77B-77H | NAO |
 | Painel administrativo completo | Item 3.4(a), 4.1(c) | ATENDE | `/app/users`, `/app/departments`, `/app/reports`, `/admin/ops`, `/app/chatbot`, `/app/api-keys` | Fases I-IV | NAO |
 | Historico integral das conversas | Itens 3.4(a), 3.4(d), 4.3(b) | ATENDE | `InboundMessage`, `OutboundMessage`, `/app/conversation/:waId/timeline`, Inbox/timeline | Fases I/II | NAO |
 | Gestao centralizada de atendimentos | Item 3.4(a) | ATENDE | `/app/inbox`, filtros por canal/status/departamento, runtime state | Fases I, 78O.2-78O.3 | NAO |
-| Transferencia entre setores e atendentes | Item 3.4(a) | ATENDE | Rotas `/app/conversation/:waId/transfer` e `/transfer-department`; UI no Inbox | Fases I/II, 78N.6 | NAO |
+| Transferencia entre setores e atendentes | Item 3.4(a) | ATENDE | Rotas `/app/conversation/:waId/transfer` e `/transfer-department`; UI no Inbox; teste 83C cobre transferencia entre atendentes e entre departamentos com RBAC preservado | Fases I/II, 78N.6, 83C | NAO |
 | Atendimento em tempo real | Item 3.4(a) | ATENDE | Realtime hub, polling/WS, Inbox operacional; `src/lib/appRealtime.ts` | Fases I/II | NAO |
 | Funcionamento via navegador, sem instalacao local obrigatoria | Item 3.4(a) | ATENDE | Next.js web app `/app/login`, `/app/inbox` | Fases I/II | NAO |
 | Compatibilidade com computadores e dispositivos moveis | Item 3.4(a) | ATENDE COM AJUSTE | UI web responsiva; nao ha certificacao formal de matriz de dispositivos no repo | Frontend | NAO, mas requer validacao documental/PoC |
@@ -68,7 +74,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Encaminhamento para atendimento humano | Item 3.4(b) | ATENDE | Handoff, `routeConversationToHumanQueue`, claim/release/transfer | Fases I/II | NAO |
 | Mensagens automaticas de saudacao, ausencia e encerramento | Item 3.4(b) | ATENDE | Configuracoes operacionais de tenant/chatbot e templates de handoff | Fases I/II | NAO |
 | Menus interativos | Item 3.4(b) | ATENDE | Chatbot flows e mensagens/template Meta | Fases I/II | NAO |
-| Atendimento por filas e departamentos | Item 3.4(b), 4.1(a) | ATENDE | `Department`, `Queue`, `/app/departments`, runtime state com `queueId`/`departmentId` | Fases I/II, 78N.6 | NAO |
+| Atendimento por filas e departamentos | Item 3.4(b), 4.1(a) | ATENDE | `Department`, `Queue`, `/app/departments`, runtime state com `queueId`/`departmentId`; teste 83C valida conversas direcionadas a fila/departamento e bloqueio cross-department | Fases I/II, 78N.6, 83C | NAO |
 | Distribuicao automatica de atendimentos | Item 3.4(b), 4.4(b) | ATENDE COM AJUSTE | Roteamento para fila/departamento e fallback operacional; nao ha evidencia de algoritmo avancado de balanceamento por carga | Fases I/II | NAO para TR basico; ajuste operacional se exigir balanceamento especifico |
 | Envio/recebimento de documentos, imagens, videos e audios | Item 3.4(b) | ATENDE | `MessageType.IMAGE/AUDIO/VIDEO/DOCUMENT`, `normalizeWebhook`, `sendMediaMessage`, `send-media` | Fases I/II, 75E-75I para audio | NAO |
 | Envio/recebimento de localizacao | Item 3.4(b) | ATENDE | `MessageType.LOCATION`, `normalizeWebhook` extrai `location`, `rawPayload.location`, timeline com Google Maps/OpenStreetMap, Public API com `location` | 80D | NAO |
@@ -111,6 +117,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 7. Demonstrar `/app/reports` com periodo "Mes fechado anterior", quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
 8. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
 9. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
+10. Como evidencia tecnica complementar, executar `node --import tsx src/http/simae25UsersAcceptance.test.ts` em `apps/whatsapp-agent` para comprovar o aceite automatizado de 25 usuarios/atendentes, quotas, RBAC, departamentos, filas e transferencias.
 
 ## Decisao
 
