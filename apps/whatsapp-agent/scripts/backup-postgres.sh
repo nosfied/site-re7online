@@ -8,6 +8,7 @@ RETENTION_DAYS="${POSTGRES_BACKUP_RETENTION_DAYS:-14}"
 MIN_BYTES="${POSTGRES_BACKUP_MIN_BYTES:-1024}"
 MIN_OBJECTS="${POSTGRES_BACKUP_MIN_OBJECTS:-50}"
 MODE="${POSTGRES_BACKUP_MODE:-auto}"
+OFFSITE_TARGET="${POSTGRES_BACKUP_OFFSITE_TARGET:-}"
 DOCKER_CONTAINER="${POSTGRES_BACKUP_DOCKER_CONTAINER:-wa-agent-postgres}"
 DB_NAME="${POSTGRES_BACKUP_DB_NAME:-whatsapp_agent}"
 DB_USER="${POSTGRES_BACKUP_DB_USER:-wa_agent}"
@@ -37,6 +38,8 @@ const entry = {
   mode: process.env.MANIFEST_MODE || null,
   objectCount: Number(process.env.MANIFEST_OBJECT_COUNT || 0),
   retentionDays: Number(process.env.MANIFEST_RETENTION_DAYS || 0),
+  offsiteStatus: process.env.MANIFEST_OFFSITE_STATUS || "not_configured",
+  offsiteTarget: process.env.MANIFEST_OFFSITE_TARGET || null,
   error: process.env.MANIFEST_ERROR || null
 };
 fs.mkdirSync(require("path").dirname(process.env.MANIFEST_PATH), { recursive: true });
@@ -66,6 +69,8 @@ append_manifest() {
   MANIFEST_MODE="${RESOLVED_MODE:-unknown}" \
   MANIFEST_OBJECT_COUNT="${object_count}" \
   MANIFEST_RETENTION_DAYS="${RETENTION_DAYS}" \
+  MANIFEST_OFFSITE_STATUS="${OFFSITE_STATUS:-not_configured}" \
+  MANIFEST_OFFSITE_TARGET="${OFFSITE_TARGET:+configured}" \
   MANIFEST_ERROR="${error}" \
   json_manifest
 }
@@ -118,6 +123,46 @@ run_pg_restore_list() {
   pg_restore --list "${TMP_BACKUP}" > "${TMP_LIST}"
 }
 
+copy_to_offsite() {
+  OFFSITE_STATUS="not_configured"
+  if [[ -z "${OFFSITE_TARGET}" ]]; then
+    return 0
+  fi
+
+  OFFSITE_STATUS="failed"
+  case "${OFFSITE_TARGET}" in
+    file://*|/*|.*)
+      local target_dir="${OFFSITE_TARGET#file://}"
+      mkdir -p "${target_dir}"
+      cp "${BACKUP_FILE}" "${target_dir}/$(basename "${BACKUP_FILE}")"
+      cp "${BACKUP_FILE}.sha256" "${target_dir}/$(basename "${BACKUP_FILE}.sha256")"
+      ;;
+    rclone:*)
+      if ! command -v rclone >/dev/null 2>&1; then
+        return 1
+      fi
+      local remote="${OFFSITE_TARGET#rclone:}"
+      rclone copyto "${BACKUP_FILE}" "${remote}/$(basename "${BACKUP_FILE}")"
+      rclone copyto "${BACKUP_FILE}.sha256" "${remote}/$(basename "${BACKUP_FILE}.sha256")"
+      ;;
+    scp:*)
+      if ! command -v scp >/dev/null 2>&1; then
+        return 1
+      fi
+      local destination="${OFFSITE_TARGET#scp:}"
+      scp "${BACKUP_FILE}" "${destination}/$(basename "${BACKUP_FILE}")"
+      scp "${BACKUP_FILE}.sha256" "${destination}/$(basename "${BACKUP_FILE}.sha256")"
+      ;;
+    *)
+      log "event=backup.offsite_upload_failed status=failed reason=unsupported_target"
+      return 1
+      ;;
+  esac
+
+  OFFSITE_STATUS="success"
+  return 0
+}
+
 mkdir -p "${BACKUP_DIR}"
 
 exec 9>"${LOCK_FILE}"
@@ -155,6 +200,12 @@ SHA256="$(sha256sum "${TMP_BACKUP}" | awk '{print $1}')"
 mv -f "${TMP_BACKUP}" "${BACKUP_FILE}"
 printf '%s  %s\n' "${SHA256}" "$(basename "${BACKUP_FILE}")" > "${BACKUP_FILE}.sha256"
 rm -f "${TMP_LIST}"
+
+if ! copy_to_offsite; then
+  append_manifest "failed" "backup.offsite_upload_failed" "${BACKUP_FILE}" "${SIZE_BYTES}" "${SHA256}" "${OBJECT_COUNT}" "offsite copy failed"
+  log "event=backup.offsite_upload_failed status=failed target=configured"
+  exit 1
+fi
 
 append_manifest "success" "backup.success" "${BACKUP_FILE}" "${SIZE_BYTES}" "${SHA256}" "${OBJECT_COUNT}" ""
 log "event=backup.success status=success file=${BACKUP_FILE} sizeBytes=${SIZE_BYTES} objectCount=${OBJECT_COUNT} sha256=${SHA256}"

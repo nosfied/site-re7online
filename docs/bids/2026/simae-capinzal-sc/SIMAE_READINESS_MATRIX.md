@@ -4,13 +4,13 @@ Fonte oficial: `docs/bids/2026/simae-capinzal-sc/DE36-2026.pdf`.
 
 Data da auditoria: 2026-07-01.
 
-Escopo: Sprints 80C-83D. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
+Escopo: Sprints 80C-83E. Esta matriz usa somente requisitos extraidos do Termo de Referencia e evidencia objetiva do repositorio atual. Requisitos sem evidencia objetiva permanecem como `ATENDE COM AJUSTE` ou `NAO ATENDE`.
 
 ## Resultado Executivo
 
 **Converta atende integralmente o TR? SIM, no escopo tecnico do produto.**
 
-O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-80D foram feitos ajustes pequenos e aderentes ao TR:
+O produto atende ao nucleo do TR: WhatsApp oficial, multiatendimento, RBAC, departamentos, historico, chatbot, painel administrativo, relatorios, exportacao, observabilidade, backup e LGPD. Nas Sprints 80C-83E foram feitos ajustes pequenos e aderentes ao TR:
 
 - protocolo de atendimento visivel no Inbox;
 - relatorios com atendimentos automatizados e transferencias para atendimento humano.
@@ -55,6 +55,12 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | --- | --- | --- |
 | SLA/incidentes/manutencao | `/health` registra snapshots internos de disponibilidade; endpoints protegidos `/admin/ops/incidents`, `/admin/ops/maintenances` e `/admin/ops/sla/monthly` permitem registrar incidentes, manutencoes programadas e compor evidencia mensal sem schema novo | `apps/whatsapp-agent/src/metrics/operationalSlaEvidence.ts`, `apps/whatsapp-agent/src/http/health.route.ts`, `apps/whatsapp-agent/src/http/routes.ts` |
 
+## Evidencia Adicionada na 83E
+
+| Area | Evidencia | Arquivo |
+| --- | --- | --- |
+| Backup offsite e restore drill | `backup:postgres` passa a aceitar destino offsite opcional por `POSTGRES_BACKUP_OFFSITE_TARGET`; `backup:evidence status` identifica backup ausente/antigo/checksum/offsite; `backup:evidence restore-drill` registra evidencia JSONL de drill em ambiente isolado sem segredos | `apps/whatsapp-agent/scripts/backup-postgres.sh`, `apps/whatsapp-agent/src/ops/backupEvidence.ts`, `apps/whatsapp-agent/scripts/backup-evidence.ts` |
+
 ## Matriz Requisito x Evidencia
 
 | Requisito do TR | Trecho do TR | Status | Evidencia objetiva | Sprint/Modulo | Necessita desenvolvimento? |
@@ -87,9 +93,9 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 | Geracao de protocolos de atendimento | Item 3.4(b) | ATENDE | Ajuste 80C: `protocol` no payload do Inbox e visualizacao no detalhe | 80C | NAO |
 | Registro completo de interacoes | Item 3.4(b), 4.3(b) | ATENDE | Mensagens inbound/outbound, eventos, timeline e historico | Fases I/II | NAO |
 | Criptografia das informacoes trafegadas | Item 3.4(c) | ATENDE COM AJUSTE | Operacao via HTTPS/TLS documentada em baseline; depende de configuracao de dominio/certificado em producao | 78I, 78O | NAO, operacional |
-| Backup periodico de conversas e registros | Item 3.4(c) | ATENDE | `backup:postgres`, `backup-postgres.sh`, manifest/checksum, restore validado | 78J-78L | NAO |
+| Backup periodico de conversas e registros | Item 3.4(c) | ATENDE | `backup:postgres`, `backup-postgres.sh`, manifest/checksum, restore validado; 83E adiciona offsite opcional configuravel e evidencia de status/drill | 78J-78L, 83E | NAO |
 | Monitoramento continuo de disponibilidade | Item 3.4(c), 4.4(b) | ATENDE | `/health`, `/admin/ops/metrics`, `/admin/ops/alerts`, dashboard operacional; 83D registra snapshots internos de health para evidencia mensal | 78A-78H, 83D | NAO |
-| Protecao contra perda de dados | Item 3.4(c) | ATENDE COM AJUSTE | Backup/restore validado; offsite/HA ainda dependem de arquitetura operacional futura | 78J-78L | NAO para MVP, operacional para reforco |
+| Protecao contra perda de dados | Item 3.4(c) | ATENDE COM AJUSTE | Backup/restore validado; 83E adiciona offsite opcional e restore drill evidence; HA/failover continuam como evolucao operacional futura | 78J-78L, 83E | NAO para MVP, operacional para reforco |
 | Atualizacoes automaticas de seguranca | Item 3.4(c), 3.5(c) | ATENDE COM AJUSTE | Processo de deploy/manutencao documentado; 83D inclui registro de manutencao programada; "automaticas" depende de rotina operacional da contratada | 78A-78O, 83D | NAO, operacional |
 | Adequacao LGPD | Item 3.4(c) | ATENDE | Privacy retention, redaction, RBAC, MFA, logs sem PII, docs LGPD | Fases II/III, 77B-77H, 78B | NAO |
 | Relatorio: quantidade de atendimentos | Item 3.4(d), 4.1(c) | ATENDE | `totalConversations` em `/app/reports/conversations` | Fases I/II | NAO |
@@ -122,7 +128,7 @@ Itens de SLA, suporte presencial e treinamento dependem tambem de compromisso op
 6. Receber localizacao WhatsApp e demonstrar timeline com coordenadas e links Google Maps/OpenStreetMap.
 7. Demonstrar `/app/reports` com periodo "Mes fechado anterior", quantidade de atendimentos, medias, automatizados, transferencias, por atendente/setor e exportacao CSV/PDF.
 8. Demonstrar `/admin/ops`, `/admin/ops/metrics`, `/admin/ops/alerts` e `/health`.
-9. Demonstrar backup PostgreSQL com checksum/manifest e documentacao de restore.
+9. Demonstrar backup PostgreSQL com checksum/manifest, status operacional, offsite configuravel e evidencia de restore drill.
 10. Como evidencia tecnica complementar, executar `node --import tsx src/http/simae25UsersAcceptance.test.ts` em `apps/whatsapp-agent` para comprovar o aceite automatizado de 25 usuarios/atendentes, quotas, RBAC, departamentos, filas e transferencias.
 11. Demonstrar `/admin/ops/sla/monthly`, `/admin/ops/incidents` e `/admin/ops/maintenances` como evidencia operacional de disponibilidade, incidentes, comunicacao e manutencao programada.
 

@@ -498,10 +498,52 @@ Cron recomendado:
 O que ainda falta:
 
 - ativar cron em producao depois do pre-release;
-- copia offsite criptografada;
+- configurar destino offsite real em producao;
 - alerta persistente/externo se backup falhar ou envelhecer;
-- restore drill recorrente usando o dump diario atual;
+- executar restore drill recorrente usando o dump diario atual;
 - backup criptografado de `.env`, Nginx, PM2 e inventario de certificados.
+
+### 83E - Backup Offsite & Restore Drill Evidence
+
+Status: implementado como hardening operacional minimo, sem schema, sem credenciais reais e sem fornecedor obrigatorio.
+
+Artefatos:
+
+- `apps/whatsapp-agent/scripts/backup-postgres.sh`;
+- `npm run backup:postgres`;
+- `npm run backup:evidence`;
+- `apps/whatsapp-agent/src/ops/backupEvidence.ts`.
+
+O que foi adicionado:
+
+- destino offsite opcional por `POSTGRES_BACKUP_OFFSITE_TARGET`;
+- suporte a destino montado/local (`file://` ou caminho), `rclone:<remote:path>` e `scp:<usuario@host:/caminho>`;
+- campos `offsiteStatus` e `offsiteTarget` no manifest JSONL;
+- falha explicita `backup.offsite_upload_failed` quando offsite configurado falha;
+- avaliacao operacional de backup ausente, antigo, sem checksum, pequeno, sem objeto ou sem offsite;
+- registro JSONL de restore drill sem restaurar sobre producao e com redaction de dados sensiveis.
+
+Variaveis adicionais:
+
+| Variavel | Default | Uso |
+| --- | --- | --- |
+| `POSTGRES_BACKUP_OFFSITE_TARGET` | vazio | destino offsite opcional. Quando vazio, backup continua local e registra `offsiteStatus=not_configured`. |
+
+Comandos operacionais:
+
+```bash
+npm run backup:postgres
+npm run backup:evidence -- status --manifest backups/postgres/manifest.jsonl --require-offsite
+npm run backup:evidence -- restore-drill --backup-file backups/postgres/<arquivo>.dump --sha256-file backups/postgres/<arquivo>.dump.sha256 --restored-into restore_validation_<data>
+```
+
+Limites:
+
+- nao configura credenciais reais;
+- nao contrata servico externo;
+- nao cria persistencia no banco;
+- nao substitui alerta externo/persistente;
+- nao executa restore automaticamente.
 
 ### 78M - Load Test Design
 

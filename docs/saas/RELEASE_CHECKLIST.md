@@ -203,6 +203,12 @@ npm run backup:postgres
   - arquivo `.dump.sha256`;
   - entrada em `backups/postgres/manifest.jsonl`;
   - status `backup.success`.
+- Se `POSTGRES_BACKUP_OFFSITE_TARGET` estiver configurado, o backup tambem deve copiar `.dump` e `.dump.sha256` para o destino offsite e registrar `offsiteStatus=success`.
+- Destinos offsite suportados pela rotina:
+  - `file:///mnt/backup-postgres` ou caminho local/montado;
+  - `rclone:<remote:path>` quando `rclone` estiver instalado/configurado fora do repo;
+  - `scp:<usuario@host:/caminho>` quando chave SSH operacional estiver configurada fora do repo.
+- Nunca commitar credenciais, dumps ou configuracoes de segredo do destino offsite.
 - O backup deve rejeitar:
   - dump vazio;
   - dump menor que `POSTGRES_BACKUP_MIN_BYTES`;
@@ -221,12 +227,30 @@ npm run backup:postgres
 tail -n 1 backups/postgres/manifest.jsonl
 (cd backups/postgres && sha256sum -c *.dump.sha256)
 pg_restore --list backups/postgres/<arquivo>.dump
+npm run backup:evidence -- status --manifest backups/postgres/manifest.jsonl --require-offsite
 ```
 
 - Em producao com PostgreSQL em Docker, o script usa por padrao o container `wa-agent-postgres`.
 - Em ambiente local sem Docker, usar `DATABASE_URL` com `POSTGRES_BACKUP_MODE=local`.
 - Dumps e manifestos nao devem ser commitados.
-- A 78L nao implementa offsite; copia externa criptografada segue como sprint propria.
+- A 83E implementa suporte offsite opcional/configuravel; em contratos com exigencia formal, configurar destino externo e anexar o resultado de `backup:evidence status` ao dossie operacional.
+
+Restore drill evidence:
+
+- Restore nunca deve ser executado sobre producao.
+- Para drill, restaurar o dump em banco isolado/temporario, validar checksum e registrar evidencia local:
+
+```bash
+npm run backup:evidence -- restore-drill \
+  --backup-file backups/postgres/<arquivo>.dump \
+  --sha256-file backups/postgres/<arquivo>.dump.sha256 \
+  --restored-into restore_validation_<data> \
+  --responsible "operacao" \
+  --observations "restore isolado validado"
+```
+
+- O comando gera/apenda `backups/postgres/restore-drills.jsonl`; esse arquivo operacional nao deve ser versionado.
+- Para contrato com exigencia de historico formal, exportar/anexar mensalmente o status e o drill ao dossie operacional.
 
 Load test:
 
