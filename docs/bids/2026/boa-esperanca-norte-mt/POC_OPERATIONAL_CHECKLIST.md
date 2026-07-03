@@ -7,6 +7,7 @@ Usar em conjunto com `POC_REMOTE_SCRIPT.md` e `ANEXO_III_EVIDENCE_MATRIX.md`.
 | Check | Status | Observacao |
 | --- | --- | --- |
 | Ambiente demo definido | pendente | Preferir tenant especifico de demonstracao, sem dados reais. |
+| Seed opcional executado | pendente | `npm run demo:seed:boa-esperanca-poc` em ambiente autorizado. |
 | Health OK | pendente | Validar `/health`. |
 | PM2/backend/frontend online | pendente | Evidencia operacional, se demo em VPS. |
 | Alertas criticos zerados ou baseline registrado | pendente | Validar `/admin/ops/alerts`. |
@@ -58,6 +59,28 @@ Itens vermelhos que bloqueiam envio:
 - expor dados reais, tokens, credenciais ou documentos pessoais;
 - nao conseguir demonstrar RBAC/multitenancy;
 - preco aprovado abaixo do custo operacional minimo.
+
+## Tenant Demo 84D
+
+Usar `DEMO_TENANT_POC_REHEARSAL.md` como roteiro operacional para preparar e validar o tenant tecnico `boa-esperanca-poc`.
+
+Comando previsto:
+
+```bash
+cd apps/whatsapp-agent
+npm run demo:seed:boa-esperanca-poc
+npm run demo:status:boa-esperanca-poc
+```
+
+O seed cria dados ficticios para:
+
+- departamentos e filas institucionais;
+- usuarios ADMIN/SUPERVISOR/AGENT;
+- fluxo inicial de chatbot;
+- base de conhecimento;
+- Webchat demonstrativo;
+- API externa simulada;
+- conversas e metricas para Inbox/Relatorios.
 
 ## Sequencia Recomendada
 

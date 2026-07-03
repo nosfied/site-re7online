@@ -28,6 +28,7 @@ Este pacote nao cria produto separado, nao altera o Core do Converta, nao hardco
 | `TECHNICAL_CAPACITY_CERTIFICATE_TENDENCIA_DRAFT.md` | Minuta de atestado tecnico para avaliacao da Tendencia Modas. |
 | `PARTICIPATION_DECISION_MATRIX.md` | Matriz de decisao, riscos e pendencias antes da participacao. |
 | `POC_OPERATIONAL_CHECKLIST.md` | Checklist operacional da POC remota. |
+| `DEMO_TENANT_POC_REHEARSAL.md` | Seed opcional, smoke e rehearsal do tenant tecnico `boa-esperanca-poc`. |
 
 ## Resultado Executivo
 
@@ -40,6 +41,7 @@ Os principais pontos que exigem atencao antes da sessao de POC sao:
 - obter atestado tecnico assinado e compativel;
 - validar certidoes, documentos societarios e declaracoes;
 - aprovar preco/margem considerando Meta, IA, treinamento, suporte e presencialidade;
+- preparar o tenant tecnico `boa-esperanca-poc` com o seed opcional da 84D;
 - demonstrar base de conhecimento alimentando respostas automatizadas;
 - demonstrar integracao com API externa em simulacao controlada;
 - apresentar plano formal de suporte/chamados com status;
