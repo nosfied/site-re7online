@@ -237,6 +237,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   const pathname = usePathname();
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
+  const [showMainMenuModal, setShowMainMenuModal] = useState(false);
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
     phoneDisplay: string | null;
@@ -346,6 +347,35 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     );
   };
 
+  const renderMainMenuGroup = (items: NavItem[], label: string) => {
+    if (items.length === 0) return null;
+    return (
+      <section className="grid gap-2">
+        <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">{label}</p>
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {items.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setShowMainMenuModal(false)}
+                className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition ${
+                  active ? "theme-nav-link-active" : "theme-nav-link"
+                }`}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-re7-sky/12 text-lg leading-none">
+                  {item.icon}
+                </span>
+                <span className="min-w-0 truncate font-semibold">{item.labels[profile]}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
   const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5 lg:px-1.5 min-[1441px]:px-2";
   const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-visible";
   const userActions = (
@@ -436,19 +466,58 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     </div>
   ) : null;
 
+  const mainMenuModal = showMainMenuModal ? (
+    <div
+      className="theme-modal-backdrop fixed inset-0 z-[90] flex items-center justify-center px-4 backdrop-blur-sm"
+      onClick={() => setShowMainMenuModal(false)}
+    >
+      <div
+        className="theme-surface-strong relative grid max-h-[min(720px,calc(100dvh-2rem))] w-full max-w-2xl gap-5 overflow-auto rounded-2xl border p-4 shadow-[0_24px_90px_rgba(0,0,0,0.24)] sm:p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
+              Navegacao
+            </p>
+            <h2 className="mt-1 text-lg font-bold">Menu principal</h2>
+            <p className="theme-muted mt-1 text-sm">
+              Opcoes disponiveis para {session.user.name || session.user.email}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowMainMenuModal(false)}
+            className="theme-nav-link shrink-0 rounded-md border px-3 py-1.5 text-sm font-semibold"
+          >
+            Fechar
+          </button>
+        </div>
+        <div className="grid gap-5">
+          {renderMainMenuGroup(operationItems, "Operacao")}
+          {renderMainMenuGroup(administrationItems, "Administracao")}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (fullScreen) {
     return (
       <main className="theme-bg theme-inbox box-border h-[var(--app-viewport-height,100dvh)] max-h-[var(--app-viewport-height,100dvh)] w-full max-w-full overflow-hidden">
         <div className="grid h-[calc(100%-var(--safe-top))] w-full max-w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden pt-[var(--safe-top)] md:h-full md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1 md:pt-0">
           <aside className="order-2 hidden min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+var(--safe-bottom))] md:order-none md:flex md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
-            <div
+            <button
+              type="button"
+              onClick={() => setShowMainMenuModal(true)}
               title="Menu principal"
-              className="hidden h-14 w-14 items-center justify-center rounded-2xl md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
+              aria-haspopup="dialog"
+              aria-expanded={showMainMenuModal}
+              className="hidden h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/15 bg-white/10 text-2xl font-bold leading-none text-white/85 shadow-sm [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl [@media(max-height:760px)]:text-xl">
                 ☰
               </span>
-            </div>
+            </button>
             <nav className="flex min-h-0 w-full flex-1 items-center gap-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mt-4 md:flex-col md:gap-2 md:overflow-x-hidden md:overflow-y-auto md:px-2 md:[@media(max-height:760px)]:mt-2 md:[@media(max-height:760px)]:gap-1 [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.filter((item) => item.href !== "/app/inbox").map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -482,6 +551,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
         </div>
         {brandModal}
+        {mainMenuModal}
       </main>
     );
   }
@@ -534,6 +604,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       </div>
 
       {brandModal}
+      {mainMenuModal}
     </main>
   );
 }
