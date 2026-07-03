@@ -237,7 +237,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   const pathname = usePathname();
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
-  const [showMainMenuModal, setShowMainMenuModal] = useState(false);
+  const [showMainMenuSubmenu, setShowMainMenuSubmenu] = useState(false);
   const [tenantSummary, setTenantSummary] = useState<{
     name: string;
     phoneDisplay: string | null;
@@ -359,7 +359,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setShowMainMenuModal(false)}
+                onClick={() => setShowMainMenuSubmenu(false)}
                 className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition ${
                   active ? "theme-nav-link-active" : "theme-nav-link"
                 }`}
@@ -466,15 +466,8 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     </div>
   ) : null;
 
-  const mainMenuModal = showMainMenuModal ? (
-    <div
-      className="theme-modal-backdrop fixed inset-0 z-[90] flex items-center justify-center px-4 backdrop-blur-sm"
-      onClick={() => setShowMainMenuModal(false)}
-    >
-      <div
-        className="theme-surface-strong relative grid max-h-[min(720px,calc(100dvh-2rem))] w-full max-w-2xl gap-5 overflow-auto rounded-2xl border p-4 shadow-[0_24px_90px_rgba(0,0,0,0.24)] sm:p-5"
-        onClick={(event) => event.stopPropagation()}
-      >
+  const mainMenuSubmenu = showMainMenuSubmenu ? (
+      <div className="theme-surface-strong absolute left-[calc(100%+0.65rem)] top-0 z-[90] grid max-h-[min(660px,calc(100dvh-1.5rem))] w-[min(540px,calc(100vw-6rem))] gap-4 overflow-auto rounded-2xl border p-4 shadow-[0_24px_90px_rgba(0,0,0,0.24)]">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="theme-soft text-xs font-semibold uppercase leading-none tracking-[0.16em]">
@@ -487,7 +480,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           </div>
           <button
             type="button"
-            onClick={() => setShowMainMenuModal(false)}
+            onClick={() => setShowMainMenuSubmenu(false)}
             className="theme-nav-link shrink-0 rounded-md border px-3 py-1.5 text-sm font-semibold"
           >
             Fechar
@@ -498,26 +491,28 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           {renderMainMenuGroup(administrationItems, "Administracao")}
         </div>
       </div>
-    </div>
   ) : null;
 
   if (fullScreen) {
     return (
       <main className="theme-bg theme-inbox box-border h-[var(--app-viewport-height,100dvh)] max-h-[var(--app-viewport-height,100dvh)] w-full max-w-full overflow-hidden">
         <div className="grid h-[calc(100%-var(--safe-top))] w-full max-w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden pt-[var(--safe-top)] md:h-full md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1 md:pt-0">
-          <aside className="order-2 hidden min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+var(--safe-bottom))] md:order-none md:flex md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
-            <button
-              type="button"
-              onClick={() => setShowMainMenuModal(true)}
-              title="Menu principal"
-              aria-haspopup="dialog"
-              aria-expanded={showMainMenuModal}
-              className="hidden h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/15 bg-white/10 text-2xl font-bold leading-none text-white/85 shadow-sm [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl [@media(max-height:760px)]:text-xl">
-                ☰
-              </span>
-            </button>
+          <aside className="relative order-2 hidden min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+var(--safe-bottom))] md:order-none md:flex md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
+            <div className="relative hidden h-14 w-14 items-center justify-center rounded-2xl md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11">
+              <button
+                type="button"
+                onClick={() => setShowMainMenuSubmenu((current) => !current)}
+                title="Menu principal"
+                aria-haspopup="menu"
+                aria-expanded={showMainMenuSubmenu}
+                className="flex h-full w-full items-center justify-center rounded-2xl transition hover:bg-white/5"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/15 bg-white/10 text-2xl font-bold leading-none text-white/85 shadow-sm [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl [@media(max-height:760px)]:text-xl">
+                  ☰
+                </span>
+              </button>
+              {mainMenuSubmenu}
+            </div>
             <nav className="flex min-h-0 w-full flex-1 items-center gap-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mt-4 md:flex-col md:gap-2 md:overflow-x-hidden md:overflow-y-auto md:px-2 md:[@media(max-height:760px)]:mt-2 md:[@media(max-height:760px)]:gap-1 [&::-webkit-scrollbar]:hidden">
               {visibleNavItems.filter((item) => item.href !== "/app/inbox").map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -551,7 +546,6 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           <section className="order-1 min-h-0 min-w-0 max-w-full overflow-hidden md:order-none">{children}</section>
         </div>
         {brandModal}
-        {mainMenuModal}
       </main>
     );
   }
@@ -604,7 +598,6 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       </div>
 
       {brandModal}
-      {mainMenuModal}
     </main>
   );
 }
