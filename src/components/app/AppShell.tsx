@@ -54,16 +54,12 @@ function getOverflowLinkClasses(active: boolean) {
 
 function getOverflowTriggerClasses(active: boolean) {
   return `inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
-    active
-      ? "border-[#0f766e] bg-[#0f766e] text-white hover:bg-[#115e59]"
-      : "border-[#fb923c] bg-[#fff7ed] text-[#7c2d12] hover:bg-[#ffedd5]"
+    active ? "theme-nav-link-active" : "theme-nav-link"
   }`;
 }
 
-function getOverflowTriggerIconClasses(active: boolean) {
-  return `flex h-4 w-4 items-center justify-center rounded-full text-[12px] font-black leading-none ${
-    active ? "bg-white/22 text-white" : "bg-[#7c2d12] text-white"
-  }`;
+function getOverflowTriggerIconClasses() {
+  return "flex h-4 w-4 items-center justify-center rounded-full border border-current/20 bg-re7-sky/15 text-[12px] font-black leading-none text-current";
 }
 
 function isSupervisorRole(role: string) {
@@ -320,7 +316,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           Mais
           <span
             aria-hidden="true"
-            className={getOverflowTriggerIconClasses(hasActiveItem)}
+            className={getOverflowTriggerIconClasses()}
           >
             ▾
           </span>
