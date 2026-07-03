@@ -441,32 +441,23 @@ export default function AppShell({ session, title, subtitle, children, fullScree
       <main className="theme-bg theme-inbox box-border h-[var(--app-viewport-height,100dvh)] max-h-[var(--app-viewport-height,100dvh)] w-full max-w-full overflow-hidden">
         <div className="grid h-[calc(100%-var(--safe-top))] w-full max-w-full grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden pt-[var(--safe-top)] md:h-full md:grid-cols-[72px_minmax(0,1fr)] md:grid-rows-1 md:pt-0">
           <aside className="order-2 hidden min-h-0 min-w-0 max-w-full flex-row items-center border-t border-white/10 bg-[#081327] px-2 py-2 pb-[calc(0.5rem+var(--safe-bottom))] md:order-none md:flex md:h-full md:flex-col md:border-r md:border-t-0 md:px-0 md:py-3 [@media(max-height:760px)]:md:py-2">
-            <button
-              type="button"
-              onClick={() => router.push("/app/inbox")}
-              title="Abrir inbox"
-              className="hidden h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/5 md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
+            <div
+              title="Menu principal"
+              className="hidden h-14 w-14 items-center justify-center rounded-2xl md:flex [@media(max-height:760px)]:h-11 [@media(max-height:760px)]:w-11"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[#f7f8fa] [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl">
-                <Image
-                  src="/images/converta-check-mark.png"
-                  alt="Converta"
-                  width={64}
-                  height={64}
-                  className="h-9 w-9 translate-x-[2px] object-contain [@media(max-height:760px)]:h-7 [@media(max-height:760px)]:w-7"
-                />
+              <span className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/15 bg-white/10 text-2xl font-bold leading-none text-white/85 shadow-sm [@media(max-height:760px)]:h-9 [@media(max-height:760px)]:w-9 [@media(max-height:760px)]:rounded-xl [@media(max-height:760px)]:text-xl">
+                ☰
               </span>
-            </button>
+            </div>
             <nav className="flex min-h-0 w-full flex-1 items-center gap-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] md:mt-4 md:flex-col md:gap-2 md:overflow-x-hidden md:overflow-y-auto md:px-2 md:[@media(max-height:760px)]:mt-2 md:[@media(max-height:760px)]:gap-1 [&::-webkit-scrollbar]:hidden">
-              {visibleNavItems.map((item) => {
+              {visibleNavItems.filter((item) => item.href !== "/app/inbox").map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const mobileOnlyInbox = item.href === "/app/inbox";
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     title={item.labels[profile]}
-                    className={`${mobileOnlyInbox ? "flex" : "hidden md:flex"} h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl ${
+                    className={`hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold transition md:flex md:h-12 md:w-12 [@media(max-height:760px)]:md:h-9 [@media(max-height:760px)]:md:w-9 [@media(max-height:760px)]:md:rounded-xl ${
                       active
                         ? "bg-re7-sky/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"
                         : "text-white/70 hover:bg-white/10 hover:text-white"
