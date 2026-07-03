@@ -345,6 +345,8 @@ async function upsertClient() {
       features: {
         webchat: true,
         webchatOutbound: true,
+        knowledgeBase: true,
+        webhooks: true,
         advancedSearch: true,
         advancedSearchRuntime: true,
         publicApi: true,
@@ -362,6 +364,8 @@ async function upsertClient() {
       features: {
         webchat: true,
         webchatOutbound: true,
+        knowledgeBase: true,
+        webhooks: true,
         advancedSearch: true,
         advancedSearchRuntime: true,
         publicApi: true,
