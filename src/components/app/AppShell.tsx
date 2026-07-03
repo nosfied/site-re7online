@@ -37,8 +37,8 @@ type NavItem = {
   minRole?: "SUPERVISOR" | "ADMIN";
 };
 
-const DIRECT_OPERATION_NAV_LIMIT = 6;
-const DIRECT_ADMINISTRATION_NAV_LIMIT = 4;
+const DIRECT_OPERATION_NAV_LIMIT = 4;
+const DIRECT_ADMINISTRATION_NAV_LIMIT = 3;
 
 function getLinkClasses(active: boolean) {
   return `inline-flex h-8 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs leading-none transition lg:h-8 lg:px-2.5 lg:text-xs min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
@@ -49,6 +49,14 @@ function getLinkClasses(active: boolean) {
 function getOverflowLinkClasses(active: boolean) {
   return `block rounded-md px-3 py-2 text-sm leading-tight transition ${
     active ? "theme-nav-link-active" : "theme-nav-link"
+  }`;
+}
+
+function getOverflowTriggerClasses(active: boolean) {
+  return `inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
+    active
+      ? "border-re7-sky/70 bg-re7-sky/25 text-white"
+      : "border-re7-orange/45 bg-re7-orange/15 text-orange-100 hover:bg-re7-orange/25"
   }`;
 }
 
@@ -300,15 +308,18 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     return (
       <details key={`${label}-overflow`} className="relative shrink-0">
         <summary
-          className={`${getLinkClasses(hasActiveItem)} cursor-pointer select-none list-none gap-1 [&::-webkit-details-marker]:hidden`}
+          className={`${getOverflowTriggerClasses(hasActiveItem)} cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden`}
           title={`Abrir mais opcoes de ${label}`}
         >
           Mais
-          <span aria-hidden="true" className="text-[10px] leading-none">
+          <span
+            aria-hidden="true"
+            className="flex h-4 w-4 items-center justify-center rounded-full bg-white/18 text-[12px] font-black leading-none text-white"
+          >
             ▾
           </span>
         </summary>
-        <div className="theme-surface-strong absolute right-0 top-[calc(100%+0.35rem)] z-[70] grid min-w-44 gap-1 rounded-lg border p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+        <div className="theme-surface-strong absolute right-0 top-[calc(100%+0.45rem)] z-[80] grid min-w-48 gap-1 rounded-lg border p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
           {items.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
@@ -334,7 +345,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
   };
 
   const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5 lg:px-1.5 min-[1441px]:px-2";
-  const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-visible";
   const userActions = (
     <div className="flex min-w-0 items-center justify-end gap-1.5 lg:flex-col lg:items-end lg:gap-1">
       <div className="min-w-0 text-right">
