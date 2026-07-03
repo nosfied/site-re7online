@@ -55,8 +55,14 @@ function getOverflowLinkClasses(active: boolean) {
 function getOverflowTriggerClasses(active: boolean) {
   return `inline-flex h-8 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-xs font-semibold leading-none shadow-sm transition min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
     active
-      ? "border-re7-sky/70 bg-re7-sky/25 text-white"
-      : "border-re7-orange/45 bg-re7-orange/15 text-orange-100 hover:bg-re7-orange/25"
+      ? "border-[#0f766e] bg-[#0f766e] text-white hover:bg-[#115e59]"
+      : "border-[#fb923c] bg-[#fff7ed] text-[#7c2d12] hover:bg-[#ffedd5]"
+  }`;
+}
+
+function getOverflowTriggerIconClasses(active: boolean) {
+  return `flex h-4 w-4 items-center justify-center rounded-full text-[12px] font-black leading-none ${
+    active ? "bg-white/22 text-white" : "bg-[#7c2d12] text-white"
   }`;
 }
 
@@ -314,7 +320,7 @@ export default function AppShell({ session, title, subtitle, children, fullScree
           Mais
           <span
             aria-hidden="true"
-            className="flex h-4 w-4 items-center justify-center rounded-full bg-white/18 text-[12px] font-black leading-none text-white"
+            className={getOverflowTriggerIconClasses(hasActiveItem)}
           >
             ▾
           </span>
