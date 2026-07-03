@@ -15,6 +15,25 @@ const PASSWORD = process.env.BOA_ESPERANCA_POC_PASSWORD || `PocDemo-${crypto.ran
 const TENANTS_CONFIG_PATH = path.join(process.cwd(), ".data", "tenants.json");
 const WHATSAPP_PHONE_NUMBER_ID = "boa-esperanca-poc-wa-001";
 const WEBCHAT_SITE_SLUG = "portal-camara-demo";
+const REQUIRED_TABLES = [
+  "Client",
+  "User",
+  "Department",
+  "Queue",
+  "Conversation",
+  "ConversationRuntimeState",
+  "ConversationMetrics",
+  "ChatbotFlow",
+  "KnowledgeBaseCollection",
+  "KnowledgeBaseArticle",
+  "WebchatSite",
+  "WebchatSettings",
+  "WebchatAllowedDomain",
+  "PublicApiKey",
+  "WebhookEndpoint",
+  "WebhookDelivery",
+  "WebhookAttempt",
+];
 
 const departmentsSeed = [
   { name: "Atendimento Geral", slug: "atendimento-geral", queueName: "Fila Geral" },
@@ -296,6 +315,24 @@ async function assertSafeDatabase() {
     throw new Error(`refusing_to_seed_unexpected_database:${currentDatabase}`);
   }
   return currentDatabase;
+}
+
+async function getMissingRequiredTables() {
+  const rows = await prisma.$queryRaw`
+    select table_name
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = any(${REQUIRED_TABLES})
+  `;
+  const existing = new Set(rows.map((row) => row.table_name));
+  return REQUIRED_TABLES.filter((table) => !existing.has(table));
+}
+
+async function assertRequiredTables() {
+  const missingTables = await getMissingRequiredTables();
+  if (missingTables.length > 0) {
+    throw new Error(`missing_required_tables:${missingTables.join(",")}`);
+  }
 }
 
 async function upsertClient() {
@@ -898,6 +935,25 @@ async function main() {
   const database = await assertSafeDatabase();
   const command = process.argv[2] || "seed";
   if (command === "status") {
+    const missingTables = await getMissingRequiredTables();
+    if (missingTables.length > 0) {
+      console.log(
+        JSON.stringify(
+          {
+            ok: false,
+            database,
+            tenant: CLIENT_KEY,
+            prepared: false,
+            error: "missing_required_tables",
+            missingTables,
+            action: "apply existing Prisma migrations before running the POC seed/status.",
+          },
+          null,
+          2
+        )
+      );
+      return;
+    }
     const client = await prisma.client.findUnique({ where: { clientKey: CLIENT_KEY }, select: { id: true, clientKey: true, name: true, profile: true } });
     if (!client) {
       console.log(JSON.stringify({ ok: false, tenant: CLIENT_KEY, error: "tenant_not_found" }, null, 2));
@@ -966,6 +1022,7 @@ async function main() {
   if (command !== "seed") {
     throw new Error(`unknown_command:${command}`);
   }
+  await assertRequiredTables();
   const client = await upsertClient();
   await upsertTenantConfig();
   const departments = await upsertDepartments(client.id);
