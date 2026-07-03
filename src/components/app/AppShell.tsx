@@ -37,8 +37,17 @@ type NavItem = {
   minRole?: "SUPERVISOR" | "ADMIN";
 };
 
+const DIRECT_OPERATION_NAV_LIMIT = 6;
+const DIRECT_ADMINISTRATION_NAV_LIMIT = 4;
+
 function getLinkClasses(active: boolean) {
   return `inline-flex h-8 min-w-0 shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2.5 text-xs leading-none transition lg:h-8 lg:px-2.5 lg:text-xs min-[1441px]:h-9 min-[1441px]:px-3 min-[1441px]:text-sm ${
+    active ? "theme-nav-link-active" : "theme-nav-link"
+  }`;
+}
+
+function getOverflowLinkClasses(active: boolean) {
+  return `block rounded-md px-3 py-2 text-sm leading-tight transition ${
     active ? "theme-nav-link-active" : "theme-nav-link"
   }`;
 }
@@ -285,6 +294,45 @@ export default function AppShell({ session, title, subtitle, children, fullScree
     );
   };
 
+  const renderOverflowMenu = (items: NavItem[], label: string) => {
+    if (items.length === 0) return null;
+    const hasActiveItem = items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+    return (
+      <details key={`${label}-overflow`} className="relative shrink-0">
+        <summary
+          className={`${getLinkClasses(hasActiveItem)} cursor-pointer select-none list-none gap-1 [&::-webkit-details-marker]:hidden`}
+          title={`Abrir mais opcoes de ${label}`}
+        >
+          Mais
+          <span aria-hidden="true" className="text-[10px] leading-none">
+            ▾
+          </span>
+        </summary>
+        <div className="theme-surface-strong absolute right-0 top-[calc(100%+0.35rem)] z-[70] grid min-w-44 gap-1 rounded-lg border p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+          {items.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link key={item.href} href={item.href} className={getOverflowLinkClasses(active)}>
+                {item.labels[profile]}
+              </Link>
+            );
+          })}
+        </div>
+      </details>
+    );
+  };
+
+  const renderNavLinks = (items: NavItem[], directLimit: number, label: string) => {
+    const directItems = items.slice(0, directLimit);
+    const overflowItems = items.slice(directLimit);
+    return (
+      <>
+        {directItems.map(renderTextLink)}
+        {renderOverflowMenu(overflowItems, label)}
+      </>
+    );
+  };
+
   const navGroupClasses = "theme-surface grid min-w-0 max-w-full gap-1 rounded-lg border px-2 py-1.5 lg:px-1.5 min-[1441px]:px-2";
   const navLinksClasses = "flex min-w-0 max-w-full flex-nowrap items-center justify-start gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
   const userActions = (
@@ -451,14 +499,18 @@ export default function AppShell({ session, title, subtitle, children, fullScree
                 <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                   Operacao
                 </p>
-                <div className={navLinksClasses}>{operationItems.map(renderTextLink)}</div>
+                <div className={navLinksClasses}>
+                  {renderNavLinks(operationItems, DIRECT_OPERATION_NAV_LIMIT, "operacao")}
+                </div>
               </div>
               {administrationItems.length > 0 ? (
                 <div className={navGroupClasses}>
                   <p className="theme-soft text-left text-[11px] font-semibold uppercase leading-none tracking-[0.16em]">
                     Administracao
                   </p>
-                  <div className={navLinksClasses}>{administrationItems.map(renderTextLink)}</div>
+                  <div className={navLinksClasses}>
+                    {renderNavLinks(administrationItems, DIRECT_ADMINISTRATION_NAV_LIMIT, "administracao")}
+                  </div>
                 </div>
               ) : null}
               <ThemeSelector variant="switch" className="justify-self-start" />
