@@ -305,7 +305,6 @@ function AppInstagramChannelSettingsContent() {
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusPill label="instagram_business_basic" />
               <StatusPill label="instagram_business_manage_messages" />
-              <StatusPill label="instagram_business_manage_comments" />
             </div>
           </div>
         </section>

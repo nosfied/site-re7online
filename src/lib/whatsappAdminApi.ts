@@ -1025,6 +1025,25 @@ export async function updateTenantChannelAccounts(
   );
 }
 
+export async function startTenantInstagramBusinessConnect(
+  connection: AdminConnection,
+  tenantId: string
+): Promise<{
+  ok: true;
+  authUrl: string;
+  redirectUri: string;
+  returnPath: string;
+  scopes: string[];
+}> {
+  return requestJson(
+    connection,
+    `/admin/tenants/${encodeURIComponent(tenantId)}/channels/instagram/connect/start`,
+    {
+      method: "POST",
+    }
+  );
+}
+
 export async function bootstrapTenantById(
   connection: AdminConnection,
   tenantId: string,

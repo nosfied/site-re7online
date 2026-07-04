@@ -128,9 +128,9 @@ Estado tecnico validado para `re7online`:
 - `facebookPageId`: `388765477658592`
 - `source`: `instagram_business_login`
 
-Enquanto o App Review Meta estiver em andamento, a rota `/app/settings/channels/instagram` continua existindo como fluxo temporario de conexao/demonstracao para review. No console interno ela deve aparecer como `Temporary Meta Review connection flow`.
+Apos a aprovacao Meta de `instagram_business_basic` e `instagram_business_manage_messages`, o Connect/Reconnect Instagram Business deve ser iniciado pelo console interno `/admin/tenants/:tenantKey/channels`.
 
-Depois da aprovacao Meta, o plano e mover o Connect/Reconnect Instagram Business para o console interno `/admin` e ocultar/remover essa rota do `/app`, mantendo o `/app` focado na operacao do cliente.
+A rota `/app/settings/channels/instagram` permanece apenas como legacy/fallback temporario para validacao direta e nao deve aparecer no menu do app do cliente. O `/app` deve permanecer focado na operacao: inbox, atendimento, usuarios e relatorios.
 
 ### Governanca de flags
 

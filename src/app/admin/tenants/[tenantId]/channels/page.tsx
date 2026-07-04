@@ -8,6 +8,7 @@ import {
   Channel,
   getTenantChannelAccounts,
   Provider,
+  startTenantInstagramBusinessConnect,
   TenantChannelAccount,
   updateTenantChannelAccounts,
 } from "@/lib/whatsappAdminApi";
@@ -248,6 +249,7 @@ export default function TenantChannelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [backupPath, setBackupPath] = useState<string | null>(null);
+  const [connectingInstagram, setConnectingInstagram] = useState(false);
 
   useEffect(() => {
     if (!tenantId || !connection.baseUrl || !connection.adminToken) return;
@@ -323,6 +325,19 @@ export default function TenantChannelsPage() {
     }
   };
 
+  const handleConnectInstagram = async () => {
+    setConnectingInstagram(true);
+    setError(null);
+    setToast(null);
+    try {
+      const response = await startTenantInstagramBusinessConnect(connection, tenantId);
+      window.location.href = response.authUrl;
+    } catch (err) {
+      setError((err as Error).message || "Falha ao iniciar Instagram Business Login.");
+      setConnectingInstagram(false);
+    }
+  };
+
   return (
     <div className="px-4 py-8 text-white md:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -357,15 +372,21 @@ export default function TenantChannelsPage() {
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p>
               Este console interno continua sendo a fonte tecnica para auditoria e flags de canal.
-              A conexao OAuth do Instagram Business deve ser feita pela tela simplificada do app.
+              A conexao OAuth do Instagram Business agora e gerenciada por este console interno.
             </p>
-            <Link
-              href="/app/settings/channels/instagram"
-              className="inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
+            <button
+              type="button"
+              onClick={handleConnectInstagram}
+              disabled={connectingInstagram || !tenantId || !connection.baseUrl || !connection.adminToken}
+              className="inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Temporary Meta Review connection flow
-            </Link>
+              {connectingInstagram ? "Abrindo Business Login..." : "Connect/Reconnect Instagram Business"}
+            </button>
           </div>
+          <p className="mt-3 text-xs text-sky-100/65">
+            A tela legacy de review em <code>/app/settings/channels/instagram</code> permanece acessivel
+            diretamente apenas como fallback temporario, mas nao aparece mais no menu do app do cliente.
+          </p>
         </section>
 
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -495,11 +516,19 @@ export default function TenantChannelsPage() {
 
               {draft.channel === "instagram" ? (
                 <div className="mb-4 flex flex-wrap gap-2">
-                  <Link
-                    href="/app/settings/channels/instagram"
+                  <button
+                    type="button"
+                    onClick={handleConnectInstagram}
+                    disabled={connectingInstagram || !tenantId || !connection.baseUrl || !connection.adminToken}
                     className="rounded-md border border-sky-300/40 px-3 py-2 text-sm font-semibold text-sky-100 hover:bg-sky-400/10"
                   >
-                    Temporary Meta Review connection flow
+                    {connectingInstagram ? "Abrindo Business Login..." : "Connect/Reconnect Instagram Business"}
+                  </button>
+                  <Link
+                    href="/app/settings/channels/instagram"
+                    className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/65 hover:bg-white/10"
+                  >
+                    Legacy review screen
                   </Link>
                   <button
                     type="button"

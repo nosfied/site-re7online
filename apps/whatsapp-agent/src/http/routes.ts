@@ -86,6 +86,7 @@ import {
   getInstagramBusinessStatus,
   getInstagramBusinessRedirectUri,
   validateInstagramBusinessConnection,
+  verifyInstagramBusinessLoginState,
 } from "../meta/instagramBusinessLogin.service.js";
 import {
   submitTemplateToMeta,
@@ -1658,6 +1659,17 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
         reason: (callbackError as Error).message,
       });
+      let errorReturnPath = "/app/settings/channels/instagram";
+      try {
+        if (state) {
+          const verifiedState = verifyInstagramBusinessLoginState(state);
+          errorReturnPath = verifiedState.returnPath;
+        }
+      } catch {
+        errorReturnPath = "/app/settings/channels/instagram";
+      }
+      const errorReturnUrl = new URL(errorReturnPath, "https://converta.re7online.com");
+      errorReturnUrl.searchParams.set("instagramConnect", "error");
       res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
       res.end(`<!doctype html>
 <html lang="pt-BR">
@@ -1666,7 +1678,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     <main style="max-width:640px;margin:0 auto">
       <h1>Nao foi possivel conectar o Instagram</h1>
       <p>${escapeHtml((callbackError as Error).message)}</p>
-      <p><a style="color:#f97316" href="/app/settings/channels/instagram?instagramConnect=error">Voltar para o Converta</a></p>
+      <p><a style="color:#f97316" href="${errorReturnUrl.pathname}${errorReturnUrl.search}">Voltar para o Converta</a></p>
     </main>
   </body>
 </html>`);
@@ -2258,7 +2270,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       scopes: [
         "instagram_business_basic",
         "instagram_business_manage_messages",
-        "instagram_business_manage_comments",
       ],
     });
     return;
@@ -12787,6 +12798,48 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         json(res, 500, { error: "server_error" });
       }
+      return;
+    }
+
+    const instagramAdminConnectStartMatch = pathname.match(
+      /^\/admin\/tenants\/([^/]+)\/channels\/instagram\/connect\/start$/
+    );
+    if (req.method === "POST" && instagramAdminConnectStartMatch) {
+      if (requireSuperadmin()) return;
+      const tenantId = decodeURIComponent(instagramAdminConnectStartMatch[1] ?? "").trim();
+      if (!tenantId) {
+        json(res, 400, httpError("bad_request", "Tenant id is required"));
+        return;
+      }
+      const prisma = getPrisma();
+      const client = await prisma.client.findUnique({
+        where: { clientKey: tenantId },
+        select: { id: true, clientKey: true },
+      });
+      if (!client) {
+        json(res, 404, httpError("tenant_not_found", "Tenant not found"));
+        return;
+      }
+      const returnPath = `/admin/tenants/${encodeURIComponent(client.clientKey)}/channels`;
+      const state = createInstagramBusinessLoginState({
+        tenantKey: client.clientKey,
+        userId: `admin:${authToken.source}`,
+        returnPath,
+      });
+      const authUrl = buildInstagramBusinessLoginAuthUrl({ state });
+      logger.info({
+        event: "instagram.business_login.admin_start",
+        requestId,
+        tenantKey: client.clientKey,
+        authSource: authToken.source,
+      });
+      json(res, 200, {
+        ok: true,
+        authUrl,
+        redirectUri: getInstagramBusinessRedirectUri(),
+        returnPath,
+        scopes: ["instagram_business_basic", "instagram_business_manage_messages"],
+      });
       return;
     }
 

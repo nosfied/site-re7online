@@ -148,6 +148,8 @@ Roteiro de screencast:
 
 ### `pages_read_engagement`
 
+Status atual: fora do escopo aprovado/operacional da trilha Instagram Direct atual.
+
 Descricao curta: Permite ler informacoes basicas de engajamento/contexto da pagina quando necessario para operacao do atendimento.
 
 Descricao longa: O Converta pode precisar confirmar dados basicos da pagina conectada e validar o contexto operacional da conta Meta vinculada ao tenant.
@@ -197,9 +199,8 @@ Para a trilha Instagram API with Instagram Login / Business Login for Instagram,
 
 - `instagram_business_basic`
 - `instagram_business_manage_messages`
-- `instagram_business_manage_comments`, somente se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login
 
-Nao incluir `pages_read_engagement` no novo pacote Instagram, salvo se houver uma etapa demonstrada no video que dependa comprovadamente dessa permissao. O fluxo E2E validado para Instagram usa Business Login, webhook `messages`, inbox e resposta manual.
+`instagram_business_manage_comments` e `pages_read_engagement` nao fazem parte do escopo aprovado/operacional atual. O fluxo E2E validado para Instagram usa Business Login, webhook `messages`, inbox e resposta manual.
 
 ### `instagram_business_basic`
 
@@ -253,13 +254,13 @@ Roteiro de screencast:
 
 ### `instagram_business_manage_comments`
 
-Esta permissao so deve ser solicitada se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login. O caso de uso principal do Converta e Instagram Direct Messaging human-only, nao gerenciamento operacional de comentarios. Se a Meta exigir a permissao como parte da trilha, documentar que ela nao e usada no runtime demonstrado para responder DMs.
+Status atual: fora do escopo aprovado/operacional da trilha Instagram Direct atual. Comentarios e private replies exigem sprint futura especifica antes de qualquer novo review.
 
 ## Roteiro Consolidado do Video
 
 1. Login no Converta.
-2. Abrir `/app/settings/channels/instagram`.
-3. Mostrar tela `Instagram Business` com status seguro, sem token.
+2. Abrir `/admin/tenants/re7online/channels`.
+3. Mostrar console `Canais conectados` com status seguro, sem token.
 4. Clicar em `Connect Instagram Business`, se o video precisar demonstrar OAuth.
 5. Concluir Business Login e retornar ao Converta.
 6. Validar que `@re7online` esta conectado.
@@ -364,7 +365,7 @@ O video deve ser curto, sem audio e com textos sobrepostos. Usar uma conversa de
 - Console interno: tenant `re7online`.
 - Console interno: tela "Canais conectados".
 - ChannelAccount Instagram com `status=connected` e `tokenStatus=configured`, sem token visivel.
-- Tela `/app/settings/channels/instagram` com `@re7online` conectado.
+- Console `/admin/tenants/re7online/channels` com `@re7online` conectado.
 - Inbox com filtros omnichannel.
 - Inbox filtrado por Instagram.
 - Timeline com mensagem inbound Instagram de teste, sem PII.
@@ -427,7 +428,7 @@ Nao para Instagram. As respostas Instagram sao enviadas manualmente por operador
 
 ### Como o usuario conecta uma conta Instagram?
 
-Um administrador acessa `/app/settings/channels/instagram`, clica em `Connect Instagram Business` e conclui o Instagram Business Login. A conta e salva como `channelAccount` com `channel=instagram`, `provider=meta`, `channelAccountId` principal da conta Instagram e aliases tecnicos para callbacks Meta.
+Um operador interno Re7online acessa `/admin/tenants/:tenantKey/channels`, clica em `Connect/Reconnect Instagram Business` e conclui o Instagram Business Login. A conta e salva como `channelAccount` com `channel=instagram`, `provider=meta`, `channelAccountId` principal da conta Instagram e aliases tecnicos para callbacks Meta. A rota `/app/settings/channels/instagram` permanece apenas como fallback legacy temporario e nao aparece no menu do cliente.
 
 ### Como os dados sao protegidos?
 

@@ -30,10 +30,10 @@ A integracao Instagram usa a trilha:
 Instagram API with Instagram Login / Business Login for Instagram
 ```
 
-O fluxo de conexao e feito pela tela customer-facing:
+O fluxo oficial de conexao apos aprovacao Meta e feito pelo console interno:
 
 ```text
-/app/settings/channels/instagram
+/admin/tenants/:tenantKey/channels
 ```
 
 O callback publico configurado no painel Meta e:
@@ -42,23 +42,22 @@ O callback publico configurado no painel Meta e:
 https://converta.re7online.com/agent-api/meta/instagram/oauth/callback
 ```
 
-O console interno continua sendo a fonte tecnica de suporte/auditoria:
+O fallback legacy de review permanece acessivel diretamente, mas oculto do menu do app do cliente:
 
 ```text
-/admin/tenants/:tenantKey/channels
+/app/settings/channels/instagram
 ```
 
-As duas telas leem/escrevem a mesma estrutura `channelAccounts`. Tokens nunca devem aparecer em UI, API, logs ou screenshots.
+As duas superficies leem/escrevem a mesma estrutura `channelAccounts`. Tokens nunca devem aparecer em UI, API, logs ou screenshots.
 
 ## Permissoes da Trilha Atual
 
-Para o novo review Instagram, solicitar apenas as permissoes necessarias ao fluxo demonstrado:
+Permissoes aprovadas para o fluxo operacional atual:
 
 - `instagram_business_basic`
 - `instagram_business_manage_messages`
-- `instagram_business_manage_comments`, somente se o painel Meta exigir essa permissao na trilha Instagram API with Instagram Login
 
-Nao incluir `pages_read_engagement` no novo review Instagram, salvo se houver um fluxo demonstrado que dependa comprovadamente dessa permissao.
+`instagram_business_manage_comments` e `pages_read_engagement` nao fazem parte do escopo operacional aprovado atual. Comentarios/private replies exigem sprint futura especifica.
 
 ## IDs Validados para Re7online
 
@@ -241,7 +240,7 @@ WhatsApp e Messenger nao dependem dessa trilha e nao devem ser alterados ao ajus
 - Redirect URI Instagram Business Login configurada.
 - Webhook `https://converta.re7online.com/agent-api/meta/webhook` configurado.
 - Campo `messages` assinado na trilha Instagram.
-- Conta Instagram `@re7online` conectada pela tela `/app/settings/channels/instagram`.
+- Conta Instagram `@re7online` conectada pelo console `/admin/tenants/re7online/channels`.
 - `tokenStatus=configured`.
 - `instagramBusinessAccessToken` presente.
 - `channelAccountId=17841470790766048`.
@@ -257,7 +256,7 @@ WhatsApp e Messenger nao dependem dessa trilha e nao devem ser alterados ao ajus
 Gravar screencast E2E curto, sem audio, demonstrando:
 
 1. login no Converta;
-2. conexao Instagram Business;
+2. conexao Instagram Business pelo console admin;
 3. status conectado;
 4. DM real chegando no inbox;
 5. resposta manual no Converta;

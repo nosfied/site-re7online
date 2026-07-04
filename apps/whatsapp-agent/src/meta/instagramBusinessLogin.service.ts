@@ -12,7 +12,6 @@ import {
 const INSTAGRAM_BUSINESS_SCOPES = [
   "instagram_business_basic",
   "instagram_business_manage_messages",
-  "instagram_business_manage_comments",
 ];
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -142,20 +141,34 @@ function signState(payload: string) {
   return crypto.createHmac("sha256", getStateSecret()).update(payload).digest("base64url");
 }
 
+function isSafeInstagramBusinessReturnPath(returnPath: string, tenantKey: string) {
+  if (!returnPath.startsWith("/") || returnPath.startsWith("//") || returnPath.includes("\\") || returnPath.includes("://")) {
+    return false;
+  }
+  if (returnPath === DEFAULT_RETURN_PATH) return true;
+  const expectedAdminPath = `/admin/tenants/${encodeURIComponent(tenantKey)}/channels`;
+  return returnPath === expectedAdminPath;
+}
+
+function normalizeInstagramBusinessReturnPath(returnPath: unknown, tenantKey: string) {
+  const normalized = typeof returnPath === "string" ? returnPath.trim() : "";
+  return normalized && isSafeInstagramBusinessReturnPath(normalized, tenantKey)
+    ? normalized
+    : DEFAULT_RETURN_PATH;
+}
+
 export function createInstagramBusinessLoginState(params: {
   tenantKey: string;
   userId: string;
   returnPath?: string | null;
 }) {
+  const tenantKey = params.tenantKey.trim();
   const payload = JSON.stringify({
-    tenantKey: params.tenantKey,
+    tenantKey,
     userId: params.userId,
     nonce: crypto.randomBytes(16).toString("hex"),
     expiresAt: Date.now() + STATE_TTL_MS,
-    returnPath:
-      typeof params.returnPath === "string" && params.returnPath.startsWith("/")
-        ? params.returnPath
-        : DEFAULT_RETURN_PATH,
+    returnPath: normalizeInstagramBusinessReturnPath(params.returnPath, tenantKey),
   });
   const encoded = base64UrlEncode(payload);
   return `${encoded}.${signState(encoded)}`;
@@ -175,13 +188,10 @@ export function verifyInstagramBusinessLoginState(state: string) {
   const tenantKey = typeof parsed.tenantKey === "string" ? parsed.tenantKey.trim() : "";
   const userId = typeof parsed.userId === "string" ? parsed.userId.trim() : "";
   const expiresAt = typeof parsed.expiresAt === "number" ? parsed.expiresAt : 0;
-  const returnPath =
-    typeof parsed.returnPath === "string" && parsed.returnPath.startsWith("/")
-      ? parsed.returnPath
-      : DEFAULT_RETURN_PATH;
   if (!tenantKey || !userId || expiresAt < Date.now()) {
     throw new Error("instagram_oauth_state_expired");
   }
+  const returnPath = normalizeInstagramBusinessReturnPath(parsed.returnPath, tenantKey);
   return { tenantKey, userId, returnPath };
 }
 
