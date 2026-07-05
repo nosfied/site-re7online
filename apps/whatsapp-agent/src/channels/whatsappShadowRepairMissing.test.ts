@@ -61,6 +61,23 @@ test("lead with missing fields uses tenant canonical channel account", () => {
   assert.equal(plan.updateData?.channelAccountId, "page-phone-1");
 });
 
+test("inbound message with missing fields is repairable in the targeted repair path", () => {
+  const plan = planWhatsAppShadowRepairCandidate(record({ model: "inboundMessages" }), client);
+
+  assert.equal(plan.action, "update");
+  assert.equal(plan.model, "inboundMessages");
+  assert.deepEqual(plan.missingFields.sort(), [
+    "channel",
+    "channelAccountId",
+    "externalUserHash",
+    "legacyWaId",
+    "provider",
+  ].sort());
+  assert.equal(plan.updateData?.channel, "whatsapp");
+  assert.equal(plan.updateData?.provider, "meta");
+  assert.equal(plan.updateData?.channelAccountId, "page-phone-1");
+});
+
 test("execute requires exact confirmation token", () => {
   assert.throws(() => assertWhatsAppShadowRepairConfirmation(undefined, true), /--confirm/);
   assert.throws(() => assertWhatsAppShadowRepairConfirmation("WRONG", true), /--confirm/);
@@ -150,8 +167,28 @@ test("report is anti-PII and separates unsafe plans", () => {
   assert.equal(report.ok, false);
   assert.equal(report.totals.updated, 1);
   assert.equal(report.totals.skippedAnonymized, 1);
+  assert.equal(report.byModel.conversations.updated, 1);
+  assert.equal(report.byModel.inboundMessages.updated, 0);
   assert.equal(serialized.includes("558400000001"), false);
   assert.equal(serialized.includes("5584****0002"), false);
   assert.equal(serialized.includes("page-phone-1"), false);
   assert.equal(serialized.includes("hash:"), true);
+});
+
+test("report separates inbound message repair counts by model", () => {
+  const plans = [
+    planWhatsAppShadowRepairCandidate(record({ model: "inboundMessages" }), client),
+  ];
+  const report = buildWhatsAppShadowRepairReport({
+    plans,
+    tenant: "demo-prefeitura",
+    execute: false,
+  });
+
+  assert.equal(report.ok, true);
+  assert.equal(report.totals.updated, 1);
+  assert.equal(report.byModel.inboundMessages.checked, 1);
+  assert.equal(report.byModel.inboundMessages.updated, 1);
+  assert.equal(report.byModel.conversations.updated, 0);
+  assert.equal(report.byModel.leads.updated, 0);
 });

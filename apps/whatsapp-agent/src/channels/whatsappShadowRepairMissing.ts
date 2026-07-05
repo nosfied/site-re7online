@@ -13,7 +13,7 @@ import {
 
 export const WHATSAPP_SHADOW_REPAIR_CONFIRMATION = "REPAIR_MISSING_WHATSAPP_SHADOW";
 
-export type WhatsAppShadowRepairModelName = Extract<BackfillModelName, "conversations" | "leads">;
+export type WhatsAppShadowRepairModelName = Extract<BackfillModelName, "conversations" | "inboundMessages" | "leads">;
 
 export type WhatsAppShadowRepairCandidate = WhatsAppBackfillExecutableRecord & {
   model: WhatsAppShadowRepairModelName;
@@ -67,7 +67,7 @@ export type WhatsAppShadowRepairReport = {
   plans: WhatsAppShadowRepairPlan[];
 };
 
-const REPAIR_MODELS = new Set<BackfillModelName>(["conversations", "leads"]);
+const REPAIR_MODELS = new Set<BackfillModelName>(["conversations", "inboundMessages", "leads"]);
 
 function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -217,6 +217,7 @@ export function buildWhatsAppShadowRepairReport(input: {
 }): WhatsAppShadowRepairReport {
   const byModel = {
     conversations: emptyModelSummary(),
+    inboundMessages: emptyModelSummary(),
     leads: emptyModelSummary(),
   };
 
