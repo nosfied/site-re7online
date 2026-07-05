@@ -18,6 +18,7 @@ Status: indice documental atual do Converta. Este documento nao altera runtime.
 | `docs/saas/CHANGE_POLICY.md` | atual | Politica de tipos de mudanca |
 | `docs/saas/FEATURE_LIFECYCLE.md` | atual | Ciclo de vida das features |
 | `docs/saas/admin-ui.md` | atual | Console interno/admin UI |
+| `docs/saas/PRIVATE_TENANT_ONBOARDING_PLAYBOOK.md` | atual | Playbook operacional para ativar tenants privados e canais pelo console interno |
 | `docs/saas/automation-ai-tenant-playbook.md` | parcialmente atual | Playbook de automacao/IA por tenant; revisar sempre que mudar evaluation ou tenant AI config |
 | `docs/saas/go-live-checklist.md` | parcialmente atual | Checklist go-live; precisa alinhar com Release Checklist novo |
 | `docs/saas/onboarding-form.md` | parcialmente atual | Formulario/processo comercial; depende do fluxo real de onboarding |

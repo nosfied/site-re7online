@@ -193,14 +193,14 @@ Roteiro de screencast:
 2. Mostrar pagina associada ao tenant.
 3. Explicar que cada tenant possui sua propria configuracao e token.
 
-## Permissoes Instagram para o Novo Review
+## Permissoes Instagram Aprovadas
 
-Para a trilha Instagram API with Instagram Login / Business Login for Instagram, o novo review deve focar somente no fluxo demonstrado no video:
+Para a trilha Instagram API with Instagram Login / Business Login for Instagram, o fluxo operacional aprovado usa somente:
 
 - `instagram_business_basic`
 - `instagram_business_manage_messages`
 
-`instagram_business_manage_comments` e `pages_read_engagement` nao fazem parte do escopo aprovado/operacional atual. O fluxo E2E validado para Instagram usa Business Login, webhook `messages`, inbox e resposta manual.
+`instagram_business_manage_comments` e `pages_read_engagement` nao fazem parte do escopo aprovado/operacional atual. O fluxo E2E validado para Instagram usa Business Login pelo console interno, webhook `messages`, inbox e resposta manual.
 
 ### `instagram_business_basic`
 
@@ -219,7 +219,7 @@ Compliance:
 Roteiro de screencast:
 
 1. Login no Converta.
-2. Abrir `Settings > Channels > Instagram`.
+2. Abrir `/admin/tenants/:tenantKey/channels`.
 3. Clicar em `Connect Instagram Business`.
 4. Concluir Business Login.
 5. Mostrar `@re7online` conectado, sem token.

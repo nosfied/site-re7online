@@ -117,6 +117,10 @@ Esse console e a fonte tecnica da Re7online para configurar, auditar e dar supor
 
 Tokens nunca devem ser exibidos pela API ou pela UI. Campos de token no console servem apenas para substituicao segura; depois de salvo, o valor deve retornar redigido/ausente.
 
+Para ativacao operacional repetivel de novos tenants privados, usar tambem:
+
+- `docs/saas/PRIVATE_TENANT_ONBOARDING_PLAYBOOK.md`
+
 ### Instagram
 
 Estado tecnico validado para `re7online`:

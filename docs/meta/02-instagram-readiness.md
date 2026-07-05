@@ -251,9 +251,9 @@ WhatsApp e Messenger nao dependem dessa trilha e nao devem ser alterados ao ajus
 - Resposta manual chega no Instagram Direct.
 - Nenhum token visivel no video.
 
-## Proxima Evidencia Necessaria
+## Evidencia Pos-Aprovacao
 
-Gravar screencast E2E curto, sem audio, demonstrando:
+As permissoes `instagram_business_basic` e `instagram_business_manage_messages` estao aprovadas para a operacao atual. Manter como evidencia reutilizavel um screencast E2E curto, sem audio, demonstrando:
 
 1. login no Converta;
 2. conexao Instagram Business pelo console admin;
@@ -262,4 +262,4 @@ Gravar screencast E2E curto, sem audio, demonstrando:
 5. resposta manual no Converta;
 6. resposta chegando no Instagram Direct.
 
-Esse video deve acompanhar a nova submissao de `instagram_business_basic` e `instagram_business_manage_messages`.
+Esse video deve ser reutilizado em auditorias internas, onboarding de novos tenants e futuras revalidacoes Meta, sem expor token, payload bruto ou dados pessoais.
