@@ -232,7 +232,7 @@ async function adminJsonRequest(
 }
 
 async function flushPassiveWebhookProcessing() {
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await new Promise((resolve) => setTimeout(resolve, 80));
 }
 
 test.before(async () => {

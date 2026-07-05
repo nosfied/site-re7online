@@ -10,7 +10,11 @@ import { getPrisma } from "../db.js";
 import { env } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 import { logChannelAccountRuntimeShadow } from "../channels/channelAccountRuntimeShadow.js";
-import { resolveMetaTenantChannelAccountDbFirst } from "../channels/channelAccountDbFirst.js";
+import {
+  findInstagramChannelAccountForConversationDbFirst,
+  findMessengerChannelAccountForConversationDbFirst,
+  resolveMetaTenantChannelAccountDbFirst,
+} from "../channels/channelAccountDbFirst.js";
 import { listTenantChannelAccountsFromDb } from "../channels/channelAccountPersistence.js";
 import { ChannelAdapterRegistry } from "../channels/channelAdapterRegistry.js";
 import {
@@ -649,6 +653,58 @@ async function buildDbTenantForPassiveMetaRuntime(params: {
   };
 }
 
+async function resolveAccountForPassiveMetaPersistence(params: {
+  channel: Channel;
+  tenantKey?: string;
+  channelAccountId: string;
+  effectiveTenant?: TenantConfig | null;
+  resolvedAccount: ResolvedTenantChannelAccount["account"];
+}) {
+  const accountFromTenant =
+    params.effectiveTenant && params.tenantKey
+      ? findTenantChannelAccount(params.effectiveTenant.channelAccounts ?? [], {
+          tenantKey: params.tenantKey,
+          channel: params.channel,
+          provider: "meta",
+          channelAccountId: params.channelAccountId,
+        })
+      : null;
+  const fallbackAccount = accountFromTenant ?? params.resolvedAccount;
+  if (!params.tenantKey || (params.channel !== "messenger" && params.channel !== "instagram")) {
+    return fallbackAccount;
+  }
+
+  try {
+    const dbAccount =
+      params.channel === "instagram"
+        ? await findInstagramChannelAccountForConversationDbFirst({
+            prisma: getPrisma(),
+            clientKey: params.tenantKey,
+            channelAccountId: params.channelAccountId,
+            includeSecrets: true,
+          })
+        : await findMessengerChannelAccountForConversationDbFirst({
+            prisma: getPrisma(),
+            clientKey: params.tenantKey,
+            channelAccountId: params.channelAccountId,
+            includeSecrets: true,
+          });
+    return dbAccount ?? fallbackAccount;
+  } catch (error) {
+    logger.warn({
+      event: "meta.webhook.passive.account_secret_lookup_fallback",
+      route: "/meta/webhook",
+      channel: params.channel,
+      provider: "meta",
+      channelAccountId: params.channelAccountId || null,
+      tenantKey: params.tenantKey,
+      reason: "db_error",
+      message: (error as Error).message,
+    });
+    return fallbackAccount;
+  }
+}
+
 function logRuntimeDryRun(params: {
   requestId: string;
   normalized: ReturnType<typeof normalizeChannelInboundEvent>;
@@ -963,15 +1019,13 @@ export async function processPassiveMetaWebhookPayload(
         });
       }
     }
-    const accountForPersistence =
-      effectiveTenant && resolution.tenantKey
-        ? findTenantChannelAccount(effectiveTenant.channelAccounts ?? [], {
-            tenantKey: resolution.tenantKey,
-            channel,
-            provider: "meta",
-            channelAccountId: item.pageId,
-          }) ?? resolution.account
-        : resolution.account;
+    const accountForPersistence = await resolveAccountForPassiveMetaPersistence({
+      channel,
+      tenantKey: resolution.tenantKey,
+      channelAccountId: item.pageId,
+      effectiveTenant,
+      resolvedAccount: resolution.account,
+    });
     const runtimeGate = resolveChannelRuntimeGate(accountForPersistence);
     const persistencePlan = buildChannelPersistencePlan(
       {
