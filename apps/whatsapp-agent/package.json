@@ -63,6 +63,7 @@
     "channels:shadow:rollout-check": "node --import tsx scripts/channels-shadow-rollout-check.ts",
     "channels:shadow:repair-missing": "node --import tsx scripts/channels-shadow-repair-missing.ts",
     "channels:shadow:release-anonymized-identity": "node --import tsx scripts/channels-shadow-release-anonymized-identity.ts",
+    "meta:profiles:backfill": "node --import tsx scripts/meta-contact-profile-backfill.ts",
     "push:vapid:generate": "node --import tsx scripts/generate-vapid-keys.ts"
   },
   "dependencies": {

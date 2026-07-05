@@ -9,6 +9,7 @@ import { encryptMessengerExternalUserRef } from "./messengerOutbound.js";
 import { channelLatencyNow, type ChannelLatencyProfiler } from "./channelLatencyProfiler.js";
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -229,15 +230,6 @@ export async function persistMessengerInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
-  const profileLookupStartedAt = channelLatencyNow();
-  const profile = await fetchMessengerUserProfile({
-    pageAccessToken: params.account?.pageAccessToken,
-    externalUserId: event.externalUserId,
-    fetchImpl: params.fetchImpl,
-  });
-  latency?.duration("profileLookup", profileLookupStartedAt);
-  const displayName = profile.displayName;
-
   const duplicateLookupStartedAt = channelLatencyNow();
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
@@ -264,6 +256,26 @@ export async function persistMessengerInboundEvent(params: {
     };
   }
 
+  const profileLookupStartedAt = channelLatencyNow();
+  const profile = await resolveMetaContactDisplayName({
+    prisma,
+    clientId: client.id,
+    tenantKey,
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    requestId,
+    fetchProfile: () =>
+      fetchMessengerUserProfile({
+        pageAccessToken: params.account?.pageAccessToken,
+        externalUserId: event.externalUserId,
+        fetchImpl: params.fetchImpl,
+      }),
+  });
+  latency?.duration("profileLookup", profileLookupStartedAt);
+  const displayName = profile.displayName;
+
   const defaultRouteStartedAt = channelLatencyNow();
   const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, client.id);
   latency?.duration("defaultRouteLookup", defaultRouteStartedAt);
@@ -273,7 +285,7 @@ export async function persistMessengerInboundEvent(params: {
   };
 
   const persistenceDbStartedAt = channelLatencyNow();
-  const [conversation, runtimeState, inbound] = await Promise.all([
+  const [conversation, runtimeState, inbound, contact] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
       create: {
@@ -364,7 +376,7 @@ export async function persistMessengerInboundEvent(params: {
         tenantId: client.id,
         waId: syntheticWaId,
         waIdCanonical: syntheticWaId,
-        name: displayName ?? "Contato Facebook/Messenger",
+        name: displayName ?? "Messenger User",
         phone: null,
         status: "NEW",
         ...channelFields,
@@ -377,6 +389,19 @@ export async function persistMessengerInboundEvent(params: {
       select: { id: true },
     }),
   ]);
+  await upsertMetaContactIdentity({
+    prisma,
+    clientId: client.id,
+    contactId: contact.id,
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    externalUserRef: channelFields.externalUserRef,
+    legacyWaId: channelFields.legacyWaId,
+    displayName,
+    seenAt: createdAt,
+  });
   latency?.duration("persistenceDb", persistenceDbStartedAt);
   latency?.duration("persistence", persistenceStartedAt);
 

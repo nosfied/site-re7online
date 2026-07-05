@@ -22,9 +22,24 @@ function createFakePrisma() {
   const runtimeStates = new Map<string, any>();
   const contacts = new Map<string, any>();
   const leads = new Map<string, any>();
+  const contactChannelIdentities = new Map<string, any>();
+  const identityKey = (input: {
+    clientId: string;
+    channel: string;
+    provider: string;
+    channelAccountId: string;
+    externalUserHash: string;
+  }) =>
+    [
+      input.clientId,
+      input.channel,
+      input.provider,
+      input.channelAccountId,
+      input.externalUserHash,
+    ].join(":");
 
   return {
-    state: { inboundMessages, conversations, runtimeStates, contacts, leads },
+    state: { inboundMessages, conversations, runtimeStates, contacts, leads, contactChannelIdentities },
     client: {
       async findUnique(args: any) {
         return args.where.clientKey === client.clientKey ? client : null;
@@ -97,6 +112,27 @@ function createFakePrisma() {
           : { id: `lead-${leads.size + 1}`, ...args.create };
         leads.set(key, item);
         return { id: item.id };
+      },
+    },
+    contactChannelIdentity: {
+      async findUnique(args: any) {
+        const key = identityKey(args.where.clientId_channel_provider_channelAccountId_externalUserHash);
+        const item = contactChannelIdentities.get(key);
+        return item
+          ? {
+              displayName: item.displayName ?? null,
+              lastSeenAt: item.lastSeenAt ?? null,
+            }
+          : null;
+      },
+      async upsert(args: any) {
+        const key = identityKey(args.where.clientId_channel_provider_channelAccountId_externalUserHash);
+        const current = contactChannelIdentities.get(key);
+        const item = current
+          ? { ...current, ...args.update }
+          : { id: `identity-${contactChannelIdentities.size + 1}`, ...args.create };
+        contactChannelIdentities.set(key, item);
+        return item;
       },
     },
   };
@@ -227,6 +263,8 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
   assert.equal(inbound.externalMessageId, "mid-1");
   assert.equal(contact.name, "Maria Silva");
   assert.equal(lead.name, "Maria Silva");
+  assert.equal(prisma.state.contactChannelIdentities.size, 1);
+  assert.equal(Array.from(prisma.state.contactChannelIdentities.values())[0].displayName, "Maria Silva");
   assert.equal(JSON.stringify({ conversation, runtime, inbound }).includes("psid_user_001"), false);
   assert.equal(realtimeEvents.length, 1);
   assert.equal(realtimeEvents[0].type, "message.created");
@@ -239,6 +277,73 @@ test("persistMessengerInboundEvent persists Messenger inbound once and dedupes b
   assert.equal(realtimeEvents[0].message.direction, "INBOUND");
   assert.equal(realtimeEvents[0].message.messageId, inbound.messageId);
   assert.equal(realtimeEvents[0].message.bodyText, "olá");
+});
+
+test("persistMessengerInboundEvent reuses recent cached profile without repeated Graph lookup", async () => {
+  const prisma = createFakePrisma();
+  let fetchCalls = 0;
+  const baseEvent = {
+    tenantKey: "tenant-a",
+    channel: "messenger" as const,
+    provider: "meta" as const,
+    channelAccountId: "page-1",
+    externalUserId: "psid_user_001",
+    text: "olá",
+  };
+
+  await persistMessengerInboundEvent({
+    prisma: prisma as any,
+    event: { ...baseEvent, externalMessageId: "mid-cache-1" },
+    tenantKey: "tenant-a",
+    account: enabledAccount,
+    requestId: "req-cache-1",
+    fetchImpl: (async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify({ first_name: "Maria", last_name: "Silva" }), { status: 200 });
+    }) as typeof fetch,
+    publishRealtimeEvent: () => undefined,
+  });
+  await persistMessengerInboundEvent({
+    prisma: prisma as any,
+    event: { ...baseEvent, externalMessageId: "mid-cache-2" },
+    tenantKey: "tenant-a",
+    account: enabledAccount,
+    requestId: "req-cache-2",
+    fetchImpl: (async () => {
+      fetchCalls += 1;
+      return new Response(JSON.stringify({ first_name: "Outra", last_name: "Pessoa" }), { status: 200 });
+    }) as typeof fetch,
+    publishRealtimeEvent: () => undefined,
+  });
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(prisma.state.inboundMessages.size, 2);
+  assert.equal(Array.from(prisma.state.leads.values())[0].name, "Maria Silva");
+});
+
+test("persistMessengerInboundEvent keeps inbound working when profile lookup fails", async () => {
+  const prisma = createFakePrisma();
+  const result = await persistMessengerInboundEvent({
+    prisma: prisma as any,
+    event: {
+      tenantKey: "tenant-a",
+      channel: "messenger",
+      provider: "meta",
+      channelAccountId: "page-1",
+      externalUserId: "psid_user_001",
+      externalMessageId: "mid-profile-fail",
+      text: "olá",
+    },
+    tenantKey: "tenant-a",
+    account: enabledAccount,
+    requestId: "req-profile-fail",
+    fetchImpl: (async () => new Response("denied", { status: 403 })) as typeof fetch,
+    publishRealtimeEvent: () => undefined,
+  });
+
+  assert.equal(result.persisted, true);
+  assert.equal(prisma.state.inboundMessages.size, 1);
+  assert.equal(Array.from(prisma.state.leads.values())[0].name, "Messenger User");
 });
 
 test("persistMessengerInboundEvent does not persist when the account flag is off", async () => {

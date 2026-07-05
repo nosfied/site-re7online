@@ -178,7 +178,22 @@ function getMediaCacheKey(messageId: string | null, mediaKind?: string | null) {
 }
 
 function getConversationLabel(item: InboxConversationItem) {
-  return item.leadName || item.leadPhone || "Sem nome";
+  if (item.leadName) return item.leadName;
+  if (item.leadPhone) return item.leadPhone;
+  switch (getConversationChannel(item)) {
+    case "instagram":
+      return "Instagram User";
+    case "messenger":
+      return "Messenger User";
+    case "whatsapp":
+      return "WhatsApp User";
+    case "webchat":
+      return "Webchat User";
+    case "telegram":
+      return "Telegram User";
+    default:
+      return "Sem nome";
+  }
 }
 
 function getLeadStatusLabel(status?: string | null) {
@@ -4587,7 +4602,7 @@ export default function AppInboxPage() {
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-slate-950">Histórico do contato</h2>
                 <p className="mt-1 truncate text-sm text-slate-500">
-                  {selectedConversation?.leadName || selectedConversation?.leadPhone || selectedConversation?.waId || "Contato"}
+                  {selectedConversation ? getConversationLabel(selectedConversation) : "Contato"}
                 </p>
               </div>
               <button
@@ -5043,7 +5058,7 @@ export default function AppInboxPage() {
               <div className="flex min-w-0 items-center gap-2">
                 <h2 className="truncate text-base font-semibold text-slate-900 max-[1440px]:text-sm">
                   {selectedConversation
-                    ? selectedConversation.leadName || selectedConversation.leadPhone || selectedConversation.waId
+                    ? getConversationLabel(selectedConversation)
                     : "Atendimento"}
                 </h2>
                 {selectedConversation ? (

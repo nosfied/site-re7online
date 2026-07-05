@@ -9,6 +9,7 @@ import { canPersistChannelInbound } from "./tenantChannelAccount.js";
 import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { env } from "../config/env.js";
+import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
 
 export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Instagram ainda não está habilitado neste canal.";
@@ -368,13 +369,6 @@ export async function persistInstagramInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
-  const profile = await fetchInstagramUserProfile({
-    instagramBusinessAccessToken: params.account?.instagramBusinessAccessToken,
-    externalUserId: event.externalUserId,
-    fetchImpl: params.fetchImpl,
-  });
-  const displayName = profile.displayName;
-
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
     select: { id: true },
@@ -399,13 +393,31 @@ export async function persistInstagramInboundEvent(params: {
     };
   }
 
+  const profile = await resolveMetaContactDisplayName({
+    prisma,
+    clientId: client.id,
+    tenantKey,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    requestId,
+    fetchProfile: () =>
+      fetchInstagramUserProfile({
+        instagramBusinessAccessToken: params.account?.instagramBusinessAccessToken,
+        externalUserId: event.externalUserId,
+        fetchImpl: params.fetchImpl,
+      }),
+  });
+  const displayName = profile.displayName;
+
   const defaults = await ensureDefaultOperationalDepartmentAndQueue(prisma, client.id);
   const operationalRoute = {
     departmentId: defaults.department.id,
     queueId: defaults.queue.id,
   };
 
-  const [conversation, runtimeState, inbound] = await Promise.all([
+  const [conversation, runtimeState, inbound, contact] = await Promise.all([
     prisma.conversation.upsert({
       where: { clientId_waId: { clientId: client.id, waId: syntheticWaId } },
       create: {
@@ -481,7 +493,7 @@ export async function persistInstagramInboundEvent(params: {
       create: {
         clientId: client.id,
         waId: syntheticWaId,
-        name: displayName ?? "Contato Instagram",
+        name: displayName ?? "Instagram User",
         ...channelFields,
       },
       update: {
@@ -496,7 +508,7 @@ export async function persistInstagramInboundEvent(params: {
         tenantId: client.id,
         waId: syntheticWaId,
         waIdCanonical: syntheticWaId,
-        name: displayName ?? "Contato Instagram",
+        name: displayName ?? "Instagram User",
         phone: null,
         status: "NEW",
         ...channelFields,
@@ -509,6 +521,19 @@ export async function persistInstagramInboundEvent(params: {
       select: { id: true },
     }),
   ]);
+  await upsertMetaContactIdentity({
+    prisma,
+    clientId: client.id,
+    contactId: contact.id,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    externalUserHash,
+    externalUserRef: channelFields.externalUserRef,
+    legacyWaId: channelFields.legacyWaId,
+    displayName,
+    seenAt: createdAt,
+  });
 
   logPersistence({
     event: "instagram.inbound_persistence.persisted",
