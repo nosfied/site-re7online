@@ -429,3 +429,81 @@ test("createWebchatInboundMessage routes explicit human request to handoff", asy
   assert.match(String(prisma.state.leadNotes[0].body), /Usuário solicitou atendimento humano/);
   assert.equal(realtimeEvents.some((event) => event.type === "conversation.handoff.updated"), true);
 });
+
+test("createWebchatInboundMessage persists captured contact fields on lead before handoff", async () => {
+  const captureFlow = {
+    start: "captura_nome",
+    nodes: {
+      captura_nome: {
+        type: "capture",
+        text: "Qual é o seu nome?",
+        field: "contact_name",
+        validation: "non_empty",
+        next: "captura_email",
+      },
+      captura_email: {
+        type: "capture",
+        text: "Informe seu e-mail.",
+        field: "contact_email",
+        validation: "email",
+        next: "captura_telefone",
+      },
+      captura_telefone: {
+        type: "capture",
+        text: "Informe telefone com DDD.",
+        field: "contact_phone",
+        validation: "phone_br",
+        next: "menu_objetivo",
+      },
+      menu_objetivo: {
+        type: "menu",
+        text: "Qual é seu objetivo?",
+        options: [{ label: "Conhecer o Converta", next: "handoff" }],
+      },
+      handoff: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+        handoffSummary: "Lead qualificado.",
+      },
+    },
+  };
+  const prisma = makePrisma() as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_capture", definition: captureFlow });
+
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_8a",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.17",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_8b",
+    input: { sessionToken: "wcs_existing", text: "Maria Silva" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.17",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_8c",
+    input: { sessionToken: "wcs_existing", text: "MARIA@EXAMPLE.COM" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.17",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_8d",
+    input: { sessionToken: "wcs_existing", text: "(84) 99999-9999" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.17",
+  });
+
+  assert.equal(prisma.state.leads[0].name, "Maria Silva");
+  assert.equal(prisma.state.leads[0].email, "maria@example.com");
+  assert.equal(prisma.state.leads[0].phone, "(84) 99999-9999");
+  assert.equal(prisma.state.leads[0].status, "NEW");
+  assert.equal(prisma.state.runtimeStates[0].mode, "BOT");
+  assert.equal(prisma.state.runtimeStates[0].status, "WAITING_USER");
+});

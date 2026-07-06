@@ -81,8 +81,80 @@ function parseArgs(argv: string[]): Options {
 }
 
 const re7onlinePrivateIntakeDefinition = {
-  start: "menu_inicial",
+  start: "captura_nome",
   nodes: {
+    captura_nome: {
+      type: "capture",
+      text:
+        "Olá! Sou o assistente da Re7online. Para começar, vou pegar seus dados de contato.\n\nQual é o seu nome?",
+      field: "contact_name",
+      validation: "non_empty",
+      errorText: "Informe seu nome para continuar.",
+      next: "captura_email",
+      tags: ["re7online", "intake", "contact_capture"],
+    },
+    captura_email: {
+      type: "capture",
+      text: "Obrigado. Agora informe seu e-mail.",
+      field: "contact_email",
+      validation: "email",
+      errorText: "Informe um e-mail válido para continuar.",
+      next: "captura_telefone",
+      tags: ["contact_capture"],
+    },
+    captura_telefone: {
+      type: "capture",
+      text: "Perfeito. Informe também um telefone com DDD. Exemplo: (84) 99999-9999.",
+      field: "contact_phone",
+      validation: "phone_br",
+      errorText: "Informe um telefone com DDD. Exemplos: (84) 99999-9999 ou 84999999999.",
+      next: "menu_objetivo",
+      tags: ["contact_capture"],
+    },
+    menu_objetivo: {
+      type: "menu",
+      text: "Certo. Qual é o seu objetivo agora?",
+      tags: ["re7online", "intake", "objective"],
+      options: [
+        {
+          label: "Conhecer como funciona o Converta",
+          next: "menu_perfil",
+          tags: ["lead", "converta"],
+          context: { intent: "learn_converta", service: "converta" },
+        },
+        {
+          label: "Testar / solicitar demonstração ou POC",
+          next: "menu_perfil",
+          tags: ["lead", "demo", "poc"],
+          context: { intent: "request_demo", service: "demo_poc", lead_temp: "quente" },
+        },
+        {
+          label: "Sou cliente e preciso de suporte",
+          next: "perfil_suporte",
+          tags: ["support"],
+          context: { intent: "support", service: "suporte" },
+        },
+      ],
+    },
+    menu_perfil: {
+      type: "menu",
+      text: "Esse atendimento é para qual perfil?",
+      tags: ["lead", "qualification"],
+      options: [
+        {
+          label: "Empresa privada",
+          next: "empresa_privada",
+          tags: ["business"],
+          context: { marketProfile: "business", profile: "business" },
+        },
+        {
+          label: "Governo / órgão público",
+          next: "governo_orgao",
+          tags: ["government"],
+          context: { marketProfile: "government", profile: "government", priority: "alta" },
+        },
+      ],
+    },
     menu_inicial: {
       type: "menu",
       text:
@@ -121,6 +193,40 @@ const re7onlinePrivateIntakeDefinition = {
         },
       ],
     },
+    empresa_privada: {
+      type: "capture",
+      text: "Qual é o nome da empresa ou organização?",
+      field: "company",
+      validation: "non_empty",
+      errorText: "Informe o nome da empresa ou organização para continuar.",
+      next: "segmento_privado",
+      tags: ["business", "qualification"],
+    },
+    segmento_privado: {
+      type: "menu",
+      text: "Qual segmento descreve melhor a operação?",
+      tags: ["business", "qualification"],
+      options: [
+        { label: "Varejo", next: "canais_interesse", context: { segment: "retail" }, tags: ["retail"] },
+        { label: "Serviços", next: "canais_interesse", context: { segment: "services" }, tags: ["services"] },
+        { label: "Escritório", next: "canais_interesse", context: { segment: "office" }, tags: ["office"] },
+        { label: "Educação", next: "canais_interesse", context: { segment: "education" }, tags: ["education"] },
+        { label: "Saúde", next: "canais_interesse", context: { segment: "healthcare" }, tags: ["healthcare"] },
+        { label: "Outro", next: "canais_interesse", context: { segment: "other" }, tags: ["other_segment"] },
+      ],
+    },
+    canais_interesse: {
+      type: "menu",
+      text: "Quais canais você quer priorizar primeiro?",
+      tags: ["business", "channels"],
+      options: [
+        { label: "WhatsApp", next: "necessidade_privada", context: { channels: "whatsapp" } },
+        { label: "Instagram", next: "necessidade_privada", context: { channels: "instagram" } },
+        { label: "Facebook/Messenger", next: "necessidade_privada", context: { channels: "messenger" } },
+        { label: "Webchat", next: "necessidade_privada", context: { channels: "webchat" } },
+        { label: "Multicanal completo", next: "necessidade_privada", context: { channels: "omnichannel" } },
+      ],
+    },
     converta_visao_geral: {
       type: "menu",
       text:
@@ -145,6 +251,65 @@ const re7onlinePrivateIntakeDefinition = {
           tags: ["navigation"],
         },
       ],
+    },
+    governo_orgao: {
+      type: "capture",
+      text: "Qual é o órgão ou entidade?",
+      field: "public_entity",
+      validation: "non_empty",
+      errorText: "Informe o órgão ou entidade para continuar.",
+      next: "governo_municipio",
+      tags: ["government", "qualification"],
+    },
+    governo_municipio: {
+      type: "capture",
+      text: "Informe município/UF.",
+      field: "public_city_uf",
+      validation: "non_empty",
+      errorText: "Informe município/UF para continuar.",
+      next: "governo_estagio",
+      tags: ["government", "qualification"],
+    },
+    governo_estagio: {
+      type: "menu",
+      text: "Em qual estágio está a demanda?",
+      tags: ["government", "bid", "qualification"],
+      options: [
+        {
+          label: "Pesquisa de solução",
+          next: "governo_prazo",
+          context: { publicSectorContext: "solution_research" },
+        },
+        {
+          label: "POC",
+          next: "governo_prazo",
+          context: { publicSectorContext: "poc", lead_temp: "quente" },
+        },
+        {
+          label: "Edital em preparação",
+          next: "governo_prazo",
+          context: { publicSectorContext: "bid_preparation", lead_temp: "quente" },
+        },
+        {
+          label: "Edital publicado",
+          next: "governo_prazo",
+          context: { publicSectorContext: "published_bid", lead_temp: "quente", priority: "alta" },
+        },
+        {
+          label: "Proposta necessária",
+          next: "governo_prazo",
+          context: { publicSectorContext: "proposal_needed", lead_temp: "quente", priority: "alta" },
+        },
+      ],
+    },
+    governo_prazo: {
+      type: "capture",
+      text: "Existe algum prazo importante? Se não houver, responda 'sem prazo definido'.",
+      field: "deadline",
+      validation: "non_empty",
+      errorText: "Informe o prazo ou responda 'sem prazo definido'.",
+      next: "handoff_governo",
+      tags: ["government", "deadline"],
     },
     perfil_demo: {
       type: "menu",
@@ -236,33 +401,56 @@ const re7onlinePrivateIntakeDefinition = {
     },
     perfil_suporte: {
       type: "menu",
-      text:
-        "Para suporte, informe o tipo de situação. Em seguida vamos encaminhar para atendimento humano com o contexto inicial.",
+      text: "Para suporte, selecione o tipo de situação. Em seguida vamos encaminhar para atendimento humano.",
       tags: ["support", "qualification"],
       options: [
         {
-          label: "Canal ou mensagem com problema",
-          next: "handoff_suporte",
-          tags: ["support", "channel_issue"],
-          context: { supportType: "channel_issue" },
-        },
-        {
-          label: "Acesso, usuário ou permissão",
+          label: "Acesso/login",
           next: "handoff_suporte",
           tags: ["support", "access"],
-          context: { supportType: "access" },
+          context: { supportType: "access_login" },
         },
         {
-          label: "Dúvida de uso",
+          label: "WhatsApp",
           next: "handoff_suporte",
-          tags: ["support", "how_to"],
-          context: { supportType: "how_to" },
+          tags: ["support", "whatsapp"],
+          context: { supportType: "whatsapp" },
         },
         {
-          label: "Urgência operacional",
+          label: "Instagram/Facebook",
           next: "handoff_suporte",
-          tags: ["support", "urgent"],
-          context: { supportType: "urgent" },
+          tags: ["support", "meta"],
+          context: { supportType: "instagram_facebook" },
+        },
+        {
+          label: "Webchat",
+          next: "handoff_suporte",
+          tags: ["support", "webchat"],
+          context: { supportType: "webchat" },
+        },
+        {
+          label: "Inbox",
+          next: "handoff_suporte",
+          tags: ["support", "inbox"],
+          context: { supportType: "inbox" },
+        },
+        {
+          label: "Relatórios",
+          next: "handoff_suporte",
+          tags: ["support", "reports"],
+          context: { supportType: "reports" },
+        },
+        {
+          label: "Instabilidade",
+          next: "handoff_suporte",
+          tags: ["support", "incident"],
+          context: { supportType: "incident", priority: "alta" },
+        },
+        {
+          label: "Financeiro/comercial",
+          next: "handoff_suporte",
+          tags: ["support", "commercial"],
+          context: { supportType: "commercial" },
         },
       ],
     },

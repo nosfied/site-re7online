@@ -86,19 +86,44 @@ The script:
 - deactivates other active entry-point flows for the same tenant only when `--execute` is used;
 - does not change Webchat sites, WhatsApp phone numbers, channel accounts, Messenger, Instagram, tokens or secrets.
 
-Current flow-engine limitation: this intake qualifies visitors through menus, context and tags. It does not perform free-form slot filling for every field below. Free-form details are requested in the handoff message and completed by the human operator using the existing Inbox and Lead notes.
+Current flow-engine behavior: this intake uses `capture` nodes for the first contact fields and menu nodes for objective/profile qualification. Captured name, e-mail and phone are persisted into the existing Lead record without creating a parallel lead store. Additional free-form details are still completed by the human operator using the existing Inbox and Lead notes.
+
+### Webchat Widget UX
+
+The public widget on `/converta` uses polling. It does not use SSE/WebSocket and it does not have a real read-receipt signal from the backend.
+
+Supported visitor feedback:
+
+- local `enviando...` while the message POST is pending;
+- `enviado` when the API accepts the message;
+- `recebido` when the same visitor message appears in the polling result;
+- `erro` when the API call fails;
+- badge on the launcher when new bot/operator messages arrive while minimized;
+- subtle visual pulse for unread messages;
+- optional short sound after the visitor has interacted with the widget, with a mute toggle.
+
+Unsupported by design in this version:
+
+- do not show `lido`;
+- do not promise delivery/read beyond what the backend actually confirms;
+- do not play sound before browser/user interaction.
+
+### Inbox Presence
+
+Webchat conversations are created on the first valid visitor message. When an active `ChatbotFlow` handles the conversation, the runtime state remains visible in the Inbox as automation (`mode=BOT`, `WAITING_USER`) and does not count as urgent human unread work until handoff/assignment. When handoff is triggered, the conversation is promoted to human flow (`mode=HUMAN`, `WAITING`, `handoffStatus=PENDING`).
 
 ### Lead Capture
 
 For commercial leads, collect:
 
 - nome;
+- telefone/WhatsApp;
+- e-mail;
 - empresa;
 - segmento;
-- telefone/WhatsApp;
 - interesse principal;
-- quantidade aproximada de atendentes;
-- canal preferido para retorno.
+- canais de interesse;
+- necessidade principal.
 
 ### Public-Sector Capture
 
@@ -149,8 +174,11 @@ Route to human attendance when:
 11. Confirm Messenger/Instagram flags remain human-only.
 12. Confirm WhatsApp runtime remains unchanged.
 13. Send a Webchat message and confirm the visitor receives the automated menu through polling.
-14. Select option `5` and confirm the conversation is marked for human handoff.
-15. For WhatsApp, validate only after confirming the tenant intentionally uses the same entry-point `ChatbotFlow`.
+14. Confirm the widget shows local send status and does not show fake read receipts.
+15. Minimize the widget, receive an automated/operator response and confirm badge/visual signal.
+16. Capture name, e-mail and phone, then confirm the Lead is recoverable even before handoff.
+17. Complete a demo/support/government path and confirm the conversation is marked for human handoff.
+18. For WhatsApp, validate only after confirming the tenant intentionally uses the same entry-point `ChatbotFlow`.
 
 ## Rollback
 

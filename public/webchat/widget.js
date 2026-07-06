@@ -27,11 +27,16 @@
     cursor: null,
     messages: [],
     messageIds: Object.create(null),
+    pendingMessages: [],
     name: "",
     error: "",
     welcomeMessage: welcomeFallback,
     collectName: script.getAttribute("data-collect-name") !== "false",
-    pollTimer: 0
+    pollTimer: 0,
+    unreadCount: 0,
+    interacted: false,
+    muted: safeStorageGet("converta:webchat:" + siteId + ":muted") === "true",
+    lastSoundAt: 0
   };
 
   var host = document.createElement("div");
@@ -44,18 +49,26 @@
     ":host{all:initial}",
     ".cw-shell{position:fixed;right:var(--cw-right);bottom:var(--cw-bottom);z-index:2147483000;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a}",
     ".cw-button{width:58px;height:58px;border:0;border-radius:50%;background:var(--cw-accent);color:#fff;box-shadow:0 18px 42px rgba(15,23,42,.28);display:grid;place-items:center;cursor:pointer}",
-    ".cw-button:focus-visible,.cw-send:focus-visible,.cw-close:focus-visible{outline:3px solid rgba(252,108,22,.35);outline-offset:3px}",
+    ".cw-shell[data-has-unread='true'] .cw-button{animation:cw-pulse 1.35s ease-in-out infinite}",
+    ".cw-button:focus-visible,.cw-send:focus-visible,.cw-close:focus-visible,.cw-sound:focus-visible{outline:3px solid rgba(252,108,22,.35);outline-offset:3px}",
     ".cw-button svg{width:28px;height:28px}",
+    ".cw-badge{display:none;position:absolute;right:-4px;top:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;border:2px solid #fff;font-size:11px;font-weight:800;line-height:20px;text-align:center;box-sizing:border-box}",
+    ".cw-shell[data-has-unread='true'] .cw-badge{display:block}",
     ".cw-panel{display:none;position:absolute;right:0;bottom:74px;width:min(360px,calc(100vw - 32px));height:min(560px,calc(100dvh - 110px));background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:14px;box-shadow:0 24px 80px rgba(15,23,42,.24);overflow:hidden}",
     ".cw-shell[data-open='true'] .cw-panel{display:grid;grid-template-rows:auto 1fr auto}",
     ".cw-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 12px;background:#0f172a;color:#fff}",
     ".cw-title{font-size:15px;font-weight:700;line-height:1.2;margin:0}",
     ".cw-subtitle{font-size:12px;color:rgba(255,255,255,.72);line-height:1.2;margin:3px 0 0}",
-    ".cw-close{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:32px}",
+    ".cw-actions{display:flex;gap:7px;align-items:center}",
+    ".cw-close,.cw-sound{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;line-height:32px}",
+    ".cw-sound{font-size:14px;font-weight:800}",
     ".cw-body{background:#f8fafc;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin}",
     ".cw-message{max-width:82%;border-radius:12px;padding:9px 11px;font-size:13px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}",
     ".cw-message.visitor{align-self:flex-end;background:var(--cw-accent);color:#fff;border-bottom-right-radius:4px}",
+    ".cw-message.visitor.pending{opacity:.78}",
+    ".cw-message.visitor.failed{background:#b42318}",
     ".cw-message.agent{align-self:flex-start;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,.08);border-bottom-left-radius:4px}",
+    ".cw-message.agent.new{box-shadow:0 0 0 2px rgba(252,108,22,.18)}",
     ".cw-message.system{align-self:center;background:transparent;color:#64748b;text-align:center;font-size:12px;max-width:100%}",
     ".cw-meta{display:block;margin-top:4px;font-size:10px;opacity:.72}",
     ".cw-form{border-top:1px solid rgba(15,23,42,.1);background:#fff;padding:10px;display:grid;gap:8px}",
@@ -66,13 +79,14 @@
     ".cw-send:disabled,.cw-text:disabled,.cw-name:disabled{opacity:.58;cursor:not-allowed}",
     ".cw-error{display:none;color:#b42318;background:#fff1f0;border:1px solid #ffd0cc;border-radius:9px;padding:8px 10px;font-size:12px}",
     ".cw-error:not(:empty){display:block}",
+    "@keyframes cw-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}",
     "@media (max-width:480px){.cw-shell{right:var(--cw-right-mobile);bottom:var(--cw-bottom-mobile)}.cw-panel{right:-2px;bottom:70px;width:calc(100vw - 24px);height:min(560px,calc(100dvh - 96px));border-radius:12px}.cw-button{width:54px;height:54px}}",
     "</style>",
     "<div class='cw-shell' style='--cw-accent:" + escapeAttr(accent) + ";--cw-bottom:" + bottom + ";--cw-right:" + right + ";--cw-bottom-mobile:" + bottomMobile + ";--cw-right-mobile:" + rightMobile + "'>",
     "  <div class='cw-panel' role='dialog' aria-label='Webchat'>",
     "    <div class='cw-head'>",
     "      <div><p class='cw-title'></p><p class='cw-subtitle'></p></div>",
-    "      <button class='cw-close' type='button' aria-label='Fechar'>x</button>",
+    "      <div class='cw-actions'><button class='cw-sound' type='button' aria-label='Silenciar notificações'>♪</button><button class='cw-close' type='button' aria-label='Fechar'>x</button></div>",
     "    </div>",
     "    <div class='cw-body' aria-live='polite'></div>",
     "    <form class='cw-form'>",
@@ -83,6 +97,7 @@
     "  </div>",
     "  <button class='cw-button' type='button' aria-label='Abrir atendimento'>",
     "    <svg viewBox='0 0 24 24' aria-hidden='true' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'/></svg>",
+    "    <span class='cw-badge' aria-hidden='true'></span>",
     "  </button>",
     "</div>"
   ].join("");
@@ -91,6 +106,8 @@
   var panel = root.querySelector(".cw-panel");
   var button = root.querySelector(".cw-button");
   var closeButton = root.querySelector(".cw-close");
+  var soundButton = root.querySelector(".cw-sound");
+  var badgeEl = root.querySelector(".cw-badge");
   var titleEl = root.querySelector(".cw-title");
   var subtitleEl = root.querySelector(".cw-subtitle");
   var bodyEl = root.querySelector(".cw-body");
@@ -105,7 +122,9 @@
   render();
 
   button.addEventListener("click", function () {
+    state.interacted = true;
     state.open = !state.open;
+    if (state.open) state.unreadCount = 0;
     render();
     if (state.open) {
       ensureSession().then(function () {
@@ -114,18 +133,27 @@
         setTimeout(function () { textEl.focus(); }, 0);
       });
     } else {
-      stopPolling();
+      schedulePolling();
     }
   });
 
   closeButton.addEventListener("click", function () {
+    state.interacted = true;
     state.open = false;
-    stopPolling();
+    schedulePolling();
     render();
+  });
+
+  soundButton.addEventListener("click", function () {
+    state.interacted = true;
+    state.muted = !state.muted;
+    safeStorageSet("converta:webchat:" + siteId + ":muted", state.muted ? "true" : "false");
+    renderControls();
   });
 
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
+    state.interacted = true;
     sendMessage();
   });
 
@@ -140,6 +168,7 @@
 
   function render() {
     shell.setAttribute("data-open", state.open ? "true" : "false");
+    shell.setAttribute("data-has-unread", state.unreadCount > 0 ? "true" : "false");
     renderMessages();
     renderControls();
   }
@@ -151,6 +180,9 @@
     textEl.disabled = state.booting || state.sending;
     nameEl.disabled = state.booting || state.sending;
     sendEl.textContent = state.sending ? "Enviando" : "Enviar";
+    soundButton.textContent = state.muted ? "×" : "♪";
+    soundButton.setAttribute("aria-label", state.muted ? "Ativar som de notificações" : "Silenciar notificações");
+    badgeEl.textContent = state.unreadCount > 9 ? "9+" : String(state.unreadCount || "");
   }
 
   function renderMessages() {
@@ -162,9 +194,12 @@
     for (var i = 0; i < state.messages.length; i += 1) {
       var item = state.messages[i];
       var cls = item.direction === "outbound" ? "agent" : "visitor";
+      if (item.localStatus === "pending") cls += " pending";
+      if (item.localStatus === "failed") cls += " failed";
+      if (item.unreadHighlight) cls += " new";
       html += "<div class='cw-message " + cls + "'>";
       html += escapeHtml(item.text || "");
-      html += "<span class='cw-meta'>" + formatTime(item.createdAt) + "</span>";
+      html += "<span class='cw-meta'>" + formatTime(item.createdAt) + formatStatus(item) + "</span>";
       html += "</div>";
     }
     bodyEl.innerHTML = html;
@@ -213,19 +248,34 @@
     state.name = nameEl.value.trim();
     state.sending = true;
     setError("");
+    var localId = "local:" + Date.now() + ":" + Math.random().toString(16).slice(2);
+    var localMessage = {
+      id: localId,
+      direction: "inbound",
+      text: text,
+      createdAt: new Date().toISOString(),
+      localStatus: "pending"
+    };
+    state.messageIds[localId] = true;
+    state.pendingMessages.push(localMessage);
+    state.messages.push(localMessage);
+    renderMessages();
     ensureSession().then(function () {
       if (!state.token) return;
       return fetchJson("/webchat/v1/messages", {
         method: "POST",
         body: JSON.stringify({ sessionToken: state.token, text: text })
       }).then(function () {
+        localMessage.localStatus = "sent";
         textEl.value = "";
         return pollMessages();
       });
     }).catch(function (error) {
+      localMessage.localStatus = "failed";
       setError(readableError(error.message));
     }).finally(function () {
       state.sending = false;
+      renderMessages();
       renderControls();
     });
   }
@@ -236,15 +286,23 @@
     if (state.cursor) path += "&cursor=" + encodeURIComponent(state.cursor);
     return fetchJson(path, { method: "GET" }).then(function (payload) {
       var list = Array.isArray(payload.messages) ? payload.messages : [];
+      var receivedNewOutbound = false;
       for (var i = 0; i < list.length; i += 1) {
         var item = normalizeMessage(list[i]);
         if (!item || state.messageIds[item.id]) continue;
         state.messageIds[item.id] = true;
+        item.unreadHighlight = item.direction === "outbound" && !state.open;
+        if (item.direction === "outbound") receivedNewOutbound = true;
+        if (item.direction === "inbound" && markPendingReceived(item)) continue;
         state.messages.push(item);
+      }
+      if (receivedNewOutbound && !state.open) {
+        state.unreadCount += 1;
+        playNotificationSound();
       }
       state.cursor = payload.page && payload.page.nextCursor ? payload.page.nextCursor : state.cursor;
       setError("");
-      renderMessages();
+      render();
     }).catch(function (error) {
       var code = String(error.message || "");
       if (code.indexOf("webchat_session_not_found") >= 0 || code.indexOf("webchat_session_expired") >= 0) {
@@ -261,7 +319,7 @@
   function schedulePolling() {
     stopPolling();
     state.pollTimer = window.setInterval(function () {
-      if (state.open && state.token) pollMessages();
+      if (state.token) pollMessages();
     }, pollingMs);
   }
 
@@ -296,6 +354,54 @@
       text: text,
       createdAt: String(input.createdAt || new Date().toISOString())
     };
+  }
+
+  function markPendingReceived(item) {
+    for (var i = 0; i < state.pendingMessages.length; i += 1) {
+      var pending = state.pendingMessages[i];
+      if (pending.localStatus !== "sent" && pending.localStatus !== "pending") continue;
+      if (pending.text !== item.text) continue;
+      delete state.messageIds[pending.id];
+      pending.id = item.id;
+      state.messageIds[item.id] = true;
+      pending.createdAt = item.createdAt;
+      pending.localStatus = "received";
+      return true;
+    }
+    return false;
+  }
+
+  function formatStatus(item) {
+    if (item.direction !== "inbound") return "";
+    if (item.localStatus === "pending") return " · enviando...";
+    if (item.localStatus === "sent") return " · enviado";
+    if (item.localStatus === "received") return " · recebido";
+    if (item.localStatus === "failed") return " · erro";
+    return "";
+  }
+
+  function playNotificationSound() {
+    if (state.muted || !state.interacted) return;
+    var now = Date.now();
+    if (now - state.lastSoundAt < 2500) return;
+    state.lastSoundAt = now;
+    try {
+      var AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      var context = new AudioContext();
+      var oscillator = context.createOscillator();
+      var gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 720;
+      gain.gain.value = 0.025;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.08);
+      window.setTimeout(function () { context.close(); }, 160);
+    } catch (_error) {
+      // Audio feedback is optional and browser-dependent.
+    }
   }
 
   function readableError(code) {

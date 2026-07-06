@@ -20134,7 +20134,11 @@ function conversationListItemIsAutomation(item: {
 }) {
   return (
     item.mode === "BOT" &&
-    (item.status === ConversationOperationalStatus.WAITING || item.status === null) &&
+    (
+      item.status === ConversationOperationalStatus.WAITING ||
+      item.status === ConversationOperationalStatus.WAITING_USER ||
+      item.status === null
+    ) &&
     (item.handoffStatus === null || item.handoffStatus === undefined || item.handoffStatus === "none") &&
     !item.assignedUserId &&
     !item.assignedAt
@@ -20168,14 +20172,7 @@ function conversationListItemIsVisibleInInbox(item: {
   lastMessage?: unknown;
 }) {
   if (conversationListItemIsInHumanFlow(item)) return true;
-  return (
-    item.mode === "BOT" &&
-    item.status === null &&
-    (item.handoffStatus === null || item.handoffStatus === undefined || item.handoffStatus === "none") &&
-    !item.assignedUserId &&
-    !item.assignedAt &&
-    Boolean(item.lastMessage)
-  );
+  return conversationListItemIsAutomation(item) && Boolean(item.lastMessage);
 }
 
 function conversationListItemShouldCountUnread(item: {

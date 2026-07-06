@@ -225,6 +225,26 @@ function pickLeadService(context: FlowContext | undefined) {
   return undefined;
 }
 
+function pickLeadText(context: FlowContext | undefined, keys: string[], maxLength = 160) {
+  for (const key of keys) {
+    const value = context?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim().slice(0, maxLength);
+  }
+  return undefined;
+}
+
+function pickLeadPhone(context: FlowContext | undefined) {
+  const value = pickLeadText(context, ["contact_phone", "phone", "telefone", "whatsapp"], 40);
+  if (!value) return undefined;
+  return value.replace(/[^\d+()\-\s]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+function pickLeadEmail(context: FlowContext | undefined) {
+  const value = pickLeadText(context, ["contact_email", "email"], 180);
+  if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value)) return undefined;
+  return value.toLowerCase();
+}
+
 async function runWebchatChatbotFlow(params: {
   prisma: PrismaClient;
   requestId: string;
@@ -372,6 +392,11 @@ async function runWebchatChatbotFlow(params: {
     await tx.lead.updateMany({
       where: { tenantId: params.clientId, waId: params.waId },
       data: {
+        ...(pickLeadText(nextContext, ["contact_name", "name", "nome"]) ? { name: pickLeadText(nextContext, ["contact_name", "name", "nome"]) } : {}),
+        ...(pickLeadEmail(nextContext) ? { email: pickLeadEmail(nextContext) } : {}),
+        ...(pickLeadPhone(nextContext) ? { phone: pickLeadPhone(nextContext) } : {}),
+        ...(pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao"]) ? { company: pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao"]) } : {}),
+        ...(pickLeadText(nextContext, ["public_city_uf", "city", "cidade"]) ? { city: pickLeadText(nextContext, ["public_city_uf", "city", "cidade"]) } : {}),
         ...(pickLeadService(nextContext) ? { service: pickLeadService(nextContext) } : {}),
         status: pendingHandoff ? "QUALIFIED" : "NEW",
       },

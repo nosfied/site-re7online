@@ -22,13 +22,22 @@ export type ChatbotTextNode = Record<string, unknown> & ChatbotFlowMetadata & {
   next?: string;
 };
 
+export type ChatbotCaptureNode = Record<string, unknown> & ChatbotFlowMetadata & {
+  type: "capture";
+  text: string;
+  field: string;
+  validation?: "email" | "phone_br" | "non_empty";
+  errorText?: string;
+  next: string;
+};
+
 export type ChatbotHandoffNode = Record<string, unknown> & ChatbotFlowMetadata & {
   type: "handoff";
   text?: string;
   handoffSummary?: string;
 };
 
-export type ChatbotNode = ChatbotMenuNode | ChatbotTextNode | ChatbotHandoffNode;
+export type ChatbotNode = ChatbotMenuNode | ChatbotTextNode | ChatbotCaptureNode | ChatbotHandoffNode;
 
 export type ChatbotFlowDefinition = {
   start: string;
@@ -195,7 +204,7 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
   }
 
   const type = getNonEmptyString(rawNode.type);
-  if (!type || !["menu", "text", "handoff"].includes(type)) {
+  if (!type || !["menu", "text", "capture", "handoff"].includes(type)) {
     return {
       ok: false,
       code: "invalid_chatbot_definition",
@@ -275,6 +284,52 @@ function normalizeNode(rawNode: unknown, nodeId: string): ChatbotNodeValidationR
         type: "text",
         text,
         ...(next ? { next } : {}),
+        ...getNodeMetadata(rawNode),
+      },
+    };
+  }
+
+  if (type === "capture") {
+    const text = getNonEmptyString(rawNode.text);
+    const field = getNonEmptyString(rawNode.field);
+    const next = getNonEmptyString(rawNode.next);
+    const validation = getNonEmptyString(rawNode.validation);
+    const errorText = getNonEmptyString(rawNode.errorText);
+    if (!text || !field || !next) {
+      return {
+        ok: false,
+        code: "invalid_chatbot_definition",
+        message: `Capture node "${nodeId}" requires text, field and next.`,
+      };
+    }
+    if (validation && !["email", "phone_br", "non_empty"].includes(validation)) {
+      return {
+        ok: false,
+        code: "invalid_chatbot_definition",
+        message: `Capture node "${nodeId}" has an invalid validation.`,
+      };
+    }
+    return {
+      ok: true,
+      node: {
+        ...preserveUnknownFields(rawNode, [
+          "type",
+          "text",
+          "field",
+          "validation",
+          "errorText",
+          "next",
+          "context",
+          "tags",
+        ]),
+        type: "capture",
+        text,
+        field,
+        next,
+        ...(validation === "email" || validation === "phone_br" || validation === "non_empty"
+          ? { validation }
+          : {}),
+        ...(errorText ? { errorText } : {}),
         ...getNodeMetadata(rawNode),
       },
     };
@@ -360,6 +415,13 @@ export function validateChatbotFlowDefinition(definition: unknown): ChatbotValid
         message: `Text node "${nodeId}" points to an unknown node "${node.next}".`,
       };
     }
+    if (node.type === "capture" && !nodes[node.next]) {
+      return {
+        ok: false,
+        code: "invalid_chatbot_definition",
+        message: `Capture node "${nodeId}" points to an unknown node "${node.next}".`,
+      };
+    }
   }
 
   return {
@@ -409,6 +471,30 @@ function parseMenuSelection(text: string | null | undefined) {
   if (!/^\d+$/.test(normalized)) return null;
   const parsed = Number.parseInt(normalized, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeCapturedInput(text: string | null | undefined) {
+  return String(text ?? "").trim().replace(/\s+/g, " ");
+}
+
+function validateCapturedInput(node: ChatbotCaptureNode, text: string | null | undefined) {
+  const normalized = normalizeCapturedInput(text);
+  if (!normalized) return { ok: false, value: normalized };
+  if (node.validation === "email") {
+    return {
+      ok: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(normalized),
+      value: normalized.toLowerCase(),
+    };
+  }
+  if (node.validation === "phone_br") {
+    const digits = normalized.replace(/\D/g, "");
+    const withoutCountry = digits.startsWith("55") && digits.length > 11 ? digits.slice(2) : digits;
+    return {
+      ok: withoutCountry.length >= 10 && withoutCountry.length <= 11,
+      value: normalized,
+    };
+  }
+  return { ok: true, value: normalized };
 }
 
 function mergeFlowMetadata(
@@ -801,6 +887,17 @@ function executeNodeChain(params: {
       };
     }
 
+    if (node.type === "capture") {
+      currentState = withChatbotRuntime(currentState, params.flowId, currentNodeId, true);
+      messages.push(node.text);
+      return {
+        handled: true,
+        state: currentState,
+        replyText: messages.join("\n\n"),
+        events,
+      };
+    }
+
     const feedbackText = node.text ?? DEFAULT_HANDOFF_FEEDBACK_TEXT;
     const summary = buildHandoffSummary(currentState.answers?.flowContext, node);
     const suggestedReply = buildSuggestedReply(
@@ -867,6 +964,42 @@ export function executeChatbotFlow(params: {
   }
 
   if (currentNode.type !== "menu") {
+    if (currentNode.type === "capture") {
+      const captured = validateCapturedInput(currentNode, params.inboundText);
+      if (!captured.ok) {
+        return {
+          handled: true,
+          state: withChatbotRuntime(params.state, params.flowId, params.state.chatbotNodeId, true),
+          replyText: currentNode.errorText ?? currentNode.text,
+        };
+      }
+      const stateWithCapturedValue = mergeFlowMetadata({
+        state: {
+          ...params.state,
+          answers: {
+            ...(params.state.answers ?? {}),
+            flowContext: {
+              ...(isRecord(params.state.answers?.flowContext)
+                ? params.state.answers?.flowContext
+                : {}),
+              [currentNode.field]: captured.value,
+            },
+          },
+        },
+        metadata: currentNode,
+        flowId: params.flowId,
+        nodeId: params.state.chatbotNodeId,
+        source: "node",
+        events: [],
+      });
+      return executeNodeChain({
+        definition: params.definition,
+        state: stateWithCapturedValue,
+        flowId: params.flowId,
+        nodeId: currentNode.next,
+        nowIso: params.nowIso,
+      });
+    }
     return executeNodeChain({
       definition: params.definition,
       state: params.state,

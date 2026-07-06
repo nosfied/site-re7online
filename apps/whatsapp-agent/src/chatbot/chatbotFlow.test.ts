@@ -95,6 +95,69 @@ test("executeChatbotFlow starts in menu and waits for numeric answer", () => {
   assert.match(result.replyText ?? "", /1\. Atendimento/);
 });
 
+test("executeChatbotFlow captures validated contact fields before menu", () => {
+  const validated = validateChatbotFlowDefinition({
+    start: "capture_email",
+    nodes: {
+      capture_email: {
+        type: "capture",
+        text: "Informe seu e-mail.",
+        field: "contact_email",
+        validation: "email",
+        errorText: "Informe um e-mail válido.",
+        next: "menu",
+      },
+      menu: {
+        type: "menu",
+        text: "Escolha",
+        options: [{ label: "Demonstração", next: "done" }],
+      },
+      done: {
+        type: "text",
+        text: "Tudo certo",
+      },
+    },
+  });
+  assert.equal(validated.ok, true);
+  if (!validated.ok) return;
+
+  const prompt = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: makeState(),
+    inboundText: "oi",
+    nowIso: "2026-04-17T10:00:01.000Z",
+  });
+
+  assert.equal(prompt.handled, true);
+  assert.equal(prompt.state.chatbotActive, true);
+  assert.equal(prompt.state.chatbotNodeId, "capture_email");
+  assert.match(prompt.replyText ?? "", /Informe seu e-mail/);
+
+  const invalid = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: prompt.state,
+    inboundText: "email invalido",
+    nowIso: "2026-04-17T10:00:02.000Z",
+  });
+
+  assert.equal(invalid.state.chatbotNodeId, "capture_email");
+  assert.match(invalid.replyText ?? "", /e-mail válido/);
+
+  const valid = executeChatbotFlow({
+    flowId: "flow_1",
+    definition: validated.definition,
+    state: invalid.state,
+    inboundText: "ANA@EXAMPLE.COM",
+    nowIso: "2026-04-17T10:00:03.000Z",
+  });
+
+  assert.equal(valid.state.chatbotNodeId, "menu");
+  assert.equal(valid.state.answers?.flowContext?.contact_email, "ana@example.com");
+  assert.match(valid.replyText ?? "", /1\. Demonstração/);
+});
+
 test("classifyFreeTextFlowIntent returns no match for greeting", () => {
   const result = classifyFreeTextFlowIntent("oi");
   assert.equal(result, null);

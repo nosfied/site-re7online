@@ -320,6 +320,9 @@ Smoke results:
 - outbound Messenger:
 - inbound Instagram:
 - outbound Instagram:
+- public Webchat widget:
+- Webchat bot intake:
+- Webchat handoff:
 - inbox:
 - timeline:
 - runtime state:
@@ -368,3 +371,4 @@ Decision: create this document as the canonical private-tenant activation playbo
 - Create a future private-tenant activation report repository/process outside git for customer-specific evidence.
 - Keep `instagram_business_manage_comments` out of scope until comments/private replies receive their own sprint.
 - Keep Messenger/Instagram AI, automation and handoff disabled until a formal multichannel automation sprint.
+- For Webchat onboarding, confirm minimized-widget badge/status behavior and document that read receipts are limited to local `sent/received` states until a future backend read-receipt capability exists.
