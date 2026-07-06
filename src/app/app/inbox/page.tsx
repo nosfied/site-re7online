@@ -864,6 +864,25 @@ function sortConversationsByRecent(items: InboxConversationItem[], prioritizeLea
   });
 }
 
+function hasFlowContextValues(value: InboxConversationItem["flowContext"]) {
+  if (!value) return false;
+  return Object.values(value).some((item) => item !== null && item !== undefined && String(item).trim() !== "");
+}
+
+function mergeConversationStableFields(
+  current: InboxConversationItem,
+  incoming: InboxConversationItem
+) {
+  const shouldPreserveFlowContext = hasFlowContextValues(current.flowContext) && !hasFlowContextValues(incoming.flowContext);
+  const shouldPreserveFlowTags = (current.flowTags?.length ?? 0) > 0 && (incoming.flowTags?.length ?? 0) === 0;
+  if (!shouldPreserveFlowContext && !shouldPreserveFlowTags) return incoming;
+  return {
+    ...incoming,
+    flowContext: shouldPreserveFlowContext ? current.flowContext : incoming.flowContext,
+    flowTags: shouldPreserveFlowTags ? current.flowTags : incoming.flowTags,
+  };
+}
+
 function dedupeConversationsByIdentity(items: InboxConversationItem[], prioritizeLeads = false) {
   const byIdentity = new Map<string, InboxConversationItem>();
   for (const item of sortConversationsByRecent(items, prioritizeLeads)) {
@@ -877,7 +896,7 @@ function dedupeConversationsByIdentity(items: InboxConversationItem[], prioritiz
     const existingTs = getConversationActivityTimestamp(existing) ?? Number.NEGATIVE_INFINITY;
     const nextTs = getConversationActivityTimestamp(item) ?? Number.NEGATIVE_INFINITY;
     if (nextTs > existingTs) {
-      byIdentity.set(identity, item);
+      byIdentity.set(identity, mergeConversationStableFields(existing, item));
       continue;
     }
 
@@ -909,7 +928,10 @@ function mergeConversationsPreservingStableOrder(
   }
 
   const merged = [
-    ...current.map((item) => incomingByIdentity.get(getConversationIdentity(item)) ?? item),
+    ...current.map((item) => {
+      const incomingItem = incomingByIdentity.get(getConversationIdentity(item));
+      return incomingItem ? mergeConversationStableFields(item, incomingItem) : item;
+    }),
     ...incoming.filter((item) => !currentIndexByIdentity.has(getConversationIdentity(item))),
   ];
 
