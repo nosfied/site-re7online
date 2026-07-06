@@ -121,7 +121,7 @@ function makePrimaryStorage(state = makeState()) {
 }
 
 let activePrismaMock: {
-  findMany?: () => Promise<unknown[]>;
+  findMany?: (args?: unknown) => Promise<unknown[]>;
   upsert?: () => Promise<unknown>;
   deleteMany?: () => Promise<unknown>;
 } = {};
@@ -132,7 +132,7 @@ let activePrismaCalls = {
 };
 
 function installPrismaMock(params: {
-  findMany?: () => Promise<unknown[]>;
+  findMany?: (args?: unknown) => Promise<unknown[]>;
   upsert?: () => Promise<unknown>;
   deleteMany?: () => Promise<unknown>;
 } = {}) {
@@ -155,9 +155,9 @@ function installPrismaMock(params: {
           activePrismaCalls.upsert += 1;
           return activePrismaMock.upsert ? activePrismaMock.upsert() : {};
         },
-        async findMany() {
+        async findMany(args?: unknown) {
           activePrismaCalls.findMany += 1;
-          return activePrismaMock.findMany ? activePrismaMock.findMany() : [];
+          return activePrismaMock.findMany ? activePrismaMock.findMany(args) : [];
         },
         async deleteMany() {
           activePrismaCalls.deleteMany += 1;
@@ -284,7 +284,12 @@ test("dual write reads synthetic Messenger state with multichannel conversation 
 test("dual write reads synthetic Webchat state with site-scoped conversation key", async () => {
   const syntheticWaId = "webchat:e39170eac92f0e8b32e1f0a3f8ed60f9";
   installPrismaMock({
-    async findMany() {
+    async findMany(args) {
+      const where = (args as { where?: { OR?: Array<Record<string, unknown>> } })?.where;
+      assert.deepEqual(where?.OR, [
+        { waIdCanonical: { in: [syntheticWaId] } },
+        { waId: { in: [syntheticWaId] } },
+      ]);
       return [
         makeDbRow({
           waId: syntheticWaId,

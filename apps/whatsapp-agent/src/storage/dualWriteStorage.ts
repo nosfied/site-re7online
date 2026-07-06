@@ -608,8 +608,10 @@ export function createDualWriteStorage(
     const clientId = await getClientId(clientKey, "read");
     if (!clientId) return null;
     const safeClientKey = clientKey || env.CLIENT_KEY || env.CLIENT_ID || "default";
-    const lookup = buildWaIdLookup(waId);
     const exactRaw = waId.trim();
+    const lookup = isSyntheticChannelWaId(exactRaw)
+      ? { raw: exactRaw, canonical: exactRaw }
+      : buildWaIdLookup(waId);
     const variants = Array.from(new Set([lookup.raw, lookup.canonical, exactRaw].filter(Boolean)));
     const rows = await prisma.conversationRuntimeState.findMany({
       where: {
