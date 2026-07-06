@@ -196,6 +196,24 @@ function getConversationLabel(item: InboxConversationItem) {
   }
 }
 
+function isPhoneLikeConversationIdentifier(value?: string | null) {
+  const normalized = (value ?? "").trim();
+  if (!normalized) return false;
+  if (/^[a-z]+:/i.test(normalized)) return false;
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 && /^[+\d\s().-]+$/.test(normalized);
+}
+
+function getConversationSecondaryIdentifier(item: InboxConversationItem, label: string) {
+  const leadPhone = item.leadPhone?.trim();
+  if (leadPhone && leadPhone !== label) return leadPhone;
+  const channel = getConversationChannel(item);
+  if (channel === "whatsapp" && isPhoneLikeConversationIdentifier(item.waId) && item.waId !== label) {
+    return item.waId;
+  }
+  return null;
+}
+
 function getLeadStatusLabel(status?: string | null) {
   switch ((status || "").trim().toUpperCase()) {
     case "NEW":
@@ -3397,9 +3415,9 @@ export default function AppInboxPage() {
     const deltaX = Math.abs(touch.clientX - start.x);
     const deltaY = Math.abs(touch.clientY - start.y);
     const scrollDelta = Math.abs((conversationListRef.current?.scrollTop ?? start.scrollTop) - start.scrollTop);
-    if (deltaX > 4 || deltaY > 4 || scrollDelta > 1) {
+    if (deltaX > 10 || deltaY > 10 || scrollDelta > 6) {
       start.moved = true;
-      conversationListSuppressClickUntilRef.current = Date.now() + 900;
+      conversationListSuppressClickUntilRef.current = Date.now() + 320;
     }
   }, []);
 
@@ -4925,7 +4943,7 @@ export default function AppInboxPage() {
               const unreadCount = getConversationUnreadBadgeCount(item, readState, session?.user);
               const status = getConversationOperationalStatus(item);
               const label = getConversationLabel(item);
-              const phoneLine = item.waId && item.waId !== label ? item.waId : null;
+              const phoneLine = getConversationSecondaryIdentifier(item, label);
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
               return (
                 <div
@@ -4938,7 +4956,7 @@ export default function AppInboxPage() {
                     const start = conversationListTouchRef.current;
                     conversationListTouchRef.current = null;
                     if (!start || start.moved || shouldSuppressConversationOpen()) {
-                      conversationListSuppressClickUntilRef.current = Date.now() + 900;
+                      conversationListSuppressClickUntilRef.current = Date.now() + 320;
                       return;
                     }
                     event.preventDefault();
