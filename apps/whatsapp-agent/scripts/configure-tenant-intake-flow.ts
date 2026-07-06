@@ -81,12 +81,38 @@ function parseArgs(argv: string[]): Options {
 }
 
 const re7onlinePrivateIntakeDefinition = {
-  start: "captura_nome",
+  start: "menu_tipo_atendimento",
   nodes: {
+    menu_tipo_atendimento: {
+      type: "menu",
+      text:
+        "Olá! Sou o assistente da Re7online. Antes de pegar seus dados, me diga como posso direcionar melhor seu atendimento.",
+      tags: ["re7online", "intake", "routing"],
+      options: [
+        {
+          label: "Sou novo lead e quero conhecer o Converta",
+          next: "menu_perfil",
+          tags: ["lead", "converta"],
+          context: { intent: "learn_converta", service: "converta", relationship: "new_lead" },
+        },
+        {
+          label: "Quero demonstração, POC ou proposta",
+          next: "menu_perfil",
+          tags: ["lead", "demo", "poc"],
+          context: { intent: "request_demo", service: "demo_poc", relationship: "new_lead", lead_temp: "quente" },
+        },
+        {
+          label: "Já sou cliente e preciso de suporte",
+          next: "perfil_suporte",
+          tags: ["support"],
+          context: { intent: "support", service: "suporte", relationship: "customer_support" },
+        },
+      ],
+    },
     captura_nome: {
       type: "capture",
       text:
-        "Olá! Sou o assistente da Re7online. Para começar, vou pegar seus dados de contato.\n\nQual é o seu nome?",
+        "Perfeito. Agora vou pegar seus dados de contato para registrar no CRM.\n\nQual é o seu nome?",
       field: "contact_name",
       validation: "non_empty",
       errorText: "Informe seu nome para continuar.",
@@ -111,6 +137,34 @@ const re7onlinePrivateIntakeDefinition = {
       next: "menu_objetivo",
       tags: ["contact_capture"],
     },
+    captura_nome_governo: {
+      type: "capture",
+      text:
+        "Perfeito. Agora vou pegar seus dados de contato para registrar no CRM.\n\nQual é o seu nome?",
+      field: "contact_name",
+      validation: "non_empty",
+      errorText: "Informe seu nome para continuar.",
+      next: "captura_email_governo",
+      tags: ["re7online", "intake", "contact_capture", "government"],
+    },
+    captura_email_governo: {
+      type: "capture",
+      text: "Obrigado. Agora informe seu e-mail.",
+      field: "contact_email",
+      validation: "email",
+      errorText: "Informe um e-mail válido para continuar.",
+      next: "captura_telefone_governo",
+      tags: ["contact_capture", "government"],
+    },
+    captura_telefone_governo: {
+      type: "capture",
+      text: "Perfeito. Informe também um telefone com DDD. Exemplo: (84) 99999-9999.",
+      field: "contact_phone",
+      validation: "phone_br",
+      errorText: "Informe um telefone com DDD. Exemplos: (84) 99999-9999 ou 84999999999.",
+      next: "governo_orgao",
+      tags: ["contact_capture", "government"],
+    },
     menu_objetivo: {
       type: "menu",
       text: "Certo. Qual é o seu objetivo agora?",
@@ -118,38 +172,32 @@ const re7onlinePrivateIntakeDefinition = {
       options: [
         {
           label: "Conhecer como funciona o Converta",
-          next: "menu_perfil",
+          next: "empresa_privada",
           tags: ["lead", "converta"],
           context: { intent: "learn_converta", service: "converta" },
         },
         {
           label: "Testar / solicitar demonstração ou POC",
-          next: "menu_perfil",
+          next: "empresa_privada",
           tags: ["lead", "demo", "poc"],
           context: { intent: "request_demo", service: "demo_poc", lead_temp: "quente" },
-        },
-        {
-          label: "Sou cliente e preciso de suporte",
-          next: "perfil_suporte",
-          tags: ["support"],
-          context: { intent: "support", service: "suporte" },
         },
       ],
     },
     menu_perfil: {
       type: "menu",
-      text: "Esse atendimento é para qual perfil?",
+      text: "Esse lead é de qual tipo?",
       tags: ["lead", "qualification"],
       options: [
         {
           label: "Empresa privada",
-          next: "empresa_privada",
+          next: "captura_nome",
           tags: ["business"],
           context: { marketProfile: "business", profile: "business" },
         },
         {
           label: "Governo / órgão público",
-          next: "governo_orgao",
+          next: "captura_nome_governo",
           tags: ["government"],
           context: { marketProfile: "government", profile: "government", priority: "alta" },
         },

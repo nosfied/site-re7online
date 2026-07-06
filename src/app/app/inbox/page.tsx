@@ -1443,7 +1443,7 @@ function isAutomationQueueConversation(
   const handoffStatus = item.handoffStatus ?? "none";
   return (
     item.mode === "BOT" &&
-    (item.status === "WAITING" || item.status === null) &&
+    (item.status === "WAITING" || item.status === "WAITING_USER" || item.status === null) &&
     handoffStatus === "none" &&
     !item.assignedUserId &&
     !item.assignedAt

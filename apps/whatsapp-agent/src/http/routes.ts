@@ -397,6 +397,7 @@ const inboxRuntimeStateSelect = {
   lastOutboundMessageId: true,
   handoffStatus: true,
   mode: true,
+  chatbotActive: true,
   assignedUserId: true,
   assignedTo: true,
   assignedAt: true,
@@ -440,7 +441,7 @@ function runtimeStateRowToConversationState(
       state.answers && typeof state.answers === "object" && !Array.isArray(state.answers)
         ? (state.answers as ConversationState["answers"])
         : {},
-    mode: state.mode === "BOT" ? "BOT" : "HUMAN",
+    mode: state.mode === "HUMAN" ? "HUMAN" : state.chatbotActive ? "BOT" : state.mode === "BOT" ? "BOT" : "HUMAN",
     assignedUserId: state.assignedUserId ?? null,
     assignedTo: state.assignedTo ?? null,
     assignedAt: state.assignedAt?.toISOString() ?? null,
