@@ -283,6 +283,8 @@ test("dual write reads synthetic Messenger state with multichannel conversation 
 
 test("dual write reads synthetic Webchat state with site-scoped conversation key", async () => {
   const syntheticWaId = "webchat:e39170eac92f0e8b32e1f0a3f8ed60f9";
+  const externalUserHash = "a4482ddeba18ed502c90e5cbf0bfe347907a73850848d86bc4781328021b64ac";
+  const conversationKey = `re7online:webchat:cmr9aldo600014sv6f13rnx0j:${externalUserHash}`;
   installPrismaMock({
     async findMany(args) {
       const where = (args as { where?: { OR?: Array<Record<string, unknown>> } })?.where;
@@ -294,10 +296,9 @@ test("dual write reads synthetic Webchat state with site-scoped conversation key
         makeDbRow({
           waId: syntheticWaId,
           waIdCanonical: syntheticWaId,
-          conversationKey:
-            "re7online:webchat:cmr9aldo600014sv6f13rnx0j:e39170eac92f0e8b32e1f0a3f8ed60f9",
+          conversationKey,
           channelAccountId: "cmr9aldo600014sv6f13rnx0j",
-          externalUserHash: "e39170eac92f0e8b32e1f0a3f8ed60f9",
+          externalUserHash,
           legacyWaId: null,
           mode: "HUMAN",
           status: ConversationOperationalStatus.WAITING,
@@ -314,10 +315,7 @@ test("dual write reads synthetic Webchat state with site-scoped conversation key
   const state = await storage.getConversation(syntheticWaId, "re7online");
 
   assert.equal(state?.waId, syntheticWaId);
-  assert.equal(
-    state?.conversationKey,
-    "re7online:webchat:cmr9aldo600014sv6f13rnx0j:e39170eac92f0e8b32e1f0a3f8ed60f9"
-  );
+  assert.equal(state?.conversationKey, conversationKey);
   assert.equal(state?.mode, "HUMAN");
   assert.equal(state?.status, "WAITING");
   assert.equal(calls.get, 0);

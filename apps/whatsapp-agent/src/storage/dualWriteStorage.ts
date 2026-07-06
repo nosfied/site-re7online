@@ -117,6 +117,16 @@ function isValidConversationKeyForState(state: ConversationState, clientKey: str
 
   const [channel, externalUserHash] = stateWaId.split(":");
   const keyPrefix = `${clientKey}:${channel}:`;
+  if (channel === "webchat") {
+    const keyParts = conversationKey.split(":");
+    return (
+      keyParts.length === 4 &&
+      keyParts[0] === clientKey &&
+      keyParts[1] === "webchat" &&
+      Boolean(keyParts[2]) &&
+      /^[a-f0-9]{16,128}$/i.test(keyParts[3] ?? "")
+    );
+  }
   return (
     Boolean(channel && externalUserHash) &&
     conversationKey.startsWith(keyPrefix) &&
