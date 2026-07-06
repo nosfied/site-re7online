@@ -100,7 +100,7 @@ function maskConversationKey(clientKey: string, waId: string) {
 }
 
 function isSyntheticChannelWaId(value: string) {
-  return /^(messenger|instagram):[a-f0-9]{16,64}$/i.test(value.trim());
+  return /^(messenger|instagram|webchat):[a-f0-9]{16,64}$/i.test(value.trim());
 }
 
 function isValidConversationKeyForState(state: ConversationState, clientKey: string, waId: string) {

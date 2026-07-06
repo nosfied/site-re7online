@@ -281,6 +281,43 @@ test("dual write reads synthetic Messenger state with multichannel conversation 
   assert.equal(calls.get, 0);
 });
 
+test("dual write reads synthetic Webchat state with site-scoped conversation key", async () => {
+  const syntheticWaId = "webchat:e39170eac92f0e8b32e1f0a3f8ed60f9";
+  installPrismaMock({
+    async findMany() {
+      return [
+        makeDbRow({
+          waId: syntheticWaId,
+          waIdCanonical: syntheticWaId,
+          conversationKey:
+            "re7online:webchat:cmr9aldo600014sv6f13rnx0j:e39170eac92f0e8b32e1f0a3f8ed60f9",
+          channelAccountId: "cmr9aldo600014sv6f13rnx0j",
+          externalUserHash: "e39170eac92f0e8b32e1f0a3f8ed60f9",
+          legacyWaId: null,
+          mode: "HUMAN",
+          status: ConversationOperationalStatus.WAITING,
+        }),
+      ];
+    },
+  });
+  const { storage: primary, calls } = makePrimaryStorage(makeState({ status: "CLOSED" }));
+  const storage = createDualWriteStorage(primary, {
+    readSource: "postgres",
+    jsonWriteEnabled: false,
+  });
+
+  const state = await storage.getConversation(syntheticWaId, "re7online");
+
+  assert.equal(state?.waId, syntheticWaId);
+  assert.equal(
+    state?.conversationKey,
+    "re7online:webchat:cmr9aldo600014sv6f13rnx0j:e39170eac92f0e8b32e1f0a3f8ed60f9"
+  );
+  assert.equal(state?.mode, "HUMAN");
+  assert.equal(state?.status, "WAITING");
+  assert.equal(calls.get, 0);
+});
+
 test("dual write does not read JSON when Postgres read fails", async () => {
   installPrismaMock({
     async findMany() {
