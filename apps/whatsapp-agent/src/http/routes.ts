@@ -404,6 +404,7 @@ const inboxRuntimeStateSelect = {
   queueId: true,
   status: true,
   closedAt: true,
+  answers: true,
 } satisfies Prisma.ConversationRuntimeStateSelect;
 
 type InboxRuntimeStateRow = Prisma.ConversationRuntimeStateGetPayload<{
@@ -435,7 +436,10 @@ function runtimeStateRowToConversationState(
     templateNeeded: false,
     demoStatus: "none",
     chatbotActive: false,
-    answers: {},
+    answers:
+      state.answers && typeof state.answers === "object" && !Array.isArray(state.answers)
+        ? (state.answers as ConversationState["answers"])
+        : {},
     mode: state.mode === "BOT" ? "BOT" : "HUMAN",
     assignedUserId: state.assignedUserId ?? null,
     assignedTo: state.assignedTo ?? null,
