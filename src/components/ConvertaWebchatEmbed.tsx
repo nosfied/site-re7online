@@ -9,7 +9,7 @@ export default function ConvertaWebchatEmbed() {
   return (
     <Script
       id="converta-webchat-widget"
-      src="/webchat/widget.js?v=67b1"
+      src="/webchat/widget.js?v=67b2"
       strategy="afterInteractive"
       data-site-id={siteId}
       data-api-base={apiBase}

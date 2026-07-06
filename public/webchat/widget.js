@@ -36,7 +36,8 @@
     unreadCount: 0,
     interacted: false,
     muted: safeStorageGet("converta:webchat:" + siteId + ":muted") === "true",
-    lastSoundAt: 0
+    lastSoundAt: 0,
+    audioContext: null
   };
 
   var host = document.createElement("div");
@@ -123,6 +124,7 @@
 
   button.addEventListener("click", function () {
     state.interacted = true;
+    primeNotificationAudio();
     state.open = !state.open;
     if (state.open) state.unreadCount = 0;
     render();
@@ -139,6 +141,7 @@
 
   closeButton.addEventListener("click", function () {
     state.interacted = true;
+    primeNotificationAudio();
     state.open = false;
     schedulePolling();
     render();
@@ -148,12 +151,14 @@
     state.interacted = true;
     state.muted = !state.muted;
     safeStorageSet("converta:webchat:" + siteId + ":muted", state.muted ? "true" : "false");
+    primeNotificationAudio();
     renderControls();
   });
 
   formEl.addEventListener("submit", function (event) {
     event.preventDefault();
     state.interacted = true;
+    primeNotificationAudio();
     sendMessage();
   });
 
@@ -296,8 +301,8 @@
         if (item.direction === "inbound" && markPendingReceived(item)) continue;
         state.messages.push(item);
       }
-      if (receivedNewOutbound && !state.open) {
-        state.unreadCount += 1;
+      if (receivedNewOutbound) {
+        if (!state.open) state.unreadCount += 1;
         playNotificationSound();
       }
       state.cursor = payload.page && payload.page.nextCursor ? payload.page.nextCursor : state.cursor;
@@ -383,25 +388,56 @@
   function playNotificationSound() {
     if (state.muted || !state.interacted) return;
     var now = Date.now();
-    if (now - state.lastSoundAt < 2500) return;
+    if (now - state.lastSoundAt < 700) return;
     state.lastSoundAt = now;
     try {
-      var AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      var context = new AudioContext();
-      var oscillator = context.createOscillator();
-      var gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 720;
-      gain.gain.value = 0.025;
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.08);
-      window.setTimeout(function () { context.close(); }, 160);
+      var context = getAudioContext();
+      if (!context) return;
+      if (context.state === "suspended" && context.resume) {
+        context.resume().catch(function () {});
+      }
+      playTone(context, 740, 0.11, 0);
+      playTone(context, 920, 0.08, 0.1);
     } catch (_error) {
       // Audio feedback is optional and browser-dependent.
     }
+  }
+
+  function primeNotificationAudio() {
+    if (state.muted) return;
+    try {
+      var context = getAudioContext();
+      if (context && context.state === "suspended" && context.resume) {
+        context.resume().catch(function () {});
+      }
+    } catch (_error) {
+      // Audio unlock is optional and browser-dependent.
+    }
+  }
+
+  function getAudioContext() {
+    var AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return null;
+    if (!state.audioContext || state.audioContext.state === "closed") {
+      state.audioContext = new AudioContext();
+    }
+    return state.audioContext;
+  }
+
+  function playTone(context, frequency, duration, delay) {
+    var oscillator = context.createOscillator();
+    var gain = context.createGain();
+    var startAt = context.currentTime + delay;
+    var endAt = startAt + duration;
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, startAt);
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(0.13, startAt + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, endAt);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(startAt);
+    oscillator.stop(endAt + 0.02);
   }
 
   function readableError(code) {
