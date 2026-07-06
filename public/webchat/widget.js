@@ -13,6 +13,10 @@
   var subtitle = script.getAttribute("data-subtitle") || "Fale com a equipe";
   var welcomeFallback = script.getAttribute("data-welcome") || "Ola. Como podemos ajudar?";
   var accent = script.getAttribute("data-accent") || "#fc6c16";
+  var bottom = safeCssLength(script.getAttribute("data-bottom"), "18px");
+  var right = safeCssLength(script.getAttribute("data-right"), "18px");
+  var bottomMobile = safeCssLength(script.getAttribute("data-bottom-mobile"), "12px");
+  var rightMobile = safeCssLength(script.getAttribute("data-right-mobile"), "12px");
   var storageKey = "converta:webchat:" + siteId + ":sessionToken";
   var pollingMs = Math.max(3000, Number(script.getAttribute("data-polling-ms") || 5000));
   var state = {
@@ -38,7 +42,7 @@
   root.innerHTML = [
     "<style>",
     ":host{all:initial}",
-    ".cw-shell{position:fixed;right:18px;bottom:18px;z-index:2147483000;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a}",
+    ".cw-shell{position:fixed;right:var(--cw-right);bottom:var(--cw-bottom);z-index:2147483000;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a}",
     ".cw-button{width:58px;height:58px;border:0;border-radius:50%;background:var(--cw-accent);color:#fff;box-shadow:0 18px 42px rgba(15,23,42,.28);display:grid;place-items:center;cursor:pointer}",
     ".cw-button:focus-visible,.cw-send:focus-visible,.cw-close:focus-visible{outline:3px solid rgba(252,108,22,.35);outline-offset:3px}",
     ".cw-button svg{width:28px;height:28px}",
@@ -62,9 +66,9 @@
     ".cw-send:disabled,.cw-text:disabled,.cw-name:disabled{opacity:.58;cursor:not-allowed}",
     ".cw-error{display:none;color:#b42318;background:#fff1f0;border:1px solid #ffd0cc;border-radius:9px;padding:8px 10px;font-size:12px}",
     ".cw-error:not(:empty){display:block}",
-    "@media (max-width:480px){.cw-shell{right:12px;bottom:12px}.cw-panel{right:-2px;bottom:70px;width:calc(100vw - 24px);height:min(560px,calc(100dvh - 96px));border-radius:12px}.cw-button{width:54px;height:54px}}",
+    "@media (max-width:480px){.cw-shell{right:var(--cw-right-mobile);bottom:var(--cw-bottom-mobile)}.cw-panel{right:-2px;bottom:70px;width:calc(100vw - 24px);height:min(560px,calc(100dvh - 96px));border-radius:12px}.cw-button{width:54px;height:54px}}",
     "</style>",
-    "<div class='cw-shell' style='--cw-accent:" + escapeAttr(accent) + "'>",
+    "<div class='cw-shell' style='--cw-accent:" + escapeAttr(accent) + ";--cw-bottom:" + bottom + ";--cw-right:" + right + ";--cw-bottom-mobile:" + bottomMobile + ";--cw-right-mobile:" + rightMobile + "'>",
     "  <div class='cw-panel' role='dialog' aria-label='Webchat'>",
     "    <div class='cw-head'>",
     "      <div><p class='cw-title'></p><p class='cw-subtitle'></p></div>",
@@ -353,5 +357,11 @@
 
   function escapeAttr(value) {
     return String(value).replace(/[;"'<>]/g, "");
+  }
+
+  function safeCssLength(value, fallback) {
+    var raw = String(value || "").trim();
+    if (/^\d{1,4}(\.\d{1,2})?(px|rem|em|vh|vw|dvh|dvw|%)$/.test(raw)) return raw;
+    return fallback;
   }
 })();

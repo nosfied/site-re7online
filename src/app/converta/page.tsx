@@ -7,6 +7,7 @@ import ConvertaDiagnosis from "@/components/ConvertaDiagnosis";
 import ConvertaFinalCta from "@/components/ConvertaFinalCta";
 import ConvertaHeader from "@/components/ConvertaHeader";
 import ConvertaHighlights from "@/components/ConvertaHighlights";
+import ConvertaWebchatEmbed from "@/components/ConvertaWebchatEmbed";
 import ConvertaOperations from "@/components/ConvertaOperations";
 import ConvertaShowcase from "@/components/ConvertaShowcase";
 import FloatingWhatsAppButton from "@/components/FloatingWhatsAppButton";
@@ -132,6 +133,7 @@ export default function ConvertaPage() {
         message="Ola! Quero conhecer o Converta e entender como organizar meu atendimento."
         label="Conhecer o Converta"
       />
+      <ConvertaWebchatEmbed />
     </main>
   );
 }

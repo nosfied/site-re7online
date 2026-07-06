@@ -12,6 +12,7 @@ This playbook must be used with:
 - `docs/saas/admin-ui.md` for admin console behavior;
 - `docs/saas/CHANNELS_GOVERNANCE.md` for channel invariants;
 - `docs/saas/MARKET_PROFILE_ARCHITECTURE.md` for Core, profiles, feature packs and tenant configuration rules;
+- `docs/saas/RE7ONLINE_TENANT_OPERATIONS.md` for the internal `re7online` showcase tenant;
 - `docs/saas/onboarding-form.md` for commercial/operational data collection.
 
 ## Scope
@@ -194,6 +195,30 @@ Smoke:
 5. Confirm timeline records inbound and outbound.
 
 Do not enable comments/private replies. `instagram_business_manage_comments` is outside the current operational scope.
+
+### Webchat
+
+Confirm:
+
+- tenant feature `webchat=true`;
+- tenant feature `webchatOutbound=true` only when human outbound through Inbox is intended;
+- at least one active `WebchatSite` belongs to the tenant;
+- allowed domains match the public site where the widget will be embedded;
+- `/webchat/widget.js` is embedded without secrets;
+- `/webchat/v1/session`, `/webchat/v1/messages` and polling are reachable from the allowed domain;
+- visitor inbound creates `Conversation.channel=webchat`;
+- operator outbound is handled through `/app/inbox`;
+- rollback can be done by removing the public site id from the frontend build or disabling `webchat`/`webchatOutbound`.
+
+Smoke:
+
+1. Open the public page with the embedded widget.
+2. Start a visitor session.
+3. Send a controlled message.
+4. Confirm the conversation appears in the correct tenant Inbox as Webchat.
+5. Reply manually from the Inbox.
+6. Confirm the visitor receives the reply by polling.
+7. Confirm no tenant or token data is exposed in the public page.
 
 ## 5. Flag Governance
 
