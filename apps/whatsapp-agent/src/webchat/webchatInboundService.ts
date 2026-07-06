@@ -596,6 +596,14 @@ export async function createWebchatInboundMessage(params: {
   const messageId = `webchat:${session.siteId}:${shortHash(`${session.id}:${params.requestId}:${now.toISOString()}`, 24)}`;
   const displayName = session.visitor.name ?? session.visitor.email ?? "Visitante Webchat";
   const defaults = await ensureDefaultOperationalDepartmentAndQueue(params.prisma, session.clientId);
+  const chatbotEnabled = getFeatures(session.site.client).chatbot;
+  const activeEntryFlow = chatbotEnabled
+    ? await params.prisma.chatbotFlow.findFirst({
+        where: { clientId: session.clientId, isActive: true, entryPoint: true },
+        select: { id: true },
+      })
+    : null;
+  const startsInAutomation = Boolean(activeEntryFlow);
 
   const [conversation, runtimeState, inbound, contact] = await params.prisma.$transaction(async (tx) => {
     const contactRecord = await tx.contact.upsert({
@@ -675,8 +683,8 @@ export async function createWebchatInboundMessage(params: {
         lastInboundAt: now,
         lastInboundMessageId: messageId,
         handoffStatus: HandoffStatus.NONE,
-        mode: "HUMAN",
-        status: ConversationOperationalStatus.WAITING,
+        mode: startsInAutomation ? "BOT" : "HUMAN",
+        status: startsInAutomation ? ConversationOperationalStatus.WAITING_USER : ConversationOperationalStatus.WAITING,
         departmentId: defaults.department.id,
         queueId: defaults.queue.id,
       },
@@ -685,13 +693,11 @@ export async function createWebchatInboundMessage(params: {
         ...channelFields,
         lastInboundAt: now,
         lastInboundMessageId: messageId,
-        mode: "HUMAN",
-        status: ConversationOperationalStatus.WAITING,
         departmentId: defaults.department.id,
         queueId: defaults.queue.id,
         closedAt: null,
       },
-      select: { id: true, status: true },
+      select: { id: true, mode: true, handoffStatus: true, assignedUserId: true, departmentId: true, status: true },
     });
     const inboundRecord = await tx.inboundMessage.create({
       data: {
@@ -775,10 +781,15 @@ export async function createWebchatInboundMessage(params: {
     clientId: session.clientId,
     waId: syntheticWaId,
     waIdCanonical: syntheticWaId,
-    mode: "HUMAN",
-    handoffStatus: "none",
-    assignedUserId: null,
-    departmentId: defaults.department.id,
+    mode: runtimeState.mode === "HUMAN" ? "HUMAN" : "BOT",
+    handoffStatus:
+      runtimeState.handoffStatus === HandoffStatus.PENDING
+        ? "pending"
+        : runtimeState.handoffStatus === HandoffStatus.ACTIVE
+          ? "active"
+          : "none",
+    assignedUserId: runtimeState.assignedUserId ?? null,
+    departmentId: runtimeState.departmentId ?? defaults.department.id,
     message: {
       direction: "INBOUND",
       type: MessageType.TEXT,
