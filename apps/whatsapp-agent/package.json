@@ -54,6 +54,7 @@
     "demo:seed:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs",
     "demo:status:boa-esperanca-poc": "node scripts/seed-boa-esperanca-poc.mjs status",
     "demo:seed:re7-screenshots": "node scripts/seed-re7-demo-screenshots.mjs",
+    "tenant:intake-flow:configure": "node --import tsx scripts/configure-tenant-intake-flow.ts",
     "state:backfill": "node scripts/backfill-runtime-state.mjs",
     "state:validate": "node scripts/validate-runtime-state.mjs",
     "test:last-outbound": "tsx scripts/test-last-outbound-at.ts",

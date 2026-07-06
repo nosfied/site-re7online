@@ -58,7 +58,7 @@ The widget is positioned above the existing WhatsApp floating CTA to avoid overl
 
 ## Initial Intake Script
 
-Use this initial welcome and routing script for Webchat and, when compatible with the active WhatsApp flow, for WhatsApp:
+Use this initial welcome and routing script for Webchat and, when compatible with the active WhatsApp flow, for WhatsApp. The flow must be stored as a tenant-owned `ChatbotFlow`; do not hardcode `re7online` in channel runtime.
 
 ```text
 Ola! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstracao, suporte ou informacoes para orgaos publicos.
@@ -69,6 +69,24 @@ Ola! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstracao
 4. Suporte para cliente
 5. Falar com atendimento humano
 ```
+
+Configure the flow with the operational script below. The command is dry-run by default and requires an explicit `--execute` to write the tenant configuration.
+
+```bash
+cd apps/whatsapp-agent
+npm run tenant:intake-flow:configure -- --tenant re7online --json
+npm run tenant:intake-flow:configure -- --tenant re7online --execute --json
+```
+
+The script:
+
+- validates the preset using the existing `ChatbotFlow` validator;
+- creates or updates a single active entry-point flow named `Re7online Automated Intake`;
+- enables `features.chatbot=true` for the selected tenant;
+- deactivates other active entry-point flows for the same tenant only when `--execute` is used;
+- does not change Webchat sites, WhatsApp phone numbers, channel accounts, Messenger, Instagram, tokens or secrets.
+
+Current flow-engine limitation: this intake qualifies visitors through menus, context and tags. It does not perform free-form slot filling for every field below. Free-form details are requested in the handoff message and completed by the human operator using the existing Inbox and Lead notes.
 
 ### Lead Capture
 
@@ -130,6 +148,9 @@ Route to human attendance when:
 10. Confirm no raw token, channel token or external ID is visible in UI/logs.
 11. Confirm Messenger/Instagram flags remain human-only.
 12. Confirm WhatsApp runtime remains unchanged.
+13. Send a Webchat message and confirm the visitor receives the automated menu through polling.
+14. Select option `5` and confirm the conversation is marked for human handoff.
+15. For WhatsApp, validate only after confirming the tenant intentionally uses the same entry-point `ChatbotFlow`.
 
 ## Rollback
 

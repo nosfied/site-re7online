@@ -56,7 +56,9 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     conversations: [] as Array<Record<string, unknown>>,
     runtimeStates: [] as Array<Record<string, unknown>>,
     inboundMessages: [] as Array<Record<string, unknown>>,
+    outboundMessages: [] as Array<Record<string, unknown>>,
     leads: [] as Array<Record<string, unknown>>,
+    leadNotes: [] as Array<Record<string, unknown>>,
     events: [] as Array<Record<string, unknown>>,
     webchatSessions: [] as Array<Record<string, unknown>>,
     webchatVisitors: [] as Array<Record<string, unknown>>,
@@ -85,6 +87,10 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
         state.conversations[0] = item;
         return { id: String(item.id), waId: String(item.waId) };
       },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.conversations[0]) state.conversations[0] = { ...state.conversations[0], ...data };
+        return { count: state.conversations[0] ? 1 : 0 };
+      },
     },
     conversationRuntimeState: {
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
@@ -92,6 +98,10 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
         const item: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
         state.runtimeStates[0] = item;
         return { id: String(item.id), status: String(item.status) };
+      },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.runtimeStates[0]) state.runtimeStates[0] = { ...state.runtimeStates[0], ...data };
+        return { count: state.runtimeStates[0] ? 1 : 0 };
       },
     },
     inboundMessage: {
@@ -110,6 +120,30 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
         const existing = state.leads[0];
         const item = existing ? { ...existing, ...update } : { id: "lead_1", ...create };
         state.leads[0] = item;
+        return { id: item.id };
+      },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        if (state.leads[0]) state.leads[0] = { ...state.leads[0], ...data };
+        return { count: state.leads[0] ? 1 : 0 };
+      },
+      findUnique: async () => state.leads[0] ? { id: state.leads[0].id } : null,
+    },
+    leadNote: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        state.leadNotes.push({ id: `lead_note_${state.leadNotes.length + 1}`, ...data });
+        return state.leadNotes[state.leadNotes.length - 1];
+      },
+    },
+    outboundMessage: {
+      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+        const existing = state.outboundMessages.find((item) => item.messageId === create.messageId);
+        const item = existing ? { ...existing, ...update } : { id: `outbound_${state.outboundMessages.length + 1}`, ...create };
+        if (existing) {
+          const index = state.outboundMessages.indexOf(existing);
+          state.outboundMessages[index] = item;
+        } else {
+          state.outboundMessages.push(item);
+        }
         return { id: item.id };
       },
     },
@@ -137,6 +171,26 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     webchatSession: {
       findUnique: async () => makeSession(),
       update: tx.webchatSession.update,
+    },
+    conversationRuntimeState: {
+      findFirst: async () => null,
+      updateMany: tx.conversationRuntimeState.updateMany,
+    },
+    chatbotFlow: {
+      findFirst: async () => null,
+    },
+    outboundMessage: {
+      upsert: tx.outboundMessage.upsert,
+    },
+    conversation: {
+      updateMany: tx.conversation.updateMany,
+    },
+    lead: {
+      updateMany: tx.lead.updateMany,
+      findUnique: tx.lead.findUnique,
+    },
+    leadNote: {
+      create: tx.leadNote.create,
     },
     department: {
       findFirst: async () => ({ id: "department_1", name: "Atendimento Geral" }),
@@ -239,4 +293,139 @@ test("createWebchatInboundMessage persists webchat inbound without outbound or r
   assert.equal(realtimeEvents[0].type, "message.created");
   assert.equal(JSON.stringify(prisma.state.events).includes("wcs_existing"), false);
   assert.equal(JSON.stringify(prisma.state.inboundMessages[0].rawPayload).includes("Preciso de atendimento"), false);
+});
+
+const re7IntakeFlow = {
+  start: "menu_inicial",
+  nodes: {
+    menu_inicial: {
+      type: "menu",
+      text: "Olá! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstração, suporte ou informações para órgãos públicos.",
+      options: [
+        { label: "Conhecer o Converta", next: "menu_perfil", context: { intent: "conhecer_converta" }, tags: ["lead:private"] },
+        { label: "Solicitar demonstração / POC", next: "menu_perfil", context: { intent: "demo_poc", lead_temp: "quente" }, tags: ["lead:demo"] },
+        { label: "Atendimento para órgão público / licitação", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" }, tags: ["lead:public_sector"] },
+        { label: "Suporte para cliente", next: "menu_suporte", context: { intent: "suporte" }, tags: ["support"] },
+        { label: "Falar com atendimento humano", next: "handoff_humano", context: { handoff_reason: "solicitado_pelo_usuario" }, tags: ["handoff:direct"] },
+      ],
+    },
+    menu_perfil: {
+      type: "menu",
+      text: "Qual perfil descreve melhor sua operação?",
+      options: [
+        { label: "Empresa privada", next: "menu_necessidade", context: { perfil: "empresa_privada" } },
+        { label: "Órgão público", next: "handoff_publico", context: { perfil: "orgao_publico", priority: "alta" }, tags: ["lead:public_sector"] },
+        { label: "Escritório / serviços", next: "menu_necessidade", context: { perfil: "escritorio_servicos" } },
+        { label: "Varejo", next: "menu_necessidade", context: { perfil: "varejo" } },
+        { label: "Outro", next: "menu_necessidade", context: { perfil: "outro" } },
+      ],
+    },
+    menu_necessidade: {
+      type: "menu",
+      text: "Qual necessidade principal você quer resolver primeiro?",
+      options: [
+        { label: "Centralizar atendimento", next: "handoff_lead", context: { necessidade: "centralizar_atendimento" } },
+        { label: "Responder mais rápido", next: "handoff_lead", context: { necessidade: "responder_mais_rapido" } },
+        { label: "Organizar histórico", next: "handoff_lead", context: { necessidade: "organizar_historico" } },
+        { label: "Filas/equipe", next: "handoff_lead", context: { necessidade: "filas_equipe" } },
+        { label: "Relatórios", next: "handoff_lead", context: { necessidade: "relatorios" } },
+        { label: "POC/licitação", next: "handoff_publico", context: { necessidade: "poc_licitacao", priority: "alta" }, tags: ["lead:public_sector"] },
+      ],
+    },
+    menu_suporte: {
+      type: "menu",
+      text: "Qual área precisa de suporte?",
+      options: [
+        { label: "Acesso/login", next: "handoff_suporte", context: { suporte_tipo: "acesso_login" } },
+        { label: "WhatsApp", next: "handoff_suporte", context: { suporte_tipo: "whatsapp" } },
+        { label: "Instagram/Facebook", next: "handoff_suporte", context: { suporte_tipo: "instagram_facebook" } },
+        { label: "Webchat", next: "handoff_suporte", context: { suporte_tipo: "webchat" } },
+        { label: "Inbox/relatórios", next: "handoff_suporte", context: { suporte_tipo: "inbox_relatorios" } },
+        { label: "Instabilidade", next: "handoff_suporte", context: { suporte_tipo: "instabilidade", priority: "alta" } },
+      ],
+    },
+    handoff_lead: {
+      type: "handoff",
+      text: "Perfeito. Vou encaminhar sua conversa para um consultor da Re7online. Se puder, envie nome, empresa, cidade/UF e melhor contato para retorno.",
+      handoffSummary: "Lead privado qualificado pela automação de intake.",
+      tags: ["handoff:lead"],
+    },
+    handoff_publico: {
+      type: "handoff",
+      text: "Entendi. Vou encaminhar para atendimento especializado em órgãos públicos e licitações. Se possível, envie órgão, município/UF, prazo e contexto do edital ou POC.",
+      handoffSummary: "Demanda de órgão público/licitação identificada pela automação.",
+      tags: ["handoff:public_sector", "priority:high"],
+    },
+    handoff_suporte: {
+      type: "handoff",
+      text: "Vou direcionar para suporte. Se puder, envie empresa/tenant, canal afetado e uma breve descrição do problema.",
+      handoffSummary: "Solicitação de suporte identificada pela automação.",
+      tags: ["handoff:support"],
+    },
+    handoff_humano: {
+      type: "handoff",
+      text: "Claro. Vou te encaminhar para um atendimento humano.",
+      handoffSummary: "Usuário solicitou atendimento humano.",
+      tags: ["handoff:direct"],
+    },
+  },
+};
+
+test("createWebchatInboundMessage replies with active chatbot entry menu when configured", async () => {
+  const prisma = makePrisma() as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+
+  const result = await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_6",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.15",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(prisma.state.outboundMessages.length, 1);
+  assert.match(String(prisma.state.outboundMessages[0].bodyText), /Conhecer o Converta/);
+  assert.equal(prisma.state.outboundMessages[0].channel, "webchat");
+  assert.equal(prisma.state.outboundMessages[0].rawPayload.source, "webchat_chatbot");
+  assert.equal(prisma.state.runtimeStates[0].chatbotActive, true);
+  assert.equal(prisma.state.runtimeStates[0].chatbotNodeId, "menu_inicial");
+  assert.equal(prisma.state.runtimeStates[0].mode, "BOT");
+  assert.equal(prisma.state.runtimeStates[0].status, "WAITING_USER");
+});
+
+test("createWebchatInboundMessage routes explicit human request to handoff", async () => {
+  const realtimeEvents: Array<Record<string, unknown>> = [];
+  const prisma = makePrisma() as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_7a",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.16",
+    publishRealtimeEvent: (event: any) => realtimeEvents.push(event),
+  });
+  const result = await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_7b",
+    input: { sessionToken: "wcs_existing", text: "5" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.16",
+    publishRealtimeEvent: (event: any) => realtimeEvents.push(event),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(prisma.state.outboundMessages.length, 2);
+  assert.match(String(prisma.state.outboundMessages[1].bodyText), /atendimento humano/);
+  assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
+  assert.equal(prisma.state.runtimeStates[0].mode, "HUMAN");
+  assert.equal(prisma.state.runtimeStates[0].status, "WAITING");
+  assert.equal(prisma.state.leads[0].status, "QUALIFIED");
+  assert.equal(prisma.state.leadNotes.length, 1);
+  assert.match(String(prisma.state.leadNotes[0].body), /Usuário solicitou atendimento humano/);
+  assert.equal(realtimeEvents.some((event) => event.type === "conversation.handoff.updated"), true);
 });
