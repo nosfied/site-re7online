@@ -217,7 +217,19 @@ function statusFromChatbotState(state: ConversationState, pendingHandoff: boolea
 }
 
 function pickLeadService(context: FlowContext | undefined) {
-  const keys = ["intent", "need", "necessidade", "service", "servico", "profile", "perfil"];
+  const keys = [
+    "interest",
+    "support_type",
+    "supportType",
+    "publicSectorContext",
+    "intent",
+    "need",
+    "necessidade",
+    "service",
+    "servico",
+    "profile",
+    "perfil",
+  ];
   for (const key of keys) {
     const value = context?.[key];
     if (typeof value === "string" && value.trim()) return value.trim().slice(0, 160);
@@ -243,6 +255,71 @@ function pickLeadEmail(context: FlowContext | undefined) {
   const value = pickLeadText(context, ["contact_email", "email"], 180);
   if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value)) return undefined;
   return value.toLowerCase();
+}
+
+async function resolveWebchatHandoffRouting(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  context: FlowContext | undefined;
+  currentDepartmentId: string | null;
+  currentQueueId: string | null;
+}) {
+  const targetDepartmentName = pickLeadText(params.context, [
+    "target_department",
+    "targetDepartment",
+    "targetDepartmentName",
+    "department",
+    "departmentName",
+  ]);
+  const targetQueueName = pickLeadText(params.context, [
+    "target_queue",
+    "targetQueue",
+    "targetQueueName",
+    "queue",
+    "queueName",
+  ]);
+
+  if (!targetDepartmentName && !targetQueueName) {
+    return {
+      departmentId: params.currentDepartmentId,
+      queueId: params.currentQueueId,
+    };
+  }
+
+  const department = targetDepartmentName
+    ? await params.prisma.department.findFirst({
+        where: {
+          clientId: params.clientId,
+          name: { equals: targetDepartmentName, mode: "insensitive" },
+          isActive: true,
+        },
+        select: { id: true },
+      })
+    : null;
+  const queue = targetQueueName
+    ? await params.prisma.queue.findFirst({
+        where: {
+          clientId: params.clientId,
+          name: { equals: targetQueueName, mode: "insensitive" },
+          ...(department?.id ? { departmentId: department.id } : {}),
+        },
+        select: { id: true, departmentId: true },
+      })
+    : null;
+
+  if ((targetDepartmentName || targetQueueName) && !department && !queue) {
+    logger.warn({
+      event: "webchat.handoff.routing_not_found",
+      clientId: params.clientId,
+      targetDepartment: targetDepartmentName ?? null,
+      targetQueue: targetQueueName ?? null,
+    });
+  }
+
+  return {
+    departmentId: queue?.departmentId ?? department?.id ?? params.currentDepartmentId,
+    queueId: queue?.id ?? params.currentQueueId,
+  };
 }
 
 async function runWebchatChatbotFlow(params: {
@@ -374,6 +451,18 @@ async function runWebchatChatbotFlow(params: {
       ? new Date(result.state.handoff.requestedAt)
       : null;
   const mode = pendingHandoff ? "HUMAN" : result.state.chatbotActive ? "BOT" : result.state.mode ?? "BOT";
+  const handoffRouting = pendingHandoff
+    ? await resolveWebchatHandoffRouting({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        context: nextContext,
+        currentDepartmentId: result.state.departmentId ?? null,
+        currentQueueId: result.state.queueId ?? null,
+      })
+    : {
+        departmentId: result.state.departmentId ?? null,
+        queueId: result.state.queueId ?? null,
+      };
 
   await params.prisma.$transaction(async (tx) => {
     await tx.conversationRuntimeState.updateMany({
@@ -394,6 +483,8 @@ async function runWebchatChatbotFlow(params: {
         handoffStatus,
         handoffRequestedAt,
         status: statusFromChatbotState(result.state, pendingHandoff),
+        ...(handoffRouting.departmentId ? { departmentId: handoffRouting.departmentId } : {}),
+        ...(handoffRouting.queueId ? { queueId: handoffRouting.queueId } : {}),
         ...(outboundMessageId ? { lastOutboundAt: outboundAt, lastOutboundMessageId: outboundMessageId } : {}),
       },
     });
@@ -403,7 +494,7 @@ async function runWebchatChatbotFlow(params: {
         ...(pickLeadText(nextContext, ["contact_name", "name", "nome"]) ? { name: pickLeadText(nextContext, ["contact_name", "name", "nome"]) } : {}),
         ...(pickLeadEmail(nextContext) ? { email: pickLeadEmail(nextContext) } : {}),
         ...(pickLeadPhone(nextContext) ? { phone: pickLeadPhone(nextContext) } : {}),
-        ...(pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao"]) ? { company: pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao"]) } : {}),
+        ...(pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao", "public_entity", "tenant"]) ? { company: pickLeadText(nextContext, ["company", "empresa", "organization", "organizacao", "public_entity", "tenant"]) } : {}),
         ...(pickLeadText(nextContext, ["public_city_uf", "city", "cidade"]) ? { city: pickLeadText(nextContext, ["public_city_uf", "city", "cidade"]) } : {}),
         ...(pickLeadService(nextContext) ? { service: pickLeadService(nextContext) } : {}),
         status: pendingHandoff ? "QUALIFIED" : "NEW",
@@ -511,7 +602,7 @@ async function runWebchatChatbotFlow(params: {
       mode: "HUMAN",
       handoffStatus: "pending",
       assignedUserId: null,
-      departmentId: result.state.departmentId ?? null,
+      departmentId: handoffRouting.departmentId ?? null,
       updatedAt: outboundAt.toISOString(),
     });
   }

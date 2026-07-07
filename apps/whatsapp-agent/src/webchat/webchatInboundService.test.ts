@@ -204,6 +204,7 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
     },
     queue: {
+      findFirst: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
       upsert: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
     },
     $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
@@ -310,10 +311,9 @@ const re7IntakeFlow = {
       text: "Olá! Sou o assistente da Re7online.\n\nEscolha o tipo de atendimento:",
       options: [
         { label: "Quero conhecer o Converta", next: "menu_perfil", context: { intent: "conhecer_converta" } },
-        { label: "Quero uma apresentação ou proposta", next: "menu_perfil", context: { intent: "demo", lead_temp: "quente" } },
-        { label: "Atendimento para órgão público ou licitação", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" } },
-        { label: "Suporte para cliente", next: "menu_suporte", context: { intent: "suporte" }, tags: ["support"] },
-        { label: "Falar com atendimento humano", next: "handoff_humano", context: { handoff_reason: "solicitado_pelo_usuario" }, tags: ["handoff:direct"] },
+        { label: "Já sou cliente e preciso de suporte", next: "menu_suporte", context: { intent: "suporte" }, tags: ["support"] },
+        { label: "Sou órgão público / licitação / governo", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" } },
+        { label: "Quero falar com atendimento", next: "handoff_humano", context: { handoff_reason: "solicitado_pelo_usuario" }, tags: ["handoff:direct"] },
       ],
     },
     menu_perfil: {
@@ -368,6 +368,7 @@ const re7IntakeFlow = {
       text: "Vou direcionar para suporte. Se puder, envie empresa/tenant, canal afetado e uma breve descrição do problema.",
       handoffSummary: "Solicitação de suporte identificada pela automação.",
       tags: ["handoff:support"],
+      context: { targetDepartment: "Suporte", targetQueue: "Fila Suporte" },
     },
     handoff_humano: {
       type: "handoff",
@@ -419,7 +420,7 @@ test("createWebchatInboundMessage routes explicit human request to handoff", asy
   const result = await createWebchatInboundMessage({
     prisma,
     requestId: "req_7b",
-    input: { sessionToken: "wcs_existing", text: "5" },
+    input: { sessionToken: "wcs_existing", text: "4" },
     origin: "https://portal.example.com",
     ip: "203.0.113.16",
     publishRealtimeEvent: (event: any) => realtimeEvents.push(event),
@@ -453,7 +454,7 @@ test("createWebchatInboundMessage does not resume chatbot after handoff before c
   await createWebchatInboundMessage({
     prisma,
     requestId: "req_7d",
-    input: { sessionToken: "wcs_existing", text: "5" },
+    input: { sessionToken: "wcs_existing", text: "4" },
     origin: "https://portal.example.com",
     ip: "203.0.113.16",
   });
@@ -548,4 +549,51 @@ test("createWebchatInboundMessage persists captured contact fields on lead befor
   assert.equal(prisma.state.leads[0].status, "NEW");
   assert.equal(prisma.state.runtimeStates[0].mode, "BOT");
   assert.equal(prisma.state.runtimeStates[0].status, "WAITING_USER");
+});
+
+test("createWebchatInboundMessage applies target department and queue on support handoff", async () => {
+  const prisma = makePrisma({
+    department: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => (
+        JSON.stringify(where).includes("Suporte") ? { id: "department_support", name: "Suporte" } : null
+      ),
+      create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
+    },
+    queue: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => (
+        JSON.stringify(where).includes("Fila Suporte")
+          ? { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" }
+          : null
+      ),
+      upsert: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
+    },
+  }) as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_9a",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.18",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_9b",
+    input: { sessionToken: "wcs_existing", text: "2" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.18",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_9c",
+    input: { sessionToken: "wcs_existing", text: "1" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.18",
+  });
+
+  assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
+  assert.equal(prisma.state.runtimeStates[0].departmentId, "department_support");
+  assert.equal(prisma.state.runtimeStates[0].queueId, "queue_support");
 });

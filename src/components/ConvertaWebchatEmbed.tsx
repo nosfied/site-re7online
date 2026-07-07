@@ -9,13 +9,13 @@ export default function ConvertaWebchatEmbed() {
   return (
     <Script
       id="converta-webchat-widget"
-      src="/webchat/widget.js?v=67b3"
+      src="/webchat/widget.js?v=83a1"
       strategy="afterInteractive"
       data-site-id={siteId}
       data-api-base={apiBase}
       data-title="Converta"
       data-subtitle="Atendimento Re7online"
-      data-welcome="Ola! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstracao, suporte ou informacoes para orgaos publicos."
+      data-welcome="Ola! Sou o assistente da Re7online. Posso te ajudar com apresentacao, suporte, atendimento publico ou contato humano."
       data-accent="#fc6c16"
       data-bottom="96px"
       data-bottom-mobile="84px"

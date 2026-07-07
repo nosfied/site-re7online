@@ -19,6 +19,13 @@ type Action = {
   detail: Record<string, unknown>;
 };
 
+const routingTargets = [
+  { department: "Atendimento Geral", queue: "Fila Geral" },
+  { department: "Comercial", queue: "Fila Comercial" },
+  { department: "Suporte", queue: "Fila Suporte" },
+  { department: "Governo e Licitações", queue: "Fila Governo" },
+] as const;
+
 function fail(message: string): never {
   console.error(`[tenant-intake-flow] FAIL: ${message}`);
   process.exit(1);
@@ -535,11 +542,308 @@ const re7onlinePrivateIntakeDefinition = {
   },
 } satisfies Prisma.InputJsonObject;
 
+const re7onlineSlaIntakeDefinition = {
+  start: "menu_tipo_atendimento",
+  nodes: {
+    menu_tipo_atendimento: {
+      type: "menu",
+      text:
+        "Olá! Sou o assistente da Re7online.\n\nEscolha o que melhor descreve seu atendimento:",
+      tags: ["re7online", "intake", "webchat_site"],
+      options: [
+        {
+          label: "Quero conhecer o Converta / apresentação",
+          next: "novo_nome",
+          tags: ["commercial", "demo"],
+          context: { origin: "webchat_site", interest: "demo", intent: "conhecer_converta" },
+        },
+        {
+          label: "Já sou cliente e preciso de suporte",
+          next: "suporte_nome",
+          tags: ["support"],
+          context: { origin: "webchat_site", interest: "suporte", intent: "support" },
+        },
+        {
+          label: "Sou órgão público / licitação / governo",
+          next: "governo_nome",
+          tags: ["government", "bid"],
+          context: { origin: "webchat_site", interest: "governo", intent: "public_sector", priority: "alta" },
+        },
+        {
+          label: "Quero falar com atendimento",
+          next: "handoff_humano",
+          tags: ["human_handoff"],
+          context: { origin: "webchat_site", intent: "human_handoff" },
+        },
+      ],
+    },
+    novo_nome: {
+      type: "capture",
+      text: "Claro. Para preparar o contato, qual é o seu nome?",
+      field: "contact_name",
+      validation: "non_empty",
+      errorText: "Informe seu nome para continuar.",
+      next: "novo_empresa",
+      tags: ["commercial", "qualification"],
+    },
+    novo_empresa: {
+      type: "capture",
+      text: "Qual é a empresa ou organização?",
+      field: "company",
+      validation: "non_empty",
+      errorText: "Informe a empresa ou organização para continuar.",
+      next: "novo_segmento",
+      tags: ["commercial", "qualification"],
+    },
+    novo_segmento: {
+      type: "menu",
+      text: "Qual segmento descreve melhor a operação?",
+      tags: ["commercial", "qualification"],
+      options: [
+        { label: "Privado", next: "novo_cidade", context: { segment: "privado" } },
+        { label: "Público", next: "novo_cidade", context: { segment: "publico", priority: "media" } },
+        { label: "Governo", next: "novo_cidade", context: { segment: "governo", priority: "alta" } },
+        { label: "Outro", next: "novo_cidade", context: { segment: "outro" } },
+      ],
+    },
+    novo_cidade: {
+      type: "capture",
+      text: "Informe cidade/UF.",
+      field: "city",
+      validation: "non_empty",
+      errorText: "Informe cidade/UF para continuar.",
+      next: "novo_interesse",
+      tags: ["commercial", "qualification"],
+    },
+    novo_interesse: {
+      type: "menu",
+      text: "Qual é o principal interesse neste momento?",
+      tags: ["commercial", "qualification"],
+      options: [
+        { label: "Centralizar canais de atendimento", next: "novo_email", context: { interest: "omnichannel" } },
+        { label: "Automação e chatbot", next: "novo_email", context: { interest: "automation" } },
+        { label: "Relatórios e gestão da equipe", next: "novo_email", context: { interest: "reports" } },
+        { label: "Implantação e proposta", next: "novo_email", context: { interest: "proposal", priority: "media" } },
+        { label: "Ainda estou avaliando", next: "novo_email", context: { interest: "discovery" } },
+      ],
+    },
+    novo_email: {
+      type: "capture",
+      text: "Informe um e-mail para retorno.",
+      field: "contact_email",
+      validation: "email",
+      errorText: "Informe um e-mail válido para continuar.",
+      next: "novo_telefone",
+      tags: ["commercial", "qualification"],
+    },
+    novo_telefone: {
+      type: "capture",
+      text: "Informe também um telefone/WhatsApp com DDD.",
+      field: "contact_phone",
+      validation: "phone_br",
+      errorText: "Informe um telefone com DDD. Exemplo: (84) 99999-9999.",
+      next: "novo_urgencia",
+      tags: ["commercial", "qualification"],
+    },
+    novo_urgencia: {
+      type: "menu",
+      text: "Qual é a urgência do contato?",
+      tags: ["commercial", "qualification"],
+      options: [
+        { label: "Alta - preciso falar o quanto antes", next: "novo_horario", context: { priority: "alta" } },
+        { label: "Média - posso aguardar retorno", next: "novo_horario", context: { priority: "media" } },
+        { label: "Baixa - apenas pesquisando", next: "novo_horario", context: { priority: "baixa" } },
+      ],
+    },
+    novo_horario: {
+      type: "capture",
+      text: "Qual o melhor horário para nossa equipe entrar em contato?",
+      field: "best_contact_time",
+      validation: "non_empty",
+      errorText: "Informe o melhor horário ou responda 'qualquer horário comercial'.",
+      next: "handoff_comercial",
+      tags: ["commercial", "qualification"],
+    },
+    suporte_nome: {
+      type: "capture",
+      text: "Vamos registrar seu suporte. Qual é o seu nome?",
+      field: "contact_name",
+      validation: "non_empty",
+      errorText: "Informe seu nome para continuar.",
+      next: "suporte_empresa",
+      tags: ["support", "qualification"],
+    },
+    suporte_empresa: {
+      type: "capture",
+      text: "Qual é a empresa ou tenant?",
+      field: "tenant",
+      validation: "non_empty",
+      errorText: "Informe a empresa ou tenant para continuar.",
+      next: "suporte_canal",
+      tags: ["support", "qualification"],
+    },
+    suporte_canal: {
+      type: "menu",
+      text: "Qual canal ou área foi afetado?",
+      tags: ["support", "qualification"],
+      options: [
+        { label: "WhatsApp", next: "suporte_tipo", context: { support_channel: "whatsapp" } },
+        { label: "Instagram/Facebook", next: "suporte_tipo", context: { support_channel: "instagram_facebook" } },
+        { label: "Webchat", next: "suporte_tipo", context: { support_channel: "webchat" } },
+        { label: "Inbox / relatórios", next: "suporte_tipo", context: { support_channel: "inbox_reports" } },
+        { label: "Acesso / login", next: "suporte_tipo", context: { support_channel: "access" } },
+        { label: "Outro", next: "suporte_tipo", context: { support_channel: "other" } },
+      ],
+    },
+    suporte_tipo: {
+      type: "menu",
+      text: "Que tipo de situação ocorreu?",
+      tags: ["support", "qualification"],
+      options: [
+        { label: "Instabilidade ou indisponibilidade", next: "suporte_urgencia", context: { support_type: "incident", priority: "alta" } },
+        { label: "Envio ou recebimento de mensagens", next: "suporte_urgencia", context: { support_type: "messaging" } },
+        { label: "Acesso ou permissão", next: "suporte_urgencia", context: { support_type: "access_permission" } },
+        { label: "Configuração", next: "suporte_urgencia", context: { support_type: "configuration" } },
+        { label: "Relatório ou dados", next: "suporte_urgencia", context: { support_type: "reports_data" } },
+        { label: "Outro", next: "suporte_urgencia", context: { support_type: "other" } },
+      ],
+    },
+    suporte_urgencia: {
+      type: "menu",
+      text: "Qual é a urgência?",
+      tags: ["support", "qualification"],
+      options: [
+        { label: "Alta - operação parada ou crítica", next: "suporte_descricao", context: { priority: "alta" } },
+        { label: "Média - impacta parte da operação", next: "suporte_descricao", context: { priority: "media" } },
+        { label: "Baixa - dúvida ou ajuste", next: "suporte_descricao", context: { priority: "baixa" } },
+      ],
+    },
+    suporte_descricao: {
+      type: "capture",
+      text: "Descreva em poucas palavras o que aconteceu.",
+      field: "support_description",
+      validation: "non_empty",
+      errorText: "Informe uma descrição curta para continuar.",
+      next: "handoff_suporte",
+      tags: ["support", "qualification"],
+    },
+    governo_nome: {
+      type: "capture",
+      text: "Certo. Qual é o seu nome?",
+      field: "contact_name",
+      validation: "non_empty",
+      errorText: "Informe seu nome para continuar.",
+      next: "governo_orgao",
+      tags: ["government", "qualification"],
+    },
+    governo_orgao: {
+      type: "capture",
+      text: "Qual é o órgão ou entidade?",
+      field: "public_entity",
+      validation: "non_empty",
+      errorText: "Informe o órgão ou entidade para continuar.",
+      next: "governo_cidade",
+      tags: ["government", "qualification"],
+    },
+    governo_cidade: {
+      type: "capture",
+      text: "Informe cidade/UF.",
+      field: "public_city_uf",
+      validation: "non_empty",
+      errorText: "Informe cidade/UF para continuar.",
+      next: "governo_tipo",
+      tags: ["government", "qualification"],
+    },
+    governo_tipo: {
+      type: "menu",
+      text: "Qual é a necessidade?",
+      tags: ["government", "qualification"],
+      options: [
+        { label: "Edital publicado", next: "governo_prazo", context: { publicSectorContext: "published_bid", priority: "alta" } },
+        { label: "Edital em preparação", next: "governo_prazo", context: { publicSectorContext: "bid_preparation", priority: "media" } },
+        { label: "Apresentação técnica", next: "governo_prazo", context: { publicSectorContext: "technical_demo" } },
+        { label: "Implantação ou contrato", next: "governo_prazo", context: { publicSectorContext: "implementation_contract" } },
+        { label: "Pesquisa de solução", next: "governo_prazo", context: { publicSectorContext: "solution_research" } },
+      ],
+    },
+    governo_prazo: {
+      type: "capture",
+      text: "Existe algum prazo importante? Se não houver, responda 'sem prazo definido'.",
+      field: "deadline",
+      validation: "non_empty",
+      errorText: "Informe o prazo ou responda 'sem prazo definido'.",
+      next: "governo_referencia",
+      tags: ["government", "qualification"],
+    },
+    governo_referencia: {
+      type: "capture",
+      text: "Se houver link, número de edital ou documento, envie aqui. Se não houver, responda 'sem link'.",
+      field: "public_reference",
+      validation: "non_empty",
+      errorText: "Informe a referência ou responda 'sem link'.",
+      next: "governo_email",
+      tags: ["government", "qualification"],
+    },
+    governo_email: {
+      type: "capture",
+      text: "Informe um e-mail para retorno.",
+      field: "contact_email",
+      validation: "email",
+      errorText: "Informe um e-mail válido para continuar.",
+      next: "governo_telefone",
+      tags: ["government", "qualification"],
+    },
+    governo_telefone: {
+      type: "capture",
+      text: "Informe também um telefone/WhatsApp com DDD.",
+      field: "contact_phone",
+      validation: "phone_br",
+      errorText: "Informe um telefone com DDD. Exemplo: (84) 99999-9999.",
+      next: "handoff_governo",
+      tags: ["government", "qualification"],
+    },
+    handoff_comercial: {
+      type: "handoff",
+      text:
+        "Obrigado. Já tenho as informações iniciais e vou encaminhar para nosso atendimento comercial.",
+      handoffSummary:
+        "Contato comercial qualificado pelo Webchat Re7online. Revisar nome, empresa, segmento, cidade/UF, interesse, telefone/e-mail, urgência e melhor horário.",
+      tags: ["commercial", "human_handoff"],
+      context: { targetDepartment: "Comercial", targetQueue: "Fila Comercial", origin: "webchat_site", interest: "demo" },
+    },
+    handoff_suporte: {
+      type: "handoff",
+      text:
+        "Obrigado. Vou encaminhar para suporte com prioridade conforme a urgência informada. Seu histórico ficará registrado para continuidade do atendimento.",
+      handoffSummary:
+        "Suporte qualificado pelo Webchat Re7online. Revisar empresa/tenant, canal afetado, tipo de problema, urgência e descrição curta.",
+      tags: ["support", "human_handoff"],
+      context: { targetDepartment: "Suporte", targetQueue: "Fila Suporte", origin: "webchat_site", interest: "suporte" },
+    },
+    handoff_governo: {
+      type: "handoff",
+      text:
+        "Obrigado. Vou encaminhar para nosso atendimento especializado em órgãos públicos e licitações.",
+      handoffSummary:
+        "Atendimento público/licitação qualificado pelo Webchat Re7online. Revisar órgão, cidade/UF, necessidade, prazo, referência/documento, e-mail e telefone.",
+      tags: ["government", "bid", "human_handoff"],
+      context: { targetDepartment: "Governo e Licitações", targetQueue: "Fila Governo", origin: "webchat_site", interest: "governo", priority: "alta" },
+    },
+    handoff_humano: {
+      type: "handoff",
+      text: "Tudo bem. Vou encaminhar seu atendimento para uma pessoa da equipe Re7online.",
+      handoffSummary: "Visitante solicitou atendimento humano diretamente pelo Webchat Re7online.",
+      tags: ["human_handoff"],
+      context: { targetDepartment: "Atendimento Geral", targetQueue: "Fila Geral", origin: "webchat_site" },
+    },
+  },
+} satisfies Prisma.InputJsonObject;
+
 function getPresetDefinition(options: Options) {
   if (options.preset === "re7online-private-intake") {
     return {
       name: "Re7online Automated Intake",
-      definition: re7onlinePrivateIntakeDefinition,
+      definition: re7onlineSlaIntakeDefinition,
     };
   }
   fail(`preset desconhecido: ${options.preset}`);
@@ -547,6 +851,16 @@ function getPresetDefinition(options: Options) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function slugifyDepartmentName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 function output(data: unknown, json: boolean) {
@@ -600,6 +914,29 @@ async function main() {
     const currentFeatures = asRecord(client.features);
     const nextFeatures = { ...currentFeatures, chatbot: true };
     const activeEntryPointsToDisable = client.chatbotFlows.filter((flow) => flow.id !== existingFlow?.id);
+    const existingRouting = await Promise.all(
+      routingTargets.map(async (target) => {
+        const department = await prisma.department.findFirst({
+          where: { clientId: client.id, name: target.department },
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+            queues: {
+              where: { name: target.queue },
+              select: { id: true, name: true },
+              take: 1,
+            },
+          },
+        });
+        return {
+          ...target,
+          departmentId: department?.id ?? null,
+          departmentActive: department?.isActive ?? false,
+          queueId: department?.queues[0]?.id ?? null,
+        };
+      })
+    );
     const actions: Action[] = [];
 
     if (currentFeatures.chatbot !== true) {
@@ -641,6 +978,29 @@ async function main() {
         target: "ChatbotFlow",
         detail: { id: flow.id, name: flow.name, previousIsActive: flow.isActive },
       });
+    }
+
+    for (const target of existingRouting) {
+      if (!target.departmentId) {
+        actions.push({
+          action: "create",
+          target: "Department",
+          detail: { name: target.department, slug: slugifyDepartmentName(target.department) },
+        });
+      } else if (!target.departmentActive) {
+        actions.push({
+          action: "update",
+          target: "Department",
+          detail: { id: target.departmentId, name: target.department, set: { isActive: true } },
+        });
+      }
+      if (!target.queueId) {
+        actions.push({
+          action: "create",
+          target: "Queue",
+          detail: { name: target.queue, department: target.department },
+        });
+      }
     }
 
     const report = {
@@ -711,6 +1071,42 @@ async function main() {
           },
           data: { isActive: false, entryPoint: false },
         });
+      }
+
+      for (const target of routingTargets) {
+        let department = await tx.department.findFirst({
+          where: { clientId: client.id, name: target.department },
+          select: { id: true, isActive: true },
+        });
+        if (!department) {
+          department = await tx.department.create({
+            data: {
+              clientId: client.id,
+              name: target.department,
+              slug: slugifyDepartmentName(target.department),
+              isActive: true,
+            },
+            select: { id: true, isActive: true },
+          });
+        } else if (!department.isActive) {
+          await tx.department.update({
+            where: { id: department.id },
+            data: { isActive: true },
+          });
+        }
+        const queue = await tx.queue.findFirst({
+          where: { clientId: client.id, departmentId: department.id, name: target.queue },
+          select: { id: true },
+        });
+        if (!queue) {
+          await tx.queue.create({
+            data: {
+              clientId: client.id,
+              departmentId: department.id,
+              name: target.queue,
+            },
+          });
+        }
       }
 
       return { flowId };

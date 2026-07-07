@@ -35,8 +35,8 @@ Before exposing the widget publicly, confirm:
 | Item | Expected state |
 | --- | --- |
 | Tenant | `re7online` active |
-| Profile | `business` unless contract/governance changes |
-| Capabilities/features | `webchat=true`, `webchatOutbound=true`, `chatbot=true` only if the WhatsApp chatbot flow is intentionally active |
+| Profile | Keep current tenant profile; runtime falls back to `business` when absent. Do not change to `government` for public-sector qualification. |
+| Capabilities/features | `webchat=true`, `webchatOutbound=true`, `chatbot=true`; effective capabilities should include `crm`, `protocols`, `sla`, `departments` and `reports` through profile defaults or tenant overrides |
 | Webchat site | active site owned by `re7online` |
 | Allowed domains | public Re7online domains and local validation domains as needed |
 | Inbox users | at least one admin/supervisor/operator available for smoke |
@@ -61,13 +61,12 @@ The widget is positioned above the existing WhatsApp floating CTA to avoid overl
 Use this initial welcome and routing script for Webchat and, when compatible with the active WhatsApp flow, for WhatsApp. The flow must be stored as a tenant-owned `ChatbotFlow`; do not hardcode `re7online` in channel runtime.
 
 ```text
-Ola! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstracao, suporte ou informacoes para orgaos publicos.
+Ola! Sou o assistente da Re7online.
 
-1. Conhecer o Converta
-2. Solicitar demonstracao / POC
-3. Atendimento para orgao publico / licitacao
-4. Suporte para cliente
-5. Falar com atendimento humano
+1. Quero conhecer o Converta / apresentacao
+2. Ja sou cliente e preciso de suporte
+3. Sou orgao publico / licitacao / governo
+4. Quero falar com atendimento
 ```
 
 Configure the flow with the operational script below. The command is dry-run by default and requires an explicit `--execute` to write the tenant configuration.
@@ -86,7 +85,7 @@ The script:
 - deactivates other active entry-point flows for the same tenant only when `--execute` is used;
 - does not change Webchat sites, WhatsApp phone numbers, channel accounts, Messenger, Instagram, tokens or secrets.
 
-Current flow-engine behavior: this intake uses `capture` nodes for the first contact fields and menu nodes for objective/profile qualification. Captured name, e-mail and phone are persisted into the existing Lead record without creating a parallel lead store. Additional free-form details are still completed by the human operator using the existing Inbox and Lead notes.
+Current flow-engine behavior: this intake uses `capture` nodes for contact fields and menu nodes for intent, urgency and qualification. Captured name, e-mail, phone, company/organization, city/UF and service/interest are persisted into the existing Lead record without creating a parallel lead store. Additional structured answers remain in the conversation runtime context and in the handoff note for the human operator.
 
 ### Webchat Widget UX
 
@@ -112,52 +111,67 @@ Unsupported by design in this version:
 
 Webchat conversations are created on the first valid visitor message. When an active `ChatbotFlow` handles the conversation, the runtime state remains visible in the Inbox as automation (`mode=BOT`, `WAITING_USER`) and does not count as urgent human unread work until handoff/assignment. When handoff is triggered, the conversation is promoted to human flow (`mode=HUMAN`, `WAITING`, `handoffStatus=PENDING`).
 
-### Lead Capture
+### Commercial Capture
 
-For commercial leads, collect:
+For new commercial contacts, collect before handoff:
 
 - nome;
+- empresa;
+- segmento: privado, publico, governo ou outro;
+- cidade/UF;
+- interesse principal;
 - telefone/WhatsApp;
 - e-mail;
-- empresa;
-- segmento;
-- interesse principal;
-- canais de interesse;
-- necessidade principal.
+- urgencia;
+- melhor horario de contato.
 
 ### Public-Sector Capture
 
-For government or bidding conversations, collect:
+For public-sector or bidding conversations, collect before handoff:
 
+- nome;
 - orgao/entidade;
 - municipio/UF;
-- edital ou contexto;
+- tipo de edital ou necessidade;
 - prazo;
-- canais exigidos;
-- contato responsavel;
-- necessidade de demonstracao/PoC.
+- link/documento/referencia, when available;
+- e-mail;
+- telefone/WhatsApp.
 
 ### Support Capture
 
-For support conversations, collect:
+For support conversations, collect before handoff:
 
+- nome;
 - tenant/empresa;
-- usuario ou contato;
 - canal afetado;
+- tipo de problema;
+- urgencia;
 - descricao curta do problema;
-- urgencia percebida;
-- evidencia ou horario aproximado.
+
+Support handoff should preserve the protocol/timeline and prepare data for first-response and resolution-time reporting.
 
 ### Human Handoff Triggers
 
 Route to human attendance when:
 
-- the visitor chooses option 5;
-- the visitor requests a demo/PoC;
+- the visitor chooses option 4;
+- commercial qualification is complete;
 - the visitor mentions edital, licitacao, orgao publico, prefeitura, camara, SAAE, SIMAE or autarquia;
 - the visitor reports support/incident;
 - qualification is complete enough for sales follow-up;
 - fallback repeats or the visitor rejects automation.
+
+Configured handoff routing uses tenant-owned department/queue names when present:
+
+| Path | Target department | Target queue |
+| --- | --- | --- |
+| Commercial | `Comercial` | `Fila Comercial` |
+| Support | `Suporte` | `Fila Suporte` |
+| Public sector | `Governo e Licitações` | `Fila Governo` |
+| Direct human | `Atendimento Geral` | `Fila Geral` |
+
+If a target department or queue is not present, the runtime keeps the current/default routing and logs a safe `webchat.handoff.routing_not_found` warning. Do not hardcode tenant-specific IDs in channel runtime.
 
 ## Validation Checklist
 

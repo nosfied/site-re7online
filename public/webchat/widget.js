@@ -71,6 +71,7 @@
     ".cw-message.agent{align-self:flex-start;background:#fff;color:#0f172a;border:1px solid rgba(15,23,42,.08);border-bottom-left-radius:4px}",
     ".cw-message.agent.new{box-shadow:0 0 0 2px rgba(252,108,22,.18)}",
     ".cw-message.system{align-self:center;background:transparent;color:#64748b;text-align:center;font-size:12px;max-width:100%}",
+    ".cw-option-line{display:block;margin-top:7px;padding:7px 8px;border-radius:9px;background:rgba(252,108,22,.07);border:1px solid rgba(252,108,22,.18);font-weight:650;color:#0f172a}",
     ".cw-meta{display:block;margin-top:4px;font-size:10px;opacity:.72}",
     ".cw-form{border-top:1px solid rgba(15,23,42,.1);background:#fff;padding:10px;display:grid;gap:8px}",
     ".cw-name{width:100%;box-sizing:border-box;border:1px solid rgba(15,23,42,.14);border-radius:10px;padding:9px 10px;font:inherit;font-size:13px;color:#0f172a;background:#fff}",
@@ -211,7 +212,7 @@
       if (item.localStatus === "failed") cls += " failed";
       if (item.unreadHighlight) cls += " new";
       html += "<div class='cw-message " + cls + "'>";
-      html += escapeHtml(item.text || "");
+      html += formatMessageText(item.text || "");
       html += "<span class='cw-meta'>" + formatTime(item.createdAt) + formatStatus(item) + "</span>";
       html += "</div>";
     }
@@ -504,6 +505,17 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function formatMessageText(value) {
+    var lines = String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    return lines.map(function (line) {
+      var escaped = escapeHtml(line);
+      if (/^\s*\d{1,2}\.\s+/.test(line)) {
+        return "<span class='cw-option-line'>" + escaped + "</span>";
+      }
+      return escaped;
+    }).join("<br>");
   }
 
   function escapeAttr(value) {
