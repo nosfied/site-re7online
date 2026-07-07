@@ -86,17 +86,17 @@ const re7onlinePrivateIntakeDefinition = {
     menu_tipo_atendimento: {
       type: "menu",
       text:
-        "Olá! Sou o assistente da Re7online. Antes de pegar seus dados, me diga como posso direcionar melhor seu atendimento.",
+        "Olá! Sou o assistente da Re7online.\n\nPara direcionar melhor seu atendimento, escolha uma opção:",
       tags: ["re7online", "intake", "routing"],
       options: [
         {
-          label: "Sou novo lead e quero conhecer o Converta",
+          label: "Quero conhecer o Converta",
           next: "menu_perfil",
           tags: ["lead", "converta"],
           context: { intent: "learn_converta", service: "converta", relationship: "new_lead" },
         },
         {
-          label: "Quero demonstração, POC ou proposta",
+          label: "Quero uma apresentação ou proposta",
           next: "menu_perfil",
           tags: ["lead", "demo", "poc"],
           context: { intent: "request_demo", service: "demo_poc", relationship: "new_lead", lead_temp: "quente" },
@@ -112,7 +112,7 @@ const re7onlinePrivateIntakeDefinition = {
     captura_nome: {
       type: "capture",
       text:
-        "Perfeito. Agora vou pegar seus dados de contato para registrar no CRM.\n\nQual é o seu nome?",
+        "Perfeito. Agora vou registrar seus dados para a equipe continuar o atendimento.\n\nQual é o seu nome?",
       field: "contact_name",
       validation: "non_empty",
       errorText: "Informe seu nome para continuar.",
@@ -140,7 +140,7 @@ const re7onlinePrivateIntakeDefinition = {
     captura_nome_governo: {
       type: "capture",
       text:
-        "Perfeito. Agora vou pegar seus dados de contato para registrar no CRM.\n\nQual é o seu nome?",
+        "Perfeito. Agora vou registrar seus dados para a equipe continuar o atendimento.\n\nQual é o seu nome?",
       field: "contact_name",
       validation: "non_empty",
       errorText: "Informe seu nome para continuar.",
@@ -177,7 +177,7 @@ const re7onlinePrivateIntakeDefinition = {
           context: { intent: "learn_converta", service: "converta" },
         },
         {
-          label: "Testar / solicitar demonstração ou POC",
+          label: "Ver uma apresentação do produto",
           next: "empresa_privada",
           tags: ["lead", "demo", "poc"],
           context: { intent: "request_demo", service: "demo_poc", lead_temp: "quente" },
@@ -186,7 +186,7 @@ const re7onlinePrivateIntakeDefinition = {
     },
     menu_perfil: {
       type: "menu",
-      text: "Esse lead é de qual tipo?",
+      text: "Qual perfil descreve melhor sua necessidade?",
       tags: ["lead", "qualification"],
       options: [
         {
@@ -206,7 +206,7 @@ const re7onlinePrivateIntakeDefinition = {
     menu_inicial: {
       type: "menu",
       text:
-        "Olá! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstração, suporte ou informações para órgãos públicos.",
+        "Olá! Sou o assistente da Re7online.\n\nEscolha o tipo de atendimento:",
       tags: ["re7online", "intake"],
       options: [
         {
@@ -216,13 +216,13 @@ const re7onlinePrivateIntakeDefinition = {
           context: { intent: "learn_converta", service: "converta" },
         },
         {
-          label: "Solicitar demonstração / POC",
+          label: "Ver uma apresentação ou proposta",
           next: "perfil_demo",
           tags: ["lead", "demo", "poc"],
           context: { intent: "request_demo", service: "demo_poc" },
         },
         {
-          label: "Atendimento para órgão público / licitação",
+          label: "Atendimento para órgão público ou licitação",
           next: "perfil_governo",
           tags: ["government", "bid", "public_sector"],
           context: { intent: "public_sector", service: "licitacao" },
@@ -282,7 +282,7 @@ const re7onlinePrivateIntakeDefinition = {
       tags: ["lead", "converta"],
       options: [
         {
-          label: "Demonstração do produto",
+          label: "Apresentação do produto",
           next: "perfil_demo",
           tags: ["demo", "poc"],
           context: { interest: "product_demo" },
@@ -329,7 +329,7 @@ const re7onlinePrivateIntakeDefinition = {
           context: { publicSectorContext: "solution_research" },
         },
         {
-          label: "POC",
+          label: "Avaliação técnica",
           next: "governo_prazo",
           context: { publicSectorContext: "poc", lead_temp: "quente" },
         },
@@ -362,7 +362,7 @@ const re7onlinePrivateIntakeDefinition = {
     perfil_demo: {
       type: "menu",
       text:
-        "Para direcionar a demonstração, selecione o perfil que melhor representa sua necessidade. Se preferir, um consultor continua o atendimento em seguida.",
+        "Para direcionar melhor a conversa, selecione o perfil que representa sua necessidade:",
       tags: ["lead", "qualification"],
       options: [
         {
@@ -387,7 +387,7 @@ const re7onlinePrivateIntakeDefinition = {
     necessidade_privada: {
       type: "menu",
       text:
-        "Qual é a principal necessidade hoje? Essa informação ajuda nossa equipe a preparar uma demonstração mais objetiva.",
+        "Qual é a principal necessidade hoje? Essa informação ajuda nossa equipe a preparar uma resposta mais objetiva.",
       tags: ["lead", "qualification", "business"],
       options: [
         {
@@ -419,7 +419,7 @@ const re7onlinePrivateIntakeDefinition = {
     perfil_governo: {
       type: "menu",
       text:
-        "Atendemos órgãos públicos com atendimento multicanal, protocolos, filas, relatórios, evidências operacionais e apoio para demonstrações/PoC. Qual é o contexto?",
+        "Atendemos órgãos públicos com atendimento multicanal, protocolos, filas, relatórios e evidências operacionais.\n\nQual é o contexto?",
       tags: ["government", "qualification"],
       options: [
         {
@@ -429,7 +429,7 @@ const re7onlinePrivateIntakeDefinition = {
           context: { publicSectorContext: "bid" },
         },
         {
-          label: "Demonstração para órgão público",
+          label: "Apresentação para órgão público",
           next: "handoff_governo",
           tags: ["public_demo", "poc"],
           context: { publicSectorContext: "demo" },
@@ -505,17 +505,17 @@ const re7onlinePrivateIntakeDefinition = {
     handoff_comercial: {
       type: "handoff",
       text:
-        "Perfeito. Vou encaminhar seu atendimento para um consultor da Re7online. Se puder, envie também nome, empresa, segmento, quantidade aproximada de atendentes e melhor canal para retorno.",
+        "Perfeito. Vou encaminhar seu atendimento para um consultor da Re7online.\n\nSe puder, envie também empresa, segmento, quantidade aproximada de atendentes e melhor canal para retorno.",
       handoffSummary:
-        "Lead comercial qualificado pelo fluxo automatizado Re7online. Coletar nome, empresa, segmento, telefone/WhatsApp, interesse principal, quantidade aproximada de atendentes e canal preferido.",
+        "Atendimento comercial qualificado pelo fluxo automatizado Re7online. Coletar nome, empresa, segmento, telefone/WhatsApp, interesse principal, quantidade aproximada de atendentes e canal preferido.",
       tags: ["sales", "human_handoff"],
     },
     handoff_governo: {
       type: "handoff",
       text:
-        "Vou encaminhar para nosso atendimento especializado em órgãos públicos. Se puder, envie órgão/entidade, município/UF, edital ou contexto, prazo e contato responsável.",
+        "Vou encaminhar para nosso atendimento especializado em órgãos públicos.\n\nSe puder, envie órgão/entidade, município/UF, edital ou contexto, prazo e contato responsável.",
       handoffSummary:
-        "Atendimento público/licitação qualificado pelo fluxo automatizado Re7online. Coletar órgão/entidade, município/UF, edital ou contexto, prazo, canais exigidos, contato responsável e necessidade de demonstração/PoC.",
+        "Atendimento público/licitação qualificado pelo fluxo automatizado Re7online. Coletar órgão/entidade, município/UF, edital ou contexto, prazo, canais exigidos, contato responsável e necessidade de apresentação técnica.",
       tags: ["government", "bid", "human_handoff"],
     },
     handoff_suporte: {

@@ -303,6 +303,14 @@ async function runWebchatChatbotFlow(params: {
     },
   });
   if (!runtimeState) return;
+  if (
+    runtimeState.mode === "HUMAN" ||
+    runtimeState.handoffStatus === HandoffStatus.PENDING ||
+    runtimeState.handoffStatus === HandoffStatus.ACTIVE ||
+    runtimeState.assignedUserId
+  ) {
+    return;
+  }
 
   const activeFlowId = extractChatbotFlowId(runtimeState.flow);
   const flow = activeFlowId && runtimeState.chatbotActive
@@ -379,8 +387,8 @@ async function runWebchatChatbotFlow(params: {
       data: {
         flow: result.state.flow ?? null,
         flowStep: result.state.flowStep ?? null,
-        chatbotNodeId: result.state.chatbotNodeId ?? null,
-        chatbotActive: result.state.chatbotActive === true,
+        chatbotNodeId: pendingHandoff ? null : result.state.chatbotNodeId ?? null,
+        chatbotActive: pendingHandoff ? false : result.state.chatbotActive === true,
         answers: (result.state.answers ?? {}) as Prisma.InputJsonValue,
         mode,
         handoffStatus,

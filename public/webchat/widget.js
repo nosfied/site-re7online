@@ -162,6 +162,14 @@
     sendMessage();
   });
 
+  textEl.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return;
+    event.preventDefault();
+    state.interacted = true;
+    primeNotificationAudio();
+    sendMessage();
+  });
+
   function endpoint(path) {
     return apiBase + path;
   }
@@ -182,8 +190,8 @@
     nameEl.style.display = state.collectName && !state.token ? "block" : "none";
     errorEl.textContent = state.error || "";
     sendEl.disabled = state.booting || state.sending;
-    textEl.disabled = state.booting || state.sending;
-    nameEl.disabled = state.booting || state.sending;
+    textEl.disabled = state.booting;
+    nameEl.disabled = state.booting;
     sendEl.textContent = state.sending ? "Enviando" : "Enviar";
     soundButton.textContent = state.muted ? "×" : "♪";
     soundButton.setAttribute("aria-label", state.muted ? "Ativar som de notificações" : "Silenciar notificações");
@@ -272,7 +280,7 @@
         body: JSON.stringify({ sessionToken: state.token, text: text })
       }).then(function () {
         localMessage.localStatus = "sent";
-        textEl.value = "";
+        if (textEl.value.trim() === text) textEl.value = "";
         return pollMessages();
       });
     }).catch(function (error) {
@@ -282,6 +290,7 @@
       state.sending = false;
       renderMessages();
       renderControls();
+      if (state.open && !state.booting) setTimeout(function () { textEl.focus(); }, 0);
     });
   }
 

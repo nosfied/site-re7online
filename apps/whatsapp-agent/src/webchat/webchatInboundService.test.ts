@@ -93,12 +93,19 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       },
     },
     conversationRuntimeState: {
-      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const existing = state.runtimeStates[0];
-        const item: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
-        state.runtimeStates[0] = item;
-        return { id: String(item.id), status: String(item.status) };
-      },
+	      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+	        const existing = state.runtimeStates[0];
+	        const item: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
+	        state.runtimeStates[0] = item;
+	        return {
+	          id: String(item.id),
+	          mode: item.mode,
+	          handoffStatus: item.handoffStatus,
+	          assignedUserId: item.assignedUserId ?? null,
+	          departmentId: item.departmentId ?? null,
+	          status: item.status,
+	        };
+	      },
       updateMany: async ({ data }: { data: Record<string, unknown> }) => {
         if (state.runtimeStates[0]) state.runtimeStates[0] = { ...state.runtimeStates[0], ...data };
         return { count: state.runtimeStates[0] ? 1 : 0 };
@@ -300,11 +307,11 @@ const re7IntakeFlow = {
   nodes: {
     menu_inicial: {
       type: "menu",
-      text: "Olá! Sou o assistente da Re7online. Posso te ajudar com o Converta, demonstração, suporte ou informações para órgãos públicos.",
+      text: "Olá! Sou o assistente da Re7online.\n\nEscolha o tipo de atendimento:",
       options: [
-        { label: "Conhecer o Converta", next: "menu_perfil", context: { intent: "conhecer_converta" }, tags: ["lead:private"] },
-        { label: "Solicitar demonstração / POC", next: "menu_perfil", context: { intent: "demo_poc", lead_temp: "quente" }, tags: ["lead:demo"] },
-        { label: "Atendimento para órgão público / licitação", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" }, tags: ["lead:public_sector"] },
+        { label: "Quero conhecer o Converta", next: "menu_perfil", context: { intent: "conhecer_converta" } },
+        { label: "Quero uma apresentação ou proposta", next: "menu_perfil", context: { intent: "demo", lead_temp: "quente" } },
+        { label: "Atendimento para órgão público ou licitação", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" } },
         { label: "Suporte para cliente", next: "menu_suporte", context: { intent: "suporte" }, tags: ["support"] },
         { label: "Falar com atendimento humano", next: "handoff_humano", context: { handoff_reason: "solicitado_pelo_usuario" }, tags: ["handoff:direct"] },
       ],
@@ -314,7 +321,7 @@ const re7IntakeFlow = {
       text: "Qual perfil descreve melhor sua operação?",
       options: [
         { label: "Empresa privada", next: "menu_necessidade", context: { perfil: "empresa_privada" } },
-        { label: "Órgão público", next: "handoff_publico", context: { perfil: "orgao_publico", priority: "alta" }, tags: ["lead:public_sector"] },
+        { label: "Órgão público", next: "handoff_publico", context: { perfil: "orgao_publico", priority: "alta" } },
         { label: "Escritório / serviços", next: "menu_necessidade", context: { perfil: "escritorio_servicos" } },
         { label: "Varejo", next: "menu_necessidade", context: { perfil: "varejo" } },
         { label: "Outro", next: "menu_necessidade", context: { perfil: "outro" } },
@@ -329,7 +336,7 @@ const re7IntakeFlow = {
         { label: "Organizar histórico", next: "handoff_lead", context: { necessidade: "organizar_historico" } },
         { label: "Filas/equipe", next: "handoff_lead", context: { necessidade: "filas_equipe" } },
         { label: "Relatórios", next: "handoff_lead", context: { necessidade: "relatorios" } },
-        { label: "POC/licitação", next: "handoff_publico", context: { necessidade: "poc_licitacao", priority: "alta" }, tags: ["lead:public_sector"] },
+        { label: "Órgão público ou licitação", next: "handoff_publico", context: { necessidade: "licitacao", priority: "alta" } },
       ],
     },
     menu_suporte: {
@@ -347,12 +354,12 @@ const re7IntakeFlow = {
     handoff_lead: {
       type: "handoff",
       text: "Perfeito. Vou encaminhar sua conversa para um consultor da Re7online. Se puder, envie nome, empresa, cidade/UF e melhor contato para retorno.",
-      handoffSummary: "Lead privado qualificado pela automação de intake.",
+      handoffSummary: "Atendimento comercial qualificado pela automação de intake.",
       tags: ["handoff:lead"],
     },
     handoff_publico: {
       type: "handoff",
-      text: "Entendi. Vou encaminhar para atendimento especializado em órgãos públicos e licitações. Se possível, envie órgão, município/UF, prazo e contexto do edital ou POC.",
+      text: "Entendi. Vou encaminhar para atendimento especializado em órgãos públicos e licitações. Se possível, envie órgão, município/UF, prazo e contexto do edital.",
       handoffSummary: "Demanda de órgão público/licitação identificada pela automação.",
       tags: ["handoff:public_sector", "priority:high"],
     },
@@ -386,7 +393,7 @@ test("createWebchatInboundMessage replies with active chatbot entry menu when co
 
   assert.equal(result.ok, true);
   assert.equal(prisma.state.outboundMessages.length, 1);
-  assert.match(String(prisma.state.outboundMessages[0].bodyText), /Conhecer o Converta/);
+  assert.match(String(prisma.state.outboundMessages[0].bodyText), /conhecer o Converta/i);
   assert.equal(prisma.state.outboundMessages[0].channel, "webchat");
   assert.equal(prisma.state.outboundMessages[0].rawPayload.source, "webchat_chatbot");
   assert.equal(prisma.state.runtimeStates[0].chatbotActive, true);
@@ -424,10 +431,45 @@ test("createWebchatInboundMessage routes explicit human request to handoff", asy
   assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
   assert.equal(prisma.state.runtimeStates[0].mode, "HUMAN");
   assert.equal(prisma.state.runtimeStates[0].status, "WAITING");
+  assert.equal(prisma.state.runtimeStates[0].chatbotActive, false);
   assert.equal(prisma.state.leads[0].status, "QUALIFIED");
   assert.equal(prisma.state.leadNotes.length, 1);
   assert.match(String(prisma.state.leadNotes[0].body), /Usuário solicitou atendimento humano/);
   assert.equal(realtimeEvents.some((event) => event.type === "conversation.handoff.updated"), true);
+});
+
+test("createWebchatInboundMessage does not resume chatbot after handoff before closure", async () => {
+  const prisma = makePrisma() as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_7c",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.16",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_7d",
+    input: { sessionToken: "wcs_existing", text: "5" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.16",
+  });
+
+  const outboundCountAfterHandoff = prisma.state.outboundMessages.length;
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_7e",
+    input: { sessionToken: "wcs_existing", text: "Ainda estou aguardando" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.16",
+  });
+
+  assert.equal(prisma.state.runtimeStates[0].mode, "HUMAN");
+  assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
+  assert.equal(prisma.state.outboundMessages.length, outboundCountAfterHandoff);
 });
 
 test("createWebchatInboundMessage persists captured contact fields on lead before handoff", async () => {
