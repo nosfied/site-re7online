@@ -551,6 +551,66 @@ test("createWebchatInboundMessage persists captured contact fields on lead befor
   assert.equal(prisma.state.runtimeStates[0].status, "WAITING_USER");
 });
 
+test("createWebchatInboundMessage preserves captured lead name after human handoff", async () => {
+  const captureFlow = {
+    start: "captura_nome",
+    nodes: {
+      captura_nome: {
+        type: "capture",
+        text: "Qual é o seu nome?",
+        field: "contact_name",
+        validation: "non_empty",
+        next: "menu_objetivo",
+      },
+      menu_objetivo: {
+        type: "menu",
+        text: "Qual é seu objetivo?",
+        options: [{ label: "Atendimento", next: "handoff" }],
+      },
+      handoff: {
+        type: "handoff",
+        text: "Vou encaminhar.",
+        handoffSummary: "Contato qualificado.",
+      },
+    },
+  };
+  const prisma = makePrisma() as any;
+  prisma.conversationRuntimeState.findFirst = async () => prisma.state.runtimeStates[0] ?? null;
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_capture", definition: captureFlow });
+
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_10a",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.19",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_10b",
+    input: { sessionToken: "wcs_existing", text: "Maria Silva" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.19",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_10c",
+    input: { sessionToken: "wcs_existing", text: "1" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.19",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_10d",
+    input: { sessionToken: "wcs_existing", text: "Continuo aguardando" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.19",
+  });
+
+  assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
+  assert.equal(prisma.state.leads[0].name, "Maria Silva");
+});
+
 test("createWebchatInboundMessage applies target department and queue on support handoff", async () => {
   const prisma = makePrisma({
     department: {

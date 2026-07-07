@@ -693,7 +693,23 @@ export async function createWebchatInboundMessage(params: {
   };
   const syntheticWaId = `webchat:${shortHash(`${session.siteId}:${externalUserHash}`)}`;
   const messageId = `webchat:${session.siteId}:${shortHash(`${session.id}:${params.requestId}:${now.toISOString()}`, 24)}`;
-  const displayName = session.visitor.name ?? session.visitor.email ?? "Visitante Webchat";
+  const authoritativeDisplayName = normalizeText(session.visitor.name ?? session.visitor.email ?? "", 180);
+  const fallbackDisplayName = "Visitante Webchat";
+  const displayName = authoritativeDisplayName || fallbackDisplayName;
+  const contactUpdateData = {
+    ...(authoritativeDisplayName ? { name: authoritativeDisplayName } : {}),
+    ...channelFields,
+  };
+  const identityUpdateData = {
+    contactId: undefined as string | undefined,
+    ...(authoritativeDisplayName ? { displayName: authoritativeDisplayName } : {}),
+    lastSeenAt: now,
+  };
+  const leadUpdateData = {
+    waIdCanonical: syntheticWaId,
+    contactChannelIdentityId: undefined as string | undefined,
+    ...channelFields,
+  };
   const defaults = await ensureDefaultOperationalDepartmentAndQueue(params.prisma, session.clientId);
   const chatbotEnabled = getFeatures(session.site.client).chatbot;
   const activeEntryFlow = chatbotEnabled
@@ -713,12 +729,10 @@ export async function createWebchatInboundMessage(params: {
         name: displayName,
         ...channelFields,
       },
-      update: {
-        name: displayName,
-        ...channelFields,
-      },
+      update: contactUpdateData,
       select: { id: true },
     });
+    identityUpdateData.contactId = contactRecord.id;
     const identity = await tx.contactChannelIdentity.upsert({
       where: {
         clientId_channel_provider_channelAccountId_externalUserHash: {
@@ -740,13 +754,10 @@ export async function createWebchatInboundMessage(params: {
         firstSeenAt: now,
         lastSeenAt: now,
       },
-      update: {
-        contactId: contactRecord.id,
-        displayName,
-        lastSeenAt: now,
-      },
+      update: identityUpdateData,
       select: { id: true },
     });
+    leadUpdateData.contactChannelIdentityId = identity.id;
     const conversationRecord = await tx.conversation.upsert({
       where: { clientId_waId: { clientId: session.clientId, waId: syntheticWaId } },
       create: {
@@ -836,12 +847,7 @@ export async function createWebchatInboundMessage(params: {
         ...channelFields,
       },
       update: {
-        waIdCanonical: syntheticWaId,
-        name: displayName,
-        phone: session.visitor.phone,
-        email: session.visitor.email,
-        contactChannelIdentityId: identity.id,
-        ...channelFields,
+        ...leadUpdateData,
       },
       select: { id: true },
     });
