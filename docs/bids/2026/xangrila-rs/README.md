@@ -26,10 +26,14 @@ Este pacote nao altera produto, nao cria produto separado, nao hardcoda Xangri-L
 | `COMMERCIAL_PROPOSAL_PREMISES.md` | Premissas comerciais, custos, garantia e preco recomendado. |
 | `IMPLEMENTATION_TRAINING_PLAN.md` | Plano de implantacao, integracao, treinamento presencial e reciclagem mensal. |
 | `RISK_DECISION_MATRIX.md` | Matriz de riscos, decisao de participacao e bloqueios. |
+| `FINAL_COMMERCIAL_PROPOSAL_DRAFT.md` | Proposta comercial final preenchivel, com valor recomendado e escopo incluido. |
+| `FINAL_TECHNICAL_PROPOSAL.md` | Proposta tecnica final para revisao e assinatura fora do Git. |
+| `TECHNICAL_DECLARATION.md` | Declaracao tecnica base sobre API Oficial, LGPD, suporte e integracoes. |
+| `FINAL_SUBMISSION_DECISION.md` | Gate final de envio, preco minimo, bloqueios e pendencias. |
 
 ## Veredito Inicial
 
-Classificacao: **participar com pendencias comerciais/operacionais**.
+Classificacao atualizada na 85B: **participar, condicionado ao fechamento dos bloqueios documentais e comerciais**.
 
 O Converta Platform possui aderencia forte ao nucleo tecnico: WhatsApp Cloud API oficial, Inbox, atendimento humano, chatbot, historico, RBAC, usuarios por tenant, LGPD, logs, backup, SLA operacional, relatorios, Public API/webhooks e suporte documentado.
 
@@ -58,3 +62,13 @@ Nao participar se:
 1. o preco vencedor provavel ficar abaixo do custo operacional minimo;
 2. a garantia de 5% ou deslocamentos inviabilizarem margem;
 3. nao houver documentacao ME/EPP/habilitacao valida ate a data da sessao.
+
+## Preco Recomendado 85B
+
+| Cenario | Valor mensal | Valor global 12 meses |
+| --- | ---: | ---: |
+| Recomendado | R$ 1.950,00 | R$ 23.400,00 |
+| Competitivo agressivo | R$ 1.750,00 | R$ 21.000,00 |
+| Minimo recomendado | R$ 1.600,00 | R$ 19.200,00 |
+
+Nao baixar do minimo recomendado sem aprovacao expressa financeira/diretoria.

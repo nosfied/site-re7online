@@ -2,7 +2,7 @@
 
 ## Decisao Preliminar
 
-Classificacao: **participar com pendencias comerciais/operacionais**.
+Classificacao 85B: **participar, condicionado ao fechamento dos bloqueios documentais e comerciais**.
 
 Motivo: o produto atende ao nucleo tecnico do certame, mas o valor estimado e baixo para incluir WhatsApp/Meta, treinamento presencial, suporte, manutencao, garantia contratual e eventual deslocamento sem controle rigoroso de custos.
 
@@ -62,6 +62,17 @@ Participar se todos os itens abaixo forem `sim`:
 - alvo inicial: R$ 1.950,00/mês;
 - limite competitivo: R$ 1.750,00/mês;
 - nao recomendado: abaixo de R$ 1.600,00/mês sem nova aprovacao financeira.
+
+## Gate Final 85B
+
+| Criterio | Decisao |
+| --- | --- |
+| Produto atende ao nucleo tecnico? | Sim |
+| Participar tecnicamente? | Sim |
+| Participar sem validar ME/EPP/habilitacao? | Nao |
+| Participar abaixo de R$ 1.600,00/mês? | Nao recomendado |
+| Proposta recomendada | R$ 1.950,00/mês / R$ 23.400,00 anual |
+| Decisao final | Participar se os bloqueios de `FINAL_SUBMISSION_DECISION.md` forem fechados |
 
 ## Decisao Final A Preencher
 

@@ -73,3 +73,17 @@ Status:
 4. Preco final aprovado.
 5. Custos Meta/WhatsApp e viagem aprovados.
 6. Garantia contratual 5% viavel.
+
+## Checklist Final 85B
+
+| Item | Status | Bloqueante? | Observacao |
+| --- | --- | --- | --- |
+| CNPJ atualizado | pendente | Sim | Emitir documento real fora do Git. |
+| Contrato social/ato constitutivo | pendente | Sim | Conferir poderes do representante. |
+| Certidoes fiscais/trabalhistas | pendente | Sim | Federal, estadual, municipal, FGTS e CNDT conforme edital. |
+| Certidao falencia/recuperacao | pendente | Sim | Conferir validade exigida. |
+| Atestado tecnico | pendente | Sim | Deve comprovar atendimento digital/SaaS/WhatsApp/chatbot. |
+| Comprovacao API Oficial WhatsApp | pronto documental | Sim | Usar `TECHNICAL_DECLARATION.md` e proposta tecnica. |
+| Medidas LGPD | pronto documental | Sim | Usar proposta tecnica, declaracao tecnica e matriz de aderencia. |
+| Declaracao ME/EPP | pendente | Sim | Obrigatoria por participacao exclusiva. |
+| Garantia contratual 5% | validar | Sim para assinatura | Confirmar modalidade e momento de apresentacao. |

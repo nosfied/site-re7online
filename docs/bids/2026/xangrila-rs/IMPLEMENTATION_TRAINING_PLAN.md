@@ -16,6 +16,7 @@ Implantar o Converta Platform para gestao de mensagens WhatsApp, com ate 10 usua
 | Relatorios/SLA | D+10 a D+18 | Validacao de relatorios, exportacao e rotina de acompanhamento. |
 | Treinamento presencial | D+15 a D+25 | 3 turmas de 5 pessoas. |
 | Homologacao e aceite | D+20 a D+30 | Checklist final, ajustes pequenos e aceite operacional. |
+| Margem contratual | D+31 a D+60 | Janela reservada para dependencias externas, integracoes e ajustes de aceite dentro do prazo maximo de 60 dias. |
 
 ## Treinamento Presencial
 
@@ -60,6 +61,15 @@ Escopo suportado:
 - exportacao CSV/PDF;
 - importacao controlada mediante layout;
 - integracao com webservice externo mediante credenciais/documentacao.
+
+Rotina de integracao/importacao de dados:
+
+1. levantamento do sistema externo e responsavel tecnico;
+2. recebimento seguro de credenciais e documentacao;
+3. validacao de endpoint, layout ou arquivo;
+4. teste em ambiente controlado;
+5. importacao/exportacao assistida;
+6. validacao e aceite pelo contratante.
 
 Premissas:
 
