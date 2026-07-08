@@ -92,6 +92,8 @@ export type InboxConversationItem = {
   closedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  waitingFirstResponseSec?: number | null;
+  activeDurationSec?: number | null;
   unreadCount?: number;
   isUnassigned: boolean;
   flowContext?: Record<string, string | number | boolean | null>;

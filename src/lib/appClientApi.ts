@@ -212,6 +212,8 @@ type AppConversationOperationalPayload = {
   closedAt: string | null;
   lastInboundAt: string | null;
   lastOutboundAt: string | null;
+  waitingFirstResponseSec?: number | null;
+  activeDurationSec?: number | null;
   isUnassigned: boolean;
   flowContext?: Record<string, string | number | boolean | null>;
   flowTags?: string[];

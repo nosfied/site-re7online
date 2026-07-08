@@ -1390,6 +1390,8 @@ function applyConversationOperationalPayload(
     closedAt: string | null;
     lastInboundAt: string | null;
     lastOutboundAt: string | null;
+    waitingFirstResponseSec?: number | null;
+    activeDurationSec?: number | null;
     isUnassigned: boolean;
     flowContext?: Record<string, string | number | boolean | null>;
     flowTags?: string[];
@@ -1421,6 +1423,8 @@ function applyConversationOperationalPayload(
     closedAt: payload.closedAt,
     lastInboundAt: payload.lastInboundAt,
     lastOutboundAt: payload.lastOutboundAt,
+    waitingFirstResponseSec: payload.waitingFirstResponseSec ?? item.waitingFirstResponseSec ?? null,
+    activeDurationSec: payload.activeDurationSec ?? item.activeDurationSec ?? null,
     isUnassigned: payload.isUnassigned,
     flowContext: payload.flowContext ?? item.flowContext,
     flowTags: payload.flowTags ?? item.flowTags,
@@ -1631,6 +1635,29 @@ function formatRelativeTime(value?: string | null) {
   }
   const diffDays = Math.round(diffHours / 24);
   return formatter.format(diffDays, "day");
+}
+
+function formatOperationalDuration(seconds?: number | null) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return null;
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}min` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+}
+
+function getConversationOperationalDurationLabel(
+  item: Pick<InboxConversationItem, "waitingFirstResponseSec" | "activeDurationSec" | "status" | "assignedUserId">
+) {
+  const waiting = formatOperationalDuration(item.waitingFirstResponseSec);
+  if (waiting && !item.assignedUserId && item.status !== "CLOSED") return `1a resposta ${waiting}`;
+  const active = formatOperationalDuration(item.activeDurationSec);
+  if (active && item.status !== "CLOSED") return `Em atendimento ${active}`;
+  return null;
 }
 
 function canReplyToConversation(
@@ -4967,6 +4994,7 @@ export default function AppInboxPage() {
               const label = getConversationLabel(item);
               const phoneLine = getConversationSecondaryIdentifier(item, label);
               const leadTemperatureLabel = getLeadTemperatureLabel(item);
+              const operationalDurationLabel = getConversationOperationalDurationLabel(item);
               return (
                 <div
                   key={conversationIdentity}
@@ -5053,6 +5081,11 @@ export default function AppInboxPage() {
                       {getConversationStatusLabelForItem(item)}
                     </span>
                     <span className="truncate">{item.departmentName || "Sem setor"}</span>
+                    {operationalDurationLabel ? (
+                      <span className="shrink-0 whitespace-nowrap text-[10px] uppercase tracking-[0.08em] text-white/42">
+                        {operationalDurationLabel}
+                      </span>
+                    ) : null}
                     {unread ? (
                       <span
                         className="ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#20b15a] px-1 text-[10px] font-bold leading-none text-white shadow-[0_0_0_2px_rgba(32,177,90,0.2)]"
@@ -5127,6 +5160,9 @@ export default function AppInboxPage() {
 	                      ? ` • ${selectedConversation.assignedTo}`
 	                      : ""}
 	                  {selectedConversation.protocol ? ` • Protocolo ${selectedConversation.protocol}` : ""}
+	                  {getConversationOperationalDurationLabel(selectedConversation)
+	                    ? ` • ${getConversationOperationalDurationLabel(selectedConversation)}`
+	                    : ""}
 	                </p>
 	              ) : null}
             </div>

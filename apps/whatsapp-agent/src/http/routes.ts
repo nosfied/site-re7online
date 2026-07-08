@@ -240,6 +240,7 @@ import {
   getConversationIdPrefixFromProtocol,
   normalizeConversationProtocol,
 } from "../inbox/conversationProtocol.js";
+import { buildConversationOperationalTimingFields } from "../inbox/conversationOperationalTiming.js";
 import {
   getHumanTransferReportCount,
   isAutomatedConversationReportState,
@@ -11532,6 +11533,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           toUserId: assignedUser.id,
           assignedAt,
         });
+        await recordConversationAuditEvent(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          eventName: "conversation.transferred",
+          actorUserId: resolveAssignedTo(adminAuth),
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          conversationId: nextState.conversationKey ?? nextState.waId,
+          payload: {
+            fromUserId: conversation.assignedUserId ?? null,
+            toUserId: assignedUser.id,
+            assignedAt,
+            departmentId: routing.departmentId,
+            queueId: routing.queueId,
+            status: nextState.status,
+          },
+        });
         logger.info({
           event: "conversation.transferred",
           requestId,
@@ -11651,6 +11670,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           departmentId: department.id,
         });
 
+        await recordConversationAuditEvent(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          eventName: "conversation.department.transferred",
+          actorUserId: resolveAssignedTo(adminAuth),
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          conversationId: nextState.conversationKey ?? nextState.waId,
+          payload: {
+            fromDepartmentId: previousDepartmentId,
+            toDepartmentId: department.id,
+            fromAssignedUserId: conversation.assignedUserId ?? null,
+            toAssignedUserId: nextState.assignedUserId ?? null,
+            status: nextState.status,
+            queueId: queue.id,
+          },
+        });
         logger.info({
           event: "conversation.department.transferred",
           clientId: client.id,
@@ -11768,6 +11805,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             requestId,
           });
         }
+        await recordConversationAuditEvent(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          eventName: "conversation.status_changed",
+          actorUserId: resolveAssignedTo(adminAuth),
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          conversationId: nextState.conversationKey ?? nextState.waId,
+          payload: {
+            fromStatus: conversation.status ?? null,
+            toStatus: nextStatus,
+            closedAt: nextState.closedAt ?? null,
+            assignedUserId: nextState.assignedUserId ?? null,
+            departmentId: nextState.departmentId ?? null,
+            queueId: nextState.queueId ?? null,
+            mode: nextState.mode ?? null,
+            handoffStatus: nextState.handoff?.status ?? null,
+          },
+        });
         logger.info({
           event: "conversation.status_changed",
           requestId,
@@ -11884,6 +11941,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           toUserId: nextState.assignedUserId ?? null,
           assignedAt,
         });
+        await recordConversationAuditEvent(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          eventName: "conversation.assigned",
+          actorUserId: resolveAssignedTo(adminAuth),
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          conversationId: nextState.conversationKey ?? nextState.waId,
+          payload: {
+            fromUserId: previousAssignedUserId,
+            toUserId: nextState.assignedUserId ?? null,
+            assignedAt,
+            departmentId: routing.departmentId,
+            queueId: routing.queueId,
+            status: nextState.status,
+          },
+        });
         logger.info({
           event: "conversation.assigned",
           requestId,
@@ -11967,6 +12042,26 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           closedAt: null,
         };
         await runtimeStorage.upsertConversation(nextState);
+        await recordConversationAuditEvent(prisma, {
+          clientId: client.id,
+          clientKey,
+          requestId,
+          eventName: "conversation.released",
+          actorUserId: resolveAssignedTo(adminAuth),
+          waId: nextState.waId,
+          waIdCanonical: nextState.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+          conversationId: nextState.conversationKey ?? nextState.waId,
+          payload: {
+            fromMode: conversation.mode ?? null,
+            toMode: nextState.mode,
+            fromStatus: conversation.status ?? null,
+            toStatus: nextState.status ?? null,
+            fromDepartmentId: conversation.departmentId ?? null,
+            toDepartmentId: nextState.departmentId ?? null,
+            fromAssignedUserId: conversation.assignedUserId ?? null,
+            toAssignedUserId: nextState.assignedUserId ?? null,
+          },
+        });
         logger.info({
           event: "conversation.released",
           requestId,
@@ -19150,7 +19245,15 @@ async function buildConversationActionPayload(
             ...(conversation.waIdCanonical ? [{ waIdCanonical: conversation.waIdCanonical }] : []),
           ],
         },
-        select: { id: true, channel: true, provider: true, channelAccountId: true, createdAt: true },
+        select: {
+          id: true,
+          channel: true,
+          provider: true,
+          channelAccountId: true,
+          createdAt: true,
+          firstResponseAt: true,
+          lastInboundAt: true,
+        },
       })
     : null;
 
@@ -19171,6 +19274,10 @@ async function buildConversationActionPayload(
     protocol: channelSource ? buildConversationProtocol(channelSource) : null,
     ...serializeInboxChannelFields(channelSource ?? undefined),
     channelOutboundEnabled,
+    ...buildConversationOperationalTimingFields({
+      source: channelSource,
+      operational: conversation,
+    }),
     ...serializeConversationOperationalFields({
       conversation,
       assignedUserName,
@@ -19288,6 +19395,7 @@ async function resolveConversationTarget(
       departmentId: true,
       createdAt: true,
       updatedAt: true,
+      firstResponseAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
       historyVisibleAfter: true,
@@ -20370,6 +20478,7 @@ async function buildConversationListPayload(
       departmentId: true,
       createdAt: true,
       updatedAt: true,
+      firstResponseAt: true,
       lastInboundAt: true,
       lastOutboundAt: true,
       historyVisibleAfter: true,
@@ -20409,6 +20518,7 @@ async function buildConversationListPayload(
       departmentId: string | null;
       createdAt: Date;
       updatedAt: Date;
+      firstResponseAt: Date | null;
       lastInboundAt: Date | null;
       lastOutboundAt: Date | null;
       historyVisibleAfter: Date | null;
@@ -20428,6 +20538,7 @@ async function buildConversationListPayload(
         departmentId: conversation.departmentId,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
+        firstResponseAt: conversation.firstResponseAt,
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
         historyVisibleAfter: conversation.historyVisibleAfter,
@@ -20789,6 +20900,10 @@ async function buildConversationListPayload(
       leadEmail: lead?.email ?? null,
       leadCompany: lead?.company ?? null,
       ...operationalFields,
+      ...buildConversationOperationalTimingFields({
+        source: conversation,
+        operational: operationalFields,
+      }),
       departmentId: operationalFields.departmentId ?? conversation.departmentId ?? null,
       unreadCount: conversationListItemShouldCountUnread(operationalFields)
         ? unreadInboundCountByWaId.get(key) ?? 0
@@ -21056,6 +21171,10 @@ async function buildConversationDetailPayload(
       queueName: conversation?.queueId
         ? operationalLookups.queueById.get(conversation.queueId) ?? null
         : null,
+    }),
+    ...buildConversationOperationalTimingFields({
+      source: resolved.winner,
+      operational: conversation,
     }),
     count: items.length,
     items,
