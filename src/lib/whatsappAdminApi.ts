@@ -324,11 +324,20 @@ export type ConversationReportResponse = {
   channel?: "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram" | null;
   userId: string | null;
   departmentId: string | null;
+  queueId?: string | null;
   totalConversations: number;
   automatedConversations?: number;
   humanTransferCount?: number;
   avgFirstResponseTimeSec: number | null;
   avgResolutionTimeSec: number | null;
+  slaOperational?: {
+    waitingFirstResponse: number;
+    inProgress: number;
+    waitingUser: number;
+    closed: number;
+    avgFirstResponseTimeSec: number | null;
+    avgResolutionTimeSec: number | null;
+  };
   slaBreaches: number;
   byAgent: ConversationReportByAgentItem[];
   byDepartment: ConversationReportByDepartmentItem[];

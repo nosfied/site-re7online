@@ -2465,6 +2465,7 @@ export async function fetchAppConversationReport(
     channel?: string | null;
     userId?: string | null;
     departmentId?: string | null;
+    queueId?: string | null;
   }
 ): Promise<ConversationReportResponse> {
   const query = new URLSearchParams({
@@ -2476,6 +2477,7 @@ export async function fetchAppConversationReport(
   if (params.to) query.set("to", params.to);
   if (params.dedupe) query.set("dedupe", "true");
   if (params.channel) query.set("channel", params.channel);
+  if (params.queueId) query.set("queueId", params.queueId);
   return requestAppJson(session, `/app/reports/conversations?${query.toString()}`);
 }
 
@@ -2505,6 +2507,7 @@ export async function exportAppConversationReportCsv(
     channel?: string | null;
     userId?: string | null;
     departmentId?: string | null;
+    queueId?: string | null;
   }
 ) {
   const query = new URLSearchParams({
@@ -2516,6 +2519,7 @@ export async function exportAppConversationReportCsv(
   if (params.to) query.set("to", params.to);
   if (params.dedupe) query.set("dedupe", "true");
   if (params.channel) query.set("channel", params.channel);
+  if (params.queueId) query.set("queueId", params.queueId);
   return requestAppText(session, `/app/reports/conversations/export?${query.toString()}`);
 }
 

@@ -83,6 +83,19 @@ function formatDateTime(value?: string | null) {
   }).format(date);
 }
 
+function getSlaOperational(report: ConversationReportResponse | null) {
+  return (
+    report?.slaOperational ?? {
+      waitingFirstResponse: 0,
+      inProgress: 0,
+      waitingUser: 0,
+      closed: 0,
+      avgFirstResponseTimeSec: report?.avgFirstResponseTimeSec ?? null,
+      avgResolutionTimeSec: report?.avgResolutionTimeSec ?? null,
+    }
+  );
+}
+
 function escapeHtml(value: string | number | null | undefined) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -321,6 +334,23 @@ export default function AppReportsPage() {
           )
           .join("")
       : `<tr><td colspan="2">Nenhum dado por canal.</td></tr>`;
+    const slaOperational = getSlaOperational(report);
+    const slaRows = [
+      ["Aguardando primeira resposta", slaOperational.waitingFirstResponse],
+      ["Em atendimento", slaOperational.inProgress],
+      ["Aguardando cliente", slaOperational.waitingUser],
+      ["Fechados", slaOperational.closed],
+      ["Tempo medio de primeira resposta", formatSeconds(slaOperational.avgFirstResponseTimeSec)],
+      ["Tempo medio de resolucao", formatSeconds(slaOperational.avgResolutionTimeSec)],
+    ]
+      .map(
+        ([label, value]) => `
+          <tr>
+            <td>${escapeHtml(label)}</td>
+            <td>${escapeHtml(value)}</td>
+          </tr>`
+      )
+      .join("");
     const protocolRows = report.conversations?.length
       ? report.conversations
           .slice(0, 100)
@@ -395,12 +425,14 @@ export default function AppReportsPage() {
           </section>
           <section class="cards">
             <div class="card"><span>Conversas</span><strong>${escapeHtml(report.totalConversations)}</strong></div>
-	            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
-	            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
-	            <div class="card"><span>Automatizados</span><strong>${escapeHtml(report.automatedConversations ?? 0)}</strong></div>
-	            <div class="card"><span>Transferencias humano</span><strong>${escapeHtml(report.humanTransferCount ?? 0)}</strong></div>
-	            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
+            <div class="card"><span>Primeira resposta media</span><strong>${escapeHtml(formatSeconds(report.avgFirstResponseTimeSec))}</strong></div>
+            <div class="card"><span>Resolucao media</span><strong>${escapeHtml(formatSeconds(report.avgResolutionTimeSec))}</strong></div>
+            <div class="card"><span>Automatizados</span><strong>${escapeHtml(report.automatedConversations ?? 0)}</strong></div>
+            <div class="card"><span>Transferencias humano</span><strong>${escapeHtml(report.humanTransferCount ?? 0)}</strong></div>
+            <div class="card"><span>Fora do SLA</span><strong>${escapeHtml(report.slaBreaches)}</strong></div>
           </section>
+          <h2>SLA operacional</h2>
+          <table><thead><tr><th>Indicador</th><th>Valor</th></tr></thead><tbody>${slaRows}</tbody></table>
           <h2>Protocolos de atendimento</h2>
           <table><thead><tr><th>Protocolo</th><th>Canal</th><th>Setor</th><th>Status</th><th>Inicio</th></tr></thead><tbody>${protocolRows}</tbody></table>
           <h2>Por canal</h2>
@@ -434,6 +466,7 @@ export default function AppReportsPage() {
   }
 
   const canFilterDepartment = isAdminRole(session.user.role);
+  const slaOperational = getSlaOperational(report);
 
   return (
     <AppShell
@@ -588,10 +621,10 @@ export default function AppReportsPage() {
 
       {loading ? <p className="text-sm text-white/70">Carregando relatorios...</p> : null}
 
-	      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-	          <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
-	          <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <p className="text-xs uppercase tracking-wide text-white/50">Conversas</p>
+          <p className="mt-2 text-2xl font-semibold">{report?.totalConversations ?? "-"}</p>
         </article>
         <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
           <p className="text-xs uppercase tracking-wide text-white/50">Primeira resposta media</p>
@@ -599,24 +632,59 @@ export default function AppReportsPage() {
             {formatSeconds(report?.avgFirstResponseTimeSec ?? null)}
           </p>
         </article>
-	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-	          <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
-	          <p className="mt-2 text-2xl font-semibold">
-	            {formatSeconds(report?.avgResolutionTimeSec ?? null)}
-	          </p>
-	        </article>
-	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-	          <p className="text-xs uppercase tracking-wide text-white/50">Automatizados</p>
-	          <p className="mt-2 text-2xl font-semibold">{report?.automatedConversations ?? "-"}</p>
-	        </article>
-	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-	          <p className="text-xs uppercase tracking-wide text-white/50">Transferencias humano</p>
-	          <p className="mt-2 text-2xl font-semibold">{report?.humanTransferCount ?? "-"}</p>
-	        </article>
-	        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
-	          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
-	          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <p className="text-xs uppercase tracking-wide text-white/50">Resolucao media</p>
+          <p className="mt-2 text-2xl font-semibold">
+            {formatSeconds(report?.avgResolutionTimeSec ?? null)}
+          </p>
         </article>
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <p className="text-xs uppercase tracking-wide text-white/50">Automatizados</p>
+          <p className="mt-2 text-2xl font-semibold">{report?.automatedConversations ?? "-"}</p>
+        </article>
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <p className="text-xs uppercase tracking-wide text-white/50">Transferencias humano</p>
+          <p className="mt-2 text-2xl font-semibold">{report?.humanTransferCount ?? "-"}</p>
+        </article>
+        <article className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <p className="text-xs uppercase tracking-wide text-white/50">Fora do SLA</p>
+          <p className="mt-2 text-2xl font-semibold">{report?.slaBreaches ?? "-"}</p>
+        </article>
+      </section>
+
+      <section className="rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+        <div className="mb-3">
+          <h2 className="text-sm font-semibold">SLA operacional</h2>
+          <p className="text-xs text-white/55">
+            Visao gerencial calculada a partir da Conversation, RuntimeState e metricas existentes.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Aguardando primeira resposta</p>
+            <p className="mt-2 text-2xl font-semibold">{slaOperational.waitingFirstResponse}</p>
+          </article>
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Em atendimento</p>
+            <p className="mt-2 text-2xl font-semibold">{slaOperational.inProgress}</p>
+          </article>
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Aguardando cliente</p>
+            <p className="mt-2 text-2xl font-semibold">{slaOperational.waitingUser}</p>
+          </article>
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Fechados</p>
+            <p className="mt-2 text-2xl font-semibold">{slaOperational.closed}</p>
+          </article>
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Media primeira resposta</p>
+            <p className="mt-2 text-2xl font-semibold">{formatSeconds(slaOperational.avgFirstResponseTimeSec)}</p>
+          </article>
+          <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs uppercase tracking-wide text-white/50">Media resolucao</p>
+            <p className="mt-2 text-2xl font-semibold">{formatSeconds(slaOperational.avgResolutionTimeSec)}</p>
+          </article>
+        </div>
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">

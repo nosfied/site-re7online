@@ -249,6 +249,7 @@ import {
   parseConversationReportPeriod,
   parseConversationReportRange,
 } from "../reports/conversationReportPeriod.js";
+import { buildConversationSlaOperationalSummary } from "../reports/conversationSlaSummary.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import {
   getPushStatus,
@@ -6816,37 +6817,52 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           dedupe,
           channel: channelFilter,
           userId: requestedUserId || null,
-	          departmentId: null,
-	          totalConversations: 0,
-	          automatedConversations: 0,
-	          humanTransferCount: 0,
-	          avgFirstResponseTimeSec: null,
+          departmentId: null,
+          totalConversations: 0,
+          automatedConversations: 0,
+          humanTransferCount: 0,
+          avgFirstResponseTimeSec: null,
           avgResolutionTimeSec: null,
+          slaOperational: {
+            waitingFirstResponse: 0,
+            inProgress: 0,
+            waitingUser: 0,
+            closed: 0,
+            avgFirstResponseTimeSec: null,
+            avgResolutionTimeSec: null,
+          },
           slaBreaches: 0,
           byAgent: [],
           byDepartment: [],
         });
         return;
       }
+      const requestedQueueId = typeof query.queueId === "string" ? query.queueId.trim() : "";
       const reportData = await loadConversationReportData(prisma, {
         clientId: client.id,
         since: range.since,
         until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
+        requestedQueueId: requestedQueueId || null,
         channel: channelFilter,
       });
       if (!reportData.ok) {
-        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        json(res, reportData.status, httpError(reportData.code, "Report filter not found"));
         return;
       }
-      const userFilteredMetrics = requestedUserId
+      const queueFilteredMetrics = requestedQueueId
         ? reportData.metrics.filter(
+            (item) => reportData.stateByWaId.get(item.conversation.waId)?.queueId === requestedQueueId
+          )
+        : reportData.metrics;
+      const userFilteredMetrics = requestedUserId
+        ? queueFilteredMetrics.filter(
             (item) =>
               reportData.stateByWaId
                 .get(item.conversation.waId)
                 ?.assignedUserIds.includes(requestedUserId)
           )
-        : reportData.metrics;
+        : queueFilteredMetrics;
       const filteredMetrics = dedupe
         ? dedupeConversationReportMetrics(userFilteredMetrics, reportData.leadIdentityByWaId)
         : userFilteredMetrics;
@@ -6861,6 +6877,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           channel: channelFilter,
           requestedUserId: requestedUserId || null,
           requestedDepartmentId: requestedDepartmentId || null,
+          requestedQueueId: requestedQueueId || null,
           filteredMetrics,
           stateByWaId: reportData.stateByWaId,
           slaConfig: reportData.slaConfig,
@@ -6950,6 +6967,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
               "channel",
               "departmentId",
               "departmentName",
+              "queueId",
               "assignedUserId",
               "status",
               "firstResponseTimeSec",
@@ -6961,26 +6979,33 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         );
         return;
       }
+      const requestedQueueId = typeof query.queueId === "string" ? query.queueId.trim() : "";
       const reportData = await loadConversationReportData(prisma, {
         clientId: client.id,
         since: range.since,
         until: range.until,
         requestedDepartmentId: requestedDepartmentId || null,
+        requestedQueueId: requestedQueueId || null,
         channel: channelFilter,
         includeClosedAt: true,
       });
       if (!reportData.ok) {
-        json(res, reportData.status, httpError(reportData.code, "Department not found"));
+        json(res, reportData.status, httpError(reportData.code, "Report filter not found"));
         return;
       }
-      const userFilteredMetrics = requestedUserId
+      const queueFilteredMetrics = requestedQueueId
         ? reportData.metrics.filter(
+            (item) => reportData.stateByWaId.get(item.conversation.waId)?.queueId === requestedQueueId
+          )
+        : reportData.metrics;
+      const userFilteredMetrics = requestedUserId
+        ? queueFilteredMetrics.filter(
             (item) =>
               reportData.stateByWaId
                 .get(item.conversation.waId)
                 ?.assignedUserIds.includes(requestedUserId)
           )
-        : reportData.metrics;
+        : queueFilteredMetrics;
       const filteredMetrics = dedupe
         ? dedupeConversationReportMetrics(userFilteredMetrics, reportData.leadIdentityByWaId)
         : userFilteredMetrics;
@@ -16043,6 +16068,7 @@ function buildReportRuntimeStateMap(
   runtimeStates: Array<{
     waId: string;
     assignedUserId: string | null;
+    queueId?: string | null;
     status?: string | null;
     mode?: string | null;
     assignments?: Array<{ toUserId: string | null }>;
@@ -16066,6 +16092,7 @@ function buildReportRuntimeStateMap(
         {
           assignedUserId: item.assignedUserId ?? null,
           assignedUserIds,
+          queueId: item.queueId ?? null,
           status: item.status ?? null,
           mode: item.mode ?? null,
           assignmentCount,
@@ -16089,6 +16116,7 @@ async function loadConversationReportData(
     since: Date;
     until?: Date | null;
     requestedDepartmentId: string | null;
+    requestedQueueId?: string | null;
     channel?: ReportChannelFilter;
     includeClosedAt?: boolean;
   }
@@ -16103,6 +16131,19 @@ async function loadConversationReportData(
     });
     if (!department) {
       return { ok: false as const, status: 404 as const, code: "department_not_found" as const };
+    }
+  }
+  if (options.requestedQueueId) {
+    const queue = await prisma.queue.findFirst({
+      where: {
+        id: options.requestedQueueId,
+        clientId: options.clientId,
+        ...(options.requestedDepartmentId ? { departmentId: options.requestedDepartmentId } : {}),
+      },
+      select: { id: true },
+    });
+    if (!queue) {
+      return { ok: false as const, status: 404 as const, code: "queue_not_found" as const };
     }
   }
   const metrics = await prisma.conversationMetrics.findMany({
@@ -16165,6 +16206,7 @@ async function loadConversationReportData(
         select: {
           waId: true,
           assignedUserId: true,
+          queueId: true,
           status: true,
           mode: true,
           assignments: {
@@ -16241,6 +16283,7 @@ function buildConversationReportSummary(options: {
   channel?: ReportChannelFilter;
   requestedUserId: string | null;
   requestedDepartmentId: string | null;
+  requestedQueueId: string | null;
   filteredMetrics: Array<{
     conversationId: string;
     firstResponseTimeSec: number | null;
@@ -16295,6 +16338,13 @@ function buildConversationReportSummary(options: {
       item.resolutionTimeSec > resolutionTimeLimitSec;
     return count + (firstResponseBreached || resolutionBreached ? 1 : 0);
   }, 0);
+  const slaOperational = buildConversationSlaOperationalSummary(
+    options.filteredMetrics.map((item) => ({
+      firstResponseTimeSec: item.firstResponseTimeSec,
+      resolutionTimeSec: item.resolutionTimeSec,
+    })),
+    options.filteredMetrics.map((item) => options.stateByWaId.get(item.conversation.waId) ?? {})
+  );
   const byAgentMap = new Map<
     string,
     { userId: string; conversations: number; totalResponseTimeSec: number; responseCount: number }
@@ -16373,11 +16423,13 @@ function buildConversationReportSummary(options: {
     channel: options.channel ?? null,
     userId: options.requestedUserId,
     departmentId: options.requestedDepartmentId,
+    queueId: options.requestedQueueId,
     totalConversations,
     automatedConversations,
     humanTransferCount,
     avgFirstResponseTimeSec,
     avgResolutionTimeSec,
+    slaOperational,
     slaBreaches,
     byAgent: Array.from(byAgentMap.values()).map((item) => ({
       userId: item.userId,
@@ -16492,6 +16544,7 @@ function buildConversationReportCsv(options: {
       "channel",
       "departmentId",
       "departmentName",
+      "queueId",
       "assignedUserId",
       "status",
       "automated",
@@ -16511,6 +16564,7 @@ function buildConversationReportCsv(options: {
         csvCell(normalizeReportChannelLabel(item.conversation.channel).channelName),
         csvCell(departmentId),
         csvCell(departmentId ? options.departmentNameById.get(departmentId) ?? null : null),
+        csvCell(runtimeState?.queueId ?? null),
         csvCell(runtimeState?.assignedUserIds.length ? runtimeState.assignedUserIds.join("|") : null),
         csvCell(runtimeState?.status ?? (item.closedAt ? "CLOSED" : null)),
         csvCell(isAutomatedConversationReportState(runtimeState) ? "true" : "false"),
