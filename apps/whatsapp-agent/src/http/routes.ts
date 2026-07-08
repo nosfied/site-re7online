@@ -7142,6 +7142,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         assignedUserDepartmentId: assignedUser?.departmentId ?? departmentAccess.departmentId,
         fallbackDepartmentId: operationalConversation.departmentId ?? null,
+        fallbackQueueId: operationalConversation.queueId ?? null,
       });
       const assignedAt = new Date().toISOString();
       const nextState = {
@@ -7749,6 +7750,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         clientId: client.id,
         assignedUserDepartmentId: assignedUser.departmentId,
         fallbackDepartmentId: conversation.departmentId ?? null,
+        fallbackQueueId: conversation.queueId ?? null,
       });
       const assignedAt = new Date().toISOString();
       const nextState = {
@@ -11384,6 +11386,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           assignedUserDepartmentId: assignedUser.departmentId,
           fallbackDepartmentId: conversation.departmentId ?? null,
+          fallbackQueueId: conversation.queueId ?? null,
         });
         const assignedAt = new Date().toISOString();
         const nextState = {
@@ -11501,6 +11504,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           assignedUserDepartmentId: assignedUser.departmentId,
           fallbackDepartmentId: conversation.departmentId ?? null,
+          fallbackQueueId: conversation.queueId ?? null,
         });
         const assignedAt = new Date().toISOString();
         const nextState = {
@@ -11909,6 +11913,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           assignedUserDepartmentId: assignedUser?.departmentId ?? null,
           fallbackDepartmentId: conversation.departmentId ?? null,
+          fallbackQueueId: conversation.queueId ?? null,
         });
         const previousAssignedUserId = conversation.assignedUserId ?? null;
         const nextState = {
@@ -18384,6 +18389,7 @@ async function resolveAssignmentRouting(
     clientId: string;
     assignedUserDepartmentId?: string | null;
     fallbackDepartmentId?: string | null;
+    fallbackQueueId?: string | null;
   }
 ) {
   const defaults = await ensureDefaultDepartmentAndQueue(prisma, params.clientId);
@@ -18393,13 +18399,24 @@ async function resolveAssignmentRouting(
       params.clientId,
       params.assignedUserDepartmentId ?? params.fallbackDepartmentId ?? defaults.department.id
     )) ?? defaults.department.id;
+  const fallbackQueue = params.fallbackQueueId
+    ? await prisma.queue.findFirst({
+        where: {
+          id: params.fallbackQueueId,
+          clientId: params.clientId,
+          departmentId,
+        },
+        select: { id: true, name: true, departmentId: true },
+      })
+    : null;
   const queue =
-    departmentId === defaults.department.id
+    fallbackQueue ??
+    (departmentId === defaults.department.id
       ? defaults.queue
       : await ensureQueueForDepartment(prisma, {
           clientId: params.clientId,
           departmentId,
-        });
+        }));
   return { departmentId, queueId: queue.id };
 }
 
