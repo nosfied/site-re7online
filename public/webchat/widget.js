@@ -51,7 +51,7 @@
     ".cw-shell{position:fixed;right:var(--cw-right);bottom:var(--cw-bottom);z-index:2147483000;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a}",
     ".cw-button{width:58px;height:58px;border:0;border-radius:50%;background:var(--cw-accent);color:#fff;box-shadow:0 18px 42px rgba(15,23,42,.28);display:grid;place-items:center;cursor:pointer}",
     ".cw-shell[data-has-unread='true'] .cw-button{animation:cw-pulse 1.35s ease-in-out infinite}",
-    ".cw-button:focus-visible,.cw-send:focus-visible,.cw-close:focus-visible,.cw-sound:focus-visible{outline:3px solid rgba(252,108,22,.35);outline-offset:3px}",
+    ".cw-button:focus-visible,.cw-send:focus-visible,.cw-close:focus-visible,.cw-sound:focus-visible,.cw-option-button:focus-visible{outline:3px solid rgba(252,108,22,.35);outline-offset:3px}",
     ".cw-button svg{width:28px;height:28px}",
     ".cw-badge{display:none;position:absolute;right:-4px;top:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#ef4444;color:#fff;border:2px solid #fff;font-size:11px;font-weight:800;line-height:20px;text-align:center;box-sizing:border-box}",
     ".cw-shell[data-has-unread='true'] .cw-badge{display:block}",
@@ -72,6 +72,10 @@
     ".cw-message.agent.new{box-shadow:0 0 0 2px rgba(252,108,22,.18)}",
     ".cw-message.system{align-self:center;background:transparent;color:#64748b;text-align:center;font-size:12px;max-width:100%}",
     ".cw-option-line{display:block;margin-top:7px;padding:7px 8px;border-radius:9px;background:rgba(252,108,22,.07);border:1px solid rgba(252,108,22,.18);font-weight:650;color:#0f172a}",
+    ".cw-option-button{display:block;width:100%;box-sizing:border-box;margin-top:7px;padding:8px 9px;border-radius:9px;background:rgba(252,108,22,.08);border:1px solid rgba(252,108,22,.22);font:inherit;font-size:13px;line-height:1.25;font-weight:700;color:#0f172a;text-align:left;cursor:pointer}",
+    ".cw-option-button:hover{background:rgba(252,108,22,.13);border-color:rgba(252,108,22,.34)}",
+    ".cw-option-button:active{transform:translateY(1px)}",
+    ".cw-option-button:disabled{opacity:.6;cursor:not-allowed;transform:none}",
     ".cw-meta{display:block;margin-top:4px;font-size:10px;opacity:.72}",
     ".cw-form{border-top:1px solid rgba(15,23,42,.1);background:#fff;padding:10px;display:grid;gap:8px}",
     ".cw-name{width:100%;box-sizing:border-box;border:1px solid rgba(15,23,42,.14);border-radius:10px;padding:9px 10px;font:inherit;font-size:13px;color:#0f172a;background:#fff}",
@@ -171,6 +175,19 @@
     sendMessage();
   });
 
+  bodyEl.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || typeof target.closest !== "function") return;
+    var optionButton = target.closest("[data-cw-option]");
+    if (!optionButton || !bodyEl.contains(optionButton) || state.booting || state.sending) return;
+    var option = optionButton.getAttribute("data-cw-option") || "";
+    if (!option) return;
+    state.interacted = true;
+    primeNotificationAudio();
+    textEl.value = option;
+    sendMessage();
+  });
+
   function endpoint(path) {
     return apiBase + path;
   }
@@ -202,6 +219,12 @@
   function renderMessages() {
     var nearBottom = bodyEl.scrollTop + bodyEl.clientHeight >= bodyEl.scrollHeight - 40;
     var html = "";
+    var latestInteractiveIndex = -1;
+    for (var j = 0; j < state.messages.length; j += 1) {
+      if (state.messages[j].direction === "outbound" && hasOptionLines(state.messages[j].text || "")) {
+        latestInteractiveIndex = j;
+      }
+    }
     if (state.messages.length === 0) {
       html += "<div class='cw-message system'>" + escapeHtml(state.welcomeMessage) + "</div>";
     }
@@ -212,7 +235,7 @@
       if (item.localStatus === "failed") cls += " failed";
       if (item.unreadHighlight) cls += " new";
       html += "<div class='cw-message " + cls + "'>";
-      html += formatMessageText(item.text || "");
+      html += formatMessageText(item.text || "", i === latestInteractiveIndex && item.direction === "outbound");
       html += "<span class='cw-meta'>" + formatTime(item.createdAt) + formatStatus(item) + "</span>";
       html += "</div>";
     }
@@ -507,11 +530,23 @@
       .replace(/'/g, "&#39;");
   }
 
-  function formatMessageText(value) {
+  function hasOptionLines(value) {
+    var lines = String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    for (var i = 0; i < lines.length; i += 1) {
+      if (/^\s*\d{1,2}\.\s+/.test(lines[i])) return true;
+    }
+    return false;
+  }
+
+  function formatMessageText(value, interactive) {
     var lines = String(value || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     return lines.map(function (line) {
       var escaped = escapeHtml(line);
-      if (/^\s*\d{1,2}\.\s+/.test(line)) {
+      var optionMatch = line.match(/^\s*(\d{1,2})\.\s+(.+)$/);
+      if (optionMatch && interactive) {
+        return "<button type='button' class='cw-option-button' data-cw-option='" + escapeAttr(optionMatch[1]) + "'" + (state.sending ? " disabled" : "") + ">" + escaped + "</button>";
+      }
+      if (optionMatch) {
         return "<span class='cw-option-line'>" + escaped + "</span>";
       }
       return escaped;
