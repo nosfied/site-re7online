@@ -153,6 +153,12 @@ export type QuoteSiteAnswers = {
   aiOrchestrator?: AIOrchestratorState;
   aiMemory?: AIMemoryState;
   aiQualification?: AIQualificationState;
+  protocolContinuation?: {
+    protocol: string;
+    originalConversationId: string;
+    linkedAt: string;
+    reason: "protocol_lookup";
+  };
 };
 
 export type ConversationState = {

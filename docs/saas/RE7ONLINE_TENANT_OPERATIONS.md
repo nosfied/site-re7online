@@ -151,6 +151,22 @@ For support conversations, collect before handoff:
 
 Support handoff should preserve the protocol/timeline and prepare data for first-response and resolution-time reporting.
 
+### Protocol Continuation
+
+When a visitor selects "Ja tenho protocolo" and proves possession with the e-mail or phone collected in the original attendance, the new Webchat conversation is treated as a continuation of the original protocol.
+
+Current runtime behavior:
+
+- the lookup is always tenant-scoped;
+- invalid protocol, protocol from another tenant and wrong confirmation return the same generic public response;
+- no conversation history or personal data is shown before proof succeeds;
+- after a valid match, the new conversation keeps its own timeline but stores a runtime link in `ConversationRuntimeState.answers.protocolContinuation`;
+- the link contains only the protocol, original conversation id, link timestamp and reason `protocol_lookup`;
+- the Inbox shows the continuation badge so the operator can identify the original protocol;
+- routing reuses the original department/queue when available.
+
+This is an operational link, not a new support-ticket entity. A future migration may introduce a first-class conversation relationship if reporting, merge or cross-channel continuity require it.
+
 ### Human Handoff Triggers
 
 Route to human attendance when:

@@ -52,6 +52,13 @@ export type InboxMessageItem = {
 
 export type InboxChannel = "whatsapp" | "messenger" | "instagram" | "webchat" | "telegram";
 
+export type InboxConversationContinuation = {
+  protocol: string;
+  originalConversationId: string;
+  linkedAt: string;
+  reason: "protocol_lookup";
+};
+
 export type InboxConversationItem = {
   waId: string;
   waIdCanonical?: string | null;
@@ -98,6 +105,7 @@ export type InboxConversationItem = {
   isUnassigned: boolean;
   flowContext?: Record<string, string | number | boolean | null>;
   flowTags?: string[];
+  continuation?: InboxConversationContinuation | null;
   updatedAt: string;
 };
 

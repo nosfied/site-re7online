@@ -1395,6 +1395,7 @@ function applyConversationOperationalPayload(
     isUnassigned: boolean;
     flowContext?: Record<string, string | number | boolean | null>;
     flowTags?: string[];
+    continuation?: InboxConversationItem["continuation"];
   }
 ) {
   const nextAssignedUserId = payload.assignedUserId;
@@ -1428,6 +1429,7 @@ function applyConversationOperationalPayload(
     isUnassigned: payload.isUnassigned,
     flowContext: payload.flowContext ?? item.flowContext,
     flowTags: payload.flowTags ?? item.flowTags,
+    continuation: payload.continuation ?? item.continuation ?? null,
   };
 }
 
@@ -5165,6 +5167,17 @@ export default function AppInboxPage() {
 	                    : ""}
 	                </p>
 	              ) : null}
+              {selectedConversation?.continuation ? (
+                <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 shadow-sm">
+                  <span className="shrink-0" aria-hidden="true">↳</span>
+                  <span className="min-w-0 truncate">
+                    Continuação do protocolo {selectedConversation.continuation.protocol}
+                    {selectedConversation.continuation.linkedAt
+                      ? ` • vinculada em ${formatDateTime(selectedConversation.continuation.linkedAt)}`
+                      : ""}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="relative hidden shrink-0 items-center gap-1.5 max-md:flex">
               <button

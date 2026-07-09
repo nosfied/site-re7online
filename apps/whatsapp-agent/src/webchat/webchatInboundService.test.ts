@@ -924,6 +924,9 @@ test("createWebchatInboundMessage validates protocol lookup and routes continuat
   assert.equal(currentRuntime?.queueId, "queue_support");
   assert.equal(currentRuntime?.handoffStatus, "PENDING");
   assert.equal(currentRuntime?.mode, "HUMAN");
+  assert.equal(currentRuntime?.answers.protocolContinuation.protocol, "CVT-123E4567E89B");
+  assert.equal(currentRuntime?.answers.protocolContinuation.originalConversationId, "123e4567-e89b-12d3-a456-426614174000");
+  assert.equal(currentRuntime?.answers.protocolContinuation.reason, "protocol_lookup");
   const event = prisma.state.events.find((item: Record<string, unknown>) => item.eventName === "webchat.protocol.lookup");
   assert.equal(event?.payloadJson.protocolLookup.ok, true);
   assert.equal(event?.payloadJson.protocolLookup.originalConversationId, "123e4567-e89b-12d3-a456-426614174000");

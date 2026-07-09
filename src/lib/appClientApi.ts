@@ -217,6 +217,12 @@ type AppConversationOperationalPayload = {
   isUnassigned: boolean;
   flowContext?: Record<string, string | number | boolean | null>;
   flowTags?: string[];
+  continuation?: {
+    protocol: string;
+    originalConversationId: string;
+    linkedAt: string;
+    reason: "protocol_lookup";
+  } | null;
 };
 
 export type AppDashboardQueueItem = {

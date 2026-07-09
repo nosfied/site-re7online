@@ -19158,6 +19158,7 @@ function serializeConversationOperationalFields(params: {
     answers?: {
       flowContext?: Record<string, unknown> | null;
       flowTags?: string[] | null;
+      protocolContinuation?: unknown;
     } | null;
   } | null;
   assignedUserName: string | null;
@@ -19190,6 +19191,29 @@ function serializeConversationOperationalFields(params: {
     isUnassigned: !conversation?.assignedUserId,
     flowContext,
     flowTags: sanitizeInboxFlowTags(conversation?.answers?.flowTags ?? null),
+    continuation: sanitizeInboxProtocolContinuation(conversation?.answers?.protocolContinuation ?? null),
+  };
+}
+
+function sanitizeInboxProtocolContinuation(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const protocol = typeof source.protocol === "string" ? normalizeConversationProtocol(source.protocol) : null;
+  const originalConversationId =
+    typeof source.originalConversationId === "string" && /^[0-9a-f-]{36}$/i.test(source.originalConversationId)
+      ? source.originalConversationId
+      : null;
+  const linkedAt =
+    typeof source.linkedAt === "string" && Number.isFinite(new Date(source.linkedAt).getTime())
+      ? source.linkedAt
+      : null;
+  const reason = source.reason === "protocol_lookup" ? "protocol_lookup" : null;
+  if (!protocol || !originalConversationId || !linkedAt || !reason) return null;
+  return {
+    protocol,
+    originalConversationId,
+    linkedAt,
+    reason,
   };
 }
 

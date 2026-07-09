@@ -695,6 +695,17 @@ async function runWebchatChatbotFlow(params: {
   const outboundMessageId = outboundBodyText
     ? `webchat.chatbot.${params.requestId}.${shortHash(`${params.waId}:${outboundAt.toISOString()}`, 16)}`
     : null;
+  const nextAnswers = protocolLookup?.ok
+    ? {
+        ...(result.state.answers ?? {}),
+        protocolContinuation: {
+          protocol: protocolLookup.protocol,
+          originalConversationId: protocolLookup.originalConversationId,
+          linkedAt: outboundAt.toISOString(),
+          reason: "protocol_lookup",
+        },
+      }
+    : result.state.answers ?? {};
 
   await params.prisma.$transaction(async (tx) => {
     await tx.conversationRuntimeState.updateMany({
@@ -710,7 +721,7 @@ async function runWebchatChatbotFlow(params: {
         flowStep: result.state.flowStep ?? null,
         chatbotNodeId: pendingHandoff ? null : result.state.chatbotNodeId ?? null,
         chatbotActive: pendingHandoff ? false : result.state.chatbotActive === true,
-        answers: (result.state.answers ?? {}) as Prisma.InputJsonValue,
+        answers: nextAnswers as Prisma.InputJsonValue,
         mode,
         handoffStatus,
         handoffRequestedAt,
