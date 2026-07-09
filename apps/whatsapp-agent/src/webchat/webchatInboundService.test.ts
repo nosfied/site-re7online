@@ -82,21 +82,37 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     },
     conversation: {
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const existing = state.conversations[0];
+        const existing = state.conversations.find((item) => item.clientId === create.clientId && item.waId === create.waId);
         const item: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "conversation_1", ...create };
-        state.conversations[0] = item;
+        if (existing) {
+          state.conversations[state.conversations.indexOf(existing)] = item;
+        } else {
+          state.conversations.push(item);
+        }
         return { id: String(item.id), waId: String(item.waId) };
       },
-      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
-        if (state.conversations[0]) state.conversations[0] = { ...state.conversations[0], ...data };
-        return { count: state.conversations[0] ? 1 : 0 };
+      updateMany: async ({ where, data }: { where?: Record<string, unknown>; data: Record<string, unknown> }) => {
+        let count = 0;
+        state.conversations = state.conversations.map((item) => {
+          if (where?.clientId && item.clientId !== where.clientId) return item;
+          if (where?.waId && item.waId !== where.waId) return item;
+          if (where?.channel && item.channel !== where.channel) return item;
+          if (where?.channelAccountId && item.channelAccountId !== where.channelAccountId) return item;
+          count += 1;
+          return { ...item, ...data };
+        });
+        return { count };
       },
     },
     conversationRuntimeState: {
 	      upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
-	        const existing = state.runtimeStates[0];
+	        const existing = state.runtimeStates.find((item) => item.clientId === create.clientId && item.waId === create.waId);
 	        const item: Record<string, unknown> = existing ? { ...existing, ...update } : { id: "runtime_1", ...create };
-	        state.runtimeStates[0] = item;
+	        if (existing) {
+	          state.runtimeStates[state.runtimeStates.indexOf(existing)] = item;
+	        } else {
+	          state.runtimeStates.push(item);
+	        }
 	        return {
 	          id: String(item.id),
 	          mode: item.mode,
@@ -106,9 +122,18 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
 	          status: item.status,
 	        };
 	      },
-      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
-        if (state.runtimeStates[0]) state.runtimeStates[0] = { ...state.runtimeStates[0], ...data };
-        return { count: state.runtimeStates[0] ? 1 : 0 };
+      updateMany: async ({ where, data }: { where?: Record<string, unknown>; data: Record<string, unknown> }) => {
+        let count = 0;
+        state.runtimeStates = state.runtimeStates.map((item) => {
+          if (where?.clientId && item.clientId !== where.clientId) return item;
+          if (where?.waId && item.waId !== where.waId) return item;
+          if (where?.channel && item.channel !== where.channel) return item;
+          if (where?.provider && item.provider !== where.provider) return item;
+          if (where?.channelAccountId && item.channelAccountId !== where.channelAccountId) return item;
+          count += 1;
+          return { ...item, ...data };
+        });
+        return { count };
       },
     },
     inboundMessage: {
@@ -191,10 +216,25 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     },
     conversation: {
       updateMany: tx.conversation.updateMany,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const idFilter = where.id as { startsWith?: string } | undefined;
+        return state.conversations.find((item) => {
+          if (where.clientId && item.clientId !== where.clientId) return false;
+          if (idFilter?.startsWith && !String(item.id).startsWith(idFilter.startsWith)) return false;
+          return true;
+        }) ?? null;
+      },
     },
     lead: {
       updateMany: tx.lead.updateMany,
       findUnique: tx.lead.findUnique,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        return state.leads.find((item) => {
+          if (where.tenantId && item.tenantId !== where.tenantId) return false;
+          if (where.waId && item.waId !== where.waId) return false;
+          return true;
+        }) ?? null;
+      },
     },
     leadNote: {
       create: tx.leadNote.create,
@@ -206,6 +246,16 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     queue: {
       findFirst: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
       upsert: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
+    },
+    webchatVisitor: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        return state.webchatVisitors.find((item) => {
+          if (where.clientId && item.clientId !== where.clientId) return false;
+          if (where.siteId && item.siteId !== where.siteId) return false;
+          if (where.visitorIdHash && item.visitorIdHash !== where.visitorIdHash) return false;
+          return true;
+        }) ?? null;
+      },
     },
     $transaction: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
   };
@@ -314,7 +364,26 @@ const re7IntakeFlow = {
         { label: "Já sou cliente e preciso de suporte", next: "menu_suporte", context: { intent: "suporte" }, tags: ["support"] },
         { label: "Sou órgão público / licitação / governo", next: "handoff_publico", context: { intent: "licitacao", priority: "alta" } },
         { label: "Quero falar com atendimento", next: "handoff_humano", context: { handoff_reason: "solicitado_pelo_usuario" }, tags: ["handoff:direct"] },
+        { label: "Já tenho protocolo", next: "protocolo_numero", context: { intent: "protocol_lookup" }, tags: ["protocol_lookup"] },
       ],
+    },
+    protocolo_numero: {
+      type: "capture",
+      text: "Informe o protocolo do atendimento. Exemplo: CVT-XXXXXXXXXXXX.",
+      field: "protocol_lookup_protocol",
+      validation: "non_empty",
+      next: "protocolo_confirmacao",
+    },
+    protocolo_confirmacao: {
+      type: "capture",
+      text: "Para sua segurança, informe o e-mail ou telefone usado no atendimento.",
+      field: "protocol_lookup_contact",
+      validation: "non_empty",
+      next: "protocolo_resultado",
+    },
+    protocolo_resultado: {
+      type: "text",
+      text: "Vou verificar o atendimento informado.",
     },
     menu_perfil: {
       type: "menu",
@@ -723,4 +792,217 @@ test("createWebchatInboundMessage routes commercial and government handoff to co
   assert.equal(governmentPrisma.state.runtimeStates[0].queueId, "queue_government");
   assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Governo/);
   assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
+});
+
+function useDynamicRuntimeLookup(prisma: any) {
+  prisma.conversationRuntimeState.findFirst = async ({ where }: { where: Record<string, unknown> }) => {
+    return prisma.state.runtimeStates.find((item: Record<string, unknown>) => {
+      if (where.clientId && item.clientId !== where.clientId) return false;
+      if (where.waId && item.waId !== where.waId) return false;
+      if (where.channel && item.channel !== where.channel) return false;
+      if (where.provider && item.provider !== where.provider) return false;
+      if (where.channelAccountId && item.channelAccountId !== where.channelAccountId) return false;
+      return true;
+    }) ?? null;
+  };
+}
+
+function useProtocolLookupDirectories(prisma: any) {
+  prisma.department.findFirst = async ({ where }: { where: Record<string, unknown> }) => {
+    if (where.id === "department_support" || JSON.stringify(where).includes("Suporte")) {
+      return { id: "department_support", name: "Suporte" };
+    }
+    return { id: "department_1", name: "Atendimento Geral" };
+  };
+  prisma.queue.findFirst = async ({ where }: { where: Record<string, unknown> }) => {
+    if (where.id === "queue_support" || JSON.stringify(where).includes("Fila Suporte")) {
+      return { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" };
+    }
+    return { id: "queue_1", name: "Fila Geral", departmentId: "department_1" };
+  };
+}
+
+async function startProtocolLookupFlow(prisma: any) {
+  prisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_a",
+    input: { sessionToken: "wcs_existing", text: "Olá" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.30",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_b",
+    input: { sessionToken: "wcs_existing", text: "5" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.30",
+  });
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_c",
+    input: { sessionToken: "wcs_existing", text: "CVT-123E4567E89B" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.30",
+  });
+}
+
+function seedProtocolConversation(prisma: any, overrides: Record<string, unknown> = {}) {
+  prisma.state.conversations.push({
+    id: "123e4567-e89b-12d3-a456-426614174000",
+    clientId: "tenant_a",
+    waId: "webchat:original",
+    waIdCanonical: "webchat:original",
+    channel: "webchat",
+    provider: "converta",
+    channelAccountId: "site_1",
+    externalUserHash: "visitor_original",
+    departmentId: "department_support",
+    createdAt: makeDate("2026-07-09T10:00:00.000Z"),
+    updatedAt: makeDate("2026-07-09T10:05:00.000Z"),
+    lastInboundAt: makeDate("2026-07-09T10:04:00.000Z"),
+    lastOutboundAt: null,
+    closedAt: null,
+    deletedAt: null,
+    anonymizedAt: null,
+    ...overrides,
+  });
+  prisma.state.runtimeStates.push({
+    clientId: "tenant_a",
+    waId: "webchat:original",
+    channel: "webchat",
+    provider: "converta",
+    channelAccountId: "site_1",
+    status: "WAITING",
+    handoffStatus: "PENDING",
+    departmentId: "department_support",
+    queueId: "queue_support",
+    updatedAt: makeDate("2026-07-09T10:06:00.000Z"),
+    closedAt: null,
+    ...((overrides.runtimeState as Record<string, unknown> | undefined) ?? {}),
+  });
+  prisma.state.leads.push({
+    id: "lead_original",
+    tenantId: "tenant_a",
+    waId: "webchat:original",
+    email: "cliente@example.com",
+    phone: "(84) 99999-0000",
+  });
+  prisma.state.webchatVisitors.push({
+    id: "visitor_original",
+    clientId: "tenant_a",
+    siteId: "site_1",
+    visitorIdHash: "visitor_original",
+    email: "cliente@example.com",
+    phone: "(84) 99999-0000",
+  });
+}
+
+test("createWebchatInboundMessage validates protocol lookup and routes continuation to original queue", async () => {
+  const prisma = makePrisma() as any;
+  useDynamicRuntimeLookup(prisma);
+  useProtocolLookupDirectories(prisma);
+  seedProtocolConversation(prisma);
+
+  await startProtocolLookupFlow(prisma);
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_d",
+    input: { sessionToken: "wcs_existing", text: "CLIENTE@example.com" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.30",
+  });
+
+  const response = String(prisma.state.outboundMessages.at(-1)?.bodyText);
+  const currentRuntime = prisma.state.runtimeStates.find((item: Record<string, unknown>) => item.waId !== "webchat:original");
+  assert.match(response, /Encontramos seu atendimento/);
+  assert.match(response, /Protocolo: CVT-123E4567E89B/);
+  assert.match(response, /Área: Suporte/);
+  assert.match(response, /Fila: Fila Suporte/);
+  assert.match(response, /Status: Aguardando atendimento/);
+  assert.equal(currentRuntime?.departmentId, "department_support");
+  assert.equal(currentRuntime?.queueId, "queue_support");
+  assert.equal(currentRuntime?.handoffStatus, "PENDING");
+  assert.equal(currentRuntime?.mode, "HUMAN");
+  const event = prisma.state.events.find((item: Record<string, unknown>) => item.eventName === "webchat.protocol.lookup");
+  assert.equal(event?.payloadJson.protocolLookup.ok, true);
+  assert.equal(event?.payloadJson.protocolLookup.originalConversationId, "123e4567-e89b-12d3-a456-426614174000");
+});
+
+test("createWebchatInboundMessage does not enumerate protocol on wrong confirmation", async () => {
+  const prisma = makePrisma() as any;
+  useDynamicRuntimeLookup(prisma);
+  useProtocolLookupDirectories(prisma);
+  seedProtocolConversation(prisma);
+
+  await startProtocolLookupFlow(prisma);
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_wrong",
+    input: { sessionToken: "wcs_existing", text: "outra@example.com" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.31",
+  });
+
+  const response = String(prisma.state.outboundMessages.at(-1)?.bodyText);
+  const currentRuntime = prisma.state.runtimeStates.find((item: Record<string, unknown>) => item.waId !== "webchat:original");
+  assert.match(response, /Não consegui confirmar esse atendimento/);
+  assert.doesNotMatch(response, /CVT-123E4567E89B/);
+  assert.doesNotMatch(response, /Suporte/);
+  assert.notEqual(currentRuntime?.queueId, "queue_support");
+  const event = prisma.state.events.find((item: Record<string, unknown>) => item.eventName === "webchat.protocol.lookup");
+  assert.equal(event?.payloadJson.protocolLookup.ok, false);
+  assert.equal(event?.payloadJson.protocolLookup.reason, "confirmation_failed");
+});
+
+test("createWebchatInboundMessage does not reveal protocol from another tenant", async () => {
+  const prisma = makePrisma() as any;
+  useDynamicRuntimeLookup(prisma);
+  useProtocolLookupDirectories(prisma);
+  seedProtocolConversation(prisma, { clientId: "tenant_b" });
+
+  await startProtocolLookupFlow(prisma);
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_cross_tenant",
+    input: { sessionToken: "wcs_existing", text: "cliente@example.com" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.32",
+  });
+
+  const response = String(prisma.state.outboundMessages.at(-1)?.bodyText);
+  assert.match(response, /Não consegui confirmar esse atendimento/);
+  assert.doesNotMatch(response, /CVT-123E4567E89B/);
+  assert.doesNotMatch(response, /Suporte/);
+  const event = prisma.state.events.find((item: Record<string, unknown>) => item.eventName === "webchat.protocol.lookup");
+  assert.equal(event?.payloadJson.protocolLookup.ok, false);
+  assert.equal(event?.payloadJson.protocolLookup.reason, "not_found_or_cross_tenant");
+});
+
+test("createWebchatInboundMessage returns closed status only after valid protocol confirmation", async () => {
+  const prisma = makePrisma() as any;
+  useDynamicRuntimeLookup(prisma);
+  useProtocolLookupDirectories(prisma);
+  seedProtocolConversation(prisma, {
+    closedAt: makeDate("2026-07-09T10:30:00.000Z"),
+    runtimeState: {
+      status: "CLOSED",
+      closedAt: makeDate("2026-07-09T10:30:00.000Z"),
+      updatedAt: makeDate("2026-07-09T10:30:00.000Z"),
+    },
+  });
+
+  await startProtocolLookupFlow(prisma);
+  await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_protocol_closed",
+    input: { sessionToken: "wcs_existing", text: "(84) 99999-0000" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.33",
+  });
+
+  const response = String(prisma.state.outboundMessages.at(-1)?.bodyText);
+  assert.match(response, /Encontramos seu atendimento/);
+  assert.match(response, /Status: Fechado/);
+  assert.match(response, /Última atualização:/);
 });

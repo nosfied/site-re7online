@@ -15,13 +15,19 @@ import {
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
 import { getFeatures } from "../features/clientFeatures.js";
-import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
+import {
+  buildConversationProtocol,
+  getConversationIdPrefixFromProtocol,
+  normalizeConversationProtocol,
+} from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 
 const MESSAGE_RATE_LIMIT_WINDOW_MS = 60_000;
 const MESSAGE_RATE_LIMIT_MAX = 20;
 const MAX_MESSAGE_LENGTH = 4_000;
+const GENERIC_PROTOCOL_LOOKUP_FAILURE =
+  "Não consegui confirmar esse atendimento com os dados informados. Confira o protocolo e o e-mail ou telefone usado no atendimento. Se preferir, posso encaminhar para nossa equipe.";
 
 type JsonInput = Record<string, unknown>;
 type RateBucket = { count: number; windowStart: number; lastSeen: number };
@@ -258,6 +264,53 @@ function pickLeadEmail(context: FlowContext | undefined) {
   return value.toLowerCase();
 }
 
+function normalizeContactProof(input: string | null | undefined) {
+  const value = String(input ?? "").trim();
+  if (!value) return { email: null, phoneDigits: null };
+  const lower = value.toLowerCase();
+  const phoneDigits = value.replace(/\D/g, "");
+  return {
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(lower) ? lower : null,
+    phoneDigits: phoneDigits.length >= 8 ? phoneDigits : null,
+  };
+}
+
+function contactProofMatches(confirmation: string, candidates: Array<string | null | undefined>) {
+  const proof = normalizeContactProof(confirmation);
+  if (!proof.email && !proof.phoneDigits) return false;
+  return candidates.some((candidate) => {
+    const normalized = normalizeContactProof(candidate);
+    if (proof.email && normalized.email && proof.email === normalized.email) return true;
+    if (proof.phoneDigits && normalized.phoneDigits && proof.phoneDigits === normalized.phoneDigits) return true;
+    return false;
+  });
+}
+
+function formatOperationalStatus(status: ConversationOperationalStatus | null | undefined, closedAt?: Date | null) {
+  if (closedAt || status === ConversationOperationalStatus.CLOSED) return "Fechado";
+  if (status === ConversationOperationalStatus.IN_PROGRESS) return "Em atendimento";
+  if (status === ConversationOperationalStatus.WAITING_USER) return "Aguardando cliente";
+  return "Aguardando atendimento";
+}
+
+function formatProtocolLookupDate(value: Date | null | undefined) {
+  if (!value) return "não informada";
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Fortaleza",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function maxDate(...values: Array<Date | null | undefined>) {
+  const valid = values.filter((value): value is Date => value instanceof Date && Number.isFinite(value.getTime()));
+  if (valid.length === 0) return null;
+  return valid.reduce((latest, value) => (value.getTime() > latest.getTime() ? value : latest), valid[0]);
+}
+
 async function resolveWebchatHandoffRouting(params: {
   prisma: PrismaClient;
   clientId: string;
@@ -344,6 +397,129 @@ function buildWebchatHandoffOperationalNotice(params: {
     lines.push("Nossa equipe dará continuidade por aqui.");
   }
   return lines.join("\n");
+}
+
+async function resolveProtocolLookup(params: {
+  prisma: PrismaClient;
+  clientId: string;
+  protocolInput: string | null | undefined;
+  confirmationInput: string | null | undefined;
+}) {
+  const normalizedProtocol = normalizeConversationProtocol(params.protocolInput);
+  const idPrefix = getConversationIdPrefixFromProtocol(normalizedProtocol);
+  const genericFailure = {
+    ok: false as const,
+    publicText: GENERIC_PROTOCOL_LOOKUP_FAILURE,
+    auditReason: !normalizedProtocol || !idPrefix ? "invalid_protocol" : "not_confirmed",
+  };
+  if (!normalizedProtocol || !idPrefix) return genericFailure;
+
+  const conversation = await params.prisma.conversation.findFirst({
+    where: {
+      clientId: params.clientId,
+      id: { startsWith: idPrefix },
+      deletedAt: null,
+      anonymizedAt: null,
+    },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      channel: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      departmentId: true,
+      createdAt: true,
+      updatedAt: true,
+      closedAt: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+    },
+  });
+  if (!conversation) return { ...genericFailure, auditReason: "not_found_or_cross_tenant" };
+
+  const [state, lead, visitor] = await Promise.all([
+    params.prisma.conversationRuntimeState.findFirst({
+      where: { clientId: params.clientId, waId: conversation.waId },
+      select: {
+        status: true,
+        handoffStatus: true,
+        departmentId: true,
+        queueId: true,
+        updatedAt: true,
+        closedAt: true,
+      },
+    }),
+    params.prisma.lead.findFirst({
+      where: { tenantId: params.clientId, waId: conversation.waId },
+      select: { email: true, phone: true },
+    }),
+    conversation.channel === "webchat" && conversation.channelAccountId && conversation.externalUserHash
+      ? params.prisma.webchatVisitor.findFirst({
+          where: {
+            clientId: params.clientId,
+            siteId: conversation.channelAccountId,
+            visitorIdHash: conversation.externalUserHash,
+          },
+          select: { email: true, phone: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const confirmed = contactProofMatches(params.confirmationInput ?? "", [
+    lead?.email,
+    lead?.phone,
+    visitor?.email,
+    visitor?.phone,
+  ]);
+  if (!confirmed) return { ...genericFailure, auditReason: "confirmation_failed" };
+
+  const departmentId = state?.departmentId ?? conversation.departmentId ?? null;
+  const queueId = state?.queueId ?? null;
+  const [department, queue] = await Promise.all([
+    departmentId
+      ? params.prisma.department.findFirst({
+          where: { clientId: params.clientId, id: departmentId },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
+    queueId
+      ? params.prisma.queue.findFirst({
+          where: { clientId: params.clientId, id: queueId },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  const lastUpdatedAt = maxDate(
+    state?.updatedAt,
+    state?.closedAt,
+    conversation.updatedAt,
+    conversation.closedAt,
+    conversation.lastInboundAt,
+    conversation.lastOutboundAt
+  );
+  const publicText = [
+    "Encontramos seu atendimento.",
+    "",
+    `Protocolo: ${normalizedProtocol}`,
+    `Área: ${department?.name ?? "Atendimento"}`,
+    ...(queue?.name ? [`Fila: ${queue.name}`] : []),
+    `Status: ${formatOperationalStatus(state?.status, state?.closedAt ?? conversation.closedAt)}`,
+    `Última atualização: ${formatProtocolLookupDate(lastUpdatedAt)}`,
+    "",
+    "Você pode complementar as informações por aqui. Se precisar falar com atendente, nossa equipe dará continuidade neste atendimento.",
+  ].join("\n");
+
+  return {
+    ok: true as const,
+    publicText,
+    protocol: normalizedProtocol,
+    departmentId,
+    queueId,
+    departmentName: department?.name ?? null,
+    queueName: queue?.name ?? null,
+    originalConversationId: conversation.id,
+  };
 }
 
 async function runWebchatChatbotFlow(params: {
@@ -465,7 +641,19 @@ async function runWebchatChatbotFlow(params: {
   const outboundText = result.replyText?.trim();
   const protocol = buildConversationProtocol({ id: params.conversationId });
   const outboundAt = new Date();
-  const pendingHandoff = Boolean(result.pendingHandoff);
+  const protocolLookupRequested =
+    typeof nextContext?.protocol_lookup_protocol === "string" &&
+    typeof nextContext?.protocol_lookup_contact === "string";
+  const protocolLookup = protocolLookupRequested
+    ? await resolveProtocolLookup({
+        prisma: params.prisma,
+        clientId: params.clientId,
+        protocolInput: String(nextContext.protocol_lookup_protocol),
+        confirmationInput: String(nextContext.protocol_lookup_contact),
+      })
+    : null;
+  const pendingProtocolContinuation = protocolLookup?.ok === true;
+  const pendingHandoff = Boolean(result.pendingHandoff) || pendingProtocolContinuation;
   const handoffStatus = pendingHandoff ? HandoffStatus.PENDING : fromHandoffState(result.state.handoff.status);
   const handoffRequestedAt = pendingHandoff
     ? outboundAt
@@ -473,7 +661,14 @@ async function runWebchatChatbotFlow(params: {
       ? new Date(result.state.handoff.requestedAt)
       : null;
   const mode = pendingHandoff ? "HUMAN" : result.state.chatbotActive ? "BOT" : result.state.mode ?? "BOT";
-  const handoffRouting = pendingHandoff
+  const handoffRouting = pendingProtocolContinuation
+    ? {
+        departmentId: protocolLookup.departmentId ?? result.state.departmentId ?? null,
+        queueId: protocolLookup.queueId ?? result.state.queueId ?? null,
+        departmentName: protocolLookup.departmentName,
+        queueName: protocolLookup.queueName,
+      }
+    : pendingHandoff
     ? await resolveWebchatHandoffRouting({
         prisma: params.prisma,
         clientId: params.clientId,
@@ -487,7 +682,9 @@ async function runWebchatChatbotFlow(params: {
         departmentName: null,
         queueName: null,
       };
-  const outboundBodyText = pendingHandoff && outboundText
+  const outboundBodyText = protocolLookup
+    ? protocolLookup.publicText
+    : pendingHandoff && outboundText
     ? `${outboundText}\n\n${buildWebchatHandoffOperationalNotice({
         protocol,
         departmentName: handoffRouting.departmentName,
@@ -614,7 +811,7 @@ async function runWebchatChatbotFlow(params: {
         waIdCanonical: params.waId,
         messageId: outboundMessageId ?? undefined,
         requestId: params.requestId,
-        eventName: pendingHandoff ? "webchat.chatbot.handoff_triggered" : "webchat.chatbot.handled",
+        eventName: protocolLookup ? "webchat.protocol.lookup" : pendingHandoff ? "webchat.chatbot.handoff_triggered" : "webchat.chatbot.handled",
         payloadJson: {
           flowId: flow.id,
           nodeId: result.state.chatbotNodeId ?? null,
@@ -623,6 +820,14 @@ async function runWebchatChatbotFlow(params: {
           tags: result.pendingHandoff?.tags ?? result.state.answers?.flowTags ?? [],
           hasReply: Boolean(outboundBodyText),
           protocol: pendingHandoff ? protocol : null,
+          protocolLookup: protocolLookup
+            ? {
+                ok: protocolLookup.ok,
+                reason: protocolLookup.ok ? null : protocolLookup.auditReason,
+                protocol: protocolLookup.ok ? protocolLookup.protocol : null,
+                originalConversationId: protocolLookup.ok ? protocolLookup.originalConversationId : null,
+              }
+            : null,
         } satisfies Prisma.InputJsonValue,
       },
     });
