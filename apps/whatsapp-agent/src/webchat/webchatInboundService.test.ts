@@ -356,12 +356,14 @@ const re7IntakeFlow = {
       text: "Perfeito. Vou encaminhar sua conversa para um consultor da Re7online. Se puder, envie nome, empresa, cidade/UF e melhor contato para retorno.",
       handoffSummary: "Atendimento comercial qualificado pela automação de intake.",
       tags: ["handoff:lead"],
+      context: { targetDepartment: "Comercial", targetQueue: "Fila Comercial" },
     },
     handoff_publico: {
       type: "handoff",
       text: "Entendi. Vou encaminhar para atendimento especializado em órgãos públicos e licitações. Se possível, envie órgão, município/UF, prazo e contexto do edital.",
       handoffSummary: "Demanda de órgão público/licitação identificada pela automação.",
       tags: ["handoff:public_sector", "priority:high"],
+      context: { targetDepartment: "Governo e Licitações", targetQueue: "Fila Governo" },
     },
     handoff_suporte: {
       type: "handoff",
@@ -433,6 +435,8 @@ test("createWebchatInboundMessage routes explicit human request to handoff", asy
   assert.equal(prisma.state.runtimeStates[0].mode, "HUMAN");
   assert.equal(prisma.state.runtimeStates[0].status, "WAITING");
   assert.equal(prisma.state.runtimeStates[0].chatbotActive, false);
+  assert.match(String(prisma.state.outboundMessages[1].bodyText), /Protocolo: CVT-/);
+  assert.match(String(prisma.state.outboundMessages[1].bodyText), /Nossa equipe dará continuidade por aqui/);
   assert.equal(prisma.state.leads[0].status, "QUALIFIED");
   assert.equal(prisma.state.leadNotes.length, 1);
   assert.match(String(prisma.state.leadNotes[0].body), /Usuário solicitou atendimento humano/);
@@ -612,19 +616,29 @@ test("createWebchatInboundMessage preserves captured lead name after human hando
 });
 
 test("createWebchatInboundMessage applies target department and queue on support handoff", async () => {
+  const departments = new Map([
+    ["Suporte", { id: "department_support", name: "Suporte" }],
+    ["Comercial", { id: "department_commercial", name: "Comercial" }],
+    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações" }],
+  ]);
+  const queues = new Map([
+    ["Fila Suporte", { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" }],
+    ["Fila Comercial", { id: "queue_commercial", name: "Fila Comercial", departmentId: "department_commercial" }],
+    ["Fila Governo", { id: "queue_government", name: "Fila Governo", departmentId: "department_government" }],
+  ]);
   const prisma = makePrisma({
     department: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) => (
-        JSON.stringify(where).includes("Suporte") ? { id: "department_support", name: "Suporte" } : null
-      ),
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const serialized = JSON.stringify(where);
+        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+      },
       create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
     },
     queue: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) => (
-        JSON.stringify(where).includes("Fila Suporte")
-          ? { id: "queue_support", name: "Fila Suporte", departmentId: "department_support" }
-          : null
-      ),
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const serialized = JSON.stringify(where);
+        return Array.from(queues.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+      },
       upsert: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
     },
   }) as any;
@@ -656,4 +670,57 @@ test("createWebchatInboundMessage applies target department and queue on support
   assert.equal(prisma.state.runtimeStates[0].handoffStatus, "PENDING");
   assert.equal(prisma.state.runtimeStates[0].departmentId, "department_support");
   assert.equal(prisma.state.runtimeStates[0].queueId, "queue_support");
+  assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
+  assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Área responsável: Suporte/);
+  assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Suporte/);
+  assert.match(String(prisma.state.outboundMessages.at(-1)?.bodyText), /SLA operacional/);
+});
+
+test("createWebchatInboundMessage routes commercial and government handoff to configured queues", async () => {
+  const departments = new Map([
+    ["Comercial", { id: "department_commercial", name: "Comercial" }],
+    ["Governo e Licitações", { id: "department_government", name: "Governo e Licitações" }],
+  ]);
+  const queues = new Map([
+    ["Fila Comercial", { id: "queue_commercial", name: "Fila Comercial", departmentId: "department_commercial" }],
+    ["Fila Governo", { id: "queue_government", name: "Fila Governo", departmentId: "department_government" }],
+  ]);
+  const makeRoutedPrisma = () => makePrisma({
+    department: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const serialized = JSON.stringify(where);
+        return Array.from(departments.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+      },
+      create: async () => ({ id: "department_1", name: "Atendimento Geral" }),
+    },
+    queue: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        const serialized = JSON.stringify(where);
+        return Array.from(queues.entries()).find(([name]) => serialized.includes(name))?.[1] ?? null;
+      },
+      upsert: async () => ({ id: "queue_1", name: "Fila Geral", departmentId: "department_1" }),
+    },
+  }) as any;
+
+  const commercialPrisma = makeRoutedPrisma();
+  commercialPrisma.conversationRuntimeState.findFirst = async () => commercialPrisma.state.runtimeStates[0] ?? null;
+  commercialPrisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+  await createWebchatInboundMessage({ prisma: commercialPrisma, requestId: "req_11a", input: { sessionToken: "wcs_existing", text: "Olá" }, origin: "https://portal.example.com", ip: "203.0.113.20" });
+  await createWebchatInboundMessage({ prisma: commercialPrisma, requestId: "req_11b", input: { sessionToken: "wcs_existing", text: "1" }, origin: "https://portal.example.com", ip: "203.0.113.20" });
+  await createWebchatInboundMessage({ prisma: commercialPrisma, requestId: "req_11c", input: { sessionToken: "wcs_existing", text: "1" }, origin: "https://portal.example.com", ip: "203.0.113.20" });
+  await createWebchatInboundMessage({ prisma: commercialPrisma, requestId: "req_11d", input: { sessionToken: "wcs_existing", text: "1" }, origin: "https://portal.example.com", ip: "203.0.113.20" });
+  assert.equal(commercialPrisma.state.runtimeStates[0].departmentId, "department_commercial");
+  assert.equal(commercialPrisma.state.runtimeStates[0].queueId, "queue_commercial");
+  assert.match(String(commercialPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Comercial/);
+  assert.match(String(commercialPrisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
+
+  const governmentPrisma = makeRoutedPrisma();
+  governmentPrisma.conversationRuntimeState.findFirst = async () => governmentPrisma.state.runtimeStates[0] ?? null;
+  governmentPrisma.chatbotFlow.findFirst = async () => ({ id: "flow_re7", definition: re7IntakeFlow });
+  await createWebchatInboundMessage({ prisma: governmentPrisma, requestId: "req_12a", input: { sessionToken: "wcs_existing", text: "Olá" }, origin: "https://portal.example.com", ip: "203.0.113.21" });
+  await createWebchatInboundMessage({ prisma: governmentPrisma, requestId: "req_12b", input: { sessionToken: "wcs_existing", text: "3" }, origin: "https://portal.example.com", ip: "203.0.113.21" });
+  assert.equal(governmentPrisma.state.runtimeStates[0].departmentId, "department_government");
+  assert.equal(governmentPrisma.state.runtimeStates[0].queueId, "queue_government");
+  assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Fila: Fila Governo/);
+  assert.match(String(governmentPrisma.state.outboundMessages.at(-1)?.bodyText), /Protocolo: CVT-/);
 });

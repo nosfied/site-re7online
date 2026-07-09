@@ -15,6 +15,7 @@ import {
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import type { ConversationState, FlowContext } from "../conversation/conversation.types.js";
 import { getFeatures } from "../features/clientFeatures.js";
+import { buildConversationProtocol } from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 
@@ -293,7 +294,7 @@ async function resolveWebchatHandoffRouting(params: {
           name: { equals: targetDepartmentName, mode: "insensitive" },
           isActive: true,
         },
-        select: { id: true },
+        select: { id: true, name: true },
       })
     : null;
   const queue = targetQueueName
@@ -303,7 +304,7 @@ async function resolveWebchatHandoffRouting(params: {
           name: { equals: targetQueueName, mode: "insensitive" },
           ...(department?.id ? { departmentId: department.id } : {}),
         },
-        select: { id: true, departmentId: true },
+        select: { id: true, name: true, departmentId: true },
       })
     : null;
 
@@ -319,7 +320,30 @@ async function resolveWebchatHandoffRouting(params: {
   return {
     departmentId: queue?.departmentId ?? department?.id ?? params.currentDepartmentId,
     queueId: queue?.id ?? params.currentQueueId,
+    departmentName: department?.name ?? targetDepartmentName ?? null,
+    queueName: queue?.name ?? targetQueueName ?? null,
   };
+}
+
+function buildWebchatHandoffOperationalNotice(params: {
+  protocol: string;
+  departmentName?: string | null;
+  queueName?: string | null;
+  context?: FlowContext;
+}) {
+  const interest = pickLeadText(params.context, ["interest", "intent", "service", "supportType", "support_type"], 80);
+  const lines = [
+    "Atendimento registrado.",
+    `Protocolo: ${params.protocol}`,
+  ];
+  if (params.departmentName) lines.push(`Área responsável: ${params.departmentName}`);
+  if (params.queueName) lines.push(`Fila: ${params.queueName}`);
+  if (interest === "suporte" || interest === "support") {
+    lines.push("Nossa equipe acompanhará este atendimento pelo SLA operacional.");
+  } else {
+    lines.push("Nossa equipe dará continuidade por aqui.");
+  }
+  return lines.join("\n");
 }
 
 async function runWebchatChatbotFlow(params: {
@@ -439,10 +463,8 @@ async function runWebchatChatbotFlow(params: {
 
   const nextContext = safeFlowContext(result.state.answers?.flowContext);
   const outboundText = result.replyText?.trim();
+  const protocol = buildConversationProtocol({ id: params.conversationId });
   const outboundAt = new Date();
-  const outboundMessageId = outboundText
-    ? `webchat.chatbot.${params.requestId}.${shortHash(`${params.waId}:${outboundAt.toISOString()}`, 16)}`
-    : null;
   const pendingHandoff = Boolean(result.pendingHandoff);
   const handoffStatus = pendingHandoff ? HandoffStatus.PENDING : fromHandoffState(result.state.handoff.status);
   const handoffRequestedAt = pendingHandoff
@@ -462,7 +484,20 @@ async function runWebchatChatbotFlow(params: {
     : {
         departmentId: result.state.departmentId ?? null,
         queueId: result.state.queueId ?? null,
+        departmentName: null,
+        queueName: null,
       };
+  const outboundBodyText = pendingHandoff && outboundText
+    ? `${outboundText}\n\n${buildWebchatHandoffOperationalNotice({
+        protocol,
+        departmentName: handoffRouting.departmentName,
+        queueName: handoffRouting.queueName,
+        context: nextContext,
+      })}`
+    : outboundText;
+  const outboundMessageId = outboundBodyText
+    ? `webchat.chatbot.${params.requestId}.${shortHash(`${params.waId}:${outboundAt.toISOString()}`, 16)}`
+    : null;
 
   await params.prisma.$transaction(async (tx) => {
     await tx.conversationRuntimeState.updateMany({
@@ -500,7 +535,7 @@ async function runWebchatChatbotFlow(params: {
         status: pendingHandoff ? "QUALIFIED" : "NEW",
       },
     });
-    if (outboundText && outboundMessageId) {
+    if (outboundBodyText && outboundMessageId) {
       await tx.outboundMessage.upsert({
         where: {
           clientId_messageId: {
@@ -523,7 +558,7 @@ async function runWebchatChatbotFlow(params: {
           legacyWaId: null,
           type: MessageType.TEXT,
           status: MessageStatus.SENT,
-          bodyText: outboundText,
+          bodyText: outboundBodyText,
           requestId: params.requestId,
           metaMessageId: null,
           errorBody: null,
@@ -534,12 +569,12 @@ async function runWebchatChatbotFlow(params: {
             sessionId: params.sessionId,
             originDomain: params.originDomain,
             delivery: "pending_public_polling",
-            messageLength: outboundText.length,
+            messageLength: outboundBodyText.length,
           } satisfies Prisma.InputJsonValue,
         },
         update: {
           status: MessageStatus.SENT,
-          bodyText: outboundText,
+          bodyText: outboundBodyText,
           externalMessageId: outboundMessageId,
           metaMessageId: null,
           errorBody: null,
@@ -586,7 +621,8 @@ async function runWebchatChatbotFlow(params: {
           chatbotActive: result.state.chatbotActive === true,
           pendingHandoff,
           tags: result.pendingHandoff?.tags ?? result.state.answers?.flowTags ?? [],
-          hasReply: Boolean(outboundText),
+          hasReply: Boolean(outboundBodyText),
+          protocol: pendingHandoff ? protocol : null,
         } satisfies Prisma.InputJsonValue,
       },
     });

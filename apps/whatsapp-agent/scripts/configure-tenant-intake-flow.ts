@@ -805,7 +805,7 @@ const re7onlineSlaIntakeDefinition = {
     handoff_comercial: {
       type: "handoff",
       text:
-        "Obrigado. Já tenho as informações iniciais e vou encaminhar para nosso atendimento comercial.",
+        "Obrigado. Já tenho as informações iniciais e vou registrar seu atendimento para a equipe comercial continuar por aqui.",
       handoffSummary:
         "Contato comercial qualificado pelo Webchat Re7online. Revisar nome, empresa, segmento, cidade/UF, interesse, telefone/e-mail, urgência e melhor horário.",
       tags: ["commercial", "human_handoff"],
@@ -814,7 +814,7 @@ const re7onlineSlaIntakeDefinition = {
     handoff_suporte: {
       type: "handoff",
       text:
-        "Obrigado. Vou encaminhar para suporte com prioridade conforme a urgência informada. Seu histórico ficará registrado para continuidade do atendimento.",
+        "Obrigado. Vou registrar seu atendimento e encaminhar para suporte com prioridade conforme a urgência informada.",
       handoffSummary:
         "Suporte qualificado pelo Webchat Re7online. Revisar empresa/tenant, canal afetado, tipo de problema, urgência e descrição curta.",
       tags: ["support", "human_handoff"],
@@ -823,7 +823,7 @@ const re7onlineSlaIntakeDefinition = {
     handoff_governo: {
       type: "handoff",
       text:
-        "Obrigado. Vou encaminhar para nosso atendimento especializado em órgãos públicos e licitações.",
+        "Obrigado. Vou registrar seu atendimento e direcionar para nossa equipe especializada em órgãos públicos e licitações.",
       handoffSummary:
         "Atendimento público/licitação qualificado pelo Webchat Re7online. Revisar órgão, cidade/UF, necessidade, prazo, referência/documento, e-mail e telefone.",
       tags: ["government", "bid", "human_handoff"],
