@@ -1,32 +1,25 @@
-# CRA-PR PE 90004/2026 - Minuta De Pedido De Esclarecimento
+Ao Conselho Regional de Administração do Paraná — CRA-PR
 
-Ao Conselho Regional de Administracao do Parana - CRA-PR
+Referente ao Pregão Eletrônico nº 90004/2026
 
-Referente ao Pregao Eletronico 90004/2026
+A empresa interessada em participar do Pregão Eletrônico nº 90004/2026 solicita, respeitosamente, os esclarecimentos abaixo, com o objetivo de formular proposta adequada, objetiva e compatível com as condições de execução contratual:
 
-A empresa interessada solicita, respeitosamente, esclarecimentos tecnicos e comerciais para adequada formulacao de proposta:
+1. Para fins de medição e faturamento, o termo “mensagem ativa” deve ser entendido como mensagem aceita pela API da Meta/WhatsApp Business Platform, mensagem entregue ao destinatário, mensagem lida ou conversa iniciada pela contratada?
 
-1. Para fins de faturamento, o termo "mensagem ativa" corresponde a mensagem aceita pela API da Meta, mensagem entregue, mensagem lida ou conversa iniciada pela empresa?
+2. Os custos cobrados pela Meta/WhatsApp Business Platform devem estar integralmente incluídos no preço unitário ofertado para os quantitativos estimados no edital?
 
-2. O custo Meta/WhatsApp Business Platform deve estar integralmente incluso no preco da proposta ate o limite estimado de 10.000 mensagens ativas por mes?
+3. Caso o consumo mensal ultrapasse os quantitativos estimados no edital, especialmente 10.000 mensagens ativas por mês, qual será o tratamento dos excedentes para fins de execução e faturamento?
 
-3. Caso o consumo ultrapasse 10.000 mensagens ativas no mes, havera pagamento de excedente ou o valor contratado sera considerado limite fixo sem remuneracao adicional?
+4. Considerando a previsão editalícia de operação regular junto à Meta/WhatsApp Business Platform, diretamente ou por vínculo técnico equivalente, será aceito que a licitante comprove tal condição por meio de configuração técnica, conta, integração, provedor ou parceiro que assegure o uso de APIs oficiais, ainda que não seja diretamente BSP, Solution Partner ou Tech Provider?
 
-4. Sera aceito vinculo tecnico equivalente que assegure uso de APIs oficiais Meta/WhatsApp Business Platform, ainda que a licitante nao seja diretamente uma BSP ou Solution Partner?
+5. Em relação aos ativos Meta vinculados ao contrato, como WABA, número telefônico institucional, templates aprovados e perfis comerciais, a administração, titularidade e eventual transferência deverão permanecer em nome do CRA-PR ou poderão ser operadas tecnicamente pela contratada durante a vigência contratual?
 
-5. Para Instagram Direct e Facebook Messenger, exige-se automacao completa por chatbot ou e suficiente a centralizacao no Inbox com atendimento humano assistido e historico?
+6. Para Instagram Direct e Facebook Messenger, a exigência contempla automação/chatbot nesses canais ou é suficiente que sejam centralizados na plataforma para atendimento humano, histórico e acompanhamento pelo mesmo Inbox multicanal?
 
-6. Quais formatos de exportacao serao considerados obrigatorios para relatorios e historicos: CSV, PDF, XLSX, JSON, XML ou equivalente?
+7. O requisito de opt-out/descadastro poderá ser atendido por controle operacional da plataforma, com registro do pedido, bloqueio do contato para novos disparos e possibilidade de auditoria?
 
-7. O opt-out/descadastro podera ser atendido por mecanismo de bloqueio/descadastro gerenciado pela plataforma, com registro do pedido e impedimento de novos disparos ao contato?
+8. Quais formatos serão considerados obrigatórios para exportação de relatórios, históricos e dados: CSV, XLSX, PDF ou formatos equivalentes disponibilizados pela plataforma?
 
-8. Sobre titularidade dos ativos, a contratante fornecera ou manterá sob sua titularidade o numero institucional, WABA, templates aprovados, perfis comerciais e demais ativos Meta?
+9. As mensagens institucionais previstas no objeto devem ser consideradas, sempre que aderentes às políticas da Meta, prioritariamente como mensagens de utilidade/utility, ou há previsão de uso relevante de mensagens classificadas como marketing?
 
-9. Em caso de necessidade de criacao/validacao de templates junto a Meta, os prazos de aprovacao pela Meta serao considerados externos ao prazo de implantacao, desde que a contratada atue tempestivamente?
-
-10. As mensagens institucionais previstas sao predominantemente de utilidade/servico, ou ha previsao de campanhas classificaveis como marketing segundo as politicas da Meta?
-
-11. A disponibilidade mensal de 99,5% sera medida por ferramenta da contratante, relatorio da contratada ou ferramenta externa acordada entre as partes?
-
-12. Como serao tratadas indisponibilidades da Meta/WhatsApp Business Platform que afetem envio ou recebimento, mas estejam fora da infraestrutura da contratada?
-
+Termos em que pede esclarecimento.
