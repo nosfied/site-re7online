@@ -36,6 +36,7 @@ export type OperationsBoardFilters = {
 
 export type OperationsBoardCard = {
   conversationId: string;
+  conversationIdentity: string;
   protocol: string;
   status: OperationsBoardStatus;
   contactName: string | null;
@@ -482,6 +483,7 @@ export async function buildOperationsBoardPayload(
           const tags = sanitizeTags(answers.flowTags);
           return {
             conversationId: conversation.id,
+            conversationIdentity: key,
             protocol: buildConversationProtocol(conversation),
             status,
             contactName: lead?.name ?? lead?.phone ?? null,

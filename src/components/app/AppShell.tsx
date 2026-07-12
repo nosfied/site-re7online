@@ -86,6 +86,14 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Dashboard", government: "Dashboard" },
   },
   {
+    href: "/app/operations",
+    icon: "▦",
+    group: "operation",
+    feature: "operationsBoard",
+    minRole: "SUPERVISOR",
+    labels: { business: "Quadro Operacional", government: "Quadro Operacional" },
+  },
+  {
     href: "/app/campaigns",
     icon: "📢",
     group: "operation",

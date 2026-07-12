@@ -261,6 +261,7 @@ export type AppOperationsBoardCursor = {
 
 export type AppOperationsBoardCard = {
   conversationId: string;
+  conversationIdentity: string;
   protocol: string;
   status: ConversationOperationalStatus;
   contactName: string | null;
