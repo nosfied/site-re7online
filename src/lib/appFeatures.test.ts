@@ -11,6 +11,7 @@ test("tenant capabilities preserve current app defaults", () => {
   assert.equal(capabilities.crm, false);
   assert.equal(capabilities.protocols, true);
   assert.equal(capabilities.catalog, false);
+  assert.equal(capabilities.operationsBoard, false);
 });
 
 test("business profile receives crm by default and government does not", () => {
@@ -26,6 +27,7 @@ test("tenant feature overrides win over profile defaults", () => {
       crm: true,
       webchat: true,
       catalog: true,
+      operationsBoard: true,
     },
   };
 
@@ -33,6 +35,7 @@ test("tenant feature overrides win over profile defaults", () => {
   assert.equal(hasCapability(session, "crm"), true);
   assert.equal(hasCapability(session, "webchat"), true);
   assert.equal(hasCapability(session, "catalog"), true);
+  assert.equal(hasCapability(session, "operationsBoard"), true);
 });
 
 test("invalid profile falls back to business and unknown capabilities are disabled", () => {

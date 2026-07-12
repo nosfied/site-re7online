@@ -254,6 +254,65 @@ export type AppDashboardOverview = {
   generatedAt: string;
 };
 
+export type AppOperationsBoardCursor = {
+  sortAt: string;
+  id: string;
+};
+
+export type AppOperationsBoardCard = {
+  conversationId: string;
+  protocol: string;
+  status: ConversationOperationalStatus;
+  contactName: string | null;
+  company: string | null;
+  channel: string | null;
+  lastMessage: {
+    direction: "INBOUND" | "OUTBOUND";
+    type: string | null;
+    bodyText: string | null;
+    createdAt: string;
+  } | null;
+  updatedAt: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  waitingFirstResponseSec: number | null;
+  activeDurationSec: number | null;
+  continuation: {
+    protocol: string;
+    originalConversationId: string;
+    linkedAt: string;
+    reason: "protocol_lookup";
+  } | null;
+  tags: string[];
+};
+
+export type AppOperationsBoardColumn = {
+  status: ConversationOperationalStatus;
+  count: number;
+  limit: number;
+  items: AppOperationsBoardCard[];
+  nextCursor: AppOperationsBoardCursor | null;
+};
+
+export type AppOperationsBoardResponse = {
+  ok: true;
+  period: {
+    from: string;
+    to: string;
+  };
+  filters: {
+    departmentId: string | null;
+    queueId: string | null;
+    assignedUserId: string | null;
+  };
+  columns: Record<ConversationOperationalStatus, AppOperationsBoardColumn>;
+  generatedAt: string;
+};
+
 export type AppContactTimelineItem = {
   id: string;
   kind: "message" | "event" | "note";
@@ -2501,6 +2560,40 @@ export async function fetchAppDashboardOverview(
   if (filters?.status?.trim()) query.set("status", filters.status.trim());
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return requestAppJson(session, `/app/dashboard/overview${suffix}`);
+}
+
+function encodeOperationsBoardCursor(cursor: AppOperationsBoardCursor) {
+  return btoa(JSON.stringify(cursor)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function fetchAppOperationsBoard(
+  session: AppSession,
+  filters?: {
+    from?: string | null;
+    to?: string | null;
+    departmentId?: string | null;
+    queueId?: string | null;
+    assignedUserId?: string | null;
+    limit?: number;
+    cursors?: Partial<Record<ConversationOperationalStatus, AppOperationsBoardCursor | null>>;
+  }
+): Promise<AppOperationsBoardResponse> {
+  const query = new URLSearchParams();
+  if (filters?.from?.trim()) query.set("from", filters.from.trim());
+  if (filters?.to?.trim()) query.set("to", filters.to.trim());
+  if (filters?.departmentId?.trim()) query.set("departmentId", filters.departmentId.trim());
+  if (filters?.queueId?.trim()) query.set("queueId", filters.queueId.trim());
+  if (filters?.assignedUserId?.trim()) query.set("assignedUserId", filters.assignedUserId.trim());
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    query.set("limit", String(filters.limit));
+  }
+  const cursors = filters?.cursors ?? {};
+  if (cursors.WAITING) query.set("waitingCursor", encodeOperationsBoardCursor(cursors.WAITING));
+  if (cursors.IN_PROGRESS) query.set("inProgressCursor", encodeOperationsBoardCursor(cursors.IN_PROGRESS));
+  if (cursors.WAITING_USER) query.set("waitingUserCursor", encodeOperationsBoardCursor(cursors.WAITING_USER));
+  if (cursors.CLOSED) query.set("closedCursor", encodeOperationsBoardCursor(cursors.CLOSED));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestAppJson(session, `/app/operations-board${suffix}`);
 }
 
 export async function exportAppConversationReportCsv(

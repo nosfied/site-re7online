@@ -41,8 +41,9 @@ export type TenantCapabilityKey =
   | FutureAppFeatureKey
   | "crm"
   | "protocols"
-  | "catalog";
-export type TenantCapabilities = AppFeatures & Record<"crm" | "protocols" | "catalog", boolean>;
+  | "catalog"
+  | "operationsBoard";
+export type TenantCapabilities = AppFeatures & Record<"crm" | "protocols" | "catalog" | "operationsBoard", boolean>;
 
 export const DEFAULT_BUSINESS_APP_FEATURES: Record<AppFeatureKey, boolean> = {
   dashboard: false,
@@ -111,10 +112,11 @@ export const DEFAULT_FUTURE_APP_FEATURES: Record<FutureAppFeatureKey, boolean> =
   instagramIntegration: false,
 };
 
-const DEFAULT_ADDITIONAL_CAPABILITIES: Record<"crm" | "protocols" | "catalog", boolean> = {
+const DEFAULT_ADDITIONAL_CAPABILITIES: Record<"crm" | "protocols" | "catalog" | "operationsBoard", boolean> = {
   crm: false,
   protocols: true,
   catalog: false,
+  operationsBoard: false,
 };
 
 export const DEFAULT_APP_FEATURES: AppFeatures = {
@@ -128,7 +130,7 @@ function normalizeBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function getAdditionalCapabilityDefaults(profile: AppProfile): Record<"crm" | "protocols" | "catalog", boolean> {
+function getAdditionalCapabilityDefaults(profile: AppProfile): Record<"crm" | "protocols" | "catalog" | "operationsBoard", boolean> {
   return {
     ...DEFAULT_ADDITIONAL_CAPABILITIES,
     crm: profile === "business",
@@ -197,6 +199,7 @@ export function getTenantCapabilities(session: SessionLike): TenantCapabilities 
     crm: normalizeBoolean(input.crm) ?? additionalDefaults.crm,
     protocols: normalizeBoolean(input.protocols) ?? additionalDefaults.protocols,
     catalog: normalizeBoolean(input.catalog) ?? additionalDefaults.catalog,
+    operationsBoard: normalizeBoolean(input.operationsBoard) ?? additionalDefaults.operationsBoard,
   };
 }
 

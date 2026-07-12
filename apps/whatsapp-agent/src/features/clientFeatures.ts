@@ -38,7 +38,8 @@ export type TenantCapabilityKey =
   | "protocols"
   | "catalog"
   | "salesPipeline"
-  | "governmentReports";
+  | "governmentReports"
+  | "operationsBoard";
 export type TenantCapabilities = ClientFeatures &
   Record<Exclude<TenantCapabilityKey, ClientFeatureKey>, boolean>;
 
@@ -115,6 +116,7 @@ const DEFAULT_ADDITIONAL_CAPABILITIES: Record<Exclude<TenantCapabilityKey, Clien
   catalog: false,
   salesPipeline: false,
   governmentReports: false,
+  operationsBoard: false,
 };
 
 type ClientWithFeatures = {
@@ -204,6 +206,8 @@ export function resolveTenantCapabilities(
       normalizeFeatureValue(input.salesPipeline) ?? additionalDefaults.salesPipeline,
     governmentReports:
       normalizeFeatureValue(input.governmentReports) ?? additionalDefaults.governmentReports,
+    operationsBoard:
+      normalizeFeatureValue(input.operationsBoard) ?? additionalDefaults.operationsBoard,
   };
 }
 

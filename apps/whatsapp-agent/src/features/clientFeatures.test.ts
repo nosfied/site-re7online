@@ -200,6 +200,8 @@ test("resolveTenantCapabilities preserves current feature defaults and adds plat
   assert.equal(government.catalog, false);
   assert.equal(business.salesPipeline, false);
   assert.equal(government.governmentReports, false);
+  assert.equal(business.operationsBoard, false);
+  assert.equal(government.operationsBoard, false);
 });
 
 test("tenant capability overrides win without changing profile defaults", () => {
@@ -212,6 +214,7 @@ test("tenant capability overrides win without changing profile defaults", () => 
       catalog: true,
       salesPipeline: true,
       governmentReports: true,
+      operationsBoard: true,
     },
   };
 
@@ -222,9 +225,11 @@ test("tenant capability overrides win without changing profile defaults", () => 
   assert.equal(capabilities.catalog, true);
   assert.equal(capabilities.salesPipeline, true);
   assert.equal(capabilities.governmentReports, true);
+  assert.equal(capabilities.operationsBoard, true);
   assert.equal(hasCapability(client, "catalog"), true);
   assert.equal(hasCapability(client, "crm"), false);
   assert.equal(hasCapability(client, "protocols"), false);
+  assert.equal(hasCapability(client, "operationsBoard"), true);
 });
 
 test("requireCapability throws a typed error when disabled", () => {

@@ -148,6 +148,14 @@ import {
   type TenantCapabilityKey,
 } from "../features/clientFeatures.js";
 import {
+  buildOperationsBoardPayload,
+  defaultOperationsBoardPeriod,
+  normalizeOperationsBoardLimit,
+  OPERATIONS_BOARD_STATUSES,
+  type OperationsBoardCursor,
+  type OperationsBoardStatus,
+} from "../operations/operationsBoardReadModel.js";
+import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
@@ -2745,6 +2753,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.dashboard.overview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/operations-board") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppCapability(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        capability: "operationsBoard",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (departmentAccess.requiresDepartmentScope && !departmentAccess.departmentId) {
+        const emptyPeriod = parseOperationsBoardPeriod(query);
+        json(res, 200, buildEmptyOperationsBoardPayload(emptyPeriod, {
+          departmentId: null,
+          queueId: null,
+          assignedUserId: null,
+          limit: normalizeOperationsBoardLimit(query.limit),
+        }));
+        return;
+      }
+      const result = await buildOperationsBoardPayload(prisma, {
+        clientId: client.id,
+        filters: {
+          period: parseOperationsBoardPeriod(query),
+          departmentId: departmentAccess.requiresDepartmentScope
+            ? departmentAccess.departmentId
+            : String(query.departmentId ?? "").trim() || null,
+          queueId: String(query.queueId ?? "").trim() || null,
+          assignedUserId: String(query.assignedUserId ?? "").trim() || null,
+          columns: buildOperationsBoardColumnInputs(query),
+        },
+      });
+      json(res, 200, result);
+    } catch (error) {
+      logger.error({
+        event: "app.operations_board.error",
         message: (error as Error).message,
         requestId,
       });
@@ -19602,6 +19670,99 @@ function getLatestDate(...values: Array<Date | null | undefined>) {
   const dates = values.filter((value): value is Date => value instanceof Date);
   if (dates.length === 0) return null;
   return dates.reduce((latest, current) => (current.getTime() > latest.getTime() ? current : latest));
+}
+
+function parseOperationsBoardDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function parseOperationsBoardPeriod(query: Record<string, unknown>) {
+  const defaults = defaultOperationsBoardPeriod();
+  const from = parseOperationsBoardDate(query.from) ?? defaults.from;
+  const to = parseOperationsBoardDate(query.to) ?? defaults.to;
+  if (from.getTime() > to.getTime()) return defaults;
+  return { from, to };
+}
+
+function parseOperationsBoardCursor(value: unknown): OperationsBoardCursor | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<OperationsBoardCursor>;
+    if (
+      typeof parsed.sortAt === "string" &&
+      typeof parsed.id === "string" &&
+      Number.isFinite(new Date(parsed.sortAt).getTime())
+    ) {
+      return { sortAt: parsed.sortAt, id: parsed.id };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function getOperationsBoardCursorQueryKey(status: OperationsBoardStatus) {
+  switch (status) {
+    case ConversationOperationalStatus.WAITING:
+      return "waitingCursor";
+    case ConversationOperationalStatus.IN_PROGRESS:
+      return "inProgressCursor";
+    case ConversationOperationalStatus.WAITING_USER:
+      return "waitingUserCursor";
+    case ConversationOperationalStatus.CLOSED:
+      return "closedCursor";
+  }
+}
+
+function buildOperationsBoardColumnInputs(query: Record<string, unknown>) {
+  const limit = normalizeOperationsBoardLimit(query.limit);
+  return Object.fromEntries(
+    OPERATIONS_BOARD_STATUSES.map((status) => [
+      status,
+      {
+        limit,
+        cursor: parseOperationsBoardCursor(query[getOperationsBoardCursorQueryKey(status)]),
+      },
+    ])
+  ) as Record<OperationsBoardStatus, { limit: number; cursor: OperationsBoardCursor | null }>;
+}
+
+function buildEmptyOperationsBoardPayload(
+  period: { from: Date; to: Date },
+  params: {
+    departmentId: string | null;
+    queueId: string | null;
+    assignedUserId: string | null;
+    limit: number;
+  }
+) {
+  return {
+    ok: true,
+    period: {
+      from: period.from.toISOString(),
+      to: period.to.toISOString(),
+    },
+    filters: {
+      departmentId: params.departmentId,
+      queueId: params.queueId,
+      assignedUserId: params.assignedUserId,
+    },
+    columns: Object.fromEntries(
+      OPERATIONS_BOARD_STATUSES.map((status) => [
+        status,
+        {
+          status,
+          count: 0,
+          limit: params.limit,
+          items: [],
+          nextCursor: null,
+        },
+      ])
+    ),
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 function resolveDashboardOperationalStatus(state: {
