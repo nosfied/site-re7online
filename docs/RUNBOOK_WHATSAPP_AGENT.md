@@ -320,6 +320,77 @@ Antes de usar retencao curta em producao, validar `RetentionConfig.retentionDays
 na tela `/app/settings/privacy`. Valores baixos, como 1 a 7 dias, podem retirar
 conversas ativas da operacao.
 
+## Retencao operacional de eventos
+
+A tabela `Event` concentra auditoria e sinais operacionais. A limpeza de eventos
+deve ser conservadora: medir primeiro, executar somente dry-run e apagar apenas
+eventos classificados como `NOISE` quando o resultado for seguro.
+
+Relatorio de armazenamento:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run --silent storage:report -- --json --include-events
+```
+
+Dry-run seguro, sem mutacao:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run --silent events:retention -- \
+  --dry-run \
+  --json \
+  --include-noise \
+  --noise-only \
+  --days 30
+```
+
+Executar limpeza real somente se:
+
+- `critical` for `0`;
+- `operational` for `0`;
+- `affectedEventNames` contiver apenas eventos descartaveis;
+- health e DB estiverem OK;
+- nao houver deploy instavel ou investigacao em andamento.
+
+Limpeza real de ruido:
+
+```bash
+cd /opt/re7online/site-re7online/apps/whatsapp-agent
+npm run --silent events:retention -- \
+  --json \
+  --include-noise \
+  --noise-only \
+  --days 30
+```
+
+Nao executar limpeza operacional sem decisao explicita. O script exige
+`--confirm-operational` para execucao real com eventos `OPERATIONAL`; esta flag
+nao deve ser usada em rotina comum.
+
+Primeira execucao real segura registrada em 2026-07-13:
+
+- HEAD de producao: `880420a`;
+- `Event.rows` antes: `65193`;
+- candidatos `NOISE`: `12912`;
+- `critical`: `0`;
+- `operational`: `0`;
+- removidos: `12912`;
+- eventos removidos:
+  - `webhook.status.received`: `8555`;
+  - `allowlist.check`: `4357`;
+- `Event.rows` depois: `52281`;
+- health final: OK;
+- DB final: OK;
+- PM2 final: `re7-admin-front` e `re7-whatsapp-agent` online.
+
+A reducao fisica em disco pode nao aparecer imediatamente em `totalSize`, pois
+depende de autovacuum/VACUUM do PostgreSQL.
+
+Gatilho recomendado: repetir apenas a cada 7 a 14 dias, sempre seguindo a ordem
+`storage:report`, dry-run `noise-only`, decisao explicita e execucao real
+somente se os criterios acima continuarem seguros.
+
 ## Registro minimo do deploy
 Registrar preferencialmente em:
 - `docs/DEPLOY_LOG.md`
