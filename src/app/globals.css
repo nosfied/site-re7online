@@ -333,6 +333,32 @@ html {
     background-color: var(--app-surface) !important;
   }
 
+  :root[data-theme="light"] .theme-workspace .operations-board-card-tone-a {
+    background-color: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .operations-board-card-tone-a:hover {
+    background-color: #f8fafc !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .operations-board-card-tone-b {
+    background-color: #eaf6ff !important;
+    border-color: rgba(14, 116, 144, 0.22) !important;
+    box-shadow: 0 10px 28px rgba(14, 165, 233, 0.1) !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .operations-board-card-tone-b:hover {
+    background-color: #dff1ff !important;
+  }
+
+  :root[data-theme="light"] .theme-workspace .operations-channel-chip {
+    background-color: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+    color: #475569 !important;
+  }
+
   :root[data-theme="light"] .theme-workspace .bg-re7-navy,
   :root[data-theme="light"] .theme-workspace .bg-re7-navy\/30,
   :root[data-theme="light"] .theme-workspace .bg-re7-navy\/40,

@@ -158,8 +158,8 @@ function OperationsBoardSkeleton() {
 }
 
 const CARD_TONES = [
-  "border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)] hover:bg-slate-50 dark:border-white/16 dark:bg-white/[0.115] dark:shadow-[0_10px_28px_rgba(2,8,23,0.16)] dark:hover:bg-white/[0.145]",
-  "border-sky-200 bg-sky-50 shadow-[0_10px_28px_rgba(14,165,233,0.08)] hover:bg-sky-100/70 dark:border-re7-sky/18 dark:bg-slate-950/28 dark:shadow-[0_10px_28px_rgba(2,8,23,0.2)] dark:hover:bg-slate-950/36",
+  "operations-board-card-tone-a border-white/16 bg-white/[0.115] shadow-[0_10px_28px_rgba(2,8,23,0.16)] hover:bg-white/[0.145]",
+  "operations-board-card-tone-b border-re7-sky/18 bg-slate-950/28 shadow-[0_10px_28px_rgba(2,8,23,0.2)] hover:bg-slate-950/36",
 ];
 
 function OperationsChannelLogo({ channel, className = "h-4 w-4" }: { channel: string | null; className?: string }) {
@@ -250,7 +250,7 @@ function OperationsCard({
     >
       <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
         <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-re7-sky">{card.protocol}</span>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/7 dark:text-white/70">
+        <span className="operations-channel-chip inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/7 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">
           <OperationsChannelLogo channel={card.channel} className="h-4 w-4 shrink-0" />
           {getChannelLabel(card.channel)}
         </span>
