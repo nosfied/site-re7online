@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
@@ -120,23 +120,6 @@ function getChannelLabel(channel: string | null) {
   }
 }
 
-function getChannelSymbol(channel: string | null) {
-  switch ((channel ?? "").toLowerCase()) {
-    case "whatsapp":
-      return "☏";
-    case "messenger":
-      return "💬";
-    case "instagram":
-      return "◎";
-    case "webchat":
-      return "⌁";
-    case "telegram":
-      return "✈";
-    default:
-      return "•";
-  }
-}
-
 function getLastMessagePreview(card: AppOperationsBoardCard) {
   const text = card.lastMessage?.bodyText?.trim();
   if (text) return text;
@@ -175,9 +158,79 @@ function OperationsBoardSkeleton() {
 }
 
 const CARD_TONES = [
-  "border-white/16 bg-white/[0.115] shadow-[0_10px_28px_rgba(2,8,23,0.16)] hover:bg-white/[0.145]",
-  "border-re7-sky/18 bg-slate-950/28 shadow-[0_10px_28px_rgba(2,8,23,0.2)] hover:bg-slate-950/36",
+  "border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.08)] hover:bg-slate-50 dark:border-white/16 dark:bg-white/[0.115] dark:shadow-[0_10px_28px_rgba(2,8,23,0.16)] dark:hover:bg-white/[0.145]",
+  "border-sky-200 bg-sky-50 shadow-[0_10px_28px_rgba(14,165,233,0.08)] hover:bg-sky-100/70 dark:border-re7-sky/18 dark:bg-slate-950/28 dark:shadow-[0_10px_28px_rgba(2,8,23,0.2)] dark:hover:bg-slate-950/36",
 ];
+
+function OperationsChannelLogo({ channel, className = "h-4 w-4" }: { channel: string | null; className?: string }) {
+  const gradientId = useId();
+  switch ((channel ?? "").toLowerCase()) {
+    case "messenger":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#1877F2" />
+          <path
+            fill="#fff"
+            d="M17.5 25v-8h2.7l.4-3.1h-3.1v-2c0-.9.2-1.5 1.5-1.5h1.7V7.6c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.5-4 4.1v2.3h-2.7V17h2.7v8h3.2z"
+          />
+        </svg>
+      );
+    case "instagram":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <defs>
+            <linearGradient id={gradientId} x1="4" x2="28" y1="28" y2="4">
+              <stop offset="0" stopColor="#FEDA75" />
+              <stop offset="0.35" stopColor="#FA7E1E" />
+              <stop offset="0.65" stopColor="#D62976" />
+              <stop offset="1" stopColor="#4F5BD5" />
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="9" fill={`url(#${gradientId})`} />
+          <rect x="8.5" y="8.5" width="15" height="15" rx="4.5" fill="none" stroke="#fff" strokeWidth="2.2" />
+          <circle cx="16" cy="16" r="3.8" fill="none" stroke="#fff" strokeWidth="2.2" />
+          <circle cx="21.2" cy="10.8" r="1.2" fill="#fff" />
+        </svg>
+      );
+    case "webchat":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#0EA5E9" />
+          <path
+            fill="#fff"
+            d="M8 11.5A4.5 4.5 0 0 1 12.5 7h7A4.5 4.5 0 0 1 24 11.5v4A4.5 4.5 0 0 1 19.5 20h-4.9l-4.1 3.2A.9.9 0 0 1 9 22.5V20h-.5A4.5 4.5 0 0 1 4 15.5v-4A4.5 4.5 0 0 1 8.5 7H10a6.5 6.5 0 0 0-2 4.5v4A6.5 6.5 0 0 0 14.5 22h4.3l.2-.2H12.7l-1.7 1.3V18H8.5A2.5 2.5 0 0 1 6 15.5v-4A2.5 2.5 0 0 1 8.5 9h11A2.5 2.5 0 0 1 22 11.5v4a2.5 2.5 0 0 1-2.5 2.5H14l-3 2.4V18H8.5A2.5 2.5 0 0 1 6 15.5v-4Z"
+          />
+          <circle cx="11.5" cy="13.5" r="1.2" fill="#0EA5E9" />
+          <circle cx="16" cy="13.5" r="1.2" fill="#0EA5E9" />
+          <circle cx="20.5" cy="13.5" r="1.2" fill="#0EA5E9" />
+        </svg>
+      );
+    case "telegram":
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#229ED9" />
+          <path
+            fill="#fff"
+            d="M24.7 9.1 21.9 22c-.2.9-.8 1.1-1.6.7l-4.4-3.2-2.1 2c-.2.2-.4.4-.9.4l.3-4.5 8.2-7.4c.4-.3-.1-.5-.5-.2l-10.1 6.4-4.4-1.4c-1-.3-1-.9.2-1.3l17.1-6.6c.8-.3 1.5.2 1.2 1.2z"
+          />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+          <circle cx="16" cy="16" r="16" fill="#25D366" />
+          <path
+            fill="#fff"
+            d="M23.2 18.9c-.4-.2-2.2-1.1-2.5-1.2-.3-.1-.6-.2-.8.2-.2.4-.9 1.2-1.1 1.4-.2.2-.4.3-.8.1-.4-.2-1.5-.5-2.8-1.7-1-1-1.7-2.1-1.9-2.5-.2-.4 0-.6.2-.8.2-.2.4-.4.6-.7.2-.2.2-.4.4-.6.1-.2.1-.5 0-.7-.1-.2-.8-1.9-1.1-2.6-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.7.1-1 .5-.3.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.8c.2.2 2.6 4 6.3 5.6.9.4 1.6.6 2.1.8.9.3 1.7.3 2.3.2.7-.1 2.2-.9 2.5-1.8.3-.9.3-1.6.2-1.8-.2-.3-.5-.4-.8-.6z"
+          />
+          <path
+            fill="#fff"
+            d="M16 5.7A10.2 10.2 0 0 0 7.2 21l-1.1 4 4.1-1.1A10.2 10.2 0 1 0 16 5.7zm0 18.5c-1.8 0-3.5-.5-5-1.6l-.4-.2-2.4.6.7-2.3-.3-.4a8.2 8.2 0 1 1 7.4 3.9z"
+          />
+        </svg>
+      );
+  }
+}
 
 function OperationsCard({
   card,
@@ -197,8 +250,8 @@ function OperationsCard({
     >
       <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
         <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-re7-sky">{card.protocol}</span>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/7 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">
-          <span className="text-[12px] leading-none text-white/85">{getChannelSymbol(card.channel)}</span>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/7 dark:text-white/70">
+          <OperationsChannelLogo channel={card.channel} className="h-4 w-4 shrink-0" />
           {getChannelLabel(card.channel)}
         </span>
       </div>
