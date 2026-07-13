@@ -527,8 +527,8 @@ export default function AppOperationsPage() {
   return (
     <AppShell
       session={session}
-      title="Quadro Operacional"
-      subtitle="Visao complementar do Inbox por status operacional, fila e SLA."
+      title="Command Center"
+      hideTitleBar
     >
       <section className="grid gap-4">
         <div className="theme-surface-strong rounded-xl border p-3 shadow-sm">
@@ -590,9 +590,6 @@ export default function AppOperationsPage() {
               {loading ? "Atualizando..." : "Aplicar"}
             </button>
           </div>
-          <p className="theme-muted mt-3 text-xs">
-            Filtro de fila sera conectado na proxima etapa, quando houver fonte segura de seletores de filas por tenant.
-          </p>
         </div>
 
         {loading && !board ? (

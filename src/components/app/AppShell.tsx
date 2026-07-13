@@ -25,6 +25,7 @@ type AppShellProps = {
   subtitle?: string | null;
   children: ReactNode;
   fullScreen?: boolean;
+  hideTitleBar?: boolean;
 };
 
 type NavItem = {
@@ -91,7 +92,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "operationsBoard",
     minRole: "SUPERVISOR",
-    labels: { business: "Quadro Operacional", government: "Quadro Operacional" },
+    labels: { business: "Command Center", government: "Command Center" },
   },
   {
     href: "/app/campaigns",
@@ -234,7 +235,14 @@ const APP_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export default function AppShell({ session, title, subtitle, children, fullScreen = false }: AppShellProps) {
+export default function AppShell({
+  session,
+  title,
+  subtitle,
+  children,
+  fullScreen = false,
+  hideTitleBar = false,
+}: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [showBrandModal, setShowBrandModal] = useState(false);
@@ -588,12 +596,21 @@ export default function AppShell({ session, title, subtitle, children, fullScree
             <div className="hidden min-w-0 overflow-hidden lg:block">{userActions}</div>
           </div>
         </header>
-        <section className="theme-surface theme-shadow fixed left-3 right-3 top-[calc(170px+var(--safe-top))] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2">
-          <h1 className="text-base font-bold min-[1441px]:text-lg">{title}</h1>
-          {subtitle ? <p className="theme-muted mt-0.5 text-xs min-[1441px]:text-sm">{subtitle}</p> : null}
-        </section>
+        {!hideTitleBar ? (
+          <section className="theme-surface theme-shadow fixed left-3 right-3 top-[calc(170px+var(--safe-top))] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2">
+            <h1 className="text-base font-bold min-[1441px]:text-lg">{title}</h1>
+            {subtitle ? <p className="theme-muted mt-0.5 text-xs min-[1441px]:text-sm">{subtitle}</p> : null}
+          </section>
+        ) : null}
 
-        <div aria-hidden="true" className="h-[230px] sm:h-[244px] lg:h-[144px] min-[1441px]:h-[196px]" />
+        <div
+          aria-hidden="true"
+          className={
+            hideTitleBar
+              ? "h-[166px] sm:h-[178px] lg:h-[86px] min-[1441px]:h-[130px]"
+              : "h-[230px] sm:h-[244px] lg:h-[144px] min-[1441px]:h-[196px]"
+          }
+        />
 
         {children}
       </div>
