@@ -143,6 +143,7 @@ import {
   getFeatures,
   hasFeature,
   requireCapability,
+  resolveTenantCapabilities,
   type ClientFeatureKey,
   type ClientProfile,
   type TenantCapabilityKey,
@@ -1321,7 +1322,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             departmentId: user.departmentId,
             departmentName: user.department?.name ?? null,
           },
-          features: getFeatures(user.client),
+          features: resolveTenantCapabilities(user.client),
           profile: getClientProfile(user.client),
         });
         return;
@@ -1362,7 +1363,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           departmentId: user.departmentId,
           departmentName: user.department?.name ?? null,
         },
-        features: getFeatures(user.client),
+        features: resolveTenantCapabilities(user.client),
         profile: getClientProfile(user.client),
       });
     } catch (error) {
@@ -1438,7 +1439,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           departmentId: user.departmentId,
           departmentName: user.department?.name ?? null,
         },
-        features: getFeatures(user.client),
+        features: resolveTenantCapabilities(user.client),
         profile: getClientProfile(user.client),
       });
     } catch (error) {
