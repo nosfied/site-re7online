@@ -120,6 +120,23 @@ function getChannelLabel(channel: string | null) {
   }
 }
 
+function getChannelSymbol(channel: string | null) {
+  switch ((channel ?? "").toLowerCase()) {
+    case "whatsapp":
+      return "☏";
+    case "messenger":
+      return "💬";
+    case "instagram":
+      return "◎";
+    case "webchat":
+      return "⌁";
+    case "telegram":
+      return "✈";
+    default:
+      return "•";
+  }
+}
+
 function getLastMessagePreview(card: AppOperationsBoardCard) {
   const text = card.lastMessage?.bodyText?.trim();
   if (text) return text;
@@ -176,53 +193,63 @@ function OperationsCard({
     <button
       type="button"
       onClick={() => onOpen(card)}
-      className={`group w-full rounded-lg border p-3 text-left transition hover:border-re7-sky/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re7-sky/70 ${tone}`}
+      className={`group w-full rounded-lg border px-2.5 py-2.5 text-left transition hover:border-re7-sky/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re7-sky/70 ${tone}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-xs font-semibold text-re7-sky">{card.protocol}</span>
-        <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/65">
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+        <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-re7-sky">{card.protocol}</span>
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/7 px-1.5 py-0.5 text-[10px] font-semibold text-white/70">
+          <span className="text-[12px] leading-none text-white/85">{getChannelSymbol(card.channel)}</span>
           {getChannelLabel(card.channel)}
         </span>
       </div>
-      <p className="mt-2 truncate text-sm font-semibold text-white">
-        {card.contactName || "Contato nao identificado"}
-      </p>
-      {card.company ? <p className="mt-0.5 truncate text-xs text-white/55">{card.company}</p> : null}
-      <p className="mt-3 line-clamp-2 min-h-9 text-xs leading-relaxed text-white/70">
-        {getLastMessagePreview(card)}
-      </p>
-      <div className="mt-3 grid gap-1.5 text-[11px] text-white/55">
-        <p className="truncate">
-          <span className="text-white/40">Setor:</span> {card.departmentName || "-"}
+
+      <div className="border-b border-white/10 py-2">
+        <p className="truncate text-sm font-semibold leading-tight text-white">
+          {card.contactName || "Contato nao identificado"}
         </p>
-        <p className="truncate">
-          <span className="text-white/40">Fila:</span> {card.queueName || "-"}
-        </p>
-        <p className="truncate">
-          <span className="text-white/40">Responsavel:</span> {card.assignedUserName || "Sem responsavel"}
+        {card.company ? <p className="mt-0.5 truncate text-[11px] leading-tight text-white/55">{card.company}</p> : null}
+        <p className="mt-1.5 line-clamp-1 text-[11px] leading-snug text-white/68">
+          {getLastMessagePreview(card)}
         </p>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/65">
-          1a resp. {formatDuration(card.waitingFirstResponseSec)}
+
+      <div className="grid gap-1 border-b border-white/10 py-2 text-[10.5px] leading-tight text-white/58">
+        <p className="truncate">
+          <span className="text-white/38">Setor</span> · {card.departmentName || "-"}
+        </p>
+        <p className="truncate">
+          <span className="text-white/38">Fila</span> · {card.queueName || "-"}
+        </p>
+        <p className="truncate">
+          <span className="text-white/38">Resp.</span> · {card.assignedUserName || "Sem responsavel"}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5 border-b border-white/10 py-2 text-[10.5px]">
+        <span className="rounded border border-white/10 bg-black/10 px-1.5 py-1 text-white/67">
+          1a {formatDuration(card.waitingFirstResponseSec)}
         </span>
-        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-white/65">
+        <span className="rounded border border-white/10 bg-black/10 px-1.5 py-1 text-white/67">
           Atend. {formatDuration(card.activeDurationSec)}
         </span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+
+      <div className="mt-2 flex min-h-5 flex-wrap gap-1">
         {card.continuation ? (
-          <span className="rounded-full border border-violet-300/25 bg-violet-400/10 px-2 py-0.5 text-[11px] font-semibold text-violet-100">
+          <span className="rounded-full border border-violet-300/25 bg-violet-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-100">
             Continuacao
           </span>
         ) : null}
         {card.tags.slice(0, 3).map((tag) => (
-          <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-white/60">
+          <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-white/60">
             {tag}
           </span>
         ))}
+        {!card.continuation && card.tags.length === 0 ? (
+          <span className="text-[10px] text-white/32">Sem tags</span>
+        ) : null}
       </div>
-      <p className="mt-3 text-[11px] text-white/40">Atualizado {formatDateTime(card.updatedAt)}</p>
+      <p className="mt-1.5 text-[10px] leading-none text-white/40">Atualizado {formatDateTime(card.updatedAt)}</p>
     </button>
   );
 }
