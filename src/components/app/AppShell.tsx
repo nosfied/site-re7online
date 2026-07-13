@@ -92,7 +92,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "operation",
     feature: "operationsBoard",
     minRole: "SUPERVISOR",
-    labels: { business: "Command Center", government: "Command Center" },
+    labels: { business: "Central de Operações", government: "Central de Operações" },
   },
   {
     href: "/app/campaigns",

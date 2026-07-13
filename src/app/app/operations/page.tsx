@@ -527,7 +527,7 @@ export default function AppOperationsPage() {
   return (
     <AppShell
       session={session}
-      title="Command Center"
+      title="Central de Operações"
       hideTitleBar
     >
       <section className="grid gap-4">
