@@ -38,6 +38,8 @@ O Converta opera com canais digitais Meta por configuracao tenant-scoped, preser
 
 Instagram e Facebook/Messenger sao operados em modo atendimento humano, sem ativacao automatica de IA ou automacao fora do escopo aprovado.
 
+Conforme esclarecimento oficial, esses canais sao tratados como centralizacao para atendimento humano, historico e acompanhamento pelo mesmo Inbox multicanal.
+
 ## Webchat / Widget
 
 O canal Webchat permite atendimento pelo site institucional, criando conversas com `channel=webchat`, historico proprio, handoff para humano e continuidade pelo Inbox.
@@ -83,11 +85,17 @@ O Converta possui modulo de campanhas e templates para disparos institucionais p
 
 A criacao, adequacao, submissao e acompanhamento de templates dependem das politicas e validacoes da Meta.
 
+Para o CRA-PR, a premissa operacional e utilizar mensagens institucionais como templates de utilidade (`utility`) sempre que aderentes as politicas Meta, sem previsao de mensagens marketing. O relatorio de consumo por campanha permite exportar CSV com status Meta, categoria, data de envio, data de entrega e criterio operacional de faturamento.
+
 ## Relatorios
 
 A plataforma oferece relatorios operacionais com filtros por periodo, canal, usuario, departamento/fila e metricas de atendimento/SLA.
 
-Exportacoes em CSV estao contempladas nos relatorios operacionais. Outros formatos devem ser confirmados conforme exigencia final do edital.
+Exportacoes em CSV estao contempladas nos relatorios operacionais e no consumo de campanhas. PDF pode ser usado como relatorio formatado quando aplicavel. XLSX pode ser atendido por formato aberto/equivalente ou conversao operacional a partir do CSV, conforme aceita o esclarecimento oficial.
+
+## Opt-out / Descadastro
+
+O requisito de opt-out pode ser atendido por controle operacional da plataforma com registro do pedido, data/canal, bloqueio de novos disparos e historico auditavel. No estado atual, esse ponto deve ser operado com procedimento controlado e validado antes do inicio de disparos em massa.
 
 ## Seguranca E LGPD
 
@@ -129,4 +137,3 @@ O treinamento inicial remoto cobre:
 - relatorios;
 - boas praticas WhatsApp Business Platform;
 - LGPD e uso adequado da base de contatos.
-

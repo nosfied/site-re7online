@@ -8672,6 +8672,71 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   if (
     req.method === "GET" &&
     pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
+    pathname.endsWith("/export")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const result = await buildCampaignDetailPayload(prisma, {
+        clientId: client.id,
+        campaignId,
+      });
+      if (!result) {
+        json(res, 404, httpError("campaign_not_found", "Campaign not found"));
+        return;
+      }
+      const csv = buildCampaignConsumptionCsv(
+        {
+          id: result.campaign.id,
+          name: result.campaign.name,
+          templateName: result.campaign.templateName,
+        },
+        result.campaign.messagesMetaStatus ?? []
+      );
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="campaign-consumption-${campaignId}.csv"`
+      );
+      res.end(csv);
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.export.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/campaigns/") &&
     pathname.split("/").length === 4
   ) {
     const prisma = getPrisma();
@@ -17763,6 +17828,10 @@ type CampaignMetaStatus = {
   waId: string;
   templateName: string | null;
   status: "sent" | "delivered" | "read" | "failed";
+  sentAt: string | null;
+  deliveredAt: string | null;
+  billable: boolean;
+  nonBillingReason: string | null;
   pricingCategory: string | null;
   pricingBillable: boolean | null;
   pricingModel: string | null;
@@ -17800,6 +17869,7 @@ function extractMetaStatus(rawPayload: unknown) {
     pricingBillable:
       typeof metaStatus?.pricingBillable === "boolean" ? metaStatus.pricingBillable : null,
     pricingModel: typeof metaStatus?.pricingModel === "string" ? metaStatus.pricingModel : null,
+    lastStatusAt: typeof metaStatus?.lastStatusAt === "string" ? metaStatus.lastStatusAt : null,
     conversationId:
       typeof metaStatus?.conversationId === "string" ? metaStatus.conversationId : null,
     statusDetail: typeof metaStatus?.statusDetail === "string" ? metaStatus.statusDetail : null,
@@ -17905,6 +17975,36 @@ function stringifyCampaignError(value: unknown) {
   }
 }
 
+function isUtilityPricingCategory(value: string | null) {
+  return (value ?? "").trim().toLowerCase() === "utility";
+}
+
+function isDeliveredForCampaignBilling(status: CampaignMetaStatus["status"]) {
+  return status === "delivered" || status === "read";
+}
+
+function resolveCampaignBillingStatus(item: {
+  status: CampaignMetaStatus["status"];
+  pricingCategory: string | null;
+}) {
+  if (!isDeliveredForCampaignBilling(item.status)) {
+    return {
+      billable: false,
+      nonBillingReason: item.status === "failed" ? "failed" : "not_delivered",
+    };
+  }
+  if (!isUtilityPricingCategory(item.pricingCategory)) {
+    return {
+      billable: false,
+      nonBillingReason: "not_utility_category",
+    };
+  }
+  return {
+    billable: true,
+    nonBillingReason: null,
+  };
+}
+
 function buildCampaignMetaStatusItem(item: {
   waId: string;
   messageId?: string | null;
@@ -17912,13 +18012,28 @@ function buildCampaignMetaStatusItem(item: {
   status: string;
   errorBody: string | null;
   rawPayload: Prisma.JsonValue | null;
+  createdAt?: Date | string | null;
 }): CampaignMetaStatus {
   const metaStatus = extractMetaStatus(item.rawPayload);
   const status = normalizeCampaignMessageStatus(metaStatus.lastStatus, item.status);
+  const billing = resolveCampaignBillingStatus({
+    status,
+    pricingCategory: metaStatus.pricingCategory,
+  });
+  const sentAt =
+    item.createdAt instanceof Date
+      ? item.createdAt.toISOString()
+      : typeof item.createdAt === "string"
+        ? item.createdAt
+        : null;
   return {
     waId: item.waId,
     templateName: item.templateName,
     status,
+    sentAt,
+    deliveredAt: isDeliveredForCampaignBilling(status) ? metaStatus.lastStatusAt : null,
+    billable: billing.billable,
+    nonBillingReason: billing.nonBillingReason,
     pricingCategory: metaStatus.pricingCategory,
     pricingBillable: metaStatus.pricingBillable,
     pricingModel: metaStatus.pricingModel,
@@ -17949,6 +18064,10 @@ function buildCampaignSeedFallbackStatusItems(
       waId,
       templateName: seed.templateName || campaign.templateName,
       status: wasSent ? "sent" : "failed",
+      sentAt: null,
+      deliveredAt: null,
+      billable: false,
+      nonBillingReason: wasSent ? "status_unconfirmed" : "failed_or_blocked",
       pricingCategory: null,
       pricingBillable: null,
       pricingModel: null,
@@ -17989,6 +18108,61 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
       totalFailed: 0,
     }
   );
+}
+
+function formatCampaignNonBillingReason(value: string | null) {
+  switch (value) {
+    case "not_delivered":
+      return "nao_entregue";
+    case "not_utility_category":
+      return "categoria_nao_utility";
+    case "failed":
+      return "falha";
+    case "status_unconfirmed":
+      return "status_nao_confirmado";
+    case "failed_or_blocked":
+      return "falha_ou_bloqueio";
+    default:
+      return value ?? "";
+  }
+}
+
+function buildCampaignConsumptionCsv(campaign: {
+  id: string;
+  name: string;
+  templateName: string;
+}, items: CampaignMetaStatus[]) {
+  const rows = [
+    [
+      "campaign_id",
+      "campaign_name",
+      "template",
+      "category",
+      "contact",
+      "status",
+      "sent_at",
+      "delivered_at",
+      "billable",
+      "non_billing_reason",
+      "meta_pricing_billable",
+      "pricing_model",
+    ],
+    ...items.map((item) => [
+      campaign.id,
+      campaign.name,
+      item.templateName ?? campaign.templateName,
+      item.pricingCategory ?? "",
+      item.waId,
+      item.status,
+      item.sentAt ?? "",
+      item.deliveredAt ?? "",
+      item.billable ? "sim" : "nao",
+      item.billable ? "" : formatCampaignNonBillingReason(item.nonBillingReason),
+      item.pricingBillable === null ? "" : item.pricingBillable ? "sim" : "nao",
+      item.pricingModel ?? "",
+    ]),
+  ];
+  return `${rows.map((row) => row.map((cell) => csvCell(cell)).join(",")).join("\n")}\n`;
 }
 
 type ScopedClientRecord = {
@@ -21771,6 +21945,7 @@ async function buildCampaignDetailPayload(
       status: true,
       errorBody: true,
       rawPayload: true,
+      createdAt: true,
     },
   });
   const messagesMetaStatus = outboundMessages

@@ -35,20 +35,21 @@ Evitar proposta abaixo de R$ 36.000,00/ano sem aceite expresso da diretoria, poi
 - O custo Meta esta incluso apenas conforme categorias e volumes previstos no edital.
 - Templates dependem de aprovacao da Meta.
 - Limites de envio, qualidade da conta, bloqueios e rejeicoes dependem da Meta.
-- Mensagens rejeitadas, falhas ou canceladas nao devem ser faturadas como mensagens efetivamente aceitas/enviadas.
-- Excedentes de consumo devem seguir o contrato, o edital ou esclarecimento formal.
-- Se grande parte das mensagens for classificada como marketing, o risco de custo aumenta.
+- Mensagens aceitas/processadas pela API, mas nao entregues, nao compoem mensagem ativa faturavel.
+- Status de leitura nao altera a regra de faturamento.
+- Excedentes acima dos quantitativos estimados seguem o mesmo preco unitario, condicionados a saldo contratual e autorizacao previa.
+- Nao ha previsao de mensagens marketing no escopo esclarecido.
 
 ## Mensagens Ativas
 
-Para fins comerciais, considerar como mensagem ativa faturavel somente a mensagem institucional enviada por template oficial e aceita pela API/Meta, conforme regra final esclarecida pelo edital/contrato.
+Para fins comerciais, considerar como mensagem ativa faturavel somente a mensagem modelo/template de utilidade (`utility`), fora da janela de 24h, efetivamente entregue ao destinatario.
 
-Pontos que exigem confirmacao:
+Regras esclarecidas:
 
-- se "mensagem ativa" e mensagem aceita pela API, entregue, lida ou conversa iniciada pela empresa;
-- se falhas/rejeicoes devem compor ou nao faturamento;
-- se utility/auth/marketing possuem tratamento diferenciado;
-- se consumo acima de 10.000/mês sera pago como excedente.
+- mensagens de servico dentro da janela de 24h nao contam como mensagens ativas faturaveis;
+- mensagens processadas, aceitas, falhas, rejeitadas ou canceladas sem entrega nao devem ser faturadas como mensagens ativas;
+- mensagens lidas seguem a mesma regra de mensagens entregues, sem adicional por leitura;
+- o relatorio operacional deve considerar `delivered/read + utility` como base conservadora de evidencia de consumo faturavel.
 
 ## Garantia
 
@@ -62,5 +63,4 @@ Operacionalmente tranquila, desde que considerada no fluxo de caixa.
 
 ## Recomendacao Comercial
 
-Participar com preco entre R$ 37.800,00 e R$ 39.600,00/ano, preferencialmente com pedido de esclarecimento sobre custos Meta e definicao de mensagens ativas antes da proposta final.
-
+Participar com preco entre R$ 37.800,00 e R$ 39.600,00/ano, incluindo custos Meta estimados para o volume editalicio. Excedentes devem ser tratados por autorizacao previa e saldo contratual, conforme esclarecimento oficial.

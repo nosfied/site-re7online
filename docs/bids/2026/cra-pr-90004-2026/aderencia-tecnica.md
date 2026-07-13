@@ -1,11 +1,12 @@
 # CRA-PR PE 90004/2026 - Aderencia Tecnica
 
-Status: auditoria documental baseada no estado do repositorio em `c4b1cc3 Sprint 85F protocol continuation link`.
+Status: auditoria documental atualizada apos resposta oficial ao pedido de esclarecimento CRA-PR e Sprint 85I.
 
 Legenda:
 
 - atende;
 - atende com configuracao;
+- atende com ressalva;
 - atende parcialmente;
 - depende de Meta/cliente;
 - depende de documentacao;
@@ -48,7 +49,7 @@ Legenda:
 | 31 | Disparo ativo em lote WhatsApp | atende parcialmente | `Campaign`, templates e outbound existem; volume/operacao CRA-PR exigem validacao. |
 | 32 | Templates/HSM oficiais | atende | `Template`, `TemplateRequest`, fallback por janela. |
 | 33 | Apoio a criacao/submissao templates | depende de documentacao | Produto apoia gestao; processo de acompanhamento deve ser descrito. |
-| 34 | Classificacao de templates Meta | depende de Meta/cliente | Depende de categoria e aprovacao Meta. |
+| 34 | Classificacao de templates Meta | depende de Meta/cliente | Categoria `utility` deve ser usada para mensagens institucionais quando aderente as politicas Meta. |
 | 35 | Bloqueio WhatsApp Web/API nao oficial | atende | Arquitetura usa Cloud API; declarar expressamente. |
 | 36 | Importacao XLSX/CSV | atende parcialmente | Exige evidenciar fluxo de importacao final. |
 | 37 | Importacao via API propria | atende parcialmente | Public API existe; escrita/importacao por API deve ser confirmada. |
@@ -60,12 +61,12 @@ Legenda:
 | 43 | Mensagem-teste antes do disparo | atende parcialmente | Smokes existem; acao formal no fluxo deve ser validada. |
 | 44 | Cancelamento/pausa de lotes | atende parcialmente | Cancelamento existe; pausa explicita nao comprovada. |
 | 45 | Status das mensagens | atende | `OutboundMessage`, `messagesMetaStatus`, falhas/status Meta. |
-| 46 | Exportacao CSV/XLSX/PDF | atende parcialmente | CSV forte; PDF em relatorios especificos; XLSX/XML nao comprovado. |
-| 47 | Opt-out/descadastro | atende parcialmente | Precisa formalizar bloqueio/descadastro para campanhas. |
-| 48 | Registro de descadastro | atende parcialmente | Exige evidencia/processo especifico. |
+| 46 | Exportacao CSV/XLSX/PDF | atende com ressalva | CSV de relatorios e campanhas; PDF em relatorios especificos; XLSX pode ser tratado por formato aberto/equivalente ou conversao operacional. |
+| 47 | Opt-out/descadastro | atende parcialmente | O esclarecimento aceita controle operacional; ainda exige formalizar registro por contato/data/canal e bloqueio auditavel. |
+| 48 | Registro de descadastro | atende parcialmente | Sem modelo dedicado evidenciado; deve ser rotina operacional ate sprint futura de opt-out persistido. |
 | 49 | Monitoramento limites/qualidade Meta | depende de Meta/cliente | Status e falhas existem; quality/limites dependem Meta/console. |
-| 50 | Relatorio consumo mensal | atende parcialmente | Metricas existem; consolidar relatorio de faturamento. |
-| 51 | Faturamento por aceitas/enviadas | risco comercial | Definicao precisa ser esclarecida no edital/contrato. |
+| 50 | Relatorio consumo mensal | atende | Export CSV de consumo por campanha considera status Meta e criterio `delivered/read + utility`. |
+| 51 | Faturamento por mensagens entregues | atende com ressalva | Regra oficial: template utility fora de 24h efetivamente entregue; o Converta gera evidencia operacional, sem modulo financeiro de billing. |
 | 52 | Disponibilidade 99,5% | depende de documentacao | Health, alertas e SLA evidence existem; compromisso e operacional. |
 | 53 | Operacao 24x7 salvo manutencao | depende de documentacao | Procedimento operacional e comunicacao precisam constar. |
 | 54 | Controle de acesso por usuario | atende | App users e sessoes. |
@@ -111,9 +112,7 @@ Legenda:
 ## Ressalvas Principais
 
 - opt-out/descadastro formal para disparos;
-- relatorio de consumo/faturamento por mensagens aceitas/enviadas;
 - validacao de 10.000 mensagens ativas/mes;
 - monitoramento de qualidade/limites Meta;
 - titularidade e transferencia de ativos Meta;
-- formatos XLSX/XML se forem exigidos literalmente.
-
+- comprovacao documental Meta e atestado assinado.

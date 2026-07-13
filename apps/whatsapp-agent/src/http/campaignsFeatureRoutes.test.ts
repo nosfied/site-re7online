@@ -133,6 +133,24 @@ async function request<T = unknown>(
   };
 }
 
+async function requestText(
+  method: string,
+  route: string,
+  user: TestUser
+): Promise<{ status: number; text: string; contentType: string | null }> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${authToken(user)}`,
+    },
+  });
+  return {
+    status: response.status,
+    text: await response.text(),
+    contentType: response.headers.get("content-type"),
+  };
+}
+
 async function cleanup() {
   const clients = await prisma.client.findMany({
     where: {
@@ -144,6 +162,13 @@ async function cleanup() {
   });
   const clientIds = clients.map((client) => client.id);
   if (clientIds.length === 0) return;
+  await prisma.outboundMessage.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.event.deleteMany({
     where: {
       clientId: {
@@ -332,6 +357,99 @@ test("tenant override can enable campaigns for a non-business profile", async ()
 
 test("tenant kill switch can disable campaigns for business profile", async () => {
   const response = await request<ErrorPayload>("GET", "/app/campaigns", killSwitchAdmin);
+
+  assert.equal(response.status, 403);
+  assert.equal(getErrorCode(response.body), "feature_not_enabled");
+  assert.equal(response.body.feature, "campaigns");
+});
+
+test("campaign export reports delivered utility messages as billable", async () => {
+  const campaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "CRA-PR consumo",
+      templateName: "cra_pr_utility",
+      status: "completed",
+      totalRecipients: 3,
+      sentCount: 3,
+      blockedCount: 0,
+    },
+  });
+  await prisma.outboundMessage.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "5541999990001",
+        waIdCanonical: "5541999990001",
+        messageId: `campaign.${campaign.id}.1`,
+        type: "TEMPLATE",
+        status: "SENT",
+        templateName: "cra_pr_utility",
+        rawPayload: {
+          campaignId: campaign.id,
+          metaStatus: {
+            lastStatus: "delivered",
+            lastStatusAt: "2026-07-13T10:00:00.000Z",
+            pricingCategory: "utility",
+            pricingBillable: true,
+            pricingModel: "PMP",
+          },
+        },
+      },
+      {
+        clientId: businessClientId,
+        waId: "5541999990002",
+        waIdCanonical: "5541999990002",
+        messageId: `campaign.${campaign.id}.2`,
+        type: "TEMPLATE",
+        status: "SENT",
+        templateName: "cra_pr_utility",
+        rawPayload: {
+          campaignId: campaign.id,
+          metaStatus: {
+            lastStatus: "sent",
+            lastStatusAt: "2026-07-13T10:01:00.000Z",
+            pricingCategory: "utility",
+            pricingBillable: true,
+            pricingModel: "PMP",
+          },
+        },
+      },
+      {
+        clientId: businessClientId,
+        waId: "5541999990003",
+        waIdCanonical: "5541999990003",
+        messageId: `campaign.${campaign.id}.3`,
+        type: "TEMPLATE",
+        status: "FAILED",
+        templateName: "cra_pr_utility",
+        errorBody: "blocked by opt-out",
+        rawPayload: {
+          campaignId: campaign.id,
+          metaStatus: {
+            lastStatus: "failed",
+            pricingCategory: "utility",
+            pricingBillable: false,
+            pricingModel: "PMP",
+          },
+        },
+      },
+    ],
+  });
+
+  const response = await requestText("GET", `/app/campaigns/${campaign.id}/export`, businessAdmin);
+
+  assert.equal(response.status, 200);
+  assert.match(response.contentType ?? "", /text\/csv/);
+  assert.match(response.text, /campaign_id,campaign_name,template,category,contact,status,sent_at,delivered_at,billable,non_billing_reason/);
+  assert.match(response.text, /5541999990001,delivered,/);
+  assert.match(response.text, /5541999990001,delivered,[^\n]*,sim,/);
+  assert.match(response.text, /5541999990002,sent,[^\n]*,nao,nao_entregue/);
+  assert.match(response.text, /5541999990003,failed,[^\n]*,nao,falha/);
+});
+
+test("campaign export remains capability protected", async () => {
+  const response = await request<ErrorPayload>("GET", "/app/campaigns/missing/export", governmentAdmin);
 
   assert.equal(response.status, 403);
   assert.equal(getErrorCode(response.body), "feature_not_enabled");

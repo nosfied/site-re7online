@@ -461,6 +461,10 @@ export type CampaignItem = {
     waId: string;
     templateName: string | null;
     status: "sent" | "delivered" | "read" | "failed";
+    sentAt: string | null;
+    deliveredAt: string | null;
+    billable: boolean;
+    nonBillingReason: string | null;
     pricingCategory: string | null;
     pricingBillable: boolean | null;
     pricingModel: string | null;

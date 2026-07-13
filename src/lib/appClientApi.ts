@@ -2929,6 +2929,13 @@ export async function getAppCampaign(
   return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}`);
 }
 
+export async function exportAppCampaignConsumptionCsv(
+  session: AppSession,
+  campaignId: string
+): Promise<string> {
+  return requestAppText(session, `/app/campaigns/${encodeURIComponent(campaignId)}/export`);
+}
+
 export async function createAppCampaign(
   session: AppSession,
   payload: {

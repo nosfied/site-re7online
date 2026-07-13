@@ -10,6 +10,7 @@ import {
   cancelAppCampaign,
   clearAppSession,
   createAppCampaign,
+  exportAppCampaignConsumptionCsv,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
@@ -221,6 +222,7 @@ export default function AppCampaignsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [exportingConsumption, setExportingConsumption] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -499,6 +501,35 @@ export default function AppCampaignsPage() {
       setDetailError(typed.message || "Erro ao cancelar campanha.");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleExportCampaignConsumption = async () => {
+    if (!session || !selectedCampaign) return;
+    setExportingConsumption(true);
+    setDetailError(null);
+    try {
+      const csv = await exportAppCampaignConsumptionCsv(session, selectedCampaign.id);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `campaign-consumption-${selectedCampaign.id}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setToast("CSV de consumo gerado.");
+      window.setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setDetailError(typed.message || "Erro ao exportar consumo da campanha.");
+    } finally {
+      setExportingConsumption(false);
     }
   };
 
@@ -873,6 +904,25 @@ export default function AppCampaignsPage() {
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
                     Status da campanha e baseado na confirmacao da Meta (sent, delivered, read).
+                    Mensagens faturaveis para CRA-PR sao consideradas apenas quando entregues/lidas,
+                    com categoria utility.
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 p-3">
+                    <div>
+                      <p className="text-sm font-semibold">Relatorio de consumo</p>
+                      <p className="mt-1 text-xs text-white/60">
+                        Exporta CSV com status de entrega e criterio operacional de faturamento.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={exportingConsumption}
+                      onClick={handleExportCampaignConsumption}
+                      className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/85 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {exportingConsumption ? "Exportando..." : "Exportar CSV"}
+                    </button>
                   </div>
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3">
@@ -912,6 +962,8 @@ export default function AppCampaignsPage() {
                               <th className="px-3 py-2">Status</th>
                               <th className="px-3 py-2">Categoria</th>
                               <th className="px-3 py-2">Cobranca</th>
+                              <th className="px-3 py-2">Faturavel</th>
+                              <th className="px-3 py-2">Entrega</th>
                               <th className="px-3 py-2">Erro</th>
                             </tr>
                           </thead>
@@ -926,6 +978,10 @@ export default function AppCampaignsPage() {
                                 </td>
                                 <td className="px-3 py-2">{item.pricingCategory || "-"}</td>
                                 <td className="px-3 py-2">{formatBillingValue(item.pricingBillable)}</td>
+                                <td className="px-3 py-2">{item.billable ? "sim" : "nao"}</td>
+                                <td className="px-3 py-2 text-xs text-white/70">
+                                  {item.deliveredAt ? formatDateTime(item.deliveredAt) : "-"}
+                                </td>
                                 <td className="px-3 py-2 text-white/70">
                                   {getFriendlyCampaignError(item.error)?.summary || "-"}
                                   {getFriendlyCampaignError(item.error)?.detail ? (

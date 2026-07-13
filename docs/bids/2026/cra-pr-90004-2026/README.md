@@ -1,6 +1,6 @@
 # CRA-PR PE 90004/2026 - Bid Readiness Pack
 
-Status: pacote documental minimo para decisao de participacao. Este material nao altera produto, codigo, banco, deploy ou tenant real.
+Status: pacote documental minimo para decisao de participacao, atualizado apos resposta oficial ao pedido de esclarecimento.
 
 ## Resumo Do Edital
 
@@ -23,18 +23,23 @@ Contratacao de plataforma multicanal de atendimento ao publico contemplando What
 
 ## Decisao Preliminar
 
-Participar com ressalvas.
+Participar com ressalvas controladas.
 
 O Converta atende ao nucleo do edital: SaaS web, WhatsApp oficial, canais Meta, Webchat, Inbox multicanal, chatbot por menus, atendimento humano, filas/setores, historico, protocolo, continuidade, relatórios e operacao assistida.
 
-As ressalvas concentram-se em:
+O esclarecimento oficial reduziu os principais riscos comerciais:
 
-- custo Meta para 120.000 mensagens ativas/ano;
-- opt-out/descadastro formal em campanhas;
-- relatorio de consumo/faturamento por mensagens aceitas/enviadas;
+- mensagem ativa faturavel = template `utility` fora da janela de 24h, efetivamente entregue;
+- mensagens aceitas/processadas, mas nao entregues, nao faturam;
+- excedentes dependem de saldo contratual e autorizacao previa;
+- Instagram/Facebook exigem centralizacao human-only no Inbox, sem automacao obrigatoria;
+- ativos Meta podem ser operados pela contratada e transferidos ao CRA-PR ao final.
+
+Ressalvas remanescentes:
+
+- opt-out/descadastro formal em campanhas com registro auditavel;
 - monitoramento formal de qualidade/limites Meta;
-- titularidade/transferencia de WABA, numero, templates e perfis;
-- confirmacao de que vinculo tecnico equivalente atende a exigencia de operacao regular Meta.
+- comprovacao oficial Meta e atestado tecnico assinados.
 
 ## Status Tecnico
 
@@ -51,7 +56,7 @@ As ressalvas concentram-se em:
 | Continuidade por protocolo | pronto |
 | Campanhas/templates | parcialmente pronto |
 | Opt-out formal | ressalva |
-| Consumo/faturamento Meta | ressalva |
+| Consumo/faturamento Meta | pronto com evidencia CSV operacional |
 
 ## Status Documental
 
@@ -63,6 +68,7 @@ As ressalvas concentram-se em:
 | Proposta tecnica base | criada neste pacote |
 | Premissas comerciais | criadas neste pacote |
 | Pedido de esclarecimento | minuta criada neste pacote |
+| Resposta ao esclarecimento | registrada neste pacote |
 | Declaracao API oficial Meta | minuta criada neste pacote |
 | Declaracao LGPD/seguranca | minuta criada neste pacote |
 
@@ -70,8 +76,7 @@ As ressalvas concentram-se em:
 
 1. Revisar e assinar o atestado Tendencia.
 2. Validar documentos de habilitacao juridica, fiscal, trabalhista e economico-financeira.
-3. Enviar pedido de esclarecimento se ainda houver prazo util.
+3. Anexar evidencias oficiais Meta.
 4. Definir preco final com margem para custos Meta.
 5. Preparar proposta tecnica e comercial em formato exigido pelo Compras.gov.
 6. Separar evidencias de POC/demonstracao: Webchat, Inbox, canais Meta, campanhas, relatorios e protocolo.
-
