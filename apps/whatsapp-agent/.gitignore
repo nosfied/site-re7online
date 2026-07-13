@@ -5,3 +5,11 @@ dist
 .backups
 backups
 *.log
+
+# Runtime/local data and backup artifacts
+.data/
+.data*
+backup_*.sql
+*.sql
+conversation-report.csv
+*.data-runtime-json-legacy-*.tar.gz
