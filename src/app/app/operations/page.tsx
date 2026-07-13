@@ -157,12 +157,26 @@ function OperationsBoardSkeleton() {
   );
 }
 
-function OperationsCard({ card, onOpen }: { card: AppOperationsBoardCard; onOpen: (card: AppOperationsBoardCard) => void }) {
+const CARD_TONES = [
+  "border-white/16 bg-white/[0.115] shadow-[0_10px_28px_rgba(2,8,23,0.16)] hover:bg-white/[0.145]",
+  "border-re7-sky/18 bg-slate-950/28 shadow-[0_10px_28px_rgba(2,8,23,0.2)] hover:bg-slate-950/36",
+];
+
+function OperationsCard({
+  card,
+  index,
+  onOpen,
+}: {
+  card: AppOperationsBoardCard;
+  index: number;
+  onOpen: (card: AppOperationsBoardCard) => void;
+}) {
+  const tone = CARD_TONES[index % CARD_TONES.length];
   return (
     <button
       type="button"
       onClick={() => onOpen(card)}
-      className="group w-full rounded-lg border border-white/10 bg-white/[0.055] p-3 text-left shadow-sm transition hover:border-re7-sky/50 hover:bg-white/[0.085] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re7-sky/70"
+      className={`group w-full rounded-lg border p-3 text-left transition hover:border-re7-sky/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re7-sky/70 ${tone}`}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-mono text-xs font-semibold text-re7-sky">{card.protocol}</span>
@@ -247,8 +261,13 @@ function OperationsColumn({
           </div>
         ) : (
           <div className="grid gap-2.5">
-            {column.items.map((card) => (
-              <OperationsCard key={`${status}:${card.conversationId}`} card={card} onOpen={onOpenCard} />
+            {column.items.map((card, index) => (
+              <OperationsCard
+                key={`${status}:${card.conversationId}`}
+                card={card}
+                index={index}
+                onOpen={onOpenCard}
+              />
             ))}
           </div>
         )}
