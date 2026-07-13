@@ -11,7 +11,14 @@ import type {
   LeadNoteItem,
   LeadStatus,
 } from "@/lib/whatsappAdminApi";
-import { getAppFeatures, getAppProfile, type AppFeatures, type AppProfile } from "@/lib/appFeatures";
+import {
+  getAppFeatures,
+  getAppProfile,
+  getTenantCapabilities,
+  type AppFeatures,
+  type AppProfile,
+  type TenantCapabilities,
+} from "@/lib/appFeatures";
 
 export type AppSessionUser = {
   id: string;
@@ -27,7 +34,7 @@ export type AppSession = {
   baseUrl: string;
   token: string;
   user: AppSessionUser;
-  features: AppFeatures;
+  features: TenantCapabilities;
   profile: AppProfile;
 };
 
@@ -1105,7 +1112,7 @@ function parseStoredSession(raw: string | null): AppSession | null {
       baseUrl: normalizeBaseUrl(String(parsed.baseUrl || getDefaultBaseUrl())),
       token,
       user: resolvedUser,
-      features: getAppFeatures(parsed as Partial<AppSession>),
+      features: getTenantCapabilities(parsed as Partial<AppSession>),
       profile: getAppProfile(parsed as Partial<AppSession>),
     };
   } catch {
@@ -1424,7 +1431,7 @@ export async function loginAppUser(
   email: string,
   password: string
 ): Promise<
-  | { ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile; mfaRequired?: false }
+  | { ok: true; token: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile; mfaRequired?: false }
   | {
       ok: true;
       mfaRequired: true;
@@ -1432,7 +1439,7 @@ export async function loginAppUser(
       expiresAt: string;
       methods: string[];
       user: AppSessionUser;
-      features: AppFeatures;
+      features: TenantCapabilities;
       profile: AppProfile;
     }
 > {
@@ -1492,7 +1499,7 @@ export async function loginAppUser(
     expiresAt?: string;
     methods?: string[];
     user: AppSessionUser;
-    features?: Partial<AppFeatures> | null;
+    features?: Partial<TenantCapabilities> | null;
     profile?: AppProfile | null;
   };
   if (payload.mfaRequired) {
@@ -1503,7 +1510,7 @@ export async function loginAppUser(
       expiresAt: String(payload.expiresAt ?? ""),
       methods: Array.isArray(payload.methods) ? payload.methods.map(String) : ["totp"],
       user: payload.user,
-      features: getAppFeatures({ features: payload.features ?? undefined }),
+      features: getTenantCapabilities({ features: payload.features ?? undefined }),
       profile: getAppProfile({ profile: payload.profile ?? undefined }),
     };
   }
@@ -1517,7 +1524,7 @@ export async function loginAppUser(
     ...payload,
     token: payload.token,
     mfaRequired: false,
-    features: getAppFeatures({ features: payload.features ?? undefined }),
+    features: getTenantCapabilities({ features: payload.features ?? undefined }),
     profile: getAppProfile({ profile: payload.profile ?? undefined }),
     user: {
       ...payload.user,
@@ -1535,7 +1542,7 @@ export async function loginAppUser(
 export async function verifyAppMfaLoginChallenge(
   challengeToken: string,
   code: string
-): Promise<{ ok: true; token: string; user: AppSessionUser; features: AppFeatures; profile: AppProfile }> {
+): Promise<{ ok: true; token: string; user: AppSessionUser; features: TenantCapabilities; profile: AppProfile }> {
   const baseUrl = normalizeBaseUrl(getDefaultBaseUrl()) || getDefaultBaseUrl();
   const res = await fetch(`${baseUrl}/auth/mfa/verify`, {
     method: "POST",
@@ -1563,13 +1570,13 @@ export async function verifyAppMfaLoginChallenge(
     ok: true;
     token: string;
     user: AppSessionUser;
-    features?: Partial<AppFeatures> | null;
+    features?: Partial<TenantCapabilities> | null;
     profile?: AppProfile | null;
   };
   const tokenUser = decodeClientAuthToken(payload.token);
   return {
     ...payload,
-    features: getAppFeatures({ features: payload.features ?? undefined }),
+    features: getTenantCapabilities({ features: payload.features ?? undefined }),
     profile: getAppProfile({ profile: payload.profile ?? undefined }),
     user: {
       ...payload.user,
