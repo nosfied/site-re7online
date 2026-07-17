@@ -62,8 +62,8 @@ Legenda:
 | 44 | Cancelamento/pausa de lotes | atende parcialmente | Cancelamento existe; pausa explicita nao comprovada. |
 | 45 | Status das mensagens | atende | `OutboundMessage`, `messagesMetaStatus`, falhas/status Meta. |
 | 46 | Exportacao CSV/XLSX/PDF | atende com ressalva | CSV de relatorios e campanhas; PDF em relatorios especificos; XLSX pode ser tratado por formato aberto/equivalente ou conversao operacional. |
-| 47 | Opt-out/descadastro | atende parcialmente | O esclarecimento aceita controle operacional; ainda exige formalizar registro por contato/data/canal e bloqueio auditavel. |
-| 48 | Registro de descadastro | atende parcialmente | Sem modelo dedicado evidenciado; deve ser rotina operacional ate sprint futura de opt-out persistido. |
+| 47 | Opt-out/descadastro | atende com ressalva | Controle operacional inicial registra descadastro em `Event` com contato/canal/origem/data e bloqueia o contato em campanhas futuras. |
+| 48 | Registro de descadastro | atende com ressalva | Historico auditavel via eventos `contact.opt_out.recorded`, `contact.opt_out.revoked` e `campaign.recipient.opt_out_blocked`; tabela dedicada fica como evolucao futura. |
 | 49 | Monitoramento limites/qualidade Meta | depende de Meta/cliente | Status e falhas existem; quality/limites dependem Meta/console. |
 | 50 | Relatorio consumo mensal | atende | Export CSV de consumo por campanha considera status Meta e criterio `delivered/read + utility`. |
 | 51 | Faturamento por mensagens entregues | atende com ressalva | Regra oficial: template utility fora de 24h efetivamente entregue; o Converta gera evidencia operacional, sem modulo financeiro de billing. |

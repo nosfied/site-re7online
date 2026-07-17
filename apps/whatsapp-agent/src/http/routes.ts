@@ -71,6 +71,15 @@ import {
   listCampaigns,
 } from "../campaigns/campaignService.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
+import {
+  CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
+  filterOptedOutCampaignRecipients,
+  normalizeOptOutWaId,
+  recordCampaignOptOutBlocks,
+  recordContactOptOut,
+  revokeContactOptOut,
+  type CampaignOptOutBlockedRecipient,
+} from "../campaigns/optOutRegistry.js";
 import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
@@ -8670,6 +8679,75 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   }
 
   if (
+    req.method === "POST" &&
+    (pathname === "/app/campaigns/opt-out" || pathname === "/app/campaigns/opt-out/revoke")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const normalized = normalizeOptOutWaId(body.waId ?? body.phone ?? body.contact);
+      if (!normalized) {
+        json(res, 400, httpError("invalid_recipient", "Recipient waId is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const common = {
+        clientId: client.id,
+        waId: normalized.waId,
+        channel: typeof body.channel === "string" ? body.channel : "whatsapp",
+        source: typeof body.source === "string" ? body.source : "manual",
+        reason: typeof body.reason === "string" ? body.reason : null,
+        userId: clientAuth.userId,
+        note: typeof body.note === "string" ? body.note : null,
+        requestId,
+      };
+      const result =
+        pathname.endsWith("/revoke")
+          ? await revokeContactOptOut(common)
+          : await recordContactOptOut({
+              ...common,
+              campaignId: typeof body.campaignId === "string" ? body.campaignId : null,
+            });
+      if (!result) {
+        json(res, 400, httpError("invalid_recipient", "Recipient waId is required"));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        status: pathname.endsWith("/revoke") ? "revoked" : "recorded",
+        waId: result.waId,
+        waIdCanonical: result.waIdCanonical,
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.opt_out.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
     req.method === "GET" &&
     pathname.startsWith("/app/campaigns/") &&
     pathname.split("/").length === 5 &&
@@ -8930,7 +9008,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         name,
         templateId: resolvedTemplate.templateId,
         templateName: resolvedTemplate.templateName,
-        waIds,
+        ...(await buildOptOutFilteredCampaignRecipients(prisma, {
+          clientId: client.id,
+          waIds,
+        })),
         components,
       });
 
@@ -14991,7 +15072,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name,
           templateId: resolvedTemplate.templateId,
           templateName: resolvedTemplate.templateName,
-          waIds: dedupedWaIds,
+          ...(await buildOptOutFilteredCampaignRecipients(prisma, {
+            clientId: client.id,
+            waIds: dedupedWaIds,
+          })),
           components,
         });
 
@@ -17827,7 +17911,7 @@ function serializeCampaign(campaign: {
 type CampaignMetaStatus = {
   waId: string;
   templateName: string | null;
-  status: "sent" | "delivered" | "read" | "failed";
+  status: "sent" | "delivered" | "read" | "failed" | "opt_out";
   sentAt: string | null;
   deliveredAt: string | null;
   billable: boolean;
@@ -18091,6 +18175,7 @@ function summarizeCampaignMetaStatuses(items: CampaignMetaStatus[]): CampaignMet
         case "delivered":
           acc.totalDelivered += 1;
           break;
+        case "opt_out":
         case "failed":
           acc.totalFailed += 1;
           break;
@@ -18122,9 +18207,38 @@ function formatCampaignNonBillingReason(value: string | null) {
       return "status_nao_confirmado";
     case "failed_or_blocked":
       return "falha_ou_bloqueio";
+    case "opt_out":
+      return "opt_out";
     default:
       return value ?? "";
   }
+}
+
+function buildCampaignOptOutStatusItem(item: {
+  waId: string | null;
+  payloadJson: Prisma.JsonValue;
+  createdAt: Date;
+}, templateName: string): CampaignMetaStatus | null {
+  const payload =
+    item.payloadJson && typeof item.payloadJson === "object" && !Array.isArray(item.payloadJson)
+      ? (item.payloadJson as Record<string, unknown>)
+      : {};
+  const waId = typeof payload.waId === "string" ? payload.waId : item.waId;
+  if (!waId) return null;
+  return {
+    waId,
+    templateName: typeof payload.templateName === "string" ? payload.templateName : templateName,
+    status: "opt_out",
+    sentAt: null,
+    deliveredAt: null,
+    billable: false,
+    nonBillingReason: "opt_out",
+    pricingCategory: null,
+    pricingBillable: null,
+    pricingModel: null,
+    conversationId: null,
+    error: "Recipient blocked by opt-out",
+  };
 }
 
 function buildCampaignConsumptionCsv(campaign: {
@@ -21900,6 +22014,7 @@ async function buildCampaignListPayload(
       case "delivered":
         current.totalDelivered += 1;
         break;
+      case "opt_out":
       case "failed":
         current.totalFailed += 1;
         break;
@@ -21951,6 +22066,22 @@ async function buildCampaignDetailPayload(
   const messagesMetaStatus = outboundMessages
     .filter((item) => resolveOutboundCampaignId(item) === campaign.id)
     .map(buildCampaignMetaStatusItem);
+  const optOutBlockEvents = await prisma.event.findMany({
+    where: {
+      clientId: params.clientId,
+      eventName: CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
+      messageId: campaign.id,
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      waId: true,
+      payloadJson: true,
+      createdAt: true,
+    },
+  });
+  const optOutMetaStatus = optOutBlockEvents
+    .map((item) => buildCampaignOptOutStatusItem(item, campaign.templateName))
+    .filter((item): item is CampaignMetaStatus => Boolean(item));
   const draftSeed = await buildCampaignDraftSeed(prisma, {
     clientId: params.clientId,
     campaignId: campaign.id,
@@ -21958,10 +22089,15 @@ async function buildCampaignDetailPayload(
     templateName: campaign.templateName,
     outboundMessages,
   });
+  const optOutWaIds = new Set(optOutMetaStatus.map((item) => item.waId));
+  const fallbackDraftSeed = {
+    ...draftSeed,
+    recipients: draftSeed.recipients.filter((waId) => !optOutWaIds.has(waId)),
+  };
   const visibleMessagesMetaStatus =
     messagesMetaStatus.length > 0
-      ? messagesMetaStatus
-      : buildCampaignSeedFallbackStatusItems(campaign, draftSeed);
+      ? [...messagesMetaStatus, ...optOutMetaStatus]
+      : [...buildCampaignSeedFallbackStatusItems(campaign, fallbackDraftSeed), ...optOutMetaStatus];
   return {
     ok: true,
     campaign: {
@@ -21980,18 +22116,34 @@ async function createScopedCampaign(params: {
   name: string;
   templateName: string;
   waIds: string[];
+  totalRecipients?: number;
+  optOutBlocked?: CampaignOptOutBlockedRecipient[];
+  seedWaIds?: string[];
   components: Array<{
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
   }> | undefined;
 }) {
-  const campaign = await createCampaign({
+  let campaign = await createCampaign({
     clientId: params.clientId,
     templateId: params.templateId ?? null,
     name: params.name,
     templateName: params.templateName,
-    totalRecipients: params.waIds.length,
+    totalRecipients: params.totalRecipients ?? params.waIds.length,
   });
+  const optOutBlocked = params.optOutBlocked ?? [];
+  if (optOutBlocked.length > 0) {
+    campaign = await getPrisma().campaign.update({
+      where: { id: campaign.id },
+      data: { blockedCount: optOutBlocked.length },
+    });
+    await recordCampaignOptOutBlocks({
+      clientId: params.clientId,
+      campaignId: campaign.id,
+      templateName: params.templateName,
+      blocked: optOutBlocked,
+    });
+  }
   const campaignRunId = startCampaignRun({
     campaignId: campaign.id,
     clientId: params.clientId,
@@ -22006,10 +22158,29 @@ async function createScopedCampaign(params: {
     campaignId: campaign.id,
     name: params.name,
     templateName: params.templateName,
-    waIds: params.waIds,
+    waIds: params.seedWaIds ?? params.waIds,
     components: params.components,
   });
   return { campaign, campaignRunId };
+}
+
+async function buildOptOutFilteredCampaignRecipients(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    waIds: string[];
+  }
+) {
+  const filtered = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: params.clientId,
+    waIds: params.waIds,
+  });
+  return {
+    waIds: filtered.allowed,
+    totalRecipients: filtered.allowed.length + filtered.blocked.length,
+    optOutBlocked: filtered.blocked,
+    seedWaIds: params.waIds,
+  };
 }
 
 async function cancelScopedCampaign(

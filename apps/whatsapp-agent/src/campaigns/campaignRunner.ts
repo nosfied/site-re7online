@@ -7,6 +7,10 @@ import { logger } from "../logger/logger.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
+import {
+  filterOptedOutCampaignRecipients,
+  recordCampaignOptOutBlocks,
+} from "./optOutRegistry.js";
 
 const CAMPAIGN_THROTTLE_MS = 1000;
 const runningCampaigns = new Map<string, Promise<void>>();
@@ -52,7 +56,28 @@ async function runCampaignInBackground(
   const tenant = await getTenant(params.clientKey);
   const phoneNumberId = tenant?.metaPhoneNumberId || undefined;
   const language = tenant?.defaultLanguage || "pt_BR";
-  const waIds = Array.from(new Set(params.waIds.map((waId) => waId.trim()).filter(Boolean)));
+  const requestedWaIds = Array.from(new Set(params.waIds.map((waId) => waId.trim()).filter(Boolean)));
+  const filteredRecipients = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: params.clientId,
+    waIds: requestedWaIds,
+  });
+  const waIds = filteredRecipients.allowed;
+  if (filteredRecipients.blocked.length > 0) {
+    await prisma.campaign.update({
+      where: { id: params.campaignId },
+      data: {
+        blockedCount: {
+          increment: filteredRecipients.blocked.length,
+        },
+      },
+    });
+    await recordCampaignOptOutBlocks({
+      clientId: params.clientId,
+      campaignId: params.campaignId,
+      templateName: params.templateName,
+      blocked: filteredRecipients.blocked,
+    });
+  }
 
   logger.info({
     event: "campaign.runner.started",
@@ -83,7 +108,13 @@ async function runCampaignInBackground(
     },
     async () => {
       let sentCount = 0;
-      let blockedCount = 0;
+      let blockedCount =
+        (
+          await prisma.campaign.findUnique({
+            where: { id: params.campaignId },
+            select: { blockedCount: true },
+          })
+        )?.blockedCount ?? 0;
 
       for (let index = 0; index < waIds.length; index += 1) {
         const waId = waIds[index];

@@ -95,7 +95,7 @@ Exportacoes em CSV estao contempladas nos relatorios operacionais e no consumo d
 
 ## Opt-out / Descadastro
 
-O requisito de opt-out pode ser atendido por controle operacional da plataforma com registro do pedido, data/canal, bloqueio de novos disparos e historico auditavel. No estado atual, esse ponto deve ser operado com procedimento controlado e validado antes do inicio de disparos em massa.
+O requisito de opt-out pode ser atendido por controle operacional da plataforma com registro do pedido, data/canal, bloqueio de novos disparos e historico auditavel. O controle inicial registra os pedidos e reversoes em eventos auditaveis por tenant e impede novos disparos de campanhas para contatos com opt-out ativo. Uma modelagem dedicada de consentimento pode ser evoluida posteriormente, se exigida pela rotina contratual.
 
 ## Seguranca E LGPD
 

@@ -7,6 +7,11 @@ import os from "node:os";
 import path from "node:path";
 import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
 import { issueClientAuthToken } from "../auth/clientAuth.js";
+import {
+  filterOptedOutCampaignRecipients,
+  recordContactOptOut,
+  revokeContactOptOut,
+} from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
@@ -446,6 +451,101 @@ test("campaign export reports delivered utility messages as billable", async () 
   assert.match(response.text, /5541999990001,delivered,[^\n]*,sim,/);
   assert.match(response.text, /5541999990002,sent,[^\n]*,nao,nao_entregue/);
   assert.match(response.text, /5541999990003,failed,[^\n]*,nao,falha/);
+});
+
+test("event-based opt-out blocks recipient in app campaign and export", async () => {
+  const waId = "5541999981001";
+  const optOut = await request<{ ok: boolean; status: string; waIdCanonical: string }>(
+    "POST",
+    "/app/campaigns/opt-out",
+    businessAdmin,
+    {
+      waId,
+      channel: "whatsapp",
+      source: "manual",
+      reason: "descadastro solicitado",
+      note: "Pedido registrado em atendimento",
+    }
+  );
+
+  assert.equal(optOut.status, 200);
+  assert.equal(optOut.body.ok, true);
+  assert.equal(optOut.body.status, "recorded");
+
+  const created = await request<{
+    ok: boolean;
+    campaign: {
+      id: string;
+      campaignId: string;
+      totalRecipients: number;
+      sentCount: number;
+      blockedCount: number;
+    };
+  }>("POST", "/app/campaigns", businessAdmin, {
+    name: "Campanha com opt-out",
+    templateName: "cra_pr_utility",
+    recipients: [waId],
+  });
+
+  assert.equal(created.status, 200);
+  assert.equal(created.body.ok, true);
+  assert.equal(created.body.campaign.totalRecipients, 1);
+  assert.equal(created.body.campaign.blockedCount, 1);
+  assert.equal(created.body.campaign.sentCount, 0);
+
+  const outboundCount = await prisma.outboundMessage.count({
+    where: {
+      clientId: businessClientId,
+      waId,
+    },
+  });
+  assert.equal(outboundCount, 0);
+
+  const response = await requestText(
+    "GET",
+    `/app/campaigns/${created.body.campaign.id}/export`,
+    businessAdmin
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.text, /5541999981001,opt_out,[^\n]*,nao,opt_out/);
+});
+
+test("event-based opt-out revoke allows recipient and tenant isolation is preserved", async () => {
+  const waId = "5541999981002";
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId,
+    source: "test",
+    reason: "tenant business block",
+  });
+
+  const otherTenantFilter = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: overrideClientId,
+    waIds: [waId],
+  });
+  assert.deepEqual(otherTenantFilter.allowed, [waId]);
+  assert.deepEqual(otherTenantFilter.blocked, []);
+
+  const blocked = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: businessClientId,
+    waIds: [waId],
+  });
+  assert.deepEqual(blocked.allowed, []);
+  assert.equal(blocked.blocked.length, 1);
+
+  await revokeContactOptOut({
+    clientId: businessClientId,
+    waId,
+    source: "test",
+    reason: "consent restored",
+  });
+
+  const revoked = await filterOptedOutCampaignRecipients(prisma, {
+    clientId: businessClientId,
+    waIds: [waId],
+  });
+  assert.deepEqual(revoked.allowed, [waId]);
+  assert.deepEqual(revoked.blocked, []);
 });
 
 test("campaign export remains capability protected", async () => {
