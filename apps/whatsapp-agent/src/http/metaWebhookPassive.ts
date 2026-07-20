@@ -228,6 +228,8 @@ export function verifyPassiveMetaWebhookSignature(
 function getMetaMessagingEvents(payload: MetaWebhookPayload) {
   const events: Array<{
     pageId: string;
+    entryPageId: string;
+    recipientId: string;
     event: MetaMessagingEvent;
     entryIndex: number;
     eventIndex: number;
@@ -235,8 +237,9 @@ function getMetaMessagingEvents(payload: MetaWebhookPayload) {
   for (const [entryIndex, entry] of (payload.entry ?? []).entries()) {
     const entryPageId = normalizeId(entry.id);
     for (const [eventIndex, messaging] of (entry.messaging ?? []).entries()) {
-      const pageId = normalizeId(messaging.recipient?.id) || entryPageId;
-      events.push({ pageId, event: messaging, entryIndex, eventIndex });
+      const recipientId = normalizeId(messaging.recipient?.id);
+      const pageId = recipientId || entryPageId;
+      events.push({ pageId, entryPageId, recipientId, event: messaging, entryIndex, eventIndex });
     }
   }
   return events;
@@ -326,6 +329,26 @@ function hasSupportedOperationalMessage(channel: Channel, event: MetaMessagingEv
   if (channel === "instagram" && getInstagramMessageEditRecord(event)) return false;
   if (hasMetaText(event)) return true;
   return false;
+}
+
+function validateInstagramOperationalRecipient(params: {
+  item: ReturnType<typeof getMetaMessagingEvents>[number];
+  resolution: ResolvedTenantChannelAccount;
+}) {
+  const recipientId = params.item.recipientId;
+  const entryPageId = params.item.entryPageId;
+  const accountId = params.resolution.account?.channelAccountId ?? "";
+  if (!recipientId) return { ok: false as const, reason: "recipient_missing" };
+  if (entryPageId && entryPageId !== recipientId) {
+    return { ok: false as const, reason: "entry_recipient_mismatch" };
+  }
+  if (params.resolution.resolution === "matched_alias") {
+    return { ok: false as const, reason: "alias_not_operational_recipient" };
+  }
+  if (!accountId || recipientId !== accountId) {
+    return { ok: false as const, reason: "recipient_account_mismatch" };
+  }
+  return { ok: true as const };
 }
 
 function getEventTimestamp(channel: Channel, event: MetaMessagingEvent) {
@@ -934,6 +957,29 @@ export async function processPassiveMetaWebhookPayload(
     if (resolution.resolution !== "matched_enabled" && resolution.resolution !== "matched_alias") {
       unsupportedCount += 1;
       continue;
+    }
+    if (channel === "instagram") {
+      const recipientValidation = validateInstagramOperationalRecipient({ item, resolution });
+      if (!recipientValidation.ok) {
+        unsupportedCount += 1;
+        logger.warn({
+          event: "instagram.inbound.recipient_mismatch",
+          route: "/meta/webhook",
+          requestId: options.requestId,
+          channel,
+          provider: "meta",
+          tenantKey: resolution.tenantKey ?? null,
+          resolution: resolution.resolution,
+          channelAccountId: item.pageId || null,
+          accountId: resolution.account?.channelAccountId ?? null,
+          entryIdHash: hashExternalUserId(item.entryPageId),
+          recipientIdHash: hashExternalUserId(item.recipientId),
+          senderIdHash: getChannelEventExternalUserHash(channel, item.event),
+          externalMessageId,
+          reason: recipientValidation.reason,
+        });
+        continue;
+      }
     }
     if (isMetaEchoEvent(item.event)) {
       unsupportedCount += 1;

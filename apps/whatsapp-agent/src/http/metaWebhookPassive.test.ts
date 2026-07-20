@@ -771,7 +771,7 @@ test("passive processor normalizes Instagram and resolves tenant from channelAcc
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
-test("passive processor normalizes Instagram when webhook id matches account alias", async () => {
+test("passive processor ignores Instagram when webhook id only matches account alias", async () => {
   const result = await processPassiveMetaWebhookPayload(instagramPayload, {
     requestId: "test-request",
     tenants: {
@@ -800,7 +800,102 @@ test("passive processor normalizes Instagram when webhook id matches account ali
     },
   });
 
-  assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
+});
+
+test("passive processor ignores Instagram message without recipient", async () => {
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "ig-account-1",
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            timestamp: 1760000000000,
+            message: {
+              mid: "ig-mid-1",
+              text: "oi instagram",
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = await processPassiveMetaWebhookPayload(payload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "ig-account-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
+});
+
+test("passive processor ignores Instagram message when entry and recipient differ", async () => {
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: "personal-account-1",
+        messaging: [
+          {
+            sender: { id: "ig-user-1" },
+            recipient: { id: "ig-account-1" },
+            timestamp: 1760000000000,
+            message: {
+              mid: "ig-mid-1",
+              text: "oi instagram",
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const result = await processPassiveMetaWebhookPayload(payload, {
+    requestId: "test-request",
+    tenants: {
+      "tenant-a": {
+        id: "tenant-a",
+        name: "Tenant A",
+        metaPhoneNumberId: "phone-tenant-a",
+        allowlist: [],
+        handoffAttendantWaid: "",
+        defaultLanguage: "pt_BR",
+        channelAccounts: [
+          {
+            id: "instagram-account-1",
+            tenantKey: "tenant-a",
+            channel: "instagram",
+            provider: "meta",
+            channelAccountId: "ig-account-1",
+            enabled: true,
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
 });
 
 test("passive processor ignores Instagram message_edit payload shape", async () => {
