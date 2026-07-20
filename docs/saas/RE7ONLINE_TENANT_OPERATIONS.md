@@ -15,6 +15,22 @@ Use `re7online` as the internal showcase and production tenant for private-marke
 - Webchat uses public `/webchat/v1/*` endpoints and creates conversations with `channel=webchat`.
 - Webchat operator responses use the existing Inbox and require `webchat=true` and `webchatOutbound=true`.
 
+## Closed Incidents
+
+### Instagram/Meta recipient mismatch legacy
+
+Status: closed.
+
+After the technical corrections delivered in Sprint 86E (`47b7e07`) and Sprint 86F (`37df319`), with production deploy and smoke approved, the old improper conversations that had been directed to a personal Instagram profile and persisted under the `re7online` tenant were closed and anonymized through the native UI function.
+
+No hard delete, direct database update or manual script was used. This decision preserved the minimum operational audit trail while removing personal data from the Inbox, timeline and reports.
+
+Final state:
+
+- real Instagram DMs sent to `re7online` continue to enter the Inbox with sender identification and manual outbound support;
+- Instagram events are accepted as operational inbound only when the supported DM event and recipient/account guard match the tenant channel account;
+- legacy conversations from the previous permissive routing were neutralized through closure and anonymization, not physical deletion.
+
 ## Current Webchat Runtime Reuse
 
 The existing Webchat runtime already provides:
