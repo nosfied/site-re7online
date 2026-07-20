@@ -803,7 +803,7 @@ test("passive processor normalizes Instagram when webhook id matches account ali
   assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
 });
 
-test("passive processor normalizes Instagram message_edit payload shape", async () => {
+test("passive processor ignores Instagram message_edit payload shape", async () => {
   const messageEditPayload = {
     object: "instagram",
     entry: [
@@ -849,7 +849,7 @@ test("passive processor normalizes Instagram message_edit payload shape", async 
     },
   });
 
-  assert.deepEqual(result, { ok: true, normalizedCount: 1, unsupportedCount: 0 });
+  assert.deepEqual(result, { ok: true, normalizedCount: 0, unsupportedCount: 1 });
 });
 
 test("passive processor ignores Instagram message_edit callbacks without text", async () => {

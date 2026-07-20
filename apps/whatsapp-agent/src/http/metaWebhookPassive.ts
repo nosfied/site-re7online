@@ -322,11 +322,9 @@ function hasMetaText(event: MetaMessagingEvent) {
   return typeof event.message?.text === "string" && event.message.text.trim().length > 0;
 }
 
-function hasChannelText(channel: Channel, event: MetaMessagingEvent) {
+function hasSupportedOperationalMessage(channel: Channel, event: MetaMessagingEvent) {
+  if (channel === "instagram" && getInstagramMessageEditRecord(event)) return false;
   if (hasMetaText(event)) return true;
-  if (channel === "instagram") {
-    return getInstagramMessageEditParts(event).text.length > 0;
-  }
   return false;
 }
 
@@ -376,7 +374,6 @@ function classifyInstagramUnsupportedEvent(event: MetaMessagingEvent) {
     return "attachment_candidate";
   }
   const messageEdit = getInstagramMessageEditParts(event);
-  if (messageEdit.text) return "supported_candidate";
   if (messageEdit.messageEdit) return "unsupported_message_edit";
   if (event.message && typeof event.message === "object") return "unsupported_non_text";
   return "unsupported_unknown_shape";
@@ -955,7 +952,7 @@ export async function processPassiveMetaWebhookPayload(
       });
       continue;
     }
-    if (!hasChannelText(channel, item.event)) {
+    if (!hasSupportedOperationalMessage(channel, item.event)) {
       unsupportedCount += 1;
       const unsupportedClass =
         channel === "instagram"

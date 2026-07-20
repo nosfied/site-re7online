@@ -23,7 +23,6 @@ type InstagramWebhookPayload = {
         mid?: unknown;
         text?: unknown;
       };
-      message_edit?: unknown;
     }>;
   }>;
 };
@@ -63,50 +62,6 @@ function normalizeTimestamp(value: unknown) {
   return undefined;
 }
 
-function asPlainRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function getNestedRecord(record: Record<string, unknown> | null, key: string) {
-  return record ? asPlainRecord(record[key]) : null;
-}
-
-function normalizeOptionalString(value: unknown) {
-  const normalized = typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
-  return normalized || undefined;
-}
-
-function pickString(...values: unknown[]) {
-  for (const value of values) {
-    const normalized = normalizeOptionalString(value);
-    if (normalized) return normalized;
-  }
-  return undefined;
-}
-
-function getInstagramMessageEditParts(messageEditValue: unknown) {
-  const messageEdit = asPlainRecord(messageEditValue);
-  const nestedMessage = getNestedRecord(messageEdit, "message");
-  const sender = getNestedRecord(messageEdit, "sender") ?? getNestedRecord(messageEdit, "from");
-  const recipient = getNestedRecord(messageEdit, "recipient") ?? getNestedRecord(messageEdit, "to");
-
-  return {
-    senderId: pickString(sender?.id, messageEdit?.sender_id, messageEdit?.from_id),
-    recipientId: pickString(recipient?.id, messageEdit?.recipient_id, messageEdit?.to_id),
-    messageId: pickString(
-      nestedMessage?.mid,
-      nestedMessage?.id,
-      messageEdit?.mid,
-      messageEdit?.message_id,
-      messageEdit?.id
-    ),
-    text: pickString(nestedMessage?.text, messageEdit?.text),
-    timestamp: pickString(messageEdit?.timestamp, nestedMessage?.timestamp),
-  };
-}
-
 export class InstagramPassiveAdapter implements ChannelAdapter<InstagramPassiveInboundRaw> {
   readonly channel = "instagram" as const;
   readonly provider = "meta" as const;
@@ -115,19 +70,15 @@ export class InstagramPassiveAdapter implements ChannelAdapter<InstagramPassiveI
     const payload = asRecord(raw.payload);
     const entry = payload.entry?.[0];
     const messaging = entry?.messaging?.[0];
-    const messageEdit = getInstagramMessageEditParts(messaging?.message_edit);
 
-    const igAccountId = asRequiredString(
-      "instagramAccountId",
-      messaging?.recipient?.id ?? messageEdit.recipientId ?? entry?.id
-    );
-    const senderId = asRequiredString("senderId", messaging?.sender?.id ?? messageEdit.senderId);
+    const igAccountId = asRequiredString("instagramAccountId", messaging?.recipient?.id ?? entry?.id);
+    const senderId = asRequiredString("senderId", messaging?.sender?.id);
     const message = messaging?.message;
     const messageId =
       typeof message?.mid === "string" || typeof message?.mid === "number"
         ? String(message.mid).trim()
-        : messageEdit.messageId;
-    const text = typeof message?.text === "string" ? message.text.trim() : messageEdit.text;
+        : undefined;
+    const text = typeof message?.text === "string" ? message.text.trim() : undefined;
     if (!text) {
       throw new Error("instagram_text_required");
     }
@@ -141,7 +92,7 @@ export class InstagramPassiveAdapter implements ChannelAdapter<InstagramPassiveI
       externalMessageId: messageId || undefined,
       externalThreadId: senderId,
       text: text || undefined,
-      timestamp: normalizeTimestamp(messaging?.timestamp ?? messageEdit.timestamp),
+      timestamp: normalizeTimestamp(messaging?.timestamp),
       raw: raw.payload,
     };
   }
