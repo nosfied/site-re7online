@@ -172,6 +172,13 @@ async function cleanup() {
       },
     },
   });
+  await prisma.tenantOperationalConfig.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.user.deleteMany({
     where: {
       clientId: {
@@ -260,6 +267,35 @@ test.before(async () => {
   });
   leadId = lead.id;
 
+  await prisma.tenantOperationalConfig.create({
+    data: {
+      clientId: businessClientId,
+      schemaVersion: 1,
+      config: {
+        crmBusinessStatuses: [
+          {
+            id: "QUALIFIED",
+            label: "Qualificado",
+            isActive: true,
+            campaignEligible: true,
+          },
+          {
+            id: "OPEN",
+            label: "Em aberto",
+            isActive: true,
+            campaignEligible: true,
+          },
+          {
+            id: "RETORNO_FUTURO",
+            label: "Retorno futuro",
+            isActive: true,
+            campaignEligible: true,
+          },
+        ],
+      },
+    },
+  });
+
   handleRequest = (await import("./routes.js")).handleRequest;
   server = createServer((req, res) => {
     void handleRequest(req, res);
@@ -336,9 +372,33 @@ test("business profile default can access CRM app routes without capability deni
   assert.equal(listNotes.body.count, 1);
 });
 
+test("CRM operational statuses are tenant-scoped and allow custom lead statuses", async () => {
+  const statuses = await request<{
+    ok: boolean;
+    settings: { crmBusinessStatuses: Array<{ id: string; label: string }> };
+  }>("GET", "/app/crm/statuses", businessAgent);
+  assert.equal(statuses.status, 200);
+  assert.equal(statuses.body.ok, true);
+  assert.deepEqual(
+    statuses.body.settings.crmBusinessStatuses.map((item) => item.id),
+    ["QUALIFIED", "OPEN", "RETORNO_FUTURO"]
+  );
+
+  const update = await request<{ ok: boolean; lead: { status: string } }>(
+    "PATCH",
+    `/app/lead/${encodeURIComponent(leadId)}/status`,
+    businessAdmin,
+    { status: "RETORNO_FUTURO" }
+  );
+  assert.equal(update.status, 200);
+  assert.equal(update.body.ok, true);
+  assert.equal(update.body.lead.status, "RETORNO_FUTURO");
+});
+
 test("government profile default is blocked by CRM capability on protected routes", async () => {
   const routes = [
     { method: "GET", route: "/app/crm/settings" },
+    { method: "GET", route: "/app/crm/statuses" },
     { method: "GET", route: "/app/crm/campaign-recipients?statuses=QUALIFIED" },
     { method: "PATCH", route: "/app/lead/missing", body: { name: "x" } },
     { method: "PATCH", route: "/app/lead/missing/status", body: { status: "OPEN" } },

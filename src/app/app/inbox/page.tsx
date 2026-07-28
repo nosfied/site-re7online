@@ -26,6 +26,7 @@ import {
   fetchAppConversation,
   fetchAppConversationTimeline,
   fetchAppConversations,
+  fetchAppCrmStatuses,
   fetchAppDepartments,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
@@ -49,6 +50,7 @@ import {
   subscribeAppPush,
   unsubscribeAppPush,
   type AppApiError,
+  type CrmBusinessStatusConfig,
   type AppPushStatus,
 } from "@/lib/appClientApi";
 import {
@@ -67,14 +69,49 @@ import {
   loadAdminConnection,
 } from "@/lib/whatsappAdminApi";
 
-const LEAD_STATUS_OPTIONS: LeadStatus[] = [
-  "QUALIFIED",
-  "OPEN",
-  "FOLLOW_UP",
-  "WON",
-  "LOST",
-  "NO_RESPONSE",
-  "NURTURE",
+const FALLBACK_LEAD_STATUS_OPTIONS: CrmBusinessStatusConfig[] = [
+  {
+    id: "QUALIFIED",
+    label: "Qualificado",
+    isActive: true,
+    campaignEligible: true,
+  },
+  {
+    id: "OPEN",
+    label: "Em aberto",
+    isActive: true,
+    campaignEligible: true,
+  },
+  {
+    id: "FOLLOW_UP",
+    label: "Follow-up",
+    isActive: true,
+    campaignEligible: true,
+  },
+  {
+    id: "WON",
+    label: "Fechado",
+    isActive: true,
+    campaignEligible: false,
+  },
+  {
+    id: "LOST",
+    label: "Não fechado",
+    isActive: true,
+    campaignEligible: true,
+  },
+  {
+    id: "NO_RESPONSE",
+    label: "Sem resposta",
+    isActive: true,
+    campaignEligible: true,
+  },
+  {
+    id: "NURTURE",
+    label: "Nutrir",
+    isActive: true,
+    campaignEligible: true,
+  },
 ];
 
 function isInboxLatencyDebugEnabled() {
@@ -214,7 +251,19 @@ function getConversationSecondaryIdentifier(item: InboxConversationItem, label: 
   return null;
 }
 
-function getLeadStatusLabel(status?: string | null) {
+function formatUnknownLeadStatus(status: string) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getLeadStatusLabel(status?: string | null, options?: CrmBusinessStatusConfig[]) {
+  const normalized = (status || "").trim().toUpperCase();
+  const configured = options?.find((item) => item.id === normalized);
+  if (configured?.label) return configured.label;
   switch ((status || "").trim().toUpperCase()) {
     case "NEW":
       return "Novo";
@@ -239,7 +288,7 @@ function getLeadStatusLabel(status?: string | null) {
     case "CLOSED":
       return "Encerrado";
     default:
-      return "Sem andamento";
+      return normalized ? formatUnknownLeadStatus(normalized) : "Sem andamento";
   }
 }
 
@@ -1727,6 +1776,7 @@ export default function AppInboxPage() {
   const [messages, setMessages] = useState<InboxMessageItem[]>([]);
   const [messagesConversationKey, setMessagesConversationKey] = useState<string | null>(null);
   const [leadNotes, setLeadNotes] = useState<LeadNoteItem[]>([]);
+  const [crmStatusOptions, setCrmStatusOptions] = useState<CrmBusinessStatusConfig[]>([]);
   const [statusDraft, setStatusDraft] = useState<LeadStatus | "">("");
   const [leadNameDraft, setLeadNameDraft] = useState("");
   const [leadEmailDraft, setLeadEmailDraft] = useState("");
@@ -2188,6 +2238,23 @@ export default function AppInboxPage() {
           setTenantNameLabel(null);
           setTenantPhoneLabel(null);
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    fetchAppCrmStatuses(session)
+      .then((response) => {
+        if (cancelled) return;
+        const activeStatuses = response.settings.crmBusinessStatuses.filter((item) => item.isActive);
+        setCrmStatusOptions(activeStatuses.length > 0 ? activeStatuses : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCrmStatusOptions([]);
       });
     return () => {
       cancelled = true;
@@ -3782,6 +3849,23 @@ export default function AppInboxPage() {
       status: selectedConversation.leadStatus as LeadStatus | null,
     };
   }, [selectedConversation]);
+  const leadStatusOptions = useMemo(() => {
+    const baseOptions = crmStatusOptions.length > 0 ? crmStatusOptions : FALLBACK_LEAD_STATUS_OPTIONS;
+    const activeOptions = baseOptions.filter((item) => item.isActive);
+    const selectedStatus = selectedLead?.status?.trim().toUpperCase();
+    if (!selectedStatus || activeOptions.some((item) => item.id === selectedStatus)) {
+      return activeOptions;
+    }
+    return [
+      {
+        id: selectedStatus,
+        label: getLeadStatusLabel(selectedStatus, activeOptions),
+        isActive: true,
+        campaignEligible: false,
+      },
+      ...activeOptions,
+    ];
+  }, [crmStatusOptions, selectedLead?.status]);
   const selectedSuggestedReply = useMemo(() => extractSuggestedReply(leadNotes), [leadNotes]);
 
   useEffect(() => {
@@ -5858,9 +5942,9 @@ export default function AppInboxPage() {
                       <option value="" disabled>
                         Situação do negócio
                       </option>
-                      {LEAD_STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {getLeadStatusLabel(status)}
+                      {leadStatusOptions.map((status) => (
+                        <option key={status.id} value={status.id}>
+                          {status.label || getLeadStatusLabel(status.id, leadStatusOptions)}
                         </option>
                       ))}
                     </select>

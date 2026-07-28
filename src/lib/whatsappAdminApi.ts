@@ -412,18 +412,7 @@ export type OpsMetricsSnapshot = {
   averages?: OpsAverageMetric[];
 };
 
-export type LeadStatus =
-  | "NEW"
-  | "QUALIFIED"
-  | "WAITING_ATTENDANT"
-  | "IN_ATTENDANCE"
-  | "CLOSED"
-  | "OPEN"
-  | "WON"
-  | "LOST"
-  | "FOLLOW_UP"
-  | "NO_RESPONSE"
-  | "NURTURE";
+export type LeadStatus = string;
 
 export type LeadNoteItem = {
   id: string;

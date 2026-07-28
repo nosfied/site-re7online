@@ -6603,6 +6603,59 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/app/crm/statuses") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/statuses",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      json(res, 200, {
+        ok: true,
+        tenantId: client.clientKey,
+        settings: {
+          crmBusinessStatuses: resolvedStatuses.statuses,
+        },
+        configSource: {
+          crmBusinessStatuses: resolvedStatuses.source,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.crm.statuses.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
   if (req.method === "PUT" && pathname === "/app/crm/settings") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -8435,7 +8488,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const body = await readJsonBody(req, res);
       if (!body) return;
       const status = String(body.status ?? "").trim().toUpperCase();
-      const allowed = new Set([
+      const legacyAllowedStatuses = new Set([
         "NEW",
         "QUALIFIED",
         "WAITING_ATTENDANT",
@@ -8447,6 +8500,19 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         "FOLLOW_UP",
         "NO_RESPONSE",
         "NURTURE",
+      ]);
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const allowed = new Set([
+        ...legacyAllowedStatuses,
+        ...resolvedStatuses.statuses
+          .filter((item) => item.isActive)
+          .map((item) => item.id),
       ]);
       if (!allowed.has(status)) {
         json(res, 400, { error: "bad_request" });

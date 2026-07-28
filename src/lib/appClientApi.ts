@@ -2732,6 +2732,10 @@ export async function fetchAppCrmSettings(session: AppSession): Promise<AppCrmSe
   return requestAppJson(session, "/app/crm/settings");
 }
 
+export async function fetchAppCrmStatuses(session: AppSession): Promise<AppCrmSettingsResponse> {
+  return requestAppJson(session, "/app/crm/statuses");
+}
+
 export async function updateAppCrmSettings(
   session: AppSession,
   payload: { crmBusinessStatuses: CrmBusinessStatusConfig[] }
