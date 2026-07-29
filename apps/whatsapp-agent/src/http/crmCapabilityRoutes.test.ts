@@ -50,6 +50,7 @@ let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let leadId = "";
 let instagramLeadId = "";
+let otherTenantLeadId = "";
 let leadConversationId = "";
 
 function getErrorCode(payload: ErrorPayload) {
@@ -433,7 +434,7 @@ test.before(async () => {
       status: "OPEN",
     },
   });
-  await prisma.lead.create({
+  const otherTenantLead = await prisma.lead.create({
     data: {
       tenantId: governmentClientId,
       waId: `${prefix}-other-tenant`,
@@ -442,7 +443,9 @@ test.before(async () => {
       phone: "5541999900000",
       status: "QUALIFIED",
     },
+    select: { id: true },
   });
+  otherTenantLeadId = otherTenantLead.id;
 
   await prisma.tenantOperationalConfig.create({
     data: {
@@ -687,6 +690,50 @@ test("CRM contacts read model supports filters and partial records", async () =>
   assert.ok(optOut.body.items.every((item) => item.activeOptOut));
 });
 
+test("CRM contact detail is tenant-scoped and returns safe related conversations", async () => {
+  const response = await request<{
+    ok: boolean;
+    item: {
+      leadId: string;
+      contactId: string | null;
+      phoneDisplay: string | null;
+      identifierDisplay: string;
+      activeOptOut: boolean;
+      notesCount: number;
+    };
+    conversations: Array<{
+      conversationId: string;
+      conversationIdentity: string;
+      protocol: string;
+      status: string | null;
+      channel: string | null;
+      departmentName: string | null;
+      queueName: string | null;
+      assignedUserName: string | null;
+    }>;
+  }>("GET", `/app/crm/contacts/${encodeURIComponent(leadId)}`, businessAgent);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.item.leadId, leadId);
+  assert.equal(response.body.item.activeOptOut, true);
+  assert.match(response.body.item.phoneDisplay ?? "", /^\d{4}\*{5}\d{4}$/);
+  assert.equal(response.body.conversations.length, 1);
+  assert.equal(response.body.conversations[0]?.conversationId, leadConversationId);
+  assert.equal(response.body.conversations[0]?.conversationIdentity, `${prefix}-lead-waid`);
+  assert.match(response.body.conversations[0]?.protocol ?? "", /^CVT-[0-9A-F]{12}$/);
+  assert.equal(response.body.conversations[0]?.status, "WAITING");
+  assert.doesNotMatch(JSON.stringify(response.body), /rawPayload|hash:|externalUserHash|externalUserRef/);
+
+  const foreign = await request<ErrorPayload>(
+    "GET",
+    `/app/crm/contacts/${encodeURIComponent(otherTenantLeadId)}`,
+    businessAgent
+  );
+  assert.equal(foreign.status, 404);
+  assert.equal(getErrorCode(foreign.body), "contact_not_found");
+});
+
 test("CRM contacts endpoint requires authentication", async () => {
   const response = await fetch(`${baseUrl}/app/crm/contacts`);
   assert.equal(response.status, 401);
@@ -697,6 +744,7 @@ test("government profile default is blocked by CRM capability on protected route
     { method: "GET", route: "/app/crm/settings" },
     { method: "GET", route: "/app/crm/statuses" },
     { method: "GET", route: "/app/crm/contacts" },
+    { method: "GET", route: "/app/crm/contacts/missing" },
     { method: "GET", route: "/app/crm/campaign-recipients?statuses=QUALIFIED" },
     { method: "PATCH", route: "/app/lead/missing", body: { name: "x" } },
     { method: "PATCH", route: "/app/lead/missing/status", body: { status: "OPEN" } },

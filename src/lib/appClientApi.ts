@@ -154,6 +154,38 @@ export type AppCrmContactItem = {
   updatedAt: string;
 };
 
+export type AppCrmContactConversationItem = {
+  conversationId: string;
+  conversationIdentity: string;
+  protocol: string;
+  channel: string | null;
+  provider: string | null;
+  status: ConversationOperationalStatus | string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+
+export type AppCrmContactDetailResponse = {
+  ok: true;
+  item: AppCrmContactItem & {
+    contactIdentity: {
+      displayName: string | null;
+      channel: string | null;
+      provider: string | null;
+      lastSeenAt: string | null;
+    } | null;
+    notesCount: number;
+  };
+  conversations: AppCrmContactConversationItem[];
+  generatedAt: string;
+};
+
 export type AppCrmContactsResponse = {
   ok: true;
   filters: {
@@ -2828,6 +2860,13 @@ export async function fetchAppCrmContacts(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/crm/contacts${suffix}`);
+}
+
+export async function fetchAppCrmContactDetail(
+  session: AppSession,
+  leadId: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}`);
 }
 
 export async function updateAppCrmSettings(

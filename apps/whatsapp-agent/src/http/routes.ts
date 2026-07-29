@@ -165,7 +165,7 @@ import {
   type OperationsBoardCursor,
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
-import { buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
+import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
@@ -6698,6 +6698,68 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.contacts.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "GET" &&
+    pathname.startsWith("/app/crm/contacts/") &&
+    pathname.split("/").length === 5
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const leadId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!leadId) {
+        json(res, 400, httpError("bad_request", "Invalid contact id"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/contacts/:leadId",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const payload = await buildCrmContactDetailPayload(prisma, {
+        clientId: client.id,
+        leadId,
+        statuses: resolvedStatuses.statuses,
+      });
+      if (!payload) {
+        json(res, 404, httpError("contact_not_found", "Contact not found"));
+        return;
+      }
+      json(res, 200, payload);
+    } catch (error) {
+      logger.error({
+        event: "app.crm.contact_detail.error",
         message: (error as Error).message,
         requestId,
       });

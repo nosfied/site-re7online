@@ -83,6 +83,38 @@ export type CrmContactsPayload = {
   generatedAt: string;
 };
 
+export type CrmContactDetailConversation = {
+  conversationId: string;
+  conversationIdentity: string;
+  protocol: string;
+  channel: string | null;
+  provider: string | null;
+  status: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  queueId: string | null;
+  queueName: string | null;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+
+export type CrmContactDetailPayload = {
+  ok: true;
+  item: CrmContactListItem & {
+    contactIdentity: {
+      displayName: string | null;
+      channel: string | null;
+      provider: string | null;
+      lastSeenAt: string | null;
+    } | null;
+    notesCount: number;
+  };
+  conversations: CrmContactDetailConversation[];
+  generatedAt: string;
+};
+
 type CrmStatusConfig = {
   id: string;
   label: string;
@@ -478,6 +510,7 @@ export async function buildCrmContactsPayload(
           id: true,
           waId: true,
           waIdCanonical: true,
+          channel: true,
           status: true,
           updatedAt: true,
         },
@@ -646,6 +679,267 @@ export async function buildCrmContactsPayload(
       hasPreviousPage: page > 1,
     },
     items: pagedItems,
+    generatedAt: (params.now ?? new Date()).toISOString(),
+  };
+}
+
+export async function buildCrmContactDetailPayload(
+  prisma: PrismaClient,
+  params: {
+    clientId: string;
+    leadId: string;
+    statuses: CrmStatusConfig[];
+    now?: Date;
+  }
+): Promise<CrmContactDetailPayload | null> {
+  const statusLabelById = buildStatusLabelMap(params.statuses);
+  const lead = await prisma.lead.findFirst({
+    where: { id: params.leadId, tenantId: params.clientId },
+    select: {
+      id: true,
+      waId: true,
+      waIdCanonical: true,
+      channel: true,
+      provider: true,
+      channelAccountId: true,
+      externalUserHash: true,
+      contactChannelIdentityId: true,
+      name: true,
+      phone: true,
+      city: true,
+      service: true,
+      email: true,
+      company: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!lead) return null;
+
+  const identityKeys = Array.from(new Set([lead.waId, lead.waIdCanonical ?? lead.waId].filter(Boolean)));
+  const optOutCanonicalWaIds = getOptOutCanonicalCandidates(lead);
+
+  const [contact, identity, conversations, runtimeStates, optOutEvents, importEvents, notesCount] =
+    await Promise.all([
+      prisma.contact.findFirst({
+        where: {
+          clientId: params.clientId,
+          OR: [{ waId: lead.waId }, { waId: lead.waIdCanonical ?? lead.waId }],
+        },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          waId: true,
+          name: true,
+          channel: true,
+          provider: true,
+          channelAccountId: true,
+          externalUserHash: true,
+          updatedAt: true,
+        },
+      }),
+      lead.contactChannelIdentityId
+        ? prisma.contactChannelIdentity.findFirst({
+            where: { clientId: params.clientId, id: lead.contactChannelIdentityId },
+            select: {
+              id: true,
+              contactId: true,
+              displayName: true,
+              channel: true,
+              provider: true,
+              lastSeenAt: true,
+            },
+          })
+        : Promise.resolve(null),
+      prisma.conversation.findMany({
+        where: {
+          clientId: params.clientId,
+          deletedAt: null,
+          anonymizedAt: null,
+          OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
+        },
+        orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        take: 25,
+        select: {
+          id: true,
+          waId: true,
+          waIdCanonical: true,
+          channel: true,
+          provider: true,
+          departmentId: true,
+          windowIsOpen: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.conversationRuntimeState.findMany({
+        where: {
+          clientId: params.clientId,
+          OR: [{ waId: { in: identityKeys } }, { waIdCanonical: { in: identityKeys } }],
+        },
+        select: {
+          waId: true,
+          waIdCanonical: true,
+          channel: true,
+          status: true,
+          assignedUserId: true,
+          assignedTo: true,
+          departmentId: true,
+          queueId: true,
+          updatedAt: true,
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          clientId: params.clientId,
+          eventName: { in: [CONTACT_OPT_OUT_RECORDED_EVENT, CONTACT_OPT_OUT_REVOKED_EVENT] },
+          waIdCanonical: { in: optOutCanonicalWaIds },
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          waId: true,
+          waIdCanonical: true,
+          eventName: true,
+          createdAt: true,
+        },
+      }),
+      prisma.event.findMany({
+        where: {
+          clientId: params.clientId,
+          eventName: { in: IMPORT_EVENT_NAMES },
+          waIdCanonical: { in: identityKeys },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: {
+          waId: true,
+          waIdCanonical: true,
+          payloadJson: true,
+          createdAt: true,
+        },
+      }),
+      prisma.leadNote.count({ where: { leadId: lead.id, tenantId: params.clientId } }),
+    ]);
+
+  const departmentIds = Array.from(
+    new Set([
+      ...conversations.map((item) => item.departmentId),
+      ...runtimeStates.map((item) => item.departmentId),
+    ].filter((value): value is string => Boolean(value)))
+  );
+  const queueIds = Array.from(new Set(runtimeStates.map((item) => item.queueId).filter((value): value is string => Boolean(value))));
+  const assignedUserIds = Array.from(
+    new Set(runtimeStates.map((item) => item.assignedUserId).filter((value): value is string => Boolean(value)))
+  );
+  const [departments, queues, users] = await Promise.all([
+    departmentIds.length > 0
+      ? prisma.department.findMany({
+          where: { clientId: params.clientId, id: { in: departmentIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    queueIds.length > 0
+      ? prisma.queue.findMany({
+          where: { clientId: params.clientId, id: { in: queueIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    assignedUserIds.length > 0
+      ? prisma.user.findMany({
+          where: { clientId: params.clientId, id: { in: assignedUserIds } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const departmentNameById = new Map(departments.map((item) => [item.id, item.name]));
+  const queueNameById = new Map(queues.map((item) => [item.id, item.name]));
+  const userNameById = new Map(users.map((item) => [item.id, item.name]));
+  const runtimeByKey = new Map<string, (typeof runtimeStates)[number]>();
+  for (const runtime of runtimeStates) {
+    runtimeByKey.set(getIdentityKey(runtime), runtime);
+  }
+  const activeOptOuts = resolveActiveOptOuts(optOutEvents);
+  const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) => activeOptOuts.has(candidate));
+  const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
+  const displayName =
+    normalizeOptionalText(lead.name) ??
+    normalizeOptionalText(identity?.displayName) ??
+    normalizeOptionalText(contact?.name);
+  const phoneDisplay = isWhatsappChannel(lead.channel)
+    ? maskPhone(lead.phone || lead.waIdCanonical || lead.waId)
+    : null;
+  const importSource = importEvents
+    .map((event) =>
+      safePayloadString(event.payloadJson, ["source", "importedSource", "origin", "fileName", "classification"])
+    )
+    .find((value): value is string => Boolean(value)) ?? null;
+  const latestConversation = conversations[0] ?? null;
+  const latestRuntime = latestConversation ? runtimeByKey.get(getIdentityKey(latestConversation)) ?? null : null;
+
+  return {
+    ok: true,
+    item: {
+      leadId: lead.id,
+      contactId: identity?.contactId ?? contact?.id ?? null,
+      displayName,
+      companyName: lead.company,
+      email: lead.email,
+      city: lead.city,
+      phoneDisplay,
+      identifierDisplay: buildIdentifierDisplay(lead, identity?.displayName ?? contact?.name),
+      channel: lead.channel,
+      provider: lead.provider,
+      crmStatus: lead.status,
+      crmStatusLabel: statusLabelById.get(lead.status.toUpperCase()) ?? lead.status,
+      leadStatus: lead.status,
+      lastConversationId: latestConversation?.id ?? null,
+      lastConversationIdentity: latestConversation ? getIdentityKey(latestConversation) : null,
+      lastProtocol: latestConversation ? buildConversationProtocol(latestConversation) : null,
+      lastConversationStatus: latestRuntime?.status ?? null,
+      lastConversationUpdatedAt: latestConversation?.updatedAt.toISOString() ?? null,
+      conversationsCount: conversations.length,
+      hasConversation: conversations.length > 0,
+      activeOptOut,
+      importedSource: importSource,
+      ...templateCandidate,
+      hasOpenConversationWindow: latestConversation ? latestConversation.windowIsOpen : null,
+      createdAt: lead.createdAt.toISOString(),
+      updatedAt: lead.updatedAt.toISOString(),
+      contactIdentity: identity
+        ? {
+            displayName: identity.displayName,
+            channel: identity.channel,
+            provider: identity.provider,
+            lastSeenAt: identity.lastSeenAt?.toISOString() ?? null,
+          }
+        : null,
+      notesCount,
+    },
+    conversations: conversations.map((conversation) => {
+      const runtime = runtimeByKey.get(getIdentityKey(conversation)) ?? null;
+      const departmentId = runtime?.departmentId ?? conversation.departmentId ?? null;
+      const queueId = runtime?.queueId ?? null;
+      const assignedUserId = runtime?.assignedUserId ?? null;
+      return {
+        conversationId: conversation.id,
+        conversationIdentity: getIdentityKey(conversation),
+        protocol: buildConversationProtocol(conversation),
+        channel: runtime?.channel ?? conversation.channel,
+        provider: conversation.provider,
+        status: runtime?.status ?? null,
+        departmentId,
+        departmentName: departmentId ? departmentNameById.get(departmentId) ?? null : null,
+        queueId,
+        queueName: queueId ? queueNameById.get(queueId) ?? null : null,
+        assignedUserId,
+        assignedUserName:
+          assignedUserId ? userNameById.get(assignedUserId) ?? runtime?.assignedTo ?? null : runtime?.assignedTo ?? null,
+        updatedAt: conversation.updatedAt.toISOString(),
+        createdAt: conversation.createdAt.toISOString(),
+      };
+    }),
     generatedAt: (params.now ?? new Date()).toISOString(),
   };
 }

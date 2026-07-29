@@ -6,10 +6,12 @@ import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
 import {
   AppApiError,
+  AppCrmContactDetailResponse,
   AppCrmContactItem,
   AppCrmContactsResponse,
   AppSession,
   clearAppSession,
+  fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
   loadAppSession,
@@ -123,10 +125,12 @@ function CrmContactsSkeleton() {
 
 function CrmContactRow({
   item,
+  onOpenDetail,
   onOpenConversation,
   onCopyIdentifier,
 }: {
   item: AppCrmContactItem;
+  onOpenDetail: (item: AppCrmContactItem) => void;
   onOpenConversation: (item: AppCrmContactItem) => void;
   onCopyIdentifier: (item: AppCrmContactItem) => void;
 }) {
@@ -190,6 +194,13 @@ function CrmContactRow({
         <div className="flex flex-col gap-2">
           <button
             type="button"
+            onClick={() => onOpenDetail(item)}
+            className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold theme-nav-link transition"
+          >
+            Abrir cadastro
+          </button>
+          <button
+            type="button"
             onClick={() => onCopyIdentifier(item)}
             className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold theme-nav-link transition"
           >
@@ -209,6 +220,195 @@ function CrmContactRow({
   );
 }
 
+function DetailField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+      <div className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">{label}</div>
+      <div className="mt-1 break-words text-sm font-semibold text-white">{value ?? "-"}</div>
+    </div>
+  );
+}
+
+function CrmContactDetailDrawer({
+  detail,
+  loading,
+  error,
+  onClose,
+  onRefresh,
+  onOpenInbox,
+  onCopyReference,
+}: {
+  detail: AppCrmContactDetailResponse | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+  onRefresh: () => void;
+  onOpenInbox: (conversationIdentity: string) => void;
+  onCopyReference: (value: string) => void;
+}) {
+  const item = detail?.item ?? null;
+  const conversations = detail?.conversations ?? [];
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end bg-black/45 backdrop-blur-sm" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        aria-label="Fechar cadastro"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <aside className="theme-bg relative grid h-full w-full max-w-[760px] grid-rows-[auto_1fr] border-l border-white/10 shadow-2xl">
+        <header className="theme-surface-strong theme-shadow border-b p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Cadastro CRM</p>
+              <h2 className="mt-1 truncate text-lg font-bold text-white">
+                {item ? getDisplayName(item) : "Carregando contato"}
+              </h2>
+              <p className="mt-1 text-sm theme-muted">
+                {item?.companyName || item?.identifierDisplay || "Detalhe operacional do contato"}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={loading}
+                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+              >
+                Atualizar
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div className="min-h-0 overflow-y-auto p-4">
+          {loading && !detail ? (
+            <div className="theme-surface rounded-xl border p-8 text-center text-sm theme-muted">
+              Carregando cadastro...
+            </div>
+          ) : error && !detail ? (
+            <div className="theme-surface rounded-xl border p-8 text-center">
+              <h3 className="text-base font-semibold text-white">Nao foi possivel carregar o cadastro</h3>
+              <p className="mt-2 text-sm theme-muted">{error}</p>
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="mt-4 rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : item ? (
+            <div className="grid gap-4">
+              {error ? (
+                <div className="rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                  {error}
+                </div>
+              ) : null}
+              <section className="theme-surface rounded-xl border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-white">Dados do contato</h3>
+                    <p className="mt-1 text-sm theme-muted">Identificadores tecnicos de canal permanecem protegidos.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
+                    className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold"
+                  >
+                    Copiar referencia
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <DetailField label="Nome" value={getDisplayName(item)} />
+                  <DetailField label="Empresa" value={item.companyName} />
+                  <DetailField label="E-mail" value={item.email} />
+                  <DetailField label="Cidade" value={item.city} />
+                  <DetailField label="Telefone/identificador" value={item.phoneDisplay || item.identifierDisplay} />
+                  <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
+                  <DetailField label="Provider" value={item.provider} />
+                  <DetailField label="Classificacao CRM" value={item.crmStatusLabel} />
+                  <DetailField label="Codigo CRM" value={item.crmStatus} />
+                  <DetailField label="Lead status" value={item.leadStatus} />
+                  <DetailField label="Opt-out" value={item.activeOptOut ? "Ativo" : "Inativo"} />
+                  <DetailField label="Origem/importacao" value={item.importedSource} />
+                  <DetailField label="Notas registradas" value={item.notesCount} />
+                  <DetailField label="Elegibilidade template" value={getTemplateHint(item)} />
+                  <DetailField label="Criado em" value={formatDateTime(item.createdAt)} />
+                  <DetailField label="Atualizado em" value={formatDateTime(item.updatedAt)} />
+                  <DetailField label="Lead ID" value={item.leadId} />
+                  <DetailField label="Contact ID" value={item.contactId} />
+                </div>
+              </section>
+
+              <section className="theme-surface rounded-xl border p-4">
+                <h3 className="text-base font-semibold text-white">Conversas relacionadas</h3>
+                <p className="mt-1 text-sm theme-muted">
+                  Abertura usa a identidade operacional esperada pelo Inbox, sempre no tenant da sessao.
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {conversations.length === 0 ? (
+                    <div className="rounded-lg border border-white/10 p-4 text-sm theme-muted">
+                      Nenhuma conversa relacionada encontrada.
+                    </div>
+                  ) : (
+                    conversations.map((conversation) => (
+                      <div
+                        key={conversation.conversationId}
+                        className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 md:grid-cols-[1fr_auto] md:items-center"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-white">{conversation.protocol}</span>
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
+                              {getChannelLabel(conversation.channel)}
+                            </span>
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs theme-muted">
+                              {getConversationStatusLabel(conversation.status)}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-xs theme-muted">
+                            {conversation.departmentName || "Sem setor"}
+                            {conversation.queueName ? ` / ${conversation.queueName}` : ""}
+                            {conversation.assignedUserName ? ` • ${conversation.assignedUserName}` : ""}
+                          </div>
+                          <div className="mt-1 text-xs theme-muted">
+                            Atualizada em {formatDateTime(conversation.updatedAt)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onOpenInbox(conversation.conversationIdentity)}
+                          className="rounded-md bg-re7-sky px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:brightness-110"
+                        >
+                          Abrir no Inbox
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export default function AppCrmContactsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -223,6 +423,10 @@ export default function AppCrmContactsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [contactDetail, setContactDetail] = useState<AppCrmContactDetailResponse | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const toastHandlers = usePausableFeedbackAutoDismiss(Boolean(error || notice), () => {
     setError(null);
     setNotice(null);
@@ -354,9 +558,49 @@ export default function AppCrmContactsPage() {
     [handleUnauthorized, loadContacts, session]
   );
 
+  const loadContactDetail = useCallback(
+    (leadId: string) => {
+      if (!session) return;
+      setLoadingDetail(true);
+      setDetailError(null);
+      fetchAppCrmContactDetail(session, leadId)
+        .then((response) => {
+          setContactDetail(response);
+          setSelectedLeadId(leadId);
+        })
+        .catch((err) => {
+          const typed = err as AppApiError;
+          if (typed.status === 401) {
+            handleUnauthorized();
+            return;
+          }
+          setDetailError(normalizeAppErrorMessage(typed, "Nao foi possivel carregar o cadastro."));
+        })
+        .finally(() => setLoadingDetail(false));
+    },
+    [handleUnauthorized, session]
+  );
+
+  const openContactDetail = useCallback(
+    (item: AppCrmContactItem) => {
+      setSelectedLeadId(item.leadId);
+      setContactDetail(null);
+      loadContactDetail(item.leadId);
+    },
+    [loadContactDetail]
+  );
+
   const openConversation = useCallback(
     (item: AppCrmContactItem) => {
       const conversationIdentity = item.lastConversationIdentity || item.lastConversationId;
+      if (!conversationIdentity) return;
+      router.push(`/app/inbox?conversation=${encodeURIComponent(conversationIdentity)}`);
+    },
+    [router]
+  );
+
+  const openConversationIdentity = useCallback(
+    (conversationIdentity: string) => {
       if (!conversationIdentity) return;
       router.push(`/app/inbox?conversation=${encodeURIComponent(conversationIdentity)}`);
     },
@@ -370,6 +614,15 @@ export default function AppCrmContactsPage() {
       setNotice("Identificador seguro copiado.");
     } catch {
       setError("Nao foi possivel copiar o identificador.");
+    }
+  }, []);
+
+  const copyReference = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice("Referencia segura copiada.");
+    } catch {
+      setError("Nao foi possivel copiar a referencia.");
     }
   }, []);
 
@@ -566,6 +819,7 @@ export default function AppCrmContactsPage() {
                     <CrmContactRow
                       key={item.leadId}
                       item={item}
+                      onOpenDetail={openContactDetail}
                       onOpenConversation={openConversation}
                       onCopyIdentifier={copyIdentifier}
                     />
@@ -580,6 +834,21 @@ export default function AppCrmContactsPage() {
         <FeedbackToast variant="error" message={error} {...toastHandlers} />
       ) : null}
       {notice ? <FeedbackToast variant="success" message={notice} {...toastHandlers} /> : null}
+      {selectedLeadId ? (
+        <CrmContactDetailDrawer
+          detail={contactDetail}
+          loading={loadingDetail}
+          error={detailError}
+          onClose={() => {
+            setSelectedLeadId(null);
+            setContactDetail(null);
+            setDetailError(null);
+          }}
+          onRefresh={() => loadContactDetail(selectedLeadId)}
+          onOpenInbox={openConversationIdentity}
+          onCopyReference={copyReference}
+        />
+      ) : null}
     </AppShell>
   );
 }
