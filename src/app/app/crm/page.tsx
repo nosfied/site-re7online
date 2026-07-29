@@ -393,8 +393,8 @@ export default function AppCrmContactsPage() {
       subtitle="Lista operacional de contatos e leads CRM por tenant."
     >
       <section className="grid min-h-0 gap-4">
-        <div className="sticky top-[230px] z-30 grid gap-3 sm:top-[244px] lg:fixed lg:left-5 lg:right-5 lg:top-[144px] lg:mx-auto lg:w-[calc(100%-2.5rem)] lg:max-w-[1400px] min-[1441px]:top-[196px]">
-          <div className="theme-surface-strong rounded-xl border p-4 shadow-sm">
+        <div className="sticky top-[230px] z-30 grid gap-2 sm:top-[244px] lg:fixed lg:left-5 lg:right-5 lg:top-[144px] lg:mx-auto lg:w-[calc(100%-2.5rem)] lg:max-w-[1400px] min-[1441px]:top-[196px]">
+          <div className="theme-surface-strong theme-shadow rounded-xl border p-4 backdrop-blur">
             <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto] lg:items-end">
               <label className="grid gap-1.5 text-sm">
                 <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Busca</span>
@@ -480,7 +480,7 @@ export default function AppCrmContactsPage() {
             </div>
           </div>
 
-          <div className="theme-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm theme-muted shadow-sm">
+          <div className="theme-surface theme-shadow flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm theme-muted backdrop-blur">
             <div className="flex flex-wrap items-center gap-3">
               <span>
                 {contacts
