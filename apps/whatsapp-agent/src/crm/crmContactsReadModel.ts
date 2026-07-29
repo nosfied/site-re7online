@@ -193,6 +193,16 @@ function hasUsableWhatsappPhone(lead: LeadRecord) {
   return Boolean(normalizeOptOutWaId(lead.phone || lead.waIdCanonical || lead.waId));
 }
 
+function getOptOutCanonicalCandidates(lead: LeadRecord) {
+  return Array.from(
+    new Set(
+      [lead.phone, lead.waIdCanonical, lead.waId]
+        .map((value) => normalizeOptOutWaId(value)?.waIdCanonical)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+}
+
 function buildTemplateCandidate(lead: LeadRecord, activeOptOut: boolean) {
   if (!isWhatsappChannel(lead.channel)) {
     return {
@@ -399,6 +409,9 @@ export async function buildCrmContactsPayload(
   const identityKeys = Array.from(new Set(leads.map(getIdentityKey)));
   const waIds = Array.from(new Set(leads.map((lead) => lead.waId)));
   const canonicalWaIds = Array.from(new Set(leads.map((lead) => lead.waIdCanonical ?? lead.waId)));
+  const optOutCanonicalWaIds = Array.from(
+    new Set(leads.flatMap((lead) => getOptOutCanonicalCandidates(lead)))
+  );
   const contactIdentityIds = leads
     .map((lead) => lead.contactChannelIdentityId)
     .filter((value): value is string => Boolean(value));
@@ -472,7 +485,7 @@ export async function buildCrmContactsPayload(
         where: {
           clientId: params.clientId,
           eventName: { in: [CONTACT_OPT_OUT_RECORDED_EVENT, CONTACT_OPT_OUT_REVOKED_EVENT] },
-          waIdCanonical: { in: canonicalWaIds },
+          waIdCanonical: { in: optOutCanonicalWaIds },
         },
         orderBy: { createdAt: "asc" },
         select: {
@@ -557,7 +570,9 @@ export async function buildCrmContactsPayload(
       const conversationSummary = conversationsByKey.get(key) ?? { count: 0, latest: null };
       const runtime = runtimeByKey.get(key) ?? null;
       const hasConversationValue = conversationSummary.count > 0;
-      const activeOptOut = activeOptOuts.has(canonical);
+      const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) =>
+        activeOptOuts.has(candidate)
+      );
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
       const displayName =
         normalizeOptionalText(lead.name) ??

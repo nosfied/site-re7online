@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { APP_AUTH_SESSION_EXPIRES_AT } from "../auth/appSessionService.js";
 import { issueClientAuthToken } from "../auth/clientAuth.js";
+import { normalizeOptOutWaId } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "crm-capability-route-test-secret";
@@ -48,6 +50,7 @@ let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let leadId = "";
 let instagramLeadId = "";
+let leadConversationId = "";
 
 function getErrorCode(payload: ErrorPayload) {
   return typeof payload.error === "string" ? payload.error : payload.error?.code;
@@ -331,9 +334,10 @@ test.before(async () => {
     },
     select: { id: true },
   });
+  leadConversationId = crypto.randomUUID();
   await prisma.conversation.create({
     data: {
-      id: "11111111-1111-4111-8111-111111111111",
+      id: leadConversationId,
       clientId: businessClientId,
       waId: `${prefix}-lead-waid`,
       waIdCanonical: `${prefix}-lead-waid`,
@@ -356,11 +360,13 @@ test.before(async () => {
       updatedAt: new Date("2026-07-28T10:01:00.000Z"),
     },
   });
+  const optOutIdentity = normalizeOptOutWaId("5511999999999");
+  assert.ok(optOutIdentity);
   await prisma.event.create({
     data: {
       clientId: businessClientId,
-      waId: "5511999999999",
-      waIdCanonical: "5511999999999",
+      waId: optOutIdentity.waId,
+      waIdCanonical: optOutIdentity.waIdCanonical,
       requestId: `${prefix}-opt-out-recorded`,
       eventName: "contact.opt_out.recorded",
       payloadJson: { source: "manual", channel: "whatsapp" },
@@ -480,9 +486,11 @@ test.before(async () => {
 });
 
 test.after(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
+  if (server) {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
   await cleanup();
   await prisma.$disconnect();
   process.chdir(originalCwd);
@@ -601,8 +609,8 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(whatsapp.crmStatusLabel, "Retorno futuro");
   assert.equal(whatsapp.hasConversation, true);
   assert.equal(whatsapp.conversationsCount, 1);
-  assert.equal(whatsapp.lastConversationId, "11111111-1111-4111-8111-111111111111");
-  assert.equal(whatsapp.lastProtocol, "CVT-111111111111");
+  assert.equal(whatsapp.lastConversationId, leadConversationId);
+  assert.match(whatsapp.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
   assert.equal(whatsapp.lastConversationStatus, "WAITING");
   assert.equal(whatsapp.activeOptOut, true);
   assert.equal(whatsapp.canStartWhatsappTemplateCandidate, false);
