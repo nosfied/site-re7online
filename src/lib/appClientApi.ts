@@ -132,6 +132,7 @@ export type AppCrmContactItem = {
   crmStatusLabel: string;
   leadStatus: string;
   lastConversationId: string | null;
+  lastConversationIdentity: string | null;
   lastProtocol: string | null;
   lastConversationStatus: ConversationOperationalStatus | string | null;
   lastConversationUpdatedAt: string | null;

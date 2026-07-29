@@ -131,6 +131,7 @@ function CrmContactRow({
   onCopyIdentifier: (item: AppCrmContactItem) => void;
 }) {
   const identifier = item.phoneDisplay || item.identifierDisplay;
+  const canOpenConversation = Boolean(item.lastConversationIdentity || item.lastConversationId);
   return (
     <tr className="border-b border-white/10 align-top transition hover:bg-white/[0.04]">
       <td className="px-4 py-3">
@@ -160,7 +161,7 @@ function CrmContactRow({
         <div className="mt-1 text-xs theme-muted">{item.crmStatus}</div>
       </td>
       <td className="px-4 py-3">
-        {item.lastConversationId ? (
+        {canOpenConversation ? (
           <button
             type="button"
             onClick={() => onOpenConversation(item)}
@@ -197,7 +198,7 @@ function CrmContactRow({
           <button
             type="button"
             onClick={() => onOpenConversation(item)}
-            disabled={!item.lastConversationId}
+            disabled={!canOpenConversation}
             className="rounded-md bg-re7-sky px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
           >
             Abrir no Inbox
@@ -355,8 +356,9 @@ export default function AppCrmContactsPage() {
 
   const openConversation = useCallback(
     (item: AppCrmContactItem) => {
-      if (!item.lastConversationId) return;
-      router.push(`/app/inbox?conversation=${encodeURIComponent(item.lastConversationId)}`);
+      const conversationIdentity = item.lastConversationIdentity || item.lastConversationId;
+      if (!conversationIdentity) return;
+      router.push(`/app/inbox?conversation=${encodeURIComponent(conversationIdentity)}`);
     },
     [router]
   );
@@ -390,8 +392,8 @@ export default function AppCrmContactsPage() {
       title="Contatos"
       subtitle="Lista operacional de contatos e leads CRM por tenant."
     >
-      <section className="grid gap-4">
-        <div className="theme-surface-strong rounded-xl border p-4 shadow-sm">
+      <section className="grid min-h-0 gap-4">
+        <div className="theme-surface-strong sticky top-0 z-20 rounded-xl border p-4 shadow-sm">
           <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto] lg:items-end">
             <label className="grid gap-1.5 text-sm">
               <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Busca</span>
@@ -477,16 +479,41 @@ export default function AppCrmContactsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm theme-muted">
-          <span>
-            {contacts
-              ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
-              : "Carregando contatos"}
-          </span>
-          {contacts ? (
+        <div className="theme-surface sticky top-[116px] z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm theme-muted shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
             <span>
-              Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
+              {contacts
+                ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
+                : "Carregando contatos"}
             </span>
+            {contacts ? (
+              <span>
+                Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
+              </span>
+            ) : null}
+          </div>
+          {contacts ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={!contacts.pagination.hasPreviousPage || loading}
+                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <span className="text-xs theme-muted">
+                {formatNumber(contacts.items.length)} nesta pagina
+              </span>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={!contacts.pagination.hasNextPage || loading}
+                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Proxima
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -541,27 +568,6 @@ export default function AppCrmContactsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-4">
-              <button
-                type="button"
-                onClick={() => goToPage(page - 1)}
-                disabled={!contacts.pagination.hasPreviousPage || loading}
-                className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Anterior
-              </button>
-              <span className="text-sm theme-muted">
-                {formatNumber(contacts.items.length)} item(ns) nesta pagina
-              </span>
-              <button
-                type="button"
-                onClick={() => goToPage(page + 1)}
-                disabled={!contacts.pagination.hasNextPage || loading}
-                className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Proxima
-              </button>
             </div>
           </div>
         ) : null}

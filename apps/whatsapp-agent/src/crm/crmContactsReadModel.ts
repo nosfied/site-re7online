@@ -38,6 +38,7 @@ export type CrmContactListItem = {
   crmStatusLabel: string;
   leadStatus: string;
   lastConversationId: string | null;
+  lastConversationIdentity: string | null;
   lastProtocol: string | null;
   lastConversationStatus: string | null;
   lastConversationUpdatedAt: string | null;
@@ -597,6 +598,7 @@ export async function buildCrmContactsPayload(
         crmStatusLabel: statusLabelById.get(lead.status.toUpperCase()) ?? lead.status,
         leadStatus: lead.status,
         lastConversationId: lastConversation?.id ?? null,
+        lastConversationIdentity: lastConversation ? getIdentityKey(lastConversation) : null,
         lastProtocol: lastConversation ? buildConversationProtocol(lastConversation) : null,
         lastConversationStatus: runtime?.status ?? null,
         lastConversationUpdatedAt: lastConversation?.updatedAt.toISOString() ?? null,

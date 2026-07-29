@@ -587,6 +587,7 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
       crmStatus: string;
       crmStatusLabel: string;
       lastConversationId: string | null;
+      lastConversationIdentity: string | null;
       lastProtocol: string | null;
       lastConversationStatus: string | null;
       conversationsCount: number;
@@ -610,6 +611,7 @@ test("CRM contacts read model lists tenant-scoped leads with safe identifiers", 
   assert.equal(whatsapp.hasConversation, true);
   assert.equal(whatsapp.conversationsCount, 1);
   assert.equal(whatsapp.lastConversationId, leadConversationId);
+  assert.equal(whatsapp.lastConversationIdentity, `${prefix}-lead-waid`);
   assert.match(whatsapp.lastProtocol ?? "", /^CVT-[0-9A-F]{12}$/);
   assert.equal(whatsapp.lastConversationStatus, "WAITING");
   assert.equal(whatsapp.activeOptOut, true);
