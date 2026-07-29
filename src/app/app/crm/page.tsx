@@ -393,128 +393,130 @@ export default function AppCrmContactsPage() {
       subtitle="Lista operacional de contatos e leads CRM por tenant."
     >
       <section className="grid min-h-0 gap-4">
-        <div className="theme-surface-strong sticky top-0 z-20 rounded-xl border p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto] lg:items-end">
-            <label className="grid gap-1.5 text-sm">
-              <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Busca</span>
-              <input
-                value={q}
-                onChange={(event) => setQ(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyFilters();
-                }}
-                className="theme-input h-10 rounded-md border px-3 text-sm"
-                placeholder="Nome, empresa, email ou telefone"
-              />
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Situacao</span>
-              <select
-                value={status}
-                onChange={(event) => setStatus(event.target.value)}
-                className="theme-input h-10 rounded-md border px-3 text-sm"
-              >
-                <option value="">Todas</option>
-                {statuses.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Canal</span>
-              <select
-                value={channel}
-                onChange={(event) => setChannel(event.target.value)}
-                className="theme-input h-10 rounded-md border px-3 text-sm"
-              >
-                {CHANNEL_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Historico</span>
-              <select
-                value={hasConversation}
-                onChange={(event) => setHasConversation(event.target.value)}
-                className="theme-input h-10 rounded-md border px-3 text-sm"
-              >
-                <option value="">Todos</option>
-                <option value="true">Com conversa</option>
-                <option value="false">Sem conversa</option>
-              </select>
-            </label>
-            <label className="grid gap-1.5 text-sm">
-              <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Opt-out</span>
-              <select
-                value={optOut}
-                onChange={(event) => setOptOut(event.target.value)}
-                className="theme-input h-10 rounded-md border px-3 text-sm"
-              >
-                <option value="">Todos</option>
-                <option value="true">Ativo</option>
-                <option value="false">Inativo</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={applyFilters}
-              disabled={loading}
-              className="h-10 rounded-md bg-re7-sky px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Atualizando..." : "Aplicar"}
-            </button>
-            <button
-              type="button"
-              onClick={clearFilters}
-              disabled={loading}
-              className="theme-nav-link h-10 rounded-md border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Limpar
-            </button>
-          </div>
-        </div>
-
-        <div className="theme-surface sticky top-[116px] z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm theme-muted shadow-sm">
-          <div className="flex flex-wrap items-center gap-3">
-            <span>
-              {contacts
-                ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
-                : "Carregando contatos"}
-            </span>
-            {contacts ? (
-              <span>
-                Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
-              </span>
-            ) : null}
-          </div>
-          {contacts ? (
-            <div className="flex items-center gap-2">
+        <div className="sticky top-[230px] z-30 grid gap-3 sm:top-[244px] lg:top-[144px] min-[1441px]:top-[196px]">
+          <div className="theme-surface-strong rounded-xl border p-4 shadow-sm">
+            <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto_auto] lg:items-end">
+              <label className="grid gap-1.5 text-sm">
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Busca</span>
+                <input
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") applyFilters();
+                  }}
+                  className="theme-input h-10 rounded-md border px-3 text-sm"
+                  placeholder="Nome, empresa, email ou telefone"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Situacao</span>
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  className="theme-input h-10 rounded-md border px-3 text-sm"
+                >
+                  <option value="">Todas</option>
+                  {statuses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Canal</span>
+                <select
+                  value={channel}
+                  onChange={(event) => setChannel(event.target.value)}
+                  className="theme-input h-10 rounded-md border px-3 text-sm"
+                >
+                  {CHANNEL_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Historico</span>
+                <select
+                  value={hasConversation}
+                  onChange={(event) => setHasConversation(event.target.value)}
+                  className="theme-input h-10 rounded-md border px-3 text-sm"
+                >
+                  <option value="">Todos</option>
+                  <option value="true">Com conversa</option>
+                  <option value="false">Sem conversa</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Opt-out</span>
+                <select
+                  value={optOut}
+                  onChange={(event) => setOptOut(event.target.value)}
+                  className="theme-input h-10 rounded-md border px-3 text-sm"
+                >
+                  <option value="">Todos</option>
+                  <option value="true">Ativo</option>
+                  <option value="false">Inativo</option>
+                </select>
+              </label>
               <button
                 type="button"
-                onClick={() => goToPage(page - 1)}
-                disabled={!contacts.pagination.hasPreviousPage || loading}
-                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={applyFilters}
+                disabled={loading}
+                className="h-10 rounded-md bg-re7-sky px-4 text-sm font-semibold text-slate-950 shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Anterior
+                {loading ? "Atualizando..." : "Aplicar"}
               </button>
-              <span className="text-xs theme-muted">
-                {formatNumber(contacts.items.length)} nesta pagina
-              </span>
               <button
                 type="button"
-                onClick={() => goToPage(page + 1)}
-                disabled={!contacts.pagination.hasNextPage || loading}
-                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={clearFilters}
+                disabled={loading}
+                className="theme-nav-link h-10 rounded-md border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Proxima
+                Limpar
               </button>
             </div>
-          ) : null}
+          </div>
+
+          <div className="theme-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm theme-muted shadow-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <span>
+                {contacts
+                  ? `${formatNumber(contacts.pagination.total)} contato(s) encontrados`
+                  : "Carregando contatos"}
+              </span>
+              {contacts ? (
+                <span>
+                  Pagina {contacts.pagination.page} de {Math.max(contacts.pagination.totalPages, 1)}
+                </span>
+              ) : null}
+            </div>
+            {contacts ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => goToPage(page - 1)}
+                  disabled={!contacts.pagination.hasPreviousPage || loading}
+                  className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs theme-muted">
+                  {formatNumber(contacts.items.length)} nesta pagina
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goToPage(page + 1)}
+                  disabled={!contacts.pagination.hasNextPage || loading}
+                  className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Proxima
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {loading && !contacts ? (
