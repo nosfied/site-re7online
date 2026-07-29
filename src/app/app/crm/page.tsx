@@ -15,7 +15,6 @@ import {
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
-  inactivateAppCrmContact,
   loadAppSession,
   recordAppCrmContactOptOut,
   revokeAppCrmContactOptOut,
@@ -181,7 +180,7 @@ function CrmContactRow({
           <span>{identifier}</span>
           {item.activeOptOut ? (
             <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-0.5 text-rose-100">
-              Opt-out
+              Envio ativo bloqueado
             </span>
           ) : null}
         </div>
@@ -292,7 +291,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus,
   onRecordOptOut,
   onRevokeOptOut,
-  onInactivate,
 }: {
   detail: AppCrmContactDetailResponse | null;
   loading: boolean;
@@ -309,7 +307,6 @@ function CrmContactDetailDrawer({
   onUpdateStatus: (leadId: string, status: string) => Promise<void>;
   onRecordOptOut: (leadId: string) => Promise<void>;
   onRevokeOptOut: (leadId: string) => Promise<void>;
-  onInactivate: (leadId: string) => Promise<void>;
 }) {
   const item = detail?.item ?? null;
   const conversations = detail?.conversations ?? [];
@@ -367,8 +364,8 @@ function CrmContactDetailDrawer({
   const toggleOptOut = async () => {
     if (!item) return;
     const message = item.activeOptOut
-      ? "Revogar opt-out deste contato? Ele podera voltar a ser considerado para campanhas futuras permitidas."
-      : "Marcar opt-out deste contato? Isso bloqueia o uso em campanhas e futuro envio ativo.";
+      ? "Esta acao permitira novamente campanhas e templates aprovados para este contato, conforme as regras do canal e da Meta."
+      : "Esta acao bloqueara campanhas e templates iniciados pela empresa para este contato. O atendimento receptivo continuara permitido.";
     if (!window.confirm(message)) return;
     setActionLoading("opt-out");
     try {
@@ -377,23 +374,6 @@ function CrmContactDetailDrawer({
       } else {
         await onRecordOptOut(item.leadId);
       }
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const inactivate = async () => {
-    if (!item) return;
-    if (
-      !window.confirm(
-        "Inativar contato? Esta acao nao apaga dados e nao anonimiza; apenas altera a classificacao operacional."
-      )
-    ) {
-      return;
-    }
-    setActionLoading("inactivate");
-    try {
-      await onInactivate(item.leadId);
     } finally {
       setActionLoading(null);
     }
@@ -570,7 +550,7 @@ function CrmContactDetailDrawer({
                   <DetailField label="Classificacao CRM" value={item.crmStatusLabel} />
                   <DetailField label="Codigo CRM" value={item.crmStatus} />
                   <DetailField label="Lead status" value={item.leadStatus} />
-                  <DetailField label="Opt-out" value={item.activeOptOut ? "Ativo" : "Inativo"} />
+                  <DetailField label="Bloqueio de envio ativo" value={item.activeOptOut ? "Ativo" : "Inativo"} />
                   <DetailField label="Origem/importacao" value={item.importedSource} />
                   <DetailField label="Notas registradas" value={item.notesCount} />
                   <DetailField label="Elegibilidade template" value={getTemplateHint(item)} />
@@ -602,7 +582,7 @@ function CrmContactDetailDrawer({
                 </div>
                 <div className="grid gap-2 rounded-lg border border-white/10 p-3">
                   <p className="text-sm theme-muted">
-                    Opt-out bloqueia o uso em campanhas e futuro envio ativo. Inativar nao apaga dados nem anonimiza.
+                    Impede campanhas e envio de templates iniciados pela empresa. O contato ainda podera enviar mensagens e ser atendido normalmente.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -614,16 +594,8 @@ function CrmContactDetailDrawer({
                       {actionLoading === "opt-out"
                         ? "Atualizando..."
                         : item.activeOptOut
-                          ? "Revogar opt-out"
-                          : "Marcar opt-out"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={inactivate}
-                      disabled={Boolean(actionLoading)}
-                      className="rounded-md border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {actionLoading === "inactivate" ? "Inativando..." : "Inativar contato"}
+                          ? "Liberar envio ativo"
+                          : "Bloquear envio ativo"}
                     </button>
                   </div>
                 </div>
@@ -925,7 +897,7 @@ export default function AppCrmContactsPage() {
         const message = normalizeAppErrorMessage(typed, fallbackMessage);
         setDetailError(
           typed.errorCode === "status_not_configured"
-            ? "Configure um status de inativacao em Config. CRM."
+            ? "A classificacao selecionada nao esta ativa em Config. CRM."
             : message
         );
         setError(message);
@@ -966,8 +938,8 @@ export default function AppCrmContactsPage() {
       if (!session) return;
       await mutateContactDetail(
         () => recordAppCrmContactOptOut(session, leadId),
-        "Opt-out registrado.",
-        "Nao foi possivel registrar opt-out."
+        "Envio ativo bloqueado.",
+        "Nao foi possivel bloquear envio ativo."
       );
     },
     [mutateContactDetail, session]
@@ -978,20 +950,8 @@ export default function AppCrmContactsPage() {
       if (!session) return;
       await mutateContactDetail(
         () => revokeAppCrmContactOptOut(session, leadId),
-        "Opt-out revogado.",
-        "Nao foi possivel revogar opt-out."
-      );
-    },
-    [mutateContactDetail, session]
-  );
-
-  const inactivateContact = useCallback(
-    async (leadId: string) => {
-      if (!session) return;
-      await mutateContactDetail(
-        () => inactivateAppCrmContact(session, leadId),
-        "Contato inativado.",
-        "Nao foi possivel inativar o contato."
+        "Envio ativo liberado.",
+        "Nao foi possivel liberar envio ativo."
       );
     },
     [mutateContactDetail, session]
@@ -1094,15 +1054,15 @@ export default function AppCrmContactsPage() {
                 </select>
               </label>
               <label className="grid gap-1.5 text-sm">
-                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Opt-out</span>
+                <span className="theme-soft text-xs font-semibold uppercase tracking-[0.14em]">Bloqueio envio</span>
                 <select
                   value={optOut}
                   onChange={(event) => setOptOut(event.target.value)}
                   className="theme-input h-10 rounded-md border px-3 text-sm"
                 >
                   <option value="">Todos</option>
-                  <option value="true">Ativo</option>
-                  <option value="false">Inativo</option>
+                  <option value="true">Bloqueado</option>
+                  <option value="false">Liberado</option>
                 </select>
               </label>
               <button
@@ -1266,7 +1226,6 @@ export default function AppCrmContactsPage() {
           onUpdateStatus={updateContactStatus}
           onRecordOptOut={recordContactOptOut}
           onRevokeOptOut={revokeContactOptOut}
-          onInactivate={inactivateContact}
         />
       ) : null}
     </AppShell>

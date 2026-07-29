@@ -2915,16 +2915,6 @@ export async function revokeAppCrmContactOptOut(
   });
 }
 
-export async function inactivateAppCrmContact(
-  session: AppSession,
-  leadId: string
-): Promise<AppCrmContactDetailResponse> {
-  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/inactivate`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
 export async function updateAppCrmSettings(
   session: AppSession,
   payload: { crmBusinessStatuses: CrmBusinessStatusConfig[] }

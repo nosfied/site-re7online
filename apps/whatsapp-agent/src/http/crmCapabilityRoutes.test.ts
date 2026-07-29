@@ -875,34 +875,6 @@ test("CRM opt-out lifecycle records events and updates read model", async () => 
   assert.equal(getErrorCode(unavailable.body), "opt_out_identity_unavailable");
 });
 
-test("CRM inactivate changes configured status without deleting data", async () => {
-  const response = await request<{ ok: boolean; item: { crmStatus: string; displayName: string | null } }>(
-    "POST",
-    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/inactivate`,
-    businessAdmin,
-    {}
-  );
-  assert.equal(response.status, 200);
-  assert.equal(response.body.ok, true);
-  assert.equal(response.body.item.crmStatus, "INATIVO");
-  assert.equal(response.body.item.displayName, "Cliente Instagram Atualizado");
-
-  const lead = await prisma.lead.findUnique({
-    where: { id: instagramLeadId },
-    select: { id: true, status: true, name: true },
-  });
-  assert.ok(lead);
-  assert.equal(lead.status, "INATIVO");
-  assert.equal(lead.name, "Cliente Instagram Atualizado");
-
-  const event = await prisma.event.findFirst({
-    where: { clientId: businessClientId, eventName: "crm.contact.inactivated" },
-    select: { payloadJson: true },
-  });
-  assert.ok(event);
-  assert.doesNotMatch(JSON.stringify(event.payloadJson), /Cliente Instagram Atualizado|contato@example.test/);
-});
-
 test("CRM contacts endpoint requires authentication", async () => {
   const response = await fetch(`${baseUrl}/app/crm/contacts`);
   assert.equal(response.status, 401);
@@ -915,6 +887,25 @@ test("CRM contacts endpoint requires authentication", async () => {
   assert.equal(patch.status, 401);
 });
 
+test("CRM contact destructive or inactive lifecycle routes are not exposed", async () => {
+  const inactive = await request<ErrorPayload>(
+    "POST",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/inactivate`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(inactive.status, 404);
+  assert.equal(getErrorCode(inactive.body), "not_found");
+
+  const remove = await request<ErrorPayload>(
+    "DELETE",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}`,
+    businessAdmin
+  );
+  assert.equal(remove.status, 404);
+  assert.equal(getErrorCode(remove.body), "not_found");
+});
+
 test("government profile default is blocked by CRM capability on protected routes", async () => {
   const routes = [
     { method: "GET", route: "/app/crm/settings" },
@@ -925,7 +916,6 @@ test("government profile default is blocked by CRM capability on protected route
     { method: "PATCH", route: "/app/crm/contacts/missing/status", body: { status: "OPEN" } },
     { method: "POST", route: "/app/crm/contacts/missing/opt-out", body: {} },
     { method: "DELETE", route: "/app/crm/contacts/missing/opt-out" },
-    { method: "POST", route: "/app/crm/contacts/missing/inactivate", body: {} },
     { method: "GET", route: "/app/crm/campaign-recipients?statuses=QUALIFIED" },
     { method: "PATCH", route: "/app/lead/missing", body: { name: "x" } },
     { method: "PATCH", route: "/app/lead/missing/status", body: { status: "OPEN" } },

@@ -8,7 +8,6 @@ import { persistEvent } from "../db/persist.js";
 
 export const CRM_CONTACT_UPDATED_EVENT = "crm.contact.updated";
 export const CRM_LEAD_STATUS_CHANGED_EVENT = "crm.lead.status_changed";
-export const CRM_CONTACT_INACTIVATED_EVENT = "crm.contact.inactivated";
 
 export type CrmStatusConfig = {
   id: string;
@@ -68,12 +67,6 @@ function getActiveStatusIds(statuses: CrmStatusConfig[]) {
       .map((status) => String(status.id ?? "").trim().toUpperCase())
       .filter(Boolean)
   );
-}
-
-function getInactivationStatus(statuses: CrmStatusConfig[]) {
-  const candidates = ["INATIVO", "INACTIVE", "SEM_INTERESSE", "PERDIDO", "LOST", "NO_RESPONSE"];
-  const active = getActiveStatusIds(statuses);
-  return candidates.find((candidate) => active.has(candidate)) ?? null;
 }
 
 async function getLeadForTenant(prisma: PrismaClient, clientId: string, leadId: string) {
@@ -312,40 +305,4 @@ export async function revokeCrmContactOptOut(
     requestId: `crm-contact-opt-out-revoke:${lead.id}:${params.requestId}`,
   });
   return { ok: true };
-}
-
-export async function inactivateCrmContact(
-  prisma: PrismaClient,
-  params: {
-    clientId: string;
-    leadId: string;
-    statuses: CrmStatusConfig[];
-    userId: string;
-    requestId: string;
-  }
-) {
-  const inactiveStatus = getInactivationStatus(params.statuses);
-  if (!inactiveStatus) {
-    throw new CrmContactMutationError(
-      "status_not_configured",
-      "Configure an inactive CRM status before inactivating contacts",
-      400
-    );
-  }
-  const lead = await getLeadForTenant(prisma, params.clientId, params.leadId);
-  if (lead.status !== inactiveStatus) {
-    await prisma.lead.update({ where: { id: lead.id }, data: { status: inactiveStatus } });
-    await recordCrmEvent({
-      clientId: params.clientId,
-      lead,
-      eventName: CRM_CONTACT_INACTIVATED_EVENT,
-      requestId: params.requestId,
-      payloadJson: {
-        from: lead.status,
-        to: inactiveStatus,
-        userId: params.userId,
-      },
-    });
-  }
-  return { status: inactiveStatus };
 }

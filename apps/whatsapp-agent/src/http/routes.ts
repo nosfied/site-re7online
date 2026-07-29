@@ -168,7 +168,6 @@ import {
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
   CrmContactMutationError,
-  inactivateCrmContact,
   recordCrmContactOptOut,
   revokeCrmContactOptOut,
   updateCrmContactBasics,
@@ -6791,10 +6790,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       const isStatusUpdate = req.method === "PATCH" && parts.length === 6 && action === "status";
       const isOptOutRecord = req.method === "POST" && parts.length === 6 && action === "opt-out";
       const isOptOutRevoke = req.method === "DELETE" && parts.length === 6 && action === "opt-out";
-      const isInactivate = req.method === "POST" && parts.length === 6 && action === "inactivate";
       if (
         !leadId ||
-        (!isBasicUpdate && !isStatusUpdate && !isOptOutRecord && !isOptOutRevoke && !isInactivate)
+        (!isBasicUpdate && !isStatusUpdate && !isOptOutRecord && !isOptOutRevoke)
       ) {
         json(res, 404, httpError("not_found", "Not found"));
         return;
@@ -6864,14 +6862,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           userId: clientAuth.userId,
           requestId,
           reason: typeof body.reason === "string" ? body.reason : null,
-        });
-      } else if (isInactivate) {
-        await inactivateCrmContact(prisma, {
-          clientId: client.id,
-          leadId,
-          statuses: resolvedStatuses.statuses,
-          userId: clientAuth.userId,
-          requestId,
         });
       }
 
