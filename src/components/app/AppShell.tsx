@@ -26,6 +26,7 @@ type AppShellProps = {
   children: ReactNode;
   fullScreen?: boolean;
   hideTitleBar?: boolean;
+  titleSurface?: "default" | "strong";
 };
 
 type NavItem = {
@@ -249,6 +250,7 @@ export default function AppShell({
   children,
   fullScreen = false,
   hideTitleBar = false,
+  titleSurface = "default",
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -604,7 +606,7 @@ export default function AppShell({
           </div>
         </header>
         {!hideTitleBar ? (
-          <section className="theme-surface theme-shadow fixed left-3 right-3 top-[calc(170px+var(--safe-top))] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2">
+          <section className={`${titleSurface === "strong" ? "theme-surface-strong" : "theme-surface"} theme-shadow fixed left-3 right-3 top-[calc(170px+var(--safe-top))] z-40 mx-auto w-[calc(100%-1.5rem)] max-w-[1400px] rounded-xl border px-3 py-2 backdrop-blur sm:left-4 sm:right-4 sm:top-[calc(184px+var(--safe-top))] sm:w-[calc(100%-2rem)] sm:px-4 lg:left-5 lg:right-5 lg:top-[92px] lg:w-[calc(100%-2.5rem)] lg:py-1.5 min-[1441px]:top-[138px] min-[1441px]:py-2`}>
             <h1 className="text-base font-bold min-[1441px]:text-lg">{title}</h1>
             {subtitle ? <p className="theme-muted mt-0.5 text-xs min-[1441px]:text-sm">{subtitle}</p> : null}
           </section>
