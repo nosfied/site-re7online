@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { FeedbackToast, usePausableFeedbackAutoDismiss } from "@/components/ui/FeedbackToast";
@@ -105,6 +106,37 @@ function getDisplayName(item: AppCrmContactItem) {
   return item.displayName || item.identifierDisplay || "Contato";
 }
 
+function ActionIconButton({
+  label,
+  icon,
+  onClick,
+  disabled,
+  variant = "neutral",
+}: {
+  label: string;
+  icon: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "neutral" | "primary";
+}) {
+  const classes =
+    variant === "primary"
+      ? "border-re7-sky/40 bg-re7-sky text-slate-950 hover:brightness-110"
+      : "theme-nav-link border-white/10 hover:bg-white/10";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-md border text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${classes}`}
+    >
+      <span aria-hidden="true">{icon}</span>
+    </button>
+  );
+}
+
 function CrmContactsSkeleton() {
   return (
     <div className="theme-surface rounded-xl border shadow-sm">
@@ -191,32 +223,39 @@ function CrmContactRow({
         <div className="mt-1 text-xs theme-muted">{getTemplateHint(item)}</div>
       </td>
       <td className="px-4 py-3 text-right">
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => onOpenDetail(item)}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold theme-nav-link transition"
-          >
-            Abrir cadastro
-          </button>
-          <button
-            type="button"
-            onClick={() => onCopyIdentifier(item)}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold theme-nav-link transition"
-          >
-            Copiar ID seguro
-          </button>
-          <button
-            type="button"
+        <div className="flex justify-end gap-2">
+          <ActionIconButton label="Abrir cadastro" icon="i" onClick={() => onOpenDetail(item)} />
+          <ActionIconButton label="Copiar referencia" icon="#" onClick={() => onCopyIdentifier(item)} />
+          <ActionIconButton
+            label="Abrir conversa no Inbox"
+            icon=">"
             onClick={() => onOpenConversation(item)}
             disabled={!canOpenConversation}
-            className="rounded-md bg-re7-sky px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Abrir no Inbox
-          </button>
+            variant="primary"
+          />
         </div>
       </td>
     </tr>
+  );
+}
+
+function DetailSection({
+  title,
+  children,
+  action,
+}: {
+  title: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-2">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -228,7 +267,7 @@ function DetailField({
   value: string | number | null | undefined;
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+    <div className="min-w-0">
       <div className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">{label}</div>
       <div className="mt-1 break-words text-sm font-semibold text-white">{value ?? "-"}</div>
     </div>
@@ -255,14 +294,21 @@ function CrmContactDetailDrawer({
   const item = detail?.item ?? null;
   const conversations = detail?.conversations ?? [];
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-black/45 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm sm:px-6"
+      role="dialog"
+      aria-modal="true"
+    >
       <button
         type="button"
         aria-label="Fechar cadastro"
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <aside className="theme-bg relative grid h-full w-full max-w-[760px] grid-rows-[auto_1fr] border-l border-white/10 shadow-2xl">
+      <aside
+        className="theme-bg relative grid max-h-[calc(100vh-2rem)] w-full max-w-[880px] grid-rows-[auto_1fr] overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <header className="theme-surface-strong theme-shadow border-b p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -275,21 +321,8 @@ function CrmContactDetailDrawer({
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={loading}
-                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
-              >
-                Atualizar
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold"
-              >
-                Fechar
-              </button>
+              <ActionIconButton label="Atualizar cadastro" icon="↺" onClick={onRefresh} disabled={loading} />
+              <ActionIconButton label="Fechar cadastro" icon="x" onClick={onClose} />
             </div>
           </div>
         </header>
@@ -318,21 +351,18 @@ function CrmContactDetailDrawer({
                   {error}
                 </div>
               ) : null}
-              <section className="theme-surface rounded-xl border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-white">Dados do contato</h3>
-                    <p className="mt-1 text-sm theme-muted">Identificadores tecnicos de canal permanecem protegidos.</p>
-                  </div>
-                  <button
-                    type="button"
+              <DetailSection
+                title="Dados do contato"
+                action={
+                  <ActionIconButton
+                    label="Copiar referencia"
+                    icon="#"
                     onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
-                    className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold"
-                  >
-                    Copiar referencia
-                  </button>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  />
+                }
+              >
+                <p className="text-sm theme-muted">Identificadores tecnicos de canal permanecem protegidos.</p>
+                <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
                   <DetailField label="Nome" value={getDisplayName(item)} />
                   <DetailField label="Empresa" value={item.companyName} />
                   <DetailField label="E-mail" value={item.email} />
@@ -352,10 +382,9 @@ function CrmContactDetailDrawer({
                   <DetailField label="Lead ID" value={item.leadId} />
                   <DetailField label="Contact ID" value={item.contactId} />
                 </div>
-              </section>
+              </DetailSection>
 
-              <section className="theme-surface rounded-xl border p-4">
-                <h3 className="text-base font-semibold text-white">Conversas relacionadas</h3>
+              <DetailSection title="Conversas relacionadas">
                 <p className="mt-1 text-sm theme-muted">
                   Abertura usa a identidade operacional esperada pelo Inbox, sempre no tenant da sessao.
                 </p>
@@ -389,18 +418,17 @@ function CrmContactDetailDrawer({
                             Atualizada em {formatDateTime(conversation.updatedAt)}
                           </div>
                         </div>
-                        <button
-                          type="button"
+                        <ActionIconButton
+                          label="Abrir conversa no Inbox"
+                          icon=">"
                           onClick={() => onOpenInbox(conversation.conversationIdentity)}
-                          className="rounded-md bg-re7-sky px-3 py-1.5 text-xs font-semibold text-slate-950 transition hover:brightness-110"
-                        >
-                          Abrir no Inbox
-                        </button>
+                          variant="primary"
+                        />
                       </div>
                     ))
                   )}
                 </div>
-              </section>
+              </DetailSection>
             </div>
           ) : null}
         </div>
@@ -431,6 +459,21 @@ export default function AppCrmContactsPage() {
     setError(null);
     setNotice(null);
   });
+
+  useEffect(() => {
+    if (!selectedLeadId) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [selectedLeadId]);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -611,9 +654,9 @@ export default function AppCrmContactsPage() {
     const value = item.phoneDisplay || item.identifierDisplay;
     try {
       await navigator.clipboard.writeText(value);
-      setNotice("Identificador seguro copiado.");
+      setNotice("Referencia segura copiada.");
     } catch {
-      setError("Nao foi possivel copiar o identificador.");
+      setError("Nao foi possivel copiar a referencia.");
     }
   }, []);
 
@@ -751,11 +794,23 @@ export default function AppCrmContactsPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => goToPage(1)}
+                  disabled={!contacts.pagination.hasPreviousPage || loading}
+                  title="Primeira pagina"
+                  aria-label="Primeira pagina"
+                  className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {"<<"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => goToPage(page - 1)}
                   disabled={!contacts.pagination.hasPreviousPage || loading}
-                  className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Pagina anterior"
+                  aria-label="Pagina anterior"
+                  className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Anterior
+                  {"<"}
                 </button>
                 <span className="text-xs theme-muted">
                   {formatNumber(contacts.items.length)} nesta pagina
@@ -764,9 +819,21 @@ export default function AppCrmContactsPage() {
                   type="button"
                   onClick={() => goToPage(page + 1)}
                   disabled={!contacts.pagination.hasNextPage || loading}
-                  className="theme-nav-link rounded-md border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Proxima pagina"
+                  aria-label="Proxima pagina"
+                  className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Proxima
+                  {">"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToPage(Math.max(contacts.pagination.totalPages, 1))}
+                  disabled={!contacts.pagination.hasNextPage || loading}
+                  title="Ultima pagina"
+                  aria-label="Ultima pagina"
+                  className="theme-nav-link inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {">>"}
                 </button>
               </div>
             ) : null}
