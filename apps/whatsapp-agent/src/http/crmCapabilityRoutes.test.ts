@@ -471,6 +471,18 @@ test.before(async () => {
             isActive: true,
             campaignEligible: true,
           },
+          {
+            id: "INATIVO",
+            label: "Inativo",
+            isActive: true,
+            campaignEligible: false,
+          },
+          {
+            id: "ARQUIVADO",
+            label: "Arquivado",
+            isActive: false,
+            campaignEligible: false,
+          },
         ],
       },
     },
@@ -563,7 +575,7 @@ test("CRM operational statuses are tenant-scoped and allow custom lead statuses"
   assert.equal(statuses.body.ok, true);
   assert.deepEqual(
     statuses.body.settings.crmBusinessStatuses.map((item) => item.id),
-    ["QUALIFIED", "OPEN", "RETORNO_FUTURO"]
+    ["QUALIFIED", "OPEN", "RETORNO_FUTURO", "INATIVO", "ARQUIVADO"]
   );
 
   const update = await request<{ ok: boolean; lead: { status: string } }>(
@@ -734,9 +746,173 @@ test("CRM contact detail is tenant-scoped and returns safe related conversations
   assert.equal(getErrorCode(foreign.body), "contact_not_found");
 });
 
+test("CRM contact mutation routes update safe fields and audit without exposing forbidden payloads", async () => {
+  const response = await request<{
+    ok: boolean;
+    item: {
+      leadId: string;
+      displayName: string | null;
+      companyName: string | null;
+      email: string | null;
+      city: string | null;
+      phoneDisplay: string | null;
+      identifierDisplay: string;
+    };
+  }>("PATCH", `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}`, businessAdmin, {
+    displayName: "Cliente Instagram Atualizado",
+    companyName: "Empresa Atualizada",
+    email: "contato@example.test",
+    city: "Curitiba/PR",
+    phone: "551188887777",
+    waId: "551188887777",
+    externalUserHash: "hash:should-not-persist",
+    rawPayload: { token: "secret" },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.item.displayName, "Cliente Instagram Atualizado");
+  assert.equal(response.body.item.companyName, "Empresa Atualizada");
+  assert.equal(response.body.item.email, "contato@example.test");
+  assert.equal(response.body.item.city, "Curitiba/PR");
+  assert.equal(response.body.item.phoneDisplay, null);
+  assert.equal(response.body.item.identifierDisplay, "Cliente Instagram Atualizado");
+
+  const stored = await prisma.lead.findUniqueOrThrow({
+    where: { id: instagramLeadId },
+    select: { waId: true, name: true, company: true, email: true, city: true, externalUserHash: true },
+  });
+  assert.equal(stored.waId, `instagram:${prefix}:sender`);
+  assert.equal(stored.externalUserHash, `hash:${prefix}:instagram`);
+  assert.equal(stored.name, "Cliente Instagram Atualizado");
+  assert.equal(stored.company, "Empresa Atualizada");
+  assert.equal(stored.email, "contato@example.test");
+  assert.equal(stored.city, "Curitiba/PR");
+
+  const event = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, eventName: "crm.contact.updated" },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  const serialized = JSON.stringify(event.payloadJson);
+  assert.match(serialized, /fieldsChanged/);
+  assert.doesNotMatch(serialized, /contato@example.test|Cliente Instagram Atualizado|secret|rawPayload|hash:should-not-persist/);
+
+  const foreign = await request<ErrorPayload>(
+    "PATCH",
+    `/app/crm/contacts/${encodeURIComponent(otherTenantLeadId)}`,
+    businessAdmin,
+    { displayName: "Cross tenant" }
+  );
+  assert.equal(foreign.status, 404);
+  assert.equal(getErrorCode(foreign.body), "contact_not_found");
+});
+
+test("CRM status mutation accepts only active tenant statuses", async () => {
+  const valid = await request<{ ok: boolean; item: { crmStatus: string; crmStatusLabel: string } }>(
+    "PATCH",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/status`,
+    businessAdmin,
+    { status: "OPEN" }
+  );
+  assert.equal(valid.status, 200);
+  assert.equal(valid.body.ok, true);
+  assert.equal(valid.body.item.crmStatus, "OPEN");
+  assert.equal(valid.body.item.crmStatusLabel, "Em aberto");
+
+  const invalid = await request<ErrorPayload>(
+    "PATCH",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/status`,
+    businessAdmin,
+    { status: "ARQUIVADO" }
+  );
+  assert.equal(invalid.status, 400);
+  assert.equal(getErrorCode(invalid.body), "status_not_configured");
+});
+
+test("CRM opt-out lifecycle records events and updates read model", async () => {
+  const revoke = await request<{ ok: boolean; item: { activeOptOut: boolean } }>(
+    "DELETE",
+    `/app/crm/contacts/${encodeURIComponent(leadId)}/opt-out`,
+    businessAdmin
+  );
+  assert.equal(revoke.status, 200);
+  assert.equal(revoke.body.ok, true);
+  assert.equal(revoke.body.item.activeOptOut, false);
+
+  const record = await request<{ ok: boolean; item: { activeOptOut: boolean } }>(
+    "POST",
+    `/app/crm/contacts/${encodeURIComponent(leadId)}/opt-out`,
+    businessAdmin,
+    { reason: "manual_test" }
+  );
+  assert.equal(record.status, 200);
+  assert.equal(record.body.ok, true);
+  assert.equal(record.body.item.activeOptOut, true);
+
+  const events = await prisma.event.findMany({
+    where: {
+      clientId: businessClientId,
+      eventName: { in: ["contact.opt_out.recorded", "contact.opt_out.revoked"] },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 2,
+    select: { eventName: true, payloadJson: true },
+  });
+  assert.deepEqual(events.map((event) => event.eventName), [
+    "contact.opt_out.recorded",
+    "contact.opt_out.revoked",
+  ]);
+  assert.doesNotMatch(JSON.stringify(events), /9999999999|secret|rawPayload/);
+
+  const unavailable = await request<ErrorPayload>(
+    "POST",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/opt-out`,
+    businessAdmin,
+    { reason: "not_whatsapp" }
+  );
+  assert.equal(unavailable.status, 400);
+  assert.equal(getErrorCode(unavailable.body), "opt_out_identity_unavailable");
+});
+
+test("CRM inactivate changes configured status without deleting data", async () => {
+  const response = await request<{ ok: boolean; item: { crmStatus: string; displayName: string | null } }>(
+    "POST",
+    `/app/crm/contacts/${encodeURIComponent(instagramLeadId)}/inactivate`,
+    businessAdmin,
+    {}
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.item.crmStatus, "INATIVO");
+  assert.equal(response.body.item.displayName, "Cliente Instagram Atualizado");
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: instagramLeadId },
+    select: { id: true, status: true, name: true },
+  });
+  assert.ok(lead);
+  assert.equal(lead.status, "INATIVO");
+  assert.equal(lead.name, "Cliente Instagram Atualizado");
+
+  const event = await prisma.event.findFirst({
+    where: { clientId: businessClientId, eventName: "crm.contact.inactivated" },
+    select: { payloadJson: true },
+  });
+  assert.ok(event);
+  assert.doesNotMatch(JSON.stringify(event.payloadJson), /Cliente Instagram Atualizado|contato@example.test/);
+});
+
 test("CRM contacts endpoint requires authentication", async () => {
   const response = await fetch(`${baseUrl}/app/crm/contacts`);
   assert.equal(response.status, 401);
+
+  const patch = await fetch(`${baseUrl}/app/crm/contacts/${encodeURIComponent(leadId)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ displayName: "Sem token" }),
+  });
+  assert.equal(patch.status, 401);
 });
 
 test("government profile default is blocked by CRM capability on protected routes", async () => {
@@ -745,6 +921,11 @@ test("government profile default is blocked by CRM capability on protected route
     { method: "GET", route: "/app/crm/statuses" },
     { method: "GET", route: "/app/crm/contacts" },
     { method: "GET", route: "/app/crm/contacts/missing" },
+    { method: "PATCH", route: "/app/crm/contacts/missing", body: { displayName: "x" } },
+    { method: "PATCH", route: "/app/crm/contacts/missing/status", body: { status: "OPEN" } },
+    { method: "POST", route: "/app/crm/contacts/missing/opt-out", body: {} },
+    { method: "DELETE", route: "/app/crm/contacts/missing/opt-out" },
+    { method: "POST", route: "/app/crm/contacts/missing/inactivate", body: {} },
     { method: "GET", route: "/app/crm/campaign-recipients?statuses=QUALIFIED" },
     { method: "PATCH", route: "/app/lead/missing", body: { name: "x" } },
     { method: "PATCH", route: "/app/lead/missing/status", body: { status: "OPEN" } },

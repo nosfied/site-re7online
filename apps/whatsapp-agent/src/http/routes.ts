@@ -167,6 +167,14 @@ import {
 } from "../operations/operationsBoardReadModel.js";
 import { buildCrmContactDetailPayload, buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
+  CrmContactMutationError,
+  inactivateCrmContact,
+  recordCrmContactOptOut,
+  revokeCrmContactOptOut,
+  updateCrmContactBasics,
+  updateCrmLeadStatus,
+} from "../crm/crmContactMutations.js";
+import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
   compareConversationLookupPriority,
@@ -6760,6 +6768,130 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.contact_detail.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    (req.method === "PATCH" || req.method === "POST" || req.method === "DELETE") &&
+    pathname.startsWith("/app/crm/contacts/")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const parts = pathname.split("/");
+      const leadId = decodeURIComponent(parts[4] ?? "").trim();
+      const action = parts[5] ?? "";
+      const isBasicUpdate = req.method === "PATCH" && parts.length === 5;
+      const isStatusUpdate = req.method === "PATCH" && parts.length === 6 && action === "status";
+      const isOptOutRecord = req.method === "POST" && parts.length === 6 && action === "opt-out";
+      const isOptOutRevoke = req.method === "DELETE" && parts.length === 6 && action === "opt-out";
+      const isInactivate = req.method === "POST" && parts.length === 6 && action === "inactivate";
+      if (
+        !leadId ||
+        (!isBasicUpdate && !isStatusUpdate && !isOptOutRecord && !isOptOutRevoke && !isInactivate)
+      ) {
+        json(res, 404, httpError("not_found", "Not found"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: isBasicUpdate
+            ? "/app/crm/contacts/:leadId"
+            : `/app/crm/contacts/:leadId/${action}`,
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const body =
+        req.method === "DELETE" ? {} : ((await readJsonBody(req, res)) as Record<string, unknown> | null);
+      if (!body) return;
+
+      if (isBasicUpdate) {
+        await updateCrmContactBasics(prisma, {
+          clientId: client.id,
+          leadId,
+          patch: body,
+          userId: clientAuth.userId,
+          requestId,
+        });
+      } else if (isStatusUpdate) {
+        await updateCrmLeadStatus(prisma, {
+          clientId: client.id,
+          leadId,
+          status: body.status,
+          statuses: resolvedStatuses.statuses,
+          userId: clientAuth.userId,
+          requestId,
+        });
+      } else if (isOptOutRecord) {
+        await recordCrmContactOptOut(prisma, {
+          clientId: client.id,
+          leadId,
+          userId: clientAuth.userId,
+          requestId,
+          reason: typeof body.reason === "string" ? body.reason : null,
+        });
+      } else if (isOptOutRevoke) {
+        await revokeCrmContactOptOut(prisma, {
+          clientId: client.id,
+          leadId,
+          userId: clientAuth.userId,
+          requestId,
+          reason: typeof body.reason === "string" ? body.reason : null,
+        });
+      } else if (isInactivate) {
+        await inactivateCrmContact(prisma, {
+          clientId: client.id,
+          leadId,
+          statuses: resolvedStatuses.statuses,
+          userId: clientAuth.userId,
+          requestId,
+        });
+      }
+
+      const payload = await buildCrmContactDetailPayload(prisma, {
+        clientId: client.id,
+        leadId,
+        statuses: resolvedStatuses.statuses,
+      });
+      if (!payload) {
+        json(res, 404, httpError("contact_not_found", "Contact not found"));
+        return;
+      }
+      json(res, 200, payload);
+    } catch (error) {
+      if (error instanceof CrmContactMutationError) {
+        json(res, error.status, httpError(error.code, error.message));
+        return;
+      }
+      logger.error({
+        event: "app.crm.contact_mutation.error",
         message: (error as Error).message,
         requestId,
       });

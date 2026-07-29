@@ -2869,6 +2869,62 @@ export async function fetchAppCrmContactDetail(
   return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}`);
 }
 
+export async function updateAppCrmContactBasics(
+  session: AppSession,
+  leadId: string,
+  payload: {
+    displayName?: string | null;
+    companyName?: string | null;
+    email?: string | null;
+    city?: string | null;
+  }
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppCrmContactStatus(
+  session: AppSession,
+  leadId: string,
+  status: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function recordAppCrmContactOptOut(
+  session: AppSession,
+  leadId: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/opt-out`, {
+    method: "POST",
+    body: JSON.stringify({ reason: "manual_crm_opt_out" }),
+  });
+}
+
+export async function revokeAppCrmContactOptOut(
+  session: AppSession,
+  leadId: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/opt-out`, {
+    method: "DELETE",
+  });
+}
+
+export async function inactivateAppCrmContact(
+  session: AppSession,
+  leadId: string
+): Promise<AppCrmContactDetailResponse> {
+  return requestAppJson(session, `/app/crm/contacts/${encodeURIComponent(leadId)}/inactivate`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function updateAppCrmSettings(
   session: AppSession,
   payload: { crmBusinessStatuses: CrmBusinessStatusConfig[] }

@@ -15,8 +15,13 @@ import {
   fetchAppCrmContactDetail,
   fetchAppCrmContacts,
   fetchAppCrmStatuses,
+  inactivateAppCrmContact,
   loadAppSession,
+  recordAppCrmContactOptOut,
+  revokeAppCrmContactOptOut,
   saveAppSession,
+  updateAppCrmContactBasics,
+  updateAppCrmContactStatus,
 } from "@/lib/appClientApi";
 import { hasCapability } from "@/lib/appFeatures";
 
@@ -278,21 +283,126 @@ function CrmContactDetailDrawer({
   detail,
   loading,
   error,
+  statuses,
   onClose,
   onRefresh,
   onOpenInbox,
   onCopyReference,
+  onUpdateBasics,
+  onUpdateStatus,
+  onRecordOptOut,
+  onRevokeOptOut,
+  onInactivate,
 }: {
   detail: AppCrmContactDetailResponse | null;
   loading: boolean;
   error: string | null;
+  statuses: Array<{ id: string; label: string; isActive?: boolean }>;
   onClose: () => void;
   onRefresh: () => void;
   onOpenInbox: (conversationIdentity: string) => void;
   onCopyReference: (value: string) => void;
+  onUpdateBasics: (
+    leadId: string,
+    payload: { displayName: string | null; companyName: string | null; email: string | null; city: string | null }
+  ) => Promise<void>;
+  onUpdateStatus: (leadId: string, status: string) => Promise<void>;
+  onRecordOptOut: (leadId: string) => Promise<void>;
+  onRevokeOptOut: (leadId: string) => Promise<void>;
+  onInactivate: (leadId: string) => Promise<void>;
 }) {
   const item = detail?.item ?? null;
   const conversations = detail?.conversations ?? [];
+  const [editingBasics, setEditingBasics] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [draft, setDraft] = useState({
+    displayName: "",
+    companyName: "",
+    email: "",
+    city: "",
+  });
+
+  useEffect(() => {
+    if (!item) return;
+    setEditingBasics(false);
+    setDraft({
+      displayName: item.displayName || "",
+      companyName: item.companyName || "",
+      email: item.email || "",
+      city: item.city || "",
+    });
+    setActionLoading(null);
+  }, [item?.leadId]);
+
+  const saveBasics = async () => {
+    if (!item) return;
+    const email = draft.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return;
+    }
+    setActionLoading("basics");
+    try {
+      await onUpdateBasics(item.leadId, {
+        displayName: draft.displayName.trim() || null,
+        companyName: draft.companyName.trim() || null,
+        email: email || null,
+        city: draft.city.trim() || null,
+      });
+      setEditingBasics(false);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const changeStatus = async (status: string) => {
+    if (!item || !status || status === item.crmStatus) return;
+    setActionLoading("status");
+    try {
+      await onUpdateStatus(item.leadId, status);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const toggleOptOut = async () => {
+    if (!item) return;
+    const message = item.activeOptOut
+      ? "Revogar opt-out deste contato? Ele podera voltar a ser considerado para campanhas futuras permitidas."
+      : "Marcar opt-out deste contato? Isso bloqueia o uso em campanhas e futuro envio ativo.";
+    if (!window.confirm(message)) return;
+    setActionLoading("opt-out");
+    try {
+      if (item.activeOptOut) {
+        await onRevokeOptOut(item.leadId);
+      } else {
+        await onRecordOptOut(item.leadId);
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const inactivate = async () => {
+    if (!item) return;
+    if (
+      !window.confirm(
+        "Inativar contato? Esta acao nao apaga dados e nao anonimiza; apenas altera a classificacao operacional."
+      )
+    ) {
+      return;
+    }
+    setActionLoading("inactivate");
+    try {
+      await onInactivate(item.leadId);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const emailDraftInvalid = Boolean(
+    draft.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())
+  );
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm sm:px-6"
@@ -354,19 +464,106 @@ function CrmContactDetailDrawer({
               <DetailSection
                 title="Dados do contato"
                 action={
-                  <ActionIconButton
-                    label="Copiar referencia"
-                    icon="#"
-                    onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
-                  />
+                  <div className="flex items-center gap-2">
+                    <ActionIconButton
+                      label="Copiar referencia"
+                      icon="#"
+                      onClick={() => onCopyReference(item.phoneDisplay || item.identifierDisplay)}
+                    />
+                    <ActionIconButton
+                      label={editingBasics ? "Cancelar edicao" : "Editar dados"}
+                      icon={editingBasics ? "x" : "✎"}
+                      onClick={() => {
+                        if (editingBasics) {
+                          setDraft({
+                            displayName: item.displayName || "",
+                            companyName: item.companyName || "",
+                            email: item.email || "",
+                            city: item.city || "",
+                          });
+                        }
+                        setEditingBasics((current) => !current);
+                      }}
+                      disabled={actionLoading === "basics"}
+                    />
+                  </div>
                 }
               >
                 <p className="text-sm theme-muted">Identificadores tecnicos de canal permanecem protegidos.</p>
-                <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
-                  <DetailField label="Nome" value={getDisplayName(item)} />
-                  <DetailField label="Empresa" value={item.companyName} />
-                  <DetailField label="E-mail" value={item.email} />
-                  <DetailField label="Cidade" value={item.city} />
+                {editingBasics ? (
+                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5 text-sm">
+                      <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Nome</span>
+                      <input
+                        value={draft.displayName}
+                        onChange={(event) => setDraft((current) => ({ ...current, displayName: event.target.value }))}
+                        className="theme-input h-10 rounded-md border px-3 text-sm"
+                        maxLength={120}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm">
+                      <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Empresa</span>
+                      <input
+                        value={draft.companyName}
+                        onChange={(event) => setDraft((current) => ({ ...current, companyName: event.target.value }))}
+                        className="theme-input h-10 rounded-md border px-3 text-sm"
+                        maxLength={160}
+                      />
+                    </label>
+                    <label className="grid gap-1.5 text-sm">
+                      <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">E-mail</span>
+                      <input
+                        value={draft.email}
+                        onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
+                        className="theme-input h-10 rounded-md border px-3 text-sm"
+                        maxLength={180}
+                      />
+                      {emailDraftInvalid ? <span className="text-xs text-amber-200">Informe um e-mail valido.</span> : null}
+                    </label>
+                    <label className="grid gap-1.5 text-sm">
+                      <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Cidade</span>
+                      <input
+                        value={draft.city}
+                        onChange={(event) => setDraft((current) => ({ ...current, city: event.target.value }))}
+                        className="theme-input h-10 rounded-md border px-3 text-sm"
+                        maxLength={120}
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2 sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={saveBasics}
+                        disabled={actionLoading === "basics" || emailDraftInvalid}
+                        className="rounded-md bg-re7-sky px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {actionLoading === "basics" ? "Salvando..." : "Salvar dados"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraft({
+                            displayName: item.displayName || "",
+                            companyName: item.companyName || "",
+                            email: item.email || "",
+                            city: item.city || "",
+                          });
+                          setEditingBasics(false);
+                        }}
+                        className="theme-nav-link rounded-md border px-4 py-2 text-sm font-semibold"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
+                    <DetailField label="Nome" value={getDisplayName(item)} />
+                    <DetailField label="Empresa" value={item.companyName} />
+                    <DetailField label="E-mail" value={item.email} />
+                    <DetailField label="Cidade" value={item.city} />
+                  </div>
+                )}
+                <div className="grid gap-x-5 gap-y-3 border-t border-white/10 pt-3 sm:grid-cols-2">
                   <DetailField label="Telefone/identificador" value={item.phoneDisplay || item.identifierDisplay} />
                   <DetailField label="Canal principal" value={getChannelLabel(item.channel)} />
                   <DetailField label="Provider" value={item.provider} />
@@ -381,6 +578,54 @@ function CrmContactDetailDrawer({
                   <DetailField label="Atualizado em" value={formatDateTime(item.updatedAt)} />
                   <DetailField label="Lead ID" value={item.leadId} />
                   <DetailField label="Contact ID" value={item.contactId} />
+                </div>
+              </DetailSection>
+
+              <DetailSection title="Preferencias e ciclo de vida">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <label className="grid gap-1.5 text-sm">
+                    <span className="theme-soft text-[11px] font-semibold uppercase tracking-[0.12em]">Classificacao CRM</span>
+                    <select
+                      value={item.crmStatus}
+                      onChange={(event) => changeStatus(event.target.value)}
+                      disabled={Boolean(actionLoading)}
+                      className="theme-input h-10 rounded-md border px-3 text-sm"
+                    >
+                      {statuses.map((status) => (
+                        <option key={status.id} value={status.id}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="text-sm font-semibold text-white">{item.crmStatusLabel}</span>
+                </div>
+                <div className="grid gap-2 rounded-lg border border-white/10 p-3">
+                  <p className="text-sm theme-muted">
+                    Opt-out bloqueia o uso em campanhas e futuro envio ativo. Inativar nao apaga dados nem anonimiza.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={toggleOptOut}
+                      disabled={Boolean(actionLoading)}
+                      className="theme-nav-link rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {actionLoading === "opt-out"
+                        ? "Atualizando..."
+                        : item.activeOptOut
+                          ? "Revogar opt-out"
+                          : "Marcar opt-out"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={inactivate}
+                      disabled={Boolean(actionLoading)}
+                      className="rounded-md border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {actionLoading === "inactivate" ? "Inativando..." : "Inativar contato"}
+                    </button>
+                  </div>
                 </div>
               </DetailSection>
 
@@ -650,6 +895,108 @@ export default function AppCrmContactsPage() {
     [router]
   );
 
+  const replaceContactFromDetail = useCallback((detail: AppCrmContactDetailResponse) => {
+    setContactDetail(detail);
+    setContacts((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) => (item.leadId === detail.item.leadId ? detail.item : item)),
+      };
+    });
+  }, []);
+
+  const mutateContactDetail = useCallback(
+    async (
+      action: () => Promise<AppCrmContactDetailResponse>,
+      successMessage: string,
+      fallbackMessage: string
+    ) => {
+      try {
+        const response = await action();
+        replaceContactFromDetail(response);
+        setNotice(successMessage);
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        const message = normalizeAppErrorMessage(typed, fallbackMessage);
+        setDetailError(
+          typed.errorCode === "status_not_configured"
+            ? "Configure um status de inativacao em Config. CRM."
+            : message
+        );
+        setError(message);
+      }
+    },
+    [handleUnauthorized, replaceContactFromDetail]
+  );
+
+  const updateContactBasics = useCallback(
+    async (
+      leadId: string,
+      payload: { displayName: string | null; companyName: string | null; email: string | null; city: string | null }
+    ) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => updateAppCrmContactBasics(session, leadId, payload),
+        "Cadastro atualizado.",
+        "Nao foi possivel atualizar o cadastro."
+      );
+    },
+    [mutateContactDetail, session]
+  );
+
+  const updateContactStatus = useCallback(
+    async (leadId: string, nextStatus: string) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => updateAppCrmContactStatus(session, leadId, nextStatus),
+        "Classificacao atualizada.",
+        "Nao foi possivel atualizar a classificacao."
+      );
+    },
+    [mutateContactDetail, session]
+  );
+
+  const recordContactOptOut = useCallback(
+    async (leadId: string) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => recordAppCrmContactOptOut(session, leadId),
+        "Opt-out registrado.",
+        "Nao foi possivel registrar opt-out."
+      );
+    },
+    [mutateContactDetail, session]
+  );
+
+  const revokeContactOptOut = useCallback(
+    async (leadId: string) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => revokeAppCrmContactOptOut(session, leadId),
+        "Opt-out revogado.",
+        "Nao foi possivel revogar opt-out."
+      );
+    },
+    [mutateContactDetail, session]
+  );
+
+  const inactivateContact = useCallback(
+    async (leadId: string) => {
+      if (!session) return;
+      await mutateContactDetail(
+        () => inactivateAppCrmContact(session, leadId),
+        "Contato inativado.",
+        "Nao foi possivel inativar o contato."
+      );
+    },
+    [mutateContactDetail, session]
+  );
+
   const copyIdentifier = useCallback(async (item: AppCrmContactItem) => {
     const value = item.phoneDisplay || item.identifierDisplay;
     try {
@@ -911,9 +1258,15 @@ export default function AppCrmContactsPage() {
             setContactDetail(null);
             setDetailError(null);
           }}
+          statuses={statuses}
           onRefresh={() => loadContactDetail(selectedLeadId)}
           onOpenInbox={openConversationIdentity}
           onCopyReference={copyReference}
+          onUpdateBasics={updateContactBasics}
+          onUpdateStatus={updateContactStatus}
+          onRecordOptOut={recordContactOptOut}
+          onRevokeOptOut={revokeContactOptOut}
+          onInactivate={inactivateContact}
         />
       ) : null}
     </AppShell>
