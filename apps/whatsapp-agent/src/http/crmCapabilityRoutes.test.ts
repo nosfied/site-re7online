@@ -47,6 +47,7 @@ let businessAgent: TestUser;
 let governmentAdmin: TestUser;
 let overrideAdmin: TestUser;
 let leadId = "";
+let instagramLeadId = "";
 
 function getErrorCode(payload: ErrorPayload) {
   return typeof payload.error === "string" ? payload.error : payload.error?.code;
@@ -144,9 +145,62 @@ async function cleanup() {
   });
   const clientIds = clients.map((client) => client.id);
   if (clientIds.length === 0) return;
+  await prisma.conversationAssignment.deleteMany({
+    where: {
+      conversation: {
+        clientId: {
+          in: clientIds,
+        },
+      },
+    },
+  });
+  await prisma.conversationRuntimeState.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.message.deleteMany({
+    where: {
+      conversation: {
+        clientId: {
+          in: clientIds,
+        },
+      },
+    },
+  });
+  await prisma.conversationMetrics.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.conversation.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.leadNote.deleteMany({
     where: {
       tenantId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.contactChannelIdentity.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.contact.deleteMany({
+    where: {
+      clientId: {
         in: clientIds,
       },
     },
@@ -266,6 +320,123 @@ test.before(async () => {
     select: { id: true },
   });
   leadId = lead.id;
+
+  await prisma.contact.create({
+    data: {
+      clientId: businessClientId,
+      waId: "5511999999999",
+      name: "Lead CRM Capability",
+      channel: "whatsapp",
+      provider: "meta",
+    },
+    select: { id: true },
+  });
+  await prisma.conversation.create({
+    data: {
+      id: "11111111-1111-4111-8111-111111111111",
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: true,
+      updatedAt: new Date("2026-07-28T10:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      conversationKey: `${businessClient.clientKey}:${prefix}-lead-waid`,
+      channel: "whatsapp",
+      provider: "meta",
+      status: "WAITING",
+      answers: {},
+      updatedAt: new Date("2026-07-28T10:01:00.000Z"),
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: "5511999999999",
+      waIdCanonical: "5511999999999",
+      requestId: `${prefix}-opt-out-recorded`,
+      eventName: "contact.opt_out.recorded",
+      payloadJson: { source: "manual", channel: "whatsapp" },
+    },
+  });
+  await prisma.event.create({
+    data: {
+      clientId: businessClientId,
+      waId: `${prefix}-lead-waid`,
+      waIdCanonical: `${prefix}-lead-waid`,
+      requestId: `${prefix}-import-source`,
+      eventName: "contact.imported_for_campaign",
+      payloadJson: { source: "pdf_inativos", classification: "RETORNO_FUTURO" },
+    },
+  });
+
+  const instagramContact = await prisma.contact.create({
+    data: {
+      clientId: businessClientId,
+      waId: `instagram:${prefix}:sender`,
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "ig-account-business",
+      externalUserHash: `hash:${prefix}:instagram`,
+    },
+    select: { id: true },
+  });
+  const instagramIdentity = await prisma.contactChannelIdentity.create({
+    data: {
+      clientId: businessClientId,
+      contactId: instagramContact.id,
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "ig-account-business",
+      externalUserHash: `hash:${prefix}:instagram`,
+      displayName: "Cliente Instagram",
+    },
+    select: { id: true },
+  });
+  const instagramLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: `instagram:${prefix}:sender`,
+      waIdCanonical: `instagram:${prefix}:sender`,
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "ig-account-business",
+      externalUserHash: `hash:${prefix}:instagram`,
+      contactChannelIdentityId: instagramIdentity.id,
+      company: "Empresa Instagram",
+      status: "RETORNO_FUTURO",
+    },
+    select: { id: true },
+  });
+  instagramLeadId = instagramLead.id;
+
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: `${prefix}-partial-webchat`,
+      waIdCanonical: `${prefix}-partial-webchat`,
+      channel: "webchat",
+      provider: "converta",
+      status: "OPEN",
+    },
+  });
+  await prisma.lead.create({
+    data: {
+      tenantId: governmentClientId,
+      waId: `${prefix}-other-tenant`,
+      waIdCanonical: `${prefix}-other-tenant`,
+      name: "Lead Outro Tenant",
+      phone: "5541999900000",
+      status: "QUALIFIED",
+    },
+  });
 
   await prisma.tenantOperationalConfig.create({
     data: {
@@ -395,10 +566,127 @@ test("CRM operational statuses are tenant-scoped and allow custom lead statuses"
   assert.equal(update.body.lead.status, "RETORNO_FUTURO");
 });
 
+test("CRM contacts read model lists tenant-scoped leads with safe identifiers", async () => {
+  const response = await request<{
+    ok: boolean;
+    items: Array<{
+      leadId: string;
+      contactId: string | null;
+      displayName: string | null;
+      phoneDisplay: string | null;
+      identifierDisplay: string;
+      channel: string | null;
+      crmStatus: string;
+      crmStatusLabel: string;
+      lastConversationId: string | null;
+      lastProtocol: string | null;
+      lastConversationStatus: string | null;
+      conversationsCount: number;
+      hasConversation: boolean;
+      activeOptOut: boolean;
+      importedSource: string | null;
+      hasValidWhatsappIdentity: boolean;
+      canStartWhatsappTemplateCandidate: boolean;
+      templateSendBlockedReason: string | null;
+    }>;
+  }>("GET", "/app/crm/contacts?limit=20", businessAgent);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  const whatsapp = response.body.items.find((item) => item.leadId === leadId);
+  assert.ok(whatsapp);
+  assert.equal(whatsapp.displayName, "Lead atualizado");
+  assert.equal(whatsapp.channel, null);
+  assert.equal(whatsapp.crmStatus, "RETORNO_FUTURO");
+  assert.equal(whatsapp.crmStatusLabel, "Retorno futuro");
+  assert.equal(whatsapp.hasConversation, true);
+  assert.equal(whatsapp.conversationsCount, 1);
+  assert.equal(whatsapp.lastConversationId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(whatsapp.lastProtocol, "CVT-111111111111");
+  assert.equal(whatsapp.lastConversationStatus, "WAITING");
+  assert.equal(whatsapp.activeOptOut, true);
+  assert.equal(whatsapp.canStartWhatsappTemplateCandidate, false);
+  assert.equal(whatsapp.templateSendBlockedReason, "opt_out");
+  assert.match(whatsapp.phoneDisplay ?? "", /^\d{4}\*{5}\d{4}$/);
+  assert.doesNotMatch(JSON.stringify(response.body), /rawPayload|hash:/);
+
+  const instagram = response.body.items.find((item) => item.leadId === instagramLeadId);
+  assert.ok(instagram);
+  assert.equal(instagram.displayName, "Cliente Instagram");
+  assert.equal(instagram.identifierDisplay, "Cliente Instagram");
+  assert.equal(instagram.phoneDisplay, null);
+  assert.equal(instagram.channel, "instagram");
+  assert.equal(instagram.hasConversation, false);
+  assert.equal(instagram.hasValidWhatsappIdentity, false);
+  assert.equal(instagram.canStartWhatsappTemplateCandidate, false);
+  assert.equal(instagram.templateSendBlockedReason, "not_whatsapp");
+});
+
+test("CRM contacts read model supports filters and partial records", async () => {
+  const byStatus = await request<{ ok: boolean; items: Array<{ crmStatus: string }> }>(
+    "GET",
+    "/app/crm/contacts?status=RETORNO_FUTURO",
+    businessAgent
+  );
+  assert.equal(byStatus.status, 200);
+  assert.ok(byStatus.body.items.length >= 1);
+  assert.ok(byStatus.body.items.every((item) => item.crmStatus === "RETORNO_FUTURO"));
+
+  const byChannel = await request<{ ok: boolean; items: Array<{ channel: string | null }> }>(
+    "GET",
+    "/app/crm/contacts?channel=instagram",
+    businessAgent
+  );
+  assert.equal(byChannel.status, 200);
+  assert.deepEqual(byChannel.body.items.map((item) => item.channel), ["instagram"]);
+
+  const bySearch = await request<{ ok: boolean; items: Array<{ companyName: string | null }> }>(
+    "GET",
+    "/app/crm/contacts?q=Empresa%20Instagram",
+    businessAgent
+  );
+  assert.equal(bySearch.status, 200);
+  assert.equal(bySearch.body.items.length, 1);
+  assert.equal(bySearch.body.items[0]?.companyName, "Empresa Instagram");
+
+  const withConversation = await request<{ ok: boolean; items: Array<{ hasConversation: boolean }> }>(
+    "GET",
+    "/app/crm/contacts?hasConversation=true",
+    businessAgent
+  );
+  assert.equal(withConversation.status, 200);
+  assert.ok(withConversation.body.items.length >= 1);
+  assert.ok(withConversation.body.items.every((item) => item.hasConversation));
+
+  const noConversation = await request<{
+    ok: boolean;
+    items: Array<{ hasConversation: boolean; identifierDisplay: string; channel: string | null }>;
+  }>("GET", "/app/crm/contacts?hasConversation=false&channel=webchat", businessAgent);
+  assert.equal(noConversation.status, 200);
+  assert.equal(noConversation.body.items.length, 1);
+  assert.equal(noConversation.body.items[0]?.hasConversation, false);
+  assert.equal(noConversation.body.items[0]?.identifierDisplay, "Visitante Webchat");
+
+  const optOut = await request<{ ok: boolean; items: Array<{ activeOptOut: boolean }> }>(
+    "GET",
+    "/app/crm/contacts?optOut=true",
+    businessAgent
+  );
+  assert.equal(optOut.status, 200);
+  assert.ok(optOut.body.items.length >= 1);
+  assert.ok(optOut.body.items.every((item) => item.activeOptOut));
+});
+
+test("CRM contacts endpoint requires authentication", async () => {
+  const response = await fetch(`${baseUrl}/app/crm/contacts`);
+  assert.equal(response.status, 401);
+});
+
 test("government profile default is blocked by CRM capability on protected routes", async () => {
   const routes = [
     { method: "GET", route: "/app/crm/settings" },
     { method: "GET", route: "/app/crm/statuses" },
+    { method: "GET", route: "/app/crm/contacts" },
     { method: "GET", route: "/app/crm/campaign-recipients?statuses=QUALIFIED" },
     { method: "PATCH", route: "/app/lead/missing", body: { name: "x" } },
     { method: "PATCH", route: "/app/lead/missing/status", body: { status: "OPEN" } },

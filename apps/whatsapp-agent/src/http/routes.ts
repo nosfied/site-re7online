@@ -165,6 +165,7 @@ import {
   type OperationsBoardCursor,
   type OperationsBoardStatus,
 } from "../operations/operationsBoardReadModel.js";
+import { buildCrmContactsPayload } from "../crm/crmContactsReadModel.js";
 import {
   buildWaIdLookup,
   canonicalizeBrazilWaId,
@@ -6648,6 +6649,55 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     } catch (error) {
       logger.error({
         event: "app.crm.statuses.get.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/crm/contacts") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: "/app/crm/contacts",
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const payload = await buildCrmContactsPayload(prisma, {
+        clientId: client.id,
+        query,
+        statuses: resolvedStatuses.statuses,
+      });
+      json(res, 200, payload);
+    } catch (error) {
+      logger.error({
+        event: "app.crm.contacts.error",
         message: (error as Error).message,
         requestId,
       });
