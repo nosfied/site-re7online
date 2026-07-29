@@ -107,6 +107,75 @@ export type AppInstagramBusinessValidation = {
   errors: Array<{ stage: string; message: string; code?: number | null; type?: string | null }>;
 };
 
+export type AppCrmContactsFilter = {
+  q?: string | null;
+  status?: string | null;
+  channel?: string | null;
+  hasConversation?: boolean | null;
+  optOut?: boolean | null;
+  page?: number;
+  limit?: number;
+};
+
+export type AppCrmContactItem = {
+  leadId: string;
+  contactId: string | null;
+  displayName: string | null;
+  companyName: string | null;
+  email: string | null;
+  city: string | null;
+  phoneDisplay: string | null;
+  identifierDisplay: string;
+  channel: string | null;
+  provider: string | null;
+  crmStatus: string;
+  crmStatusLabel: string;
+  leadStatus: string;
+  lastConversationId: string | null;
+  lastProtocol: string | null;
+  lastConversationStatus: ConversationOperationalStatus | string | null;
+  lastConversationUpdatedAt: string | null;
+  conversationsCount: number;
+  hasConversation: boolean;
+  activeOptOut: boolean;
+  importedSource: string | null;
+  hasValidWhatsappIdentity: boolean;
+  canStartWhatsappTemplateCandidate: boolean;
+  hasOpenConversationWindow: boolean | null;
+  templateSendBlockedReason:
+    | "not_whatsapp"
+    | "missing_phone"
+    | "opt_out"
+    | "unsupported_channel"
+    | "unknown"
+    | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AppCrmContactsResponse = {
+  ok: true;
+  filters: {
+    q: string | null;
+    status: string | null;
+    channel: string | null;
+    hasConversation: boolean | null;
+    optOut: boolean | null;
+    updatedFrom: string | null;
+    updatedTo: string | null;
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  items: AppCrmContactItem[];
+  generatedAt: string;
+};
+
 export type AppApiError = Error & {
   status?: number;
   errorCode?: string;
@@ -2734,6 +2803,30 @@ export async function fetchAppCrmSettings(session: AppSession): Promise<AppCrmSe
 
 export async function fetchAppCrmStatuses(session: AppSession): Promise<AppCrmSettingsResponse> {
   return requestAppJson(session, "/app/crm/statuses");
+}
+
+export async function fetchAppCrmContacts(
+  session: AppSession,
+  filters?: AppCrmContactsFilter
+): Promise<AppCrmContactsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.q?.trim()) params.set("q", filters.q.trim());
+  if (filters?.status?.trim()) params.set("status", filters.status.trim());
+  if (filters?.channel?.trim()) params.set("channel", filters.channel.trim());
+  if (typeof filters?.hasConversation === "boolean") {
+    params.set("hasConversation", String(filters.hasConversation));
+  }
+  if (typeof filters?.optOut === "boolean") {
+    params.set("optOut", String(filters.optOut));
+  }
+  if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(Math.max(1, Math.floor(filters.page))));
+  }
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.max(1, Math.floor(filters.limit))));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/crm/contacts${suffix}`);
 }
 
 export async function updateAppCrmSettings(

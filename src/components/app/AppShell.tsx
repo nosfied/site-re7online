@@ -102,6 +102,13 @@ const APP_NAV_ITEMS: NavItem[] = [
     labels: { business: "Campanhas", government: "Comunicados" },
   },
   {
+    href: "/app/crm",
+    icon: "👥",
+    group: "operation",
+    feature: "crm",
+    labels: { business: "Contatos", government: "Contatos" },
+  },
+  {
     href: "/app/templates",
     icon: "🧾",
     group: "operation",
@@ -201,7 +208,7 @@ const APP_NAV_ITEMS: NavItem[] = [
     group: "administration",
     feature: "crm",
     minRole: "SUPERVISOR",
-    labels: { business: "CRM", government: "CRM" },
+    labels: { business: "Config. CRM", government: "Config. CRM" },
   },
   {
     href: "/app/api-keys",
