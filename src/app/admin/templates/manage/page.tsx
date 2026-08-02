@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminConsole } from "@/components/admin/AdminConsoleProvider";
 import {
   AdminTemplateCatalogItem,
@@ -148,6 +148,7 @@ export default function ManageTemplatesAdminPage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [requests, setRequests] = useState<AdminTemplateRequestItem[]>([]);
   const [catalog, setCatalog] = useState<AdminTemplateCatalogItem[]>([]);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftById, setDraftById] = useState<Record<string, {
     name: string;
@@ -290,6 +291,7 @@ export default function ManageTemplatesAdminPage() {
   };
 
   const startEditing = (item: AdminTemplateRequestItem) => {
+    setSelectedRequestId(item.id);
     setEditingId(item.id);
     setDraftById((current) => ({
       ...current,
@@ -310,6 +312,10 @@ export default function ManageTemplatesAdminPage() {
   const visibleCatalog = clientKeyFilter
     ? catalog.filter((item) => item.clientKey === clientKeyFilter)
     : catalog;
+  const selectedRequest = useMemo(
+    () => visibleRequests.find((item) => item.id === selectedRequestId) ?? null,
+    [selectedRequestId, visibleRequests]
+  );
 
   return (
     <div className="px-4 py-8 text-white md:px-8">
@@ -506,7 +512,13 @@ export default function ManageTemplatesAdminPage() {
                           </div>
                         ) : (
                           <div className="max-w-md">
-                            <p className="font-medium text-white">{item.name}</p>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRequestId(item.id)}
+                              className="text-left font-medium text-white hover:text-re7-sky"
+                            >
+                              {item.name}
+                            </button>
                             <p className="text-xs text-white/55">{item.category} · {item.language || "pt_BR"}</p>
                             <p className="mt-1 line-clamp-2 text-xs text-white/70">{item.content}</p>
                             {item.variableDetails?.length ? (
@@ -519,14 +531,6 @@ export default function ManageTemplatesAdminPage() {
                                 Este template já foi submetido à Meta ou encerrado. Para alterar conteúdo, crie uma nova solicitação.
                               </p>
                             ) : null}
-                            <TemplateWhatsappPreview
-                              body={item.content}
-                              variableExamples={item.variableDetails ?? []}
-                              category={item.category}
-                              language={item.language || "pt_BR"}
-                              status={item.status}
-                              templateName={item.name}
-                            />
                           </div>
                         )}
                       </td>
@@ -560,6 +564,13 @@ export default function ManageTemplatesAdminPage() {
                               Revisar
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRequestId(item.id)}
+                            className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
+                          >
+                            Detalhes
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleApprove(item.id)}
@@ -599,6 +610,117 @@ export default function ManageTemplatesAdminPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 px-4 py-3">
+            <h2 className="text-sm font-semibold">Painel de revisão</h2>
+            <p className="mt-1 text-xs text-white/55">
+              Selecione uma solicitação para ver prévia, status e ações permitidas pelo ciclo de vida.
+            </p>
+          </div>
+          {selectedRequest ? (
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="grid gap-3">
+                <div className="rounded-lg border border-white/10 bg-re7-navy/60 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-white">{selectedRequest.name}</p>
+                      <p className="mt-1 text-xs text-white/50">
+                        {selectedRequest.clientName || selectedRequest.clientId}
+                      </p>
+                    </div>
+                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedRequest.status)}`}>
+                      {selectedRequest.statusLabel || selectedRequest.status}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs text-white/65 sm:grid-cols-3">
+                    <p><span className="block text-white/40">Categoria</span>{selectedRequest.category}</p>
+                    <p><span className="block text-white/40">Idioma</span>{selectedRequest.language || "pt_BR"}</p>
+                    <p><span className="block text-white/40">Criado em</span>{formatDateTime(selectedRequest.createdAt)}</p>
+                  </div>
+                  {!isAdminTemplateRequestEditable(selectedRequest.status) ? (
+                    <p className="mt-3 rounded-md border border-sky-300/25 bg-sky-900/20 p-2 text-xs text-sky-100">
+                      Este template já foi submetido à Meta ou encerrado. O conteúdo fica somente leitura; use sincronização quando houver status Meta.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs font-semibold uppercase text-white/45">Conteúdo</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-white/75">{selectedRequest.content}</p>
+                </div>
+                {selectedRequest.variableDetails?.length ? (
+                  <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                    <p className="text-xs font-semibold uppercase text-white/45">Variáveis</p>
+                    <div className="mt-2 grid gap-2">
+                      {selectedRequest.variableDetails.map((variable) => (
+                        <div key={variable.key} className="rounded-md border border-white/10 bg-re7-navy/60 p-2 text-xs text-white/70">
+                          <span className="font-semibold text-white">{`{{${variable.key}}}`}</span>
+                          <span className="ml-2">{variable.description || "Sem descrição"}</span>
+                          <span className="ml-2 text-white/45">Exemplo: {variable.example || "-"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs font-semibold uppercase text-white/45">Ações do ciclo de vida</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(selectedRequest)}
+                      disabled={actingId === selectedRequest.id || !isAdminTemplateRequestEditable(selectedRequest.status)}
+                      className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white disabled:opacity-60"
+                    >
+                      Revisar/editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(selectedRequest.id)}
+                      disabled={actingId === selectedRequest.id || !["requested", "review_started", "pending"].includes(selectedRequest.status)}
+                      className="rounded-md border border-emerald-400/30 bg-emerald-900/20 px-3 py-1.5 text-xs text-emerald-100 disabled:opacity-60"
+                    >
+                      Aprovar internamente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSubmitToMeta(selectedRequest.id)}
+                      disabled={actingId === selectedRequest.id || !isAdminTemplateRequestSubmittable(selectedRequest.status)}
+                      className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-1.5 text-xs text-sky-100 disabled:opacity-60"
+                    >
+                      Submeter à Meta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSyncRequest(selectedRequest.id)}
+                      disabled={actingId === selectedRequest.id || !isAdminTemplateRequestSyncable(selectedRequest.status)}
+                      className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white disabled:opacity-60"
+                    >
+                      Sincronizar status
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCancel(selectedRequest)}
+                      disabled={actingId === selectedRequest.id || !canAdminCancelTemplateRequest(selectedRequest.status)}
+                      className="rounded-md border border-red-300/30 bg-red-900/20 px-3 py-1.5 text-xs text-red-100 disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <TemplateWhatsappPreview
+                body={selectedRequest.content}
+                variableExamples={selectedRequest.variableDetails ?? []}
+                category={selectedRequest.category}
+                language={selectedRequest.language || "pt_BR"}
+                status={selectedRequest.status}
+                templateName={selectedRequest.name}
+              />
+            </div>
+          ) : (
+            <p className="p-4 text-sm text-white/70">Nenhuma solicitação selecionada.</p>
           )}
         </section>
 

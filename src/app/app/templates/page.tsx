@@ -37,6 +37,15 @@ const EMPTY_FORM: TemplateRequestFormState = {
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
+const TEMPLATE_VIEW_TABS = [
+  { id: "all", label: "Todos" },
+  { id: "usable", label: "Utilizáveis" },
+  { id: "review", label: "Aguardando revisão" },
+  { id: "meta", label: "Em análise na Meta" },
+  { id: "closed", label: "Rejeitados/Cancelados" },
+] as const;
+
+type TemplateViewTab = (typeof TEMPLATE_VIEW_TABS)[number]["id"];
 
 type CatalogItem = {
   id: string;
@@ -115,9 +124,26 @@ function getStatusLabel(status: string) {
   }
 }
 
+function getTemplateLifecycleBucket(status: string) {
+  const normalized = status.toLowerCase();
+  if (["approved", "approved_meta", "meta_approved"].includes(normalized)) return "approved";
+  if (["submitted_to_meta", "submitting", "pending", "meta_pending"].includes(normalized)) return "meta";
+  if (["requested", "review_started", "adjustment_requested", "internal_approved"].includes(normalized)) {
+    return "review";
+  }
+  if (["rejected", "rejected_meta", "meta_rejected", "failed", "cancelled"].includes(normalized)) return "closed";
+  return "review";
+}
+
+function itemMatchesViewTab(item: CatalogItem, tab: TemplateViewTab) {
+  if (tab === "all") return true;
+  if (tab === "usable") return item.canUseInCampaign;
+  return getTemplateLifecycleBucket(item.status) === tab;
+}
+
 function getUsageLabel(item: Pick<CatalogItem, "canUseInCampaign" | "blockedReasonLabel">) {
-  if (item.canUseInCampaign) return "Pode ser usado em campanhas";
-  return `Nao pode ser usado${item.blockedReasonLabel ? `: ${item.blockedReasonLabel}` : ""}`;
+  if (item.canUseInCampaign) return "Permitido";
+  return item.blockedReasonLabel ? `Bloqueado: ${item.blockedReasonLabel}` : "Bloqueado";
 }
 
 function normalizeFilterValue(input: string) {
@@ -418,7 +444,10 @@ export default function AppTemplatesPage() {
   const [syncingTemplateId, setSyncingTemplateId] = useState<string | null>(null);
   const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isRequestDrawerOpen, setIsRequestDrawerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [viewTab, setViewTab] = useState<TemplateViewTab>("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -459,8 +488,16 @@ export default function AppTemplatesPage() {
       }).length,
     [catalogItems]
   );
+  const reviewRequestsCount = useMemo(
+    () => catalogItems.filter((item) => getTemplateLifecycleBucket(item.status) === "review").length,
+    [catalogItems]
+  );
   const rejectedTemplatesCount = useMemo(
-    () => catalogItems.filter((item) => ["rejected", "failed"].includes(item.status.toLowerCase())).length,
+    () => catalogItems.filter((item) => ["rejected", "rejected_meta", "meta_rejected", "failed"].includes(item.status.toLowerCase())).length,
+    [catalogItems]
+  );
+  const cancelledTemplatesCount = useMemo(
+    () => catalogItems.filter((item) => item.status.toLowerCase() === "cancelled").length,
     [catalogItems]
   );
   const campaignReadyCount = useMemo(
@@ -498,6 +535,7 @@ export default function AppTemplatesPage() {
       ) {
         return false;
       }
+      if (!itemMatchesViewTab(item, viewTab)) return false;
       if (statusFilter !== "all" && item.status !== statusFilter) return false;
       if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
       if (languageFilter !== "all" && item.language !== languageFilter) return false;
@@ -505,7 +543,7 @@ export default function AppTemplatesPage() {
       if (campaignUseFilter === "blocked" && item.canUseInCampaign) return false;
       return true;
     });
-  }, [campaignUseFilter, catalogItems, categoryFilter, languageFilter, search, statusFilter]);
+  }, [campaignUseFilter, catalogItems, categoryFilter, languageFilter, search, statusFilter, viewTab]);
   const selectedItem = useMemo(
     () => filteredCatalogItems.find((item) => item.id === selectedItemId) ?? null,
     [filteredCatalogItems, selectedItemId]
@@ -514,6 +552,11 @@ export default function AppTemplatesPage() {
     () => (selectedItem ? getCatalogItemVariableDetails(selectedItem) : []),
     [selectedItem]
   );
+
+  const openDetails = useCallback((itemId: string) => {
+    setSelectedItemId(itemId);
+    setIsDetailDrawerOpen(true);
+  }, []);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -654,6 +697,7 @@ export default function AppTemplatesPage() {
       });
       await loadData(session);
       setForm(EMPTY_FORM);
+      setIsRequestDrawerOpen(false);
       setSuccess(
         response.notification?.delivered === false
           ? "Solicitação criada, mas a notificação interna por e-mail não pôde ser enviada."
@@ -693,6 +737,7 @@ export default function AppTemplatesPage() {
       }
       if (recoveredAfterReload) {
         setForm(EMPTY_FORM);
+        setIsRequestDrawerOpen(false);
         setSuccess("Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela.");
         return;
       }
@@ -842,26 +887,30 @@ export default function AppTemplatesPage() {
   return (
     <AppShell
       session={session}
-      title="Templates"
-      subtitle="Consulte os modelos aprovados e envie novos templates para analise."
+      title="Modelos de mensagem"
+      subtitle="Templates aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
     >
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
       {error ? (
-        <p className="rounded-xl border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-          {error}
+        <p className="rounded-xl border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{error}</p>
+      ) : null}
+      {success ? (
+        <p className="rounded-xl border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
+          {success}
         </p>
       ) : null}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3">
-        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold">Catalogo operacional</h2>
-                <p className="mt-1 text-xs text-white/60">
-                  Templates aprovados sao necessarios para envio ativo fora da janela de 24h.
-                </p>
-              </div>
+      <div className="grid min-w-0 gap-4">
+        <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <h2 className="text-lg font-semibold text-white">Central de modelos</h2>
+              <p className="mt-2 text-sm leading-relaxed text-white/70">
+                Modelos são mensagens aprovadas pela Meta para iniciar conversas fora da janela de atendimento do WhatsApp.
+                Eles são usados em campanhas e em retomadas de atendimento quando a janela de 24h estiver fechada.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={handleSyncAllTemplates}
@@ -870,68 +919,75 @@ export default function AppTemplatesPage() {
               >
                 {syncingAll ? "Sincronizando..." : "Sincronizar com Meta"}
               </button>
-              <a
-                href="#solicitar-template"
+              <button
+                type="button"
+                onClick={() => setIsRequestDrawerOpen(true)}
                 className="rounded-lg bg-re7-orange px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110"
               >
-                Nova solicitação de template
-              </a>
+                Nova solicitação
+              </button>
             </div>
           </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-5">
+            {["Você solicita", "Re7online revisa", "Re7online envia à Meta", "Meta aprova ou rejeita", "Modelo disponível"].map((step, index) => (
+              <div key={step} className="rounded-lg border border-white/10 bg-re7-navy/50 p-3">
+                <p className="text-[11px] font-semibold uppercase text-re7-sky">Etapa {index + 1}</p>
+                <p className="mt-1 text-sm font-semibold text-white/85">{step}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-          <div className="grid gap-3 p-3 sm:p-4">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-xs uppercase text-white/55">Total</p>
-                <p className="mt-1 text-xl font-semibold">{catalogItems.length}</p>
+        <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          {[
+            { label: "Aprovados", value: approvedTemplatesCount, tone: "border-emerald-300/20 bg-emerald-900/20 text-emerald-100" },
+            { label: "Em análise", value: pendingTemplatesCount, tone: "border-amber-300/20 bg-amber-900/20 text-amber-100" },
+            { label: "Aguardando revisão", value: reviewRequestsCount, tone: "border-sky-300/20 bg-sky-900/20 text-sky-100" },
+            { label: "Rejeitados", value: rejectedTemplatesCount, tone: "border-red-300/20 bg-red-900/20 text-red-100" },
+            { label: "Cancelados", value: cancelledTemplatesCount, tone: "border-slate-300/20 bg-slate-800/60 text-slate-100" },
+            { label: "Utilizáveis", value: campaignReadyCount, tone: "border-re7-sky/25 bg-re7-sky/10 text-sky-100" },
+          ].map((card) => (
+            <div key={card.label} className={`rounded-lg border p-3 ${card.tone}`}>
+              <p className="text-[11px] font-semibold uppercase opacity-75">{card.label}</p>
+              <p className="mt-1 text-2xl font-semibold">{card.value}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-white/5">
+          <div className="border-b border-white/10 p-3 sm:p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Catálogo de modelos</h2>
+                <p className="mt-1 text-xs text-white/60">
+                  Veja o que pode ser usado em campanhas, o que está em revisão e o que depende da Meta.
+                </p>
               </div>
-              <div className="rounded-lg border border-emerald-300/20 bg-emerald-900/20 p-3">
-                <p className="text-xs uppercase text-emerald-100/70">Aprovados</p>
-                <p className="mt-1 text-xl font-semibold text-emerald-100">{approvedTemplatesCount}</p>
-              </div>
-              <div className="rounded-lg border border-amber-300/20 bg-amber-900/20 p-3">
-                <p className="text-xs uppercase text-amber-100/70">Em analise</p>
-                <p className="mt-1 text-xl font-semibold text-amber-100">{pendingTemplatesCount}</p>
-              </div>
-              <div className="rounded-lg border border-sky-300/20 bg-sky-900/20 p-3">
-                <p className="text-xs uppercase text-sky-100/70">Usaveis em campanhas</p>
-                <p className="mt-1 text-xl font-semibold text-sky-100">{campaignReadyCount}</p>
+              <div className="flex flex-wrap gap-2">
+                {TEMPLATE_VIEW_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setViewTab(tab.id)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      viewTab === tab.id
+                        ? "border-re7-sky/50 bg-re7-sky/20 text-sky-100"
+                        : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
-
-            {campaignReadyCount === 0 ? (
-              <div className="rounded-lg border border-amber-300/30 bg-amber-900/20 p-3 text-sm text-amber-100">
-                <p className="font-semibold">Este tenant ainda nao possui template aprovado para envio ativo.</p>
-                <p className="mt-1 text-amber-100/80">
-                  Cadastre ou sincronize um template aprovado para criar campanhas e futuramente iniciar conversas fora da janela de 24h.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSyncAllTemplates}
-                    disabled={syncingAll || catalogItems.length === 0}
-                    className="rounded-md border border-amber-200/40 px-3 py-1.5 text-xs font-semibold hover:bg-amber-200/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {syncingAll ? "Sincronizando..." : "Sincronizar com Meta"}
-                  </button>
-                  <a
-                    href="#solicitar-template"
-                    className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10"
-                  >
-                    Cadastrar solicitacao de template
-                  </a>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_150px_150px_130px_160px]">
+            <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(260px,1fr)_150px_150px_130px_160px]">
               <label className="grid gap-1 text-xs text-white/70">
                 Busca
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Nome, categoria ou conteudo"
-                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                  placeholder="Nome, categoria ou conteúdo"
+                  className="max-w-xl rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 />
               </label>
               <label className="grid gap-1 text-xs text-white/70">
@@ -943,9 +999,7 @@ export default function AppTemplatesPage() {
                 >
                   <option value="all">Todos</option>
                   {statusOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {getStatusLabel(option)}
-                    </option>
+                    <option key={option} value={option}>{getStatusLabel(option)}</option>
                   ))}
                 </select>
               </label>
@@ -983,361 +1037,390 @@ export default function AppTemplatesPage() {
                   className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white"
                 >
                   <option value="all">Todos</option>
-                  <option value="ready">Usaveis</option>
+                  <option value="ready">Utilizáveis</option>
                   <option value="blocked">Bloqueados</option>
                 </select>
               </label>
             </div>
+          </div>
 
-            <p className="text-xs text-white/55">
-              Campanhas usam apenas templates aprovados. Mensagens livres continuam restritas a janela permitida do WhatsApp.
-            </p>
+          {campaignReadyCount === 0 ? (
+            <div className="m-3 rounded-lg border border-amber-300/30 bg-amber-900/20 p-3 text-sm text-amber-100 sm:m-4">
+              <p className="font-semibold">Este tenant ainda não possui modelo aprovado para envio ativo.</p>
+              <p className="mt-1 text-amber-100/80">
+                Crie uma solicitação ou sincronize modelos já aprovados para habilitar campanhas.
+              </p>
+            </div>
+          ) : null}
 
-            {catalogItems.length === 0 ? (
-              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">Nenhum template encontrado.</p>
-            ) : filteredCatalogItems.length === 0 ? (
-              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">Nenhum template corresponde aos filtros.</p>
-            ) : (
-              <div className="max-h-[34rem] overflow-x-auto xl:overflow-y-auto">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead className="bg-white/10 text-left">
-                    <tr>
-                      <th className="px-3 py-2">Nome</th>
-                      <th className="px-3 py-2">Status</th>
-                      <th className="px-3 py-2">Categoria</th>
-                      <th className="px-3 py-2">Idioma</th>
-                      <th className="px-3 py-2">Uso permitido</th>
-                      <th className="px-3 py-2">Variaveis</th>
-                      <th className="px-3 py-2">Ultima sync</th>
-                      <th className="px-3 py-2">Acoes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCatalogItems.map((item) => {
-                      const recategorizationInfo = getTemplateRecategorizationLabel(item);
-                      return (
-                        <tr
-                          key={item.id}
-                          className={`border-t border-white/10 ${highlightedTemplateId === item.templateId ? "bg-emerald-500/10" : selectedItem?.id === item.id ? "bg-white/10" : ""}`}
-                        >
-                          <td className="px-3 py-2">
+          {catalogItems.length === 0 ? (
+            <p className="p-4 text-sm text-white/70">Nenhum modelo encontrado.</p>
+          ) : filteredCatalogItems.length === 0 ? (
+            <p className="p-4 text-sm text-white/70">Nenhum modelo corresponde aos filtros.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[940px] text-sm">
+                <thead className="bg-white/10 text-left text-xs uppercase text-white/55">
+                  <tr>
+                    <th className="px-3 py-2">Modelo</th>
+                    <th className="px-3 py-2">Categoria</th>
+                    <th className="px-3 py-2">Meta</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Campanha</th>
+                    <th className="px-3 py-2">Atualização</th>
+                    <th className="px-3 py-2">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCatalogItems.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={`border-t border-white/10 ${
+                        highlightedTemplateId === item.templateId
+                          ? "bg-emerald-500/10"
+                          : selectedItem?.id === item.id
+                            ? "bg-white/10"
+                            : "hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      <td className="px-3 py-2">
+                        <button type="button" onClick={() => openDetails(item.id)} className="text-left font-semibold text-white hover:text-re7-sky">
+                          {item.displayName}
+                        </button>
+                        <p className="text-xs text-white/45">{item.name}</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <p className="text-white/85">{item.requestedCategory || item.submittedCategory || item.category}</p>
+                        <p className="text-xs text-white/45">solicitada</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <p className={item.categoryChanged ? "font-semibold text-amber-100" : "text-white/85"}>
+                          {item.effectiveCategory || item.category}
+                        </p>
+                        {item.categoryChanged ? <p className="text-xs text-amber-200">recategorizado</p> : <p className="text-xs text-white/45">efetiva</p>}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}>
+                          {getStatusLabel(item.status)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={item.canUseInCampaign ? "text-emerald-100" : "text-amber-100"}>
+                          {item.canUseInCampaign ? "Permitido" : "Bloqueado"}
+                        </span>
+                        {!item.canUseInCampaign && item.blockedReasonLabel ? (
+                          <p className="text-xs text-white/45">{item.blockedReasonLabel}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 text-white/70">{formatDateTime(item.updatedAt)}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openDetails(item.id)}
+                            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+                              selectedItem?.id === item.id
+                                ? "border-re7-sky/40 bg-re7-sky/15 text-sky-100"
+                                : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+                            }`}
+                          >
+                            {selectedItem?.id === item.id ? "Selecionado" : "Ver detalhes"}
+                          </button>
+                          {item.syncable && item.templateId ? (
                             <button
                               type="button"
-                              onClick={() => setSelectedItemId(item.id)}
-                              className="text-left font-semibold text-white hover:text-re7-sky"
+                              onClick={() => handleSyncTemplate(item.templateId as string)}
+                              disabled={syncingTemplateId === item.templateId}
+                              className="rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              {item.displayName}
+                              {syncingTemplateId === item.templateId ? "Atualizando..." : "Atualizar"}
                             </button>
-                            <p className="text-xs text-white/50">{item.name}</p>
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}>
-                              {getStatusLabel(item.status)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-col gap-1">
-                              <span>{item.category}</span>
-                              {recategorizationInfo ? (
-                                <span className="text-xs text-amber-200">{recategorizationInfo.detail}</span>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2">{item.language || "-"}</td>
-                          <td className="px-3 py-2">
-                            <span className={item.canUseInCampaign ? "text-emerald-100" : "text-amber-100"}>
-                              {getUsageLabel(item)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            {item.variablesDetected.length > 0 ? item.variablesDetected.join(", ") : "-"}
-                          </td>
-                          <td className="px-3 py-2">
-                            {item.lastSyncedAt ? formatDateTime(item.lastSyncedAt) : "Nao sincronizado"}
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedItemId(item.id)}
-                                disabled={selectedItem?.id === item.id}
-                                className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:border-re7-sky/35 disabled:bg-re7-sky/15 disabled:text-sky-100"
-                              >
-                                {selectedItem?.id === item.id ? "Selecionado" : "Ver detalhes"}
-                              </button>
-                              {item.syncable && item.templateId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSyncTemplate(item.templateId as string)}
-                                  disabled={syncingTemplateId === item.templateId}
-                                  className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {syncingTemplateId === item.templateId ? "Atualizando..." : "Atualizar status"}
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="order-3 min-w-0 rounded-xl border border-white/10 bg-white/5">
-          <div className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <h2 className="text-sm font-semibold">
-              Detalhes e prévia
-            </h2>
-            <p className="mt-1 text-xs text-white/60">
-              Selecione uma solicitação ou template no catálogo para revisar conteúdo, status e prévia.
-            </p>
-          </div>
-          {selectedItem ? (
-            <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] sm:p-4">
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold">{selectedItem.displayName}</h3>
-                    <p className="mt-1 text-xs text-white/55">{selectedItem.category} · {selectedItem.language}</p>
-                  </div>
-                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedItem.status)}`}>
-                    {getStatusLabel(selectedItem.status)}
-                  </span>
-                </div>
-                <p className={`mt-3 rounded-md border px-3 py-2 text-xs ${selectedItem.canUseInCampaign ? "border-emerald-300/25 bg-emerald-900/20 text-emerald-100" : "border-amber-300/25 bg-amber-900/20 text-amber-100"}`}>
-                  {getUsageLabel(selectedItem)}
-                </p>
-                <div className="mt-3 grid gap-2 text-xs text-white/70">
-                  <p><span className="text-white/45">Provider/Meta:</span> {selectedItem.name}</p>
-                  <p><span className="text-white/45">Categoria solicitada:</span> {selectedItem.requestedCategory || selectedItem.submittedCategory || selectedItem.category}</p>
-                  <p><span className="text-white/45">Categoria efetiva:</span> {selectedItem.effectiveCategory || selectedItem.category}</p>
-                  <p><span className="text-white/45">Atualizado:</span> {formatDateTime(selectedItem.updatedAt)}</p>
-                  <p><span className="text-white/45">Ultima sincronizacao:</span> {selectedItem.lastSyncedAt ? formatDateTime(selectedItem.lastSyncedAt) : "Nao sincronizado"}</p>
-                  {selectedItem.rejectionReason ? (
-                    <p><span className="text-white/45">Motivo:</span> {selectedItem.rejectionReason}</p>
-                  ) : null}
-                  {selectedItem.templateRequest ? (
-                    <p><span className="text-white/45">Solicitacao:</span> {getStatusLabel(selectedItem.templateRequest.status)} em {formatDateTime(selectedItem.templateRequest.createdAt)}</p>
-                  ) : null}
-                </div>
-                {selectedItem.categoryChanged || selectedItem.effectiveCategory === "MARKETING" || selectedItem.category === "MARKETING" ? (
-                  <div className="mt-3 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-                    {selectedItem.categoryChanged ? (
-                      <p className="font-semibold">
-                        {selectedItem.categoryChangeLabel ||
-                          `A Meta classificou este template como ${selectedItem.effectiveCategory || selectedItem.category}, diferente da categoria solicitada ${selectedItem.requestedCategory || selectedItem.submittedCategory}.`}
-                      </p>
-                    ) : null}
-                    {(selectedItem.effectiveCategory || selectedItem.category) === "MARKETING" ? (
-                      <p className="mt-1">
-                        Templates de Marketing podem ter custo e regras diferentes e devem ser usados com cautela.
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase text-white/50">Variaveis</p>
-                  {selectedItem.variablesDetected.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedItem.variablesDetected.map((variable) => (
-                        <span key={variable} className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
-                          {`{{${variable}}}`}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm text-white/55">Nenhuma variavel detectada.</p>
-                  )}
-                  <p className="mt-2 text-xs text-white/55">
-                    As variaveis deverao ser preenchidas na campanha antes do envio.
-                  </p>
-                </div>
-                {selectedItem.id.startsWith("request:") ? (
-                  <div className="mt-4 rounded-md border border-white/10 bg-re7-navy/60 p-3">
-                    <p className="text-xs font-semibold uppercase text-white/50">Cancelamento</p>
-                    {canTenantCancelTemplateRequest(selectedItem) ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleCancelRequest(selectedItem)}
-                          disabled={syncingTemplateId === selectedItem.id}
-                          className="rounded-lg border border-red-300/30 bg-red-900/20 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-200/60 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {syncingTemplateId === selectedItem.id ? "Cancelando..." : "Cancelar solicitação"}
-                        </button>
-                        <span className="text-xs text-white/50">O registro será mantido para auditoria.</span>
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-xs text-white/55">
-                        Esta solicitação já foi submetida à Meta, está cancelada ou não pode ser cancelada por aqui.
-                      </p>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <TemplateWhatsappPreview
-                body={selectedItem.content}
-                variableExamples={selectedVariableDetails}
-                category={selectedItem.category}
-                language={selectedItem.language}
-                status={selectedItem.status}
-                templateName={selectedItem.displayName}
-                emptyText="Este template não possui corpo textual registrado."
-              />
-            </div>
-          ) : (
-            <div className="p-4">
-              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-                Nenhum template selecionado. Use “Ver detalhes” no catálogo para abrir a revisão.
-              </p>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
 
-        <section className="order-2 min-w-0 rounded-xl border border-white/10 bg-white/5">
-          <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <h2 className="text-sm font-semibold">Solicitar novo template</h2>
-            <p className="mt-1 text-xs text-white/60">
-              Descreva a mensagem que deseja usar. A equipe Re7online revisará o conteúdo antes de enviar para aprovação da Meta.
-            </p>
-          </div>
-          <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
-            <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Nome técnico sugerido</span>
-              <input
-                value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="ex: atendimento_retorno_v1"
-                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
-              />
-              <span className="text-xs text-white/50">
-                Use letras minúsculas, números e underline. Exemplo: aviso_atendimento_v1
-              </span>
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Categoria</span>
-              <select
-                value={form.category}
-                onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
-                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
-              >
-                {CATEGORY_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <div className="grid gap-1 text-xs text-white/50">
-                <span>Utility: atendimento, avisos, atualizações e comunicações necessárias.</span>
-                <span>Marketing: promoções, ofertas e divulgação comercial.</span>
-                <span>Authentication: códigos de acesso ou verificação.</span>
-              </div>
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Idioma</span>
-              <input
-                value={form.language}
-                onChange={(event) => setForm((current) => ({ ...current, language: event.target.value }))}
-                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
-              />
-              <span className="text-xs text-white/50">Use pt_BR para português do Brasil.</span>
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Mensagem do template</span>
-              <textarea
-                value={form.content}
-                onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
-                rows={6}
-                placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação. Responda esta mensagem para continuar o atendimento com nossa equipe."
-                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
-              />
-              <span className="text-xs text-white/50">
-                Use variáveis como {"{{1}}"} e {"{{2}}"} para dados que mudam por contato.
-              </span>
-            </label>
-            {formWarnings.length > 0 ? (
-              <div className="rounded-lg border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-                {formWarnings.map((warning) => (
-                  <p key={warning}>{warning}</p>
-                ))}
-              </div>
-            ) : null}
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-sm font-semibold text-white/80">Variáveis detectadas</p>
-              {form.variableDetails.length === 0 ? (
-                <p className="mt-2 text-xs text-white/55">Nenhuma variável detectada no conteúdo.</p>
-              ) : (
-                <div className="mt-3 grid gap-3">
-                  {form.variableDetails.map((variable) => (
-                    <div key={variable.key} className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/70 p-3">
-                      <p className="text-xs font-semibold text-white/70">{`Variável {{${variable.key}}}`}</p>
-                      <input
-                        value={variable.description}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            variableDetails: current.variableDetails.map((item) =>
-                              item.key === variable.key ? { ...item, description: event.target.value } : item
-                            ),
-                          }))
-                        }
-                        placeholder="O que representa? ex: nome do contato"
-                        className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
-                      />
-                      <input
-                        value={variable.example}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            variableDetails: current.variableDetails.map((item) =>
-                              item.key === variable.key ? { ...item, example: event.target.value } : item
-                            ),
-                          }))
-                        }
-                        placeholder="Exemplo: Maria"
-                        className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <TemplateWhatsappPreview
-              body={form.content}
-              variableExamples={form.variableDetails}
-              category={form.category}
-              language={form.language}
-              status="requested"
-              templateName={form.name || "nova_solicitacao"}
-              emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
-            />
-
-            {formError ? (
-              <p className="rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-                {formError}
-              </p>
-            ) : null}
-
-            {success ? (
-              <p className="rounded-lg border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
-                {success}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-re7-orange px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? "Enviando..." : "Enviar solicitação para análise"}
-            </button>
-          </form>
+        <section className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-4">
+          <p className="text-sm font-semibold text-white">Nenhum modelo selecionado</p>
+          <p className="mt-1 text-sm text-white/60">
+            Selecione um modelo para ver detalhes ou crie uma nova solicitação.
+          </p>
         </section>
       </div>
+
+      {isDetailDrawerOpen ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 p-3 backdrop-blur-sm">
+          <aside className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+              <div>
+                <h2 className="text-lg font-semibold">Detalhes do modelo</h2>
+                <p className="mt-1 text-xs text-white/55">Status, categoria, variáveis e prévia da mensagem.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDetailDrawerOpen(false)}
+                className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {selectedItem ? (
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                  <div className="grid gap-3">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-semibold">{selectedItem.displayName}</h3>
+                          <p className="mt-1 text-xs text-white/50">{selectedItem.name}</p>
+                        </div>
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedItem.status)}`}>
+                          {getStatusLabel(selectedItem.status)}
+                        </span>
+                      </div>
+                      <p className={`mt-3 rounded-md border px-3 py-2 text-xs ${selectedItem.canUseInCampaign ? "border-emerald-300/25 bg-emerald-900/20 text-emerald-100" : "border-amber-300/25 bg-amber-900/20 text-amber-100"}`}>
+                        {selectedItem.canUseInCampaign ? "Pode ser usado em campanhas." : "Ainda não pode ser usado em campanhas."}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/75 sm:grid-cols-2">
+                      <p><span className="block text-xs uppercase text-white/40">Categoria solicitada</span>{selectedItem.requestedCategory || selectedItem.submittedCategory || selectedItem.category}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Categoria Meta/efetiva</span>{selectedItem.effectiveCategory || selectedItem.category}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Idioma</span>{selectedItem.language}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Atualizado</span>{formatDateTime(selectedItem.updatedAt)}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Última sincronização</span>{selectedItem.lastSyncedAt ? formatDateTime(selectedItem.lastSyncedAt) : "Não sincronizado"}</p>
+                      <p><span className="block text-xs uppercase text-white/40">Origem</span>{selectedItem.id.startsWith("request:") ? "Solicitação interna" : "Catálogo Meta"}</p>
+                    </div>
+                    {selectedItem.categoryChanged || selectedItem.effectiveCategory === "MARKETING" || selectedItem.category === "MARKETING" ? (
+                      <div className="rounded-lg border border-amber-300/25 bg-amber-900/20 p-3 text-sm text-amber-100">
+                        {selectedItem.categoryChanged ? (
+                          <p className="font-semibold">
+                            {selectedItem.categoryChangeLabel ||
+                              `A Meta classificou este template como ${selectedItem.effectiveCategory || selectedItem.category}, diferente da categoria solicitada ${selectedItem.requestedCategory || selectedItem.submittedCategory}.`}
+                          </p>
+                        ) : null}
+                        {(selectedItem.effectiveCategory || selectedItem.category) === "MARKETING" ? (
+                          <p className="mt-1">Templates de Marketing podem ter custo e regras diferentes. Use com cautela.</p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                      <p className="text-xs font-semibold uppercase text-white/50">Variáveis e exemplos</p>
+                      {selectedVariableDetails.length > 0 ? (
+                        <div className="mt-2 grid gap-2">
+                          {selectedVariableDetails.map((variable) => (
+                            <div key={variable.key} className="rounded-md border border-white/10 bg-re7-navy/60 p-2 text-xs text-white/70">
+                              <span className="font-semibold text-white">{`{{${variable.key}}}`}</span>
+                              <span className="ml-2">{variable.description || "Sem descrição"}</span>
+                              <span className="ml-2 text-white/45">Exemplo: {variable.example || "-"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm text-white/55">Nenhuma variável detectada.</p>
+                      )}
+                    </div>
+                    {selectedItem.id.startsWith("request:") ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs font-semibold uppercase text-white/50">Ações permitidas</p>
+                        {canTenantCancelTemplateRequest(selectedItem) ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCancelRequest(selectedItem)}
+                              disabled={syncingTemplateId === selectedItem.id}
+                              className="rounded-md border border-red-300/30 bg-red-900/20 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-200/60 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {syncingTemplateId === selectedItem.id ? "Cancelando..." : "Cancelar solicitação"}
+                            </button>
+                            <span className="text-xs text-white/50">O registro será mantido no histórico.</span>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-white/60">
+                            Este modelo já foi enviado à Meta ou encerrado. Para alterar o conteúdo, crie uma nova solicitação.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  <TemplateWhatsappPreview
+                    body={selectedItem.content}
+                    variableExamples={selectedVariableDetails}
+                    category={selectedItem.category}
+                    language={selectedItem.language}
+                    status={selectedItem.status}
+                    templateName={selectedItem.displayName}
+                    emptyText="Este template não possui corpo textual registrado."
+                  />
+                </div>
+              ) : (
+                <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                  Selecione um modelo para ver detalhes.
+                </p>
+              )}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      {isRequestDrawerOpen ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 p-3 backdrop-blur-sm">
+          <aside className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+              <div>
+                <h2 className="text-lg font-semibold">Nova solicitação</h2>
+                <p className="mt-1 text-xs text-white/55">
+                  A Re7online revisará o conteúdo antes de enviar para aprovação da Meta.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRequestDrawerOpen(false)}
+                className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+              >
+                Fechar
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="grid gap-4">
+                  <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold uppercase text-re7-sky">1. Identificação</p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-[minmax(220px,360px)_180px_140px]">
+                      <label className="grid gap-1 text-sm text-white/80">
+                        Nome técnico sugerido
+                        <input
+                          value={form.name}
+                          onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                          placeholder="ex: atendimento_retorno_v1"
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm text-white/80">
+                        Categoria
+                        <select
+                          value={form.category}
+                          onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                        >
+                          {CATEGORY_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm text-white/80">
+                        Idioma
+                        <input
+                          value={form.language}
+                          onChange={(event) => setForm((current) => ({ ...current, language: event.target.value }))}
+                          className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                        />
+                      </label>
+                    </div>
+                    <p className="mt-2 text-xs text-white/50">
+                      Utility: avisos e atendimento. Marketing: ofertas. Authentication: códigos de acesso.
+                    </p>
+                  </section>
+                  <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold uppercase text-re7-sky">2. Mensagem</p>
+                    <label className="mt-3 grid max-w-3xl gap-1 text-sm text-white/80">
+                      Conteúdo do modelo
+                      <textarea
+                        value={form.content}
+                        onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
+                        rows={5}
+                        placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação."
+                        className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none focus:border-re7-sky/50"
+                      />
+                    </label>
+                    <p className="mt-2 text-xs text-white/50">
+                      Use variáveis como {"{{1}}"} e {"{{2}}"} para informações que mudam por contato.
+                    </p>
+                    {formWarnings.length > 0 ? (
+                      <div className="mt-3 rounded-lg border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+                        {formWarnings.map((warning) => <p key={warning}>{warning}</p>)}
+                      </div>
+                    ) : null}
+                  </section>
+                  <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold uppercase text-re7-sky">3. Variáveis</p>
+                    {form.variableDetails.length === 0 ? (
+                      <p className="mt-2 text-sm text-white/55">Nenhuma variável detectada no conteúdo.</p>
+                    ) : (
+                      <div className="mt-3 grid gap-3">
+                        {form.variableDetails.map((variable) => (
+                          <div key={variable.key} className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/70 p-3 md:grid-cols-[80px_minmax(0,1fr)_minmax(0,1fr)]">
+                            <p className="text-xs font-semibold text-white/70">{`{{${variable.key}}}`}</p>
+                            <input
+                              value={variable.description}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  variableDetails: current.variableDetails.map((item) =>
+                                    item.key === variable.key ? { ...item, description: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              placeholder="Descrição"
+                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50"
+                            />
+                            <input
+                              value={variable.example}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  variableDetails: current.variableDetails.map((item) =>
+                                    item.key === variable.key ? { ...item, example: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              placeholder="Exemplo"
+                              className="rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky/50"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                  <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold uppercase text-re7-sky">5. Envio</p>
+                    <p className="mt-2 text-sm text-white/65">
+                      Solicitação enviada. Acompanhe o status nesta tela.
+                    </p>
+                    {formError ? (
+                      <p className="mt-3 rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{formError}</p>
+                    ) : null}
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="mt-3 rounded-lg bg-re7-orange px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {submitting ? "Enviando..." : "Enviar para análise da Re7online"}
+                    </button>
+                  </section>
+                </div>
+                <section className="lg:sticky lg:top-4 lg:self-start">
+                  <p className="mb-2 text-xs font-semibold uppercase text-re7-sky">4. Prévia</p>
+                  <TemplateWhatsappPreview
+                    body={form.content}
+                    variableExamples={form.variableDetails}
+                    category={form.category}
+                    language={form.language}
+                    status="requested"
+                    templateName={form.name || "nova_solicitacao"}
+                    emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
+                  />
+                </section>
+              </div>
+            </form>
+          </aside>
+        </div>
+      ) : null}
     </AppShell>
   );
 }
