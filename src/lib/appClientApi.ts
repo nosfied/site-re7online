@@ -544,6 +544,7 @@ export type AppContactTimelineResponse = {
 export type AppTemplateItem = {
   id: string;
   name: string;
+  displayName?: string | null;
   category: string;
   submittedCategory: string | null;
   wasRecategorized: boolean;
@@ -552,7 +553,21 @@ export type AppTemplateItem = {
   content: string;
   variables: unknown;
   metaTemplateId: string | null;
+  providerName?: string | null;
   rejectionReason: string | null;
+  componentsSummary?: Array<{ type: string; text: string }>;
+  variablesDetected?: string[];
+  canUseInCampaign?: boolean;
+  canUseInInbox?: boolean;
+  blockedReason?: string | null;
+  blockedReasonLabel?: string | null;
+  lastSyncedAt?: string | null;
+  templateRequest?: {
+    id: string;
+    status: string;
+    notes: string | null;
+    createdAt: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -3362,5 +3377,25 @@ export async function syncAppTemplate(
 }> {
   return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/sync`, {
     method: "POST",
+  });
+}
+
+export async function syncAppTemplates(
+  session: AppSession
+): Promise<{
+  ok: true;
+  summary: {
+    checked: number;
+    updated: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+    failed: number;
+    lastSyncedAt: string | null;
+  };
+}> {
+  return requestAppJson(session, "/app/templates/sync", {
+    method: "POST",
+    timeoutMs: 30000,
   });
 }

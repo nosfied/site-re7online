@@ -936,9 +936,18 @@ export default function AppCampaignsPage() {
                   </button>
                 </div>
                 {templates.length === 0 ? (
-                  <p className="text-xs text-amber-100 lg:col-span-3">
-                    Cadastre ou sincronize um template aprovado antes de criar campanha.
-                  </p>
+                  <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
+                    <p className="font-semibold">Nenhum template aprovado disponivel para este tenant.</p>
+                    <p className="mt-1 text-amber-100/80">
+                      Campanhas usam apenas templates aprovados pela Meta para envio ativo fora da janela de 24h.
+                    </p>
+                    <a
+                      href="/app/templates"
+                      className="mt-2 inline-flex rounded-md border border-amber-200/40 px-3 py-1.5 font-semibold hover:bg-amber-200/10"
+                    >
+                      Ir para Templates
+                    </a>
+                  </div>
                 ) : null}
                 <p className="text-xs text-white/55 lg:col-span-3">
                   O rascunho nao envia mensagens. O envio exige revisao e acao explicita do operador.

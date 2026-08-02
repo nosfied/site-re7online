@@ -3475,6 +3475,28 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           updatedAt: true,
         },
       });
+      const requests = await prisma.templateRequest.findMany({
+        where: {
+          clientId: client.id,
+          name: {
+            in: items.map((item) => item.name),
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          notes: true,
+          createdAt: true,
+        },
+      });
+      const latestRequestByName = new Map<string, (typeof requests)[number]>();
+      for (const requestItem of requests) {
+        const key = normalizeTemplateLookupName(requestItem.name);
+        if (!key || latestRequestByName.has(key)) continue;
+        latestRequestByName.set(key, requestItem);
+      }
 
       triggerTemplateStatusSync({
         templateIds: await findTemplatesNeedingSync(prisma, { clientId: client.id }),
@@ -3485,11 +3507,134 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         count: items.length,
-        items,
+        items: items.map((item) =>
+          buildAppTemplateCatalogItem(item, latestRequestByName.get(normalizeTemplateLookupName(item.name)) ?? null)
+        ),
       });
     } catch (error) {
       logger.error({
         event: "app.templates.list.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/app/templates/sync") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, { error: "client_inactive" });
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+
+      const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
+        where: { clientId: client.id },
+        select: {
+          businessToken: true,
+          wabaId: true,
+        },
+      });
+      const hasMetaConfig = Boolean(
+        String(tenantMetaConfig?.businessToken ?? "").trim() &&
+          String(tenantMetaConfig?.wabaId ?? "").trim()
+      );
+      if (!hasMetaConfig) {
+        json(res, 400, {
+          error: "meta_config_missing",
+          message: "Conecte seu WhatsApp antes de sincronizar templates com a Meta.",
+          summary: {
+            checked: 0,
+            updated: 0,
+            approved: 0,
+            pending: 0,
+            rejected: 0,
+            failed: 0,
+            lastSyncedAt: null,
+          },
+        });
+        return;
+      }
+
+      const templatesToSync = await prisma.template.findMany({
+        where: { clientId: client.id },
+        orderBy: { updatedAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+        },
+      });
+
+      let updated = 0;
+      let approved = 0;
+      let pending = 0;
+      let rejected = 0;
+      let failed = 0;
+      for (const template of templatesToSync) {
+        try {
+          const result = await syncTemplateStatus(template.id);
+          if (result.updated) updated += 1;
+          const status = normalizeTemplateStatus(result.status);
+          if (status === "approved") approved += 1;
+          else if (status === "rejected") rejected += 1;
+          else pending += 1;
+        } catch (error) {
+          failed += 1;
+          logger.warn({
+            event: "template.sync.bulk.item_failed",
+            requestId,
+            clientId: client.id,
+            clientKey: client.clientKey,
+            templateId: template.id,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const lastSyncedAt = new Date();
+      logger.info({
+        event: "template.sync.bulk.success",
+        requestId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+        checked: templatesToSync.length,
+        updated,
+        approved,
+        pending,
+        rejected,
+        failed,
+      });
+      json(res, 200, {
+        ok: true,
+        summary: {
+          checked: templatesToSync.length,
+          updated,
+          approved,
+          pending,
+          rejected,
+          failed,
+          lastSyncedAt,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.bulk_sync.error",
         message: (error as Error).message,
         requestId,
       });
@@ -16678,6 +16823,138 @@ function triggerTemplateStatusSync(params: {
       }
     }
   );
+}
+
+function normalizeTemplateLookupName(input: string | null | undefined) {
+  return String(input || "").trim().toLowerCase();
+}
+
+function normalizeTemplateStatus(input: string | null | undefined) {
+  return String(input || "").trim().toLowerCase();
+}
+
+function normalizeTemplateCategory(input: string | null | undefined) {
+  return String(input || "").trim().toUpperCase();
+}
+
+function extractTemplateVariableKeys(content: string | null | undefined, variables: unknown) {
+  const keys = new Set<string>();
+  const text = String(content || "");
+  for (const match of text.matchAll(/{{\s*([^}\s]+)\s*}}/g)) {
+    if (match[1]) keys.add(match[1]);
+  }
+
+  if (Array.isArray(variables)) {
+    variables.forEach((value, index) => {
+      if (typeof value === "string" && value.trim()) {
+        keys.add(value.trim());
+        return;
+      }
+      keys.add(String(index + 1));
+    });
+  } else if (variables && typeof variables === "object") {
+    for (const key of Object.keys(variables as Record<string, unknown>)) {
+      if (key.trim()) keys.add(key.trim());
+    }
+  } else if (typeof variables === "number" && Number.isInteger(variables) && variables > 0) {
+    for (let index = 1; index <= variables; index += 1) {
+      keys.add(String(index));
+    }
+  }
+
+  return Array.from(keys).sort((left, right) => {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isInteger(leftNumber) && Number.isInteger(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+    return left.localeCompare(right);
+  });
+}
+
+function summarizeTemplateComponents(content: string | null | undefined) {
+  const body = String(content || "").trim();
+  if (!body) return [];
+  return [
+    {
+      type: "BODY",
+      text: body.length > 500 ? `${body.slice(0, 497)}...` : body,
+    },
+  ];
+}
+
+function getTemplateUsageBlock(params: {
+  id: string | null | undefined;
+  status: string | null | undefined;
+  category: string | null | undefined;
+  language: string | null | undefined;
+  content: string | null | undefined;
+}) {
+  const status = normalizeTemplateStatus(params.status);
+  const category = normalizeTemplateCategory(params.category);
+  if (status !== "approved") {
+    if (status === "pending" || status === "submitting" || status === "pending_review") {
+      return { reason: "pending_review", label: "Em analise" };
+    }
+    if (status === "rejected") return { reason: "rejected", label: "Rejeitado" };
+    return { reason: "not_approved", label: "Nao aprovado" };
+  }
+  if (!params.id) return { reason: "not_approved", label: "Nao aprovado" };
+  if (!String(params.language || "").trim()) return { reason: "missing_language", label: "Idioma ausente" };
+  if (!String(params.content || "").trim()) {
+    return { reason: "missing_template_components", label: "Componentes ausentes" };
+  }
+  if (!["MARKETING", "UTILITY", "AUTHENTICATION"].includes(category)) {
+    return { reason: "unsupported_category", label: "Categoria nao suportada" };
+  }
+  return { reason: null, label: null };
+}
+
+function buildAppTemplateCatalogItem(
+  item: {
+    id: string;
+    name: string;
+    category: string;
+    submittedCategory: string | null;
+    wasRecategorized: boolean;
+    language: string;
+    status: string;
+    content: string;
+    variables: Prisma.JsonValue | null;
+    metaTemplateId: string | null;
+    rejectionReason: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  templateRequest: {
+    id: string;
+    status: string;
+    notes: string | null;
+    createdAt: Date;
+  } | null
+) {
+  const block = getTemplateUsageBlock(item);
+  const canUse = block.reason === null;
+  return {
+    ...item,
+    displayName: item.name,
+    providerName: item.name,
+    componentsSummary: summarizeTemplateComponents(item.content),
+    variablesDetected: extractTemplateVariableKeys(item.content, item.variables),
+    canUseInCampaign: canUse,
+    canUseInInbox: canUse,
+    blockedReason: block.reason,
+    blockedReasonLabel: block.label,
+    lastSyncedAt: null,
+    templateRequest: templateRequest
+      ? {
+          id: templateRequest.id,
+          status: templateRequest.status,
+          notes: templateRequest.notes,
+          createdAt: templateRequest.createdAt,
+        }
+      : null,
+  };
 }
 
 function mapTemplateValidationMessage(code: string) {

@@ -388,6 +388,119 @@ test("campaign draft routes require authentication", async () => {
   assert.equal(getErrorCode(send.body), "missing_token");
 });
 
+test("template catalog is tenant scoped and exposes campaign usage safely", async () => {
+  await prisma.template.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        name: `approved_template_${prefix}`,
+        category: "UTILITY",
+        language: "pt_BR",
+        status: "approved",
+        content: "Ola {{1}}, seu atendimento foi registrado.",
+        variables: ["nome"],
+        metaTemplateId: `meta-approved-${prefix}`,
+      },
+      {
+        clientId: businessClientId,
+        name: `pending_template_${prefix}`,
+        category: "UTILITY",
+        language: "pt_BR",
+        status: "pending",
+        content: "Aviso pendente",
+      },
+      {
+        clientId: businessClientId,
+        name: `rejected_template_${prefix}`,
+        category: "MARKETING",
+        language: "pt_BR",
+        status: "rejected",
+        content: "Aviso rejeitado",
+        rejectionReason: "policy",
+      },
+      {
+        clientId: overrideClientId,
+        name: `other_tenant_template_${prefix}`,
+        category: "UTILITY",
+        language: "pt_BR",
+        status: "approved",
+        content: "Outro tenant",
+      },
+    ],
+  });
+
+  const response = await request<{
+    ok: true;
+    count: number;
+    items: Array<{
+      name: string;
+      status: string;
+      metaTemplateId: string | null;
+      canUseInCampaign: boolean;
+      canUseInInbox: boolean;
+      blockedReason: string | null;
+      blockedReasonLabel: string | null;
+      variablesDetected: string[];
+      componentsSummary: Array<{ type: string; text: string }>;
+    }>;
+  }>("GET", "/app/templates?clientId=malicious", businessAdmin);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.items.some((item) => item.name.includes("other_tenant")), false);
+
+  const approved = response.body.items.find((item) => item.name === `approved_template_${prefix}`);
+  assert.ok(approved);
+  assert.equal(approved.canUseInCampaign, true);
+  assert.equal(approved.canUseInInbox, true);
+  assert.equal(approved.blockedReason, null);
+  assert.deepEqual(approved.variablesDetected, ["1", "nome"]);
+  assert.deepEqual(approved.componentsSummary, [
+    { type: "BODY", text: "Ola {{1}}, seu atendimento foi registrado." },
+  ]);
+  assert.equal(JSON.stringify(approved).includes("businessToken"), false);
+
+  const pending = response.body.items.find((item) => item.name === `pending_template_${prefix}`);
+  assert.ok(pending);
+  assert.equal(pending.canUseInCampaign, false);
+  assert.equal(pending.blockedReason, "pending_review");
+  assert.equal(pending.blockedReasonLabel, "Em analise");
+
+  const rejected = response.body.items.find((item) => item.name === `rejected_template_${prefix}`);
+  assert.ok(rejected);
+  assert.equal(rejected.canUseInCampaign, false);
+  assert.equal(rejected.blockedReason, "rejected");
+  assert.equal(rejected.blockedReasonLabel, "Rejeitado");
+});
+
+test("template routes require auth and bulk sync fails safely without Meta config", async () => {
+  const list = await requestUnauth<ErrorPayload>("GET", "/app/templates");
+  assert.equal(list.status, 401);
+  assert.equal(getErrorCode(list.body), "missing_token");
+
+  const sync = await requestUnauth<ErrorPayload>("POST", "/app/templates/sync");
+  assert.equal(sync.status, 401);
+  assert.equal(getErrorCode(sync.body), "missing_token");
+
+  const response = await request<{
+    error: string;
+    message: string;
+    summary: {
+      checked: number;
+      updated: number;
+      approved: number;
+      pending: number;
+      rejected: number;
+      failed: number;
+      lastSyncedAt: string | null;
+    };
+  }>("POST", "/app/templates/sync?clientId=malicious", businessAdmin);
+
+  assert.equal(response.status, 400);
+  assert.equal(getErrorCode(response.body), "meta_config_missing");
+  assert.equal(JSON.stringify(response.body).includes("token"), false);
+});
+
 test("campaign audience preview is tenant scoped and does not create operational records", async () => {
   const eligibleWaId = "5541991177001";
   const blockedWaId = "5541991177002";

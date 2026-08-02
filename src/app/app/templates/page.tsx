@@ -15,6 +15,7 @@ import {
   loadAppSession,
   saveAppSession,
   syncAppTemplate,
+  syncAppTemplates,
 } from "@/lib/appClientApi";
 import { formatDateTime } from "@/lib/whatsappAdminApi";
 
@@ -40,12 +41,25 @@ type CatalogItem = {
   id: string;
   templateId: string | null;
   name: string;
+  displayName: string;
   category: string;
   submittedCategory: string | null;
   wasRecategorized: boolean;
+  language: string;
   status: string;
+  content: string;
+  variables: unknown;
+  variablesDetected: string[];
+  componentsSummary: Array<{ type: string; text: string }>;
+  canUseInCampaign: boolean;
+  canUseInInbox: boolean;
+  blockedReason: string | null;
+  blockedReasonLabel: string | null;
+  lastSyncedAt: string | null;
   updatedAt: string;
+  createdAt: string;
   rejectionReason: string | null;
+  templateRequest: AppTemplateItem["templateRequest"] | null;
   syncable: boolean;
 };
 
@@ -78,6 +92,30 @@ function getStatusLabel(status: string) {
     default:
       return status;
   }
+}
+
+function getUsageLabel(item: Pick<CatalogItem, "canUseInCampaign" | "blockedReasonLabel">) {
+  if (item.canUseInCampaign) return "Pode ser usado em campanhas";
+  return `Nao pode ser usado${item.blockedReasonLabel ? `: ${item.blockedReasonLabel}` : ""}`;
+}
+
+function normalizeFilterValue(input: string) {
+  return input.trim().toLowerCase();
+}
+
+function getTemplateVariableLabels(variables: unknown): string[] {
+  if (Array.isArray(variables)) {
+    return variables
+      .map((value, index) => (typeof value === "string" && value.trim() ? value.trim() : String(index + 1)))
+      .filter(Boolean);
+  }
+  if (variables && typeof variables === "object") {
+    return Object.keys(variables as Record<string, unknown>).filter(Boolean);
+  }
+  if (typeof variables === "number" && Number.isInteger(variables) && variables > 0) {
+    return Array.from({ length: variables }, (_, index) => String(index + 1));
+  }
+  return [];
 }
 
 function parseVariablesInput(input: string) {
@@ -143,12 +181,30 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       id: `request:${request.id}`,
       templateId: null,
       name: request.name,
+      displayName: request.name,
       category: request.category,
       submittedCategory: request.category,
       wasRecategorized: false,
+      language: "pt_BR",
       status: request.status,
+      content: request.content,
+      variables: request.variables,
+      variablesDetected: getTemplateVariableLabels(request.variables),
+      componentsSummary: request.content ? [{ type: "BODY", text: request.content }] : [],
+      canUseInCampaign: false,
+      canUseInInbox: false,
+      blockedReason: isTemplateRequestPendingLike(request.status) ? "pending_review" : "not_approved",
+      blockedReasonLabel: isTemplateRequestPendingLike(request.status) ? "Em analise" : "Nao aprovado",
+      lastSyncedAt: null,
       updatedAt: request.createdAt,
+      createdAt: request.createdAt,
       rejectionReason: request.notes,
+      templateRequest: {
+        id: request.id,
+        status: request.status,
+        notes: request.notes,
+        createdAt: request.createdAt,
+      },
       syncable: false,
     });
   }
@@ -160,12 +216,25 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       id: template.id,
       templateId: template.id,
       name: template.name,
+      displayName: template.displayName || template.name,
       category: template.category,
       submittedCategory: template.submittedCategory,
       wasRecategorized: template.wasRecategorized,
+      language: template.language,
       status: template.status,
+      content: template.content,
+      variables: template.variables,
+      variablesDetected: template.variablesDetected ?? getTemplateVariableLabels(template.variables),
+      componentsSummary: template.componentsSummary ?? (template.content ? [{ type: "BODY", text: template.content }] : []),
+      canUseInCampaign: template.canUseInCampaign === true,
+      canUseInInbox: template.canUseInInbox === true,
+      blockedReason: template.blockedReason ?? null,
+      blockedReasonLabel: template.blockedReasonLabel ?? null,
+      lastSyncedAt: template.lastSyncedAt ?? null,
       updatedAt: template.updatedAt,
+      createdAt: template.createdAt,
       rejectionReason: template.rejectionReason,
+      templateRequest: template.templateRequest ?? null,
       syncable: true,
     });
   }
@@ -235,12 +304,85 @@ export default function AppTemplatesPage() {
   const [form, setForm] = useState<TemplateRequestFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [syncingAll, setSyncingAll] = useState(false);
   const [syncingTemplateId, setSyncingTemplateId] = useState<string | null>(null);
   const [highlightedTemplateId, setHighlightedTemplateId] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [languageFilter, setLanguageFilter] = useState("all");
+  const [campaignUseFilter, setCampaignUseFilter] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
+  const approvedTemplatesCount = useMemo(
+    () => catalogItems.filter((item) => item.status.toLowerCase() === "approved").length,
+    [catalogItems]
+  );
+  const pendingTemplatesCount = useMemo(
+    () =>
+      catalogItems.filter((item) => {
+        const status = item.status.toLowerCase();
+        return status === "pending" || status === "submitting" || status === "pending_review";
+      }).length,
+    [catalogItems]
+  );
+  const rejectedTemplatesCount = useMemo(
+    () => catalogItems.filter((item) => ["rejected", "failed"].includes(item.status.toLowerCase())).length,
+    [catalogItems]
+  );
+  const campaignReadyCount = useMemo(
+    () => catalogItems.filter((item) => item.canUseInCampaign).length,
+    [catalogItems]
+  );
+  const statusOptions = useMemo(
+    () => Array.from(new Set(catalogItems.map((item) => item.status).filter(Boolean))).sort(),
+    [catalogItems]
+  );
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(catalogItems.map((item) => item.category).filter(Boolean))).sort(),
+    [catalogItems]
+  );
+  const languageOptions = useMemo(
+    () => Array.from(new Set(catalogItems.map((item) => item.language).filter(Boolean))).sort(),
+    [catalogItems]
+  );
+  const filteredCatalogItems = useMemo(() => {
+    const normalizedSearch = normalizeFilterValue(search);
+    return catalogItems.filter((item) => {
+      if (
+        normalizedSearch &&
+        ![
+          item.name,
+          item.displayName,
+          item.category,
+          item.language,
+          item.status,
+          item.content,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      ) {
+        return false;
+      }
+      if (statusFilter !== "all" && item.status !== statusFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (languageFilter !== "all" && item.language !== languageFilter) return false;
+      if (campaignUseFilter === "ready" && !item.canUseInCampaign) return false;
+      if (campaignUseFilter === "blocked" && item.canUseInCampaign) return false;
+      return true;
+    });
+  }, [campaignUseFilter, catalogItems, categoryFilter, languageFilter, search, statusFilter]);
+  const selectedItem = useMemo(
+    () =>
+      filteredCatalogItems.find((item) => item.id === selectedItemId) ??
+      filteredCatalogItems[0] ??
+      null,
+    [filteredCatalogItems, selectedItemId]
+  );
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -446,6 +588,7 @@ export default function AppTemplatesPage() {
             )
           )
         );
+        await loadData(session);
         setHighlightedTemplateId(response.template.id);
         setSuccess(
           categoryChanged
@@ -469,6 +612,34 @@ export default function AppTemplatesPage() {
     [handleUnauthorized, session, templates]
   );
 
+  const handleSyncAllTemplates = useCallback(async () => {
+    if (!session) return;
+    setError(null);
+    setFormError(null);
+    setSuccess(null);
+    setSyncingAll(true);
+    try {
+      const response = await syncAppTemplates(session);
+      await loadData(session);
+      setSuccess(
+        `Sincronizacao concluida: ${response.summary.checked} verificados, ${response.summary.updated} atualizados, ${response.summary.approved} aprovados, ${response.summary.rejected} rejeitados.`
+      );
+    } catch (err) {
+      const typed = err as AppApiError;
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (typed.errorCode === "meta_config_missing") {
+        setError("Configuracao Meta ausente para sincronizar templates neste tenant.");
+        return;
+      }
+      setError(typed.message || typed.details || "Erro ao sincronizar templates com a Meta.");
+    } finally {
+      setSyncingAll(false);
+    }
+  }, [handleUnauthorized, loadData, session]);
+
   if (!session) return null;
 
   return (
@@ -484,89 +655,300 @@ export default function AppTemplatesPage() {
         </p>
       ) : null}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <h2 className="text-sm font-semibold">Catalogo de templates</h2>
-          </div>
-          {catalogItems.length === 0 ? (
-            <p className="p-4 text-sm text-white/70">Nenhum template encontrado.</p>
-          ) : (
-            <div className="max-h-[34rem] overflow-x-auto xl:overflow-y-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="bg-white/10 text-left">
-                  <tr>
-                    <th className="px-3 py-2">Nome</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Categoria</th>
-                    <th className="px-3 py-2">Atualizado</th>
-                    <th className="px-3 py-2">Motivo</th>
-                    <th className="px-3 py-2">Acao</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {catalogItems.map((item) => {
-                    const recategorizationInfo = getTemplateRecategorizationLabel(item);
-                    return (
-                    <tr
-                      key={item.id}
-                      className={`border-t border-white/10 ${highlightedTemplateId === item.templateId ? "bg-emerald-500/10" : ""}`}
-                    >
-                      <td className="px-3 py-2">{item.name}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}
-                        >
-                          {getStatusLabel(item.status)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col gap-1">
-                          <span>{item.category}</span>
-                          {recategorizationInfo ? (
-                            <>
-                              <span className="inline-flex w-fit rounded-full border border-amber-300/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
-                                {recategorizationInfo.badge}
-                              </span>
-                              <span className="text-xs text-amber-200">
-                                {recategorizationInfo.detail}
-                              </span>
-                            </>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">{formatDateTime(item.updatedAt)}</td>
-                      <td className="px-3 py-2">{getTemplateReason(item)}</td>
-                      <td className="px-3 py-2">
-                        {item.syncable && item.templateId ? (
-                          <button
-                            type="button"
-                            onClick={() => handleSyncTemplate(item.templateId as string)}
-                            disabled={syncingTemplateId === item.templateId}
-                            className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {syncingTemplateId === item.templateId
-                                ? "Atualizando..."
-                                : item.status.toLowerCase() === "approved"
-                                  ? "Revalidar"
-                                  : "Atualizar status"}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-white/50">Aguardando revisao</span>
-                        )}
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Catalogo operacional</h2>
+                <p className="mt-1 text-xs text-white/60">
+                  Templates aprovados sao necessarios para envio ativo fora da janela de 24h.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSyncAllTemplates}
+                disabled={syncingAll || catalogItems.length === 0}
+                className="rounded-lg border border-sky-300/30 bg-sky-900/20 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:border-sky-200/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {syncingAll ? "Sincronizando..." : "Sincronizar com Meta"}
+              </button>
             </div>
-          )}
+          </div>
+
+          <div className="grid gap-3 p-3 sm:p-4">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <p className="text-xs uppercase text-white/55">Total</p>
+                <p className="mt-1 text-xl font-semibold">{catalogItems.length}</p>
+              </div>
+              <div className="rounded-lg border border-emerald-300/20 bg-emerald-900/20 p-3">
+                <p className="text-xs uppercase text-emerald-100/70">Aprovados</p>
+                <p className="mt-1 text-xl font-semibold text-emerald-100">{approvedTemplatesCount}</p>
+              </div>
+              <div className="rounded-lg border border-amber-300/20 bg-amber-900/20 p-3">
+                <p className="text-xs uppercase text-amber-100/70">Em analise</p>
+                <p className="mt-1 text-xl font-semibold text-amber-100">{pendingTemplatesCount}</p>
+              </div>
+              <div className="rounded-lg border border-sky-300/20 bg-sky-900/20 p-3">
+                <p className="text-xs uppercase text-sky-100/70">Usaveis em campanhas</p>
+                <p className="mt-1 text-xl font-semibold text-sky-100">{campaignReadyCount}</p>
+              </div>
+            </div>
+
+            {campaignReadyCount === 0 ? (
+              <div className="rounded-lg border border-amber-300/30 bg-amber-900/20 p-3 text-sm text-amber-100">
+                <p className="font-semibold">Este tenant ainda nao possui template aprovado para envio ativo.</p>
+                <p className="mt-1 text-amber-100/80">
+                  Cadastre ou sincronize um template aprovado para criar campanhas e futuramente iniciar conversas fora da janela de 24h.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSyncAllTemplates}
+                    disabled={syncingAll || catalogItems.length === 0}
+                    className="rounded-md border border-amber-200/40 px-3 py-1.5 text-xs font-semibold hover:bg-amber-200/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {syncingAll ? "Sincronizando..." : "Sincronizar com Meta"}
+                  </button>
+                  <a
+                    href="#solicitar-template"
+                    className="rounded-md border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/85 hover:bg-white/10"
+                  >
+                    Cadastrar solicitacao de template
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_150px_150px_130px_160px]">
+              <label className="grid gap-1 text-xs text-white/70">
+                Busca
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Nome, categoria ou conteudo"
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                />
+              </label>
+              <label className="grid gap-1 text-xs text-white/70">
+                Status
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white"
+                >
+                  <option value="all">Todos</option>
+                  {statusOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {getStatusLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/70">
+                Categoria
+                <select
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white"
+                >
+                  <option value="all">Todas</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/70">
+                Idioma
+                <select
+                  value={languageFilter}
+                  onChange={(event) => setLanguageFilter(event.target.value)}
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white"
+                >
+                  <option value="all">Todos</option>
+                  {languageOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-white/70">
+                Uso em campanha
+                <select
+                  value={campaignUseFilter}
+                  onChange={(event) => setCampaignUseFilter(event.target.value)}
+                  className="rounded-md border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white"
+                >
+                  <option value="all">Todos</option>
+                  <option value="ready">Usaveis</option>
+                  <option value="blocked">Bloqueados</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="text-xs text-white/55">
+              Campanhas usam apenas templates aprovados. Mensagens livres continuam restritas a janela permitida do WhatsApp.
+            </p>
+
+            {catalogItems.length === 0 ? (
+              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">Nenhum template encontrado.</p>
+            ) : filteredCatalogItems.length === 0 ? (
+              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">Nenhum template corresponde aos filtros.</p>
+            ) : (
+              <div className="max-h-[34rem] overflow-x-auto xl:overflow-y-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="bg-white/10 text-left">
+                    <tr>
+                      <th className="px-3 py-2">Nome</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Categoria</th>
+                      <th className="px-3 py-2">Idioma</th>
+                      <th className="px-3 py-2">Uso permitido</th>
+                      <th className="px-3 py-2">Variaveis</th>
+                      <th className="px-3 py-2">Ultima sync</th>
+                      <th className="px-3 py-2">Acoes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCatalogItems.map((item) => {
+                      const recategorizationInfo = getTemplateRecategorizationLabel(item);
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`border-t border-white/10 ${highlightedTemplateId === item.templateId ? "bg-emerald-500/10" : selectedItem?.id === item.id ? "bg-white/10" : ""}`}
+                        >
+                          <td className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedItemId(item.id)}
+                              className="text-left font-semibold text-white hover:text-re7-sky"
+                            >
+                              {item.displayName}
+                            </button>
+                            <p className="text-xs text-white/50">{item.name}</p>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(item.status)}`}>
+                              {getStatusLabel(item.status)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1">
+                              <span>{item.category}</span>
+                              {recategorizationInfo ? (
+                                <span className="text-xs text-amber-200">{recategorizationInfo.detail}</span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">{item.language || "-"}</td>
+                          <td className="px-3 py-2">
+                            <span className={item.canUseInCampaign ? "text-emerald-100" : "text-amber-100"}>
+                              {getUsageLabel(item)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {item.variablesDetected.length > 0 ? item.variablesDetected.join(", ") : "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {item.lastSyncedAt ? formatDateTime(item.lastSyncedAt) : "Nao sincronizado"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedItemId(item.id)}
+                                className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                              >
+                                Ver
+                              </button>
+                              {item.syncable && item.templateId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSyncTemplate(item.templateId as string)}
+                                  disabled={syncingTemplateId === item.templateId}
+                                  className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/90 transition hover:border-re7-sky/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {syncingTemplateId === item.templateId ? "Atualizando..." : "Atualizar status"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
+            <h2 className="text-sm font-semibold">Detalhe e solicitacao</h2>
+          </div>
+          {selectedItem ? (
+            <div className="border-b border-white/10 p-3 sm:p-4">
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">{selectedItem.displayName}</h3>
+                    <p className="mt-1 text-xs text-white/55">{selectedItem.category} · {selectedItem.language}</p>
+                  </div>
+                  <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getStatusClasses(selectedItem.status)}`}>
+                    {getStatusLabel(selectedItem.status)}
+                  </span>
+                </div>
+                <p className={`mt-3 rounded-md border px-3 py-2 text-xs ${selectedItem.canUseInCampaign ? "border-emerald-300/25 bg-emerald-900/20 text-emerald-100" : "border-amber-300/25 bg-amber-900/20 text-amber-100"}`}>
+                  {getUsageLabel(selectedItem)}
+                </p>
+                <div className="mt-3 grid gap-2 text-xs text-white/70">
+                  <p><span className="text-white/45">Provider/Meta:</span> {selectedItem.name}</p>
+                  <p><span className="text-white/45">Atualizado:</span> {formatDateTime(selectedItem.updatedAt)}</p>
+                  <p><span className="text-white/45">Ultima sincronizacao:</span> {selectedItem.lastSyncedAt ? formatDateTime(selectedItem.lastSyncedAt) : "Nao sincronizado"}</p>
+                  {selectedItem.rejectionReason ? (
+                    <p><span className="text-white/45">Motivo:</span> {selectedItem.rejectionReason}</p>
+                  ) : null}
+                  {selectedItem.templateRequest ? (
+                    <p><span className="text-white/45">Solicitacao:</span> {getStatusLabel(selectedItem.templateRequest.status)} em {formatDateTime(selectedItem.templateRequest.createdAt)}</p>
+                  ) : null}
+                </div>
+                <div className="mt-3 rounded-md border border-white/10 bg-re7-navy/70 p-3">
+                  <p className="text-xs font-semibold uppercase text-white/50">Preview</p>
+                  {selectedItem.componentsSummary.length > 0 ? (
+                    selectedItem.componentsSummary.map((component) => (
+                      <div key={`${selectedItem.id}-${component.type}`} className="mt-2">
+                        <p className="text-[11px] font-semibold text-white/45">{component.type}</p>
+                        <p className="whitespace-pre-wrap text-sm text-white/85">{component.text}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="mt-2 text-sm text-white/55">Sem componentes textuais registrados.</p>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase text-white/50">Variaveis</p>
+                  {selectedItem.variablesDetected.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedItem.variablesDetected.map((variable) => (
+                        <span key={variable} className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
+                          {`{{${variable}}}`}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-white/55">Nenhuma variavel detectada.</p>
+                  )}
+                  <p className="mt-2 text-xs text-white/55">
+                    As variaveis deverao ser preenchidas na campanha antes do envio.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Solicitar template</h2>
+            <p className="mt-1 text-xs text-white/60">Cadastre uma solicitacao operacional para analise e aprovacao.</p>
           </div>
           <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
             <label className="flex flex-col gap-2 text-sm text-white/80">
