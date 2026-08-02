@@ -141,6 +141,7 @@ export type AppCrmContactItem = {
   conversationsCount: number;
   hasConversation: boolean;
   activeOptOut: boolean;
+  isAnonymized: boolean;
   importedSource: string | null;
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
@@ -220,6 +221,7 @@ export type AppCampaignAudiencePreviewFilter = AppCrmContactsFilter & {
 };
 
 export type AppCampaignAudienceBlockedReason =
+  | "anonymized_contact"
   | "active_send_blocked"
   | "missing_whatsapp_identity"
   | "non_whatsapp_channel"
@@ -240,6 +242,7 @@ export type AppCampaignAudiencePreviewItem = {
   phoneDisplay: string | null;
   identifierDisplay: string;
   activeOptOut: boolean;
+  isAnonymized: boolean;
   hasValidWhatsappIdentity: boolean;
   lastConversationIdentity: string | null;
   lastProtocol: string | null;

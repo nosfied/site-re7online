@@ -45,6 +45,7 @@ export type CrmContactListItem = {
   conversationsCount: number;
   hasConversation: boolean;
   activeOptOut: boolean;
+  isAnonymized: boolean;
   importedSource: string | null;
   hasValidWhatsappIdentity: boolean;
   canStartWhatsappTemplateCandidate: boolean;
@@ -199,6 +200,38 @@ function maskPhone(value: string | null | undefined) {
 
 function isWhatsappChannel(channel: string | null | undefined) {
   return !channel || channel.toLowerCase() === "whatsapp";
+}
+
+function isAnonymizedMarker(value: unknown) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized.startsWith("anon:") ||
+    normalized.startsWith("hash:anon:") ||
+    normalized === "[mensagem anonimizada]" ||
+    normalized === "usuario anonimizado" ||
+    normalized === "usuário anonimizado" ||
+    normalized.includes("******")
+  );
+}
+
+function isAnonymizedContactRecord(
+  lead: LeadRecord,
+  contact?: { waId?: string | null; name?: string | null; externalUserHash?: string | null } | null,
+  identity?: { displayName?: string | null; externalUserHash?: string | null } | null
+) {
+  return [
+    lead.waId,
+    lead.waIdCanonical,
+    lead.externalUserHash,
+    lead.name,
+    lead.phone,
+    contact?.waId,
+    contact?.name,
+    contact?.externalUserHash,
+    identity?.displayName,
+    identity?.externalUserHash,
+  ].some(isAnonymizedMarker);
 }
 
 function buildIdentifierDisplay(lead: LeadRecord, contactDisplayName?: string | null) {
@@ -608,6 +641,7 @@ export async function buildCrmContactsPayload(
         activeOptOuts.has(candidate)
       );
       const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
+      const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
       const displayName =
         normalizeOptionalText(lead.name) ??
         normalizeOptionalText(identity?.displayName) ??
@@ -638,6 +672,7 @@ export async function buildCrmContactsPayload(
         conversationsCount: conversationSummary.count,
         hasConversation: hasConversationValue,
         activeOptOut,
+        isAnonymized,
         importedSource: importSourceByKey.get(canonical) ?? null,
         ...templateCandidate,
         hasOpenConversationWindow: lastConversation ? lastConversation.windowIsOpen : null,
@@ -863,6 +898,7 @@ export async function buildCrmContactDetailPayload(
   const activeOptOuts = resolveActiveOptOuts(optOutEvents);
   const activeOptOut = getOptOutCanonicalCandidates(lead).some((candidate) => activeOptOuts.has(candidate));
   const templateCandidate = buildTemplateCandidate(lead, activeOptOut);
+  const isAnonymized = isAnonymizedContactRecord(lead, contact, identity);
   const displayName =
     normalizeOptionalText(lead.name) ??
     normalizeOptionalText(identity?.displayName) ??
@@ -902,6 +938,7 @@ export async function buildCrmContactDetailPayload(
       conversationsCount: conversations.length,
       hasConversation: conversations.length > 0,
       activeOptOut,
+      isAnonymized,
       importedSource: importSource,
       ...templateCandidate,
       hasOpenConversationWindow: latestConversation ? latestConversation.windowIsOpen : null,

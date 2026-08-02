@@ -360,6 +360,7 @@ test("campaign audience preview is tenant scoped and does not create operational
   const eligibleWaId = "5541991177001";
   const blockedWaId = "5541991177002";
   const otherTenantWaId = "5541991177003";
+  const anonymizedWaId = "5541******7004:anon001";
 
   await prisma.lead.createMany({
     data: [
@@ -391,6 +392,16 @@ test("campaign audience preview is tenant scoped and does not create operational
         channel: "instagram",
         provider: "meta",
         name: "Contato Instagram",
+        status: "RETORNO_FUTURO",
+      },
+      {
+        tenantId: businessClientId,
+        waId: anonymizedWaId,
+        waIdCanonical: anonymizedWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "Usuario Anonimizado",
+        phone: "5541991177004",
         status: "RETORNO_FUTURO",
       },
       {
@@ -431,6 +442,7 @@ test("campaign audience preview is tenant scoped and does not create operational
       eligible: boolean;
       blockedReason: string | null;
       activeOptOut: boolean;
+      isAnonymized: boolean;
     }>;
     pagination: { total: number; page: number; limit: number };
   }>(
@@ -441,9 +453,9 @@ test("campaign audience preview is tenant scoped and does not create operational
 
   assert.equal(response.status, 200);
   assert.equal(response.body.ok, true);
-  assert.equal(response.body.summary.total, 3);
+  assert.equal(response.body.summary.total, 4);
   assert.equal(response.body.summary.eligible, 1);
-  assert.equal(response.body.summary.blocked, 2);
+  assert.equal(response.body.summary.blocked, 3);
   assert.equal(response.body.items.some((item) => item.displayName === "Outro Tenant"), false);
 
   const eligible = response.body.items.find((item) => item.displayName === "Cliente Elegivel");
@@ -458,10 +470,24 @@ test("campaign audience preview is tenant scoped and does not create operational
   assert.equal(blocked.activeOptOut, true);
   assert.equal(blocked.blockedReason, "active_send_blocked");
 
+  const anonymized = response.body.items.find((item) => item.displayName === "Usuario Anonimizado");
+  assert.ok(anonymized);
+  assert.equal(anonymized.eligible, false);
+  assert.equal(anonymized.isAnonymized, true);
+  assert.equal(anonymized.blockedReason, "anonymized_contact");
+  assert.equal(JSON.stringify(anonymized).includes("5541991177004"), false);
+
   const instagram = response.body.items.find((item) => item.displayName === "Contato Instagram");
   assert.ok(instagram);
   assert.equal(instagram.eligible, false);
   assert.equal(instagram.blockedReason, "non_whatsapp_channel");
+
+  const anonymizedSummary = response.body.summary.blockedByReason.find(
+    (item) => item.reason === "anonymized_contact"
+  );
+  assert.ok(anonymizedSummary);
+  assert.equal(anonymizedSummary.label, "Contato anonimizado");
+  assert.equal(anonymizedSummary.count, 1);
 
   const campaignsAfter = await prisma.campaign.count({ where: { clientId: businessClientId } });
   const eventsAfter = await prisma.event.count({ where: { clientId: businessClientId } });
