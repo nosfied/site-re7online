@@ -3362,6 +3362,16 @@ export async function createAppTemplateRequest(
   });
 }
 
+export async function cancelAppTemplateRequest(
+  session: AppSession,
+  requestId: string
+): Promise<{ ok: true; request: AppTemplateRequestItem }> {
+  return requestAppJson(session, `/app/templates/requests/${encodeURIComponent(requestId)}/cancel`, {
+    method: "POST",
+    timeoutMs: 15000,
+  });
+}
+
 export async function syncAppTemplate(
   session: AppSession,
   templateId: string

@@ -3230,6 +3230,98 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/templates/requests/") &&
+    pathname.split("/").length === 6 &&
+    pathname.endsWith("/cancel")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+      if (!templateRequestId) {
+        json(res, 400, { error: "bad_request" });
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, { error: "client_not_found" });
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const existing = await prisma.templateRequest.findFirst({
+        where: { id: templateRequestId, clientId: client.id },
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          content: true,
+          variables: true,
+          category: true,
+          status: true,
+          notes: true,
+          createdBy: true,
+          createdAt: true,
+        },
+      });
+      if (!existing) {
+        json(res, 404, { error: "template_request_not_found" });
+        return;
+      }
+      if (!TEMPLATE_REQUEST_APP_CANCELABLE_STATUSES.includes(existing.status)) {
+        json(res, 409, {
+          error: "template_request_not_cancelable",
+          message: "Esta solicitação já foi submetida ou está em revisão e não pode ser cancelada por aqui.",
+        });
+        return;
+      }
+      const updated = await prisma.templateRequest.update({
+        where: { id: existing.id },
+        data: { status: "cancelled" },
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          content: true,
+          variables: true,
+          category: true,
+          status: true,
+          notes: true,
+          createdBy: true,
+          createdAt: true,
+        },
+      });
+      await persistEvent({
+        clientId: updated.clientId,
+        requestId: `template-request-cancelled:${updated.id}:${Date.now()}`,
+        eventName: "template.request.cancelled",
+        payloadJson: {
+          templateRequestId: updated.id,
+          templateName: updated.name,
+          cancelledBy: clientAuth.userId,
+          source: "app",
+        },
+      });
+      json(res, 200, { ok: true, request: serializeTemplateRequest(updated) });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.request.cancel.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/app/templates") {
     const prisma = getPrisma();
     const clientAuth = requireClientAuth(req, res);
@@ -16110,6 +16202,86 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       req.method === "POST" &&
       pathname.startsWith("/admin/templates/requests/") &&
       pathname.split("/").length === 6 &&
+      pathname.endsWith("/cancel")
+    ) {
+      try {
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const existing = await prisma.templateRequest.findFirst({
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        if (!existing) {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        if (!TEMPLATE_REQUEST_ADMIN_CANCELABLE_STATUSES.includes(existing.status)) {
+          json(res, 409, {
+            error: "template_request_not_cancelable",
+            message: "Esta solicitação já foi submetida à Meta e não pode ser cancelada por aqui.",
+          });
+          return;
+        }
+        const updated = await prisma.templateRequest.update({
+          where: { id: existing.id },
+          data: { status: "cancelled" },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        await persistEvent({
+          clientId: updated.clientId,
+          requestId: `template-request-admin-cancelled:${updated.id}:${Date.now()}`,
+          eventName: "template.request.cancelled",
+          payloadJson: {
+            templateRequestId: updated.id,
+            templateName: updated.name,
+            cancelledBy: resolveAssignedTo(adminAuth),
+            source: "admin",
+          },
+        });
+        json(res, 200, { ok: true, request: serializeTemplateRequest(updated) });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.requests.cancel.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
       pathname.endsWith("/sync")
     ) {
       try {
@@ -16876,6 +17048,15 @@ const TEMPLATE_REQUEST_OPEN_STATUSES = [
   "submitted_to_meta",
 ];
 
+const TEMPLATE_REQUEST_APP_CANCELABLE_STATUSES = ["requested"];
+const TEMPLATE_REQUEST_ADMIN_CANCELABLE_STATUSES = [
+  "pending",
+  "requested",
+  "review_started",
+  "adjustment_requested",
+  "internal_approved",
+];
+
 type TemplateVariableDetail = {
   key: string;
   description: string;
@@ -16897,6 +17078,7 @@ function normalizeTemplateRequestStatus(status: unknown) {
       "approved",
       "rejected",
       "failed",
+      "cancelled",
     ].includes(normalized)
   ) {
     return normalized;
@@ -16924,6 +17106,8 @@ function getTemplateRequestStatusLabel(status: string) {
       return "Rejeitado pela Meta";
     case "failed":
       return "Falha";
+    case "cancelled":
+      return "Cancelada";
     default:
       return status;
   }
@@ -17484,6 +17668,8 @@ function mapTemplateValidationMessage(code: string) {
       return "O conteudo do template excede o limite permitido pela Meta.";
     case "template_variables_invalid":
       return "Revise as variaveis do template. Os placeholders devem ser sequenciais e coerentes.";
+    case "template_variable_example_required":
+      return "Informe um exemplo para cada variavel do template.";
     default:
       return "Nao foi possivel validar o template.";
   }

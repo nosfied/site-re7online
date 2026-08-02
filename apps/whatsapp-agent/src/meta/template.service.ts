@@ -105,14 +105,51 @@ function resolveVariableCount(variables: unknown) {
     return variables;
   }
   if (Array.isArray(variables)) return variables.length;
-  if (typeof variables === "object") return Object.keys(variables as Record<string, unknown>).length;
+  if (typeof variables === "object") {
+    const raw = variables as Record<string, unknown>;
+    if (Array.isArray(raw.variableDetails)) return raw.variableDetails.length;
+    if (Array.isArray(raw.variables)) return raw.variables.length;
+    return Object.keys(raw).filter((key) => /^\d+$/.test(key)).length;
+  }
   return 0;
 }
 
-function buildMetaExamples(variableCount: number) {
-  if (variableCount <= 0) return undefined;
+function normalizeVariableExampleDetails(variables: unknown): Array<{ key: string; example: string }> {
+  const normalizeList = (input: unknown) => {
+    if (!Array.isArray(input)) return [];
+    return input
+      .map((item, index) => {
+        if (typeof item === "string") {
+          return { key: String(index + 1), example: item.trim() };
+        }
+        if (!item || typeof item !== "object") return null;
+        const raw = item as Record<string, unknown>;
+        return {
+          key: String(raw.key ?? index + 1).trim(),
+          example: String(raw.example ?? "").trim(),
+        };
+      })
+      .filter((item): item is { key: string; example: string } => Boolean(item?.key));
+  };
+
+  if (Array.isArray(variables)) return normalizeList(variables);
+  if (variables && typeof variables === "object") {
+    const raw = variables as Record<string, unknown>;
+    return normalizeList(raw.variableDetails ?? raw.variables);
+  }
+  return [];
+}
+
+function buildMetaExamples(content: string, variables: unknown) {
+  const placeholderIndexes = extractPlaceholderIndexes(content);
+  if (placeholderIndexes.length <= 0) return undefined;
+  const details = normalizeVariableExampleDetails(variables);
+  const examples = placeholderIndexes.map((index) => {
+    const detail = details.find((item) => Number(item.key) === index);
+    return detail?.example || `example_${index}`;
+  });
   return {
-    body_text: [Array.from({ length: variableCount }, (_, index) => `example_${index + 1}`)],
+    body_text: [examples],
   };
 }
 
@@ -129,7 +166,7 @@ function buildMetaTemplatePayload(template: TemplateForMeta): MetaTemplatePayloa
         type: "BODY",
         text: content,
         ...(placeholderIndexes.length > 0
-          ? { example: buildMetaExamples(placeholderIndexes.length) }
+          ? { example: buildMetaExamples(content, template.variables) }
           : {}),
       },
     ],
@@ -179,6 +216,16 @@ export function validateTemplateForMeta(template: TemplateForMeta) {
 
   if (placeholderIndexes.length > 0 && variableCount > 0 && variableCount !== placeholderIndexes.length) {
     throw new MetaTemplateValidationError("template_variables_invalid");
+  }
+
+  const variableExamples = normalizeVariableExampleDetails(template.variables);
+  if (placeholderIndexes.length > 0 && variableExamples.length > 0) {
+    for (const index of placeholderIndexes) {
+      const detail = variableExamples.find((item) => Number(item.key) === index);
+      if (!detail?.example) {
+        throw new MetaTemplateValidationError("template_variable_example_required");
+      }
+    }
   }
 }
 

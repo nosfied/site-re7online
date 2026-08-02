@@ -8,6 +8,7 @@ import {
   AppSession,
   AppTemplateItem,
   AppTemplateRequestItem,
+  cancelAppTemplateRequest,
   clearAppSession,
   createAppTemplateRequest,
   listAppTemplateRequests,
@@ -72,6 +73,8 @@ function getStatusClasses(status: string) {
     case "failed":
     case "rejected":
       return "bg-red-600 text-white";
+    case "cancelled":
+      return "bg-slate-600 text-white";
     case "pending":
     default:
       return "bg-amber-500 text-slate-950";
@@ -175,11 +178,84 @@ function buildTemplatePreviewWithExamples(
 ) {
   let preview = content.trim();
   for (const variable of variables) {
-    const example = variable.example.trim();
-    if (!example) continue;
+    const example = variable.example.trim() || `[exemplo de {{${variable.key}}}]`;
     preview = preview.replace(new RegExp(`{{\\s*${variable.key}\\s*}}`, "g"), example);
   }
   return preview;
+}
+
+function getCatalogItemVariableDetails(item: CatalogItem): Array<{ key: string; description: string; example: string }> {
+  if (item.variables && typeof item.variables === "object" && !Array.isArray(item.variables)) {
+    const raw = item.variables as Record<string, unknown>;
+    const details = raw.variableDetails ?? raw.variables;
+    if (Array.isArray(details)) {
+      return details
+        .map((detail) => {
+          if (!detail || typeof detail !== "object") return null;
+          const typed = detail as Record<string, unknown>;
+          const key = String(typed.key ?? "").trim();
+          if (!key) return null;
+          return {
+            key,
+            description: String(typed.description ?? "").trim(),
+            example: String(typed.example ?? "").trim(),
+          };
+        })
+        .filter((detail): detail is { key: string; description: string; example: string } => Boolean(detail));
+    }
+  }
+  return item.variablesDetected.map((key) => ({ key, description: "", example: "" }));
+}
+
+function canTenantCancelTemplateRequest(item: CatalogItem | null) {
+  return Boolean(item?.id.startsWith("request:") && item.status === "requested" && item.templateRequest?.id);
+}
+
+function TemplateWhatsappPreview({
+  body,
+  variableExamples,
+  category,
+  language,
+  status,
+  templateName,
+  emptyText = "Informe uma mensagem para visualizar a prévia.",
+}: {
+  body: string;
+  variableExamples: Array<{ key: string; example: string }>;
+  category: string;
+  language: string;
+  status: string;
+  templateName: string;
+  emptyText?: string;
+}) {
+  const previewBody = buildTemplatePreviewWithExamples(body, variableExamples);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-white/85">Prévia no WhatsApp</p>
+          <p className="mt-1 text-xs text-white/50">{templateName || "template_sem_nome"}</p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{category || "UTILITY"}</span>
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{language || "pt_BR"}</span>
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-white/75">{getStatusLabel(status || "draft")}</span>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-emerald-200/10 bg-[#0b2b24] p-4">
+        <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-sm leading-relaxed text-slate-950 shadow">
+          {previewBody ? (
+            <p className="whitespace-pre-wrap">{previewBody}</p>
+          ) : (
+            <p className="text-slate-600">{emptyText}</p>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-white/50">
+        A aparência final pode variar conforme o WhatsApp e componentes aprovados pela Meta.
+      </p>
+    </div>
+  );
 }
 
 function isRetryableLocalTemplateFailure(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
@@ -346,10 +422,6 @@ export default function AppTemplatesPage() {
     }
     return warnings;
   }, [form.category, form.content]);
-  const formPreview = useMemo(
-    () => buildTemplatePreviewWithExamples(form.content, form.variableDetails),
-    [form.content, form.variableDetails]
-  );
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
   const approvedTemplatesCount = useMemo(
     () => catalogItems.filter((item) => item.status.toLowerCase() === "approved").length,
@@ -359,7 +431,16 @@ export default function AppTemplatesPage() {
     () =>
       catalogItems.filter((item) => {
         const status = item.status.toLowerCase();
-        return status === "pending" || status === "submitting" || status === "pending_review";
+        return [
+          "pending",
+          "submitting",
+          "pending_review",
+          "requested",
+          "review_started",
+          "adjustment_requested",
+          "internal_approved",
+          "submitted_to_meta",
+        ].includes(status);
       }).length,
     [catalogItems]
   );
@@ -411,11 +492,12 @@ export default function AppTemplatesPage() {
     });
   }, [campaignUseFilter, catalogItems, categoryFilter, languageFilter, search, statusFilter]);
   const selectedItem = useMemo(
-    () =>
-      filteredCatalogItems.find((item) => item.id === selectedItemId) ??
-      filteredCatalogItems[0] ??
-      null,
+    () => filteredCatalogItems.find((item) => item.id === selectedItemId) ?? null,
     [filteredCatalogItems, selectedItemId]
+  );
+  const selectedVariableDetails = useMemo(
+    () => (selectedItem ? getCatalogItemVariableDetails(selectedItem) : []),
+    [selectedItem]
   );
 
   const handleUnauthorized = useCallback(() => {
@@ -679,6 +761,39 @@ export default function AppTemplatesPage() {
     [handleUnauthorized, session, templates]
   );
 
+  const handleCancelRequest = useCallback(
+    async (item: CatalogItem) => {
+      if (!session || !item.templateRequest?.id) return;
+      if (!canTenantCancelTemplateRequest(item)) {
+        setError("Esta solicitação já foi submetida à Meta e não pode ser cancelada por aqui.");
+        return;
+      }
+      if (!window.confirm("Cancelar esta solicitação de template? O registro será mantido para auditoria.")) {
+        return;
+      }
+      setError(null);
+      setFormError(null);
+      setSuccess(null);
+      setSyncingTemplateId(item.id);
+      try {
+        const response = await cancelAppTemplateRequest(session, item.templateRequest.id);
+        await loadData(session);
+        setSelectedItemId(`request:${response.request.id}`);
+        setSuccess("Solicitação cancelada. O registro foi mantido para auditoria.");
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(typed.message || typed.details || "Nao foi possivel cancelar a solicitacao.");
+      } finally {
+        setSyncingTemplateId(null);
+      }
+    },
+    [handleUnauthorized, loadData, session]
+  );
+
   const handleSyncAllTemplates = useCallback(async () => {
     if (!session) return;
     setError(null);
@@ -722,7 +837,7 @@ export default function AppTemplatesPage() {
         </p>
       ) : null}
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+      <div className="grid min-w-0 grid-cols-1 gap-3">
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -954,11 +1069,14 @@ export default function AppTemplatesPage() {
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">
-              {selectedItem?.id.startsWith("request:") ? "Solicitação selecionada" : "Template selecionado"}
+              Detalhes e prévia
             </h2>
+            <p className="mt-1 text-xs text-white/60">
+              Selecione uma solicitação ou template no catálogo para revisar conteúdo, status e prévia.
+            </p>
           </div>
           {selectedItem ? (
-            <div className="border-b border-white/10 p-3 sm:p-4">
+            <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] sm:p-4">
               <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -983,19 +1101,6 @@ export default function AppTemplatesPage() {
                     <p><span className="text-white/45">Solicitacao:</span> {getStatusLabel(selectedItem.templateRequest.status)} em {formatDateTime(selectedItem.templateRequest.createdAt)}</p>
                   ) : null}
                 </div>
-                <div className="mt-3 rounded-md border border-white/10 bg-re7-navy/70 p-3">
-                  <p className="text-xs font-semibold uppercase text-white/50">Preview</p>
-                  {selectedItem.componentsSummary.length > 0 ? (
-                    selectedItem.componentsSummary.map((component) => (
-                      <div key={`${selectedItem.id}-${component.type}`} className="mt-2">
-                        <p className="text-[11px] font-semibold text-white/45">{component.type}</p>
-                        <p className="whitespace-pre-wrap text-sm text-white/85">{component.text}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="mt-2 text-sm text-white/55">Sem componentes textuais registrados.</p>
-                  )}
-                </div>
                 <div className="mt-3">
                   <p className="text-xs font-semibold uppercase text-white/50">Variaveis</p>
                   {selectedItem.variablesDetected.length > 0 ? (
@@ -1013,9 +1118,49 @@ export default function AppTemplatesPage() {
                     As variaveis deverao ser preenchidas na campanha antes do envio.
                   </p>
                 </div>
+                {selectedItem.id.startsWith("request:") ? (
+                  <div className="mt-4 rounded-md border border-white/10 bg-re7-navy/60 p-3">
+                    <p className="text-xs font-semibold uppercase text-white/50">Cancelamento</p>
+                    {canTenantCancelTemplateRequest(selectedItem) ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCancelRequest(selectedItem)}
+                          disabled={syncingTemplateId === selectedItem.id}
+                          className="rounded-lg border border-red-300/30 bg-red-900/20 px-3 py-2 text-xs font-semibold text-red-100 transition hover:border-red-200/60 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {syncingTemplateId === selectedItem.id ? "Cancelando..." : "Cancelar solicitação"}
+                        </button>
+                        <span className="text-xs text-white/50">O registro será mantido para auditoria.</span>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-white/55">
+                        Esta solicitação já foi submetida à Meta, está cancelada ou não pode ser cancelada por aqui.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
               </div>
+              <TemplateWhatsappPreview
+                body={selectedItem.content}
+                variableExamples={selectedVariableDetails}
+                category={selectedItem.category}
+                language={selectedItem.language}
+                status={selectedItem.status}
+                templateName={selectedItem.displayName}
+                emptyText="Este template não possui corpo textual registrado."
+              />
             </div>
-          ) : null}
+          ) : (
+            <div className="p-4">
+              <p className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                Nenhum template selecionado. Use “Ver detalhes” no catálogo para abrir a revisão.
+              </p>
+            </div>
+          )}
+        </section>
+
+        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Solicitar novo template</h2>
             <p className="mt-1 text-xs text-white/60">
@@ -1028,11 +1173,11 @@ export default function AppTemplatesPage() {
               <input
                 value={form.name}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="ex: tendencia_atendimento_retorno_v1"
+                placeholder="ex: atendimento_retorno_v1"
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
               <span className="text-xs text-white/50">
-                Use letras minúsculas, números e underline. Exemplo: tendencia_atendimento_retorno_v1
+                Use letras minúsculas, números e underline. Exemplo: aviso_atendimento_v1
               </span>
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
@@ -1069,7 +1214,7 @@ export default function AppTemplatesPage() {
                 value={form.content}
                 onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
                 rows={6}
-                placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre seu atendimento na Tendência. Responda esta mensagem para continuar falando com nossa equipe."
+                placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação. Responda esta mensagem para continuar o atendimento com nossa equipe."
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
               <span className="text-xs text-white/50">
@@ -1123,16 +1268,15 @@ export default function AppTemplatesPage() {
                 </div>
               )}
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-sm font-semibold text-white/80">Prévia com exemplos</p>
-              {formPreview ? (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-white/75">{formPreview}</p>
-              ) : (
-                <p className="mt-2 text-xs text-white/55">
-                  A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis.
-                </p>
-              )}
-            </div>
+            <TemplateWhatsappPreview
+              body={form.content}
+              variableExamples={form.variableDetails}
+              category={form.category}
+              language={form.language}
+              status="requested"
+              templateName={form.name || "nova_solicitacao"}
+              emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
+            />
 
             {formError ? (
               <p className="rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">

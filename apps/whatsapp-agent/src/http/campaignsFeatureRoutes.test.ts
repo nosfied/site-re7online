@@ -629,6 +629,16 @@ test("template request validation blocks unsafe variables and missing fields", a
   });
   assert.equal(atEdge.status, 400);
   assert.equal(getErrorCode(atEdge.body), "validation_error");
+
+  const missingExample = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `missing_example_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Ola {{1}}, sua solicitacao foi atualizada.",
+    variableDetails: [{ key: "1", description: "Nome", example: "" }],
+  });
+  assert.equal(missingExample.status, 400);
+  assert.equal(getErrorCode(missingExample.body), "validation_error");
 });
 
 test("template request email failure is audited without failing creation", async (t) => {
@@ -687,11 +697,12 @@ test("template request email failure is audited without failing creation", async
 });
 
 test("tenant template request listing is scoped to tenant", async () => {
+  const ownRequestName = `tenant_visible_${safeTemplatePrefix}`;
   await prisma.templateRequest.createMany({
     data: [
       {
         clientId: businessClientId,
-        name: `tenant_visible_${safeTemplatePrefix}`,
+        name: ownRequestName,
         category: "UTILITY",
         content: "Visivel",
         status: "requested",
@@ -711,8 +722,42 @@ test("tenant template request listing is scoped to tenant", async () => {
     businessAdmin
   );
   assert.equal(response.status, 200);
-  assert.equal(response.body.items.some((item) => item.name === `tenant_visible_${safeTemplatePrefix}`), true);
+  assert.equal(response.body.items.some((item) => item.name === ownRequestName), true);
   assert.equal(response.body.items.some((item) => item.name === `tenant_hidden_${safeTemplatePrefix}`), false);
+
+  const ownRequest = await prisma.templateRequest.findFirstOrThrow({
+    where: { clientId: businessClientId, name: ownRequestName },
+    select: { id: true },
+  });
+  const cancelled = await request<{
+    ok: true;
+    request: { id: string; status: string; statusLabel: string };
+  }>("POST", `/app/templates/requests/${ownRequest.id}/cancel?clientId=malicious`, businessAdmin);
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.request.status, "cancelled");
+  assert.equal(cancelled.body.request.statusLabel, "Cancelada");
+
+  const cancelEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "template.request.cancelled",
+      payloadJson: { path: ["templateRequestId"], equals: ownRequest.id },
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(cancelEvent);
+  assert.equal((cancelEvent.payloadJson as Record<string, unknown>).source, "app");
+
+  const otherRequest = await prisma.templateRequest.findFirstOrThrow({
+    where: { clientId: overrideClientId, name: `tenant_hidden_${safeTemplatePrefix}` },
+    select: { id: true },
+  });
+  const crossTenantCancel = await request<ErrorPayload>(
+    "POST",
+    `/app/templates/requests/${otherRequest.id}/cancel`,
+    businessAdmin
+  );
+  assert.equal(crossTenantCancel.status, 404);
 });
 
 test("admin can list and edit template requests without exposing tokens", async () => {
@@ -753,6 +798,26 @@ test("admin can list and edit template requests without exposing tokens", async 
   assert.equal(updated.status, 200);
   assert.equal(updated.body.request.status, "review_started");
   assert.equal(updated.body.request.name, `admin_review_updated_${safeTemplatePrefix}`);
+  assert.equal(updated.body.request.language, "pt_BR");
+
+  const cancel = await requestAdmin<{
+    ok: true;
+    request: { id: string; status: string; statusLabel: string };
+  }>("POST", `/admin/templates/requests/${created.id}/cancel`);
+  assert.equal(cancel.status, 200);
+  assert.equal(cancel.body.request.status, "cancelled");
+  assert.equal(cancel.body.request.statusLabel, "Cancelada");
+
+  const cancelEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "template.request.cancelled",
+      payloadJson: { path: ["templateRequestId"], equals: created.id },
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(cancelEvent);
+  assert.equal((cancelEvent.payloadJson as Record<string, unknown>).source, "admin");
 });
 
 test("admin submit requires tenant Meta config and does not expose tokens", async () => {
@@ -774,6 +839,81 @@ test("admin submit requires tenant Meta config and does not expose tokens", asyn
   assert.equal(getErrorCode(response.body), "meta_config_missing");
   assert.equal(JSON.stringify(response.body).includes("businessToken"), false);
   assert.equal(JSON.stringify(response.body).includes("token"), false);
+});
+
+test("admin submit uses saved variable examples in Meta payload", async (t) => {
+  const created = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `submit_with_example_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content:
+        "Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação. Responda esta mensagem para continuar o atendimento com nossa equipe.",
+      variables: {
+        language: "pt_BR",
+        variableDetails: [{ key: "1", description: "nome do contato", example: "Maria" }],
+        variables: [{ key: "1", description: "nome do contato", example: "Maria" }],
+      },
+      status: "internal_approved",
+    },
+  });
+  await prisma.tenantMetaConfig.upsert({
+    where: { clientId: businessClientId },
+    create: {
+      clientId: businessClientId,
+      businessToken: "test-business-token",
+      wabaId: "test-waba-id",
+      rawPayload: {},
+    },
+    update: {
+      businessToken: "test-business-token",
+      wabaId: "test-waba-id",
+      rawPayload: {},
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ id: `meta-${safeTemplatePrefix}`, status: "PENDING" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await requestAdmin<{
+    ok: boolean;
+    request: { status: string };
+    submission: { submitted: boolean; status: string; templateId: string; errorMessage: string | null };
+  }>("POST", `/admin/templates/requests/${created.id}/submit`);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.request.status, "submitted_to_meta");
+  assert.equal(response.body.submission.submitted, true);
+  assert.equal(metaPayloads.length, 1);
+  assert.deepEqual(metaPayloads[0], {
+    name: `submit_with_example_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    components: [
+      {
+        type: "BODY",
+        text:
+          "Olá {{1}}, tudo bem? Estamos retornando sobre sua solicitação. Responda esta mensagem para continuar o atendimento com nossa equipe.",
+        example: {
+          body_text: [["Maria"]],
+        },
+      },
+    ],
+  });
 });
 
 test("campaign audience preview is tenant scoped and does not create operational records", async () => {

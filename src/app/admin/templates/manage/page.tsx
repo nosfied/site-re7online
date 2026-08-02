@@ -8,6 +8,7 @@ import {
   AdminTemplateCatalogItem,
   AdminTemplateRequestItem,
   approveAdminTemplateRequest,
+  cancelAdminTemplateRequest,
   fetchAdminTemplateRequests,
   fetchTemplatesObservability,
   formatDateTime,
@@ -30,10 +31,96 @@ function getStatusClasses(status: string) {
     case "rejected_meta":
     case "failed":
       return "bg-red-500/20 text-red-200";
+    case "cancelled":
+      return "bg-slate-500/20 text-slate-200";
     case "pending":
     default:
       return "bg-amber-500/20 text-amber-200";
   }
+}
+
+function getStatusLabel(status: string) {
+  switch (status.toLowerCase()) {
+    case "requested":
+    case "review_started":
+    case "pending":
+      return "Em análise pela Re7online";
+    case "adjustment_requested":
+      return "Ajustes solicitados";
+    case "internal_approved":
+      return "Aprovado internamente";
+    case "submitted_to_meta":
+      return "Submetido à Meta";
+    case "approved_meta":
+    case "approved":
+      return "Aprovado pela Meta";
+    case "rejected_meta":
+    case "rejected":
+      return "Rejeitado pela Meta";
+    case "cancelled":
+      return "Cancelada";
+    case "failed":
+      return "Falha";
+    default:
+      return status;
+  }
+}
+
+function canAdminCancelTemplateRequest(status: string) {
+  return ["pending", "requested", "review_started", "adjustment_requested", "internal_approved"].includes(
+    status.toLowerCase()
+  );
+}
+
+function buildTemplatePreviewWithExamples(
+  content: string,
+  variables: Array<{ key: string; example: string }>
+) {
+  let preview = content.trim();
+  for (const variable of variables) {
+    const example = variable.example.trim() || `[exemplo de {{${variable.key}}}]`;
+    preview = preview.replace(new RegExp(`{{\\s*${variable.key}\\s*}}`, "g"), example);
+  }
+  return preview;
+}
+
+function TemplateWhatsappPreview({
+  body,
+  variableExamples,
+  category,
+  language,
+  status,
+  templateName,
+}: {
+  body: string;
+  variableExamples: Array<{ key: string; example: string }>;
+  category: string;
+  language: string;
+  status: string;
+  templateName: string;
+}) {
+  const previewBody = buildTemplatePreviewWithExamples(body, variableExamples);
+  return (
+    <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase text-white/50">Prévia no WhatsApp</p>
+        <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-white/70">
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1">{category}</span>
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1">{language}</span>
+          <span className="rounded-full border border-white/15 bg-white/10 px-2 py-1">{getStatusLabel(status)}</span>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-white/50">{templateName}</p>
+      <div className="mt-3 rounded-xl border border-emerald-200/10 bg-[#0b2b24] p-4">
+        <div className="ml-auto max-w-[88%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-sm leading-relaxed text-slate-950 shadow">
+          <p className="whitespace-pre-wrap">{previewBody || "Sem conteúdo textual."}</p>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-white/50">
+        A aparência final pode variar conforme o WhatsApp e componentes aprovados pela Meta.
+      </p>
+    </div>
+  );
 }
 
 export default function ManageTemplatesAdminPage() {
@@ -52,6 +139,7 @@ export default function ManageTemplatesAdminPage() {
     language: string;
     content: string;
     notes: string;
+    variableDetails?: Array<{ key: string; description: string; example: string }>;
   }>>({});
   const clientKeyFilter = searchParams.get("clientKey")?.trim() ?? "";
   const tenantIdFilter = searchParams.get("tenantId")?.trim() ?? "";
@@ -116,7 +204,7 @@ export default function ManageTemplatesAdminPage() {
         category: draft.category,
         language: draft.language,
         content: draft.content,
-        variableDetails: item.variableDetails ?? [],
+        variableDetails: draft.variableDetails ?? item.variableDetails ?? [],
         notes: draft.notes || null,
         status: "review_started",
       });
@@ -126,6 +214,25 @@ export default function ManageTemplatesAdminPage() {
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Erro ao atualizar solicitacao.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleCancel = async (item: AdminTemplateRequestItem) => {
+    if (!window.confirm("Cancelar esta solicitação? O registro será mantido para auditoria.")) {
+      return;
+    }
+    setActingId(item.id);
+    setError(null);
+    setFeedback(null);
+    try {
+      await cancelAdminTemplateRequest(connection, item.id);
+      await loadData(connection);
+      setFeedback("Solicitação cancelada.");
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Erro ao cancelar solicitação.");
     } finally {
       setActingId(null);
     }
@@ -176,6 +283,7 @@ export default function ManageTemplatesAdminPage() {
         language: item.language || "pt_BR",
         content: item.content,
         notes: item.notes || "",
+        variableDetails: item.variableDetails ?? [],
       },
     }));
   };
@@ -323,6 +431,62 @@ export default function ManageTemplatesAdminPage() {
                               placeholder="Notas internas ou ajustes solicitados"
                               className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-white"
                             />
+                            {(draftById[item.id]?.variableDetails ?? item.variableDetails ?? []).length > 0 ? (
+                              <div className="grid gap-2 rounded-md border border-white/10 bg-white/5 p-2">
+                                <p className="text-[11px] font-semibold uppercase text-white/45">Variáveis</p>
+                                {(draftById[item.id]?.variableDetails ?? item.variableDetails ?? []).map((variable) => (
+                                  <div key={variable.key} className="grid gap-2 md:grid-cols-[90px_minmax(0,1fr)_minmax(0,1fr)]">
+                                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-white/70">{`{{${variable.key}}}`}</span>
+                                    <input
+                                      value={variable.description}
+                                      onChange={(event) =>
+                                        setDraftById((current) => ({
+                                          ...current,
+                                          [item.id]: {
+                                            ...(current[item.id] ?? {
+                                              name: item.name,
+                                              category: item.category,
+                                              language: item.language || "pt_BR",
+                                              content: item.content,
+                                              notes: item.notes || "",
+                                              variableDetails: item.variableDetails ?? [],
+                                            }),
+                                            variableDetails: (current[item.id]?.variableDetails ?? item.variableDetails ?? []).map((entry) =>
+                                              entry.key === variable.key ? { ...entry, description: event.target.value } : entry
+                                            ),
+                                          },
+                                        }))
+                                      }
+                                      placeholder="Descrição"
+                                      className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-white"
+                                    />
+                                    <input
+                                      value={variable.example}
+                                      onChange={(event) =>
+                                        setDraftById((current) => ({
+                                          ...current,
+                                          [item.id]: {
+                                            ...(current[item.id] ?? {
+                                              name: item.name,
+                                              category: item.category,
+                                              language: item.language || "pt_BR",
+                                              content: item.content,
+                                              notes: item.notes || "",
+                                              variableDetails: item.variableDetails ?? [],
+                                            }),
+                                            variableDetails: (current[item.id]?.variableDetails ?? item.variableDetails ?? []).map((entry) =>
+                                              entry.key === variable.key ? { ...entry, example: event.target.value } : entry
+                                            ),
+                                          },
+                                        }))
+                                      }
+                                      placeholder="Exemplo"
+                                      className="rounded-md border border-white/15 bg-re7-navy px-2 py-1 text-white"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         ) : (
                           <div className="max-w-md">
@@ -334,6 +498,14 @@ export default function ManageTemplatesAdminPage() {
                                 Variaveis: {item.variableDetails.map((variable) => `{{${variable.key}}}`).join(", ")}
                               </p>
                             ) : null}
+                            <TemplateWhatsappPreview
+                              body={item.content}
+                              variableExamples={item.variableDetails ?? []}
+                              category={item.category}
+                              language={item.language || "pt_BR"}
+                              status={item.status}
+                              templateName={item.name}
+                            />
                           </div>
                         )}
                       </td>
@@ -390,6 +562,14 @@ export default function ManageTemplatesAdminPage() {
                             className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
                           >
                             Sincronizar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancel(item)}
+                            disabled={actingId === item.id || !canAdminCancelTemplateRequest(item.status)}
+                            className="rounded-md border border-red-300/30 bg-red-900/20 px-3 py-1 text-xs text-red-100 disabled:opacity-60"
+                          >
+                            Cancelar
                           </button>
                         </div>
                       </td>

@@ -1757,6 +1757,15 @@ export async function rejectAdminTemplateRequest(
   });
 }
 
+export async function cancelAdminTemplateRequest(
+  connection: AdminConnection,
+  requestId: string
+): Promise<{ ok: true; request: AdminTemplateRequestItem }> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/cancel`, {
+    method: "POST",
+  });
+}
+
 export async function updateAdminTemplateRequest(
   connection: AdminConnection,
   requestId: string,
