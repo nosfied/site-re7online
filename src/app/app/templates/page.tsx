@@ -1124,7 +1124,7 @@ export default function AppTemplatesPage() {
                                 : "border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
                             }`}
                           >
-                            {selectedItem?.id === item.id ? "Selecionado" : "Ver detalhes"}
+                            Ver detalhes
                           </button>
                           {item.syncable && item.templateId ? (
                             <button
@@ -1155,8 +1155,8 @@ export default function AppTemplatesPage() {
       </div>
 
       {isDetailDrawerOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 p-3 backdrop-blur-sm">
-          <aside className="flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
+          <aside className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
               <div>
                 <h2 className="text-lg font-semibold">Detalhes do modelo</h2>
@@ -1269,8 +1269,8 @@ export default function AppTemplatesPage() {
       ) : null}
 
       {isRequestDrawerOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 p-3 backdrop-blur-sm">
-          <aside className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6">
+          <aside className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/10 bg-re7-navy text-white shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
               <div>
                 <h2 className="text-lg font-semibold">Nova solicitação</h2>
@@ -1287,7 +1287,7 @@ export default function AppTemplatesPage() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto p-4">
-              <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="mx-auto grid max-w-4xl gap-4">
                 <div className="grid gap-4">
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
                     <p className="text-xs font-semibold uppercase text-re7-sky">1. Identificação</p>
@@ -1388,6 +1388,20 @@ export default function AppTemplatesPage() {
                     )}
                   </section>
                   <section className="rounded-lg border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-semibold uppercase text-re7-sky">4. Prévia</p>
+                    <div className="mt-3">
+                      <TemplateWhatsappPreview
+                        body={form.content}
+                        variableExamples={form.variableDetails}
+                        category={form.category}
+                        language={form.language}
+                        status="requested"
+                        templateName={form.name || "nova_solicitacao"}
+                        emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
+                      />
+                    </div>
+                  </section>
+                  <section className="rounded-lg border border-white/10 bg-white/5 p-4">
                     <p className="text-xs font-semibold uppercase text-re7-sky">5. Envio</p>
                     <p className="mt-2 text-sm text-white/65">
                       Solicitação enviada. Acompanhe o status nesta tela.
@@ -1404,18 +1418,6 @@ export default function AppTemplatesPage() {
                     </button>
                   </section>
                 </div>
-                <section className="lg:sticky lg:top-4 lg:self-start">
-                  <p className="mb-2 text-xs font-semibold uppercase text-re7-sky">4. Prévia</p>
-                  <TemplateWhatsappPreview
-                    body={form.content}
-                    variableExamples={form.variableDetails}
-                    category={form.category}
-                    language={form.language}
-                    status="requested"
-                    templateName={form.name || "nova_solicitacao"}
-                    emptyText="A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis."
-                  />
-                </section>
               </div>
             </form>
           </aside>
