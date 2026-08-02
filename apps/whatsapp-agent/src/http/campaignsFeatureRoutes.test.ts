@@ -156,6 +156,22 @@ async function requestText(
   };
 }
 
+async function requestUnauth<T = unknown>(
+  method: string,
+  route: string,
+  body?: unknown
+): Promise<TestResponse<T>> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: body !== undefined ? { "content-type": "application/json" } : {},
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as T,
+  };
+}
+
 async function cleanup() {
   const clients = await prisma.client.findMany({
     where: {
@@ -330,6 +346,8 @@ test("government profile default is blocked from campaigns routes", async () => 
   const routes = [
     { method: "GET", route: "/app/campaigns" },
     { method: "GET", route: "/app/campaigns/audience-preview" },
+    { method: "POST", route: "/app/campaigns/drafts", body: { name: "Draft", templateId: "missing", selectedLeadIds: ["lead"] } },
+    { method: "POST", route: "/app/campaigns/missing/send" },
     { method: "GET", route: "/app/campaigns/missing" },
     { method: "POST", route: "/app/campaigns/missing/cancel" },
     {
@@ -354,6 +372,20 @@ test("government profile default is blocked from campaigns routes", async () => 
     assert.equal(getErrorCode(response.body), "feature_not_enabled");
     assert.equal(response.body.feature, "campaigns");
   }
+});
+
+test("campaign draft routes require authentication", async () => {
+  const draft = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/drafts", {
+    name: "Sem sessao",
+    templateId: "template",
+    selectedLeadIds: ["lead"],
+  });
+  assert.equal(draft.status, 401);
+  assert.equal(getErrorCode(draft.body), "missing_token");
+
+  const send = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/example/send");
+  assert.equal(send.status, 401);
+  assert.equal(getErrorCode(send.body), "missing_token");
 });
 
 test("campaign audience preview is tenant scoped and does not create operational records", async () => {
@@ -493,6 +525,259 @@ test("campaign audience preview is tenant scoped and does not create operational
   const eventsAfter = await prisma.event.count({ where: { clientId: businessClientId } });
   assert.equal(campaignsAfter, campaignsBefore);
   assert.equal(eventsAfter, eventsBefore);
+});
+
+test("campaign draft uses approved template and stores safe seed without sending", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}",
+    },
+  });
+  const eligibleWaId = "5541991188001";
+  const duplicateWaId = "5541991188002";
+  const optOutWaId = "5541991188003";
+  const [eligible, duplicateA, duplicateB, optOut, anonymized, instagram] =
+    await Promise.all([
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: eligibleWaId,
+          waIdCanonical: eligibleWaId,
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Elegivel",
+          phone: eligibleWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: duplicateWaId,
+          waIdCanonical: duplicateWaId,
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Duplicado A",
+          phone: duplicateWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: `${duplicateWaId}9`,
+          waIdCanonical: `${duplicateWaId}9`,
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Duplicado B",
+          phone: duplicateWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: optOutWaId,
+          waIdCanonical: optOutWaId,
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Draft Opt Out",
+          phone: optOutWaId,
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: "5541******8804:anon001",
+          waIdCanonical: "5541******8804:anon001",
+          channel: "whatsapp",
+          provider: "meta",
+          name: "Usuario Anonimizado",
+          phone: "5541991188004",
+          status: "RETORNO_FUTURO",
+        },
+      }),
+      prisma.lead.create({
+        data: {
+          tenantId: businessClientId,
+          waId: `${prefix}-draft-instagram`,
+          channel: "instagram",
+          provider: "meta",
+          name: "Draft Instagram",
+          status: "RETORNO_FUTURO",
+        },
+      }),
+    ]);
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: optOutWaId,
+    source: "test",
+    reason: "draft block",
+  });
+
+  const outboundBefore = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const response = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number; sentCount: number; blockedCount: number };
+    draft: {
+      summary: {
+        requested: number;
+        accepted: number;
+        blocked: number;
+        duplicatesRemoved: number;
+        blockedByReason: Array<{ reason: string; label: string; count: number }>;
+      };
+      recipients: Array<{ leadId: string; phoneDisplay: string | null; identifierDisplay: string }>;
+    };
+  }>("POST", "/app/campaigns/drafts?clientId=malicious", businessAdmin, {
+    name: "Rascunho CRM",
+    templateId: template.id,
+    selectedLeadIds: [
+      eligible.id,
+      duplicateA.id,
+      duplicateB.id,
+      optOut.id,
+      anonymized.id,
+      instagram.id,
+    ],
+    templateParams: ["Cliente"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.campaign.status, "draft");
+  assert.equal(response.body.campaign.totalRecipients, 2);
+  assert.equal(response.body.campaign.sentCount, 0);
+  assert.equal(response.body.campaign.blockedCount, 0);
+  assert.equal(response.body.draft.summary.requested, 6);
+  assert.equal(response.body.draft.summary.accepted, 2);
+  assert.equal(response.body.draft.summary.blocked, 4);
+  assert.equal(response.body.draft.summary.duplicatesRemoved, 1);
+  assert.ok(
+    response.body.draft.summary.blockedByReason.some(
+      (item) => item.reason === "anonymized_contact" && item.label === "Contato anonimizado"
+    )
+  );
+  assert.ok(
+    response.body.draft.summary.blockedByReason.some(
+      (item) => item.reason === "active_send_blocked"
+    )
+  );
+  assert.ok(
+    response.body.draft.summary.blockedByReason.some(
+      (item) => item.reason === "non_whatsapp_channel"
+    )
+  );
+  assert.equal(JSON.stringify(response.body).includes(eligibleWaId), false);
+
+  const seed = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.seed.saved",
+      messageId: response.body.campaign.id,
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(seed);
+  const seedPayload = seed.payloadJson as Record<string, unknown>;
+  assert.equal(seedPayload.templateId, template.id);
+  assert.equal(seedPayload.source, "crm_audience_preview");
+  assert.deepEqual(seedPayload.leadIds, [
+    eligible.id,
+    duplicateA.id,
+    duplicateB.id,
+    optOut.id,
+    anonymized.id,
+    instagram.id,
+  ]);
+
+  const outboundAfter = await prisma.outboundMessage.count({ where: { clientId: businessClientId } });
+  const sendEvents = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      eventName: { in: ["campaign.draft.sent", "campaign.message.sent", "campaign.message.failed"] },
+      messageId: response.body.campaign.id,
+    },
+  });
+  assert.equal(outboundAfter, outboundBefore);
+  assert.equal(sendEvents, 0);
+});
+
+test("campaign draft send revalidates recipients before starting", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_send_template_${prefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola",
+    },
+  });
+  const waId = "5541991189001";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Enviar Draft",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho para envio",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.campaign.status, "draft");
+  assert.equal(created.body.campaign.totalRecipients, 1);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId,
+    source: "test",
+    reason: "blocked before explicit send",
+  });
+
+  const send = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(send.status, 400);
+  assert.equal(getErrorCode(send.body), "no_eligible_recipients");
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: created.body.campaign.id },
+    select: { status: true },
+  });
+  assert.equal(campaign?.status, "draft");
+  const outboundCount = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, waId },
+  });
+  const sentEventCount = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: created.body.campaign.id,
+      eventName: "campaign.draft.sent",
+    },
+  });
+  assert.equal(outboundCount, 0);
+  assert.equal(sentEventCount, 0);
 });
 
 test("tenant override can enable campaigns for a non-business profile", async () => {

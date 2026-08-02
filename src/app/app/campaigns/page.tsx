@@ -11,6 +11,7 @@ import {
   cancelAppCampaign,
   clearAppSession,
   createAppCampaign,
+  createAppCampaignDraft,
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
   getAppCampaign,
@@ -18,6 +19,7 @@ import {
   listAppTemplates,
   loadAppSession,
   saveAppSession,
+  sendAppCampaignDraft,
 } from "@/lib/appClientApi";
 import { CampaignItem, formatDateTime, normalizeWaIdList } from "@/lib/whatsappAdminApi";
 
@@ -132,6 +134,8 @@ function getStatusClasses(status: string) {
 
 function getStatusLabel(status: string) {
   switch (status) {
+    case "draft":
+      return "Rascunho";
     case "sending":
       return "Enviando...";
     case "completed":
@@ -244,6 +248,8 @@ export default function AppCampaignsPage() {
   const [audiencePage, setAudiencePage] = useState(1);
   const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [sendingDraft, setSendingDraft] = useState(false);
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -310,6 +316,22 @@ export default function AppCampaignsPage() {
     if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
     return buildTemplatePreview(selectedTemplate.content, form.templateVariables);
   }, [form.templateVariables, selectedTemplate, templateVariableLabels.length]);
+
+  const audienceEligibleItems = useMemo(
+    () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
+    [audiencePreview]
+  );
+
+  const defaultDraftName = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `Campanha CRM - ${formatter.format(new Date())}`;
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -611,6 +633,81 @@ export default function AppCampaignsPage() {
     setAudiencePreviewError(null);
   };
 
+  const handleCreateDraftFromAudience = async () => {
+    if (!session || !audiencePreview) return;
+    const selectedLeadIds = audienceEligibleItems.map((item) => item.leadId);
+    const name = form.name.trim() || defaultDraftName;
+    const templateId = form.templateId.trim();
+    const templateParams =
+      templateVariableLabels.length > 0
+        ? form.templateVariables.map((value) => value.trim())
+        : normalizeTemplateParams(form.templateParamsInput);
+
+    if (!templateId) {
+      setAudiencePreviewError("Selecione um template aprovado antes de criar o rascunho.");
+      return;
+    }
+    if (selectedLeadIds.length === 0) {
+      setAudiencePreviewError("Nao ha contatos elegiveis nesta previa para criar rascunho.");
+      return;
+    }
+
+    setCreatingDraft(true);
+    setAudiencePreviewError(null);
+    try {
+      const created = await createAppCampaignDraft(session, {
+        name,
+        templateId,
+        selectedLeadIds,
+        ...(templateParams.length > 0 ? { templateParams } : {}),
+      });
+      await refreshCampaigns(session, created.campaign.id);
+      const detail = await getAppCampaign(session, created.campaign.id);
+      setSelectedCampaign(detail.campaign);
+      setSelectedCampaignId(created.campaign.id);
+      setForm((prev) => ({ ...prev, name }));
+      setToast(
+        `Rascunho criado: ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+      );
+      window.setTimeout(() => setToast(null), 4000);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setAudiencePreviewError(typed.message || "Nao foi possivel criar o rascunho da campanha.");
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  const handleSendDraftCampaign = async () => {
+    if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
+    const confirmed = window.confirm(
+      "Esta acao iniciara o envio de template aprovado para os contatos elegiveis deste rascunho. Contatos com envio ativo bloqueado, anonimizados, sem WhatsApp valido ou duplicados serao revalidados e ignorados antes do envio."
+    );
+    if (!confirmed) return;
+    setSendingDraft(true);
+    setDetailError(null);
+    try {
+      const response = await sendAppCampaignDraft(session, selectedCampaign.id);
+      setSelectedCampaign(response.campaign);
+      await refreshCampaigns(session, response.campaign.id);
+      setToast(`Envio iniciado para ${response.send.summary.accepted} destinatarios elegiveis.`);
+      window.setTimeout(() => setToast(null), 4000);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setDetailError(typed.message || "Nao foi possivel enviar o rascunho.");
+    } finally {
+      setSendingDraft(false);
+    }
+  };
+
   const handleReuseCampaign = (campaign: CampaignItem) => {
     const replayForm = buildReplayFormFromCampaign(campaign);
     setForm({
@@ -786,6 +883,67 @@ export default function AppCampaignsPage() {
                   A analise foi limitada aos primeiros {audiencePreview.summary.analyzed} contatos para proteger desempenho.
                 </p>
               ) : null}
+              <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Nome do rascunho</span>
+                  <input
+                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={form.name}
+                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder={defaultDraftName}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-white/70">Template aprovado</span>
+                  <select
+                    className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                    value={form.templateId}
+                    onChange={(event) => {
+                      const template = templates.find((item) => item.id === event.target.value) ?? null;
+                      const labels = getTemplateVariableLabels(template?.variables);
+                      setForm((prev) => ({
+                        ...prev,
+                        templateId: event.target.value,
+                        templateName: template?.name ?? "",
+                        templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                      }));
+                    }}
+                  >
+                    <option value="">Selecione</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex flex-col justify-end gap-2">
+                  <p className="text-xs text-white/60">
+                    {audienceEligibleItems.length} elegiveis serao incluidos; {audiencePreview.summary.blocked} bloqueados serao ignorados.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={
+                      creatingDraft ||
+                      audienceEligibleItems.length === 0 ||
+                      !form.templateId ||
+                      templates.length === 0
+                    }
+                    onClick={handleCreateDraftFromAudience}
+                    className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creatingDraft ? "Criando..." : "Criar rascunho de campanha"}
+                  </button>
+                </div>
+                {templates.length === 0 ? (
+                  <p className="text-xs text-amber-100 lg:col-span-3">
+                    Cadastre ou sincronize um template aprovado antes de criar campanha.
+                  </p>
+                ) : null}
+                <p className="text-xs text-white/55 lg:col-span-3">
+                  O rascunho nao envia mensagens. O envio exige revisao e acao explicita do operador.
+                </p>
+              </div>
               <div className="overflow-x-auto rounded-md border border-white/10">
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="bg-white/10 text-left">
@@ -874,7 +1032,10 @@ export default function AppCampaignsPage() {
       <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden">
           <div className="border-b border-white/10 px-3 py-2.5">
-            <h2 className="text-sm font-semibold">Criar campanha</h2>
+            <h2 className="text-sm font-semibold">Envio imediato manual</h2>
+            <p className="mt-1 text-xs text-white/55">
+              Compatibilidade para listas manuais. Para audiencia CRM, use rascunho e revisao.
+            </p>
           </div>
           <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
             <div className="grid min-w-0 flex-1 gap-2 p-3 lg:overflow-y-auto">
@@ -969,7 +1130,7 @@ export default function AppCampaignsPage() {
               </label>
             )}
             <label className="grid min-w-0 gap-1 text-sm">
-              <span className="text-white/70">Recipients (um waId por linha)</span>
+              <span className="text-white/70">Destinatarios manuais (um waId por linha)</span>
               <textarea
                 className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                 value={form.recipientsInput}
@@ -988,7 +1149,7 @@ export default function AppCampaignsPage() {
               disabled={creating}
               className="w-full rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {creating ? "Criando campanha..." : "Criar campanha"}
+              {creating ? "Iniciando envio..." : "Enviar campanha agora"}
             </button>
             </div>
           </form>
@@ -1212,6 +1373,56 @@ export default function AppCampaignsPage() {
                     Mensagens faturaveis para CRA-PR sao consideradas apenas quando entregues/lidas,
                     com categoria utility.
                   </div>
+
+                  {selectedCampaign.status === "draft" ? (
+                    <div className="grid gap-3 rounded-md border border-sky-300/25 bg-sky-900/20 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-sky-100">Rascunho em revisao</p>
+                          <p className="mt-1 text-xs text-sky-100/75">
+                            Este rascunho ainda nao enviou mensagens. Revise template e audiencia antes de iniciar.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={sendingDraft}
+                          onClick={handleSendDraftCampaign}
+                          className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {sendingDraft ? "Iniciando..." : "Enviar campanha"}
+                        </button>
+                      </div>
+                      {selectedCampaign.draftReview ? (
+                        <div className="grid gap-2 sm:grid-cols-4">
+                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                            <p className="text-xs text-white/60">Solicitados</p>
+                            <p className="font-semibold">{selectedCampaign.draftReview.summary.requested}</p>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                            <p className="text-xs text-white/60">Aceitos</p>
+                            <p className="font-semibold text-emerald-100">{selectedCampaign.draftReview.summary.accepted}</p>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                            <p className="text-xs text-white/60">Bloqueados</p>
+                            <p className="font-semibold text-amber-100">{selectedCampaign.draftReview.summary.blocked}</p>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-white/5 p-2">
+                            <p className="text-xs text-white/60">Duplicados</p>
+                            <p className="font-semibold">{selectedCampaign.draftReview.summary.duplicatesRemoved}</p>
+                          </div>
+                        </div>
+                      ) : null}
+                      {selectedCampaign.draftReview?.summary.blockedByReason.length ? (
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {selectedCampaign.draftReview.summary.blockedByReason.map((item) => (
+                            <span key={item.reason} className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75">
+                              {item.label}: {item.count}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-white/10 bg-white/5 p-3">
                     <div>

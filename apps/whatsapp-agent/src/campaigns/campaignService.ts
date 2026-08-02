@@ -22,6 +22,7 @@ export type CreateCampaignParams = {
   name: string;
   templateName: string;
   totalRecipients: number;
+  status?: CampaignStatus;
 };
 
 export async function createCampaign(params: CreateCampaignParams) {
@@ -32,7 +33,7 @@ export async function createCampaign(params: CreateCampaignParams) {
       templateId: params.templateId ?? null,
       name: params.name,
       templateName: params.templateName,
-      status: "sending",
+      status: params.status ?? "sending",
       totalRecipients: params.totalRecipients,
     },
   });

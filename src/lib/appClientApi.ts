@@ -3,6 +3,7 @@ import type {
   AdminDepartmentItem,
   AdminUserItem,
   CampaignItem,
+  CampaignDraftSummary,
   ConversationReportRange,
   ConversationReportResponse,
   ConversationOperationalStatus,
@@ -291,6 +292,13 @@ export type AppCampaignAudiencePreviewResponse = {
     hasPreviousPage: boolean;
   };
   generatedAt: string;
+};
+
+export type AppCampaignDraftRecipient = {
+  leadId: string;
+  displayName: string | null;
+  phoneDisplay: string | null;
+  identifierDisplay: string;
 };
 
 export type AppApiError = Error & {
@@ -3253,6 +3261,43 @@ export async function createAppCampaign(
   return requestAppJson(session, "/app/campaigns", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function createAppCampaignDraft(
+  session: AppSession,
+  payload: {
+    name: string;
+    templateId: string;
+    selectedLeadIds: string[];
+    templateParams?: string[];
+  }
+): Promise<{
+  ok: true;
+  campaign: CampaignItem & { campaignId: string };
+  draft: {
+    summary: CampaignDraftSummary;
+    recipients: AppCampaignDraftRecipient[];
+  };
+}> {
+  return requestAppJson(session, "/app/campaigns/drafts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendAppCampaignDraft(
+  session: AppSession,
+  campaignId: string
+): Promise<{
+  ok: true;
+  campaign: CampaignItem & { campaignId: string; campaignRunId: string | null };
+  send: {
+    summary: CampaignDraftSummary;
+  };
+}> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/send`, {
+    method: "POST",
   });
 }
 

@@ -462,10 +462,31 @@ export type CampaignItem = {
   }>;
   draftSeed?: {
     name: string;
+    templateId?: string | null;
     templateName: string;
+    leadIds?: string[];
     recipients: string[];
     templateParams: string[];
   };
+  draftReview?: {
+    summary: CampaignDraftSummary;
+    recipients: Array<{
+      phoneDisplay: string | null;
+      identifierDisplay: string;
+    }>;
+  };
+};
+
+export type CampaignDraftSummary = {
+  requested: number;
+  accepted: number;
+  blocked: number;
+  duplicatesRemoved: number;
+  blockedByReason: Array<{
+    reason: string;
+    label: string;
+    count: number;
+  }>;
 };
 
 export type TemplateObservabilityItem = {
