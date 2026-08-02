@@ -444,6 +444,16 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
         rejectionReason: "policy",
       },
       {
+        clientId: businessClientId,
+        name: `recategorized_template_${prefix}`,
+        category: "MARKETING",
+        submittedCategory: "UTILITY",
+        wasRecategorized: true,
+        language: "pt_BR",
+        status: "approved",
+        content: "Aviso institucional aprovado pela Meta",
+      },
+      {
         clientId: overrideClientId,
         name: `other_tenant_template_${prefix}`,
         category: "UTILITY",
@@ -467,6 +477,11 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
       blockedReasonLabel: string | null;
       variablesDetected: string[];
       componentsSummary: Array<{ type: string; text: string }>;
+      requestedCategory: string | null;
+      metaCategory: string | null;
+      effectiveCategory: string | null;
+      categoryChanged: boolean;
+      categoryChangeLabel: string | null;
     }>;
   }>("GET", "/app/templates?clientId=malicious", businessAdmin);
 
@@ -496,6 +511,16 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
   assert.equal(rejected.canUseInCampaign, false);
   assert.equal(rejected.blockedReason, "rejected");
   assert.equal(rejected.blockedReasonLabel, "Rejeitado");
+
+  const recategorized = response.body.items.find((item) => item.name === `recategorized_template_${prefix}`);
+  assert.ok(recategorized);
+  assert.equal(recategorized.canUseInCampaign, true);
+  assert.equal(recategorized.requestedCategory, "UTILITY");
+  assert.equal(recategorized.metaCategory, "MARKETING");
+  assert.equal(recategorized.effectiveCategory, "MARKETING");
+  assert.equal(recategorized.categoryChanged, true);
+  assert.match(recategorized.categoryChangeLabel ?? "", /MARKETING/);
+  assert.match(recategorized.categoryChangeLabel ?? "", /UTILITY/);
 });
 
 test("template routes require auth and bulk sync fails safely without Meta config", async () => {
@@ -818,6 +843,61 @@ test("admin can list and edit template requests without exposing tokens", async 
   });
   assert.ok(cancelEvent);
   assert.equal((cancelEvent.payloadJson as Record<string, unknown>).source, "admin");
+});
+
+test("submitted and closed template requests are locked for review actions", async () => {
+  const submitted = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `submitted_locked_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Aviso ja submetido",
+      variables: { language: "pt_BR", variableDetails: [], variables: [] },
+      status: "submitted_to_meta",
+    },
+  });
+  const cancelled = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `cancelled_locked_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Aviso cancelado",
+      variables: { language: "pt_BR", variableDetails: [], variables: [] },
+      status: "cancelled",
+    },
+  });
+  const metaApproved = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `meta_approved_locked_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Aviso aprovado",
+      variables: { language: "pt_BR", variableDetails: [], variables: [] },
+      status: "meta_approved",
+    },
+  });
+
+  const editSubmitted = await requestAdmin<ErrorPayload>("PATCH", `/admin/templates/requests/${submitted.id}`, {
+    name: `submitted_locked_updated_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Conteudo alterado indevidamente",
+    variableDetails: [],
+  });
+  assert.equal(editSubmitted.status, 409);
+  assert.equal(getErrorCode(editSubmitted.body), "template_request_locked");
+
+  const resubmit = await requestAdmin<ErrorPayload>("POST", `/admin/templates/requests/${submitted.id}/submit`);
+  assert.equal(resubmit.status, 409);
+  assert.equal(getErrorCode(resubmit.body), "template_already_submitted");
+
+  const submitCancelled = await requestAdmin<ErrorPayload>("POST", `/admin/templates/requests/${cancelled.id}/submit`);
+  assert.equal(submitCancelled.status, 409);
+  assert.equal(getErrorCode(submitCancelled.body), "template_request_locked");
+
+  const cancelMetaApproved = await requestAdmin<ErrorPayload>("POST", `/admin/templates/requests/${metaApproved.id}/cancel`);
+  assert.equal(cancelMetaApproved.status, 409);
+  assert.equal(getErrorCode(cancelMetaApproved.body), "template_request_not_cancellable");
 });
 
 test("admin submit requires tenant Meta config and does not expose tokens", async () => {

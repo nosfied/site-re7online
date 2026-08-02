@@ -548,6 +548,11 @@ export type AppTemplateItem = {
   category: string;
   submittedCategory: string | null;
   wasRecategorized: boolean;
+  requestedCategory?: string | null;
+  metaCategory?: string | null;
+  effectiveCategory?: string | null;
+  categoryChanged?: boolean;
+  categoryChangeLabel?: string | null;
   language: string;
   status: string;
   content: string;

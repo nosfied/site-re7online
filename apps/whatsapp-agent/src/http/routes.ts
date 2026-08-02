@@ -3276,9 +3276,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, 404, { error: "template_request_not_found" });
         return;
       }
-      if (!TEMPLATE_REQUEST_APP_CANCELABLE_STATUSES.includes(existing.status)) {
+      if (!canCancelTemplateRequest(existing.status, "app")) {
         json(res, 409, {
-          error: "template_request_not_cancelable",
+          error: "template_request_not_cancellable",
           message: "Esta solicitação já foi submetida ou está em revisão e não pode ser cancelada por aqui.",
         });
         return;
@@ -15998,6 +15998,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "template_request_not_found" });
           return;
         }
+        if (!isTemplateRequestEditable(existing.status)) {
+          json(res, 409, {
+            error: "template_request_locked",
+            message: "Este template já foi submetido à Meta ou encerrado. Crie uma nova solicitação para alterar conteúdo.",
+          });
+          return;
+        }
 
         const merged = parseTemplateRequestInput({
           name: body.name ?? existing.name,
@@ -16090,10 +16097,18 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             content: true,
             variables: true,
             category: true,
+            status: true,
           },
         });
         if (!templateRequest) {
           json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        if (!isTemplateRequestEditable(templateRequest.status)) {
+          json(res, 409, {
+            error: "template_request_locked",
+            message: "Este template já foi submetido à Meta ou encerrado.",
+          });
           return;
         }
 
@@ -16232,9 +16247,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "template_request_not_found" });
           return;
         }
-        if (!TEMPLATE_REQUEST_ADMIN_CANCELABLE_STATUSES.includes(existing.status)) {
+        if (!canCancelTemplateRequest(existing.status, "admin")) {
           json(res, 409, {
-            error: "template_request_not_cancelable",
+            error: "template_request_not_cancellable",
             message: "Esta solicitação já foi submetida à Meta e não pode ser cancelada por aqui.",
           });
           return;
@@ -16424,6 +16439,20 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         }
         if ((error as Error).message === "template_request_not_found") {
           json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        if ((error as Error).message === "template_already_submitted") {
+          json(res, 409, {
+            error: "template_already_submitted",
+            message: "Este template já foi submetido à Meta. Sincronize o status ou crie uma nova solicitação.",
+          });
+          return;
+        }
+        if ((error as Error).message === "template_request_locked") {
+          json(res, 409, {
+            error: "template_request_locked",
+            message: "Esta solicitação está bloqueada para submissão.",
+          });
           return;
         }
         logger.error({
@@ -17056,6 +17085,33 @@ const TEMPLATE_REQUEST_ADMIN_CANCELABLE_STATUSES = [
   "adjustment_requested",
   "internal_approved",
 ];
+const TEMPLATE_REQUEST_EDITABLE_STATUSES = [
+  "pending",
+  "requested",
+  "review_started",
+  "adjustment_requested",
+  "internal_approved",
+];
+const TEMPLATE_REQUEST_SUBMITTABLE_STATUSES = ["internal_approved"];
+const TEMPLATE_REQUEST_SYNCABLE_STATUSES = [
+  "submitted_to_meta",
+  "meta_pending",
+  "approved_meta",
+  "meta_approved",
+  "rejected_meta",
+  "meta_rejected",
+];
+const TEMPLATE_REQUEST_LOCKED_STATUSES = [
+  "submitted_to_meta",
+  "meta_pending",
+  "approved_meta",
+  "meta_approved",
+  "rejected_meta",
+  "meta_rejected",
+  "approved",
+  "rejected",
+  "cancelled",
+];
 
 type TemplateVariableDetail = {
   key: string;
@@ -17072,6 +17128,9 @@ function normalizeTemplateRequestStatus(status: unknown) {
       "adjustment_requested",
       "internal_approved",
       "submitted_to_meta",
+      "meta_pending",
+      "meta_approved",
+      "meta_rejected",
       "approved_meta",
       "rejected_meta",
       "pending",
@@ -17097,11 +17156,14 @@ function getTemplateRequestStatusLabel(status: string) {
     case "internal_approved":
       return "Aprovado internamente";
     case "submitted_to_meta":
+    case "meta_pending":
       return "Submetido à Meta";
     case "approved_meta":
+    case "meta_approved":
     case "approved":
       return "Aprovado pela Meta";
     case "rejected_meta":
+    case "meta_rejected":
     case "rejected":
       return "Rejeitado pela Meta";
     case "failed":
@@ -17111,6 +17173,32 @@ function getTemplateRequestStatusLabel(status: string) {
     default:
       return status;
   }
+}
+
+function normalizeTemplateRequestLifecycleStatus(status: string | null | undefined) {
+  return String(status || "").trim().toLowerCase();
+}
+
+function isTemplateRequestEditable(status: string | null | undefined) {
+  return TEMPLATE_REQUEST_EDITABLE_STATUSES.includes(normalizeTemplateRequestLifecycleStatus(status));
+}
+
+function isTemplateRequestSubmittable(status: string | null | undefined) {
+  return TEMPLATE_REQUEST_SUBMITTABLE_STATUSES.includes(normalizeTemplateRequestLifecycleStatus(status));
+}
+
+function canCancelTemplateRequest(status: string | null | undefined, source: "app" | "admin") {
+  const normalized = normalizeTemplateRequestLifecycleStatus(status);
+  const allowed = source === "app" ? TEMPLATE_REQUEST_APP_CANCELABLE_STATUSES : TEMPLATE_REQUEST_ADMIN_CANCELABLE_STATUSES;
+  return allowed.includes(normalized);
+}
+
+function isTemplateRequestSyncable(status: string | null | undefined) {
+  return TEMPLATE_REQUEST_SYNCABLE_STATUSES.includes(normalizeTemplateRequestLifecycleStatus(status));
+}
+
+function isTemplateRequestLocked(status: string | null | undefined) {
+  return TEMPLATE_REQUEST_LOCKED_STATUSES.includes(normalizeTemplateRequestLifecycleStatus(status));
 }
 
 function normalizeTemplateLanguage(value: unknown) {
@@ -17334,6 +17422,12 @@ async function submitTemplateRequestToMeta(params: {
     },
   });
   if (!templateRequest) throw new Error("template_request_not_found");
+  if (!isTemplateRequestSubmittable(templateRequest.status)) {
+    if (isTemplateRequestSyncable(templateRequest.status)) {
+      throw new Error("template_already_submitted");
+    }
+    throw new Error("template_request_locked");
+  }
   const language = extractTemplateRequestLanguage(templateRequest.variables);
   const variableDetails = extractTemplateRequestVariableDetails(templateRequest.variables);
   const variablesPayload = buildTemplateRequestVariablesPayload({ language, variableDetails });
@@ -17628,10 +17722,20 @@ function buildAppTemplateCatalogItem(
 ) {
   const block = getTemplateUsageBlock(item);
   const canUse = block.reason === null;
+  const requestedCategory = item.submittedCategory || item.category;
+  const effectiveCategory = item.category;
+  const categoryChanged = Boolean(item.wasRecategorized && requestedCategory && effectiveCategory !== requestedCategory);
   return {
     ...item,
     displayName: item.name,
     providerName: item.name,
+    requestedCategory,
+    metaCategory: effectiveCategory,
+    effectiveCategory,
+    categoryChanged,
+    categoryChangeLabel: categoryChanged
+      ? `A Meta classificou este template como ${effectiveCategory}, diferente da categoria solicitada ${requestedCategory}.`
+      : null,
     componentsSummary: summarizeTemplateComponents(item.content),
     variablesDetected: extractTemplateVariableKeys(item.content, item.variables),
     canUseInCampaign: canUse,

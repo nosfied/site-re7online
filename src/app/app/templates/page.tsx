@@ -46,6 +46,11 @@ type CatalogItem = {
   category: string;
   submittedCategory: string | null;
   wasRecategorized: boolean;
+  requestedCategory: string | null;
+  metaCategory: string | null;
+  effectiveCategory: string | null;
+  categoryChanged: boolean;
+  categoryChangeLabel: string | null;
   language: string;
   status: string;
   content: string;
@@ -306,6 +311,11 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       category: request.category,
       submittedCategory: request.category,
       wasRecategorized: false,
+      requestedCategory: request.category,
+      metaCategory: null,
+      effectiveCategory: request.category,
+      categoryChanged: false,
+      categoryChangeLabel: null,
       language: request.language || "pt_BR",
       status: request.status,
       content: request.content,
@@ -341,6 +351,11 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       category: template.category,
       submittedCategory: template.submittedCategory,
       wasRecategorized: template.wasRecategorized,
+      requestedCategory: template.requestedCategory ?? template.submittedCategory ?? template.category,
+      metaCategory: template.metaCategory ?? template.category,
+      effectiveCategory: template.effectiveCategory ?? template.category,
+      categoryChanged: template.categoryChanged === true,
+      categoryChangeLabel: template.categoryChangeLabel ?? null,
       language: template.language,
       status: template.status,
       content: template.content,
@@ -855,6 +870,12 @@ export default function AppTemplatesPage() {
               >
                 {syncingAll ? "Sincronizando..." : "Sincronizar com Meta"}
               </button>
+              <a
+                href="#solicitar-template"
+                className="rounded-lg bg-re7-orange px-3 py-2 text-xs font-semibold text-white transition hover:brightness-110"
+              >
+                Nova solicitação de template
+              </a>
             </div>
           </div>
 
@@ -1066,7 +1087,7 @@ export default function AppTemplatesPage() {
           </div>
         </section>
 
-        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
+        <section className="order-3 min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">
               Detalhes e prévia
@@ -1092,6 +1113,8 @@ export default function AppTemplatesPage() {
                 </p>
                 <div className="mt-3 grid gap-2 text-xs text-white/70">
                   <p><span className="text-white/45">Provider/Meta:</span> {selectedItem.name}</p>
+                  <p><span className="text-white/45">Categoria solicitada:</span> {selectedItem.requestedCategory || selectedItem.submittedCategory || selectedItem.category}</p>
+                  <p><span className="text-white/45">Categoria efetiva:</span> {selectedItem.effectiveCategory || selectedItem.category}</p>
                   <p><span className="text-white/45">Atualizado:</span> {formatDateTime(selectedItem.updatedAt)}</p>
                   <p><span className="text-white/45">Ultima sincronizacao:</span> {selectedItem.lastSyncedAt ? formatDateTime(selectedItem.lastSyncedAt) : "Nao sincronizado"}</p>
                   {selectedItem.rejectionReason ? (
@@ -1101,6 +1124,21 @@ export default function AppTemplatesPage() {
                     <p><span className="text-white/45">Solicitacao:</span> {getStatusLabel(selectedItem.templateRequest.status)} em {formatDateTime(selectedItem.templateRequest.createdAt)}</p>
                   ) : null}
                 </div>
+                {selectedItem.categoryChanged || selectedItem.effectiveCategory === "MARKETING" || selectedItem.category === "MARKETING" ? (
+                  <div className="mt-3 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+                    {selectedItem.categoryChanged ? (
+                      <p className="font-semibold">
+                        {selectedItem.categoryChangeLabel ||
+                          `A Meta classificou este template como ${selectedItem.effectiveCategory || selectedItem.category}, diferente da categoria solicitada ${selectedItem.requestedCategory || selectedItem.submittedCategory}.`}
+                      </p>
+                    ) : null}
+                    {(selectedItem.effectiveCategory || selectedItem.category) === "MARKETING" ? (
+                      <p className="mt-1">
+                        Templates de Marketing podem ter custo e regras diferentes e devem ser usados com cautela.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="mt-3">
                   <p className="text-xs font-semibold uppercase text-white/50">Variaveis</p>
                   {selectedItem.variablesDetected.length > 0 ? (
@@ -1160,7 +1198,7 @@ export default function AppTemplatesPage() {
           )}
         </section>
 
-        <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
+        <section className="order-2 min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Solicitar novo template</h2>
             <p className="mt-1 text-xs text-white/60">

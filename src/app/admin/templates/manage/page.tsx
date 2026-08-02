@@ -72,6 +72,22 @@ function canAdminCancelTemplateRequest(status: string) {
   );
 }
 
+function isAdminTemplateRequestEditable(status: string) {
+  return ["pending", "requested", "review_started", "adjustment_requested", "internal_approved"].includes(
+    status.toLowerCase()
+  );
+}
+
+function isAdminTemplateRequestSubmittable(status: string) {
+  return status.toLowerCase() === "internal_approved";
+}
+
+function isAdminTemplateRequestSyncable(status: string) {
+  return ["submitted_to_meta", "meta_pending", "approved_meta", "meta_approved", "rejected_meta", "meta_rejected"].includes(
+    status.toLowerCase()
+  );
+}
+
 function buildTemplatePreviewWithExamples(
   content: string,
   variables: Array<{ key: string; example: string }>
@@ -498,6 +514,11 @@ export default function ManageTemplatesAdminPage() {
                                 Variaveis: {item.variableDetails.map((variable) => `{{${variable.key}}}`).join(", ")}
                               </p>
                             ) : null}
+                            {!isAdminTemplateRequestEditable(item.status) ? (
+                              <p className="mt-2 rounded-md border border-sky-300/25 bg-sky-900/20 p-2 text-xs text-sky-100">
+                                Este template já foi submetido à Meta ou encerrado. Para alterar conteúdo, crie uma nova solicitação.
+                              </p>
+                            ) : null}
                             <TemplateWhatsappPreview
                               body={item.content}
                               variableExamples={item.variableDetails ?? []}
@@ -533,7 +554,7 @@ export default function ManageTemplatesAdminPage() {
                             <button
                               type="button"
                               onClick={() => startEditing(item)}
-                              disabled={actingId === item.id}
+                              disabled={actingId === item.id || !isAdminTemplateRequestEditable(item.status)}
                               className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
                             >
                               Revisar
@@ -550,7 +571,7 @@ export default function ManageTemplatesAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleSubmitToMeta(item.id)}
-                            disabled={actingId === item.id || !["internal_approved", "submitted_to_meta"].includes(item.status)}
+                            disabled={actingId === item.id || !isAdminTemplateRequestSubmittable(item.status)}
                             className="rounded-md border border-re7-sky/30 bg-re7-sky/10 px-3 py-1 text-xs text-sky-100 disabled:opacity-60"
                           >
                             Enviar Meta
@@ -558,7 +579,7 @@ export default function ManageTemplatesAdminPage() {
                           <button
                             type="button"
                             onClick={() => handleSyncRequest(item.id)}
-                            disabled={actingId === item.id || !["submitted_to_meta", "approved_meta", "rejected_meta"].includes(item.status)}
+                            disabled={actingId === item.id || !isAdminTemplateRequestSyncable(item.status)}
                             className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
                           >
                             Sincronizar
