@@ -22,17 +22,17 @@ import { formatDateTime } from "@/lib/whatsappAdminApi";
 type TemplateRequestFormState = {
   name: string;
   content: string;
-  variables: string;
+  language: string;
+  variableDetails: Array<{ key: string; description: string; example: string }>;
   category: string;
-  autoSubmit: boolean;
 };
 
 const EMPTY_FORM: TemplateRequestFormState = {
   name: "",
   content: "",
-  variables: "",
-  category: "MARKETING",
-  autoSubmit: true,
+  language: "pt_BR",
+  variableDetails: [],
+  category: "UTILITY",
 };
 
 const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
@@ -80,6 +80,19 @@ function getStatusClasses(status: string) {
 
 function getStatusLabel(status: string) {
   switch (status.toLowerCase()) {
+    case "requested":
+    case "review_started":
+      return "Em análise pela Re7online";
+    case "adjustment_requested":
+      return "Ajustes solicitados";
+    case "internal_approved":
+      return "Aprovado internamente";
+    case "submitted_to_meta":
+      return "Submetido à Meta";
+    case "approved_meta":
+      return "Aprovado pela Meta";
+    case "rejected_meta":
+      return "Rejeitado pela Meta";
     case "submitting":
     case "pending":
       return "Em analise";
@@ -118,23 +131,42 @@ function getTemplateVariableLabels(variables: unknown): string[] {
   return [];
 }
 
-function parseVariablesInput(input: string) {
-  const value = input.trim();
-  if (!value) return undefined;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    throw new Error("Variables deve ser um JSON valido.");
-  }
-}
-
 function normalizeTemplateName(input: string) {
   return input.trim().toLowerCase();
 }
 
 function isTemplateRequestPendingLike(status: string) {
   const normalized = status.trim().toLowerCase();
-  return normalized === "pending" || normalized === "submitting";
+  return [
+    "pending",
+    "submitting",
+    "requested",
+    "review_started",
+    "adjustment_requested",
+    "internal_approved",
+    "submitted_to_meta",
+  ].includes(normalized);
+}
+
+function extractNumberedVariables(content: string) {
+  const keys = new Set<string>();
+  for (const match of content.matchAll(/{{\s*(\d+)\s*}}/g)) {
+    if (match[1]) keys.add(String(Number(match[1])));
+  }
+  return Array.from(keys).sort((left, right) => Number(left) - Number(right));
+}
+
+function hasVariableAtContentEdge(content: string) {
+  const trimmed = content.trim();
+  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}$/.test(trimmed);
+}
+
+function hasAdjacentVariables(content: string) {
+  return /}}\s*{{/.test(content);
+}
+
+function looksPromotional(content: string) {
+  return /\b(promo[cç][aã]o|desconto|oferta|imperd[ií]vel|compre|cupom|liquida[cç][aã]o|black\s*friday)\b/i.test(content);
 }
 
 function isRetryableLocalTemplateFailure(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
@@ -185,11 +217,11 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       category: request.category,
       submittedCategory: request.category,
       wasRecategorized: false,
-      language: "pt_BR",
+      language: request.language || "pt_BR",
       status: request.status,
       content: request.content,
       variables: request.variables,
-      variablesDetected: getTemplateVariableLabels(request.variables),
+      variablesDetected: request.variableDetails?.map((item) => item.key) ?? getTemplateVariableLabels(request.variables),
       componentsSummary: request.content ? [{ type: "BODY", text: request.content }] : [],
       canUseInCampaign: false,
       canUseInInbox: false,
@@ -266,32 +298,6 @@ function getTemplateRecategorizationLabel(
   };
 }
 
-function getSubmissionMessage(submission?: {
-  mode: "assisted" | "self_service";
-  status: string | null;
-}) {
-  if (!submission) {
-    return "Template solicitado com sucesso.";
-  }
-  if (submission.mode === "assisted") {
-    return "Sua conta Meta ainda nao esta conectada. O template foi enviado para revisao interna.";
-  }
-
-  switch ((submission.status || "").toLowerCase()) {
-    case "approved":
-      return "Template aprovado e pronto para uso em campanhas.";
-    case "rejected":
-      return "Template rejeitado pela Meta.";
-    case "failed":
-      return "Nao foi possivel enviar o template para analise.";
-    case "submitting":
-    case "pending":
-    case "pending_review":
-    default:
-      return "Seu template foi enviado para a Meta e esta em analise.";
-  }
-}
-
 function isNetworkTimeoutLikeError(error: AppApiError) {
   return error.errorCode === "network_timeout" || error.errorCode === "network_error" || error.status === 0;
 }
@@ -316,6 +322,17 @@ export default function AppTemplatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const detectedFormVariables = useMemo(() => extractNumberedVariables(form.content), [form.content]);
+  const formWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (form.category === "MARKETING") {
+      warnings.push("Templates de marketing exigem revisão mais criteriosa e consentimento adequado.");
+    }
+    if (form.category === "UTILITY" && looksPromotional(form.content)) {
+      warnings.push("O conteúdo parece promocional. Revise se UTILITY é a categoria correta.");
+    }
+    return warnings;
+  }, [form.category, form.content]);
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
   const approvedTemplatesCount = useMemo(
     () => catalogItems.filter((item) => item.status.toLowerCase() === "approved").length,
@@ -441,6 +458,27 @@ export default function AppTemplatesPage() {
     };
   }, [handleUnauthorized, loadData, session]);
 
+  useEffect(() => {
+    setForm((current) => {
+      const nextDetails = detectedFormVariables.map((key) => {
+        return (
+          current.variableDetails.find((item) => item.key === key) ?? {
+            key,
+            description: "",
+            example: "",
+          }
+        );
+      });
+      if (
+        nextDetails.length === current.variableDetails.length &&
+        nextDetails.every((item, index) => item.key === current.variableDetails[index]?.key)
+      ) {
+        return current;
+      }
+      return { ...current, variableDetails: nextDetails };
+    });
+  }, [detectedFormVariables]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!session) return;
@@ -450,8 +488,17 @@ export default function AppTemplatesPage() {
     const name = form.name.trim();
     const content = form.content.trim();
     const category = form.category.trim();
-    if (!name || !content || !category) {
-      setFormError("Preencha nome, conteudo e categoria.");
+    const language = form.language.trim();
+    if (!name || !content || !category || !language) {
+      setFormError("Preencha nome, categoria, idioma e conteudo.");
+      return;
+    }
+    if (hasVariableAtContentEdge(content)) {
+      setFormError("Evite variavel no inicio ou no fim do conteudo.");
+      return;
+    }
+    if (hasAdjacentVariables(content)) {
+      setFormError("Evite variaveis adjacentes no conteudo.");
       return;
     }
     const normalizedName = normalizeTemplateName(name);
@@ -475,12 +522,11 @@ export default function AppTemplatesPage() {
       return;
     }
 
-    let variables: unknown;
-    try {
-      variables = parseVariablesInput(form.variables);
-    } catch (parseError) {
-      setFormError((parseError as Error).message);
-      return;
+    for (const variable of form.variableDetails) {
+      if (!variable.description.trim() || !variable.example.trim()) {
+        setFormError(`Informe descricao e exemplo para a variavel {{${variable.key}}}.`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -489,12 +535,16 @@ export default function AppTemplatesPage() {
         name,
         content,
         category,
-        autoSubmit: form.autoSubmit,
-        ...(variables !== undefined ? { variables } : {}),
+        language,
+        variableDetails: form.variableDetails,
       });
       await loadData(session);
       setForm(EMPTY_FORM);
-      setSuccess(getSubmissionMessage(response.submission));
+      setSuccess(
+        response.notification?.delivered === false
+          ? "Solicitação enviada para análise da Re7online. A notificação interna será acompanhada pela equipe."
+          : "Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela."
+      );
     } catch (err) {
       const typed = err as AppApiError;
       if (typed.status === 401) {
@@ -529,7 +579,7 @@ export default function AppTemplatesPage() {
       }
       if (recoveredAfterReload) {
         setForm(EMPTY_FORM);
-        setSuccess("Template enviado para a Meta e em analise.");
+        setSuccess("Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela.");
         return;
       }
       if (isNetworkTimeoutLikeError(typed)) {
@@ -947,8 +997,10 @@ export default function AppTemplatesPage() {
             </div>
           ) : null}
           <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <h2 className="text-sm font-semibold">Solicitar template</h2>
-            <p className="mt-1 text-xs text-white/60">Cadastre uma solicitacao operacional para analise e aprovacao.</p>
+            <h2 className="text-sm font-semibold">Solicitar novo template</h2>
+            <p className="mt-1 text-xs text-white/60">
+              A equipe Re7online revisará o conteúdo antes de enviar para aprovação da Meta.
+            </p>
           </div>
           <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
             <label className="flex flex-col gap-2 text-sm text-white/80">
@@ -972,6 +1024,17 @@ export default function AppTemplatesPage() {
                   </option>
                 ))}
               </select>
+              <span className="text-xs text-white/50">
+                UTILITY é indicado para avisos transacionais e institucionais. Use MARKETING apenas para conteúdo promocional autorizado.
+              </span>
+            </label>
+            <label className="flex flex-col gap-2 text-sm text-white/80">
+              <span>Idioma</span>
+              <input
+                value={form.language}
+                onChange={(event) => setForm((current) => ({ ...current, language: event.target.value }))}
+                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
+              />
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
               <span>Conteudo</span>
@@ -981,28 +1044,57 @@ export default function AppTemplatesPage() {
                 rows={6}
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
+              <span className="text-xs text-white/50">
+                Use variáveis sequenciais como {"{{1}}"} e {"{{2}}"} quando precisar personalizar o texto.
+              </span>
             </label>
-            <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Variaveis (JSON opcional)</span>
-              <textarea
-                value={form.variables}
-                onChange={(event) => setForm((current) => ({ ...current, variables: event.target.value }))}
-                rows={4}
-                placeholder='{"items":["nome","cidade"]}'
-                className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
-              />
-            </label>
-            <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-sm text-white/80">
-              <input
-                type="checkbox"
-                checked={form.autoSubmit}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, autoSubmit: event.target.checked }))
-                }
-                className="mt-1 h-4 w-4 rounded border-white/20 bg-re7-navy text-re7-orange"
-              />
-              <span>Enviar automaticamente para aprovacao na Meta</span>
-            </label>
+            {formWarnings.length > 0 ? (
+              <div className="rounded-lg border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+                {formWarnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            ) : null}
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-sm font-semibold text-white/80">Variáveis detectadas</p>
+              {form.variableDetails.length === 0 ? (
+                <p className="mt-2 text-xs text-white/55">Nenhuma variável detectada no conteúdo.</p>
+              ) : (
+                <div className="mt-3 grid gap-3">
+                  {form.variableDetails.map((variable) => (
+                    <div key={variable.key} className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/70 p-3">
+                      <p className="text-xs font-semibold text-white/70">{`{{${variable.key}}}`}</p>
+                      <input
+                        value={variable.description}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            variableDetails: current.variableDetails.map((item) =>
+                              item.key === variable.key ? { ...item, description: event.target.value } : item
+                            ),
+                          }))
+                        }
+                        placeholder="Descrição da variável"
+                        className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                      />
+                      <input
+                        value={variable.example}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            variableDetails: current.variableDetails.map((item) =>
+                              item.key === variable.key ? { ...item, example: event.target.value } : item
+                            ),
+                          }))
+                        }
+                        placeholder="Exemplo enviado à Meta"
+                        className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {formError ? (
               <p className="rounded-lg border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -1021,7 +1113,7 @@ export default function AppTemplatesPage() {
               disabled={submitting}
               className="rounded-lg bg-re7-orange px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? "Enviando..." : "Solicitar template"}
+              {submitting ? "Enviando..." : "Enviar solicitação para análise"}
             </button>
           </form>
         </section>

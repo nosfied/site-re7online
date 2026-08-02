@@ -109,6 +109,7 @@ import {
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
+import { sendTemplateReviewNotification } from "../templates/templateReviewNotification.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
@@ -2938,17 +2939,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     try {
       const body = await readJsonBody(req, res);
       if (!body) return;
-      const name = String(body.name ?? "").trim();
-      const content = String(body.content ?? "").trim();
-      const category = String(body.category ?? "").trim();
-      const autoSubmit = body.autoSubmit === true;
-      if (!name || !content || !category) {
+      const parsed = parseTemplateRequestInput(body);
+      if (!parsed.ok) {
         json(res, 400, {
           error: "validation_error",
-          message: "Preencha nome, conteudo e categoria.",
+          message: parsed.message,
+          details: parsed.code,
         });
         return;
       }
+      const { name, content, category, language, variableDetails, variablesPayload, warnings } = parsed;
 
       const client = await getScopedClientById(prisma, clientAuth.clientId);
       if (!client) {
@@ -2966,28 +2966,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         endpoint: pathname,
         requestId,
       }))) return;
-
-      if (autoSubmit) {
-        try {
-          validateTemplateForMeta({
-            name,
-            content,
-            category,
-            language: "pt_BR",
-            ...(body.variables !== undefined ? { variables: body.variables } : {}),
-          });
-        } catch (error) {
-          if (error instanceof MetaTemplateValidationError) {
-            json(res, 400, {
-              error: "validation_error",
-              message: mapTemplateValidationMessage(error.message),
-              details: error.message,
-            });
-            return;
-          }
-          throw error;
-        }
-      }
 
       const existingTemplateByName = await prisma.template.findFirst({
         where: {
@@ -3034,7 +3012,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             equals: name,
             mode: "insensitive",
           },
-          status: { in: ["pending", "submitting"] },
+          status: { in: TEMPLATE_REQUEST_OPEN_STATUSES },
         },
         select: {
           id: true,
@@ -3087,11 +3065,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           name,
           content,
           category,
-          status: "pending",
+          status: "requested",
           createdBy: clientAuth.userId,
-          ...(body.variables !== undefined
-            ? { variables: body.variables as Prisma.InputJsonValue }
-            : {}),
+          variables: variablesPayload,
         },
         select: {
           id: true,
@@ -3106,250 +3082,65 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         },
       });
 
-      let submission:
-        | {
-            attempted: boolean;
-            submitted: boolean;
-            mode: "assisted" | "self_service";
-            templateId: string | null;
-            status: string | null;
-            errorMessage: string | null;
-          }
-        | undefined;
+      await persistEvent({
+        clientId: client.id,
+        requestId: `template-request-created:${created.id}`,
+        eventName: "template.request.created",
+        payloadJson: {
+          templateRequestId: created.id,
+          templateName: name,
+          category,
+          language,
+          requestedBy: clientAuth.userId,
+          autoSubmitRequested: body.autoSubmit === true,
+        },
+      });
 
-      if (autoSubmit) {
-        const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
-          where: { clientId: client.id },
-          select: {
-            businessToken: true,
-            wabaId: true,
+      let notification:
+        | { attempted: true; delivered: true }
+        | { attempted: true; delivered: false; reason: string }
+        | undefined;
+      try {
+        await sendTemplateReviewNotification({
+          tenantName: client.clientKey,
+          clientKey: client.clientKey,
+          requestedBy: clientAuth.userId,
+          name,
+          category,
+          language,
+          content,
+          variables: variableDetails,
+          adminPath: `/admin/templates/manage?clientKey=${encodeURIComponent(client.clientKey)}`,
+        });
+        notification = { attempted: true, delivered: true };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        notification = { attempted: true, delivered: false, reason };
+        logger.warn({
+          event: "template.request.notification_failed",
+          requestId,
+          clientId: client.id,
+          clientKey: client.clientKey,
+          templateRequestId: created.id,
+          reason,
+        });
+        await persistEvent({
+          clientId: client.id,
+          requestId: `template-request-notification:${created.id}`,
+          eventName: "template.request.notification_failed",
+          payloadJson: {
+            templateRequestId: created.id,
+            templateName: name,
+            reason,
           },
         });
-
-        const hasMetaConfig = Boolean(
-          String(tenantMetaConfig?.businessToken ?? "").trim() &&
-            String(tenantMetaConfig?.wabaId ?? "").trim()
-        );
-
-        if (!hasMetaConfig) {
-          submission = {
-            attempted: false,
-            submitted: false,
-            mode: "assisted",
-            templateId: null,
-            status: "pending",
-            errorMessage: "meta_config_missing",
-          };
-        } else {
-          const template = await prisma.template.create({
-            data: {
-              clientId: client.id,
-              name,
-              content,
-              category,
-              submittedCategory: category,
-              wasRecategorized: false,
-              language: "pt_BR",
-              status: "submitting",
-              ...(body.variables !== undefined
-                ? { variables: body.variables as Prisma.InputJsonValue }
-                : {}),
-            },
-            select: {
-              id: true,
-              name: true,
-              category: true,
-              language: true,
-              content: true,
-              variables: true,
-            },
-          });
-
-          try {
-            logger.info({
-              event: "template.submit.started",
-              requestId,
-              clientId: client.id,
-              clientKey: client.clientKey,
-              templateId: template.id,
-              templateName: template.name,
-            });
-
-            if (!tenantMetaConfig) {
-              throw new MetaTemplateServiceError(
-                "meta_config_missing",
-                "meta_config_missing"
-              );
-            }
-
-            const result = await submitTemplateToMeta({
-              tenantConfig: tenantMetaConfig,
-              template,
-            });
-
-            if (result.ok) {
-              const updated = await prisma.template.update({
-                where: { id: template.id },
-                data: {
-                  metaTemplateId: result.metaTemplateId ?? undefined,
-                  status: result.status || "PENDING",
-                  submittedCategory: category,
-                  wasRecategorized: false,
-                  rejectionReason: null,
-                },
-                select: {
-                  id: true,
-                  category: true,
-                  submittedCategory: true,
-                  wasRecategorized: true,
-                  status: true,
-                },
-              });
-
-              submission = {
-                attempted: true,
-                submitted: true,
-                mode: "self_service",
-                templateId: updated.id,
-                status: updated.status,
-                errorMessage: null,
-              };
-
-              logger.info({
-                event: "template.submit.success",
-                requestId,
-                clientId: client.id,
-                clientKey: client.clientKey,
-                templateId: updated.id,
-                templateName: template.name,
-                metaTemplateId: result.metaTemplateId,
-                status: updated.status,
-              });
-            } else {
-              const updated = await prisma.template.update({
-                where: { id: template.id },
-                data: {
-                  status: "failed",
-                  rejectionReason: result.errorMessage,
-                },
-                select: {
-                  id: true,
-                  status: true,
-                },
-              });
-
-              submission = {
-                attempted: true,
-                submitted: false,
-                mode: "self_service",
-                templateId: updated.id,
-                status: updated.status,
-                errorMessage: result.errorMessage,
-              };
-
-              logger.warn({
-                event: "template.submit.failed",
-                requestId,
-                clientId: client.id,
-                clientKey: client.clientKey,
-                templateId: updated.id,
-                templateName: template.name,
-                status: updated.status,
-                message: result.errorMessage,
-              });
-
-              json(res, 400, {
-                error: "meta_error",
-                message: "Nao foi possivel enviar o template para a Meta.",
-                details: summarizeMetaErrorMessage(result.errorMessage),
-                request: created,
-                submission,
-              });
-              return;
-            }
-          } catch (error) {
-            const errorMessage =
-              error instanceof MetaTemplateValidationError ||
-              error instanceof MetaTemplateServiceError
-                ? error.message
-                : (error as Error).message;
-
-            const updated = await prisma.template.update({
-              where: { id: template.id },
-              data: {
-                status: "failed",
-                rejectionReason: errorMessage,
-              },
-              select: {
-                id: true,
-                status: true,
-              },
-            });
-
-            submission = {
-              attempted: true,
-              submitted: false,
-              mode: "self_service",
-              templateId: updated.id,
-              status: updated.status,
-              errorMessage,
-            };
-
-            logger.warn({
-              event: isTimeoutLikeError(error)
-                ? "template.submit.timeout_like"
-                : "template.submit.failed",
-              requestId,
-              clientId: client.id,
-              clientKey: client.clientKey,
-              templateId: updated.id,
-              templateName: template.name,
-              status: updated.status,
-              message: errorMessage,
-            });
-
-            if (error instanceof MetaTemplateValidationError) {
-              json(res, 400, {
-                error: "validation_error",
-                message: mapTemplateValidationMessage(error.message),
-                details: error.message,
-                request: created,
-                submission,
-              });
-              return;
-            }
-
-            if (error instanceof MetaTemplateServiceError) {
-              if (error.code === "meta_config_missing") {
-                json(res, 400, {
-                  error: "meta_config_missing",
-                  message: "Conecte seu WhatsApp antes de enviar templates.",
-                  details: error.message,
-                  request: created,
-                  submission,
-                });
-                return;
-              }
-
-              json(res, 400, {
-                error: "meta_error",
-                message: "Nao foi possivel enviar o template para a Meta.",
-                details: summarizeMetaErrorMessage(error.errorBody || error.message),
-                request: created,
-                submission,
-              });
-              return;
-            }
-
-            throw error;
-          }
-        }
       }
 
       json(res, 200, {
         ok: true,
-        request: created,
-        ...(submission ? { submission } : {}),
+        request: serializeTemplateRequest(created),
+        notification,
+        warnings,
       });
     } catch (error) {
       if (
@@ -3419,7 +3210,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       json(res, 200, {
         ok: true,
         count: items.length,
-        items,
+        items: items.map(serializeTemplateRequest),
       });
     } catch (error) {
       logger.error({
@@ -15994,6 +15785,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
     if (req.method === "GET" && pathname === "/admin/templates/requests") {
       try {
+        const statusFilter = String(query.status ?? "").trim();
+        const categoryFilter = String(query.category ?? "").trim();
+        const searchFilter = String(query.search ?? "").trim().toLowerCase();
         const where = tenantAdmin
           ? { clientId: adminAuth.clientId }
           : requestedClientKey
@@ -16023,25 +15817,148 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         json(res, 200, {
           ok: true,
-          count: items.length,
-          items: items.map((item) => ({
-            id: item.id,
-            clientId: item.clientId,
-            clientKey: item.client.clientKey,
-            clientName: item.client.name,
-            name: item.name,
-            content: item.content,
-            variables: item.variables,
-            category: item.category,
-            status: item.status,
-            notes: item.notes,
-            createdBy: item.createdBy,
-            createdAt: item.createdAt,
-          })),
+          count: items.filter((item) => {
+            if (statusFilter && item.status !== statusFilter) return false;
+            if (categoryFilter && item.category !== categoryFilter) return false;
+            if (
+              searchFilter &&
+              ![item.name, item.content, item.client.clientKey, item.client.name]
+                .join(" ")
+                .toLowerCase()
+                .includes(searchFilter)
+            ) {
+              return false;
+            }
+            return true;
+          }).length,
+          items: items
+            .filter((item) => {
+              if (statusFilter && item.status !== statusFilter) return false;
+              if (categoryFilter && item.category !== categoryFilter) return false;
+              if (
+                searchFilter &&
+                ![item.name, item.content, item.client.clientKey, item.client.name]
+                  .join(" ")
+                  .toLowerCase()
+                  .includes(searchFilter)
+              ) {
+                return false;
+              }
+              return true;
+            })
+            .map((item) => ({
+              ...serializeTemplateRequest(item),
+              clientId: item.clientId,
+              clientKey: item.client.clientKey,
+              clientName: item.client.name,
+            })),
         });
       } catch (error) {
         logger.error({
           event: "admin.templates.requests.list.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "PATCH" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 5
+    ) {
+      try {
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const body = await readJsonBody(req, res);
+        if (!body) return;
+        const existing = await prisma.templateRequest.findFirst({
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        if (!existing) {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+
+        const merged = parseTemplateRequestInput({
+          name: body.name ?? existing.name,
+          content: body.content ?? existing.content,
+          category: body.category ?? existing.category,
+          language: body.language ?? extractTemplateRequestLanguage(existing.variables),
+          variableDetails: body.variableDetails ?? extractTemplateRequestVariableDetails(existing.variables),
+        });
+        if (!merged.ok) {
+          json(res, 400, {
+            error: "validation_error",
+            message: merged.message,
+            details: merged.code,
+          });
+          return;
+        }
+        const status = typeof body.status === "string" && body.status.trim()
+          ? normalizeTemplateRequestStatus(body.status)
+          : existing.status;
+        const notes =
+          typeof body.notes === "string"
+            ? body.notes.trim().slice(0, 2000) || null
+            : existing.notes;
+        const updated = await prisma.templateRequest.update({
+          where: { id: existing.id },
+          data: {
+            name: merged.name,
+            content: merged.content,
+            category: merged.category,
+            variables: merged.variablesPayload,
+            status,
+            notes,
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        await persistEvent({
+          clientId: updated.clientId,
+          requestId: `template-request-updated:${updated.id}:${Date.now()}`,
+          eventName: `template.request.${status === "adjustment_requested" ? "adjustment_requested" : "review_started"}`,
+          payloadJson: {
+            templateRequestId: updated.id,
+            status,
+            changedBy: resolveAssignedTo(adminAuth),
+          },
+        });
+        json(res, 200, { ok: true, request: serializeTemplateRequest(updated) });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.requests.update.error",
           message: (error as Error).message,
           requestId,
         });
@@ -16081,48 +15998,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           return;
         }
 
-        const result = await prisma.$transaction(async (tx) => {
-          const template = await tx.template.create({
-            data: {
-              clientId: templateRequest.clientId,
-              name: templateRequest.name,
-              content: templateRequest.content,
-              category: templateRequest.category,
-              submittedCategory: templateRequest.category,
-              wasRecategorized: false,
-              language: "pt_BR",
-              status: "approved",
-              ...(templateRequest.variables !== null && templateRequest.variables !== undefined
-                ? {
-                    variables: templateRequest.variables as Prisma.InputJsonValue,
-                  }
-                : {}),
-            },
-            select: {
-              id: true,
-              clientId: true,
-              name: true,
-              content: true,
-              variables: true,
-              category: true,
-              language: true,
-              status: true,
-              metaTemplateId: true,
-              rejectionReason: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          });
-          await tx.templateRequest.update({
-            where: { id: templateRequest.id },
-            data: { status: "approved" },
-          });
-          return template;
+        const updated = await prisma.templateRequest.update({
+          where: { id: templateRequest.id },
+          data: { status: "internal_approved" },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        await persistEvent({
+          clientId: updated.clientId,
+          requestId: `template-request-internal-approved:${updated.id}`,
+          eventName: "template.request.internal_approved",
+          payloadJson: {
+            templateRequestId: updated.id,
+            changedBy: resolveAssignedTo(adminAuth),
+          },
         });
 
         json(res, 200, {
           ok: true,
-          template: result,
+          request: serializeTemplateRequest(updated),
         });
       } catch (error) {
         logger.error({
@@ -16159,7 +16063,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
           },
           data: {
-            status: "rejected",
+            status: "adjustment_requested",
             ...(notes ? { notes } : {}),
           },
         });
@@ -16167,10 +16071,184 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           json(res, 404, { error: "template_request_not_found" });
           return;
         }
+        const templateRequest = await prisma.templateRequest.findUnique({
+          where: { id: templateRequestId },
+          select: { clientId: true },
+        });
+        if (templateRequest) {
+          await persistEvent({
+            clientId: templateRequest.clientId,
+            requestId: `template-request-adjustment:${templateRequestId}`,
+            eventName: "template.request.adjustment_requested",
+            payloadJson: {
+              templateRequestId,
+              changedBy: resolveAssignedTo(adminAuth),
+              hasNotes: Boolean(notes),
+            },
+          });
+        }
         json(res, 200, { ok: true });
       } catch (error) {
         logger.error({
           event: "admin.templates.requests.reject.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/sync")
+    ) {
+      try {
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const templateRequest = await prisma.templateRequest.findFirst({
+          where: {
+            id: templateRequestId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        if (!templateRequest) {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        const template = await prisma.template.findFirst({
+          where: {
+            clientId: templateRequest.clientId,
+            name: { equals: templateRequest.name, mode: "insensitive" },
+          },
+          select: { id: true },
+        });
+        if (!template) {
+          json(res, 404, { error: "template_not_found" });
+          return;
+        }
+        const synced = await syncTemplateStatus(template.id);
+        const syncedStatus = normalizeTemplateStatus(synced.status);
+        const requestStatus =
+          syncedStatus === "approved"
+            ? "approved_meta"
+            : syncedStatus === "rejected"
+              ? "rejected_meta"
+              : "submitted_to_meta";
+        const updated = await prisma.templateRequest.update({
+          where: { id: templateRequest.id },
+          data: { status: requestStatus },
+          select: {
+            id: true,
+            clientId: true,
+            name: true,
+            content: true,
+            variables: true,
+            category: true,
+            status: true,
+            notes: true,
+            createdBy: true,
+            createdAt: true,
+          },
+        });
+        await persistEvent({
+          clientId: updated.clientId,
+          requestId: `template-request-sync:${updated.id}:${Date.now()}`,
+          eventName: "template.request.meta_sync_updated",
+          payloadJson: {
+            templateRequestId: updated.id,
+            templateId: template.id,
+            status: synced.status,
+            changedBy: resolveAssignedTo(adminAuth),
+          },
+        });
+        json(res, 200, {
+          ok: true,
+          request: serializeTemplateRequest(updated),
+          sync: synced,
+        });
+      } catch (error) {
+        if (error instanceof MetaTemplateServiceError) {
+          json(res, error.status ?? 400, {
+            error: error.code,
+            message: "Nao foi possivel sincronizar o template com a Meta.",
+            details: summarizeMetaErrorMessage(error.errorBody || error.message),
+          });
+          return;
+        }
+        logger.error({
+          event: "admin.templates.requests.sync.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/requests/") &&
+      pathname.split("/").length === 6 &&
+      pathname.endsWith("/submit")
+    ) {
+      try {
+        const templateRequestId = decodeURIComponent(pathname.split("/")[4] ?? "").trim();
+        if (!templateRequestId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const result = await submitTemplateRequestToMeta({
+          prisma,
+          templateRequestId,
+          tenantAdminClientId: tenantAdmin ? adminAuth.clientId : null,
+          actor: resolveAssignedTo(adminAuth),
+          requestId,
+        });
+        json(res, 200, result);
+      } catch (error) {
+        if (error instanceof MetaTemplateValidationError) {
+          json(res, 400, {
+            error: "validation_error",
+            message: mapTemplateValidationMessage(error.message),
+            details: error.message,
+          });
+          return;
+        }
+        if (error instanceof MetaTemplateServiceError) {
+          json(res, error.status ?? 400, {
+            error: error.code,
+            message:
+              error.code === "meta_config_missing"
+                ? "Configuracao Meta ausente para o tenant da solicitacao."
+                : "Nao foi possivel enviar o template para a Meta.",
+            details: summarizeMetaErrorMessage(error.errorBody || error.message),
+          });
+          return;
+        }
+        if ((error as Error).message === "template_request_not_found") {
+          json(res, 404, { error: "template_request_not_found" });
+          return;
+        }
+        logger.error({
+          event: "admin.templates.requests.submit.error",
           message: (error as Error).message,
           requestId,
         });
@@ -16781,6 +16859,430 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
   json(res, 404, { error: "not_found" });
 }
 
+const TEMPLATE_REQUEST_OPEN_STATUSES = [
+  "pending",
+  "submitting",
+  "requested",
+  "review_started",
+  "adjustment_requested",
+  "internal_approved",
+  "submitted_to_meta",
+];
+
+type TemplateVariableDetail = {
+  key: string;
+  description: string;
+  example: string;
+};
+
+function normalizeTemplateRequestStatus(status: unknown) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (
+    [
+      "requested",
+      "review_started",
+      "adjustment_requested",
+      "internal_approved",
+      "submitted_to_meta",
+      "approved_meta",
+      "rejected_meta",
+      "pending",
+      "approved",
+      "rejected",
+      "failed",
+    ].includes(normalized)
+  ) {
+    return normalized;
+  }
+  return "review_started";
+}
+
+function getTemplateRequestStatusLabel(status: string) {
+  switch (normalizeTemplateRequestStatus(status)) {
+    case "requested":
+    case "review_started":
+    case "pending":
+      return "Em análise pela Re7online";
+    case "adjustment_requested":
+      return "Ajustes solicitados";
+    case "internal_approved":
+      return "Aprovado internamente";
+    case "submitted_to_meta":
+      return "Submetido à Meta";
+    case "approved_meta":
+    case "approved":
+      return "Aprovado pela Meta";
+    case "rejected_meta":
+    case "rejected":
+      return "Rejeitado pela Meta";
+    case "failed":
+      return "Falha";
+    default:
+      return status;
+  }
+}
+
+function normalizeTemplateLanguage(value: unknown) {
+  const language = String(value || "pt_BR").trim();
+  return language || "pt_BR";
+}
+
+function extractTemplateRequestLanguage(variables: unknown) {
+  if (variables && typeof variables === "object" && !Array.isArray(variables)) {
+    const value = (variables as Record<string, unknown>).language;
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "pt_BR";
+}
+
+function normalizeVariableDetails(input: unknown): TemplateVariableDetail[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const raw = item as Record<string, unknown>;
+      const key = String(raw.key ?? "").trim();
+      if (!key) return null;
+      return {
+        key,
+        description: String(raw.description ?? "").trim().slice(0, 240),
+        example: String(raw.example ?? "").trim().slice(0, 240),
+      };
+    })
+    .filter((item): item is TemplateVariableDetail => Boolean(item));
+}
+
+function extractTemplateRequestVariableDetails(variables: unknown): TemplateVariableDetail[] {
+  if (variables && typeof variables === "object" && !Array.isArray(variables)) {
+    const raw = variables as Record<string, unknown>;
+    const details = normalizeVariableDetails(raw.variableDetails ?? raw.variables);
+    if (details.length > 0) return details;
+  }
+  if (Array.isArray(variables)) {
+    return variables.map((item, index) => ({
+      key: String(index + 1),
+      description: typeof item === "string" ? item : "",
+      example: "",
+    }));
+  }
+  return [];
+}
+
+function extractNumberedPlaceholders(content: string) {
+  const matches = Array.from(content.matchAll(/{{\s*(\d+)\s*}}/g));
+  return matches.map((match) => ({
+    key: String(Number(match[1])),
+    index: match.index ?? -1,
+    raw: match[0],
+  }));
+}
+
+function contentHasAdjacentVariables(content: string) {
+  return /}}\s*{{/.test(content);
+}
+
+function contentStartsOrEndsWithVariable(content: string) {
+  const trimmed = content.trim();
+  return /^{{\s*\d+\s*}}/.test(trimmed) || /{{\s*\d+\s*}}$/.test(trimmed);
+}
+
+function isPromotionalTemplateContent(content: string) {
+  return /\b(promo[cç][aã]o|desconto|oferta|imperd[ií]vel|compre|cupom|liquida[cç][aã]o|black\s*friday)\b/i.test(
+    content
+  );
+}
+
+function buildTemplateRequestVariablesPayload(params: {
+  language: string;
+  variableDetails: TemplateVariableDetail[];
+}) {
+  return {
+    language: params.language,
+    variableDetails: params.variableDetails,
+    variables: params.variableDetails,
+    schemaVersion: 1,
+  } satisfies Prisma.InputJsonObject;
+}
+
+function parseTemplateRequestInput(body: Record<string, unknown>):
+  | {
+      ok: true;
+      name: string;
+      content: string;
+      category: string;
+      language: string;
+      variableDetails: TemplateVariableDetail[];
+      variablesPayload: Prisma.InputJsonObject;
+      warnings: string[];
+    }
+  | { ok: false; code: string; message: string } {
+  const name = String(body.name ?? "").trim();
+  const content = String(body.content ?? "").trim();
+  const category = normalizeTemplateCategory(String(body.category ?? "").trim());
+  const language = normalizeTemplateLanguage(body.language);
+  const placeholders = extractNumberedPlaceholders(content);
+  const variableDetails = normalizeVariableDetails(body.variableDetails ?? body.variables);
+
+  if (!name) return { ok: false, code: "template_name_required", message: "Informe o nome sugerido do template." };
+  if (!content) return { ok: false, code: "template_content_required", message: "Informe o conteudo do template." };
+  if (!category) return { ok: false, code: "template_category_invalid", message: "Selecione a categoria sugerida." };
+  if (!language) return { ok: false, code: "template_language_required", message: "Informe o idioma do template." };
+  try {
+    validateTemplateForMeta({
+      name,
+      content,
+      category,
+      language,
+      variables: placeholders.map((item) => item.key),
+    });
+  } catch (error) {
+    if (error instanceof MetaTemplateValidationError) {
+      return { ok: false, code: error.message, message: mapTemplateValidationMessage(error.message) };
+    }
+    throw error;
+  }
+  if (contentStartsOrEndsWithVariable(content)) {
+    return {
+      ok: false,
+      code: "template_variable_at_edge",
+      message: "Evite variavel no inicio ou no fim do conteudo.",
+    };
+  }
+  if (contentHasAdjacentVariables(content)) {
+    return {
+      ok: false,
+      code: "template_adjacent_variables",
+      message: "Evite variaveis adjacentes no conteudo.",
+    };
+  }
+  const placeholderKeys = placeholders.map((item) => item.key);
+  if (variableDetails.length !== placeholderKeys.length) {
+    return {
+      ok: false,
+      code: "template_variables_examples_required",
+      message: "Informe descricao e exemplo para cada variavel detectada.",
+    };
+  }
+  for (const key of placeholderKeys) {
+    const detail = variableDetails.find((item) => item.key === key);
+    if (!detail?.description || !detail.example) {
+      return {
+        ok: false,
+        code: "template_variables_examples_required",
+        message: `Informe descricao e exemplo para a variavel {{${key}}}.`,
+      };
+    }
+  }
+  const warnings: string[] = [];
+  if (category === "MARKETING") warnings.push("marketing_category_requires_explicit_review");
+  if (category === "UTILITY" && isPromotionalTemplateContent(content)) {
+    warnings.push("utility_content_looks_promotional");
+  }
+  return {
+    ok: true,
+    name,
+    content,
+    category,
+    language,
+    variableDetails,
+    variablesPayload: buildTemplateRequestVariablesPayload({ language, variableDetails }),
+    warnings,
+  };
+}
+
+function serializeTemplateRequest<T extends {
+  id: string;
+  name: string;
+  content: string;
+  variables: Prisma.JsonValue | null;
+  category: string;
+  status: string;
+  notes: string | null;
+  createdBy: string | null;
+  createdAt: Date;
+}>(item: T) {
+  return {
+    id: item.id,
+    name: item.name,
+    content: item.content,
+    variables: item.variables,
+    variableDetails: extractTemplateRequestVariableDetails(item.variables),
+    category: item.category,
+    language: extractTemplateRequestLanguage(item.variables),
+    status: item.status,
+    statusLabel: getTemplateRequestStatusLabel(item.status),
+    notes: item.notes,
+    createdBy: item.createdBy,
+    createdAt: item.createdAt,
+  };
+}
+
+async function submitTemplateRequestToMeta(params: {
+  prisma: ReturnType<typeof getPrisma>;
+  templateRequestId: string;
+  tenantAdminClientId: string | null;
+  actor: string;
+  requestId: string;
+}) {
+  const templateRequest = await params.prisma.templateRequest.findFirst({
+    where: {
+      id: params.templateRequestId,
+      ...(params.tenantAdminClientId ? { clientId: params.tenantAdminClientId } : {}),
+    },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      content: true,
+      variables: true,
+      category: true,
+      status: true,
+      notes: true,
+      createdBy: true,
+      createdAt: true,
+    },
+  });
+  if (!templateRequest) throw new Error("template_request_not_found");
+  const language = extractTemplateRequestLanguage(templateRequest.variables);
+  const variableDetails = extractTemplateRequestVariableDetails(templateRequest.variables);
+  const variablesPayload = buildTemplateRequestVariablesPayload({ language, variableDetails });
+
+  const tenantMetaConfig = await params.prisma.tenantMetaConfig.findUnique({
+    where: { clientId: templateRequest.clientId },
+    select: { businessToken: true, wabaId: true },
+  });
+  const hasMetaConfig = Boolean(
+    String(tenantMetaConfig?.businessToken ?? "").trim() &&
+      String(tenantMetaConfig?.wabaId ?? "").trim()
+  );
+  if (!hasMetaConfig || !tenantMetaConfig) {
+    throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
+  }
+
+  validateTemplateForMeta({
+    name: templateRequest.name,
+    content: templateRequest.content,
+    category: templateRequest.category,
+    language,
+    variables: variableDetails.map((item) => item.key),
+  });
+
+  const template = await params.prisma.template.upsert({
+    where: {
+      clientId_name: {
+        clientId: templateRequest.clientId,
+        name: templateRequest.name,
+      },
+    },
+    create: {
+      clientId: templateRequest.clientId,
+      name: templateRequest.name,
+      content: templateRequest.content,
+      category: templateRequest.category,
+      submittedCategory: templateRequest.category,
+      wasRecategorized: false,
+      language,
+      status: "submitting",
+      variables: variablesPayload,
+    },
+    update: {
+      content: templateRequest.content,
+      category: templateRequest.category,
+      submittedCategory: templateRequest.category,
+      wasRecategorized: false,
+      language,
+      status: "submitting",
+      rejectionReason: null,
+      variables: variablesPayload,
+    },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      language: true,
+      content: true,
+      variables: true,
+    },
+  });
+
+  const result = await submitTemplateToMeta({
+    tenantConfig: tenantMetaConfig,
+    template,
+  });
+  const updatedTemplate = await params.prisma.template.update({
+    where: { id: template.id },
+    data: result.ok
+      ? {
+          metaTemplateId: result.metaTemplateId ?? undefined,
+          status: result.status || "PENDING",
+          submittedCategory: templateRequest.category,
+          wasRecategorized: false,
+          rejectionReason: null,
+        }
+      : {
+          status: "failed",
+          rejectionReason: result.errorMessage,
+        },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      content: true,
+      variables: true,
+      category: true,
+      language: true,
+      status: true,
+      metaTemplateId: true,
+      rejectionReason: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  const updatedRequest = await params.prisma.templateRequest.update({
+    where: { id: templateRequest.id },
+    data: {
+      status: result.ok ? "submitted_to_meta" : "failed",
+      ...(result.ok ? {} : { notes: summarizeMetaErrorMessage(result.errorMessage) }),
+    },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      content: true,
+      variables: true,
+      category: true,
+      status: true,
+      notes: true,
+      createdBy: true,
+      createdAt: true,
+    },
+  });
+  await persistEvent({
+    clientId: templateRequest.clientId,
+    requestId: `template-request-submitted:${templateRequest.id}`,
+    eventName: "template.request.submitted_to_meta",
+    payloadJson: {
+      templateRequestId: templateRequest.id,
+      templateId: updatedTemplate.id,
+      templateName: updatedTemplate.name,
+      status: updatedTemplate.status,
+      submittedBy: params.actor,
+      metaSubmitted: result.ok,
+    },
+  });
+  return {
+    ok: result.ok,
+    request: serializeTemplateRequest(updatedRequest),
+    template: updatedTemplate,
+    submission: {
+      submitted: result.ok,
+      status: updatedTemplate.status,
+      templateId: updatedTemplate.id,
+      errorMessage: result.ok ? null : result.errorMessage,
+    },
+  };
+}
+
 async function findTemplatesNeedingSync(
   prisma: { template: { findMany: (...args: any[]) => Promise<Array<{ id: string }>> } },
   where:
@@ -17005,7 +17507,7 @@ function summarizeMetaErrorMessage(input: string) {
 
 function isTemplatePendingLike(status: string | null | undefined) {
   const normalized = String(status || "").trim().toLowerCase();
-  return normalized === "pending" || normalized === "submitting";
+  return TEMPLATE_REQUEST_OPEN_STATUSES.includes(normalized);
 }
 
 function isRetryableLocalTemplateFailure(

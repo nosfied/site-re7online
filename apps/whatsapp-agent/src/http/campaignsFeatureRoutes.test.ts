@@ -13,8 +13,10 @@ import {
   revokeContactOptOut,
 } from "../campaigns/optOutRegistry.js";
 import { getPrisma } from "../db.js";
+import { setTemplateReviewNotificationSenderForTests } from "../templates/templateReviewNotification.js";
 
 process.env.APP_AUTH_SECRET = process.env.APP_AUTH_SECRET || "campaigns-feature-route-test-secret";
+process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || "campaigns-feature-route-test-admin-token";
 
 type TestResponse<T = unknown> = {
   status: number;
@@ -38,6 +40,8 @@ type TestUser = {
 const prisma = getPrisma();
 const originalCwd = process.cwd();
 const prefix = `campaigns-feature-${process.pid}-${Date.now()}`;
+const safeTemplatePrefix = prefix.replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+const businessAdminToken = `${prefix}-business-admin-token`;
 
 let tempRoot = "";
 let server: Server;
@@ -172,6 +176,25 @@ async function requestUnauth<T = unknown>(
   };
 }
 
+async function requestAdmin<T = unknown>(
+  method: string,
+  route: string,
+  body?: unknown
+): Promise<TestResponse<T>> {
+  const response = await fetch(`${baseUrl}${route}`, {
+    method,
+    headers: {
+      "x-admin-token": businessAdminToken,
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  return {
+    status: response.status,
+    body: (await response.json()) as T,
+  };
+}
+
 async function cleanup() {
   const clients = await prisma.client.findMany({
     where: {
@@ -245,6 +268,7 @@ test.before(async () => {
       name: "Campaigns Feature Business",
       profile: "business",
       features: {},
+      adminToken: businessAdminToken,
     },
     select: { id: true, clientKey: true },
   });
@@ -321,6 +345,7 @@ test.before(async () => {
 });
 
 test.after(async () => {
+  setTemplateReviewNotificationSenderForTests(null);
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
@@ -498,6 +523,215 @@ test("template routes require auth and bulk sync fails safely without Meta confi
 
   assert.equal(response.status, 400);
   assert.equal(getErrorCode(response.body), "meta_config_missing");
+  assert.equal(JSON.stringify(response.body).includes("token"), false);
+});
+
+test("tenant template request stays in internal review and ignores auto submit", async () => {
+  const sentEmails: Array<{ subject: string; text: string }> = [];
+  setTemplateReviewNotificationSenderForTests(async (message) => {
+    sentEmails.push({ subject: message.subject, text: message.text });
+  });
+  const templatesBefore = await prisma.template.count({ where: { clientId: businessClientId } });
+  const response = await request<{
+    ok: true;
+    request: {
+      id: string;
+      name: string;
+      category: string;
+      language: string;
+      status: string;
+      statusLabel: string;
+      variableDetails: Array<{ key: string; description: string; example: string }>;
+    };
+    notification: { attempted: boolean; delivered: boolean };
+    warnings: string[];
+  }>("POST", "/app/templates/request?clientId=malicious", businessAdmin, {
+    name: `utility_request_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Ola {{1}}, seu atendimento foi atualizado.",
+    variableDetails: [{ key: "1", description: "Nome do contato", example: "Maria" }],
+    autoSubmit: true,
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.request.status, "requested");
+  assert.equal(response.body.request.statusLabel, "Em análise pela Re7online");
+  assert.equal(response.body.request.language, "pt_BR");
+  assert.deepEqual(response.body.request.variableDetails, [
+    { key: "1", description: "Nome do contato", example: "Maria" },
+  ]);
+  assert.equal(response.body.notification.delivered, true);
+  assert.equal(sentEmails.length, 1);
+  assert.match(sentEmails[0].subject, /Nova solicitação de template/);
+  assert.match(sentEmails[0].text, /Campaigns Feature Business|campaigns-feature/);
+
+  const templatesAfter = await prisma.template.count({ where: { clientId: businessClientId } });
+  assert.equal(templatesAfter, templatesBefore);
+  const createdEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "template.request.created",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(createdEvent);
+  assert.equal((createdEvent.payloadJson as Record<string, unknown>).templateName, `utility_request_${safeTemplatePrefix}`);
+});
+
+test("template request validation blocks unsafe variables and missing fields", async () => {
+  const missing = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: "",
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Ola",
+  });
+  assert.equal(missing.status, 400);
+  assert.equal(getErrorCode(missing.body), "validation_error");
+
+  const skipped = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `bad_vars_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Ola {{2}}",
+    variableDetails: [{ key: "2", description: "Nome", example: "Maria" }],
+  });
+  assert.equal(skipped.status, 400);
+  assert.equal(getErrorCode(skipped.body), "validation_error");
+
+  const atEdge = await request<ErrorPayload>("POST", "/app/templates/request", businessAdmin, {
+    name: `edge_vars_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "{{1}} recebeu atualizacao",
+    variableDetails: [{ key: "1", description: "Nome", example: "Maria" }],
+  });
+  assert.equal(atEdge.status, 400);
+  assert.equal(getErrorCode(atEdge.body), "validation_error");
+});
+
+test("template request email failure is audited without failing creation", async () => {
+  setTemplateReviewNotificationSenderForTests(async () => {
+    throw new Error("smtp_test_failure");
+  });
+  const response = await request<{
+    ok: true;
+    request: { id: string; status: string };
+    notification: { attempted: boolean; delivered: boolean; reason: string };
+  }>("POST", "/app/templates/request", businessAdmin, {
+    name: `notification_failure_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Aviso institucional",
+    variableDetails: [],
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.request.status, "requested");
+  assert.equal(response.body.notification.delivered, false);
+
+  const event = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "template.request.notification_failed",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(event);
+  assert.equal(JSON.stringify(event.payloadJson).includes("token"), false);
+  setTemplateReviewNotificationSenderForTests(null);
+});
+
+test("tenant template request listing is scoped to tenant", async () => {
+  await prisma.templateRequest.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        name: `tenant_visible_${safeTemplatePrefix}`,
+        category: "UTILITY",
+        content: "Visivel",
+        status: "requested",
+      },
+      {
+        clientId: overrideClientId,
+        name: `tenant_hidden_${safeTemplatePrefix}`,
+        category: "UTILITY",
+        content: "Oculto",
+        status: "requested",
+      },
+    ],
+  });
+  const response = await request<{ ok: true; items: Array<{ name: string }> }>(
+    "GET",
+    "/app/templates/requests?clientId=malicious",
+    businessAdmin
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.body.items.some((item) => item.name === `tenant_visible_${safeTemplatePrefix}`), true);
+  assert.equal(response.body.items.some((item) => item.name === `tenant_hidden_${safeTemplatePrefix}`), false);
+});
+
+test("admin can list and edit template requests without exposing tokens", async () => {
+  const created = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `admin_review_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Ola {{1}}",
+      variables: {
+        language: "pt_BR",
+        variableDetails: [{ key: "1", description: "Nome", example: "Maria" }],
+        variables: [{ key: "1", description: "Nome", example: "Maria" }],
+      },
+      status: "requested",
+    },
+  });
+  const list = await requestAdmin<{
+    ok: true;
+    items: Array<{ id: string; clientKey: string; language: string; variableDetails: unknown[] }>;
+  }>("GET", `/admin/templates/requests?clientKey=${encodeURIComponent(`${prefix}-business`)}`);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.items.some((item) => item.id === created.id), true);
+  assert.equal(JSON.stringify(list.body).includes("businessToken"), false);
+
+  const updated = await requestAdmin<{
+    ok: true;
+    request: { id: string; status: string; name: string; language: string };
+  }>("PATCH", `/admin/templates/requests/${created.id}`, {
+    name: `admin_review_updated_${safeTemplatePrefix}`,
+    category: "UTILITY",
+    language: "pt_BR",
+    content: "Ola {{1}}, tudo bem?",
+    variableDetails: [{ key: "1", description: "Nome", example: "Maria" }],
+    notes: "Revisado internamente",
+    status: "review_started",
+  });
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.request.status, "review_started");
+  assert.equal(updated.body.request.name, `admin_review_updated_${safeTemplatePrefix}`);
+});
+
+test("admin submit requires tenant Meta config and does not expose tokens", async () => {
+  const created = await prisma.templateRequest.create({
+    data: {
+      clientId: businessClientId,
+      name: `submit_without_meta_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      content: "Aviso institucional",
+      variables: { language: "pt_BR", variableDetails: [], variables: [] },
+      status: "internal_approved",
+    },
+  });
+  const response = await requestAdmin<ErrorPayload>(
+    "POST",
+    `/admin/templates/requests/${created.id}/submit`
+  );
+  assert.equal(response.status, 400);
+  assert.equal(getErrorCode(response.body), "meta_config_missing");
+  assert.equal(JSON.stringify(response.body).includes("businessToken"), false);
   assert.equal(JSON.stringify(response.body).includes("token"), false);
 });
 

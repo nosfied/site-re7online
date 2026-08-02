@@ -577,8 +577,11 @@ export type AppTemplateRequestItem = {
   name: string;
   content: string;
   variables: unknown;
+  variableDetails?: Array<{ key: string; description: string; example: string }>;
   category: string;
+  language?: string;
   status: string;
+  statusLabel?: string;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -3342,21 +3345,15 @@ export async function createAppTemplateRequest(
   payload: {
     name: string;
     content: string;
-    variables?: unknown;
+    variableDetails?: Array<{ key: string; description: string; example: string }>;
     category: string;
-    autoSubmit?: boolean;
+    language: string;
   }
 ): Promise<{
   ok: true;
   request: AppTemplateRequestItem;
-  submission?: {
-    attempted: boolean;
-    submitted: boolean;
-    mode: "assisted" | "self_service";
-    templateId: string | null;
-    status: string | null;
-    errorMessage: string | null;
-  };
+  notification?: { attempted: boolean; delivered: boolean; reason?: string };
+  warnings?: string[];
 }> {
   return requestAppJson(session, "/app/templates/request", {
     method: "POST",

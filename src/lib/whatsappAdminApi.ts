@@ -530,8 +530,11 @@ export type AdminTemplateRequestItem = {
   name: string;
   content: string;
   variables: unknown;
+  variableDetails?: Array<{ key: string; description: string; example: string }>;
   category: string;
+  language?: string;
   status: string;
+  statusLabel?: string;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -1716,13 +1719,19 @@ export async function updateAdminChatbotFlow(
 }
 
 export async function fetchAdminTemplateRequests(
-  connection: AdminConnection
+  connection: AdminConnection,
+  filters?: { clientKey?: string; status?: string; category?: string; search?: string }
 ): Promise<{
   ok: true;
   count: number;
   items: AdminTemplateRequestItem[];
 }> {
-  return requestJson(connection, "/admin/templates/requests");
+  const params = new URLSearchParams();
+  if (filters?.clientKey) params.set("clientKey", filters.clientKey);
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.category) params.set("category", filters.category);
+  if (filters?.search) params.set("search", filters.search);
+  return requestJson(connection, `/admin/templates/requests${params.size ? `?${params.toString()}` : ""}`);
 }
 
 export async function approveAdminTemplateRequest(
@@ -1739,11 +1748,59 @@ export async function approveAdminTemplateRequest(
 
 export async function rejectAdminTemplateRequest(
   connection: AdminConnection,
-  requestId: string
+  requestId: string,
+  notes?: string
 ): Promise<{ ok: true }> {
   return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/reject`, {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify({ notes }),
+  });
+}
+
+export async function updateAdminTemplateRequest(
+  connection: AdminConnection,
+  requestId: string,
+  payload: {
+    name?: string;
+    category?: string;
+    language?: string;
+    content?: string;
+    variableDetails?: Array<{ key: string; description: string; example: string }>;
+    status?: string;
+    notes?: string | null;
+  }
+): Promise<{ ok: true; request: AdminTemplateRequestItem }> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitAdminTemplateRequestToMeta(
+  connection: AdminConnection,
+  requestId: string
+): Promise<{
+  ok: boolean;
+  request: AdminTemplateRequestItem;
+  template: AdminTemplateCatalogItem;
+  submission: {
+    submitted: boolean;
+    status: string;
+    templateId: string;
+    errorMessage: string | null;
+  };
+}> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/submit`, {
+    method: "POST",
+  });
+}
+
+export async function syncAdminTemplateRequest(
+  connection: AdminConnection,
+  requestId: string
+): Promise<{ ok: true; request: AdminTemplateRequestItem; sync: unknown }> {
+  return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/sync`, {
+    method: "POST",
   });
 }
 
