@@ -526,10 +526,28 @@ test("template routes require auth and bulk sync fails safely without Meta confi
   assert.equal(JSON.stringify(response.body).includes("token"), false);
 });
 
-test("tenant template request stays in internal review and ignores auto submit", async () => {
-  const sentEmails: Array<{ subject: string; text: string }> = [];
+test("tenant template request stays in internal review and ignores auto submit", async (t) => {
+  const originalNotifyEmail = process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+  const originalFallbackEmail = process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+  delete process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+  delete process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+  t.after(() => {
+    if (originalNotifyEmail === undefined) {
+      delete process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+    } else {
+      process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL = originalNotifyEmail;
+    }
+    if (originalFallbackEmail === undefined) {
+      delete process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+    } else {
+      process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL = originalFallbackEmail;
+    }
+    setTemplateReviewNotificationSenderForTests(null);
+  });
+
+  const sentEmails: Array<{ to: string; subject: string; text: string }> = [];
   setTemplateReviewNotificationSenderForTests(async (message) => {
-    sentEmails.push({ subject: message.subject, text: message.text });
+    sentEmails.push({ to: message.to, subject: message.subject, text: message.text });
   });
   const templatesBefore = await prisma.template.count({ where: { clientId: businessClientId } });
   const response = await request<{
@@ -564,6 +582,7 @@ test("tenant template request stays in internal review and ignores auto submit",
   ]);
   assert.equal(response.body.notification.delivered, true);
   assert.equal(sentEmails.length, 1);
+  assert.equal(sentEmails[0].to, "re7online@gmail.com");
   assert.match(sentEmails[0].subject, /Nova solicitação de template/);
   assert.match(sentEmails[0].text, /Campaigns Feature Business|campaigns-feature/);
 
@@ -612,9 +631,27 @@ test("template request validation blocks unsafe variables and missing fields", a
   assert.equal(getErrorCode(atEdge.body), "validation_error");
 });
 
-test("template request email failure is audited without failing creation", async () => {
+test("template request email failure is audited without failing creation", async (t) => {
+  const originalNotifyEmail = process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+  const originalFallbackEmail = process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+  delete process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+  delete process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+  t.after(() => {
+    if (originalNotifyEmail === undefined) {
+      delete process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL;
+    } else {
+      process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL = originalNotifyEmail;
+    }
+    if (originalFallbackEmail === undefined) {
+      delete process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL;
+    } else {
+      process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL = originalFallbackEmail;
+    }
+    setTemplateReviewNotificationSenderForTests(null);
+  });
+
   setTemplateReviewNotificationSenderForTests(async () => {
-    throw new Error("smtp_test_failure");
+    throw new Error("smtp_test_failure token=supersecret Bearer abc123");
   });
   const response = await request<{
     ok: true;
@@ -631,6 +668,8 @@ test("template request email failure is audited without failing creation", async
   assert.equal(response.body.ok, true);
   assert.equal(response.body.request.status, "requested");
   assert.equal(response.body.notification.delivered, false);
+  assert.equal(response.body.notification.reason.includes("supersecret"), false);
+  assert.equal(response.body.notification.reason.includes("abc123"), false);
 
   const event = await prisma.event.findFirst({
     where: {
@@ -641,8 +680,10 @@ test("template request email failure is audited without failing creation", async
     select: { payloadJson: true },
   });
   assert.ok(event);
-  assert.equal(JSON.stringify(event.payloadJson).includes("token"), false);
-  setTemplateReviewNotificationSenderForTests(null);
+  const payload = event.payloadJson as Record<string, unknown>;
+  assert.equal(payload.recipient, "re7online@gmail.com");
+  assert.equal(JSON.stringify(payload).includes("supersecret"), false);
+  assert.equal(JSON.stringify(payload).includes("abc123"), false);
 });
 
 test("tenant template request listing is scoped to tenant", async () => {

@@ -29,12 +29,20 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function getNotifyEmail() {
+export function resolveTemplateReviewNotifyEmail() {
   return (
     process.env.TEMPLATE_REVIEW_NOTIFY_EMAIL?.trim() ||
     process.env.TEMPLATE_REVIEW_FALLBACK_EMAIL?.trim() ||
-    "suporte@re7online.com"
+    "re7online@gmail.com"
   );
+}
+
+export function sanitizeTemplateReviewNotificationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+    .replace(/(token|secret|password|pass|api[_-]?key)=([^&\s]+)/gi, "$1=[REDACTED]")
+    .slice(0, 240);
 }
 
 function isSmtpConfigured() {
@@ -74,7 +82,7 @@ export async function sendTemplateReviewNotification(params: {
   variables: Array<{ key: string; description: string; example: string }>;
   adminPath: string;
 }) {
-  const to = getNotifyEmail();
+  const to = resolveTemplateReviewNotifyEmail();
   const subject = `Nova solicitação de template — ${params.tenantName}`;
   const variableLines =
     params.variables.length > 0

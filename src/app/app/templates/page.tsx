@@ -169,6 +169,19 @@ function looksPromotional(content: string) {
   return /\b(promo[cç][aã]o|desconto|oferta|imperd[ií]vel|compre|cupom|liquida[cç][aã]o|black\s*friday)\b/i.test(content);
 }
 
+function buildTemplatePreviewWithExamples(
+  content: string,
+  variables: Array<{ key: string; example: string }>
+) {
+  let preview = content.trim();
+  for (const variable of variables) {
+    const example = variable.example.trim();
+    if (!example) continue;
+    preview = preview.replace(new RegExp(`{{\\s*${variable.key}\\s*}}`, "g"), example);
+  }
+  return preview;
+}
+
 function isRetryableLocalTemplateFailure(item: Pick<AppTemplateItem, "status" | "rejectionReason">) {
   const normalizedStatus = item.status.trim().toLowerCase();
   const normalizedReason = String(item.rejectionReason || "").trim().toLowerCase();
@@ -333,6 +346,10 @@ export default function AppTemplatesPage() {
     }
     return warnings;
   }, [form.category, form.content]);
+  const formPreview = useMemo(
+    () => buildTemplatePreviewWithExamples(form.content, form.variableDetails),
+    [form.content, form.variableDetails]
+  );
   const catalogItems = useMemo(() => buildCatalogItems(templates, requests), [templates, requests]);
   const approvedTemplatesCount = useMemo(
     () => catalogItems.filter((item) => item.status.toLowerCase() === "approved").length,
@@ -542,7 +559,7 @@ export default function AppTemplatesPage() {
       setForm(EMPTY_FORM);
       setSuccess(
         response.notification?.delivered === false
-          ? "Solicitação enviada para análise da Re7online. A notificação interna será acompanhada pela equipe."
+          ? "Solicitação criada, mas a notificação interna por e-mail não pôde ser enviada."
           : "Solicitação enviada para análise da Re7online. Você poderá acompanhar o status nesta tela."
       );
     } catch (err) {
@@ -907,9 +924,10 @@ export default function AppTemplatesPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedItemId(item.id)}
-                                className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                                disabled={selectedItem?.id === item.id}
+                                className="rounded-lg border border-white/15 px-3 py-1 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:border-re7-sky/35 disabled:bg-re7-sky/15 disabled:text-sky-100"
                               >
-                                Ver
+                                {selectedItem?.id === item.id ? "Selecionado" : "Ver detalhes"}
                               </button>
                               {item.syncable && item.templateId ? (
                                 <button
@@ -935,7 +953,9 @@ export default function AppTemplatesPage() {
 
         <section className="min-w-0 rounded-xl border border-white/10 bg-white/5">
           <div className="border-b border-white/10 px-3 py-3 sm:px-4">
-            <h2 className="text-sm font-semibold">Detalhe e solicitacao</h2>
+            <h2 className="text-sm font-semibold">
+              {selectedItem?.id.startsWith("request:") ? "Solicitação selecionada" : "Template selecionado"}
+            </h2>
           </div>
           {selectedItem ? (
             <div className="border-b border-white/10 p-3 sm:p-4">
@@ -999,17 +1019,21 @@ export default function AppTemplatesPage() {
           <div id="solicitar-template" className="border-b border-white/10 px-3 py-3 sm:px-4">
             <h2 className="text-sm font-semibold">Solicitar novo template</h2>
             <p className="mt-1 text-xs text-white/60">
-              A equipe Re7online revisará o conteúdo antes de enviar para aprovação da Meta.
+              Descreva a mensagem que deseja usar. A equipe Re7online revisará o conteúdo antes de enviar para aprovação da Meta.
             </p>
           </div>
           <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4 p-3 sm:p-4">
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Nome</span>
+              <span>Nome técnico sugerido</span>
               <input
                 value={form.name}
                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                placeholder="ex: tendencia_atendimento_retorno_v1"
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
+              <span className="text-xs text-white/50">
+                Use letras minúsculas, números e underline. Exemplo: tendencia_atendimento_retorno_v1
+              </span>
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
               <span>Categoria</span>
@@ -1024,9 +1048,11 @@ export default function AppTemplatesPage() {
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-white/50">
-                UTILITY é indicado para avisos transacionais e institucionais. Use MARKETING apenas para conteúdo promocional autorizado.
-              </span>
+              <div className="grid gap-1 text-xs text-white/50">
+                <span>Utility: atendimento, avisos, atualizações e comunicações necessárias.</span>
+                <span>Marketing: promoções, ofertas e divulgação comercial.</span>
+                <span>Authentication: códigos de acesso ou verificação.</span>
+              </div>
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
               <span>Idioma</span>
@@ -1035,17 +1061,19 @@ export default function AppTemplatesPage() {
                 onChange={(event) => setForm((current) => ({ ...current, language: event.target.value }))}
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
+              <span className="text-xs text-white/50">Use pt_BR para português do Brasil.</span>
             </label>
             <label className="flex flex-col gap-2 text-sm text-white/80">
-              <span>Conteudo</span>
+              <span>Mensagem do template</span>
               <textarea
                 value={form.content}
                 onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
                 rows={6}
+                placeholder="Olá {{1}}, tudo bem? Estamos retornando sobre seu atendimento na Tendência. Responda esta mensagem para continuar falando com nossa equipe."
                 className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-white outline-none ring-0 transition focus:border-re7-sky/50"
               />
               <span className="text-xs text-white/50">
-                Use variáveis sequenciais como {"{{1}}"} e {"{{2}}"} quando precisar personalizar o texto.
+                Use variáveis como {"{{1}}"} e {"{{2}}"} para dados que mudam por contato.
               </span>
             </label>
             {formWarnings.length > 0 ? (
@@ -1063,7 +1091,7 @@ export default function AppTemplatesPage() {
                 <div className="mt-3 grid gap-3">
                   {form.variableDetails.map((variable) => (
                     <div key={variable.key} className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/70 p-3">
-                      <p className="text-xs font-semibold text-white/70">{`{{${variable.key}}}`}</p>
+                      <p className="text-xs font-semibold text-white/70">{`Variável {{${variable.key}}}`}</p>
                       <input
                         value={variable.description}
                         onChange={(event) =>
@@ -1074,7 +1102,7 @@ export default function AppTemplatesPage() {
                             ),
                           }))
                         }
-                        placeholder="Descrição da variável"
+                        placeholder="O que representa? ex: nome do contato"
                         className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
                       />
                       <input
@@ -1087,12 +1115,22 @@ export default function AppTemplatesPage() {
                             ),
                           }))
                         }
-                        placeholder="Exemplo enviado à Meta"
+                        placeholder="Exemplo: Maria"
                         className="w-full min-w-0 rounded-lg border border-white/15 bg-re7-navy px-3 py-2 text-sm text-white outline-none ring-0 transition focus:border-re7-sky/50"
                       />
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-sm font-semibold text-white/80">Prévia com exemplos</p>
+              {formPreview ? (
+                <p className="mt-2 whitespace-pre-wrap text-sm text-white/75">{formPreview}</p>
+              ) : (
+                <p className="mt-2 text-xs text-white/55">
+                  A prévia aparecerá conforme você preencher a mensagem e os exemplos das variáveis.
+                </p>
               )}
             </div>
 

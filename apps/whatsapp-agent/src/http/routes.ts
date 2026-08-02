@@ -109,7 +109,11 @@ import {
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
-import { sendTemplateReviewNotification } from "../templates/templateReviewNotification.js";
+import {
+  resolveTemplateReviewNotifyEmail,
+  sanitizeTemplateReviewNotificationError,
+  sendTemplateReviewNotification,
+} from "../templates/templateReviewNotification.js";
 import { resolveTenantOutboundCredentials } from "../whatsapp/tenantCredentials.js";
 import { hashPassword, issueClientAuthToken, verifyPassword } from "../auth/clientAuth.js";
 import {
@@ -3100,6 +3104,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         | { attempted: true; delivered: true }
         | { attempted: true; delivered: false; reason: string }
         | undefined;
+      const notificationRecipient = resolveTemplateReviewNotifyEmail();
       try {
         await sendTemplateReviewNotification({
           tenantName: client.clientKey,
@@ -3114,7 +3119,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         });
         notification = { attempted: true, delivered: true };
       } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = sanitizeTemplateReviewNotificationError(error);
         notification = { attempted: true, delivered: false, reason };
         logger.warn({
           event: "template.request.notification_failed",
@@ -3122,6 +3127,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           clientKey: client.clientKey,
           templateRequestId: created.id,
+          recipient: notificationRecipient,
           reason,
         });
         await persistEvent({
@@ -3131,6 +3137,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           payloadJson: {
             templateRequestId: created.id,
             templateName: name,
+            recipient: notificationRecipient,
             reason,
           },
         });

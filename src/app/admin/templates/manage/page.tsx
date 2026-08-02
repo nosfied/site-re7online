@@ -11,7 +11,6 @@ import {
   fetchAdminTemplateRequests,
   fetchTemplatesObservability,
   formatDateTime,
-  rejectAdminTemplateRequest,
   syncAdminTemplateRequest,
   submitAdminTemplateRequestToMeta,
   updateAdminTemplateRequest,
@@ -100,22 +99,6 @@ export default function ManageTemplatesAdminPage() {
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Erro ao aprovar template.");
-    } finally {
-      setActingId(null);
-    }
-  };
-
-  const handleReject = async (requestId: string) => {
-    setActingId(requestId);
-    setError(null);
-    setFeedback(null);
-    try {
-      await rejectAdminTemplateRequest(connection, requestId, draftById[requestId]?.notes);
-      await loadData(connection);
-      setFeedback("Ajustes solicitados ao tenant.");
-    } catch (err) {
-      const typed = err as { message?: string };
-      setError(typed.message || "Erro ao rejeitar template.");
     } finally {
       setActingId(null);
     }
@@ -211,6 +194,9 @@ export default function ManageTemplatesAdminPage() {
           <div>
             <h1 className="text-2xl font-bold">Gestao de templates</h1>
             <p className="text-sm text-white/70">Aprovacao de requests e catalogo aprovado.</p>
+            <p className="mt-1 text-xs text-white/50">
+              Ajustes necessários podem ser feitos internamente pela equipe Re7online antes da submissão à Meta.
+            </p>
             {clientKeyFilter ? (
               <p className="mt-1 text-xs text-white/50">
                 Templates do tenant: {tenantIdFilter || clientKeyFilter}
@@ -404,14 +390,6 @@ export default function ManageTemplatesAdminPage() {
                             className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
                           >
                             Sincronizar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleReject(item.id)}
-                            disabled={actingId === item.id || !["requested", "review_started", "pending"].includes(item.status)}
-                            className="rounded-md border border-red-400/30 bg-red-900/20 px-3 py-1 text-xs text-red-100 disabled:opacity-60"
-                          >
-                            Solicitar ajustes
                           </button>
                         </div>
                       </td>
