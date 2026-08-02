@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
+  AppCampaignAudiencePreviewResponse,
   AppTemplateItem,
   AppSession,
   cancelAppCampaign,
   clearAppSession,
   createAppCampaign,
   exportAppCampaignConsumptionCsv,
+  fetchAppCampaignAudiencePreview,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
@@ -37,6 +39,14 @@ type CampaignStatusFilter =
   | "cancelled"
   | "failed";
 
+type AudiencePreviewFilters = {
+  q: string;
+  status: string;
+  channel: string;
+  hasConversation: "all" | "true" | "false";
+  optOut: "all" | "true" | "false";
+};
+
 const EMPTY_FORM: CampaignFormState = {
   name: "",
   templateId: "",
@@ -44,6 +54,14 @@ const EMPTY_FORM: CampaignFormState = {
   templateVariables: [],
   templateParamsInput: "",
   recipientsInput: "",
+};
+
+const EMPTY_AUDIENCE_FILTERS: AudiencePreviewFilters = {
+  q: "",
+  status: "",
+  channel: "all",
+  hasConversation: "all",
+  optOut: "all",
 };
 
 const PAGE_SIZE = 5;
@@ -207,6 +225,12 @@ function formatBillingValue(value: boolean | null) {
   return value ? "sim" : "nao";
 }
 
+function getAudienceEligibilityClasses(eligible: boolean) {
+  return eligible
+    ? "border-emerald-400/30 bg-emerald-900/20 text-emerald-100"
+    : "border-amber-400/30 bg-amber-900/20 text-amber-100";
+}
+
 export default function AppCampaignsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -215,6 +239,11 @@ export default function AppCampaignsPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
+  const [audienceFilters, setAudienceFilters] = useState<AudiencePreviewFilters>(EMPTY_AUDIENCE_FILTERS);
+  const [audiencePreview, setAudiencePreview] = useState<AppCampaignAudiencePreviewResponse | null>(null);
+  const [audiencePage, setAudiencePage] = useState(1);
+  const [loadingAudiencePreview, setLoadingAudiencePreview] = useState(false);
+  const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -533,6 +562,55 @@ export default function AppCampaignsPage() {
     }
   };
 
+  const loadAudiencePreview = useCallback(
+    async (nextPage = audiencePage) => {
+      if (!session) return;
+      setLoadingAudiencePreview(true);
+      setAudiencePreviewError(null);
+      try {
+        const response = await fetchAppCampaignAudiencePreview(session, {
+          q: audienceFilters.q,
+          status: audienceFilters.status,
+          channel: audienceFilters.channel === "all" ? null : audienceFilters.channel,
+          hasConversation:
+            audienceFilters.hasConversation === "all"
+              ? null
+              : audienceFilters.hasConversation === "true",
+          optOut:
+            audienceFilters.optOut === "all"
+              ? null
+              : audienceFilters.optOut === "true",
+          page: nextPage,
+          limit: 25,
+        });
+        setAudiencePreview(response);
+        setAudiencePage(nextPage);
+      } catch (err) {
+        const typed = err as { status?: number; message?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setAudiencePreviewError(typed.message || "Nao foi possivel gerar a previa de audiencia.");
+      } finally {
+        setLoadingAudiencePreview(false);
+      }
+    },
+    [audienceFilters, audiencePage, handleUnauthorized, session]
+  );
+
+  const handleAudiencePreviewSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    await loadAudiencePreview(1);
+  };
+
+  const handleClearAudienceFilters = () => {
+    setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
+    setAudiencePage(1);
+    setAudiencePreview(null);
+    setAudiencePreviewError(null);
+  };
+
   const handleReuseCampaign = (campaign: CampaignItem) => {
     const replayForm = buildReplayFormFromCampaign(campaign);
     setForm({
@@ -565,6 +643,233 @@ export default function AppCampaignsPage() {
           {toast}
         </p>
       ) : null}
+
+      <section className="rounded-xl border border-white/10 bg-white/5">
+        <div className="border-b border-white/10 px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Previa de audiencia CRM</h2>
+              <p className="mt-1 text-xs text-white/60">
+                Valide contatos antes de montar campanhas com template aprovado.
+              </p>
+            </div>
+            <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
+              Sem envio
+            </span>
+          </div>
+        </div>
+        <div className="grid gap-3 p-3">
+          <p className="rounded-md border border-sky-300/25 bg-sky-900/20 p-3 text-sm text-sky-100">
+            Esta previa nao envia mensagens e nao cria campanha. Ela apenas valida contatos do CRM para uso futuro em campanhas com template aprovado.
+          </p>
+          <form className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_160px_150px_150px_150px_auto]" onSubmit={handleAudiencePreviewSubmit}>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Busca</span>
+              <input
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                value={audienceFilters.q}
+                onChange={(event) =>
+                  setAudienceFilters((prev) => ({ ...prev, q: event.target.value }))
+                }
+                placeholder="Nome, empresa ou telefone mascarado"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Status CRM</span>
+              <input
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                value={audienceFilters.status}
+                onChange={(event) =>
+                  setAudienceFilters((prev) => ({ ...prev, status: event.target.value }))
+                }
+                placeholder="Ex.: INATIVO"
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Canal</span>
+              <select
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                value={audienceFilters.channel}
+                onChange={(event) =>
+                  setAudienceFilters((prev) => ({ ...prev, channel: event.target.value }))
+                }
+              >
+                <option value="all">Todos</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="instagram">Instagram</option>
+                <option value="messenger">Messenger</option>
+                <option value="webchat">Webchat</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Envio ativo</span>
+              <select
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                value={audienceFilters.optOut}
+                onChange={(event) =>
+                  setAudienceFilters((prev) => ({ ...prev, optOut: event.target.value as AudiencePreviewFilters["optOut"] }))
+                }
+              >
+                <option value="all">Todos</option>
+                <option value="false">Liberado</option>
+                <option value="true">Bloqueado</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-white/70">Conversa</span>
+              <select
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
+                value={audienceFilters.hasConversation}
+                onChange={(event) =>
+                  setAudienceFilters((prev) => ({ ...prev, hasConversation: event.target.value as AudiencePreviewFilters["hasConversation"] }))
+                }
+              >
+                <option value="all">Todos</option>
+                <option value="true">Com conversa</option>
+                <option value="false">Sem conversa</option>
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                disabled={loadingAudiencePreview}
+                className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingAudiencePreview ? "Gerando..." : "Gerar previa"}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAudienceFilters}
+                className="rounded-md border border-white/20 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+              >
+                Limpar
+              </button>
+            </div>
+          </form>
+
+          {audiencePreviewError ? (
+            <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
+              {audiencePreviewError}
+            </p>
+          ) : null}
+
+          {audiencePreview ? (
+            <div className="grid gap-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs uppercase tracking-wide text-white/60">Total</p>
+                  <p className="mt-1 text-xl font-semibold">{audiencePreview.summary.total}</p>
+                </div>
+                <div className="rounded-md border border-emerald-400/20 bg-emerald-900/20 p-3">
+                  <p className="text-xs uppercase tracking-wide text-emerald-100/70">Elegiveis</p>
+                  <p className="mt-1 text-xl font-semibold text-emerald-100">{audiencePreview.summary.eligible}</p>
+                </div>
+                <div className="rounded-md border border-amber-400/20 bg-amber-900/20 p-3">
+                  <p className="text-xs uppercase tracking-wide text-amber-100/70">Bloqueados</p>
+                  <p className="mt-1 text-xl font-semibold text-amber-100">{audiencePreview.summary.blocked}</p>
+                </div>
+              </div>
+              {audiencePreview.summary.blockedByReason.length > 0 ? (
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {audiencePreview.summary.blockedByReason.map((item) => (
+                    <span
+                      key={item.reason}
+                      className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-white/75"
+                    >
+                      {item.label}: {item.count}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {audiencePreview.summary.truncated ? (
+                <p className="rounded-md border border-amber-400/30 bg-amber-900/20 p-3 text-sm text-amber-100">
+                  A analise foi limitada aos primeiros {audiencePreview.summary.analyzed} contatos para proteger desempenho.
+                </p>
+              ) : null}
+              <div className="overflow-x-auto rounded-md border border-white/10">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead className="bg-white/10 text-left">
+                    <tr>
+                      <th className="px-3 py-2">Contato</th>
+                      <th className="px-3 py-2">Referencia</th>
+                      <th className="px-3 py-2">Status CRM</th>
+                      <th className="px-3 py-2">Canal</th>
+                      <th className="px-3 py-2">Elegibilidade</th>
+                      <th className="px-3 py-2">Ultima conversa</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audiencePreview.items.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-4 text-white/70" colSpan={6}>
+                          Nenhum contato encontrado para estes filtros.
+                        </td>
+                      </tr>
+                    ) : null}
+                    {audiencePreview.items.map((item) => (
+                      <tr key={item.leadId} className="border-t border-white/10">
+                        <td className="px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-white">{item.displayName || "Contato"}</p>
+                            <p className="truncate text-xs text-white/55">{item.companyName || item.city || "-"}</p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-white/75">
+                          {item.phoneDisplay || item.identifierDisplay}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/80">
+                            {item.crmStatusLabel || item.crmStatus}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{item.channel || "whatsapp"}</td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${getAudienceEligibilityClasses(item.eligible)}`}>
+                            {item.eligible ? "Elegivel para envio ativo" : "Bloqueado"}
+                          </span>
+                          {!item.eligible && item.blockedReasonLabel ? (
+                            <p className="mt-1 text-xs text-white/60">{item.blockedReasonLabel}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          {item.lastProtocol ? (
+                            <span className="font-mono text-xs text-white/75">{item.lastProtocol}</span>
+                          ) : (
+                            <span className="text-white/45">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <p className="text-white/70">
+                  Pagina {audiencePreview.pagination.page} de {Math.max(audiencePreview.pagination.totalPages, 1)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!audiencePreview.pagination.hasPreviousPage || loadingAudiencePreview}
+                    onClick={() => void loadAudiencePreview(Math.max(audiencePage - 1, 1))}
+                    className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!audiencePreview.pagination.hasNextPage || loadingAudiencePreview}
+                    onClick={() => void loadAudiencePreview(audiencePage + 1)}
+                    className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Proxima
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden">

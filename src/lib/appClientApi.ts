@@ -113,6 +113,8 @@ export type AppCrmContactsFilter = {
   channel?: string | null;
   hasConversation?: boolean | null;
   optOut?: boolean | null;
+  updatedFrom?: string | null;
+  updatedTo?: string | null;
   page?: number;
   limit?: number;
 };
@@ -206,6 +208,85 @@ export type AppCrmContactsResponse = {
     hasPreviousPage: boolean;
   };
   items: AppCrmContactItem[];
+  generatedAt: string;
+};
+
+export type AppCampaignAudiencePreviewFilter = AppCrmContactsFilter & {
+  onlyWhatsappEligible?: boolean | null;
+  excludeOptOut?: boolean | null;
+  crmStatus?: string | null;
+  city?: string | null;
+  importedSource?: string | null;
+};
+
+export type AppCampaignAudienceBlockedReason =
+  | "active_send_blocked"
+  | "missing_whatsapp_identity"
+  | "non_whatsapp_channel"
+  | "invalid_whatsapp_identity"
+  | "missing_contact"
+  | "unsupported_channel"
+  | "unknown";
+
+export type AppCampaignAudiencePreviewItem = {
+  leadId: string;
+  contactId: string | null;
+  displayName: string | null;
+  companyName: string | null;
+  city: string | null;
+  crmStatus: string;
+  crmStatusLabel: string;
+  channel: string | null;
+  phoneDisplay: string | null;
+  identifierDisplay: string;
+  activeOptOut: boolean;
+  hasValidWhatsappIdentity: boolean;
+  lastConversationIdentity: string | null;
+  lastProtocol: string | null;
+  importedSource: string | null;
+  updatedAt: string;
+  eligible: boolean;
+  blockedReason: AppCampaignAudienceBlockedReason | null;
+  blockedReasonLabel: string | null;
+};
+
+export type AppCampaignAudiencePreviewResponse = {
+  ok: true;
+  filters: {
+    q: string | null;
+    status: string | null;
+    channel: string | null;
+    hasConversation: boolean | null;
+    optOut: boolean | null;
+    updatedFrom: string | null;
+    updatedTo: string | null;
+    onlyWhatsappEligible: boolean | null;
+    excludeOptOut: boolean | null;
+    crmStatus: string | null;
+    city: string | null;
+    importedSource: string | null;
+  };
+  summary: {
+    total: number;
+    analyzed: number;
+    eligible: number;
+    blocked: number;
+    truncated: boolean;
+    blockedByReason: Array<{
+      reason: AppCampaignAudienceBlockedReason;
+      label: string;
+      count: number;
+    }>;
+  };
+  items: AppCampaignAudiencePreviewItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
   generatedAt: string;
 };
 
@@ -2860,6 +2941,43 @@ export async function fetchAppCrmContacts(
   }
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return requestAppJson(session, `/app/crm/contacts${suffix}`);
+}
+
+export async function fetchAppCampaignAudiencePreview(
+  session: AppSession,
+  filters?: AppCampaignAudiencePreviewFilter
+): Promise<AppCampaignAudiencePreviewResponse> {
+  const params = new URLSearchParams();
+  if (filters?.q?.trim()) params.set("q", filters.q.trim());
+  if (filters?.status?.trim()) params.set("status", filters.status.trim());
+  if (filters?.crmStatus?.trim()) params.set("crmStatus", filters.crmStatus.trim());
+  if (filters?.channel?.trim()) params.set("channel", filters.channel.trim());
+  if (filters?.city?.trim()) params.set("city", filters.city.trim());
+  if (filters?.importedSource?.trim()) {
+    params.set("importedSource", filters.importedSource.trim());
+  }
+  if (typeof filters?.hasConversation === "boolean") {
+    params.set("hasConversation", String(filters.hasConversation));
+  }
+  if (typeof filters?.optOut === "boolean") {
+    params.set("optOut", String(filters.optOut));
+  }
+  if (typeof filters?.onlyWhatsappEligible === "boolean") {
+    params.set("onlyWhatsappEligible", String(filters.onlyWhatsappEligible));
+  }
+  if (typeof filters?.excludeOptOut === "boolean") {
+    params.set("excludeOptOut", String(filters.excludeOptOut));
+  }
+  if (filters?.updatedFrom?.trim()) params.set("updatedFrom", filters.updatedFrom.trim());
+  if (filters?.updatedTo?.trim()) params.set("updatedTo", filters.updatedTo.trim());
+  if (typeof filters?.page === "number" && Number.isFinite(filters.page)) {
+    params.set("page", String(Math.max(1, Math.floor(filters.page))));
+  }
+  if (typeof filters?.limit === "number" && Number.isFinite(filters.limit)) {
+    params.set("limit", String(Math.max(1, Math.floor(filters.limit))));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return requestAppJson(session, `/app/campaigns/audience-preview${suffix}`);
 }
 
 export async function fetchAppCrmContactDetail(

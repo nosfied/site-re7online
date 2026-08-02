@@ -80,6 +80,7 @@ import {
   revokeContactOptOut,
   type CampaignOptOutBlockedRecipient,
 } from "../campaigns/optOutRegistry.js";
+import { buildCampaignAudiencePreviewPayload } from "../campaigns/campaignAudiencePreview.js";
 import { httpError } from "../utils/httpError.js";
 import {
   enrichMetaOnboardingResult,
@@ -8974,6 +8975,62 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/app/campaigns/audience-preview") {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      if (
+        !(await enforceAppCapability(prisma, res, {
+          client,
+          userId: clientAuth.userId,
+          capability: "crm",
+          endpoint: pathname,
+          requestId,
+        }))
+      ) {
+        return;
+      }
+      const tenants = await getTenants();
+      const tenant = tenants[client.clientKey] ?? null;
+      const resolvedStatuses = await resolveCrmBusinessStatuses({
+        prisma,
+        clientId: client.id,
+        tenant,
+      });
+      const payload = await buildCampaignAudiencePreviewPayload(prisma, {
+        clientId: client.id,
+        query,
+        statuses: resolvedStatuses.statuses,
+      });
+      json(res, 200, payload);
+    } catch (error) {
+      logger.error({
+        event: "app.campaigns.audience_preview.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
     }
     return;
   }

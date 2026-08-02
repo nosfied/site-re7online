@@ -188,6 +188,13 @@ async function cleanup() {
       },
     },
   });
+  await prisma.lead.deleteMany({
+    where: {
+      tenantId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.appAuthSession.deleteMany({
     where: {
       clientId: {
@@ -322,6 +329,7 @@ test("business profile default can access campaigns route", async () => {
 test("government profile default is blocked from campaigns routes", async () => {
   const routes = [
     { method: "GET", route: "/app/campaigns" },
+    { method: "GET", route: "/app/campaigns/audience-preview" },
     { method: "GET", route: "/app/campaigns/missing" },
     { method: "POST", route: "/app/campaigns/missing/cancel" },
     {
@@ -346,6 +354,119 @@ test("government profile default is blocked from campaigns routes", async () => 
     assert.equal(getErrorCode(response.body), "feature_not_enabled");
     assert.equal(response.body.feature, "campaigns");
   }
+});
+
+test("campaign audience preview is tenant scoped and does not create operational records", async () => {
+  const eligibleWaId = "5541991177001";
+  const blockedWaId = "5541991177002";
+  const otherTenantWaId = "5541991177003";
+
+  await prisma.lead.createMany({
+    data: [
+      {
+        tenantId: businessClientId,
+        waId: eligibleWaId,
+        waIdCanonical: eligibleWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "Cliente Elegivel",
+        phone: eligibleWaId,
+        company: "Empresa Elegivel",
+        city: "Curitiba",
+        status: "RETORNO_FUTURO",
+      },
+      {
+        tenantId: businessClientId,
+        waId: blockedWaId,
+        waIdCanonical: blockedWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "Cliente Bloqueado",
+        phone: blockedWaId,
+        status: "RETORNO_FUTURO",
+      },
+      {
+        tenantId: businessClientId,
+        waId: `${prefix}-instagram-audience`,
+        channel: "instagram",
+        provider: "meta",
+        name: "Contato Instagram",
+        status: "RETORNO_FUTURO",
+      },
+      {
+        tenantId: overrideClientId,
+        waId: otherTenantWaId,
+        waIdCanonical: otherTenantWaId,
+        channel: "whatsapp",
+        provider: "meta",
+        name: "Outro Tenant",
+        phone: otherTenantWaId,
+        status: "RETORNO_FUTURO",
+      },
+    ],
+  });
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId: blockedWaId,
+    source: "test",
+    reason: "preview block",
+  });
+
+  const campaignsBefore = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const eventsBefore = await prisma.event.count({ where: { clientId: businessClientId } });
+  const response = await request<{
+    ok: boolean;
+    summary: {
+      total: number;
+      eligible: number;
+      blocked: number;
+      blockedByReason: Array<{ reason: string; label: string; count: number }>;
+    };
+    items: Array<{
+      leadId: string;
+      displayName: string | null;
+      phoneDisplay: string | null;
+      identifierDisplay: string;
+      channel: string | null;
+      eligible: boolean;
+      blockedReason: string | null;
+      activeOptOut: boolean;
+    }>;
+    pagination: { total: number; page: number; limit: number };
+  }>(
+    "GET",
+    "/app/campaigns/audience-preview?status=RETORNO_FUTURO&limit=20&clientId=malicious",
+    businessAdmin
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.summary.total, 3);
+  assert.equal(response.body.summary.eligible, 1);
+  assert.equal(response.body.summary.blocked, 2);
+  assert.equal(response.body.items.some((item) => item.displayName === "Outro Tenant"), false);
+
+  const eligible = response.body.items.find((item) => item.displayName === "Cliente Elegivel");
+  assert.ok(eligible);
+  assert.equal(eligible.eligible, true);
+  assert.notEqual(eligible.phoneDisplay, eligibleWaId);
+  assert.equal(JSON.stringify(eligible).includes(eligibleWaId), false);
+
+  const blocked = response.body.items.find((item) => item.displayName === "Cliente Bloqueado");
+  assert.ok(blocked);
+  assert.equal(blocked.eligible, false);
+  assert.equal(blocked.activeOptOut, true);
+  assert.equal(blocked.blockedReason, "active_send_blocked");
+
+  const instagram = response.body.items.find((item) => item.displayName === "Contato Instagram");
+  assert.ok(instagram);
+  assert.equal(instagram.eligible, false);
+  assert.equal(instagram.blockedReason, "non_whatsapp_channel");
+
+  const campaignsAfter = await prisma.campaign.count({ where: { clientId: businessClientId } });
+  const eventsAfter = await prisma.event.count({ where: { clientId: businessClientId } });
+  assert.equal(campaignsAfter, campaignsBefore);
+  assert.equal(eventsAfter, eventsBefore);
 });
 
 test("tenant override can enable campaigns for a non-business profile", async () => {
