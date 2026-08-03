@@ -8,6 +8,10 @@ import { makeConversationKey } from "../storage/conversationKey.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
 import {
+  resolveCampaignRecipientConversationTarget,
+  summarizeCampaignRecipientResolution,
+} from "./campaignRecipientConversationBridge.js";
+import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
 } from "./optOutRegistry.js";
@@ -118,7 +122,7 @@ async function runCampaignInBackground(
         )?.blockedCount ?? 0;
 
       for (let index = 0; index < waIds.length; index += 1) {
-        const waId = waIds[index];
+        const inputWaId = waIds[index];
         const campaignState = await prisma.campaign.findUnique({
           where: { id: params.campaignId },
           select: { status: true },
@@ -133,13 +137,48 @@ async function runCampaignInBackground(
           });
           return;
         }
+        const resolvedRecipient = await resolveCampaignRecipientConversationTarget(prisma, {
+          clientId: params.clientId,
+          inputWaId,
+        });
+        const resolutionSummary = summarizeCampaignRecipientResolution(resolvedRecipient);
+        const waId = resolvedRecipient.winningWaId;
+        const waIdCanonical = resolvedRecipient.winningWaIdCanonical;
+        if (resolvedRecipient.resolved) {
+          await persistEvent({
+            clientId: params.clientId,
+            conversationId: resolvedRecipient.conversationId ?? null,
+            waId,
+            waIdCanonical,
+            requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
+            eventName: "campaign.recipient.conversation_resolved",
+            payloadJson: {
+              campaignId: params.campaignId,
+              campaignRunId,
+              ...resolutionSummary,
+            },
+          });
+        } else if (resolvedRecipient.reason === "ambiguous") {
+          await persistEvent({
+            clientId: params.clientId,
+            waId: inputWaId,
+            waIdCanonical: resolvedRecipient.inputWaIdCanonical,
+            requestId: `campaign-recipient-resolution:${params.campaignId}:${index + 1}`,
+            eventName: "campaign.recipient.conversation_resolution_ambiguous",
+            payloadJson: {
+              campaignId: params.campaignId,
+              campaignRunId,
+              ...resolutionSummary,
+            },
+          });
+        }
         logger.updateContext({
           waId,
           conversationKey: makeConversationKey(params.clientKey, waId),
         });
         const requestId = crypto.randomUUID();
         const messageId = `campaign.${params.campaignId}.${index + 1}`;
-        const components = params.componentsByWaId?.[waId] ?? params.components;
+        const components = params.componentsByWaId?.[inputWaId] ?? params.componentsByWaId?.[waId] ?? params.components;
         const result = await sendTemplate({
           toE164: waId,
           waId,
@@ -182,6 +221,7 @@ async function runCampaignInBackground(
           clientId: params.clientId,
           phoneNumberId,
           waId,
+          waIdCanonical,
           messageId,
           type: MessageType.TEMPLATE,
           status,
@@ -196,11 +236,14 @@ async function runCampaignInBackground(
             campaignRunId,
             templateName: params.templateName,
             components: components ?? null,
+            recipientResolution: resolutionSummary,
           },
         });
         await persistEvent({
           clientId: params.clientId,
+          conversationId: resolvedRecipient.conversationId ?? null,
           waId,
+          waIdCanonical,
           messageId,
           requestId,
           eventName: result.ok ? "campaign.message.sent" : "campaign.message.failed",
@@ -238,6 +281,28 @@ async function runCampaignInBackground(
         }
 
         sentCount += 1;
+        const deliveredAt = new Date();
+        if (resolvedRecipient.conversationId) {
+          await prisma.conversation.updateMany({
+            where: {
+              id: resolvedRecipient.conversationId,
+              clientId: params.clientId,
+            },
+            data: {
+              lastOutboundAt: deliveredAt,
+            },
+          });
+          await prisma.conversationRuntimeState.updateMany({
+            where: {
+              clientId: params.clientId,
+              OR: [{ waId }, { waIdCanonical }],
+            },
+            data: {
+              lastOutboundAt: deliveredAt,
+              lastOutboundMessageId: messageId,
+            },
+          });
+        }
         await prisma.campaign.update({
           where: { id: params.campaignId },
           data: { sentCount },

@@ -243,6 +243,27 @@ async function cleanup() {
       },
     },
   });
+  await prisma.conversationRuntimeState.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.conversation.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
+  await prisma.contact.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.appAuthSession.deleteMany({
     where: {
       clientId: {
@@ -1952,6 +1973,267 @@ test("campaign draft explicit send renders mapped variables per contact", async 
       ],
     },
   ]);
+});
+
+test("campaign send resolves safe ninth digit variant to existing conversation", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_bridge_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso de atendimento",
+    },
+  });
+  const conversationWaId = "554112349614";
+  const inputWaId = "5541912349614";
+  const previousOutboundAt = new Date("2026-01-01T10:00:00.000Z");
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId: conversationWaId,
+      waIdCanonical: conversationWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      lastInboundAt: new Date("2026-01-01T09:00:00.000Z"),
+      lastOutboundAt: previousOutboundAt,
+    },
+    select: { id: true },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId: conversationWaId,
+      waIdCanonical: conversationWaId,
+      conversationKey: `${prefix}-business:${conversationWaId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T09:00:00.000Z"),
+      lastOutboundAt: previousOutboundAt,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.bridge.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: boolean; campaign: { id: string; status: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio com variacao segura",
+      templateId: template.id,
+      recipients: [inputWaId],
+    }
+  );
+  assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+
+  assert.equal(metaPayloads.length, 1);
+  assert.equal((metaPayloads[0] as { to?: string }).to, conversationWaId);
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    select: { waId: true, waIdCanonical: true, rawPayload: true },
+  });
+  assert.equal(outbound.waId, conversationWaId);
+  assert.equal(outbound.waIdCanonical, conversationWaId);
+  const resolution = (outbound.rawPayload as { recipientResolution?: { matchedBy?: string; inputLast4?: string } })
+    .recipientResolution;
+  assert.equal(resolution?.matchedBy, "brazil_ninth_digit_safe");
+  assert.equal(resolution?.inputLast4, "9614");
+  assert.equal(JSON.stringify(resolution).includes(inputWaId), false);
+
+  const updatedConversation = await prisma.conversation.findUniqueOrThrow({
+    where: { id: conversation.id },
+    select: { lastOutboundAt: true },
+  });
+  if ((updatedConversation.lastOutboundAt?.getTime() ?? 0) <= previousOutboundAt.getTime()) {
+    await waitFor(async () => {
+      const refreshed = await prisma.conversation.findUnique({
+        where: { id: conversation.id },
+        select: { lastOutboundAt: true },
+      });
+      return (refreshed?.lastOutboundAt?.getTime() ?? 0) > previousOutboundAt.getTime();
+    });
+  }
+
+  const runtimeStates = await prisma.conversationRuntimeState.findMany({
+    where: {
+      clientId: businessClientId,
+      OR: [{ waId: conversationWaId }, { waId: inputWaId }],
+    },
+    select: { waId: true, mode: true, status: true, assignedUserId: true, lastOutboundMessageId: true },
+  });
+  assert.equal(runtimeStates.length, 1);
+  assert.equal(runtimeStates[0].waId, conversationWaId);
+  assert.equal(runtimeStates[0].mode, "HUMAN");
+  assert.equal(runtimeStates[0].status, "IN_PROGRESS");
+  assert.equal(runtimeStates[0].assignedUserId, businessAdmin.id);
+  assert.ok(runtimeStates[0].lastOutboundMessageId);
+
+  const resolutionEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.recipient.conversation_resolved",
+      conversationId: conversation.id,
+    },
+    select: { payloadJson: true },
+  });
+  assert.ok(resolutionEvent);
+  assert.equal(JSON.stringify(resolutionEvent.payloadJson).includes(inputWaId), false);
+});
+
+test("campaign recipient bridge does not cross tenants and skips ambiguous matches", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_bridge_isolation_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso de isolamento",
+    },
+  });
+  const otherTenantWaId = "554198889614";
+  await prisma.conversation.create({
+    data: {
+      clientId: governmentClientId,
+      waId: otherTenantWaId,
+      waIdCanonical: otherTenantWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      lastInboundAt: new Date("2026-01-01T09:00:00.000Z"),
+    },
+  });
+  await prisma.conversation.createMany({
+    data: [
+      {
+        clientId: businessClientId,
+        waId: "554176549614",
+        waIdCanonical: "554176549614",
+        channel: "whatsapp",
+        provider: "meta",
+        lastInboundAt: new Date("2026-01-01T09:00:00.000Z"),
+      },
+      {
+        clientId: businessClientId,
+        waId: "alt-554176549614",
+        waIdCanonical: null,
+        channel: "whatsapp",
+        provider: "meta",
+        lastInboundAt: new Date("2026-01-01T09:05:00.000Z"),
+      },
+    ],
+  });
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.isolation.${metaPayloads.length}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const crossTenant = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio sem cruzar tenant",
+      templateId: template.id,
+      recipients: [otherTenantWaId],
+    }
+  );
+  assert.equal(crossTenant.status, 200);
+  const ambiguousInput = "5541976549614";
+  const ambiguous = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio ambiguo",
+      templateId: template.id,
+      recipients: [ambiguousInput],
+    }
+  );
+  assert.equal(ambiguous.status, 200);
+
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: {
+        clientId: businessClientId,
+        messageId: {
+          in: [`campaign.${crossTenant.body.campaign.id}.1`, `campaign.${ambiguous.body.campaign.id}.1`],
+        },
+      },
+    });
+    return count === 2;
+  });
+
+  const metaRecipients = metaPayloads.map((payload) => (payload as { to?: string }).to);
+  assert.equal(metaRecipients.includes(otherTenantWaId), true);
+  assert.equal(metaRecipients.includes(ambiguousInput), true);
+
+  const crossTenantEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.recipient.conversation_resolved",
+      messageId: `campaign.${crossTenant.body.campaign.id}.1`,
+    },
+  });
+  assert.equal(crossTenantEvent, null);
+  const governmentConversation = await prisma.conversation.findFirstOrThrow({
+    where: { clientId: governmentClientId, waId: otherTenantWaId },
+    select: { lastOutboundAt: true },
+  });
+  assert.equal(governmentConversation.lastOutboundAt, null);
+
+  const ambiguousEvent = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.recipient.conversation_resolution_ambiguous",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(ambiguousEvent);
+  assert.equal((ambiguousEvent.payloadJson as { reason?: string }).reason, "ambiguous");
+  assert.equal(JSON.stringify(ambiguousEvent.payloadJson).includes(ambiguousInput), false);
 });
 
 test("campaign draft send blocks mapped recipients without value or fallback", async () => {
