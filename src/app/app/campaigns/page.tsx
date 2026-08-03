@@ -51,6 +51,8 @@ type CampaignStatusFilter =
   | "cancelled"
   | "failed";
 
+type CampaignCenterTab = "create" | "drafts" | "sent" | "blocked" | "all";
+
 type AudiencePreviewFilters = {
   q: string;
   status: string;
@@ -86,6 +88,14 @@ const STATUS_FILTER_OPTIONS: CampaignStatusFilter[] = [
   "blocked",
   "cancelled",
   "failed",
+];
+
+const CAMPAIGN_CENTER_TABS: Array<{ id: CampaignCenterTab; label: string }> = [
+  { id: "create", label: "Criar campanha" },
+  { id: "drafts", label: "Rascunhos" },
+  { id: "sent", label: "Enviadas" },
+  { id: "blocked", label: "Bloqueadas/Falhas" },
+  { id: "all", label: "Todas" },
 ];
 
 function normalizeTemplateParams(input: string) {
@@ -336,6 +346,21 @@ function getAudienceEligibilityClasses(eligible: boolean) {
     : "border-amber-400/30 bg-amber-900/20 text-amber-100";
 }
 
+function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
+  switch (tab) {
+    case "drafts":
+      return "draft";
+    case "sent":
+      return "completed";
+    case "blocked":
+      return "blocked";
+    case "all":
+    case "create":
+    default:
+      return "all";
+  }
+}
+
 export default function AppCampaignsPage() {
   const router = useRouter();
   const [session, setSession] = useState<AppSession | null>(null);
@@ -351,6 +376,7 @@ export default function AppCampaignsPage() {
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
+  const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -408,6 +434,10 @@ export default function AppCampaignsPage() {
     [form.templateId, form.templateName, templates]
   );
 
+  const selectedTemplateEffectiveCategory = String(
+    selectedTemplate?.effectiveCategory ?? selectedTemplate?.category ?? ""
+  ).toUpperCase();
+
   const templateVariableLabels = useMemo(
     () => getTemplateVariablePositions(selectedTemplate),
     [selectedTemplate]
@@ -435,6 +465,21 @@ export default function AppCampaignsPage() {
     () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
     [audiencePreview]
   );
+
+  const campaignStats = useMemo(() => {
+    return campaigns.reduce(
+      (acc, campaign) => {
+        acc.total += 1;
+        if (campaign.status === "draft") acc.drafts += 1;
+        if (campaign.status === "sending") acc.sending += 1;
+        if (campaign.status === "completed") acc.sent += 1;
+        if (campaign.status === "blocked") acc.blocked += 1;
+        if (campaign.status === "failed") acc.failed += 1;
+        return acc;
+      },
+      { total: 0, drafts: 0, sending: 0, sent: 0, blocked: 0, failed: 0 }
+    );
+  }, [campaigns]);
 
   const defaultDraftName = useMemo(() => {
     const formatter = new Intl.DateTimeFormat("pt-BR", {
@@ -542,7 +587,10 @@ export default function AppCampaignsPage() {
     return campaigns
       .filter((campaign) => {
         const campaignName = (campaign.name || "").toLowerCase();
-        const matchesStatus = statusFilter === "all" || campaign.status === statusFilter;
+        const matchesStatus =
+          activeTab === "blocked"
+            ? campaign.status === "blocked" || campaign.status === "failed"
+            : statusFilter === "all" || campaign.status === statusFilter;
         const matchesSearch = !query || campaignName.includes(query);
         return matchesStatus && matchesSearch;
       })
@@ -552,7 +600,7 @@ export default function AppCampaignsPage() {
         if (aSending !== bSending) return bSending - aSending;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [campaigns, search, statusFilter]);
+  }, [activeTab, campaigns, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCampaigns.length / PAGE_SIZE));
 
@@ -785,9 +833,13 @@ export default function AppCampaignsPage() {
       const detail = await getAppCampaign(session, created.campaign.id);
       setSelectedCampaign(detail.campaign);
       setSelectedCampaignId(created.campaign.id);
-      setForm((prev) => ({ ...prev, name }));
+      setForm(EMPTY_FORM);
+      setFormError(null);
+      setStatusFilter("draft");
+      setActiveTab("drafts");
+      setCurrentPage(1);
       setToast(
-        `Rascunho criado: ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+        `Rascunho criado. Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
       );
       window.setTimeout(() => setToast(null), 4000);
     } catch (err) {
@@ -849,7 +901,7 @@ export default function AppCampaignsPage() {
     <AppShell
       session={session}
       title="Campanhas"
-      subtitle="Crie campanhas e acompanhe os envios sem perder o historico."
+      subtitle="Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM."
     >
       {error ? (
         <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
@@ -862,13 +914,88 @@ export default function AppCampaignsPage() {
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-white/10 bg-white/5">
+      <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="flex flex-col gap-4">
+          <div className="max-w-5xl">
+            <h2 className="text-base font-semibold">Central de Campanhas</h2>
+            <p className="mt-2 text-sm leading-6 text-white/70">
+              Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM.
+              Antes do envio, a plataforma valida bloqueio de envio ativo, contatos anonimizados,
+              WhatsApp válido, duplicidades e variáveis obrigatórias.
+            </p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              "Escolha a audiência",
+              "Valide elegíveis",
+              "Escolha o template",
+              "Mapeie variáveis",
+              "Crie rascunho",
+              "Revise e envie",
+            ].map((label, index) => (
+              <div key={label} className="rounded-md border border-white/10 bg-re7-navy/35 p-3">
+                <p className="text-xs font-semibold text-re7-sky">0{index + 1}</p>
+                <p className="mt-1 text-sm text-white/85">{label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Rascunhos</p>
+              <p className="mt-1 text-xl font-semibold">{campaignStats.drafts}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Em envio</p>
+              <p className="mt-1 text-xl font-semibold text-amber-100">{campaignStats.sending}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Enviadas</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-100">{campaignStats.sent}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Bloqueadas</p>
+              <p className="mt-1 text-xl font-semibold text-orange-100">{campaignStats.blocked}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Falhas</p>
+              <p className="mt-1 text-xl font-semibold text-red-100">{campaignStats.failed}</p>
+            </div>
+            <div className="rounded-md border border-white/10 bg-white/5 p-3">
+              <p className="text-xs uppercase tracking-wide text-white/55">Total recente</p>
+              <p className="mt-1 text-xl font-semibold">{campaignStats.total}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {CAMPAIGN_CENTER_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setStatusFilter(getTabStatusFilter(tab.id));
+                  setCurrentPage(1);
+                }}
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                  activeTab === tab.id
+                    ? "border-re7-sky bg-re7-sky/20 text-white"
+                    : "border-white/15 bg-white/5 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className={`${activeTab === "create" ? "grid" : "hidden"} rounded-xl border border-white/10 bg-white/5`}>
         <div className="border-b border-white/10 px-3 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Previa de audiencia CRM</h2>
+              <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Bloco 1</p>
+              <h2 className="mt-1 text-sm font-semibold">Audiência CRM</h2>
               <p className="mt-1 text-xs text-white/60">
-                Valide contatos antes de montar campanhas com template aprovado.
+                Escolha filtros, gere a prévia e valide quem está elegível antes de montar a campanha.
               </p>
             </div>
             <span className="rounded-full border border-sky-300/30 bg-sky-900/20 px-3 py-1 text-xs text-sky-100">
@@ -1005,6 +1132,13 @@ export default function AppCampaignsPage() {
                 </p>
               ) : null}
               <div className="grid gap-3 rounded-md border border-white/10 bg-white/5 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)_auto]">
+                <div className="lg:col-span-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Blocos 2 e 4</p>
+                  <h3 className="mt-1 text-sm font-semibold">Template aprovado e rascunho</h3>
+                  <p className="mt-1 text-xs text-white/60">
+                    Escolha um modelo aprovado, revise as regras e crie um rascunho. Criar rascunho não envia mensagens.
+                  </p>
+                </div>
                 <label className="grid gap-1 text-sm">
                   <span className="text-white/70">Nome do rascunho</span>
                   <input
@@ -1038,6 +1172,11 @@ export default function AppCampaignsPage() {
                       </option>
                     ))}
                   </select>
+                  {selectedTemplate ? (
+                    <span className="text-xs text-white/55">
+                      Categoria efetiva: {selectedTemplateEffectiveCategory || selectedTemplate.category || "-"}
+                    </span>
+                  ) : null}
                 </label>
                 <div className="flex flex-col justify-end gap-2">
                   <p className="text-xs text-white/60">
@@ -1072,9 +1211,15 @@ export default function AppCampaignsPage() {
                     </a>
                   </div>
                 ) : null}
+                {selectedTemplateEffectiveCategory === "MARKETING" ? (
+                  <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
+                    Este template está classificado como MARKETING pela Meta. Revise política, consentimento e custos antes de enviar.
+                  </div>
+                ) : null}
                 {templateVariableLabels.length > 0 ? (
                   <div className="grid gap-3 rounded-md border border-re7-sky/20 bg-re7-sky/10 p-3 lg:col-span-3">
                     <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-re7-sky">Bloco 3</p>
                       <p className="text-sm font-semibold text-sky-100">Variáveis do template</p>
                       <p className="mt-1 text-xs text-white/60">
                         Defina como cada variável será preenchida para cada contato antes de criar o rascunho.
@@ -1251,134 +1396,130 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           ) : null}
-        </div>
-      </section>
-
-      <section className="grid min-w-0 grid-cols-1 items-start gap-3 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="flex min-w-0 flex-col rounded-xl border border-white/10 bg-white/5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-hidden">
-          <div className="border-b border-white/10 px-3 py-2.5">
-            <h2 className="text-sm font-semibold">Envio imediato manual</h2>
-            <p className="mt-1 text-xs text-white/55">
-              Compatibilidade para listas manuais. Para audiencia CRM, use rascunho e revisao.
-            </p>
-          </div>
-          <form className="flex flex-1 flex-col" onSubmit={handleSubmit}>
-            <div className="grid min-w-0 flex-1 gap-2 p-3 lg:overflow-y-auto">
-            <label className="grid min-w-0 gap-1 text-sm">
-              <span className="text-white/70">Nome</span>
-              <input
-                className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              />
-            </label>
-            <label className="grid min-w-0 gap-1 text-sm">
-              <span className="text-white/70">Template</span>
-              <select
-                className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                value={form.templateId}
-                disabled={templates.length === 0}
-                onChange={(event) => {
-                  const nextTemplateId = event.target.value;
-                  const selectedTemplate = templates.find((item) => item.id === nextTemplateId) ?? null;
-                  const labels = getTemplateVariablePositions(selectedTemplate);
-                  setForm((prev) => ({
-                    ...prev,
-                    templateId: nextTemplateId,
-                    templateName: selectedTemplate?.name ?? "",
-                    templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
-                    templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
-                  }));
-                }}
-              >
-                <option value="">
-                  {templates.length === 0
-                    ? "Nenhum template aprovado disponivel"
-                    : "Selecione um template aprovado"}
-                </option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name} - {template.category}
-                  </option>
-                ))}
-              </select>
-              {form.templateName && !form.templateId ? (
-                <span className="text-xs text-amber-200">
-                  Template reaproveitado de campanha antiga. Selecione o equivalente aprovado para vincular.
-                </span>
-              ) : null}
-            </label>
-            {templateVariableLabels.length > 0 ? (
-              <div className="grid min-w-0 gap-2.5">
-                <span className="text-sm text-white/70">Variaveis do template</span>
-                {templateVariableLabels.map((label, index) => (
-                  <label key={`${label}-${index}`} className="grid min-w-0 gap-1 text-sm">
-                    <span className="text-white/70">{label}</span>
-                    <input
-                      className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                      value={form.templateVariables[index] ?? ""}
+          <details className="rounded-md border border-white/10 bg-white/5">
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-white/85">
+              Envio imediato manual (avançado)
+            </summary>
+            <div className="border-t border-white/10 p-3">
+              <p className="mb-3 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+                Use apenas para operação técnica ou compatibilidade. O fluxo recomendado é criar rascunho a partir da audiência CRM.
+              </p>
+              <form className="grid gap-3 lg:grid-cols-2" onSubmit={handleSubmit}>
+                <label className="grid min-w-0 gap-1 text-sm">
+                  <span className="text-white/70">Nome</span>
+                  <input
+                    className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={form.name}
+                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  />
+                </label>
+                <label className="grid min-w-0 gap-1 text-sm">
+                  <span className="text-white/70">Template</span>
+                  <select
+                    className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={form.templateId}
+                    disabled={templates.length === 0}
+                    onChange={(event) => {
+                      const nextTemplateId = event.target.value;
+                      const selectedTemplate = templates.find((item) => item.id === nextTemplateId) ?? null;
+                      const labels = getTemplateVariablePositions(selectedTemplate);
+                      setForm((prev) => ({
+                        ...prev,
+                        templateId: nextTemplateId,
+                        templateName: selectedTemplate?.name ?? "",
+                        templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                        templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
+                      }));
+                    }}
+                  >
+                    <option value="">
+                      {templates.length === 0
+                        ? "Nenhum template aprovado disponivel"
+                        : "Selecione um template aprovado"}
+                    </option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} - {template.category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {templateVariableLabels.length > 0 ? (
+                  <div className="grid min-w-0 gap-2.5 lg:col-span-2">
+                    <span className="text-sm text-white/70">Variáveis manuais do template</span>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {templateVariableLabels.map((label, index) => (
+                        <label key={`${label}-${index}`} className="grid min-w-0 gap-1 text-sm">
+                          <span className="text-white/70">{label}</span>
+                          <input
+                            className="block w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                            value={form.templateVariables[index] ?? ""}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                templateVariables: prev.templateVariables.map((value, valueIndex) =>
+                                  valueIndex === index ? event.target.value : value
+                                ),
+                                templateParamsInput: syncTemplateVariables(
+                                  prev.templateVariables.map((value, valueIndex) =>
+                                    valueIndex === index ? event.target.value : value
+                                  ),
+                                  templateVariableLabels.length
+                                ).join("\n"),
+                              }))
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    {manualTemplatePreview ? (
+                      <div className="rounded-md border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
+                        <p className="mb-1 text-xs uppercase tracking-wide text-white/50">Preview manual</p>
+                        <p>{manualTemplatePreview}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
+                    <span className="text-white/70">Template params (um por linha)</span>
+                    <textarea
+                      className="block min-h-16 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                      value={form.templateParamsInput}
                       onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          templateVariables: prev.templateVariables.map((value, valueIndex) =>
-                            valueIndex === index ? event.target.value : value
-                          ),
-                          templateParamsInput: syncTemplateVariables(
-                            prev.templateVariables.map((value, valueIndex) =>
-                              valueIndex === index ? event.target.value : value
-                            ),
-                            templateVariableLabels.length
-                          ).join("\n"),
-                        }))
+                        setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
                       }
                     />
                   </label>
-                ))}
-                {manualTemplatePreview ? (
-                  <div className="rounded-md border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
-                    <p className="mb-1 text-xs uppercase tracking-wide text-white/50">Preview</p>
-                    <p>{manualTemplatePreview}</p>
-                  </div>
+                )}
+                <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
+                  <span className="text-white/70">Destinatários manuais (um waId por linha)</span>
+                  <textarea
+                    className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                    value={form.recipientsInput}
+                    onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
+                  />
+                </label>
+                {formError ? (
+                  <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 lg:col-span-2">
+                    {formError}
+                  </p>
                 ) : null}
-              </div>
-            ) : (
-              <label className="grid min-w-0 gap-1 text-sm">
-                <span className="text-white/70">Template params (um por linha)</span>
-                <textarea
-                  className="block min-h-16 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                  value={form.templateParamsInput}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, templateParamsInput: event.target.value }))
-                  }
-                />
-              </label>
-            )}
-            <label className="grid min-w-0 gap-1 text-sm">
-              <span className="text-white/70">Destinatarios manuais (um waId por linha)</span>
-              <textarea
-                className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
-                value={form.recipientsInput}
-                onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
-              />
-            </label>
-            {formError ? (
-              <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-                {formError}
-              </p>
-            ) : null}
+                <div className="flex justify-end lg:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creating ? "Iniciando envio..." : "Enviar campanha agora"}
+                  </button>
+                </div>
+              </form>
             </div>
-            <div className="border-t border-white/10 bg-re7-navy/30 p-2.5">
-            <button
-              type="submit"
-              disabled={creating}
-              className="w-full rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {creating ? "Iniciando envio..." : "Enviar campanha agora"}
-            </button>
-            </div>
-          </form>
-        </aside>
+          </details>
+        </div>
+      </section>
 
+      <section className={`${activeTab === "create" ? "hidden" : "grid"} min-w-0 grid-cols-1 items-start gap-3`}>
         <div className="grid min-w-0 gap-3">
           <section className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
             <div className="border-b border-white/10 px-3 py-2.5">
@@ -1398,7 +1539,10 @@ export default function AppCampaignsPage() {
                   <select
                     className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                     value={statusFilter}
-                    onChange={(event) => setStatusFilter(event.target.value as CampaignStatusFilter)}
+                    onChange={(event) => {
+                      setActiveTab("all");
+                      setStatusFilter(event.target.value as CampaignStatusFilter);
+                    }}
                   >
                     {STATUS_FILTER_OPTIONS.map((option) => (
                       <option key={option} value={option}>
@@ -1421,7 +1565,7 @@ export default function AppCampaignsPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-white/10 text-left">
                 <tr>
-                  <th className="px-2 py-2">Replay</th>
+                  <th className="px-2 py-2">Ações</th>
                   <th className="px-2 py-2">Campanha</th>
                   <th className="px-2 py-2">Status</th>
                   <th className="px-2 py-2 text-center">Enviadas</th>
@@ -1463,19 +1607,32 @@ export default function AppCampaignsPage() {
                       onClick={() => setSelectedCampaignId(campaign.id)}
                     >
                       <td className="px-2 py-2 align-top">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedCampaignId(campaign.id);
-                            handleReuseCampaign(campaign);
-                          }}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/20 text-sm text-white/80 hover:bg-white/10"
-                          title="Reaproveitar campanha"
-                          aria-label={`Reaproveitar campanha ${campaign.name || campaign.id}`}
-                        >
-                          ↺
-                        </button>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedCampaignId(campaign.id);
+                            }}
+                            className="rounded-md border border-re7-sky/40 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-re7-sky/10"
+                          >
+                            Ver detalhes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setActiveTab("create");
+                              setSelectedCampaignId(campaign.id);
+                              handleReuseCampaign(campaign);
+                            }}
+                            className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/65 hover:bg-white/10"
+                            title="Reaproveitar campanha"
+                            aria-label={`Reaproveitar campanha ${campaign.name || campaign.id}`}
+                          >
+                            Reusar
+                          </button>
+                        </div>
                       </td>
                       <td className="px-2 py-2">
                         <div className="min-w-0">
@@ -1594,8 +1751,8 @@ export default function AppCampaignsPage() {
 
                   <div className="rounded-md border border-white/10 bg-white/5 p-3 text-sm text-white/70">
                     Status da campanha e baseado na confirmacao da Meta (sent, delivered, read).
-                    Mensagens faturaveis para CRA-PR sao consideradas apenas quando entregues/lidas,
-                    com categoria utility.
+                    Relatórios comerciais podem considerar critérios de entrega, leitura e categoria
+                    do template conforme a regra contratual aplicável.
                   </div>
 
                   {selectedCampaign.status === "draft" ? (
