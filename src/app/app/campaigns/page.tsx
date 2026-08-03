@@ -54,6 +54,14 @@ type CampaignStatusFilter =
 
 type CampaignCenterTab = "create" | "drafts" | "sent" | "blocked" | "all";
 
+type CampaignToastTone = "success" | "warning" | "error" | "info";
+
+type CampaignToast = {
+  tone: CampaignToastTone;
+  title: string;
+  message: string;
+};
+
 type AudiencePreviewFilters = {
   q: string;
   status: string;
@@ -381,6 +389,20 @@ function getAudienceEligibilityClasses(eligible: boolean) {
     : "border-amber-400/30 bg-amber-900/20 text-amber-100";
 }
 
+function getToastClasses(tone: CampaignToastTone) {
+  switch (tone) {
+    case "success":
+      return "border-emerald-400/30 bg-emerald-950/95 text-emerald-50";
+    case "warning":
+      return "border-amber-400/35 bg-amber-950/95 text-amber-50";
+    case "error":
+      return "border-red-400/35 bg-red-950/95 text-red-50";
+    case "info":
+    default:
+      return "border-sky-400/30 bg-sky-950/95 text-sky-50";
+  }
+}
+
 function getTabStatusFilter(tab: CampaignCenterTab): CampaignStatusFilter {
   switch (tab) {
     case "drafts":
@@ -412,12 +434,15 @@ export default function AppCampaignsPage() {
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [manualSendOpen, setManualSendOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [refreshingList, setRefreshingList] = useState(false);
+  const [refreshingDetail, setRefreshingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [discardingDraft, setDiscardingDraft] = useState(false);
@@ -425,7 +450,11 @@ export default function AppCampaignsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<CampaignToast | null>(null);
+
+  const showToast = useCallback((tone: CampaignToastTone, title: string, message: string) => {
+    setToast({ tone, title, message });
+  }, []);
 
   const handleUnauthorized = useCallback(() => {
     clearAppSession();
@@ -464,6 +493,67 @@ export default function AppCampaignsPage() {
     setTemplates(approvedTemplates);
     return approvedTemplates;
   }, []);
+
+  const refreshCampaignDetail = useCallback(
+    async (activeSession: AppSession, campaignId: string, notify = false) => {
+      setRefreshingDetail(true);
+      setDetailError(null);
+      try {
+        const detail = await getAppCampaign(activeSession, campaignId);
+        setSelectedCampaign(detail.campaign);
+        setCampaigns((prev) => prev.map((item) => (item.id === detail.campaign.id ? detail.campaign : item)));
+        if (notify) {
+          showToast("success", "Detalhe atualizado", "Os dados da campanha foram recarregados.");
+        }
+        return detail.campaign;
+      } catch (err) {
+        const typed = err as { status?: number; message?: string };
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return null;
+        }
+        const message = typed.message || "Falha ao atualizar detalhe da campanha.";
+        setDetailError(message);
+        if (notify) {
+          showToast("error", "Atualização não concluída", message);
+        }
+        return null;
+      } finally {
+        setRefreshingDetail(false);
+      }
+    },
+    [handleUnauthorized, showToast]
+  );
+
+  const handleRefreshCampaigns = useCallback(async () => {
+    if (!session) return;
+    setRefreshingList(true);
+    setError(null);
+    try {
+      const items = await refreshCampaigns(session, selectedCampaignId);
+      const nextSelectedId =
+        selectedCampaignId && items.some((item) => item.id === selectedCampaignId)
+          ? selectedCampaignId
+          : items[0]?.id ?? null;
+      if (nextSelectedId) {
+        await refreshCampaignDetail(session, nextSelectedId);
+      } else {
+        setSelectedCampaign(null);
+      }
+      showToast("success", "Campanhas atualizadas", "A lista e o detalhe selecionado foram recarregados.");
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const message = typed.message || "Erro ao atualizar campanhas.";
+      setError(message);
+      showToast("error", "Atualização não concluída", message);
+    } finally {
+      setRefreshingList(false);
+    }
+  }, [handleUnauthorized, refreshCampaignDetail, refreshCampaigns, selectedCampaignId, session, showToast]);
 
   const selectedTemplate = useMemo(
     () =>
@@ -703,15 +793,27 @@ export default function AppCampaignsPage() {
         : normalizeTemplateParams(form.templateParamsInput);
 
     if (!name) {
-      setFormError("Erro ao criar campanha: informe o nome da campanha.");
+      const message = "Informe o nome da campanha.";
+      setFormError(`Erro ao criar campanha: ${message}`);
+      showToast("error", "Envio imediato incompleto", message);
       return;
     }
     if (!templateId && !templateName) {
-      setFormError("Erro ao criar campanha: selecione um template.");
+      const message = "Selecione um template aprovado antes de continuar.";
+      setFormError(`Erro ao criar campanha: ${message}`);
+      showToast("error", "Envio imediato incompleto", message);
       return;
     }
     if (recipients.length === 0) {
-      setFormError("Erro ao criar campanha: informe ao menos um destinatario valido.");
+      const message = "Informe ao menos um número do contato válido.";
+      setFormError(`Erro ao criar campanha: ${message}`);
+      showToast("error", "Envio imediato incompleto", message);
+      return;
+    }
+    if (templateVariableLabels.length > 0 && templateParams.some((value) => !value)) {
+      const message = "Informe todas as variáveis obrigatórias do modelo.";
+      setFormError(`Erro ao criar campanha: ${message}`);
+      showToast("error", "Envio imediato incompleto", message);
       return;
     }
     const confirmed = window.confirm(
@@ -739,15 +841,20 @@ export default function AppCampaignsPage() {
       setSelectedCampaignId(created.campaign.campaignId);
       setCurrentPage(1);
       setForm(EMPTY_FORM);
-      setToast("Campanha criada com sucesso.");
-      window.setTimeout(() => setToast(null), 3000);
+      showToast(
+        "success",
+        "Envio imediato processado",
+        "Confira o status na campanha e no Inbox, quando houver conversa associada."
+      );
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setFormError(typed.message || "Erro ao criar campanha. Verifique template e destinatarios.");
+      const message = typed.message || "Erro ao criar campanha. Verifique template e destinatários.";
+      setFormError(message);
+      showToast("error", "Envio imediato não processado", message);
     } finally {
       setCreating(false);
     }
@@ -762,15 +869,16 @@ export default function AppCampaignsPage() {
       const response = await cancelAppCampaign(session, selectedCampaign.id);
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
-      setToast("Campanha cancelada.");
-      window.setTimeout(() => setToast(null), 3000);
+      showToast("success", "Campanha cancelada", "O envio em andamento foi cancelado quando possível.");
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setDetailError(typed.message || "Erro ao cancelar campanha.");
+      const message = typed.message || "Erro ao cancelar campanha.";
+      setDetailError(message);
+      showToast("error", "Cancelamento não concluído", message);
     } finally {
       setCancelling(false);
     }
@@ -791,15 +899,16 @@ export default function AppCampaignsPage() {
       setActiveTab("all");
       setStatusFilter("all");
       setDetailModalOpen(false);
-      setToast("Rascunho descartado. Nenhuma mensagem foi enviada.");
-      window.setTimeout(() => setToast(null), 4000);
+      showToast("success", "Rascunho descartado", "Nenhuma mensagem foi enviada.");
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setDetailError(typed.message || "Nao foi possivel descartar o rascunho.");
+      const message = typed.message || "Não foi possível descartar o rascunho.";
+      setDetailError(message);
+      showToast("error", "Rascunho não descartado", message);
     } finally {
       setDiscardingDraft(false);
     }
@@ -820,15 +929,16 @@ export default function AppCampaignsPage() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setToast("CSV de consumo gerado.");
-      window.setTimeout(() => setToast(null), 3000);
+      showToast("success", "CSV gerado", "O relatório de consumo foi baixado.");
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setDetailError(typed.message || "Erro ao exportar consumo da campanha.");
+      const message = typed.message || "Erro ao exportar consumo da campanha.";
+      setDetailError(message);
+      showToast("error", "CSV não gerado", message);
     } finally {
       setExportingConsumption(false);
     }
@@ -890,15 +1000,20 @@ export default function AppCampaignsPage() {
     const templateId = form.templateId.trim();
 
     if (!templateId) {
-      setAudiencePreviewError("Selecione um template aprovado antes de criar o rascunho.");
+      const message = "Selecione um template aprovado antes de criar o rascunho.";
+      setAudiencePreviewError(message);
+      showToast("error", "Rascunho incompleto", message);
       return;
     }
     if (templateVariableMappingError) {
       setAudiencePreviewError(templateVariableMappingError);
+      showToast("error", "Rascunho incompleto", templateVariableMappingError);
       return;
     }
     if (selectedLeadIds.length === 0) {
-      setAudiencePreviewError("Nao ha contatos elegiveis nesta previa para criar rascunho.");
+      const message = "Não há contatos elegíveis nesta prévia para criar rascunho.";
+      setAudiencePreviewError(message);
+      showToast("warning", "Sem audiência elegível", message);
       return;
     }
 
@@ -923,17 +1038,20 @@ export default function AppCampaignsPage() {
       setStatusFilter("draft");
       setActiveTab("drafts");
       setCurrentPage(1);
-      setToast(
-        `Rascunho criado. Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
+      showToast(
+        "success",
+        "Rascunho criado",
+        `Revise antes de enviar. Nenhuma mensagem foi enviada. ${created.draft.summary.accepted} aceitos, ${created.draft.summary.blocked} bloqueados.`
       );
-      window.setTimeout(() => setToast(null), 4000);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setAudiencePreviewError(typed.message || "Nao foi possivel criar o rascunho da campanha.");
+      const message = typed.message || "Não foi possível criar o rascunho da campanha.";
+      setAudiencePreviewError(message);
+      showToast("error", "Rascunho não criado", message);
     } finally {
       setCreatingDraft(false);
     }
@@ -953,15 +1071,16 @@ export default function AppCampaignsPage() {
       await refreshCampaigns(session, response.campaign.id);
       setActiveTab("all");
       setStatusFilter("sending");
-      setToast(`Envio iniciado para ${response.send.summary.accepted} destinatarios elegiveis.`);
-      window.setTimeout(() => setToast(null), 4000);
+      showToast("success", "Envio iniciado", `${response.send.summary.accepted} destinatários elegíveis foram aceitos para processamento.`);
     } catch (err) {
       const typed = err as { status?: number; message?: string };
       if (typed.status === 401) {
         handleUnauthorized();
         return;
       }
-      setDetailError(typed.message || "Nao foi possivel enviar o rascunho.");
+      const message = typed.message || "Não foi possível enviar o rascunho.";
+      setDetailError(message);
+      showToast("error", "Envio não iniciado", message);
     } finally {
       setSendingDraft(false);
     }
@@ -969,15 +1088,64 @@ export default function AppCampaignsPage() {
 
   const handleReuseCampaign = (campaign: CampaignItem) => {
     const replayForm = buildReplayFormFromCampaign(campaign);
+    const replayTemplateId = campaign.draftSeed?.templateId || campaign.templateId || "";
+    const matchedTemplate =
+      templates.find((item) => replayTemplateId && item.id === replayTemplateId) ??
+      templates.find((item) => item.name === replayForm.templateName) ??
+      null;
+    const labels = getTemplateVariablePositions(matchedTemplate);
+    const templateVariables = normalizeTemplateParams(replayForm.templateParamsInput);
+    const seedMappings = campaign.draftSeed?.templateVariableMappings ?? [];
+    const replayMappings: TemplateVariableMappingFormState[] =
+      seedMappings.length > 0
+        ? labels.map((position) => {
+            const mapping = seedMappings.find((item) => item.position === position);
+            const source = mapping?.source as TemplateVariableSource | undefined;
+            const validSource: TemplateVariableSource =
+              source === "contact.displayName" ||
+              source === "lead.companyName" ||
+              source === "lead.city" ||
+              source === "fixed"
+                ? source
+                : "";
+            return {
+              position,
+              source: validSource,
+              value: mapping?.value ?? "",
+              fallback: mapping?.fallback ?? "",
+            };
+          })
+        : syncTemplateVariableMappings([], labels);
     setForm({
-      templateId: "",
-      templateVariables: normalizeTemplateParams(replayForm.templateParamsInput),
-      templateVariableMappings: [],
+      templateVariables: syncTemplateVariables(templateVariables, labels.length),
+      templateVariableMappings: replayMappings,
       ...replayForm,
+      templateId: matchedTemplate?.id ?? "",
+      templateName: matchedTemplate?.name ?? replayForm.templateName,
     });
     setFormError(null);
-    setToast("Formulario preenchido com os dados da campanha selecionada.");
-    window.setTimeout(() => setToast(null), 3000);
+    setManualSendOpen(Boolean(replayForm.recipientsInput.trim()));
+    if (replayForm.templateName && !matchedTemplate) {
+      showToast(
+        "warning",
+        "Campanha carregada para reuso",
+        "O template original não está disponível para campanha. Selecione um modelo ativo antes de criar novo rascunho ou usar envio imediato."
+      );
+      return;
+    }
+    if (campaign.draftSeed?.leadIds?.length && !replayForm.recipientsInput.trim()) {
+      showToast(
+        "warning",
+        "Campanha carregada para reuso",
+        "O template e as variáveis foram reaproveitados. Gere uma nova prévia de audiência CRM antes de criar outro rascunho."
+      );
+      return;
+    }
+    showToast(
+      "info",
+      "Campanha carregada para reuso",
+      "Revise audiência, template e variáveis antes de criar um novo rascunho ou envio imediato."
+    );
   };
 
   if (!session) {
@@ -990,16 +1158,39 @@ export default function AppCampaignsPage() {
       title="Campanhas"
       subtitle="Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM."
     >
-      <div className="fixed right-4 top-4 z-[70] grid w-[min(28rem,calc(100vw-2rem))] gap-2">
+      <div className="fixed right-4 top-4 z-[90] grid w-[min(30rem,calc(100vw-2rem))] gap-2">
         {error ? (
-          <p className="rounded-md border border-red-400/30 bg-red-900/80 p-3 text-sm text-red-100 shadow-2xl backdrop-blur">
-            {error}
-          </p>
+          <div className="rounded-md border border-red-400/30 bg-red-950/95 p-3 text-sm text-red-50 shadow-2xl backdrop-blur">
+            <div className="flex items-start justify-between gap-3">
+              <p>{error}</p>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="rounded border border-white/15 px-2 py-0.5 text-xs text-white/75 hover:bg-white/10"
+                aria-label="Fechar aviso de erro"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         ) : null}
         {toast ? (
-          <p className="rounded-md border border-emerald-400/30 bg-emerald-900/80 p-3 text-sm text-emerald-100 shadow-2xl backdrop-blur">
-            {toast}
-          </p>
+          <div className={`rounded-md border p-3 text-sm shadow-2xl backdrop-blur ${getToastClasses(toast.tone)}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold">{toast.title}</p>
+                <p className="mt-1 leading-5 opacity-85">{toast.message}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="shrink-0 rounded border border-white/15 px-2 py-0.5 text-xs text-white/75 hover:bg-white/10"
+                aria-label="Fechar aviso"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -1485,7 +1676,11 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           ) : null}
-          <details className="rounded-md border border-amber-300/20 bg-amber-950/10">
+          <details
+            className="rounded-md border border-amber-300/20 bg-amber-950/10"
+            open={manualSendOpen}
+            onToggle={(event) => setManualSendOpen(event.currentTarget.open)}
+          >
             <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-amber-100">
               Envio imediato manual (avançado)
             </summary>
@@ -1581,7 +1776,7 @@ export default function AppCampaignsPage() {
                   </label>
                 )}
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
-                  <span className="text-white/70">Números dos contatos</span>
+                  <span className="text-white/70">Número do contato</span>
                   <textarea
                     className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={form.recipientsInput}
@@ -1620,10 +1815,11 @@ export default function AppCampaignsPage() {
                 <h2 className="text-sm font-semibold">Campanhas</h2>
                 <button
                   type="button"
-                  onClick={() => session && refreshCampaigns(session, selectedCampaignId)}
-                  className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10"
+                  disabled={refreshingList}
+                  onClick={() => void handleRefreshCampaigns()}
+                  className="rounded-md border border-white/20 px-3 py-1 text-xs text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Atualizar
+                  {refreshingList ? "Atualizando..." : "Atualizar"}
                 </button>
               </div>
               <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[180px_minmax(0,1fr)]">
@@ -1799,13 +1995,26 @@ export default function AppCampaignsPage() {
                       Revise rascunho, status, audiência e consumo sem sair da lista.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDetailModalOpen(false)}
-                    className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
-                  >
-                    Fechar
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!session || !selectedCampaignId || refreshingDetail}
+                      onClick={() => {
+                        if (!session || !selectedCampaignId) return;
+                        void refreshCampaignDetail(session, selectedCampaignId, true);
+                      }}
+                      className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {refreshingDetail ? "Atualizando..." : "Atualizar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailModalOpen(false)}
+                      className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
                 <div className="grid gap-3 overflow-y-auto p-3 text-sm sm:p-4">
               {!selectedCampaignId ? (
