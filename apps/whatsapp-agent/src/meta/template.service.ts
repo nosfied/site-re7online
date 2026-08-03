@@ -1,9 +1,16 @@
 import { getPrisma } from "../db.js";
+import { getEnv } from "../config/env.js";
 import { logger } from "../logger/logger.js";
 
 type TenantMetaTemplateConfig = {
   businessToken?: string | null;
   wabaId?: string | null;
+};
+
+type MetaTemplateCredentials = {
+  businessToken: string;
+  wabaId: string;
+  source: "tenant_meta" | "env_matched_phone";
 };
 
 type TemplateForMeta = {
@@ -83,6 +90,53 @@ const META_TEMPLATE_BODY_MAX_LENGTH = 1024;
 function normalizeOptionalString(value: unknown) {
   if (typeof value !== "string") return "";
   return value.trim();
+}
+
+export async function resolveMetaTemplateCredentialsForClient(params: {
+  clientId: string;
+}): Promise<MetaTemplateCredentials | null> {
+  const prisma = getPrisma();
+  const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
+    where: { clientId: params.clientId },
+    select: {
+      businessToken: true,
+      wabaId: true,
+    },
+  });
+  const tenantBusinessToken = normalizeOptionalString(tenantMetaConfig?.businessToken);
+  const tenantWabaId = normalizeOptionalString(tenantMetaConfig?.wabaId);
+  if (tenantBusinessToken && tenantWabaId) {
+    return {
+      businessToken: tenantBusinessToken,
+      wabaId: tenantWabaId,
+      source: "tenant_meta",
+    };
+  }
+
+  const currentEnv = getEnv();
+  const envBusinessToken = normalizeOptionalString(currentEnv.WHATSAPP_ACCESS_TOKEN);
+  const envWabaId = normalizeOptionalString(currentEnv.WHATSAPP_BUSINESS_ACCOUNT_ID);
+  const envPhoneNumberId = normalizeOptionalString(currentEnv.WHATSAPP_PHONE_NUMBER_ID);
+  if (!envBusinessToken || !envWabaId || !envPhoneNumberId) {
+    return null;
+  }
+
+  const matchingPhone = await prisma.waPhoneNumber.findFirst({
+    where: {
+      clientId: params.clientId,
+      phoneNumberId: envPhoneNumberId,
+    },
+    select: { id: true },
+  });
+  if (!matchingPhone) {
+    return null;
+  }
+
+  return {
+    businessToken: envBusinessToken,
+    wabaId: envWabaId,
+    source: "env_matched_phone",
+  };
 }
 
 function extractPlaceholderIndexes(content: string) {
@@ -359,12 +413,6 @@ export async function syncTemplateStatus(templateId: string) {
       client: {
         select: {
           clientKey: true,
-          metaConfig: {
-            select: {
-              businessToken: true,
-              wabaId: true,
-            },
-          },
         },
       },
     },
@@ -374,19 +422,18 @@ export async function syncTemplateStatus(templateId: string) {
     throw new MetaTemplateServiceError("meta_template_sync_not_found", "meta_template_sync_not_found", 404);
   }
 
-  const businessToken = normalizeOptionalString(template.client.metaConfig?.businessToken);
-  const wabaId = normalizeOptionalString(template.client.metaConfig?.wabaId);
-  if (!businessToken || !wabaId) {
+  const credentials = await resolveMetaTemplateCredentialsForClient({ clientId: template.clientId });
+  if (!credentials) {
     throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
   }
 
   const params = new URLSearchParams({ name: template.name });
-  const url = `https://graph.facebook.com/${META_TEMPLATE_API_VERSION}/${wabaId}/message_templates?${params.toString()}`;
+  const url = `https://graph.facebook.com/${META_TEMPLATE_API_VERSION}/${credentials.wabaId}/message_templates?${params.toString()}`;
   const response = await fetch(url, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${businessToken}`,
+      Authorization: `Bearer ${credentials.businessToken}`,
     },
   });
 
@@ -434,7 +481,8 @@ export async function syncTemplateStatus(templateId: string) {
       templateId: template.id,
       clientKey: template.client.clientKey,
       templateName: template.name,
-      wabaId,
+      wabaId: credentials.wabaId,
+      credentialSource: credentials.source,
     });
     return {
       ok: false as const,

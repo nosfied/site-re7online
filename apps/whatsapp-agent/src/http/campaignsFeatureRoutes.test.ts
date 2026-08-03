@@ -241,6 +241,13 @@ async function cleanup() {
       },
     },
   });
+  await prisma.waPhoneNumber.deleteMany({
+    where: {
+      clientId: {
+        in: clientIds,
+      },
+    },
+  });
   await prisma.user.deleteMany({
     where: {
       clientId: {
@@ -549,6 +556,86 @@ test("template routes require auth and bulk sync fails safely without Meta confi
   assert.equal(response.status, 400);
   assert.equal(getErrorCode(response.body), "meta_config_missing");
   assert.equal(JSON.stringify(response.body).includes("token"), false);
+});
+
+test("bulk template sync can use env WABA only when env phone belongs to tenant", async (t) => {
+  const originalAccessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const originalWabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  const originalPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  process.env.WHATSAPP_ACCESS_TOKEN = "test-env-business-token";
+  process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = "test-env-waba";
+  process.env.WHATSAPP_PHONE_NUMBER_ID = `env-phone-${safeTemplatePrefix}`;
+  const envPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  t.after(() => {
+    if (originalAccessToken === undefined) delete process.env.WHATSAPP_ACCESS_TOKEN;
+    else process.env.WHATSAPP_ACCESS_TOKEN = originalAccessToken;
+    if (originalWabaId === undefined) delete process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    else process.env.WHATSAPP_BUSINESS_ACCOUNT_ID = originalWabaId;
+    if (originalPhoneNumberId === undefined) delete process.env.WHATSAPP_PHONE_NUMBER_ID;
+    else process.env.WHATSAPP_PHONE_NUMBER_ID = originalPhoneNumberId;
+  });
+
+  await prisma.tenantMetaConfig.deleteMany({ where: { clientId: businessClientId } });
+  await prisma.waPhoneNumber.create({
+    data: {
+      clientId: businessClientId,
+      phoneNumberId: envPhoneNumberId,
+      display: "Env matched phone",
+    },
+  });
+  const templateName = `env_sync_${safeTemplatePrefix}`;
+  await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: templateName,
+      category: "UTILITY",
+      language: "pt_BR",
+      content: "Aviso institucional de teste",
+      status: "pending",
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  const urls: string[] = [];
+  const authHeaders: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      urls.push(url);
+      authHeaders.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: `meta-${templateName}`,
+              name: templateName,
+              language: "pt_BR",
+              category: "UTILITY",
+              status: "APPROVED",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{
+    ok: boolean;
+    summary: { checked: number; approved: number; failed: number };
+  }>("POST", "/app/templates/sync", businessAdmin);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.summary.checked > 0, true);
+  assert.equal(response.body.summary.approved > 0, true);
+  assert.equal(response.body.summary.failed, 0);
+  assert.equal(urls.some((url) => url.includes("/test-env-waba/message_templates")), true);
+  assert.equal(authHeaders.every((value) => value === "Bearer test-env-business-token"), true);
 });
 
 test("tenant template request stays in internal review and ignores auto submit", async (t) => {

@@ -106,6 +106,7 @@ import {
   submitTemplateToMeta,
   MetaTemplateServiceError,
   MetaTemplateValidationError,
+  resolveMetaTemplateCredentialsForClient,
   syncTemplateStatus,
   validateTemplateForMeta,
 } from "../meta/template.service.js";
@@ -3434,18 +3435,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       }))) return;
 
-      const tenantMetaConfig = await prisma.tenantMetaConfig.findUnique({
-        where: { clientId: client.id },
-        select: {
-          businessToken: true,
-          wabaId: true,
-        },
-      });
-      const hasMetaConfig = Boolean(
-        String(tenantMetaConfig?.businessToken ?? "").trim() &&
-          String(tenantMetaConfig?.wabaId ?? "").trim()
-      );
-      if (!hasMetaConfig) {
+      const templateCredentials = await resolveMetaTemplateCredentialsForClient({ clientId: client.id });
+      if (!templateCredentials) {
         json(res, 400, {
           error: "meta_config_missing",
           message: "Conecte seu WhatsApp antes de sincronizar templates com a Meta.",
@@ -17432,15 +17423,10 @@ async function submitTemplateRequestToMeta(params: {
   const variableDetails = extractTemplateRequestVariableDetails(templateRequest.variables);
   const variablesPayload = buildTemplateRequestVariablesPayload({ language, variableDetails });
 
-  const tenantMetaConfig = await params.prisma.tenantMetaConfig.findUnique({
-    where: { clientId: templateRequest.clientId },
-    select: { businessToken: true, wabaId: true },
+  const tenantMetaConfig = await resolveMetaTemplateCredentialsForClient({
+    clientId: templateRequest.clientId,
   });
-  const hasMetaConfig = Boolean(
-    String(tenantMetaConfig?.businessToken ?? "").trim() &&
-      String(tenantMetaConfig?.wabaId ?? "").trim()
-  );
-  if (!hasMetaConfig || !tenantMetaConfig) {
+  if (!tenantMetaConfig) {
     throw new MetaTemplateServiceError("meta_config_missing", "meta_config_missing", 400);
   }
 
