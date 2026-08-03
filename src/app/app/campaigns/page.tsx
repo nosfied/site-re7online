@@ -29,7 +29,17 @@ type CampaignFormState = {
   templateName: string;
   templateVariables: string[];
   templateParamsInput: string;
+  templateVariableMappings: TemplateVariableMappingFormState[];
   recipientsInput: string;
+};
+
+type TemplateVariableSource = "" | "contact.displayName" | "lead.companyName" | "lead.city" | "fixed";
+
+type TemplateVariableMappingFormState = {
+  position: string;
+  source: TemplateVariableSource;
+  value: string;
+  fallback: string;
 };
 
 type CampaignStatusFilter =
@@ -55,6 +65,7 @@ const EMPTY_FORM: CampaignFormState = {
   templateName: "",
   templateVariables: [],
   templateParamsInput: "",
+  templateVariableMappings: [],
   recipientsInput: "",
 };
 
@@ -106,6 +117,96 @@ function getTemplateVariableLabels(variables: unknown): string[] {
 
 function syncTemplateVariables(values: string[], total: number) {
   return Array.from({ length: total }, (_, index) => values[index] ?? "");
+}
+
+function getTemplateVariablePositions(template: AppTemplateItem | null) {
+  const contentPositions = Array.from(
+    new Set(
+      Array.from(String(template?.content ?? "").matchAll(/{{\s*([^}\s]+)\s*}}/g))
+        .map((match) => match[1]?.trim() ?? "")
+        .filter(Boolean)
+    )
+  );
+  if (contentPositions.length > 0) {
+    return contentPositions.sort((left, right) => {
+      const leftNumber = Number(left);
+      const rightNumber = Number(right);
+      if (Number.isInteger(leftNumber) && Number.isInteger(rightNumber)) {
+        return leftNumber - rightNumber;
+      }
+      return left.localeCompare(right);
+    });
+  }
+  return getTemplateVariableLabels(template?.variables);
+}
+
+function syncTemplateVariableMappings(
+  previous: TemplateVariableMappingFormState[],
+  positions: string[]
+): TemplateVariableMappingFormState[] {
+  return positions.map((position) => {
+    const existing = previous.find((item) => item.position === position);
+    return {
+      position,
+      source: existing?.source ?? "",
+      value: existing?.value ?? "",
+      fallback: existing?.fallback ?? "",
+    };
+  });
+}
+
+function getVariableSourceLabel(source: TemplateVariableSource) {
+  switch (source) {
+    case "contact.displayName":
+      return "Nome do contato";
+    case "lead.companyName":
+      return "Empresa";
+    case "lead.city":
+      return "Cidade";
+    case "fixed":
+      return "Valor fixo/manual";
+    default:
+      return "Selecione";
+  }
+}
+
+function getIllustrativeVariableValue(mapping: TemplateVariableMappingFormState) {
+  if (mapping.source === "fixed") return mapping.value.trim();
+  if (mapping.fallback.trim()) return mapping.fallback.trim();
+  switch (mapping.source) {
+    case "contact.displayName":
+      return "Maria";
+    case "lead.companyName":
+      return "Empresa Exemplo";
+    case "lead.city":
+      return "Natal";
+    default:
+      return "";
+  }
+}
+
+function buildTemplatePreviewFromMappings(content: string, mappings: TemplateVariableMappingFormState[]) {
+  return mappings.reduce((acc, mapping) => {
+    const value = getIllustrativeVariableValue(mapping) || `{{${mapping.position}}}`;
+    return acc.replace(new RegExp(`{{\\s*${mapping.position}\\s*}}`, "g"), value);
+  }, content);
+}
+
+function buildTemplateVariableMappingsPayload(mappings: TemplateVariableMappingFormState[]) {
+  return mappings.map((mapping) => ({
+    position: mapping.position,
+    source: mapping.source,
+    ...(mapping.source === "fixed" ? { value: mapping.value.trim() } : {}),
+    ...(mapping.fallback.trim() ? { fallback: mapping.fallback.trim() } : {}),
+  }));
+}
+
+function getTemplateVariableMappingError(mappings: TemplateVariableMappingFormState[]) {
+  const missingSource = mappings.some((mapping) => !mapping.source);
+  if (missingSource) return "Mapeie todas as variáveis antes de criar o rascunho.";
+  const missingFixed = mappings.some((mapping) => mapping.source === "fixed" && !mapping.value.trim());
+  if (missingFixed) return "Informe o valor fixo das variáveis configuradas como valor manual.";
+  return null;
 }
 
 function buildTemplatePreview(content: string, values: string[]) {
@@ -308,14 +409,27 @@ export default function AppCampaignsPage() {
   );
 
   const templateVariableLabels = useMemo(
-    () => getTemplateVariableLabels(selectedTemplate?.variables),
+    () => getTemplateVariablePositions(selectedTemplate),
     [selectedTemplate]
   );
 
   const templatePreview = useMemo(() => {
     if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
+    return buildTemplatePreviewFromMappings(selectedTemplate.content, form.templateVariableMappings);
+  }, [form.templateVariableMappings, selectedTemplate, templateVariableLabels.length]);
+
+  const manualTemplatePreview = useMemo(() => {
+    if (!selectedTemplate?.content || templateVariableLabels.length === 0) return null;
     return buildTemplatePreview(selectedTemplate.content, form.templateVariables);
   }, [form.templateVariables, selectedTemplate, templateVariableLabels.length]);
+
+  const templateVariableMappingError = useMemo(
+    () =>
+      templateVariableLabels.length > 0
+        ? getTemplateVariableMappingError(form.templateVariableMappings)
+        : null,
+    [form.templateVariableMappings, templateVariableLabels.length]
+  );
 
   const audienceEligibleItems = useMemo(
     () => audiencePreview?.items.filter((item) => item.eligible) ?? [],
@@ -373,7 +487,11 @@ export default function AppCampaignsPage() {
         prev.templateVariables.length > 0
           ? prev.templateVariables
           : normalizeTemplateParams(prev.templateParamsInput),
-        getTemplateVariableLabels(matchedTemplate.variables).length
+        getTemplateVariablePositions(matchedTemplate).length
+      ),
+      templateVariableMappings: syncTemplateVariableMappings(
+        prev.templateVariableMappings,
+        getTemplateVariablePositions(matchedTemplate)
       ),
     }));
   }, [form.templateId, form.templateName, templates]);
@@ -638,13 +756,13 @@ export default function AppCampaignsPage() {
     const selectedLeadIds = audienceEligibleItems.map((item) => item.leadId);
     const name = form.name.trim() || defaultDraftName;
     const templateId = form.templateId.trim();
-    const templateParams =
-      templateVariableLabels.length > 0
-        ? form.templateVariables.map((value) => value.trim())
-        : normalizeTemplateParams(form.templateParamsInput);
 
     if (!templateId) {
       setAudiencePreviewError("Selecione um template aprovado antes de criar o rascunho.");
+      return;
+    }
+    if (templateVariableMappingError) {
+      setAudiencePreviewError(templateVariableMappingError);
       return;
     }
     if (selectedLeadIds.length === 0) {
@@ -659,7 +777,9 @@ export default function AppCampaignsPage() {
         name,
         templateId,
         selectedLeadIds,
-        ...(templateParams.length > 0 ? { templateParams } : {}),
+        ...(templateVariableLabels.length > 0
+          ? { templateVariableMappings: buildTemplateVariableMappingsPayload(form.templateVariableMappings) }
+          : {}),
       });
       await refreshCampaigns(session, created.campaign.id);
       const detail = await getAppCampaign(session, created.campaign.id);
@@ -713,6 +833,7 @@ export default function AppCampaignsPage() {
     setForm({
       templateId: "",
       templateVariables: normalizeTemplateParams(replayForm.templateParamsInput),
+      templateVariableMappings: [],
       ...replayForm,
     });
     setFormError(null);
@@ -900,12 +1021,13 @@ export default function AppCampaignsPage() {
                     value={form.templateId}
                     onChange={(event) => {
                       const template = templates.find((item) => item.id === event.target.value) ?? null;
-                      const labels = getTemplateVariableLabels(template?.variables);
+                      const labels = getTemplateVariablePositions(template);
                       setForm((prev) => ({
                         ...prev,
                         templateId: event.target.value,
                         templateName: template?.name ?? "",
                         templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                        templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
                       }));
                     }}
                   >
@@ -927,7 +1049,8 @@ export default function AppCampaignsPage() {
                       creatingDraft ||
                       audienceEligibleItems.length === 0 ||
                       !form.templateId ||
-                      templates.length === 0
+                      templates.length === 0 ||
+                      Boolean(templateVariableMappingError)
                     }
                     onClick={handleCreateDraftFromAudience}
                     className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -947,6 +1070,99 @@ export default function AppCampaignsPage() {
                     >
                       Ir para Templates
                     </a>
+                  </div>
+                ) : null}
+                {templateVariableLabels.length > 0 ? (
+                  <div className="grid gap-3 rounded-md border border-re7-sky/20 bg-re7-sky/10 p-3 lg:col-span-3">
+                    <div>
+                      <p className="text-sm font-semibold text-sky-100">Variáveis do template</p>
+                      <p className="mt-1 text-xs text-white/60">
+                        Defina como cada variável será preenchida para cada contato antes de criar o rascunho.
+                      </p>
+                    </div>
+                    <div className="grid gap-3">
+                      {form.templateVariableMappings.map((mapping, index) => (
+                        <div
+                          key={mapping.position}
+                          className="grid gap-2 rounded-md border border-white/10 bg-re7-navy/50 p-3 lg:grid-cols-[80px_minmax(180px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]"
+                        >
+                          <div>
+                            <p className="text-xs uppercase text-white/45">Variável</p>
+                            <p className="mt-1 font-mono text-sm font-semibold text-white">{`{{${mapping.position}}}`}</p>
+                          </div>
+                          <label className="grid gap-1 text-sm">
+                            <span className="text-white/70">Origem do valor</span>
+                            <select
+                              value={mapping.source}
+                              onChange={(event) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                                    itemIndex === index
+                                      ? { ...item, source: event.target.value as TemplateVariableSource }
+                                      : item
+                                  ),
+                                }))
+                              }
+                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                            >
+                              <option value="">Selecione</option>
+                              <option value="contact.displayName">Nome do contato</option>
+                              <option value="lead.companyName">Empresa</option>
+                              <option value="lead.city">Cidade</option>
+                              <option value="fixed">Valor fixo/manual</option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1 text-sm">
+                            <span className="text-white/70">Fallback</span>
+                            <input
+                              value={mapping.fallback}
+                              onChange={(event) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, fallback: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              placeholder="ex: cliente"
+                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+                            />
+                          </label>
+                          <label className="grid gap-1 text-sm">
+                            <span className="text-white/70">Valor fixo</span>
+                            <input
+                              value={mapping.value}
+                              disabled={mapping.source !== "fixed"}
+                              onChange={(event) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  templateVariableMappings: prev.templateVariableMappings.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, value: event.target.value } : item
+                                  ),
+                                }))
+                              }
+                              placeholder={mapping.source === "fixed" ? "Valor enviado" : getVariableSourceLabel(mapping.source)}
+                              className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                    {templatePreview ? (
+                      <div className="rounded-md border border-white/10 bg-re7-navy/50 p-3 text-sm text-white/80">
+                        <p className="text-xs uppercase tracking-wide text-white/50">Prévia ilustrativa</p>
+                        <p className="mt-2 whitespace-pre-wrap">{templatePreview}</p>
+                        <p className="mt-2 text-xs text-white/50">
+                          Prévia ilustrativa. O valor final será calculado para cada contato no momento do envio.
+                        </p>
+                      </div>
+                    ) : null}
+                    {templateVariableMappingError ? (
+                      <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+                        {templateVariableMappingError}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 <p className="text-xs text-white/55 lg:col-span-3">
@@ -1065,14 +1281,13 @@ export default function AppCampaignsPage() {
                 onChange={(event) => {
                   const nextTemplateId = event.target.value;
                   const selectedTemplate = templates.find((item) => item.id === nextTemplateId) ?? null;
+                  const labels = getTemplateVariablePositions(selectedTemplate);
                   setForm((prev) => ({
                     ...prev,
                     templateId: nextTemplateId,
                     templateName: selectedTemplate?.name ?? "",
-                    templateVariables: syncTemplateVariables(
-                      prev.templateVariables,
-                      getTemplateVariableLabels(selectedTemplate?.variables).length
-                    ),
+                    templateVariables: syncTemplateVariables(prev.templateVariables, labels.length),
+                    templateVariableMappings: syncTemplateVariableMappings(prev.templateVariableMappings, labels),
                   }));
                 }}
               >
@@ -1119,10 +1334,10 @@ export default function AppCampaignsPage() {
                     />
                   </label>
                 ))}
-                {templatePreview ? (
+                {manualTemplatePreview ? (
                   <div className="rounded-md border border-white/10 bg-re7-navy/40 p-3 text-sm text-white/80">
                     <p className="mb-1 text-xs uppercase tracking-wide text-white/50">Preview</p>
-                    <p>{templatePreview}</p>
+                    <p>{manualTemplatePreview}</p>
                   </div>
                 ) : null}
               </div>
@@ -1428,6 +1643,32 @@ export default function AppCampaignsPage() {
                               {item.label}: {item.count}
                             </span>
                           ))}
+                        </div>
+                      ) : null}
+                      {selectedCampaign.draftSeed?.templateVariableMappings?.length ? (
+                        <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                            Mapeamento de variáveis
+                          </p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {selectedCampaign.draftSeed.templateVariableMappings.map((mapping) => (
+                              <div
+                                key={mapping.position}
+                                className="rounded-md border border-white/10 bg-re7-navy/40 px-3 py-2 text-xs text-white/75"
+                              >
+                                <p className="font-semibold text-white">{`{{${mapping.position}}}`}</p>
+                                <p className="mt-1">
+                                  Origem: {getVariableSourceLabel(mapping.source as TemplateVariableSource)}
+                                </p>
+                                {mapping.source === "fixed" && mapping.value ? (
+                                  <p className="mt-1">Valor fixo: {mapping.value}</p>
+                                ) : null}
+                                {mapping.fallback ? (
+                                  <p className="mt-1">Fallback: {mapping.fallback}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                     </div>

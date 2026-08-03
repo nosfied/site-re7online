@@ -467,6 +467,12 @@ export type CampaignItem = {
     leadIds?: string[];
     recipients: string[];
     templateParams: string[];
+    templateVariableMappings?: Array<{
+      position: string;
+      source: string;
+      value?: string;
+      fallback?: string;
+    }>;
   };
   draftReview?: {
     summary: CampaignDraftSummary;

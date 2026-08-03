@@ -9124,6 +9124,14 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         json(res, error.status, httpError(error.error, error.message));
         return;
       }
+      const variableMappings = parseCampaignTemplateVariableMappings(
+        body.templateVariableMappings,
+        resolvedTemplate.variableKeys
+      );
+      if (!variableMappings.ok) {
+        json(res, 400, httpError(variableMappings.error, variableMappings.message));
+        return;
+      }
       const created = await createScopedCampaignDraft({
         clientId: client.id,
         templateId: resolvedTemplate.templateId,
@@ -9131,6 +9139,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         name,
         selectedLeadIds,
         components,
+        templateVariableMappings: variableMappings.mappings,
       });
       if (!created.ok) {
         json(
@@ -9395,6 +9404,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? "Approved template is required"
                 : sent.error === "template_not_found"
                   ? "Approved template not found"
+                  : sent.error === "template_variables_required"
+                    ? "Mapeie todas as variaveis do template antes de enviar"
+                    : sent.error === "invalid_template_variable_mapping"
+                      ? "Mapeamento de variavel invalido"
                   : "Campaign not found";
         json(res, status, httpError(sent.error, message));
         return;
@@ -17645,6 +17658,22 @@ function extractTemplateVariableKeys(content: string | null | undefined, variabl
   });
 }
 
+function extractTemplatePlaceholderKeys(content: string | null | undefined) {
+  const keys = new Set<string>();
+  const text = String(content || "");
+  for (const match of text.matchAll(/{{\s*([^}\s]+)\s*}}/g)) {
+    if (match[1]) keys.add(match[1].trim());
+  }
+  return Array.from(keys).sort((left, right) => {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isInteger(leftNumber) && Number.isInteger(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+    return left.localeCompare(right);
+  });
+}
+
 function summarizeTemplateComponents(content: string | null | undefined) {
   const body = String(content || "").trim();
   if (!body) return [];
@@ -19532,13 +19561,35 @@ type CampaignDraftSeed = {
   leadIds?: string[];
   recipients: string[];
   templateParams: string[];
+  templateVariableMappings?: CampaignTemplateVariableMapping[];
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
 };
 
 type CampaignDraftBlockedReason =
   | CampaignAudienceBlockedReason
-  | "duplicate_recipient";
+  | "duplicate_recipient"
+  | "variable_missing_value";
+
+type CampaignTemplateVariableMappingSource =
+  | "contact.displayName"
+  | "lead.companyName"
+  | "lead.city"
+  | "fixed";
+
+type CampaignTemplateVariableMapping = {
+  position: string;
+  source: CampaignTemplateVariableMappingSource;
+  value?: string;
+  fallback?: string;
+};
+
+const CAMPAIGN_TEMPLATE_VARIABLE_MAPPING_SOURCES = new Set<string>([
+  "contact.displayName",
+  "lead.companyName",
+  "lead.city",
+  "fixed",
+]);
 
 type CampaignDraftRecipientSummary = {
   requested: number;
@@ -19565,6 +19616,13 @@ type CampaignDraftRecipientResolution = {
     displayName: string | null;
     phoneDisplay: string | null;
     identifierDisplay: string;
+  }>;
+  acceptedVariableValues: Array<{
+    leadId: string;
+    waId: string;
+    displayName: string | null;
+    companyName: string | null;
+    city: string | null;
   }>;
 };
 
@@ -19634,6 +19692,102 @@ function extractTemplateParamsFromComponents(components: unknown): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+function sanitizeCampaignTemplateVariableText(input: unknown, maxLength = 160) {
+  return String(input ?? "").trim().slice(0, maxLength);
+}
+
+function parseCampaignTemplateVariableMappings(
+  input: unknown,
+  requiredPositions: string[]
+):
+  | { ok: true; mappings: CampaignTemplateVariableMapping[] }
+  | { ok: false; error: "template_variables_required" | "invalid_template_variable_mapping"; message: string } {
+  const required = Array.from(new Set(requiredPositions.map((value) => value.trim()).filter(Boolean)));
+  if (required.length === 0) return { ok: true, mappings: [] };
+  if (!Array.isArray(input)) {
+    return {
+      ok: false,
+      error: "template_variables_required",
+      message: "Mapeie todas as variaveis do template antes de criar o rascunho.",
+    };
+  }
+
+  const requiredSet = new Set(required);
+  const mappingsByPosition = new Map<string, CampaignTemplateVariableMapping>();
+  for (const item of input) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return {
+        ok: false,
+        error: "invalid_template_variable_mapping",
+        message: "Mapeamento de variavel invalido.",
+      };
+    }
+    const typed = item as Record<string, unknown>;
+    const position = sanitizeCampaignTemplateVariableText(typed.position, 32);
+    const source = sanitizeCampaignTemplateVariableText(typed.source, 80);
+    if (!requiredSet.has(position) || !CAMPAIGN_TEMPLATE_VARIABLE_MAPPING_SOURCES.has(source)) {
+      return {
+        ok: false,
+        error: "invalid_template_variable_mapping",
+        message: "Mapeamento de variavel invalido.",
+      };
+    }
+    const mapping: CampaignTemplateVariableMapping = {
+      position,
+      source: source as CampaignTemplateVariableMappingSource,
+      fallback: sanitizeCampaignTemplateVariableText(typed.fallback, 120) || undefined,
+    };
+    if (mapping.source === "fixed") {
+      const value = sanitizeCampaignTemplateVariableText(typed.value, 240);
+      if (!value) {
+        return {
+          ok: false,
+          error: "invalid_template_variable_mapping",
+          message: "Valor fixo de variavel nao pode ficar vazio.",
+        };
+      }
+      mapping.value = value;
+    }
+    mappingsByPosition.set(position, mapping);
+  }
+
+  const missing = required.filter((position) => !mappingsByPosition.has(position));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      error: "template_variables_required",
+      message: "Mapeie todas as variaveis do template antes de criar o rascunho.",
+    };
+  }
+
+  return {
+    ok: true,
+    mappings: required.map((position) => mappingsByPosition.get(position)).filter(Boolean) as CampaignTemplateVariableMapping[],
+  };
+}
+
+function extractCampaignTemplateVariableMappings(input: unknown): CampaignTemplateVariableMapping[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const typed = item as Record<string, unknown>;
+      const position = sanitizeCampaignTemplateVariableText(typed.position, 32);
+      const source = sanitizeCampaignTemplateVariableText(typed.source, 80);
+      if (!position || !CAMPAIGN_TEMPLATE_VARIABLE_MAPPING_SOURCES.has(source)) return null;
+      const mapping: CampaignTemplateVariableMapping = {
+        position,
+        source: source as CampaignTemplateVariableMappingSource,
+        fallback: sanitizeCampaignTemplateVariableText(typed.fallback, 120) || undefined,
+      };
+      if (mapping.source === "fixed") {
+        mapping.value = sanitizeCampaignTemplateVariableText(typed.value, 240) || undefined;
+      }
+      return mapping;
+    })
+    .filter((value): value is CampaignTemplateVariableMapping => Boolean(value));
+}
+
 function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) return null;
   const typed = rawPayload as Record<string, unknown>;
@@ -19655,6 +19809,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
         .map((value) => (typeof value === "string" ? value.trim() : ""))
         .filter((value): value is string => Boolean(value))
     : [];
+  const templateVariableMappings = extractCampaignTemplateVariableMappings(typed.templateVariableMappings);
   if (!name || !templateName) return null;
   return {
     name,
@@ -19663,6 +19818,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
     leadIds,
     recipients,
     templateParams,
+    templateVariableMappings,
     source: typeof typed.source === "string" ? typed.source : null,
     summary:
       typed.summary && typeof typed.summary === "object" && !Array.isArray(typed.summary)
@@ -19689,10 +19845,124 @@ function getCampaignBlockedReasonLabel(reason: CampaignDraftBlockedReason) {
       return "Contato incompleto";
     case "duplicate_recipient":
       return "Destinatario duplicado";
+    case "variable_missing_value":
+      return "Variavel sem valor";
     case "unknown":
     default:
       return "Indeterminado";
   }
+}
+
+function resolveCampaignVariableMappingValue(
+  mapping: CampaignTemplateVariableMapping,
+  recipient: {
+    displayName: string | null;
+    companyName: string | null;
+    city: string | null;
+  }
+) {
+  let value = "";
+  switch (mapping.source) {
+    case "fixed":
+      value = mapping.value ?? "";
+      break;
+    case "contact.displayName":
+      value = recipient.displayName ?? "";
+      break;
+    case "lead.companyName":
+      value = recipient.companyName ?? "";
+      break;
+    case "lead.city":
+      value = recipient.city ?? "";
+      break;
+  }
+  return sanitizeCampaignTemplateVariableText(value || mapping.fallback || "", 240);
+}
+
+function buildTemplateComponentsForCampaignRecipient(params: {
+  mappings: CampaignTemplateVariableMapping[];
+  recipient: {
+    displayName: string | null;
+    companyName: string | null;
+    city: string | null;
+  };
+}): CampaignTemplateComponents | null | undefined {
+  if (params.mappings.length === 0) return undefined;
+  const values: string[] = [];
+  for (const mapping of params.mappings) {
+    const value = resolveCampaignVariableMappingValue(mapping, params.recipient);
+    if (!value) return null;
+    values.push(value);
+  }
+  return [{ type: "body", parameters: values.map((text) => ({ type: "text" as const, text })) }];
+}
+
+function applyCampaignTemplateVariableMappingsToRecipients(params: {
+  recipients: CampaignDraftRecipientResolution;
+  mappings: CampaignTemplateVariableMapping[];
+}): {
+  recipients: CampaignDraftRecipientResolution;
+  componentsByWaId: Record<string, CampaignTemplateComponents> | undefined;
+} {
+  if (params.mappings.length === 0) {
+    return { recipients: params.recipients, componentsByWaId: undefined };
+  }
+  const componentsByWaId: Record<string, CampaignTemplateComponents> = {};
+  const blocked = [...params.recipients.blocked];
+  const allowedWaIds: string[] = [];
+  const allowedVariableValues: CampaignDraftRecipientResolution["acceptedVariableValues"] = [];
+  const blockedCounts = new Map<CampaignDraftBlockedReason, number>();
+  for (const item of params.recipients.summary.blockedByReason) {
+    blockedCounts.set(item.reason, item.count);
+  }
+
+  const valueByWaId = new Map(params.recipients.acceptedVariableValues.map((item) => [item.waId, item]));
+  for (const waId of params.recipients.acceptedWaIds) {
+    const variableValues = valueByWaId.get(waId) ?? {
+      leadId: "",
+      waId,
+      displayName: null,
+      companyName: null,
+      city: null,
+    };
+    const components = buildTemplateComponentsForCampaignRecipient({
+      mappings: params.mappings,
+      recipient: variableValues,
+    });
+    if (!components) {
+      incrementCampaignBlockedReason(blockedCounts, "variable_missing_value");
+      blocked.push({
+        leadId: variableValues.leadId,
+        reason: "variable_missing_value",
+        label: getCampaignBlockedReasonLabel("variable_missing_value"),
+      });
+      continue;
+    }
+    componentsByWaId[waId] = components;
+    allowedWaIds.push(waId);
+    allowedVariableValues.push(variableValues);
+  }
+
+  const blockedByReason = Array.from(blockedCounts.entries()).map(([reason, count]) => ({
+    reason,
+    label: getCampaignBlockedReasonLabel(reason),
+    count,
+  }));
+  return {
+    recipients: {
+      ...params.recipients,
+      acceptedWaIds: allowedWaIds,
+      acceptedVariableValues: allowedVariableValues,
+      blocked,
+      summary: {
+        ...params.recipients.summary,
+        accepted: allowedWaIds.length,
+        blocked: blocked.length,
+        blockedByReason,
+      },
+    },
+    componentsByWaId,
+  };
 }
 
 function isAnonymizedCampaignMarker(value: unknown) {
@@ -20413,7 +20683,7 @@ async function resolveCampaignTemplateInput(
     templateName: string;
   }
 ): Promise<
-  | { templateId: string | null; templateName: string; language: string | null }
+  | { templateId: string | null; templateName: string; language: string | null; variableKeys: string[] }
   | { status: 400 | 404; error: string; message: string }
 > {
   if (!params.templateId) {
@@ -20421,6 +20691,7 @@ async function resolveCampaignTemplateInput(
       templateId: null,
       templateName: params.templateName,
       language: null,
+      variableKeys: [],
     };
   }
 
@@ -20434,6 +20705,8 @@ async function resolveCampaignTemplateInput(
       id: true,
       name: true,
       language: true,
+      content: true,
+      variables: true,
     },
   });
 
@@ -20449,6 +20722,7 @@ async function resolveCampaignTemplateInput(
     templateId: template.id,
     templateName: template.name,
     language: template.language,
+    variableKeys: extractTemplatePlaceholderKeys(template.content),
   };
 }
 
@@ -23890,6 +24164,7 @@ async function createScopedCampaignDraft(params: {
   templateName: string;
   selectedLeadIds: string[];
   components: CampaignTemplateComponents | undefined;
+  templateVariableMappings?: CampaignTemplateVariableMapping[];
 }) {
   const prisma = getPrisma();
   const recipients = await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
@@ -23916,6 +24191,7 @@ async function createScopedCampaignDraft(params: {
     leadIds: params.selectedLeadIds,
     waIds: recipients.acceptedWaIds,
     components: params.components,
+    templateVariableMappings: params.templateVariableMappings ?? [],
     source: "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -23951,7 +24227,14 @@ async function sendScopedCampaignDraft(params: {
     templateName: campaign.templateName,
     outboundMessages: [],
   });
-  const recipients =
+  const variableMappings = parseCampaignTemplateVariableMappings(
+    seed.templateVariableMappings ?? [],
+    resolvedTemplate.variableKeys
+  );
+  if (!variableMappings.ok) {
+    return { ok: false as const, status: 400 as const, error: variableMappings.error };
+  }
+  const resolvedRecipients =
     seed.leadIds && seed.leadIds.length > 0
       ? await resolveCampaignDraftRecipientsFromLeadIds(prisma, {
           clientId: params.clientId,
@@ -23972,8 +24255,35 @@ async function sendScopedCampaignDraft(params: {
           safeRecipients: [],
           blocked: [],
           acceptedWaIds: seed.recipients,
+          acceptedVariableValues: seed.recipients.map((waId) => ({
+            leadId: "",
+            waId,
+            displayName: null,
+            companyName: null,
+            city: null,
+          })),
         };
+  const { recipients, componentsByWaId } = applyCampaignTemplateVariableMappingsToRecipients({
+    recipients: resolvedRecipients,
+    mappings: variableMappings.mappings,
+  });
   if (recipients.acceptedWaIds.length === 0) {
+    await persistCampaignDraftSeed({
+      clientId: params.clientId,
+      campaignId: campaign.id,
+      templateId: campaign.templateId,
+      name: campaign.name,
+      templateName: resolvedTemplate.templateName,
+      leadIds: seed.leadIds ?? [],
+      waIds: recipients.acceptedWaIds,
+      components:
+        variableMappings.mappings.length === 0 && seed.templateParams.length > 0
+          ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
+          : undefined,
+      templateVariableMappings: variableMappings.mappings,
+      source: seed.source ?? "crm_audience_preview",
+      summary: recipients.summary,
+    });
     return { ok: false as const, status: 400 as const, error: "no_eligible_recipients" as const, campaign, recipients };
   }
   const updated = await prisma.campaign.update({
@@ -23994,9 +24304,10 @@ async function sendScopedCampaignDraft(params: {
     leadIds: seed.leadIds ?? [],
     waIds: recipients.acceptedWaIds,
     components:
-      seed.templateParams.length > 0
+      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
         ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
         : undefined,
+    templateVariableMappings: variableMappings.mappings,
     source: seed.source ?? "crm_audience_preview",
     summary: recipients.summary,
   });
@@ -24020,9 +24331,10 @@ async function sendScopedCampaignDraft(params: {
     templateName: resolvedTemplate.templateName,
     waIds: recipients.acceptedWaIds,
     components:
-      seed.templateParams.length > 0
+      variableMappings.mappings.length === 0 && seed.templateParams.length > 0
         ? [{ type: "body", parameters: seed.templateParams.map((text) => ({ type: "text", text })) }]
         : undefined,
+    componentsByWaId,
   });
   return { ok: true as const, campaign: updated, campaignRunId, recipients };
 }
@@ -24081,6 +24393,8 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       waId: string;
       leadId: string;
       displayName: string | null;
+      companyName: string | null;
+      city: string | null;
       phoneDisplay: string | null;
       identifierDisplay: string;
     }
@@ -24149,6 +24463,8 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       waId: selectedWaId,
       leadId: lead.id,
       displayName: lead.name,
+      companyName: lead.company,
+      city: lead.city,
       phoneDisplay: maskCampaignRecipientIdentifier(selectedWaId),
       identifierDisplay: maskCampaignRecipientIdentifier(selectedWaId) ?? "WhatsApp User",
     });
@@ -24167,6 +24483,13 @@ async function resolveCampaignDraftRecipientsFromLeadIds(
       displayName,
       phoneDisplay,
       identifierDisplay,
+    })),
+    acceptedVariableValues: accepted.map(({ leadId, waId, displayName, companyName, city }) => ({
+      leadId,
+      waId,
+      displayName,
+      companyName,
+      city,
     })),
     blocked,
     summary: {
@@ -24220,13 +24543,14 @@ async function persistCampaignDraftSeed(params: {
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
   }>;
+  templateVariableMappings?: CampaignTemplateVariableMapping[];
   source?: string | null;
   summary?: CampaignDraftRecipientSummary | null;
 }) {
   await persistEvent({
     clientId: params.clientId,
     messageId: params.campaignId,
-    requestId: `campaign-seed:${params.campaignId}`,
+    requestId: `campaign-seed:${params.campaignId}:${crypto.randomUUID()}`,
     eventName: "campaign.seed.saved",
     payloadJson: {
       campaignId: params.campaignId,
@@ -24236,6 +24560,7 @@ async function persistCampaignDraftSeed(params: {
       leadIds: params.leadIds ?? [],
       recipients: params.waIds,
       templateParams: extractTemplateParamsFromComponents(params.components ?? null),
+      templateVariableMappings: params.templateVariableMappings ?? [],
       source: params.source ?? null,
       summary: params.summary ?? null,
     },
@@ -24296,6 +24621,7 @@ async function buildCampaignDraftSeed(
     templateName: params.templateName,
     recipients,
     templateParams,
+    templateVariableMappings: [],
   };
 }
 

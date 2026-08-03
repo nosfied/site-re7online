@@ -3294,6 +3294,12 @@ export async function createAppCampaignDraft(
     templateId: string;
     selectedLeadIds: string[];
     templateParams?: string[];
+    templateVariableMappings?: Array<{
+      position: string;
+      source: "contact.displayName" | "lead.companyName" | "lead.city" | "fixed" | "";
+      value?: string;
+      fallback?: string;
+    }>;
   }
 ): Promise<{
   ok: true;

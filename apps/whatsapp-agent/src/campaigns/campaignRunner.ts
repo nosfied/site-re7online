@@ -23,6 +23,7 @@ export type StartCampaignRunParams = {
   templateName: string;
   waIds: string[];
   components?: CampaignTemplateComponents;
+  componentsByWaId?: Record<string, CampaignTemplateComponents>;
 };
 
 function sleep(ms: number) {
@@ -138,13 +139,14 @@ async function runCampaignInBackground(
         });
         const requestId = crypto.randomUUID();
         const messageId = `campaign.${params.campaignId}.${index + 1}`;
+        const components = params.componentsByWaId?.[waId] ?? params.components;
         const result = await sendTemplate({
           toE164: waId,
           waId,
           intent: undefined,
           templateName: params.templateName,
           lang: language,
-          components: params.components,
+          components,
           requestId,
           rid: campaignRunId,
           messageId,
@@ -193,7 +195,7 @@ async function runCampaignInBackground(
             campaignId: params.campaignId,
             campaignRunId,
             templateName: params.templateName,
-            components: params.components ?? null,
+            components: components ?? null,
           },
         });
         await persistEvent({
@@ -209,7 +211,7 @@ async function runCampaignInBackground(
             waId,
             status: result.status ?? null,
             errorBody: result.errorBody ?? null,
-            components: params.components ?? null,
+            components: components ?? null,
           },
         });
 

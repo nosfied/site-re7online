@@ -176,6 +176,15 @@ async function requestUnauth<T = unknown>(
   };
 }
 
+async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail("Timed out waiting for async condition");
+}
+
 async function requestAdmin<T = unknown>(
   method: string,
   route: string,
@@ -1230,7 +1239,7 @@ test("campaign draft uses approved template and stores safe seed without sending
       category: "UTILITY",
       language: "pt_BR",
       status: "approved",
-      content: "Ola {{1}}",
+      content: "Aviso institucional",
     },
   });
   const eligibleWaId = "5541991188001";
@@ -1341,7 +1350,6 @@ test("campaign draft uses approved template and stores safe seed without sending
       anonymized.id,
       instagram.id,
     ],
-    templateParams: ["Cliente"],
   });
 
   assert.equal(response.status, 200);
@@ -1473,6 +1481,293 @@ test("campaign draft send revalidates recipients before starting", async () => {
   });
   assert.equal(outboundCount, 0);
   assert.equal(sentEventCount, 0);
+});
+
+test("campaign draft requires mappings for approved template variables", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_variable_required_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, sua solicitacao foi atualizada.",
+    },
+  });
+  const waId = "5541991189101";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Sem Mapeamento",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const response = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho sem variavel",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(getErrorCode(response.body), "template_variables_required");
+  const campaigns = await prisma.campaign.count({
+    where: { clientId: businessClientId, name: "Rascunho sem variavel" },
+  });
+  assert.equal(campaigns, 0);
+});
+
+test("campaign draft rejects invalid fixed variable mapping", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_variable_invalid_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, sua solicitacao foi atualizada.",
+    },
+  });
+  const waId = "5541991189102";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Fixo Vazio",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const response = await request<ErrorPayload>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho fixo vazio",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+    templateVariableMappings: [{ position: "1", source: "fixed", value: "" }],
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(getErrorCode(response.body), "invalid_template_variable_mapping");
+});
+
+test("campaign draft explicit send renders mapped variables per contact", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_variable_send_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, sua empresa {{2}} em {{3}} recebeu {{4}}.",
+      variables: ["nome", "empresa", "cidade", "aviso"],
+    },
+  });
+  const waId = "5541991189103";
+  const normalizedWaId = "55419991189103";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Cliente Variavel",
+      phone: waId,
+      company: "Empresa Variavel",
+      city: "Curitiba",
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho variavel",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+    templateVariableMappings: [
+      { position: "1", source: "contact.displayName" },
+      { position: "2", source: "lead.companyName" },
+      { position: "3", source: "lead.city" },
+      { position: "4", source: "fixed", value: "atualizacao" },
+    ],
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.campaign.status, "draft");
+
+  const seed = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.seed.saved",
+      messageId: created.body.campaign.id,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(seed);
+  const seedPayload = seed.payloadJson as Record<string, unknown>;
+  assert.deepEqual(seedPayload.templateVariableMappings, [
+    { position: "1", source: "contact.displayName" },
+    { position: "2", source: "lead.companyName" },
+    { position: "3", source: "lead.city" },
+    { position: "4", source: "fixed", value: "atualizacao" },
+  ]);
+  assert.equal(JSON.stringify(seedPayload).includes(waId), false);
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const sent = await request<{
+    ok: true;
+    campaign: { id: string; status: string };
+    send: {
+      summary: {
+        accepted: number;
+        blocked: number;
+      };
+    };
+  }>("POST", `/app/campaigns/${created.body.campaign.id}/send`, businessAdmin);
+  assert.equal(sent.status, 200);
+  assert.equal(sent.body.send.summary.accepted, 1);
+  assert.equal(sent.body.send.summary.blocked, 0);
+
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+  assert.equal(metaPayloads.length, 1);
+  assert.deepEqual(metaPayloads[0], {
+    messaging_product: "whatsapp",
+    to: normalizedWaId,
+    type: "template",
+    template: {
+      name: template.name,
+      language: { code: "pt_BR" },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: "Cliente Variavel" },
+            { type: "text", text: "Empresa Variavel" },
+            { type: "text", text: "Curitiba" },
+            { type: "text", text: "atualizacao" },
+          ],
+        },
+      ],
+    },
+  });
+
+  const outbound = await prisma.outboundMessage.findFirst({
+    where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+    select: { rawPayload: true },
+  });
+  assert.ok(outbound);
+  assert.deepEqual((outbound.rawPayload as Record<string, unknown>).components, [
+    {
+      type: "body",
+      parameters: [
+        { type: "text", text: "Cliente Variavel" },
+        { type: "text", text: "Empresa Variavel" },
+        { type: "text", text: "Curitiba" },
+        { type: "text", text: "atualizacao" },
+      ],
+    },
+  ]);
+});
+
+test("campaign draft send blocks mapped recipients without value or fallback", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_variable_block_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, sua cidade e {{2}}.",
+    },
+  });
+  const waId = "5541991189104";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Sem Cidade",
+      phone: waId,
+      city: "",
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho variavel bloqueada",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+    templateVariableMappings: [
+      { position: "1", source: "contact.displayName" },
+      { position: "2", source: "lead.city" },
+    ],
+  });
+  assert.equal(created.status, 200);
+
+  const send = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${created.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(send.status, 400);
+  assert.equal(getErrorCode(send.body), "no_eligible_recipients");
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: created.body.campaign.id },
+    select: { status: true },
+  });
+  assert.equal(campaign?.status, "draft");
+  const seed = await prisma.event.findFirst({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.seed.saved",
+      messageId: created.body.campaign.id,
+    },
+    orderBy: { createdAt: "desc" },
+    select: { payloadJson: true },
+  });
+  assert.ok(seed);
+  const summary = (seed.payloadJson as { summary?: { blockedByReason?: Array<{ reason: string; count: number }> } })
+    .summary;
+  assert.ok(summary?.blockedByReason?.some((item) => item.reason === "variable_missing_value" && item.count === 1));
+  const outboundCount = await prisma.outboundMessage.count({ where: { clientId: businessClientId, waId } });
+  assert.equal(outboundCount, 0);
 });
 
 test("tenant override can enable campaigns for a non-business profile", async () => {
