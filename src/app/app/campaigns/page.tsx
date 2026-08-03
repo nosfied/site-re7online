@@ -376,6 +376,7 @@ export default function AppCampaignsPage() {
   const [audiencePreviewError, setAudiencePreviewError] = useState<string | null>(null);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sendingDraft, setSendingDraft] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<CampaignCenterTab>("create");
   const [statusFilter, setStatusFilter] = useState<CampaignStatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -421,7 +422,9 @@ export default function AppCampaignsPage() {
 
   const refreshTemplates = useCallback(async (activeSession: AppSession) => {
     const response = await listAppTemplates(activeSession);
-    const approvedTemplates = response.items.filter((item) => item.status === "approved");
+    const approvedTemplates = response.items.filter(
+      (item) => item.status === "approved" && item.canUseInCampaign !== false && item.locallyDisabled !== true
+    );
     setTemplates(approvedTemplates);
     return approvedTemplates;
   }, []);
@@ -639,6 +642,15 @@ export default function AppCampaignsPage() {
     setCampaigns((prev) => prev.map((item) => (item.id === selectedCampaign.id ? selectedCampaign : item)));
   }, [selectedCampaign, selectedCampaignId]);
 
+  useEffect(() => {
+    if (!detailModalOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [detailModalOpen]);
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!session) return;
@@ -833,6 +845,7 @@ export default function AppCampaignsPage() {
       const detail = await getAppCampaign(session, created.campaign.id);
       setSelectedCampaign(detail.campaign);
       setSelectedCampaignId(created.campaign.id);
+      setDetailModalOpen(true);
       setForm(EMPTY_FORM);
       setFormError(null);
       setStatusFilter("draft");
@@ -1199,9 +1212,9 @@ export default function AppCampaignsPage() {
                 </div>
                 {templates.length === 0 ? (
                   <div className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100 lg:col-span-3">
-                    <p className="font-semibold">Nenhum template aprovado disponivel para este tenant.</p>
+                    <p className="font-semibold">Não há modelos ativos disponíveis para campanha.</p>
                     <p className="mt-1 text-amber-100/80">
-                      Campanhas usam apenas templates aprovados pela Meta para envio ativo fora da janela de 24h.
+                      Verifique os modelos aprovados ou reative um modelo no Centro de Modelos.
                     </p>
                     <a
                       href="/app/templates"
@@ -1434,8 +1447,8 @@ export default function AppCampaignsPage() {
                   >
                     <option value="">
                       {templates.length === 0
-                        ? "Nenhum template aprovado disponivel"
-                        : "Selecione um template aprovado"}
+                        ? "Nenhum modelo ativo disponivel"
+                        : "Selecione um modelo aprovado e ativo"}
                     </option>
                     {templates.map((template) => (
                       <option key={template.id} value={template.id}>
@@ -1610,10 +1623,11 @@ export default function AppCampaignsPage() {
                         <div className="flex flex-wrap gap-1.5">
                           <button
                             type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setSelectedCampaignId(campaign.id);
-                            }}
+	                            onClick={(event) => {
+	                              event.stopPropagation();
+	                              setSelectedCampaignId(campaign.id);
+	                              setDetailModalOpen(true);
+	                            }}
                             className="rounded-md border border-re7-sky/40 px-2 py-1 text-xs font-semibold text-sky-100 hover:bg-re7-sky/10"
                           >
                             Ver detalhes
@@ -1686,11 +1700,34 @@ export default function AppCampaignsPage() {
             </div>
           </section>
 
-          <section className="flex flex-col rounded-xl border border-white/10 bg-white/5">
-            <div className="border-b border-white/10 px-4 py-3">
-              <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
-            </div>
-            <div className="grid gap-3 p-3 text-sm">
+          {detailModalOpen ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Detalhe da campanha"
+              onClick={() => setDetailModalOpen(false)}
+            >
+              <section
+                className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-white/15 bg-re7-navy text-white shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                  <div>
+                    <h2 className="text-sm font-semibold">Detalhe da campanha</h2>
+                    <p className="mt-1 text-xs text-white/55">
+                      Revise rascunho, status, audiência e consumo sem sair da lista.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailModalOpen(false)}
+                    className="rounded-md border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10"
+                  >
+                    Fechar
+                  </button>
+                </div>
+                <div className="grid gap-3 overflow-y-auto p-3 text-sm sm:p-4">
               {!selectedCampaignId ? (
                 <p className="text-white/70">Selecione uma campanha para ver o detalhe.</p>
               ) : null}
@@ -1937,8 +1974,10 @@ export default function AppCampaignsPage() {
                   ) : null}
                 </>
               ) : null}
+                </div>
+              </section>
             </div>
-          </section>
+          ) : null}
         </div>
       </section>
     </AppShell>

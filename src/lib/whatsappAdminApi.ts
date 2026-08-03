@@ -524,6 +524,8 @@ export type AdminTemplateCatalogItem = {
   category: string;
   language: string;
   status: string;
+  locallyDisabled?: boolean;
+  localAvailabilityUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1815,6 +1817,24 @@ export async function syncAdminTemplateRequest(
   requestId: string
 ): Promise<{ ok: true; request: AdminTemplateRequestItem; sync: unknown }> {
   return requestJson(connection, `/admin/templates/requests/${encodeURIComponent(requestId)}/sync`, {
+    method: "POST",
+  });
+}
+
+export async function disableAdminTemplate(
+  connection: AdminConnection,
+  templateId: string
+): Promise<{ ok: true; template: AdminTemplateCatalogItem }> {
+  return requestJson(connection, `/admin/templates/${encodeURIComponent(templateId)}/disable`, {
+    method: "POST",
+  });
+}
+
+export async function enableAdminTemplate(
+  connection: AdminConnection,
+  templateId: string
+): Promise<{ ok: true; template: AdminTemplateCatalogItem }> {
+  return requestJson(connection, `/admin/templates/${encodeURIComponent(templateId)}/enable`, {
     method: "POST",
   });
 }

@@ -9,6 +9,8 @@ import {
   AdminTemplateRequestItem,
   approveAdminTemplateRequest,
   cancelAdminTemplateRequest,
+  disableAdminTemplate,
+  enableAdminTemplate,
   fetchAdminTemplateRequests,
   fetchTemplatesObservability,
   formatDateTime,
@@ -285,6 +287,32 @@ export default function ManageTemplatesAdminPage() {
     } catch (err) {
       const typed = err as { message?: string };
       setError(typed.message || "Erro ao sincronizar template.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleToggleTemplateAvailability = async (item: AdminTemplateCatalogItem, disabled: boolean) => {
+    if (disabled) {
+      const confirmed = window.confirm(
+        "Este modelo continuará aprovado na Meta, mas não ficará disponível para campanhas ou envios pela plataforma."
+      );
+      if (!confirmed) return;
+    }
+    setActingId(item.id);
+    setError(null);
+    setFeedback(null);
+    try {
+      if (disabled) {
+        await disableAdminTemplate(connection, item.id);
+      } else {
+        await enableAdminTemplate(connection, item.id);
+      }
+      await loadData(connection);
+      setFeedback(disabled ? "Template inativado localmente no Converta." : "Template reativado localmente no Converta.");
+    } catch (err) {
+      const typed = err as { message?: string };
+      setError(typed.message || "Erro ao atualizar disponibilidade local do template.");
     } finally {
       setActingId(null);
     }
@@ -732,13 +760,15 @@ export default function ManageTemplatesAdminPage() {
             <p className="p-4 text-sm text-white/70">Nenhum template aprovado encontrado.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-sm">
+              <table className="w-full min-w-[920px] text-sm">
                 <thead className="bg-white/10 text-left">
                   <tr>
                     <th className="px-3 py-2">Name</th>
                     <th className="px-3 py-2">Cliente</th>
                     <th className="px-3 py-2">Category</th>
                     <th className="px-3 py-2">Language</th>
+                    <th className="px-3 py-2">Disponibilidade</th>
+                    <th className="px-3 py-2">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -748,6 +778,32 @@ export default function ManageTemplatesAdminPage() {
                       <td className="px-3 py-2">{item.clientName || item.clientId}</td>
                       <td className="px-3 py-2">{item.category}</td>
                       <td className="px-3 py-2">{item.language}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                            item.locallyDisabled
+                              ? "bg-amber-500/20 text-amber-100"
+                              : "bg-emerald-500/20 text-emerald-100"
+                          }`}
+                        >
+                          {item.locallyDisabled ? "Inativo no Converta" : "Ativo no Converta"}
+                        </span>
+                        <p className="mt-1 text-xs text-white/45">Status Meta preservado: {item.status}</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleTemplateAvailability(item, !item.locallyDisabled)}
+                          disabled={actingId === item.id}
+                          className="rounded-md border border-white/20 bg-white/10 px-3 py-1 text-xs text-white disabled:opacity-60"
+                        >
+                          {actingId === item.id
+                            ? "Atualizando..."
+                            : item.locallyDisabled
+                              ? "Reativar"
+                              : "Inativar"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

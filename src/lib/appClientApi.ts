@@ -562,6 +562,8 @@ export type AppTemplateItem = {
   rejectionReason: string | null;
   componentsSummary?: Array<{ type: string; text: string }>;
   variablesDetected?: string[];
+  locallyDisabled?: boolean;
+  localAvailabilityUpdatedAt?: string | null;
   canUseInCampaign?: boolean;
   canUseInInbox?: boolean;
   blockedReason?: string | null;
@@ -3395,6 +3397,26 @@ export async function syncAppTemplate(
 }> {
   return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/sync`, {
     method: "POST",
+  });
+}
+
+export async function disableAppTemplate(
+  session: AppSession,
+  templateId: string
+): Promise<{ ok: true; template: AppTemplateItem }> {
+  return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/disable`, {
+    method: "POST",
+    timeoutMs: 15000,
+  });
+}
+
+export async function enableAppTemplate(
+  session: AppSession,
+  templateId: string
+): Promise<{ ok: true; template: AppTemplateItem }> {
+  return requestAppJson(session, `/app/templates/${encodeURIComponent(templateId)}/enable`, {
+    method: "POST",
+    timeoutMs: 15000,
   });
 }
 

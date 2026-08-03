@@ -3388,6 +3388,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         if (!key || latestRequestByName.has(key)) continue;
         latestRequestByName.set(key, requestItem);
       }
+      const localAvailabilityByTemplateId = await getTemplateLocalAvailabilityMap(prisma, {
+        clientId: client.id,
+        templateIds: items.map((item) => item.id),
+      });
 
       triggerTemplateStatusSync({
         templateIds: await findTemplatesNeedingSync(prisma, { clientId: client.id }),
@@ -3399,7 +3403,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         ok: true,
         count: items.length,
         items: items.map((item) =>
-          buildAppTemplateCatalogItem(item, latestRequestByName.get(normalizeTemplateLookupName(item.name)) ?? null)
+          buildAppTemplateCatalogItem(
+            item,
+            latestRequestByName.get(normalizeTemplateLookupName(item.name)) ?? null,
+            localAvailabilityByTemplateId.get(item.id) ?? null
+          )
         ),
       });
     } catch (error) {
@@ -3409,6 +3417,85 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
         requestId,
       });
       json(res, 500, { error: "server_error" });
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/templates/") &&
+    pathname.split("/").length === 5 &&
+    (pathname.endsWith("/disable") || pathname.endsWith("/enable"))
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const templateId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!templateId) {
+        json(res, 400, httpError("bad_request", "Template id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "templates",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+
+      const disabled = pathname.endsWith("/disable");
+      const template = await recordTemplateLocalAvailability(prisma, {
+        clientId: client.id,
+        templateId,
+        disabled,
+        actor: clientAuth.userId,
+        source: "app",
+        requestId,
+      });
+      if (!template) {
+        json(res, 404, httpError("template_not_found", "Template not found"));
+        return;
+      }
+      const requests = await prisma.templateRequest.findMany({
+        where: {
+          clientId: client.id,
+          name: { equals: template.name, mode: "insensitive" },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          notes: true,
+          createdAt: true,
+        },
+      });
+      json(res, 200, {
+        ok: true,
+        template: buildAppTemplateCatalogItem(
+          template,
+          requests[0] ?? null,
+          { locallyDisabled: disabled, updatedAt: new Date() }
+        ),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.templates.local_availability.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
     }
     return;
   }
@@ -9404,6 +9491,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
                 ? "Approved template is required"
                 : sent.error === "template_not_found"
                   ? "Approved template not found"
+                  : sent.error === "template_locally_disabled"
+                    ? "Template disabled locally in Converta"
                   : sent.error === "template_variables_required"
                     ? "Mapeie todas as variaveis do template antes de enviar"
                     : sent.error === "invalid_template_variable_mapping"
@@ -15813,6 +15902,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             },
           },
         });
+        const localAvailabilityByTemplateId = new Map<
+          string,
+          { locallyDisabled: boolean; updatedAt: Date | null }
+        >();
+        const templateIdsByClientId = new Map<string, string[]>();
+        for (const item of catalog) {
+          const list = templateIdsByClientId.get(item.clientId) ?? [];
+          list.push(item.id);
+          templateIdsByClientId.set(item.clientId, list);
+        }
+        await Promise.all(
+          Array.from(templateIdsByClientId.entries()).map(async ([clientId, templateIds]) => {
+            const map = await getTemplateLocalAvailabilityMap(prisma, { clientId, templateIds });
+            for (const [templateId, value] of map.entries()) {
+              localAvailabilityByTemplateId.set(templateId, value);
+            }
+          })
+        );
 
         const syncWhere = tenantAdmin
           ? { clientId: adminAuth.clientId }
@@ -15871,6 +15978,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
             category: item.category,
             language: item.language,
             status: item.status,
+            locallyDisabled: localAvailabilityByTemplateId.get(item.id)?.locallyDisabled === true,
+            localAvailabilityUpdatedAt: localAvailabilityByTemplateId.get(item.id)?.updatedAt ?? null,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
           })),
@@ -15878,6 +15987,77 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
       } catch (error) {
         logger.error({
           event: "admin.templates.error",
+          message: (error as Error).message,
+          requestId,
+        });
+        json(res, 500, { error: "server_error" });
+      }
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      pathname.startsWith("/admin/templates/") &&
+      pathname.split("/").length === 5 &&
+      (pathname.endsWith("/disable") || pathname.endsWith("/enable"))
+    ) {
+      try {
+        const templateId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+        if (!templateId) {
+          json(res, 400, { error: "bad_request" });
+          return;
+        }
+        const existing = await prisma.template.findFirst({
+          where: {
+            id: templateId,
+            ...(tenantAdmin ? { clientId: adminAuth.clientId } : {}),
+          },
+          select: {
+            id: true,
+            clientId: true,
+          },
+        });
+        if (!existing) {
+          json(res, 404, { error: "template_not_found" });
+          return;
+        }
+        const disabled = pathname.endsWith("/disable");
+        const template = await recordTemplateLocalAvailability(prisma, {
+          clientId: existing.clientId,
+          templateId: existing.id,
+          disabled,
+          actor: resolveAssignedTo(adminAuth),
+          source: "admin",
+          requestId,
+        });
+        if (!template) {
+          json(res, 404, { error: "template_not_found" });
+          return;
+        }
+        const client = await prisma.client.findUnique({
+          where: { id: template.clientId },
+          select: { clientKey: true, name: true },
+        });
+        json(res, 200, {
+          ok: true,
+          template: {
+            id: template.id,
+            clientId: template.clientId,
+            clientKey: client?.clientKey ?? "",
+            clientName: client?.name ?? "",
+            name: template.name,
+            category: template.category,
+            language: template.language,
+            status: template.status,
+            locallyDisabled: disabled,
+            localAvailabilityUpdatedAt: new Date(),
+            createdAt: template.createdAt,
+            updatedAt: template.updatedAt,
+          },
+        });
+      } catch (error) {
+        logger.error({
+          event: "admin.templates.local_availability.error",
           message: (error as Error).message,
           requestId,
         });
@@ -17691,7 +17871,11 @@ function getTemplateUsageBlock(params: {
   category: string | null | undefined;
   language: string | null | undefined;
   content: string | null | undefined;
+  locallyDisabled?: boolean;
 }) {
+  if (params.locallyDisabled) {
+    return { reason: "locally_disabled", label: "Inativo no Converta" };
+  }
   const status = normalizeTemplateStatus(params.status);
   const category = normalizeTemplateCategory(params.category);
   if (status !== "approved") {
@@ -17710,6 +17894,90 @@ function getTemplateUsageBlock(params: {
     return { reason: "unsupported_category", label: "Categoria nao suportada" };
   }
   return { reason: null, label: null };
+}
+
+const TEMPLATE_LOCAL_DISABLED_EVENT = "template.local_disabled";
+const TEMPLATE_LOCAL_ENABLED_EVENT = "template.local_enabled";
+
+async function getTemplateLocalAvailabilityMap(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; templateIds: string[] }
+) {
+  const templateIds = Array.from(new Set(params.templateIds.filter(Boolean)));
+  const result = new Map<string, { locallyDisabled: boolean; updatedAt: Date | null }>();
+  if (templateIds.length === 0) return result;
+  const events = await prisma.event.findMany({
+    where: {
+      clientId: params.clientId,
+      messageId: { in: templateIds },
+      eventName: { in: [TEMPLATE_LOCAL_DISABLED_EVENT, TEMPLATE_LOCAL_ENABLED_EVENT] },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      messageId: true,
+      eventName: true,
+      createdAt: true,
+    },
+  });
+  for (const event of events) {
+    const templateId = event.messageId ?? "";
+    if (!templateId || result.has(templateId)) continue;
+    result.set(templateId, {
+      locallyDisabled: event.eventName === TEMPLATE_LOCAL_DISABLED_EVENT,
+      updatedAt: event.createdAt,
+    });
+  }
+  return result;
+}
+
+async function recordTemplateLocalAvailability(
+  prisma: ReturnType<typeof getPrisma>,
+  params: {
+    clientId: string;
+    templateId: string;
+    disabled: boolean;
+    actor: string | null;
+    source: "app" | "admin";
+    requestId: string;
+  }
+) {
+  const template = await prisma.template.findFirst({
+    where: { id: params.templateId, clientId: params.clientId },
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      category: true,
+      submittedCategory: true,
+      wasRecategorized: true,
+      language: true,
+      status: true,
+      content: true,
+      variables: true,
+      metaTemplateId: true,
+      rejectionReason: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+  if (!template) return null;
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: template.id,
+    requestId: `${params.disabled ? "template-local-disabled" : "template-local-enabled"}:${template.id}:${Date.now()}`,
+    eventName: params.disabled ? TEMPLATE_LOCAL_DISABLED_EVENT : TEMPLATE_LOCAL_ENABLED_EVENT,
+    payloadJson: {
+      templateId: template.id,
+      templateName: template.name,
+      source: params.source,
+      changedBy: params.actor,
+      metaStatus: template.status,
+      note: params.disabled
+        ? "Template aprovado na Meta, mas indisponivel localmente para envios no Converta."
+        : "Template reativado localmente para envios no Converta.",
+    },
+  });
+  return template;
 }
 
 function buildAppTemplateCatalogItem(
@@ -17733,9 +18001,11 @@ function buildAppTemplateCatalogItem(
     status: string;
     notes: string | null;
     createdAt: Date;
-  } | null
+  } | null,
+  localAvailability?: { locallyDisabled: boolean; updatedAt: Date | null } | null
 ) {
-  const block = getTemplateUsageBlock(item);
+  const locallyDisabled = localAvailability?.locallyDisabled === true;
+  const block = getTemplateUsageBlock({ ...item, locallyDisabled });
   const canUse = block.reason === null;
   const requestedCategory = item.submittedCategory || item.category;
   const effectiveCategory = item.category;
@@ -17753,6 +18023,8 @@ function buildAppTemplateCatalogItem(
       : null,
     componentsSummary: summarizeTemplateComponents(item.content),
     variablesDetected: extractTemplateVariableKeys(item.content, item.variables),
+    locallyDisabled,
+    localAvailabilityUpdatedAt: localAvailability?.updatedAt ?? null,
     canUseInCampaign: canUse,
     canUseInInbox: canUse,
     blockedReason: block.reason,
@@ -20715,6 +20987,17 @@ async function resolveCampaignTemplateInput(
       status: 404,
       error: "template_not_found",
       message: "Approved template not found",
+    };
+  }
+  const availability = await getTemplateLocalAvailabilityMap(prisma, {
+    clientId: params.clientId,
+    templateIds: [template.id],
+  });
+  if (availability.get(template.id)?.locallyDisabled === true) {
+    return {
+      status: 400,
+      error: "template_locally_disabled",
+      message: "Template locally disabled",
     };
   }
 

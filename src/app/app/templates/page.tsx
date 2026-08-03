@@ -11,6 +11,8 @@ import {
   cancelAppTemplateRequest,
   clearAppSession,
   createAppTemplateRequest,
+  disableAppTemplate,
+  enableAppTemplate,
   listAppTemplateRequests,
   listAppTemplates,
   loadAppSession,
@@ -40,6 +42,7 @@ const CATEGORY_OPTIONS = ["MARKETING", "UTILITY", "AUTHENTICATION"] as const;
 const TEMPLATE_VIEW_TABS = [
   { id: "all", label: "Todos" },
   { id: "usable", label: "Utilizáveis" },
+  { id: "inactive", label: "Inativos" },
   { id: "review", label: "Aguardando revisão" },
   { id: "meta", label: "Em análise na Meta" },
   { id: "closed", label: "Rejeitados/Cancelados" },
@@ -65,6 +68,8 @@ type CatalogItem = {
   content: string;
   variables: unknown;
   variablesDetected: string[];
+  locallyDisabled: boolean;
+  localAvailabilityUpdatedAt: string | null;
   componentsSummary: Array<{ type: string; text: string }>;
   canUseInCampaign: boolean;
   canUseInInbox: boolean;
@@ -138,6 +143,7 @@ function getTemplateLifecycleBucket(status: string) {
 function itemMatchesViewTab(item: CatalogItem, tab: TemplateViewTab) {
   if (tab === "all") return true;
   if (tab === "usable") return item.canUseInCampaign;
+  if (tab === "inactive") return item.locallyDisabled;
   return getTemplateLifecycleBucket(item.status) === tab;
 }
 
@@ -347,6 +353,8 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       content: request.content,
       variables: request.variables,
       variablesDetected: request.variableDetails?.map((item) => item.key) ?? getTemplateVariableLabels(request.variables),
+      locallyDisabled: false,
+      localAvailabilityUpdatedAt: null,
       componentsSummary: request.content ? [{ type: "BODY", text: request.content }] : [],
       canUseInCampaign: false,
       canUseInInbox: false,
@@ -387,6 +395,8 @@ function buildCatalogItems(templates: AppTemplateItem[], requests: AppTemplateRe
       content: template.content,
       variables: template.variables,
       variablesDetected: template.variablesDetected ?? getTemplateVariableLabels(template.variables),
+      locallyDisabled: template.locallyDisabled === true,
+      localAvailabilityUpdatedAt: template.localAvailabilityUpdatedAt ?? null,
       componentsSummary: template.componentsSummary ?? (template.content ? [{ type: "BODY", text: template.content }] : []),
       canUseInCampaign: template.canUseInCampaign === true,
       canUseInInbox: template.canUseInInbox === true,
@@ -854,6 +864,40 @@ export default function AppTemplatesPage() {
     [handleUnauthorized, loadData, session]
   );
 
+  const handleToggleLocalAvailability = useCallback(
+    async (item: CatalogItem, disabled: boolean) => {
+      if (!session || !item.templateId) return;
+      if (disabled) {
+        const confirmed = window.confirm(
+          "Este modelo continuará aprovado na Meta, mas não ficará disponível para campanhas ou envios pela plataforma."
+        );
+        if (!confirmed) return;
+      }
+      setError(null);
+      setFormError(null);
+      setSuccess(null);
+      setSyncingTemplateId(item.templateId);
+      try {
+        const response = disabled
+          ? await disableAppTemplate(session, item.templateId)
+          : await enableAppTemplate(session, item.templateId);
+        await loadData(session);
+        setSelectedItemId(response.template.id);
+        setSuccess(disabled ? "Modelo inativado no Converta." : "Modelo reativado no Converta.");
+      } catch (err) {
+        const typed = err as AppApiError;
+        if (typed.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        setError(typed.message || typed.details || "Nao foi possivel atualizar a disponibilidade local do modelo.");
+      } finally {
+        setSyncingTemplateId(null);
+      }
+    },
+    [handleUnauthorized, loadData, session]
+  );
+
   const handleSyncAllTemplates = useCallback(async () => {
     if (!session) return;
     setError(null);
@@ -1088,6 +1132,11 @@ export default function AppTemplatesPage() {
                           {item.displayName}
                         </button>
                         <p className="text-xs text-white/45">{item.name}</p>
+                        {item.locallyDisabled ? (
+                          <span className="mt-1 inline-flex rounded-full border border-amber-300/30 bg-amber-900/20 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                            Inativo no Converta
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2">
                         <p className="text-white/85">{item.requestedCategory || item.submittedCategory || item.category}</p>
@@ -1127,6 +1176,19 @@ export default function AppTemplatesPage() {
                             Ver detalhes
                           </button>
                           {item.syncable && item.templateId ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleLocalAvailability(item, !item.locallyDisabled)}
+                                disabled={syncingTemplateId === item.templateId}
+                                className="rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {syncingTemplateId === item.templateId
+                                  ? "Atualizando..."
+                                  : item.locallyDisabled
+                                    ? "Reativar"
+                                    : "Inativar"}
+                              </button>
                             <button
                               type="button"
                               onClick={() => handleSyncTemplate(item.templateId as string)}
@@ -1135,6 +1197,7 @@ export default function AppTemplatesPage() {
                             >
                               {syncingTemplateId === item.templateId ? "Atualizando..." : "Atualizar"}
                             </button>
+                            </>
                           ) : null}
                         </div>
                       </td>
@@ -1186,6 +1249,7 @@ export default function AppTemplatesPage() {
                       </div>
                       <p className={`mt-3 rounded-md border px-3 py-2 text-xs ${selectedItem.canUseInCampaign ? "border-emerald-300/25 bg-emerald-900/20 text-emerald-100" : "border-amber-300/25 bg-amber-900/20 text-amber-100"}`}>
                         {selectedItem.canUseInCampaign ? "Pode ser usado em campanhas." : "Ainda não pode ser usado em campanhas."}
+                        {selectedItem.locallyDisabled ? " O status Meta foi preservado; o bloqueio é apenas local." : ""}
                       </p>
                     </div>
                     <div className="grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white/75 sm:grid-cols-2">
@@ -1245,6 +1309,27 @@ export default function AppTemplatesPage() {
                             Este modelo já foi enviado à Meta ou encerrado. Para alterar o conteúdo, crie uma nova solicitação.
                           </p>
                         )}
+                      </div>
+                    ) : selectedItem.templateId ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs font-semibold uppercase text-white/50">Disponibilidade local</p>
+                        <p className="mt-2 text-sm text-white/65">
+                          {selectedItem.locallyDisabled
+                            ? "Inativo no Converta. Continua no catálogo e preserva o status da Meta, mas não aparece em campanhas ou envios pela plataforma."
+                            : "Ativo no Converta quando também estiver aprovado e com componentes válidos na Meta."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleLocalAvailability(selectedItem, !selectedItem.locallyDisabled)}
+                          disabled={syncingTemplateId === selectedItem.templateId}
+                          className="mt-3 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {syncingTemplateId === selectedItem.templateId
+                            ? "Atualizando..."
+                            : selectedItem.locallyDisabled
+                              ? "Reativar no Converta"
+                              : "Inativar no Converta"}
+                        </button>
                       </div>
                     ) : null}
                   </div>

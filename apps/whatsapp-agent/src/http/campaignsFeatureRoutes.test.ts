@@ -302,7 +302,7 @@ test.before(async () => {
       clientKey: `${prefix}-override`,
       name: "Campaigns Feature Override",
       profile: "government",
-      features: { campaigns: true },
+      features: { campaigns: true, templates: true },
     },
     select: { id: true, clientKey: true },
   });
@@ -484,11 +484,13 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
     ok: true;
     count: number;
     items: Array<{
+      id: string;
       name: string;
       status: string;
       metaTemplateId: string | null;
       canUseInCampaign: boolean;
       canUseInInbox: boolean;
+      locallyDisabled: boolean;
       blockedReason: string | null;
       blockedReasonLabel: string | null;
       variablesDetected: string[];
@@ -509,6 +511,7 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
   assert.ok(approved);
   assert.equal(approved.canUseInCampaign, true);
   assert.equal(approved.canUseInInbox, true);
+  assert.equal(approved.locallyDisabled, false);
   assert.equal(approved.blockedReason, null);
   assert.deepEqual(approved.variablesDetected, ["1", "nome"]);
   assert.deepEqual(approved.componentsSummary, [
@@ -537,6 +540,92 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
   assert.equal(recategorized.categoryChanged, true);
   assert.match(recategorized.categoryChangeLabel ?? "", /MARKETING/);
   assert.match(recategorized.categoryChangeLabel ?? "", /UTILITY/);
+});
+
+test("template local availability blocks campaign usage and preserves tenant isolation", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `local_disabled_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, aviso operacional.",
+    },
+  });
+
+  const disabledByOtherTenant = await request<ErrorPayload>(
+    "POST",
+    `/app/templates/${template.id}/disable`,
+    overrideAdmin
+  );
+  assert.equal(disabledByOtherTenant.status, 404);
+  assert.equal(getErrorCode(disabledByOtherTenant.body), "template_not_found");
+
+  const disabled = await request<{
+    ok: true;
+    template: {
+      id: string;
+      locallyDisabled: boolean;
+      canUseInCampaign: boolean;
+      canUseInInbox: boolean;
+      blockedReason: string | null;
+      blockedReasonLabel: string | null;
+    };
+  }>("POST", `/app/templates/${template.id}/disable`, businessAdmin);
+  assert.equal(disabled.status, 200);
+  assert.equal(disabled.body.template.locallyDisabled, true);
+  assert.equal(disabled.body.template.canUseInCampaign, false);
+  assert.equal(disabled.body.template.canUseInInbox, false);
+  assert.equal(disabled.body.template.blockedReason, "locally_disabled");
+  assert.equal(disabled.body.template.blockedReasonLabel, "Inativo no Converta");
+
+  const listed = await request<{
+    ok: true;
+    items: Array<{
+      id: string;
+      locallyDisabled: boolean;
+      canUseInCampaign: boolean;
+      blockedReason: string | null;
+    }>;
+  }>("GET", "/app/templates", businessAdmin);
+  const listedTemplate = listed.body.items.find((item) => item.id === template.id);
+  assert.ok(listedTemplate);
+  assert.equal(listedTemplate.locallyDisabled, true);
+  assert.equal(listedTemplate.canUseInCampaign, false);
+  assert.equal(listedTemplate.blockedReason, "locally_disabled");
+
+  const disabledEvents = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: template.id,
+      eventName: "template.local_disabled",
+    },
+  });
+  assert.equal(disabledEvents, 1);
+
+  const adminEnabled = await requestAdmin<{
+    ok: true;
+    template: { id: string; locallyDisabled: boolean };
+  }>("POST", `/admin/templates/${template.id}/enable`);
+  assert.equal(adminEnabled.status, 200);
+  assert.equal(adminEnabled.body.template.locallyDisabled, false);
+
+  const relisted = await request<{
+    ok: true;
+    items: Array<{ id: string; locallyDisabled: boolean; canUseInCampaign: boolean }>;
+  }>("GET", "/app/templates", businessAdmin);
+  const reactivated = relisted.body.items.find((item) => item.id === template.id);
+  assert.ok(reactivated);
+  assert.equal(reactivated.locallyDisabled, false);
+  assert.equal(reactivated.canUseInCampaign, true);
+
+  const adminDisabled = await requestAdmin<{
+    ok: true;
+    template: { id: string; locallyDisabled: boolean };
+  }>("POST", `/admin/templates/${template.id}/disable`);
+  assert.equal(adminDisabled.status, 200);
+  assert.equal(adminDisabled.body.template.locallyDisabled, true);
 });
 
 test("template routes require auth and bulk sync fails safely without Meta config", async () => {
@@ -1520,6 +1609,86 @@ test("campaign draft requires mappings for approved template variables", async (
     where: { clientId: businessClientId, name: "Rascunho sem variavel" },
   });
   assert.equal(campaigns, 0);
+});
+
+test("campaign draft explicit send blocks locally disabled template without sending", async () => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `draft_local_disabled_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso sem variaveis.",
+    },
+  });
+  const waId = "5541991189105";
+  const lead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Template Inativo",
+      phone: waId,
+      status: "RETORNO_FUTURO",
+    },
+  });
+
+  const created = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; totalRecipients: number };
+  }>("POST", "/app/campaigns/drafts", businessAdmin, {
+    name: "Rascunho com template inativado",
+    templateId: template.id,
+    selectedLeadIds: [lead.id],
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.campaign.status, "draft");
+
+  const disabled = await request("POST", `/app/templates/${template.id}/disable`, businessAdmin);
+  assert.equal(disabled.status, 200);
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  try {
+    const send = await request<ErrorPayload>(
+      "POST",
+      `/app/campaigns/${created.body.campaign.id}/send`,
+      businessAdmin
+    );
+    assert.equal(send.status, 400);
+    assert.equal(getErrorCode(send.body), "template_locally_disabled");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: created.body.campaign.id },
+    select: { status: true },
+  });
+  const outboundCount = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, messageId: { startsWith: `campaign.${created.body.campaign.id}.` } },
+  });
+  const sentEventCount = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      messageId: created.body.campaign.id,
+      eventName: "campaign.draft.sent",
+    },
+  });
+  assert.equal(campaign?.status, "draft");
+  assert.equal(outboundCount, 0);
+  assert.equal(sentEventCount, 0);
+  assert.equal(metaCalls, 0);
 });
 
 test("campaign draft rejects invalid fixed variable mapping", async () => {
