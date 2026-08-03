@@ -3332,6 +3332,15 @@ export async function sendAppCampaignDraft(
   });
 }
 
+export async function discardAppCampaignDraft(
+  session: AppSession,
+  campaignId: string
+): Promise<{ ok: true; campaign: CampaignItem }> {
+  return requestAppJson(session, `/app/campaigns/${encodeURIComponent(campaignId)}/discard`, {
+    method: "POST",
+  });
+}
+
 export async function cancelAppCampaign(
   session: AppSession,
   campaignId: string

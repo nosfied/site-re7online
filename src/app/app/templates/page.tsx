@@ -563,6 +563,18 @@ export default function AppTemplatesPage() {
     [selectedItem]
   );
 
+  useEffect(() => {
+    if (!isDetailDrawerOpen && !isRequestDrawerOpen) return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [isDetailDrawerOpen, isRequestDrawerOpen]);
+
   const openDetails = useCallback((itemId: string) => {
     setSelectedItemId(itemId);
     setIsDetailDrawerOpen(true);
@@ -934,15 +946,19 @@ export default function AppTemplatesPage() {
       title="Modelos de mensagem"
       subtitle="Templates aprovados pela Meta para campanhas e retomadas fora da janela de 24h."
     >
+      <div className="fixed right-4 top-4 z-[70] grid w-[min(28rem,calc(100vw-2rem))] gap-2">
+        {error ? (
+          <p className="rounded-xl border border-red-400/30 bg-red-900/80 p-3 text-sm text-red-100 shadow-2xl backdrop-blur">
+            {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="rounded-xl border border-emerald-400/30 bg-emerald-900/80 p-3 text-sm text-emerald-100 shadow-2xl backdrop-blur">
+            {success}
+          </p>
+        ) : null}
+      </div>
       {loading ? <p className="text-sm text-white/70">Carregando...</p> : null}
-      {error ? (
-        <p className="rounded-xl border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">{error}</p>
-      ) : null}
-      {success ? (
-        <p className="rounded-xl border border-emerald-400/30 bg-emerald-900/20 p-3 text-sm text-emerald-100">
-          {success}
-        </p>
-      ) : null}
 
       <div className="grid min-w-0 gap-4">
         <section className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -1209,12 +1225,6 @@ export default function AppTemplatesPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-dashed border-white/15 bg-white/[0.03] p-4">
-          <p className="text-sm font-semibold text-white">Nenhum modelo selecionado</p>
-          <p className="mt-1 text-sm text-white/60">
-            Selecione um modelo para ver detalhes ou crie uma nova solicitação.
-          </p>
-        </section>
       </div>
 
       {isDetailDrawerOpen ? (

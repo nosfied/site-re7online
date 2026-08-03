@@ -12,6 +12,7 @@ import {
   clearAppSession,
   createAppCampaign,
   createAppCampaignDraft,
+  discardAppCampaignDraft,
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
   getAppCampaign,
@@ -228,6 +229,8 @@ function buildTemplatePreview(content: string, values: string[]) {
 
 function getStatusClasses(status: string) {
   switch (status) {
+    case "draft":
+      return "bg-sky-700 text-white";
     case "sending":
       return "bg-amber-500 text-slate-950";
     case "completed":
@@ -235,7 +238,7 @@ function getStatusClasses(status: string) {
     case "blocked":
       return "bg-orange-600 text-white";
     case "cancelled":
-      return "bg-slate-500 text-white";
+      return "bg-slate-600 text-white";
     case "failed":
       return "bg-red-600 text-white";
     default:
@@ -246,7 +249,7 @@ function getStatusClasses(status: string) {
 function getStatusLabel(status: string) {
   switch (status) {
     case "draft":
-      return "Rascunho";
+      return "Rascunho em revisão";
     case "sending":
       return "Enviando...";
     case "completed":
@@ -254,7 +257,7 @@ function getStatusLabel(status: string) {
     case "blocked":
       return "Bloqueada por limite";
     case "cancelled":
-      return "Cancelada";
+      return "Descartada";
     case "failed":
       return "Erro";
     default:
@@ -309,6 +312,27 @@ function getMetaStatusLabel(status: string) {
 }
 
 function getCampaignConfidence(campaign: CampaignItem) {
+  if (campaign.status === "draft") {
+    return {
+      label: "Aguardando envio explícito",
+      icon: "INFO",
+      classes: "border-sky-300/25 bg-sky-900/20 text-sky-100",
+    };
+  }
+  if (campaign.status === "cancelled") {
+    return {
+      label: "Rascunho descartado",
+      icon: "INFO",
+      classes: "border-slate-300/20 bg-slate-800/60 text-slate-100",
+    };
+  }
+  if (campaign.status === "sending") {
+    return {
+      label: "Envio em andamento",
+      icon: "INFO",
+      classes: "border-amber-300/25 bg-amber-900/20 text-amber-100",
+    };
+  }
   const totalRecipients = campaign.totalRecipients || 0;
   const metaSummary = campaign.metaSummary;
   const deliveredOrRead = (metaSummary?.totalDelivered ?? 0) + (metaSummary?.totalRead ?? 0);
@@ -338,6 +362,17 @@ function getCampaignConfidence(campaign: CampaignItem) {
 function formatBillingValue(value: boolean | null) {
   if (value === null) return "-";
   return value ? "sim" : "nao";
+}
+
+function formatCampaignRecipientReference(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length >= 10) {
+    return `${digits.slice(0, 4)}****${digits.slice(-4)}`;
+  }
+  if (value.length > 8) {
+    return `${value.slice(0, 4)}****${value.slice(-4)}`;
+  }
+  return value || "-";
 }
 
 function getAudienceEligibilityClasses(eligible: boolean) {
@@ -385,6 +420,7 @@ export default function AppCampaignsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [discardingDraft, setDiscardingDraft] = useState(false);
   const [exportingConsumption, setExportingConsumption] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -644,10 +680,13 @@ export default function AppCampaignsPage() {
 
   useEffect(() => {
     if (!detailModalOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [detailModalOpen]);
 
@@ -675,6 +714,10 @@ export default function AppCampaignsPage() {
       setFormError("Erro ao criar campanha: informe ao menos um destinatario valido.");
       return;
     }
+    const confirmed = window.confirm(
+      "Esta ação usa o envio imediato manual e pode enviar templates para os números informados. O fluxo recomendado é criar um rascunho pela audiência CRM. Deseja continuar?"
+    );
+    if (!confirmed) return;
 
     setCreating(true);
     setFormError(null);
@@ -730,6 +773,35 @@ export default function AppCampaignsPage() {
       setDetailError(typed.message || "Erro ao cancelar campanha.");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleDiscardDraft = async () => {
+    if (!session || !selectedCampaign || selectedCampaign.status !== "draft") return;
+    const confirmed = window.confirm(
+      "Este rascunho será removido da fila de revisão. Nenhuma mensagem será enviada."
+    );
+    if (!confirmed) return;
+    setDiscardingDraft(true);
+    setDetailError(null);
+    try {
+      const response = await discardAppCampaignDraft(session, selectedCampaign.id);
+      setSelectedCampaign(response.campaign);
+      await refreshCampaigns(session, response.campaign.id);
+      setActiveTab("all");
+      setStatusFilter("all");
+      setDetailModalOpen(false);
+      setToast("Rascunho descartado. Nenhuma mensagem foi enviada.");
+      window.setTimeout(() => setToast(null), 4000);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setDetailError(typed.message || "Nao foi possivel descartar o rascunho.");
+    } finally {
+      setDiscardingDraft(false);
     }
   };
 
@@ -879,6 +951,8 @@ export default function AppCampaignsPage() {
       const response = await sendAppCampaignDraft(session, selectedCampaign.id);
       setSelectedCampaign(response.campaign);
       await refreshCampaigns(session, response.campaign.id);
+      setActiveTab("all");
+      setStatusFilter("sending");
       setToast(`Envio iniciado para ${response.send.summary.accepted} destinatarios elegiveis.`);
       window.setTimeout(() => setToast(null), 4000);
     } catch (err) {
@@ -916,16 +990,18 @@ export default function AppCampaignsPage() {
       title="Campanhas"
       subtitle="Crie campanhas com templates aprovados pela Meta, usando contatos elegíveis do CRM."
     >
-      {error ? (
-        <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
-          {error}
-        </p>
-      ) : null}
-      {toast ? (
-        <p className="rounded-md border border-emerald-400/30 bg-emerald-900/30 p-3 text-sm text-emerald-100">
-          {toast}
-        </p>
-      ) : null}
+      <div className="fixed right-4 top-4 z-[70] grid w-[min(28rem,calc(100vw-2rem))] gap-2">
+        {error ? (
+          <p className="rounded-md border border-red-400/30 bg-red-900/80 p-3 text-sm text-red-100 shadow-2xl backdrop-blur">
+            {error}
+          </p>
+        ) : null}
+        {toast ? (
+          <p className="rounded-md border border-emerald-400/30 bg-emerald-900/80 p-3 text-sm text-emerald-100 shadow-2xl backdrop-blur">
+            {toast}
+          </p>
+        ) : null}
+      </div>
 
       <section className="rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex flex-col gap-4">
@@ -1409,13 +1485,13 @@ export default function AppCampaignsPage() {
               </div>
             </div>
           ) : null}
-          <details className="rounded-md border border-white/10 bg-white/5">
-            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-white/85">
+          <details className="rounded-md border border-amber-300/20 bg-amber-950/10">
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-amber-100">
               Envio imediato manual (avançado)
             </summary>
             <div className="border-t border-white/10 p-3">
               <p className="mb-3 rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
-                Use apenas para operação técnica ou compatibilidade. O fluxo recomendado é criar rascunho a partir da audiência CRM.
+                Use apenas para operação técnica ou compatibilidade. Esta ação pode enviar imediatamente após confirmação. O fluxo recomendado é criar rascunho a partir da audiência CRM.
               </p>
               <form className="grid gap-3 lg:grid-cols-2" onSubmit={handleSubmit}>
                 <label className="grid min-w-0 gap-1 text-sm">
@@ -1494,7 +1570,7 @@ export default function AppCampaignsPage() {
                   </div>
                 ) : (
                   <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
-                    <span className="text-white/70">Template params (um por linha)</span>
+                    <span className="text-white/70">Parâmetros do modelo (um por linha)</span>
                     <textarea
                       className="block min-h-16 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                       value={form.templateParamsInput}
@@ -1505,12 +1581,16 @@ export default function AppCampaignsPage() {
                   </label>
                 )}
                 <label className="grid min-w-0 gap-1 text-sm lg:col-span-2">
-                  <span className="text-white/70">Destinatários manuais (um waId por linha)</span>
+                  <span className="text-white/70">Números dos contatos</span>
                   <textarea
                     className="block min-h-20 w-full min-w-0 max-w-full rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
                     value={form.recipientsInput}
                     onChange={(event) => setForm((prev) => ({ ...prev, recipientsInput: event.target.value }))}
+                    placeholder={"5584999999999\n5584888888888"}
                   />
+                  <span className="text-xs text-white/55">
+                    Digite um número por linha, com código do país e DDD, somente números. Exemplo: 5584999999999.
+                  </span>
                 </label>
                 {formError ? (
                   <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100 lg:col-span-2">
@@ -1523,7 +1603,7 @@ export default function AppCampaignsPage() {
                     disabled={creating}
                     className="rounded-md bg-re7-orange px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {creating ? "Iniciando envio..." : "Enviar campanha agora"}
+                    {creating ? "Iniciando envio..." : "Enviar agora"}
                   </button>
                 </div>
               </form>
@@ -1750,15 +1830,15 @@ export default function AppCampaignsPage() {
                       <p className="mt-2 text-xs text-white/60">{getStatusLabel(selectedCampaign.status)}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Sent</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">Enviadas</p>
                       <p className="mt-1 font-semibold">{selectedCampaign.sentCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Blocked</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">Bloqueados</p>
                       <p className="mt-1 font-semibold">{selectedCampaign.blockedCount}</p>
                     </div>
                     <div className="rounded-md border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs uppercase tracking-wide text-white/60">Pending</p>
+                      <p className="text-xs uppercase tracking-wide text-white/60">Pendentes</p>
                       <p className="mt-1 font-semibold">{selectedCampaign.progress.pendingCount}</p>
                     </div>
                   </div>
@@ -1801,14 +1881,24 @@ export default function AppCampaignsPage() {
                             Este rascunho ainda nao enviou mensagens. Revise template e audiencia antes de iniciar.
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          disabled={sendingDraft}
-                          onClick={handleSendDraftCampaign}
-                          className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {sendingDraft ? "Iniciando..." : "Enviar campanha"}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={discardingDraft || sendingDraft}
+                            onClick={handleDiscardDraft}
+                            className="rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {discardingDraft ? "Descartando..." : "Descartar rascunho"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sendingDraft || discardingDraft}
+                            onClick={handleSendDraftCampaign}
+                            className="rounded-md bg-re7-orange px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {sendingDraft ? "Iniciando..." : "Enviar campanha"}
+                          </button>
+                        </div>
                       </div>
                       {selectedCampaign.draftReview ? (
                         <div className="grid gap-2 sm:grid-cols-4">
@@ -1865,6 +1955,44 @@ export default function AppCampaignsPage() {
                           </div>
                         </div>
                       ) : null}
+                      {selectedCampaign.draftReview?.recipients?.length ? (
+                        <div className="rounded-md border border-white/10 bg-white/5 p-3">
+                          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-white/60">
+                              Destinatários do rascunho
+                            </p>
+                            <span className="rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs text-sky-100">
+                              Aguardando envio explícito
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[620px] text-sm">
+                              <thead className="bg-white/10 text-left">
+                                <tr>
+                                  <th className="px-3 py-2">Contato</th>
+                                  <th className="px-3 py-2">Referência</th>
+                                  <th className="px-3 py-2">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedCampaign.draftReview.recipients.map((recipient, index) => (
+                                  <tr key={`${recipient.identifierDisplay}-${index}`} className="border-t border-white/10">
+                                    <td className="px-3 py-2">Contato {index + 1}</td>
+                                    <td className="px-3 py-2 font-mono text-xs text-white/75">
+                                      {recipient.phoneDisplay || recipient.identifierDisplay}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className="inline-flex rounded-full border border-sky-300/25 bg-sky-900/20 px-2 py-1 text-xs font-semibold text-sky-100">
+                                        Incluído no rascunho
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -1918,7 +2046,7 @@ export default function AppCampaignsPage() {
                         <table className="w-full min-w-[780px] text-sm">
                           <thead className="bg-white/10 text-left">
                             <tr>
-                              <th className="px-3 py-2">Telefone</th>
+                              <th className="px-3 py-2">Referência</th>
                               <th className="px-3 py-2">Status</th>
                               <th className="px-3 py-2">Categoria</th>
                               <th className="px-3 py-2">Cobranca</th>
@@ -1930,7 +2058,7 @@ export default function AppCampaignsPage() {
                           <tbody>
                             {selectedCampaign.messagesMetaStatus.map((item, index) => (
                               <tr key={`${item.waId}-${item.conversationId ?? "conversation"}-${index}`} className="border-t border-white/10">
-                                <td className="px-3 py-2 font-mono text-xs">{item.waId}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{formatCampaignRecipientReference(item.waId)}</td>
                                 <td className="px-3 py-2">
                                   <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getMetaStatusClasses(item.status)}`}>
                                     {getMetaStatusLabel(item.status)}

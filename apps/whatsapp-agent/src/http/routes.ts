@@ -9448,6 +9448,66 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/campaigns/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/discard")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const campaignId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+      if (!campaignId) {
+        json(res, 400, httpError("bad_request", "Campaign id is required"));
+        return;
+      }
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+      if (!(await enforceAppFeature(prisma, res, {
+        client,
+        userId: clientAuth.userId,
+        feature: "campaigns",
+        endpoint: pathname,
+        requestId,
+      }))) return;
+      const discarded = await discardScopedCampaignDraft(prisma, {
+        clientId: client.id,
+        campaignId,
+        userId: clientAuth.userId,
+        requestId,
+      });
+      if (!discarded.ok) {
+        const message =
+          discarded.error === "campaign_not_draft"
+            ? "Only draft campaigns can be discarded"
+            : "Campaign not found";
+        json(res, discarded.status, httpError(discarded.error, message));
+        return;
+      }
+      json(res, 200, {
+        ok: true,
+        campaign: serializeCampaign(discarded.campaign),
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.campaign.draft.discard.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/campaigns/") &&
+    pathname.split("/").length === 5 &&
     pathname.endsWith("/send")
   ) {
     const prisma = getPrisma();
@@ -24369,9 +24429,11 @@ async function buildCampaignDetailPayload(
         }
       : draftSeed;
   const visibleMessagesMetaStatus =
-    messagesMetaStatus.length > 0
-      ? [...messagesMetaStatus, ...optOutMetaStatus]
-      : [...buildCampaignSeedFallbackStatusItems(campaign, fallbackDraftSeed), ...optOutMetaStatus];
+    campaign.status === "draft"
+      ? optOutMetaStatus
+      : messagesMetaStatus.length > 0
+        ? [...messagesMetaStatus, ...optOutMetaStatus]
+        : [...buildCampaignSeedFallbackStatusItems(campaign, fallbackDraftSeed), ...optOutMetaStatus];
   return {
     ok: true,
     campaign: {
@@ -24812,6 +24874,46 @@ async function cancelScopedCampaign(
   if (!campaign) return null;
   if (campaign.status !== "sending") return "not_cancelable" as const;
   return cancelCampaign({ campaignId: params.campaignId, clientId: params.clientId });
+}
+
+async function discardScopedCampaignDraft(
+  prisma: ReturnType<typeof getPrisma>,
+  params: { clientId: string; campaignId: string; userId: string; requestId: string }
+) {
+  const campaign = await getCampaignById(params.campaignId, params.clientId);
+  if (!campaign) {
+    return { ok: false as const, status: 404 as const, error: "campaign_not_found" as const };
+  }
+  if (campaign.status !== "draft") {
+    return { ok: false as const, status: 409 as const, error: "campaign_not_draft" as const };
+  }
+  const discarded = await prisma.campaign.update({
+    where: { id: campaign.id },
+    data: { status: "cancelled" },
+  });
+  await persistEvent({
+    clientId: params.clientId,
+    messageId: campaign.id,
+    requestId: `campaign-draft-discard:${campaign.id}`,
+    eventName: "campaign.draft.discarded",
+    payloadJson: {
+      campaignId: campaign.id,
+      templateId: campaign.templateId,
+      templateName: campaign.templateName,
+      previousStatus: campaign.status,
+      nextStatus: discarded.status,
+      discardedBy: params.userId,
+      discardedAt: new Date().toISOString(),
+      source: "app",
+    },
+  });
+  logger.info({
+    event: "campaign.draft.discarded",
+    requestId: params.requestId,
+    clientId: params.clientId,
+    campaignId: campaign.id,
+  });
+  return { ok: true as const, campaign: discarded };
 }
 
 async function persistCampaignDraftSeed(params: {

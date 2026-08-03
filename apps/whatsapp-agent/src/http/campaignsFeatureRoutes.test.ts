@@ -389,6 +389,7 @@ test("government profile default is blocked from campaigns routes", async () => 
     { method: "GET", route: "/app/campaigns/audience-preview" },
     { method: "POST", route: "/app/campaigns/drafts", body: { name: "Draft", templateId: "missing", selectedLeadIds: ["lead"] } },
     { method: "POST", route: "/app/campaigns/missing/send" },
+    { method: "POST", route: "/app/campaigns/missing/discard" },
     { method: "GET", route: "/app/campaigns/missing" },
     { method: "POST", route: "/app/campaigns/missing/cancel" },
     {
@@ -427,6 +428,10 @@ test("campaign draft routes require authentication", async () => {
   const send = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/example/send");
   assert.equal(send.status, 401);
   assert.equal(getErrorCode(send.body), "missing_token");
+
+  const discard = await requestUnauth<ErrorPayload>("POST", "/app/campaigns/example/discard");
+  assert.equal(discard.status, 401);
+  assert.equal(getErrorCode(discard.body), "missing_token");
 });
 
 test("template catalog is tenant scoped and exposes campaign usage safely", async () => {
@@ -1499,6 +1504,86 @@ test("campaign draft uses approved template and stores safe seed without sending
   });
   assert.equal(outboundAfter, outboundBefore);
   assert.equal(sendEvents, 0);
+
+  const detail = await request<{
+    campaign: {
+      status: string;
+      metaSummary: { totalSent: number; totalDelivered: number; totalRead: number; totalFailed: number };
+      messagesMetaStatus: Array<{ status: string }>;
+      draftReview: { recipients: Array<{ phoneDisplay: string | null; identifierDisplay: string }> };
+    };
+  }>("GET", `/app/campaigns/${response.body.campaign.id}`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.campaign.status, "draft");
+  assert.equal(detail.body.campaign.metaSummary.totalSent, 0);
+  assert.equal(detail.body.campaign.metaSummary.totalDelivered, 0);
+  assert.equal(detail.body.campaign.metaSummary.totalRead, 0);
+  assert.equal(detail.body.campaign.metaSummary.totalFailed, 0);
+  assert.equal(detail.body.campaign.messagesMetaStatus.length, 0);
+  assert.equal(detail.body.campaign.draftReview.recipients.length, 2);
+  assert.equal(JSON.stringify(detail.body).includes(eligibleWaId), false);
+
+  const crossTenantDiscard = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${response.body.campaign.id}/discard`,
+    overrideAdmin
+  );
+  assert.equal(crossTenantDiscard.status, 404);
+  assert.equal(getErrorCode(crossTenantDiscard.body), "campaign_not_found");
+
+  const discarded = await request<{
+    ok: boolean;
+    campaign: { id: string; status: string; sentCount: number; blockedCount: number };
+  }>("POST", `/app/campaigns/${response.body.campaign.id}/discard`, businessAdmin);
+  assert.equal(discarded.status, 200);
+  assert.equal(discarded.body.ok, true);
+  assert.equal(discarded.body.campaign.status, "cancelled");
+  assert.equal(discarded.body.campaign.sentCount, 0);
+  assert.equal(discarded.body.campaign.blockedCount, 0);
+
+  const discardEvent = await prisma.event.count({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.draft.discarded",
+      messageId: response.body.campaign.id,
+    },
+  });
+  assert.equal(discardEvent, 1);
+
+  const sendDiscarded = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${response.body.campaign.id}/send`,
+    businessAdmin
+  );
+  assert.equal(sendDiscarded.status, 409);
+  assert.equal(getErrorCode(sendDiscarded.body), "campaign_not_draft");
+
+  const discardAgain = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${response.body.campaign.id}/discard`,
+    businessAdmin
+  );
+  assert.equal(discardAgain.status, 409);
+  assert.equal(getErrorCode(discardAgain.body), "campaign_not_draft");
+
+  const sendingCampaign = await prisma.campaign.create({
+    data: {
+      clientId: businessClientId,
+      name: "Campanha em envio",
+      templateName: template.name,
+      status: "sending",
+      totalRecipients: 1,
+      sentCount: 0,
+      blockedCount: 0,
+    },
+  });
+  const discardSending = await request<ErrorPayload>(
+    "POST",
+    `/app/campaigns/${sendingCampaign.id}/discard`,
+    businessAdmin
+  );
+  assert.equal(discardSending.status, 409);
+  assert.equal(getErrorCode(discardSending.body), "campaign_not_draft");
 });
 
 test("campaign draft send revalidates recipients before starting", async () => {
