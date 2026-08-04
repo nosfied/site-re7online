@@ -80,6 +80,8 @@ test("listPublicContacts scopes all queries by tenant", async () => {
   assert.equal((calls[0]?.where as { clientId?: string }).clientId, "client_a");
   assert.equal((calls[1]?.where as { tenantId?: string }).tenantId, "client_a");
   assert.equal((calls[2]?.where as { clientId?: string }).clientId, "client_a");
+  assert.equal((calls[2]?.where as { deletedAt?: null }).deletedAt, null);
+  assert.equal((calls[2]?.where as { anonymizedAt?: null }).anonymizedAt, null);
 });
 
 test("listPublicContacts returns pagination metadata", async () => {

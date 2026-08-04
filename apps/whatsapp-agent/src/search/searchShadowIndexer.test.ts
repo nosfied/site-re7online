@@ -25,6 +25,7 @@ function makePrisma(params: {
     createdIndexes: [] as unknown[],
     events: [] as unknown[],
     findManyCalls: [] as string[],
+    conversationFindManyArgs: null as unknown,
   };
   const client = makeClient(params.features ?? { advancedSearch: true, advancedSearchRuntime: false });
   const prisma = {
@@ -32,8 +33,9 @@ function makePrisma(params: {
       findUnique: async () => client,
     },
     conversation: {
-      findMany: async () => {
+      findMany: async (args: unknown) => {
         state.findManyCalls.push("conversation");
+        state.conversationFindManyArgs = args;
         return params.conversationRows ?? [];
       },
     },
@@ -174,4 +176,19 @@ test("search shadow skips empty message content", async () => {
   assert.equal(report.eligible, 0);
   assert.equal(report.skippedItems[0]?.reason, "empty_index_content");
   assert.equal(state.createdIndexes.length, 0);
+});
+
+test("search shadow conversation source excludes anonymized conversations explicitly", async () => {
+  const { prisma, state } = makePrisma({ conversationRows: [] });
+
+  await runSearchShadowIndexer({
+    prisma,
+    tenant: "demo-prefeitura",
+    source: "conversation",
+  });
+
+  const where = (state.conversationFindManyArgs as { where: Record<string, unknown> }).where;
+  assert.equal(where.clientId, "tenant-1");
+  assert.equal(where.deletedAt, null);
+  assert.equal(where.anonymizedAt, null);
 });

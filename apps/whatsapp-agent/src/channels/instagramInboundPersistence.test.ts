@@ -24,6 +24,7 @@ function createFakePrisma() {
   const contacts = new Map<string, any>();
   const leads = new Map<string, any>();
   const outboundMessages = new Map<string, any>();
+  const events: any[] = [];
   const contactChannelIdentities = new Map<string, any>();
   const identityKey = (input: {
     clientId: string;
@@ -41,7 +42,7 @@ function createFakePrisma() {
     ].join(":");
 
   return {
-    state: { inboundMessages, conversations, runtimeStates, contacts, leads, outboundMessages, contactChannelIdentities },
+    state: { inboundMessages, conversations, runtimeStates, contacts, leads, outboundMessages, contactChannelIdentities, events },
     client: {
       async findUnique(args: any) {
         return args.where.clientKey === client.clientKey ? client : null;
@@ -103,6 +104,13 @@ function createFakePrisma() {
       },
     },
     conversation: {
+      async findUnique(args: any) {
+        const key = `${args.where.clientId_waId.clientId}:${args.where.clientId_waId.waId}`;
+        const item = conversations.get(key);
+        return item
+          ? { id: item.id, deletedAt: item.deletedAt ?? null, anonymizedAt: item.anonymizedAt ?? null }
+          : null;
+      },
       async upsert(args: any) {
         const key = `${args.where.clientId_waId.clientId}:${args.where.clientId_waId.waId}`;
         const current = conversations.get(key);
@@ -165,6 +173,12 @@ function createFakePrisma() {
           : { id: `identity-${contactChannelIdentities.size + 1}`, ...args.create };
         contactChannelIdentities.set(key, item);
         return item;
+      },
+    },
+    event: {
+      async create(args: any) {
+        events.push(args.data);
+        return args.data;
       },
     },
   };
@@ -394,6 +408,47 @@ test("persistInstagramInboundEvent keeps inbound working when profile lookup fai
   assert.equal(result.persisted, true);
   assert.equal(prisma.state.inboundMessages.size, 1);
   assert.equal(Array.from(prisma.state.leads.values())[0].name, "Instagram User");
+});
+
+test("persistInstagramInboundEvent blocks anonymized identity rehydration", async () => {
+  const prisma = createFakePrisma();
+  const syntheticWaId = buildInstagramSyntheticWaId(
+    "1dbdacfaf97548a0c94d3ac007ce6b1d"
+  );
+  prisma.state.conversations.set(`client-1:${syntheticWaId}`, {
+    id: "conversation-anonymized",
+    clientId: "client-1",
+    waId: syntheticWaId,
+    deletedAt: new Date("2026-05-02T10:00:00.000Z"),
+    anonymizedAt: new Date("2026-05-02T10:01:00.000Z"),
+  });
+
+  const result = await persistInstagramInboundEvent({
+    prisma: prisma as any,
+    event: {
+      tenantKey: "tenant-a",
+      channel: "instagram",
+      provider: "meta",
+      channelAccountId: "ig-account-1",
+      externalUserId: "ig-user-001",
+      externalMessageId: "ig-mid-anonymized",
+      text: "olá instagram de novo",
+    },
+    tenantKey: "tenant-a",
+    account: enabledAccount,
+    requestId: "req-anonymized",
+    publishRealtimeEvent: () => undefined,
+  });
+
+  const preserved = prisma.state.conversations.get(`client-1:${syntheticWaId}`);
+  assert.equal(result.persisted, false);
+  assert.equal(result.reason, "anonymized_identity");
+  assert.equal(prisma.state.inboundMessages.size, 0);
+  assert.equal(preserved.anonymizedAt?.toISOString(), "2026-05-02T10:01:00.000Z");
+  assert.equal(preserved.deletedAt?.toISOString(), "2026-05-02T10:00:00.000Z");
+  assert.equal(prisma.state.events[0]?.eventName, "inbound.anonymized_identity_seen");
+  assert.equal(JSON.stringify(prisma.state.events[0]).includes("ig-user-001"), false);
+  assert.equal(JSON.stringify(prisma.state.events[0]).includes("olá instagram de novo"), false);
 });
 
 test("persistInstagramInboundEvent ignores Instagram outbound echo callbacks by provider message id", async () => {

@@ -1621,6 +1621,7 @@ export async function receiveWebhook(payload: unknown, meta?: RequestMeta) {
         lastInboundAt: state.lastInboundAt ? new Date(state.lastInboundAt) : null,
         lastOutboundAt: state.lastOutboundAt ? new Date(state.lastOutboundAt) : null,
         reopenClosed: state.reopenClosed === true,
+        requestId: meta?.requestId,
       });
     } catch (error) {
       logger.error({

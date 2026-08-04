@@ -112,6 +112,8 @@ test("listPublicConversations scopes all queries by tenant and excludes message 
   assert.equal("waId" in (result.data[0] as Record<string, unknown>), false);
   assert.equal("messages" in (result.data[0] as Record<string, unknown>), false);
   assert.equal((calls[0]?.where as { clientId?: string }).clientId, "client_a");
+  assert.equal((calls[0]?.where as { deletedAt?: null }).deletedAt, null);
+  assert.equal((calls[0]?.where as { anonymizedAt?: null }).anonymizedAt, null);
   assert.equal((calls[1]?.where as { clientId?: string }).clientId, "client_a");
   assert.equal((calls[2]?.where as { clientId?: string }).clientId, "client_a");
   assert.equal((calls[3]?.where as { clientId?: string }).clientId, "client_a");

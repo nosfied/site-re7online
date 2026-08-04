@@ -17,6 +17,14 @@ export function getPrisma() {
   return prisma;
 }
 
+export function setPrismaForTesting(client: PrismaClient | undefined) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setPrismaForTesting is not available in production");
+  }
+  prisma = client;
+  globalForPrisma.prisma = client;
+}
+
 const shutdown = async () => {
   if (prisma) {
     await prisma.$disconnect();

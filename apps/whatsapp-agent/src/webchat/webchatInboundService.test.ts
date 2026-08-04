@@ -216,6 +216,12 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     },
     conversation: {
       updateMany: tx.conversation.updateMany,
+      findUnique: async ({ where }: { where: { clientId_waId: { clientId: string; waId: string } } }) => {
+        return state.conversations.find(
+          (item) =>
+            item.clientId === where.clientId_waId.clientId && item.waId === where.clientId_waId.waId
+        ) ?? null;
+      },
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         const idFilter = where.id as { startsWith?: string } | undefined;
         return state.conversations.find((item) => {
@@ -238,6 +244,9 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     },
     leadNote: {
       create: tx.leadNote.create,
+    },
+    event: {
+      create: tx.event.create,
     },
     department: {
       findFirst: async () => ({ id: "department_1", name: "Atendimento Geral" }),
@@ -1008,4 +1017,34 @@ test("createWebchatInboundMessage returns closed status only after valid protoco
   assert.match(response, /Encontramos seu atendimento/);
   assert.match(response, /Status: Fechado/);
   assert.match(response, /Última atualização:/);
+});
+
+test("createWebchatInboundMessage blocks anonymized identity rehydration", async () => {
+  const prisma = makePrisma() as any;
+  const syntheticWaId = "webchat:e3a3f40a607039326b4e08d09825532c";
+  prisma.state.conversations.push({
+    id: "conversation_anonymized",
+    clientId: "tenant_a",
+    waId: syntheticWaId,
+    waIdCanonical: syntheticWaId,
+    channel: "webchat",
+    deletedAt: makeDate("2026-07-01T10:00:00.000Z"),
+    anonymizedAt: makeDate("2026-07-01T10:01:00.000Z"),
+  });
+
+  const result = await createWebchatInboundMessage({
+    prisma,
+    requestId: "req_webchat_anonymized",
+    input: { sessionToken: "wcs_existing", text: "Novo contato" },
+    origin: "https://portal.example.com",
+    ip: "203.0.113.40",
+  });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error, "webchat_identity_anonymized");
+  assert.equal(prisma.state.inboundMessages.length, 0);
+  const event = prisma.state.events.at(-1);
+  assert.equal(event?.eventName, "inbound.anonymized_identity_seen");
+  assert.equal(JSON.stringify(event).includes("Novo contato"), false);
+  assert.equal(JSON.stringify(event).includes("cliente@example.com"), false);
 });

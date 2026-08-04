@@ -259,6 +259,7 @@ export async function listPublicConversations(params: {
     where: {
       clientId: params.clientId,
       deletedAt: null,
+      anonymizedAt: null,
       ...(updatedSince ? { updatedAt: { gte: updatedSince } } : {}),
       ...(channel ? { channel } : {}),
       ...(cursor
@@ -347,6 +348,7 @@ export async function getPublicConversation(params: {
       id: params.conversationId,
       clientId: params.clientId,
       deletedAt: null,
+      anonymizedAt: null,
     },
     select: {
       id: true,

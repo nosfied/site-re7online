@@ -10,6 +10,7 @@ import { channelLatencyNow, type ChannelLatencyProfiler } from "./channelLatency
 import { ensureDefaultOperationalDepartmentAndQueue } from "../bootstrap/defaultOperationalDepartment.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
+import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 
 export const MESSENGER_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
@@ -25,6 +26,7 @@ export type MessengerInboundPersistenceReason =
   | "tenant_missing"
   | "client_missing"
   | "duplicate_message"
+  | "anonymized_identity"
   | "persisted";
 
 export type MessengerInboundPersistenceResult = {
@@ -230,6 +232,29 @@ export async function persistMessengerInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
+  const anonymizedGuard = await guardAgainstAnonymizedIdentityRehydration({
+    prisma,
+    clientId: client.id,
+    tenantKey,
+    channel: "messenger",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    waId: syntheticWaId,
+    requestId,
+    source: "messenger_inbound",
+  });
+  if (anonymizedGuard.blocked) {
+    logPersistence({
+      event: "messenger.inbound_persistence.blocked",
+      requestId,
+      tenantKey,
+      channelAccountId: event.channelAccountId,
+      externalMessageId: event.externalMessageId,
+      externalUserHash,
+      reason: "anonymized_identity",
+    });
+    return { persisted: false, reason: "anonymized_identity", syntheticWaId };
+  }
   const duplicateLookupStartedAt = channelLatencyNow();
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
@@ -304,7 +329,6 @@ export async function persistMessengerInboundEvent(params: {
         departmentId: operationalRoute.departmentId,
         lastInboundAt: createdAt,
         deletedAt: null,
-        anonymizedAt: null,
       },
       select: { id: true },
     }),

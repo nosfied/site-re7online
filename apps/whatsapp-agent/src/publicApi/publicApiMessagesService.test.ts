@@ -151,9 +151,10 @@ test("listPublicConversationMessages returns only safe normalized fields", async
   assert.equal("metaMessageId" in data, false);
   assert.equal("requestId" in data, false);
   assert.equal("rawPayload" in data, false);
-  const conversationWhere = (calls[0]?.args as { where: { clientId?: string; deletedAt?: null } }).where;
+  const conversationWhere = (calls[0]?.args as { where: { clientId?: string; deletedAt?: null; anonymizedAt?: null } }).where;
   assert.equal(conversationWhere.clientId, "client_a");
   assert.equal(conversationWhere.deletedAt, null);
+  assert.equal(conversationWhere.anonymizedAt, null);
   const inboundArgs = calls.find((call) => call.model === "inbound")?.args as {
     where: { clientId?: string; OR?: unknown[] };
     select: Record<string, unknown>;

@@ -8,6 +8,7 @@ import { logger } from "../logger/logger.js";
 import { runtimeStorage } from "../storage/runtimeStorage.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
+import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 import {
   isWhatsAppMultichannelShadowWriteEnabled,
   safeApplyWhatsAppMultichannelShadow,
@@ -42,6 +43,18 @@ export async function persistInboundMessage(params: {
   if (!params.clientId) return false;
   try {
     const prisma = getPrisma();
+    const anonymizedGuard = await guardAgainstAnonymizedIdentityRehydration({
+      prisma,
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: params.phoneNumberId ?? null,
+      waId: params.waId,
+      requestId: params.requestId ?? `whatsapp-inbound:${params.messageId}`,
+      source: "whatsapp.inbound_message",
+    });
+    if (anonymizedGuard.blocked) return false;
+
     const existing = await prisma.inboundMessage.findUnique({
       where: {
         clientId_messageId: {
@@ -97,6 +110,7 @@ export async function persistConversationWindow(params: {
   lastInboundAt?: Date | null;
   lastOutboundAt?: Date | null;
   reopenClosed?: boolean;
+  requestId?: string;
 }) {
   if (!params.clientId) return;
   const prisma = getPrisma();
@@ -112,9 +126,23 @@ export async function persistConversationWindow(params: {
       id: true,
       departmentId: true,
       deletedAt: true,
+      anonymizedAt: true,
       closedAt: true,
     },
   });
+  if (existing?.anonymizedAt) {
+    await guardAgainstAnonymizedIdentityRehydration({
+      prisma,
+      clientId: params.clientId,
+      channel: "whatsapp",
+      provider: "meta",
+      channelAccountId: params.phoneNumberId ?? null,
+      waId: params.waId,
+      requestId: params.requestId ?? "whatsapp-conversation-window",
+      source: "whatsapp.conversation_window",
+    });
+    return;
+  }
   const isInboundAfterSoftDelete = Boolean(existing?.deletedAt && params.lastInboundAt);
   const isInboundAfterClosed = Boolean(
     existing?.closedAt &&

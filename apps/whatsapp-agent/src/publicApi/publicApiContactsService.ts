@@ -212,10 +212,11 @@ export async function listPublicContacts(params: {
         })
       : Promise.resolve([]),
     lookupKeys.length
-      ? params.prisma.conversation.findMany({
+        ? params.prisma.conversation.findMany({
           where: {
             clientId: params.clientId,
             deletedAt: null,
+            anonymizedAt: null,
             OR: [{ waId: { in: lookupKeys } }, { waIdCanonical: { in: lookupKeys } }],
           },
           orderBy: [{ updatedAt: "desc" }],
@@ -307,6 +308,7 @@ export async function getPublicContact(params: {
       where: {
         clientId: params.clientId,
         deletedAt: null,
+        anonymizedAt: null,
         OR: [{ waId: { in: lookupKeys } }, { waIdCanonical: { in: lookupKeys } }],
       },
       orderBy: [{ updatedAt: "desc" }],

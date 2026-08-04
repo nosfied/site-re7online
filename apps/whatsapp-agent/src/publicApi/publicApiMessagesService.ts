@@ -122,6 +122,7 @@ export async function listPublicConversationMessages(params: {
       id: params.conversationId,
       clientId: params.clientId,
       deletedAt: null,
+      anonymizedAt: null,
     },
     select: {
       id: true,

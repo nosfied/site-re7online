@@ -316,7 +316,7 @@ export async function runSearchShadowIndexer(params: SearchShadowParams): Promis
   for (const currentSource of sources) {
     if (currentSource === "conversation") {
       const rows = await params.prisma.conversation.findMany({
-        where: { clientId: client.id, deletedAt: null },
+        where: { clientId: client.id, deletedAt: null, anonymizedAt: null },
         orderBy: [{ updatedAt: "desc" }],
         take: limit,
         select: {

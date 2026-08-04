@@ -10,6 +10,7 @@ import type { TenantChannelAccount } from "./tenantChannelAccount.types.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
 import { env } from "../config/env.js";
 import { resolveMetaContactDisplayName, upsertMetaContactIdentity } from "./metaContactProfile.js";
+import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 
 export const INSTAGRAM_OUTBOUND_DISABLED_MESSAGE =
   "Envio por Instagram ainda não está habilitado neste canal.";
@@ -25,6 +26,7 @@ export type InstagramInboundPersistenceReason =
   | "client_missing"
   | "outbound_echo"
   | "duplicate_message"
+  | "anonymized_identity"
   | "persisted";
 
 export type InstagramInboundPersistenceResult = {
@@ -369,6 +371,29 @@ export async function persistInstagramInboundEvent(params: {
     externalUserRef: encryptMessengerExternalUserRef(event.externalUserId),
     legacyWaId: null,
   };
+  const anonymizedGuard = await guardAgainstAnonymizedIdentityRehydration({
+    prisma,
+    clientId: client.id,
+    tenantKey,
+    channel: "instagram",
+    provider: "meta",
+    channelAccountId: event.channelAccountId,
+    waId: syntheticWaId,
+    requestId,
+    source: "instagram_inbound",
+  });
+  if (anonymizedGuard.blocked) {
+    logPersistence({
+      event: "instagram.inbound_persistence.blocked",
+      requestId,
+      tenantKey,
+      channelAccountId: event.channelAccountId,
+      externalMessageId: event.externalMessageId,
+      externalUserHash,
+      reason: "anonymized_identity",
+    });
+    return { persisted: false, reason: "anonymized_identity", syntheticWaId };
+  }
   const duplicate = await prisma.inboundMessage.findUnique({
     where: { clientId_messageId: { clientId: client.id, messageId } },
     select: { id: true },
@@ -436,7 +461,6 @@ export async function persistInstagramInboundEvent(params: {
         departmentId: operationalRoute.departmentId,
         lastInboundAt: createdAt,
         deletedAt: null,
-        anonymizedAt: null,
       },
       select: { id: true },
     }),

@@ -22,6 +22,7 @@ import {
 } from "../inbox/conversationProtocol.js";
 import { logger } from "../logger/logger.js";
 import { publishRealtimeEvent } from "../realtime/hub.js";
+import { guardAgainstAnonymizedIdentityRehydration } from "../privacy/anonymizedIdentityGuard.js";
 
 const MESSAGE_RATE_LIMIT_WINDOW_MS = 60_000;
 const MESSAGE_RATE_LIMIT_MAX = 20;
@@ -881,7 +882,8 @@ export type WebchatInboundResult =
         | "webchat_origin_not_allowed"
         | "webchat_rate_limited"
         | "webchat_message_required"
-        | "webchat_message_too_long";
+        | "webchat_message_too_long"
+        | "webchat_identity_anonymized";
       retryAfterSec?: number;
     };
 
@@ -945,6 +947,20 @@ export async function createWebchatInboundMessage(params: {
   };
   const syntheticWaId = `webchat:${shortHash(`${session.siteId}:${externalUserHash}`)}`;
   const messageId = `webchat:${session.siteId}:${shortHash(`${session.id}:${params.requestId}:${now.toISOString()}`, 24)}`;
+  const anonymizedGuard = await guardAgainstAnonymizedIdentityRehydration({
+    prisma: params.prisma,
+    clientId: session.clientId,
+    tenantKey: session.site.client.clientKey,
+    channel: "webchat",
+    provider: "converta",
+    channelAccountId: session.siteId,
+    waId: syntheticWaId,
+    requestId: params.requestId,
+    source: "webchat_inbound",
+  });
+  if (anonymizedGuard.blocked) {
+    return { ok: false, error: "webchat_identity_anonymized" };
+  }
   const authoritativeDisplayName = normalizeText(session.visitor.name ?? session.visitor.email ?? "", 180);
   const fallbackDisplayName = "Visitante Webchat";
   const displayName = authoritativeDisplayName || fallbackDisplayName;
@@ -1028,7 +1044,6 @@ export async function createWebchatInboundMessage(params: {
         departmentId: defaults.department.id,
         lastInboundAt: now,
         deletedAt: null,
-        anonymizedAt: null,
       },
       select: { id: true, waId: true },
     });
