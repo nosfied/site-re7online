@@ -6,8 +6,9 @@ import AppShell from "@/components/app/AppShell";
 import { buildReplayFormFromCampaign, getFriendlyCampaignError } from "@/lib/campaignDrafts";
 import {
   AppCampaignAudiencePreviewResponse,
-  AppTemplateItem,
   AppSession,
+  AppTemplateItem,
+  CrmBusinessStatusConfig,
   cancelAppCampaign,
   clearAppSession,
   createAppCampaign,
@@ -15,6 +16,7 @@ import {
   discardAppCampaignDraft,
   exportAppCampaignConsumptionCsv,
   fetchAppCampaignAudiencePreview,
+  fetchAppCrmStatuses,
   getAppCampaign,
   listAppCampaigns,
   listAppTemplates,
@@ -423,6 +425,8 @@ export default function AppCampaignsPage() {
   const [session, setSession] = useState<AppSession | null>(null);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [templates, setTemplates] = useState<AppTemplateItem[]>([]);
+  const [crmStatuses, setCrmStatuses] = useState<CrmBusinessStatusConfig[]>([]);
+  const [crmStatusesWarning, setCrmStatusesWarning] = useState<string | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignItem | null>(null);
   const [form, setForm] = useState<CampaignFormState>(EMPTY_FORM);
@@ -631,7 +635,20 @@ export default function AppCampaignsPage() {
     setLoadingList(true);
     setError(null);
 
-    Promise.all([refreshCampaigns(session), refreshTemplates(session)])
+    Promise.all([
+      refreshCampaigns(session),
+      refreshTemplates(session),
+      fetchAppCrmStatuses(session)
+        .then((response) => {
+          setCrmStatuses(response.settings.crmBusinessStatuses.filter((item) => item.isActive !== false));
+          setCrmStatusesWarning(null);
+        })
+        .catch((err: { status?: number; message?: string }) => {
+          if (err.status === 401) throw err;
+          setCrmStatuses([]);
+          setCrmStatusesWarning("Não foi possível carregar os status CRM. O filtro ficou em todos os status.");
+        }),
+    ])
       .catch((err: { status?: number; message?: string }) => {
         if (cancelled) return;
         if (err.status === 401) {
@@ -1095,36 +1112,27 @@ export default function AppCampaignsPage() {
       null;
     const labels = getTemplateVariablePositions(matchedTemplate);
     const templateVariables = normalizeTemplateParams(replayForm.templateParamsInput);
-    const seedMappings = campaign.draftSeed?.templateVariableMappings ?? [];
-    const replayMappings: TemplateVariableMappingFormState[] =
-      seedMappings.length > 0
-        ? labels.map((position) => {
-            const mapping = seedMappings.find((item) => item.position === position);
-            const source = mapping?.source as TemplateVariableSource | undefined;
-            const validSource: TemplateVariableSource =
-              source === "contact.displayName" ||
-              source === "lead.companyName" ||
-              source === "lead.city" ||
-              source === "fixed"
-                ? source
-                : "";
-            return {
-              position,
-              source: validSource,
-              value: mapping?.value ?? "",
-              fallback: mapping?.fallback ?? "",
-            };
-          })
-        : syncTemplateVariableMappings([], labels);
+    const fixedVariableValues = labels.map((position, index) => {
+      const mapping = campaign.draftSeed?.templateVariableMappings?.find((item) => item.position === position);
+      if (mapping?.source === "fixed" && mapping.value) return mapping.value;
+      if (mapping?.fallback) return mapping.fallback;
+      return templateVariables[index] ?? "";
+    });
     setForm({
-      templateVariables: syncTemplateVariables(templateVariables, labels.length),
-      templateVariableMappings: replayMappings,
+      templateVariables: syncTemplateVariables(fixedVariableValues, labels.length),
+      templateVariableMappings: syncTemplateVariableMappings([], labels),
       ...replayForm,
       templateId: matchedTemplate?.id ?? "",
       templateName: matchedTemplate?.name ?? replayForm.templateName,
+      templateParamsInput: syncTemplateVariables(fixedVariableValues, labels.length).join("\n"),
     });
     setFormError(null);
-    setManualSendOpen(Boolean(replayForm.recipientsInput.trim()));
+    setAudienceFilters(EMPTY_AUDIENCE_FILTERS);
+    setAudiencePreview(null);
+    setAudiencePreviewError(null);
+    setAudiencePage(1);
+    setActiveTab("create");
+    setManualSendOpen(true);
     if (replayForm.templateName && !matchedTemplate) {
       showToast(
         "warning",
@@ -1133,18 +1141,10 @@ export default function AppCampaignsPage() {
       );
       return;
     }
-    if (campaign.draftSeed?.leadIds?.length && !replayForm.recipientsInput.trim()) {
-      showToast(
-        "warning",
-        "Campanha carregada para reuso",
-        "O template e as variáveis foram reaproveitados. Gere uma nova prévia de audiência CRM antes de criar outro rascunho."
-      );
-      return;
-    }
     showToast(
       "info",
-      "Campanha carregada para reuso",
-      "Revise audiência, template e variáveis antes de criar um novo rascunho ou envio imediato."
+      "Campanha carregada para reuso no envio imediato manual",
+      "Revise números, template e variáveis antes de enviar."
     );
   };
 
@@ -1301,14 +1301,23 @@ export default function AppCampaignsPage() {
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Status CRM</span>
-              <input
-                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white outline-none focus:border-re7-sky"
+              <select
+                className="w-full min-w-0 rounded-md border border-white/20 bg-re7-navy/80 px-3 py-2 text-sm text-white"
                 value={audienceFilters.status}
                 onChange={(event) =>
                   setAudienceFilters((prev) => ({ ...prev, status: event.target.value }))
                 }
-                placeholder="Ex.: INATIVO"
-              />
+              >
+                <option value="">Todos os status</option>
+                {crmStatuses.map((status) => (
+                  <option key={status.id} value={status.id}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-white/55">
+                Filtre pelos status configurados no CRM deste tenant.
+              </span>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Canal</span>
@@ -1375,6 +1384,11 @@ export default function AppCampaignsPage() {
           {audiencePreviewError ? (
             <p className="rounded-md border border-red-400/30 bg-red-900/30 p-3 text-sm text-red-100">
               {audiencePreviewError}
+            </p>
+          ) : null}
+          {crmStatusesWarning ? (
+            <p className="rounded-md border border-amber-300/25 bg-amber-900/20 p-3 text-xs text-amber-100">
+              {crmStatusesWarning}
             </p>
           ) : null}
 
@@ -1730,7 +1744,13 @@ export default function AppCampaignsPage() {
                 </label>
                 {templateVariableLabels.length > 0 ? (
                   <div className="grid min-w-0 gap-2.5 lg:col-span-2">
-                    <span className="text-sm text-white/70">Variáveis manuais do template</span>
+                    <div>
+                      <span className="text-sm font-semibold text-white/80">Variáveis do envio imediato</span>
+                      <p className="mt-1 text-xs text-white/55">
+                        Como este envio usa números informados manualmente, use valores fixos para as variáveis
+                        ou revise os valores antes de enviar.
+                      </p>
+                    </div>
                     <div className="grid gap-2 md:grid-cols-2">
                       {templateVariableLabels.map((label, index) => (
                         <label key={`${label}-${index}`} className="grid min-w-0 gap-1 text-sm">

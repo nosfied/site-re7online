@@ -68,6 +68,6 @@ export function buildReplayFormFromCampaign(campaign: CampaignItem) {
     name: seed?.name ? `${seed.name}-replay` : `${campaign.name || "campanha"}-replay`,
     templateName: seed?.templateName || campaign.templateName || "",
     templateParamsInput: (seed?.templateParams || []).join("\n"),
-    recipientsInput: (seed?.recipients || []).join("\n"),
+    recipientsInput: (seed?.manualRecipientInput?.length ? seed.manualRecipientInput : seed?.recipients || []).join("\n"),
   };
 }

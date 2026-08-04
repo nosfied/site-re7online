@@ -9733,6 +9733,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           clientId: client.id,
           waIds,
         })),
+        manualRecipientInput: rawWaIds
+          .map((value) => String(value ?? "").trim())
+          .filter((value) => value.length > 0),
         components,
       });
 
@@ -19892,6 +19895,7 @@ type CampaignDraftSeed = {
   templateName: string;
   leadIds?: string[];
   recipients: string[];
+  manualRecipientInput?: string[];
   templateParams: string[];
   templateVariableMappings?: CampaignTemplateVariableMapping[];
   source?: string | null;
@@ -20131,6 +20135,11 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
         .map((value) => (typeof value === "string" ? normalizeWaId(value) : ""))
         .filter((value): value is string => Boolean(value))
     : [];
+  const manualRecipientInput = Array.isArray(typed.manualRecipientInput)
+    ? typed.manualRecipientInput
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value): value is string => Boolean(value))
+    : [];
   const leadIds = Array.isArray(typed.leadIds)
     ? typed.leadIds
         .map((value) => (typeof value === "string" ? value.trim() : ""))
@@ -20149,6 +20158,7 @@ function extractCampaignDraftSeed(rawPayload: unknown): CampaignDraftSeed | null
     templateName,
     leadIds,
     recipients,
+    manualRecipientInput,
     templateParams,
     templateVariableMappings,
     source: typeof typed.source === "string" ? typed.source : null,
@@ -24456,6 +24466,7 @@ async function createScopedCampaign(params: {
   totalRecipients?: number;
   optOutBlocked?: CampaignOptOutBlockedRecipient[];
   seedWaIds?: string[];
+  manualRecipientInput?: string[];
   components: Array<{
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
@@ -24497,6 +24508,7 @@ async function createScopedCampaign(params: {
     name: params.name,
     templateName: params.templateName,
     waIds: params.seedWaIds ?? params.waIds,
+    manualRecipientInput: params.manualRecipientInput,
     components: params.components,
   });
   return { campaign, campaignRunId };
@@ -24924,6 +24936,7 @@ async function persistCampaignDraftSeed(params: {
   templateName: string;
   leadIds?: string[];
   waIds: string[];
+  manualRecipientInput?: string[];
   components?: Array<{
     type: "body";
     parameters: Array<{ type: "text"; text: string }>;
@@ -24944,6 +24957,7 @@ async function persistCampaignDraftSeed(params: {
       templateName: params.templateName,
       leadIds: params.leadIds ?? [],
       recipients: params.waIds,
+      manualRecipientInput: params.manualRecipientInput ?? [],
       templateParams: extractTemplateParamsFromComponents(params.components ?? null),
       templateVariableMappings: params.templateVariableMappings ?? [],
       source: params.source ?? null,

@@ -466,6 +466,7 @@ export type CampaignItem = {
     templateName: string;
     leadIds?: string[];
     recipients: string[];
+    manualRecipientInput?: string[];
     templateParams: string[];
     templateVariableMappings?: Array<{
       position: string;
