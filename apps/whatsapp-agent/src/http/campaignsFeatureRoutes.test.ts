@@ -2117,10 +2117,22 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       category: "UTILITY",
       language: "pt_BR",
       status: "approved",
-      content: "Aviso inicial",
+      content: "Ola {{1}}, aviso inicial",
     },
   });
   const waId = "5584951957784";
+  const anonymizedWaId = "5584******7784:anon001";
+  const anonymizedLead = await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: anonymizedWaId,
+      waIdCanonical: anonymizedWaId,
+      name: "Usuario Anonimizado",
+      phone: anonymizedWaId,
+      status: "NEW",
+    },
+    select: { id: true },
+  });
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2147,6 +2159,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       name: "Envio cria conversa",
       templateId: template.id,
       recipients: [waId],
+      templateParams: ["Cliente Novo"],
     }
   );
   assert.equal(response.status, 200);
@@ -2173,6 +2186,8 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       lastInboundAt: true,
       lastOutboundAt: true,
       departmentId: true,
+      anonymizedAt: true,
+      deletedAt: true,
     },
   });
   assert.equal(conversation.channel, "whatsapp");
@@ -2180,6 +2195,36 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   assert.equal(conversation.lastInboundAt, null);
   assert.ok(conversation.lastOutboundAt);
   assert.ok(conversation.departmentId);
+  assert.equal(conversation.anonymizedAt, null);
+  assert.equal(conversation.deletedAt, null);
+
+  const contact = await prisma.contact.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: { id: true, name: true, channel: true, provider: true, externalUserHash: true },
+  });
+  assert.equal(contact.name, "Contato WhatsApp • ****7784");
+  assert.equal(contact.channel, "whatsapp");
+  assert.equal(contact.provider, "meta");
+  assert.ok(contact.externalUserHash?.startsWith("whatsapp:"));
+
+  const lead = await prisma.lead.findUniqueOrThrow({
+    where: { tenantId_waId: { tenantId: businessClientId, waId } },
+    select: { id: true, name: true, phone: true, channel: true, provider: true, contactChannelIdentityId: true },
+  });
+  assert.equal(lead.name, "Contato WhatsApp • ****7784");
+  assert.equal(lead.phone, waId);
+  assert.equal(lead.channel, "whatsapp");
+  assert.equal(lead.provider, "meta");
+  assert.ok(lead.contactChannelIdentityId);
+
+  const preservedAnonymizedLead = await prisma.lead.findUniqueOrThrow({
+    where: { id: anonymizedLead.id },
+    select: { waId: true, waIdCanonical: true, name: true, phone: true },
+  });
+  assert.equal(preservedAnonymizedLead.waId, anonymizedWaId);
+  assert.equal(preservedAnonymizedLead.waIdCanonical, anonymizedWaId);
+  assert.equal(preservedAnonymizedLead.name, "Usuario Anonimizado");
+  assert.equal(preservedAnonymizedLead.phone, anonymizedWaId);
 
   const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
     where: { clientId_waId: { clientId: businessClientId, waId } },
@@ -2214,23 +2259,36 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
     ok: boolean;
     conversations: Array<{
       waId: string;
+      leadId: string | null;
+      leadName: string | null;
+      leadPhone: string | null;
       status: string | null;
       mode: string | null;
-      lastMessage: { direction: string; type: string; templateName: string | null } | null;
+      lastMessage: { direction: string; type: string; templateName: string | null; bodyText: string | null } | null;
     }>;
   }>("GET", `/app/conversations?search=${encodeURIComponent(waId)}&limit=10`, businessAdmin);
   assert.equal(list.status, 200);
   const listItem = list.body.conversations.find((item) => item.waId === waId);
   assert.ok(listItem);
+  assert.equal(listItem.leadId, lead.id);
+  assert.equal(listItem.leadName, "Contato WhatsApp • ****7784");
+  assert.equal(listItem.leadPhone, waId);
   assert.equal(listItem.status, "WAITING");
   assert.equal(listItem.mode, "HUMAN");
   assert.equal(listItem.lastMessage?.direction, "OUTBOUND");
   assert.equal(listItem.lastMessage?.type, "TEMPLATE");
   assert.equal(listItem.lastMessage?.templateName, template.name);
+  assert.equal(listItem.lastMessage?.bodyText, "Ola Cliente Novo, aviso inicial");
 
   const detail = await request<{
     ok: boolean;
-    items: Array<{ direction: string; type: string; templateName: string | null; messageId: string | null }>;
+    items: Array<{
+      direction: string;
+      type: string;
+      bodyText: string | null;
+      templateName: string | null;
+      messageId: string | null;
+    }>;
   }>("GET", `/app/conversation/${encodeURIComponent(waId)}?order=asc`, businessAdmin);
   assert.equal(detail.status, 200);
   assert.ok(
@@ -2238,10 +2296,65 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
       (item) =>
         item.direction === "OUTBOUND" &&
         item.type === "TEMPLATE" &&
+        item.bodyText === "Ola Cliente Novo, aviso inicial" &&
         item.templateName === template.name &&
         item.messageId === `campaign.${response.body.campaign.id}.1`
     )
   );
+});
+
+test("campaign send failure does not create conversation or CRM bootstrap", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_failure_no_conversation_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso nao entregue",
+    },
+  });
+  const waId = "5584951957799";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ error: { message: "Meta unavailable" } }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio falha sem conversa",
+      templateId: template.id,
+      recipients: [waId],
+    }
+  );
+  assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: response.body.campaign.id },
+      select: { status: true },
+    });
+    return campaign?.status === "failed";
+  });
+
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 0);
+  assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }), 0);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId } }), 0);
 });
 
 test("campaign recipient bridge does not cross tenants and skips ambiguous matches", async (t) => {
