@@ -1175,7 +1175,11 @@ export default function AppCampaignsPage() {
           </div>
         ) : null}
         {toast ? (
-          <div className={`rounded-md border p-3 text-sm shadow-2xl backdrop-blur ${getToastClasses(toast.tone)}`}>
+          <div
+            role={toast.tone === "error" ? "alert" : "status"}
+            onClick={() => setToast(null)}
+            className={`cursor-pointer rounded-md border p-3 text-sm shadow-2xl backdrop-blur ${getToastClasses(toast.tone)}`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-semibold">{toast.title}</p>

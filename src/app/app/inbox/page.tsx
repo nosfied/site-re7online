@@ -5661,7 +5661,12 @@ export default function AppInboxPage() {
                           />
                         ) : null}
                         {item.templateName ? (
-                          <p className="wa-bubble-meta mt-1 text-[11px]">template: {item.templateName}</p>
+                          <div className="wa-bubble-meta mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
+                            <span className="rounded-full border border-emerald-500/25 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">
+                              Template
+                            </span>
+                            <span>Modelo: {item.templateName}</span>
+                          </div>
                         ) : null}
                         <div className="mt-2 flex items-center justify-end gap-1 text-[11px] text-slate-600">
                           <span>{formatDateTime(item.createdAt)}</span>

@@ -2109,6 +2109,141 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
   assert.equal(JSON.stringify(resolutionEvent.payloadJson).includes(inputWaId), false);
 });
 
+test("campaign send creates inbox conversation and timeline for new recipient", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_new_conversation_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso inicial",
+    },
+  });
+  const waId = "5584951957784";
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { to?: string };
+      assert.equal(payload.to, waId);
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.new.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio cria conversa",
+      templateId: template.id,
+      recipients: [waId],
+    }
+  );
+  assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const event = await prisma.event.findFirst({
+      where: {
+        clientId: businessClientId,
+        eventName: "campaign.message.sent",
+        messageId: `campaign.${response.body.campaign.id}.1`,
+        conversationId: { not: null },
+      },
+      select: { id: true },
+    });
+    return Boolean(event);
+  });
+
+  const conversation = await prisma.conversation.findFirstOrThrow({
+    where: { clientId: businessClientId, waId },
+    select: {
+      id: true,
+      channel: true,
+      provider: true,
+      lastInboundAt: true,
+      lastOutboundAt: true,
+      departmentId: true,
+    },
+  });
+  assert.equal(conversation.channel, "whatsapp");
+  assert.equal(conversation.provider, "meta");
+  assert.equal(conversation.lastInboundAt, null);
+  assert.ok(conversation.lastOutboundAt);
+  assert.ok(conversation.departmentId);
+
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: {
+      mode: true,
+      status: true,
+      queueId: true,
+      departmentId: true,
+      lastOutboundMessageId: true,
+      assignedUserId: true,
+    },
+  });
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.status, "WAITING");
+  assert.equal(runtime.assignedUserId, null);
+  assert.ok(runtime.departmentId);
+  assert.ok(runtime.queueId);
+  assert.equal(runtime.lastOutboundMessageId, `campaign.${response.body.campaign.id}.1`);
+
+  const creationEvent = await prisma.event.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.recipient.conversation_created",
+      conversationId: conversation.id,
+    },
+    select: { payloadJson: true },
+  });
+  assert.equal((creationEvent.payloadJson as { matchedBy?: string }).matchedBy, "new_recipient");
+  assert.equal(JSON.stringify(creationEvent.payloadJson).includes(waId), false);
+
+  const list = await request<{
+    ok: boolean;
+    conversations: Array<{
+      waId: string;
+      status: string | null;
+      mode: string | null;
+      lastMessage: { direction: string; type: string; templateName: string | null } | null;
+    }>;
+  }>("GET", `/app/conversations?search=${encodeURIComponent(waId)}&limit=10`, businessAdmin);
+  assert.equal(list.status, 200);
+  const listItem = list.body.conversations.find((item) => item.waId === waId);
+  assert.ok(listItem);
+  assert.equal(listItem.status, "WAITING");
+  assert.equal(listItem.mode, "HUMAN");
+  assert.equal(listItem.lastMessage?.direction, "OUTBOUND");
+  assert.equal(listItem.lastMessage?.type, "TEMPLATE");
+  assert.equal(listItem.lastMessage?.templateName, template.name);
+
+  const detail = await request<{
+    ok: boolean;
+    items: Array<{ direction: string; type: string; templateName: string | null; messageId: string | null }>;
+  }>("GET", `/app/conversation/${encodeURIComponent(waId)}?order=asc`, businessAdmin);
+  assert.equal(detail.status, 200);
+  assert.ok(
+    detail.body.items.some(
+      (item) =>
+        item.direction === "OUTBOUND" &&
+        item.type === "TEMPLATE" &&
+        item.templateName === template.name &&
+        item.messageId === `campaign.${response.body.campaign.id}.1`
+    )
+  );
+});
+
 test("campaign recipient bridge does not cross tenants and skips ambiguous matches", async (t) => {
   const template = await prisma.template.create({
     data: {

@@ -23307,28 +23307,36 @@ async function buildConversationListPayload(
   const conversationFetchLimit = Math.min(params.limit * 10 + 1, 1000);
   const messageFetchLimit = Math.min(conversationFetchLimit * 2, 2000);
   const protocolIdPrefix = getConversationIdPrefixFromProtocol(params.filters.search);
+  const searchIdentity = params.filters.search.trim();
+  const searchIdentityVariants = searchIdentity
+    ? Array.from(new Set([searchIdentity, ...buildWaIdLookup(searchIdentity).variants].filter(Boolean)))
+    : [];
   const conversationWhere: Prisma.ConversationWhereInput = {
       clientId: params.clientId,
       deletedAt: null,
       anonymizedAt: null,
-      lastInboundAt: { not: null },
+      AND: [
+        { OR: [{ lastInboundAt: { not: null } }, { lastOutboundAt: { not: null } }] },
+        ...(params.cursor
+          ? [
+              {
+                OR: [
+                  { updatedAt: { lt: new Date(params.cursor.updatedAt) } },
+                  {
+                    updatedAt: new Date(params.cursor.updatedAt),
+                    waIdCanonical: { gt: params.cursor.conversationIdentity },
+                  },
+                  {
+                    updatedAt: new Date(params.cursor.updatedAt),
+                    waIdCanonical: null,
+                    waId: { gt: params.cursor.conversationIdentity },
+                  },
+                ],
+              },
+            ]
+          : []),
+      ],
     ...(protocolIdPrefix ? { id: { startsWith: protocolIdPrefix } } : {}),
-    ...(params.cursor
-      ? {
-          OR: [
-            { updatedAt: { lt: new Date(params.cursor.updatedAt) } },
-            {
-              updatedAt: new Date(params.cursor.updatedAt),
-              waIdCanonical: { gt: params.cursor.conversationIdentity },
-            },
-            {
-              updatedAt: new Date(params.cursor.updatedAt),
-              waIdCanonical: null,
-              waId: { gt: params.cursor.conversationIdentity },
-            },
-          ],
-        }
-      : {}),
   };
   const baseQueryStartedAt = channelLatencyNow();
   const conversations = await prisma.conversation.findMany({
@@ -23351,6 +23359,44 @@ async function buildConversationListPayload(
       historyVisibleAfter: true,
     },
   });
+  if (searchIdentityVariants.length > 0) {
+    const identityConversations = await prisma.conversation.findMany({
+      where: {
+        clientId: params.clientId,
+        deletedAt: null,
+        anonymizedAt: null,
+        OR: [
+          { waId: { in: searchIdentityVariants } },
+          { waIdCanonical: { in: searchIdentityVariants } },
+          { waId: { contains: searchIdentity } },
+          { waIdCanonical: { contains: searchIdentity } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }, { waIdCanonical: "asc" }, { waId: "asc" }],
+      take: conversationFetchLimit,
+      select: {
+        id: true,
+        waId: true,
+        waIdCanonical: true,
+        channel: true,
+        provider: true,
+        channelAccountId: true,
+        departmentId: true,
+        createdAt: true,
+        updatedAt: true,
+        firstResponseAt: true,
+        lastInboundAt: true,
+        lastOutboundAt: true,
+        historyVisibleAfter: true,
+      },
+    });
+    const seenConversationIds = new Set(conversations.map((conversation) => conversation.id));
+    for (const conversation of identityConversations) {
+      if (seenConversationIds.has(conversation.id)) continue;
+      conversations.push(conversation);
+      seenConversationIds.add(conversation.id);
+    }
+  }
   recordInboxListTiming(params.clientId, "base_query", baseQueryStartedAt);
   recordInboxListCount(params.clientId, "base_query", 1);
   if (conversations.length === 0) {

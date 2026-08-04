@@ -11,6 +11,7 @@ import {
   resolveCampaignRecipientConversationTarget,
   summarizeCampaignRecipientResolution,
 } from "./campaignRecipientConversationBridge.js";
+import { ensureCampaignOutboundConversation } from "./campaignOutboundConversation.js";
 import {
   filterOptedOutCampaignRecipients,
   recordCampaignOptOutBlocks,
@@ -217,6 +218,23 @@ async function runCampaignInBackground(
         }
 
         const status = result.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+        const deliveredAt = new Date();
+        const conversationOutcome = result.ok
+          ? await ensureCampaignOutboundConversation(prisma, {
+              clientId: params.clientId,
+              clientKey: params.clientKey,
+              waId,
+              waIdCanonical,
+              phoneNumberId,
+              messageId,
+              campaignId: params.campaignId,
+              campaignRunId,
+              templateName: params.templateName,
+              sentAt: deliveredAt,
+              source: "campaign",
+              conversationId: resolvedRecipient.conversationId ?? null,
+            })
+          : null;
         await persistOutboundMessage({
           clientId: params.clientId,
           phoneNumberId,
@@ -237,11 +255,12 @@ async function runCampaignInBackground(
             templateName: params.templateName,
             components: components ?? null,
             recipientResolution: resolutionSummary,
+            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
           },
         });
         await persistEvent({
           clientId: params.clientId,
-          conversationId: resolvedRecipient.conversationId ?? null,
+          conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
           waId,
           waIdCanonical,
           messageId,
@@ -251,10 +270,12 @@ async function runCampaignInBackground(
             campaignId: params.campaignId,
             campaignRunId,
             templateName: params.templateName,
-            waId,
+            waIdLast4: waId.slice(-4),
+            waIdLength: waId.length,
             status: result.status ?? null,
             errorBody: result.errorBody ?? null,
             components: components ?? null,
+            conversationId: conversationOutcome?.conversationId ?? resolvedRecipient.conversationId ?? null,
           },
         });
 
@@ -281,28 +302,6 @@ async function runCampaignInBackground(
         }
 
         sentCount += 1;
-        const deliveredAt = new Date();
-        if (resolvedRecipient.conversationId) {
-          await prisma.conversation.updateMany({
-            where: {
-              id: resolvedRecipient.conversationId,
-              clientId: params.clientId,
-            },
-            data: {
-              lastOutboundAt: deliveredAt,
-            },
-          });
-          await prisma.conversationRuntimeState.updateMany({
-            where: {
-              clientId: params.clientId,
-              OR: [{ waId }, { waIdCanonical }],
-            },
-            data: {
-              lastOutboundAt: deliveredAt,
-              lastOutboundMessageId: messageId,
-            },
-          });
-        }
         await prisma.campaign.update({
           where: { id: params.campaignId },
           data: { sentCount },
