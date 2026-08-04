@@ -14,6 +14,40 @@ function buildWhatsAppExternalUserHash(waIdCanonical: string) {
   return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
 }
 
+async function recordCampaignOutboundConversationReactivated(
+  params: {
+    clientId: string;
+    conversationId: string;
+    waId: string;
+    waIdCanonical: string;
+    messageId: string;
+    campaignId: string;
+    campaignRunId: string;
+    templateName: string;
+    source: "campaign" | "manual" | "bot";
+  }
+) {
+  await persistEvent({
+    clientId: params.clientId,
+    conversationId: params.conversationId,
+    waId: params.waId,
+    waIdCanonical: params.waIdCanonical,
+    messageId: params.messageId,
+    requestId: `campaign-conversation-reactivated:${params.campaignId}:${params.messageId}`,
+    eventName: "campaign.recipient.conversation_reactivated",
+    payloadJson: {
+      campaignId: params.campaignId,
+      campaignRunId: params.campaignRunId,
+      conversationId: params.conversationId,
+      source: params.source,
+      reason: "outbound_template_sent",
+      templateName: params.templateName,
+      waIdLast4: params.waId.slice(-4),
+      waIdLength: params.waId.length,
+    },
+  });
+}
+
 async function ensureCampaignOutboundCrmBootstrap(
   prisma: PrismaClient,
   params: {
@@ -177,28 +211,52 @@ export async function ensureCampaignOutboundConversation(
         where: {
           id: params.conversationId,
           clientId: params.clientId,
-          deletedAt: null,
           anonymizedAt: null,
         },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       })
     : await prisma.conversation.findFirst({
         where: {
           clientId: params.clientId,
-          deletedAt: null,
           anonymizedAt: null,
           OR: [{ waId: params.waId }, { waIdCanonical }],
         },
         orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
+  const anonymizedExisting = existing
+    ? null
+    : params.conversationId
+      ? await prisma.conversation.findFirst({
+          where: {
+            id: params.conversationId,
+            clientId: params.clientId,
+            anonymizedAt: { not: null },
+          },
+          select: { id: true },
+        })
+      : await prisma.conversation.findFirst({
+          where: {
+            clientId: params.clientId,
+            anonymizedAt: { not: null },
+            OR: [{ waId: params.waId }, { waIdCanonical }],
+          },
+          select: { id: true },
+        });
+  if (anonymizedExisting) {
+    return { conversationId: null, created: false, contactId: null, leadId: null, skipped: "anonymized" as const };
+  }
 
   if (existing) {
+    const wasSoftDeleted = Boolean(existing.deletedAt);
     await prisma.conversation.updateMany({
       where: { id: existing.id, clientId: params.clientId },
-      data: { lastOutboundAt: params.sentAt },
+      data: {
+        deletedAt: null,
+        lastOutboundAt: params.sentAt,
+      },
     });
-    await prisma.conversationRuntimeState.updateMany({
+    const runtimeUpdate = await prisma.conversationRuntimeState.updateMany({
       where: {
         clientId: params.clientId,
         OR: [{ waId: params.waId }, { waIdCanonical }],
@@ -206,8 +264,50 @@ export async function ensureCampaignOutboundConversation(
       data: {
         lastOutboundAt: params.sentAt,
         lastOutboundMessageId: params.messageId,
+        ...(wasSoftDeleted
+          ? {
+              mode: "HUMAN",
+              status: ConversationOperationalStatus.WAITING,
+              closedAt: null,
+              chatbotActive: false,
+            }
+          : {}),
       },
     });
+    if (runtimeUpdate.count === 0) {
+      await prisma.conversationRuntimeState.create({
+        data: {
+          clientId: params.clientId,
+          waId: params.waId,
+          waIdCanonical,
+          conversationKey: makeConversationKey(params.clientKey, params.waId),
+          channel: "whatsapp",
+          provider: "meta",
+          firstSeenAt: params.sentAt,
+          lastOutboundAt: params.sentAt,
+          lastOutboundMessageId: params.messageId,
+          mode: "HUMAN",
+          status: ConversationOperationalStatus.WAITING,
+          departmentId: defaults.department.id,
+          queueId: defaults.queue.id,
+          chatbotActive: false,
+          answers: {},
+        },
+      });
+    }
+    if (wasSoftDeleted) {
+      await recordCampaignOutboundConversationReactivated({
+        clientId: params.clientId,
+        conversationId: existing.id,
+        waId: params.waId,
+        waIdCanonical,
+        messageId: params.messageId,
+        campaignId: params.campaignId,
+        campaignRunId: params.campaignRunId,
+        templateName: params.templateName,
+        source: params.source,
+      });
+    }
     const crm = await ensureCampaignOutboundCrmBootstrap(prisma, {
       clientId: params.clientId,
       waId: params.waId,

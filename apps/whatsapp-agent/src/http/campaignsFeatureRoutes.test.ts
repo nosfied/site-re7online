@@ -2109,6 +2109,210 @@ test("campaign send resolves safe ninth digit variant to existing conversation",
   assert.equal(JSON.stringify(resolutionEvent.payloadJson).includes(inputWaId), false);
 });
 
+test("campaign send reactivates soft-deleted non-anonymized conversation", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_reactivate_deleted_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Retorno de atendimento",
+    },
+  });
+  const waId = "558494786787";
+  const deletedAt = new Date("2026-01-03T10:00:00.000Z");
+  const previousOutboundAt = new Date("2026-01-02T10:00:00.000Z");
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      deletedAt,
+      lastOutboundAt: previousOutboundAt,
+    },
+    select: { id: true },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "WAITING",
+      closedAt: deletedAt,
+      lastOutboundAt: previousOutboundAt,
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.reactivated.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio reativa conversa excluida",
+      templateId: template.id,
+      recipients: [waId],
+    }
+  );
+  assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const event = await prisma.event.findFirst({
+      where: {
+        clientId: businessClientId,
+        eventName: "campaign.recipient.conversation_reactivated",
+        conversationId: conversation.id,
+      },
+      select: { id: true },
+    });
+    return Boolean(event);
+  });
+
+  const updated = await prisma.conversation.findUniqueOrThrow({
+    where: { id: conversation.id },
+    select: { deletedAt: true, anonymizedAt: true, lastOutboundAt: true },
+  });
+  assert.equal(updated.deletedAt, null);
+  assert.equal(updated.anonymizedAt, null);
+  assert.ok((updated.lastOutboundAt?.getTime() ?? 0) > previousOutboundAt.getTime());
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 1);
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+    select: { status: true, mode: true, closedAt: true, lastOutboundMessageId: true },
+  });
+  assert.equal(runtime.status, "WAITING");
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.closedAt, null);
+  assert.equal(runtime.lastOutboundMessageId, `campaign.${response.body.campaign.id}.1`);
+
+  const reactivatedEvent = await prisma.event.findFirstOrThrow({
+    where: {
+      clientId: businessClientId,
+      eventName: "campaign.recipient.conversation_reactivated",
+      conversationId: conversation.id,
+    },
+    select: { payloadJson: true },
+  });
+  assert.equal((reactivatedEvent.payloadJson as { reason?: string }).reason, "outbound_template_sent");
+  assert.equal(JSON.stringify(reactivatedEvent.payloadJson).includes(waId), false);
+
+  const list = await request<{
+    ok: boolean;
+    conversations: Array<{ waId: string; lastMessage: { direction: string; type: string } | null }>;
+  }>("GET", `/app/conversations?search=${encodeURIComponent(waId)}&limit=10`, businessAdmin);
+  assert.equal(list.status, 200);
+  const listItem = list.body.conversations.find((item) => item.waId === waId);
+  assert.ok(listItem);
+  assert.equal(listItem.lastMessage?.direction, "OUTBOUND");
+  assert.equal(listItem.lastMessage?.type, "TEMPLATE");
+});
+
+test("campaign send does not reactivate anonymized soft-deleted conversation", async (t) => {
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `campaign_skip_anonymized_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Retorno bloqueado",
+    },
+  });
+  const waId = "558494817470";
+  const deletedAt = new Date("2026-01-04T10:00:00.000Z");
+  const anonymizedAt = new Date("2026-01-04T10:01:00.000Z");
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      deletedAt,
+      anonymizedAt,
+      lastOutboundAt: new Date("2026-01-01T10:00:00.000Z"),
+    },
+    select: { id: true },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.anonymized.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{ ok: boolean; campaign: { id: string } }>(
+    "POST",
+    "/app/campaigns",
+    businessAdmin,
+    {
+      name: "Envio nao reativa anonimizada",
+      templateId: template.id,
+      recipients: [waId],
+    }
+  );
+  assert.equal(response.status, 200);
+
+  await waitFor(async () => {
+    const count = await prisma.outboundMessage.count({
+      where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    });
+    return count === 1;
+  });
+
+  const preserved = await prisma.conversation.findUniqueOrThrow({
+    where: { id: conversation.id },
+    select: { deletedAt: true, anonymizedAt: true, lastOutboundAt: true },
+  });
+  assert.deepEqual(preserved.deletedAt, deletedAt);
+  assert.deepEqual(preserved.anonymizedAt, anonymizedAt);
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 1);
+  assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId } }), 0);
+  assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId } }), 0);
+  assert.equal(
+    await prisma.event.count({
+      where: { clientId: businessClientId, eventName: "campaign.recipient.conversation_reactivated", conversationId: conversation.id },
+    }),
+    0
+  );
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, messageId: { startsWith: `campaign.${response.body.campaign.id}.` } },
+    select: { rawPayload: true },
+  });
+  assert.equal((outbound.rawPayload as { conversationId?: string | null }).conversationId, null);
+});
+
 test("campaign send creates inbox conversation and timeline for new recipient", async (t) => {
   const template = await prisma.template.create({
     data: {
@@ -2303,7 +2507,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   );
 });
 
-test("campaign send failure does not create conversation or CRM bootstrap", async (t) => {
+test("campaign send failure does not reactivate soft-deleted conversation or CRM bootstrap", async (t) => {
   const template = await prisma.template.create({
     data: {
       clientId: businessClientId,
@@ -2315,6 +2519,19 @@ test("campaign send failure does not create conversation or CRM bootstrap", asyn
     },
   });
   const waId = "5584951957799";
+  const deletedAt = new Date("2026-01-05T10:00:00.000Z");
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      deletedAt,
+      lastOutboundAt: new Date("2026-01-01T10:00:00.000Z"),
+    },
+    select: { id: true },
+  });
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2336,7 +2553,7 @@ test("campaign send failure does not create conversation or CRM bootstrap", asyn
     "/app/campaigns",
     businessAdmin,
     {
-      name: "Envio falha sem conversa",
+      name: "Envio falha sem reativar conversa",
       templateId: template.id,
       recipients: [waId],
     }
@@ -2351,10 +2568,22 @@ test("campaign send failure does not create conversation or CRM bootstrap", asyn
     return campaign?.status === "failed";
   });
 
-  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 0);
+  const preserved = await prisma.conversation.findUniqueOrThrow({
+    where: { id: conversation.id },
+    select: { deletedAt: true, anonymizedAt: true },
+  });
+  assert.deepEqual(preserved.deletedAt, deletedAt);
+  assert.equal(preserved.anonymizedAt, null);
+  assert.equal(await prisma.conversation.count({ where: { clientId: businessClientId, waId } }), 1);
   assert.equal(await prisma.conversationRuntimeState.count({ where: { clientId: businessClientId, waId } }), 0);
   assert.equal(await prisma.contact.count({ where: { clientId: businessClientId, waId } }), 0);
   assert.equal(await prisma.lead.count({ where: { tenantId: businessClientId, waId } }), 0);
+  assert.equal(
+    await prisma.event.count({
+      where: { clientId: businessClientId, eventName: "campaign.recipient.conversation_reactivated", conversationId: conversation.id },
+    }),
+    0
+  );
 });
 
 test("campaign recipient bridge does not cross tenants and skips ambiguous matches", async (t) => {
