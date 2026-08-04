@@ -5,11 +5,6 @@ import { persistEvent } from "../db/persist.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { canonicalizeBrazilWaId } from "../utils/waid.js";
 
-function buildOutboundContactDisplayName(waId: string) {
-  const last4 = waId.slice(-4) || "----";
-  return `Contato WhatsApp • ****${last4}`;
-}
-
 function buildWhatsAppExternalUserHash(waIdCanonical: string) {
   return `whatsapp:${crypto.createHash("sha256").update(waIdCanonical).digest("hex").slice(0, 32)}`;
 }
@@ -63,7 +58,6 @@ async function ensureCampaignOutboundCrmBootstrap(
     source: "campaign" | "manual" | "bot";
   }
 ) {
-  const displayName = buildOutboundContactDisplayName(params.waId);
   const channelAccountId = params.phoneNumberId ?? "whatsapp";
   const identityHash = buildWhatsAppExternalUserHash(params.waIdCanonical);
 
@@ -83,7 +77,7 @@ async function ensureCampaignOutboundCrmBootstrap(
     create: {
       clientId: params.clientId,
       waId: params.waId,
-      name: displayName,
+      name: null,
       channel: "whatsapp",
       provider: "meta",
       channelAccountId,
@@ -105,7 +99,7 @@ async function ensureCampaignOutboundCrmBootstrap(
     update: {
       contactId: contact.id,
       legacyWaId: params.waId,
-      displayName: contact.name ?? displayName,
+      displayName: contact.name ?? null,
       lastSeenAt: params.source === "campaign" ? undefined : new Date(),
     },
     create: {
@@ -116,7 +110,7 @@ async function ensureCampaignOutboundCrmBootstrap(
       channelAccountId,
       externalUserHash: identityHash,
       legacyWaId: params.waId,
-      displayName: contact.name ?? displayName,
+      displayName: contact.name ?? null,
     },
     select: { id: true },
   });
@@ -142,7 +136,7 @@ async function ensureCampaignOutboundCrmBootstrap(
           externalUserHash: identityHash,
           contactChannelIdentityId: existingLead.contactChannelIdentityId ?? identity.id,
           phone: existingLead.phone ?? params.waId,
-          name: existingLead.name ?? contact.name ?? displayName,
+          name: existingLead.name ?? contact.name ?? null,
         },
         select: { id: true },
       })
@@ -156,7 +150,7 @@ async function ensureCampaignOutboundCrmBootstrap(
           channelAccountId,
           externalUserHash: identityHash,
           contactChannelIdentityId: identity.id,
-          name: contact.name ?? displayName,
+          name: contact.name ?? null,
           phone: params.waId,
           status: "NEW",
         },

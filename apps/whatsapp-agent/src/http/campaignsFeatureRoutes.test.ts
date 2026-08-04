@@ -2406,7 +2406,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
     where: { clientId_waId: { clientId: businessClientId, waId } },
     select: { id: true, name: true, channel: true, provider: true, externalUserHash: true },
   });
-  assert.equal(contact.name, "Contato WhatsApp • ****7784");
+  assert.equal(contact.name, null);
   assert.equal(contact.channel, "whatsapp");
   assert.equal(contact.provider, "meta");
   assert.ok(contact.externalUserHash?.startsWith("whatsapp:"));
@@ -2415,11 +2415,17 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
     where: { tenantId_waId: { tenantId: businessClientId, waId } },
     select: { id: true, name: true, phone: true, channel: true, provider: true, contactChannelIdentityId: true },
   });
-  assert.equal(lead.name, "Contato WhatsApp • ****7784");
+  assert.equal(lead.name, null);
   assert.equal(lead.phone, waId);
   assert.equal(lead.channel, "whatsapp");
   assert.equal(lead.provider, "meta");
   assert.ok(lead.contactChannelIdentityId);
+  const identity = await prisma.contactChannelIdentity.findUniqueOrThrow({
+    where: { id: lead.contactChannelIdentityId },
+    select: { displayName: true, legacyWaId: true },
+  });
+  assert.equal(identity.displayName, null);
+  assert.equal(identity.legacyWaId, waId);
 
   const preservedAnonymizedLead = await prisma.lead.findUniqueOrThrow({
     where: { id: anonymizedLead.id },
@@ -2475,7 +2481,7 @@ test("campaign send creates inbox conversation and timeline for new recipient", 
   const listItem = list.body.conversations.find((item) => item.waId === waId);
   assert.ok(listItem);
   assert.equal(listItem.leadId, lead.id);
-  assert.equal(listItem.leadName, "Contato WhatsApp • ****7784");
+  assert.equal(listItem.leadName, null);
   assert.equal(listItem.leadPhone, waId);
   assert.equal(listItem.status, "WAITING");
   assert.equal(listItem.mode, "HUMAN");
