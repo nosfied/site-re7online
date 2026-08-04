@@ -1315,9 +1315,6 @@ export default function AppCampaignsPage() {
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-white/55">
-                Filtre pelos status configurados no CRM deste tenant.
-              </span>
             </label>
             <label className="grid gap-1 text-sm">
               <span className="text-white/70">Canal</span>

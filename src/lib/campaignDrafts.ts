@@ -62,12 +62,34 @@ export function getFriendlyCampaignError(error: string | null) {
   };
 }
 
+export function fixLegacyBrazilDuplicateNinthDigitForDisplay(recipient: string) {
+  const value = recipient.trim();
+  if (!/^\d+$/.test(value)) return value;
+  if (!value.startsWith("55") || value.length !== 14) return value;
+
+  const country = value.slice(0, 2);
+  const areaCode = value.slice(2, 4);
+  const local = value.slice(4);
+
+  // Display-only repair for old campaign seeds created before manualRecipientInput.
+  // Sending still uses backend normalization/resolution; do not reuse this as send logic.
+  if (!/^\d{2}$/.test(areaCode) || local.length !== 10 || !local.startsWith("99")) {
+    return value;
+  }
+
+  return `${country}${areaCode}${local.slice(1)}`;
+}
+
 export function buildReplayFormFromCampaign(campaign: CampaignItem) {
   const seed = campaign.draftSeed;
+  const recipients = seed?.manualRecipientInput?.length
+    ? seed.manualRecipientInput
+    : (seed?.recipients || []).map(fixLegacyBrazilDuplicateNinthDigitForDisplay);
+
   return {
     name: seed?.name ? `${seed.name}-replay` : `${campaign.name || "campanha"}-replay`,
     templateName: seed?.templateName || campaign.templateName || "",
     templateParamsInput: (seed?.templateParams || []).join("\n"),
-    recipientsInput: (seed?.manualRecipientInput?.length ? seed.manualRecipientInput : seed?.recipients || []).join("\n"),
+    recipientsInput: recipients.join("\n"),
   };
 }
