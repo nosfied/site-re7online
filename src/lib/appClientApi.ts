@@ -1985,6 +1985,28 @@ export async function sendAppConversationMessage(
   });
 }
 
+export async function sendAppConversationTemplate(
+  session: AppSession,
+  waId: string,
+  payload: { templateId: string; variables?: Record<string, string> }
+): Promise<AppConversationOperationalPayload & {
+  message: {
+    messageId: string;
+    status: string;
+    metaMessageId: string | null;
+    createdAt: string;
+    type: string;
+    bodyText: string | null;
+    templateName: string;
+    templateLang: string | null;
+  };
+}> {
+  return requestAppJson(session, `/app/conversation/${encodeURIComponent(waId)}/send-template`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function sendAppConversationMedia(
   session: AppSession,
   waId: string,

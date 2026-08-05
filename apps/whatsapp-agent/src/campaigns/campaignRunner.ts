@@ -6,6 +6,7 @@ import { persistEvent, persistOutboundMessage } from "../db/persist.js";
 import { logger } from "../logger/logger.js";
 import { makeConversationKey } from "../storage/conversationKey.js";
 import { sendTemplate } from "../services/outboundTemplateService.js";
+import { renderTemplateBody } from "../templates/templateRendering.js";
 import type { CampaignTemplateComponents } from "./campaignService.js";
 import {
   resolveCampaignRecipientConversationTarget,
@@ -33,53 +34,6 @@ export type StartCampaignRunParams = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function extractTemplateBodyContent(content: string | null | undefined) {
-  const raw = String(content ?? "").trim();
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const components = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).components)
-        ? ((parsed as Record<string, unknown>).components as unknown[])
-        : null;
-    const body = components?.find((component) => {
-      if (!component || typeof component !== "object" || Array.isArray(component)) return false;
-      const type = String((component as Record<string, unknown>).type ?? "").toLowerCase();
-      return type === "body";
-    });
-    if (body && typeof body === "object" && !Array.isArray(body)) {
-      const text = (body as Record<string, unknown>).text;
-      if (typeof text === "string" && text.trim()) return text.trim();
-    }
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      for (const key of ["body", "bodyText", "text", "content"]) {
-        const value = (parsed as Record<string, unknown>)[key];
-        if (typeof value === "string" && value.trim()) return value.trim();
-      }
-    }
-  } catch {
-    // Template content is commonly stored as plain text in the local catalog.
-  }
-  return raw;
-}
-
-function extractBodyTemplateParameterValues(components: CampaignTemplateComponents | undefined) {
-  const body = components?.find((component) => component.type === "body");
-  return body?.parameters.map((parameter) => parameter.text) ?? [];
-}
-
-function renderTemplateBody(content: string | null | undefined, components: CampaignTemplateComponents | undefined) {
-  const body = extractTemplateBodyContent(content);
-  if (!body) return null;
-  const values = extractBodyTemplateParameterValues(components);
-  if (values.length === 0) return body;
-  return body.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, index: string) => {
-    const value = values[Number(index) - 1];
-    return value && value.trim() ? value : match;
-  });
 }
 
 export function startCampaignRun(params: StartCampaignRunParams) {

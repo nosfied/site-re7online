@@ -399,7 +399,7 @@ test("business profile default can access campaigns route", async () => {
     businessAdmin
   );
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 200, JSON.stringify(response.body));
   assert.equal(response.body.ok, true);
   assert.equal(response.body.count, 0);
 });
@@ -529,7 +529,7 @@ test("template catalog is tenant scoped and exposes campaign usage safely", asyn
     }>;
   }>("GET", "/app/templates?clientId=malicious", businessAdmin);
 
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 200, JSON.stringify(response.body));
   assert.equal(response.body.ok, true);
   assert.equal(response.body.items.some((item) => item.name.includes("other_tenant")), false);
 
@@ -652,6 +652,350 @@ test("template local availability blocks campaign usage and preserves tenant iso
   }>("POST", `/admin/templates/${template.id}/disable`);
   assert.equal(adminDisabled.status, 200);
   assert.equal(adminDisabled.body.template.locallyDisabled, true);
+});
+
+test("inbox template send uses approved active template and updates timeline safely", async (t) => {
+  const waId = "5541991177801";
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_template_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, continuamos seu atendimento.",
+    },
+  });
+  const conversation = await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      windowExpiresAt: new Date("2026-01-01T10:00:00.000Z"),
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      windowIsOpen: false,
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const freeText = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send`, businessAdmin, {
+    text: "Mensagem livre fora da janela",
+  });
+  assert.equal(freeText.status, 409);
+  assert.equal(getErrorCode(freeText.body), "window_closed");
+
+  const originalFetch = globalThis.fetch;
+  const metaPayloads: unknown[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaPayloads.push(JSON.parse(String(init?.body ?? "{}")));
+      return new Response(JSON.stringify({ messages: [{ id: `wamid.inbox.${safeTemplatePrefix}` }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const response = await request<{
+    ok: true;
+    message: { type: string; status: string; bodyText: string; templateName: string; metaMessageId: string | null };
+  }>("POST", `/app/conversation/${waId}/send-template?clientId=malicious`, businessAdmin, {
+    templateId: template.id,
+    variables: { "1": "Maria" },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(response.body.message.type, "TEMPLATE");
+  assert.equal(response.body.message.status, "SENT");
+  assert.equal(response.body.message.bodyText, "Ola Maria, continuamos seu atendimento.");
+  assert.equal(response.body.message.templateName, template.name);
+  assert.equal(response.body.message.metaMessageId, `wamid.inbox.${safeTemplatePrefix}`);
+  assert.equal(metaPayloads.length, 1);
+  assert.equal((metaPayloads[0] as { to?: string }).to, waId);
+
+  const outbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "inbox.template." } },
+  });
+  assert.equal(outbound.type, "TEMPLATE");
+  assert.equal(outbound.bodyText, "Ola Maria, continuamos seu atendimento.");
+  assert.equal(outbound.templateName, template.name);
+  assert.equal((outbound.rawPayload as Record<string, unknown>).source, "inbox_template");
+  assert.equal(JSON.stringify(outbound.rawPayload).includes(waId), false);
+
+  const updatedConversation = await prisma.conversation.findUniqueOrThrow({ where: { id: conversation.id } });
+  assert.ok(updatedConversation.lastOutboundAt);
+  const runtime = await prisma.conversationRuntimeState.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId } },
+  });
+  assert.equal(runtime.mode, "HUMAN");
+  assert.equal(runtime.status, "IN_PROGRESS");
+  assert.equal(runtime.assignedUserId, businessAdmin.id);
+  assert.equal(runtime.lastOutboundMessageId, outbound.messageId);
+
+  const event = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, conversationId: conversation.id, eventName: "inbox.template.sent" },
+  });
+  assert.equal((event.payloadJson as Record<string, unknown>).templateName, template.name);
+});
+
+test("inbox template send blocks opt-out, inactive templates, missing variables and cross tenant template", async (t) => {
+  const waId = "5541991177802";
+  const template = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_block_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Ola {{1}}, mensagem de atendimento.",
+    },
+  });
+  const otherTemplate = await prisma.template.create({
+    data: {
+      clientId: overrideClientId,
+      name: `inbox_cross_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Outro tenant",
+    },
+  });
+  await prisma.conversation.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      channel: "whatsapp",
+      provider: "meta",
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+  await prisma.conversationRuntimeState.create({
+    data: {
+      clientId: businessClientId,
+      waId,
+      waIdCanonical: waId,
+      conversationKey: `${prefix}-business:${waId}`,
+      channel: "whatsapp",
+      provider: "meta",
+      mode: "HUMAN",
+      status: "IN_PROGRESS",
+      assignedUserId: businessAdmin.id,
+      assignedTo: businessAdmin.name,
+      lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  let metaCalls = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      metaCalls += 1;
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const missing = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: template.id,
+    variables: {},
+  });
+  assert.equal(missing.status, 400, JSON.stringify(missing.body));
+  assert.equal(getErrorCode(missing.body), "template_variables_required");
+
+  const crossTenant = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: otherTemplate.id,
+  });
+  assert.equal(crossTenant.status, 404);
+  assert.equal(getErrorCode(crossTenant.body), "template_not_found");
+
+  await request("POST", `/app/templates/${template.id}/disable`, businessAdmin);
+  const disabled = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: template.id,
+    variables: { "1": "Maria" },
+  });
+  assert.equal(disabled.status, 409);
+  assert.equal(getErrorCode(disabled.body), "template_locally_disabled");
+  await request("POST", `/app/templates/${template.id}/enable`, businessAdmin);
+
+  await recordContactOptOut({
+    clientId: businessClientId,
+    waId,
+    source: "test",
+    reason: "inbox template block",
+  });
+  const optOut = await request<ErrorPayload>("POST", `/app/conversation/${waId}/send-template`, businessAdmin, {
+    templateId: template.id,
+    variables: { "1": "Maria" },
+  });
+  assert.equal(optOut.status, 409);
+  assert.equal(getErrorCode(optOut.body), "active_send_blocked");
+
+  assert.equal(metaCalls, 0);
+  const outboundCount = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, waId, messageId: { startsWith: "inbox.template." } },
+  });
+  assert.equal(outboundCount, 0);
+});
+
+test("inbox template send blocks unsafe conversations and records Meta failure without SENT success", async (t) => {
+  const activeWaId = "5541991177803";
+  const deletedWaId = "5541991177804";
+  const anonymizedWaId = "5541991177805";
+  const markedWaId = "5541991177806";
+  const approved = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_failure_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "approved",
+      content: "Aviso operacional.",
+    },
+  });
+  const pending = await prisma.template.create({
+    data: {
+      clientId: businessClientId,
+      name: `inbox_pending_${safeTemplatePrefix}`,
+      category: "UTILITY",
+      language: "pt_BR",
+      status: "pending",
+      content: "Aviso pendente.",
+    },
+  });
+  for (const [waId, extra] of [
+    [activeWaId, {}],
+    [deletedWaId, { deletedAt: new Date("2026-01-02T10:00:00.000Z") }],
+    [anonymizedWaId, { anonymizedAt: new Date("2026-01-02T10:00:00.000Z") }],
+    [markedWaId, {}],
+  ] as Array<[string, Record<string, Date>]>) {
+    await prisma.conversation.create({
+      data: {
+        clientId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        channel: "whatsapp",
+        provider: "meta",
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+        ...extra,
+      },
+    });
+    await prisma.conversationRuntimeState.create({
+      data: {
+        clientId: businessClientId,
+        waId,
+        waIdCanonical: waId,
+        conversationKey: `${prefix}-business:${waId}`,
+        channel: "whatsapp",
+        provider: "meta",
+        mode: "HUMAN",
+        status: "IN_PROGRESS",
+        assignedUserId: businessAdmin.id,
+        assignedTo: businessAdmin.name,
+        lastInboundAt: new Date("2026-01-01T08:00:00.000Z"),
+      },
+    });
+  }
+  await prisma.lead.create({
+    data: {
+      tenantId: businessClientId,
+      waId: markedWaId,
+      waIdCanonical: markedWaId,
+      channel: "whatsapp",
+      provider: "meta",
+      name: "Usuario Anonimizado",
+      phone: markedWaId,
+      status: "INBOX_TEMPLATE_TEST",
+    },
+  });
+
+  const deleted = await request<ErrorPayload>("POST", `/app/conversation/${deletedWaId}/send-template`, businessAdmin, {
+    templateId: approved.id,
+  });
+  assert.equal(deleted.status, 404);
+  assert.equal(getErrorCode(deleted.body), "conversation_not_found");
+
+  const anonymized = await request<ErrorPayload>("POST", `/app/conversation/${anonymizedWaId}/send-template`, businessAdmin, {
+    templateId: approved.id,
+  });
+  assert.equal(anonymized.status, 404);
+  assert.equal(getErrorCode(anonymized.body), "conversation_not_found");
+
+  const marked = await request<ErrorPayload>("POST", `/app/conversation/${markedWaId}/send-template`, businessAdmin, {
+    templateId: approved.id,
+  });
+  assert.equal(marked.status, 409);
+  assert.equal(getErrorCode(marked.body), "anonymized_contact");
+
+  const pendingResponse = await request<ErrorPayload>("POST", `/app/conversation/${activeWaId}/send-template`, businessAdmin, {
+    templateId: pending.id,
+  });
+  assert.equal(pendingResponse.status, 409);
+  assert.equal(getErrorCode(pendingResponse.body), "pending_review");
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (url.startsWith("https://graph.facebook.com/")) {
+      return new Response(JSON.stringify({ error: { message: "Meta unavailable" } }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const failed = await request<ErrorPayload>("POST", `/app/conversation/${activeWaId}/send-template`, businessAdmin, {
+    templateId: approved.id,
+  });
+  assert.equal(failed.status, 502);
+  assert.equal(getErrorCode(failed.body), "template_send_failed");
+
+  const sentCount = await prisma.outboundMessage.count({
+    where: { clientId: businessClientId, waId: activeWaId, messageId: { startsWith: "inbox.template." }, status: "SENT" },
+  });
+  assert.equal(sentCount, 0);
+  const failedOutbound = await prisma.outboundMessage.findFirstOrThrow({
+    where: { clientId: businessClientId, waId: activeWaId, messageId: { startsWith: "inbox.template." } },
+  });
+  assert.equal(failedOutbound.status, "FAILED");
+  const conversation = await prisma.conversation.findUniqueOrThrow({
+    where: { clientId_waId: { clientId: businessClientId, waId: activeWaId } },
+  });
+  assert.equal(conversation.lastOutboundAt, null);
+  const failedEvent = await prisma.event.findFirstOrThrow({
+    where: { clientId: businessClientId, waId: activeWaId, eventName: "inbox.template.failed" },
+  });
+  assert.equal(JSON.stringify(failedEvent.payloadJson).includes(activeWaId), false);
 });
 
 test("template routes require auth and bulk sync fails safely without Meta config", async () => {

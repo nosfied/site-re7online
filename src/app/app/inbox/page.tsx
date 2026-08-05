@@ -30,6 +30,7 @@ import {
   fetchAppDepartments,
   fetchAppLeadNotes,
   fetchAppTenantSummary,
+  listAppTemplates,
   sendAppConversationMedia,
   fetchAppUsers,
   logoutAppSession,
@@ -40,6 +41,7 @@ import {
   saveAppSession,
   fetchAppConversationMedia,
   sendAppConversationMessage,
+  sendAppConversationTemplate,
   transferAppConversation,
   transferAppConversationDepartment,
   updateAppConversationStatus,
@@ -50,6 +52,7 @@ import {
   subscribeAppPush,
   unsubscribeAppPush,
   type AppApiError,
+  type AppTemplateItem,
   type CrmBusinessStatusConfig,
   type AppPushStatus,
 } from "@/lib/appClientApi";
@@ -1754,6 +1757,51 @@ function canSessionAccessConversationDepartment(
   return session.user.departmentId === (departmentId ?? null);
 }
 
+function getTemplateBodyPreview(content: string | null | undefined) {
+  const raw = String(content ?? "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const components = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).components)
+        ? ((parsed as Record<string, unknown>).components as unknown[])
+        : null;
+    const body = components?.find((component) => {
+      if (!component || typeof component !== "object" || Array.isArray(component)) return false;
+      return String((component as Record<string, unknown>).type ?? "").toLowerCase() === "body";
+    });
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+      const text = (body as Record<string, unknown>).text;
+      if (typeof text === "string" && text.trim()) return text.trim();
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const key of ["body", "bodyText", "text", "content"]) {
+        const value = (parsed as Record<string, unknown>)[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+      }
+    }
+  } catch {
+    // Plain text template content is valid in the local catalog.
+  }
+  return raw;
+}
+
+function renderTemplatePreview(content: string | null | undefined, variables: Record<string, string>) {
+  const body = getTemplateBodyPreview(content);
+  if (!body) return "Conteudo do modelo indisponivel.";
+  return body.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, key: string) => {
+    const value = variables[key]?.trim();
+    return value || match;
+  });
+}
+
+function getTemplateVariableKeys(template: AppTemplateItem | null) {
+  return (template?.variablesDetected ?? [])
+    .map((key) => String(key).trim())
+    .filter((key) => /^\d+$/.test(key));
+}
+
 function buildInboxErrorToast(error: string | null, errorDetails: string | null, leadError: string | null) {
   if (error && errorDetails && !error.includes(errorDetails)) {
     return `${error}\n${errorDetails}`;
@@ -1796,6 +1844,13 @@ export default function AppInboxPage() {
     "idle"
   );
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateItems, setTemplateItems] = useState<AppTemplateItem[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
   const [conversationAction, setConversationAction] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>("ALL");
@@ -1829,7 +1884,6 @@ export default function AppInboxPage() {
   const [contactTimelineError, setContactTimelineError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [pauseErrorToast, setPauseErrorToast] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const isBusinessTenant = isBusinessSession(session);
   const [leadError, setLeadError] = useState<string | null>(null);
@@ -1989,22 +2043,24 @@ export default function AppInboxPage() {
     setContactTimelineError(null);
   }, []);
 
-  useEffect(() => {
-    handleCloseContactTimeline();
-  }, [handleCloseContactTimeline, selectedConversationWaId]);
+  const handleCloseTemplateModal = useCallback(() => {
+    setTemplateModalOpen(false);
+    setSelectedTemplateId("");
+    setTemplateVariables({});
+    setTemplateError(null);
+  }, []);
 
   useEffect(() => {
-    if (!error && !errorDetails && !success && !leadError) return;
-    if (pauseErrorToast) return;
-    const timer = window.setTimeout(() => {
-      setError(null);
-      setErrorDetails(null);
-      setPauseErrorToast(false);
-      setSuccess(null);
-      setLeadError(null);
-    }, 3000);
-    return () => window.clearTimeout(timer);
-  }, [error, errorDetails, leadError, pauseErrorToast, success]);
+    handleCloseContactTimeline();
+    handleCloseTemplateModal();
+  }, [handleCloseContactTimeline, handleCloseTemplateModal, selectedConversationWaId]);
+
+  const dismissInboxFeedback = useCallback(() => {
+    setError(null);
+    setErrorDetails(null);
+    setSuccess(null);
+    setLeadError(null);
+  }, []);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -3735,6 +3791,7 @@ export default function AppInboxPage() {
     (selectedConversationChannel === "telegram" &&
       selectedConversation?.channelOutboundEnabled === true);
   const selectedConversationSupportsMediaOutbound = selectedConversationChannel === "whatsapp";
+  const selectedConversationSupportsTemplateOutbound = selectedConversationChannel === "whatsapp";
   const selectedConversationOutboundDisabledMessage =
     selectedConversationChannel === "webchat"
       ? "Envio por Webchat ainda não está habilitado neste canal."
@@ -3744,6 +3801,23 @@ export default function AppInboxPage() {
       ? "Envio por Instagram ainda não está habilitado neste canal."
       : "Envio por Facebook/Messenger ainda não está habilitado neste canal.";
   const composerEnabled = canReply && selectedConversationSupportsOutbound;
+  const templateComposerEnabled = canReply && selectedConversationSupportsTemplateOutbound;
+  const usableInboxTemplates = useMemo(
+    () =>
+      templateItems.filter(
+        (template) =>
+          template.status === "approved" &&
+          template.canUseInInbox === true &&
+          template.locallyDisabled !== true &&
+          !template.blockedReason
+      ),
+    [templateItems]
+  );
+  const selectedTemplate = useMemo(
+    () => usableInboxTemplates.find((template) => template.id === selectedTemplateId) ?? null,
+    [selectedTemplateId, usableInboxTemplates]
+  );
+  const selectedTemplateVariableKeys = useMemo(() => getTemplateVariableKeys(selectedTemplate), [selectedTemplate]);
   const isHydratingSelectedTimeline =
     Boolean(selectedConversationWaId) &&
     loadingMessages &&
@@ -4308,6 +4382,141 @@ export default function AppInboxPage() {
     await handleSendMessage();
   };
 
+  const loadInboxTemplates = useCallback(async () => {
+    if (!session) return;
+    setTemplatesLoading(true);
+    setTemplateError(null);
+    try {
+      const response = await listAppTemplates(session);
+      setTemplateItems(response.items);
+    } catch (err) {
+      const typed = err as { status?: number; message?: string; details?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setTemplateError(typed.message || "Falha ao carregar modelos.");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [handleUnauthorized, session]);
+
+  const handleOpenTemplateModal = useCallback(() => {
+    if (!selectedConversationWaId || !selectedConversation) return;
+    if (!selectedConversationSupportsTemplateOutbound) {
+      setError("Envio de modelo pelo Inbox esta disponivel apenas para WhatsApp.");
+      setErrorDetails(null);
+      return;
+    }
+    if (!canReply) {
+      setError("Assuma a conversa para enviar modelo.");
+      setErrorDetails(null);
+      return;
+    }
+    setTemplateModalOpen(true);
+    setTemplateError(null);
+    if (templateItems.length === 0) {
+      void loadInboxTemplates();
+    }
+  }, [
+    canReply,
+    loadInboxTemplates,
+    selectedConversation,
+    selectedConversationSupportsTemplateOutbound,
+    selectedConversationWaId,
+    templateItems.length,
+  ]);
+
+  const handleSendTemplate = async () => {
+    if (!session || !selectedConversationWaId || !selectedConversation || !selectedTemplate) return;
+    if (!templateComposerEnabled) {
+      setTemplateError("Assuma uma conversa WhatsApp para enviar modelo.");
+      return;
+    }
+    const missingKeys = selectedTemplateVariableKeys.filter((key) => !templateVariables[key]?.trim());
+    if (missingKeys.length > 0) {
+      setTemplateError("Preencha todas as variaveis obrigatorias.");
+      return;
+    }
+    setSendingTemplate(true);
+    setTemplateError(null);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      const response = await sendAppConversationTemplate(session, selectedConversationWaId, {
+        templateId: selectedTemplate.id,
+        variables: templateVariables,
+      });
+      shouldScrollToBottomRef.current = true;
+      const outboundMessage: InboxMessageItem = {
+        direction: "OUTBOUND",
+        type: response.message.type,
+        status: response.message.status,
+        intent: null,
+        bodyText: response.message.bodyText,
+        media: null,
+        templateName: response.message.templateName,
+        templateLang: response.message.templateLang,
+        requestId: null,
+        messageId: response.message.messageId,
+        metaMessageId: response.message.metaMessageId,
+        errorBody: null,
+        createdAt: response.message.createdAt,
+      };
+      setMessages((prev) => {
+        const nextMessages = mergeMessagesByIdentity(prev, [outboundMessage]);
+        timelineCacheRef.current.set(selectedConversationWaId, nextMessages);
+        return nextMessages;
+      });
+      setMessagesConversationKey(getConversationIdentity(selectedConversation));
+      setConversations((prev) =>
+        dedupeConversationsByIdentity(
+          prev.map((item) =>
+            getConversationIdentity(item) === getConversationIdentity(selectedConversation)
+              ? {
+                  ...applyConversationOperationalPayload(item, response),
+                  lastMessage: {
+                    direction: "OUTBOUND",
+                    type: response.message.type,
+                    status: response.message.status,
+                    messageId: response.message.messageId,
+                    bodyText: response.message.bodyText,
+                    templateName: response.message.templateName,
+                    createdAt: response.message.createdAt,
+                  },
+                  lastOutboundAt: response.message.createdAt,
+                  updatedAt: response.message.createdAt,
+                }
+              : item
+          ),
+          isBusinessTenant
+        )
+      );
+      markConversationIdentitiesAsRead(
+        [
+          response.waIdCanonical,
+          response.waId,
+          ...getConversationIdentityCandidates(selectedConversation),
+        ],
+        response.message.createdAt,
+        selectedConversation.waId
+      );
+      setSuccess("Modelo enviado.");
+      handleCloseTemplateModal();
+    } catch (err) {
+      const typed = err as { status?: number; message?: string; details?: string };
+      if (typed.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      setTemplateError(typed.message || "Falha ao enviar modelo.");
+      setErrorDetails(typed.details || null);
+    } finally {
+      setSendingTemplate(false);
+      focusComposer();
+    }
+  };
+
   const handleToggleAudioRecording = async () => {
     if (!selectedConversationWaId) return;
     if (!selectedConversationSupportsOutbound || !selectedConversationSupportsMediaOutbound) {
@@ -4735,19 +4944,176 @@ export default function AppInboxPage() {
     >
       <FeedbackToast
         message={success}
-        onMouseEnter={() => setPauseErrorToast(true)}
-        onMouseLeave={() => setPauseErrorToast(false)}
-        onFocus={() => setPauseErrorToast(true)}
-        onBlur={() => setPauseErrorToast(false)}
+        onClick={dismissInboxFeedback}
       />
       <FeedbackToast
         message={buildInboxErrorToast(error, errorDetails, leadError)}
         variant="error"
-        onMouseEnter={() => setPauseErrorToast(true)}
-        onMouseLeave={() => setPauseErrorToast(false)}
-        onFocus={() => setPauseErrorToast(true)}
-        onBlur={() => setPauseErrorToast(false)}
+        onClick={dismissInboxFeedback}
       />
+      {templateModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-3 py-6">
+          <section className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-950 shadow-2xl">
+            <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold">Enviar modelo aprovado</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Use um template aprovado para continuar o atendimento pelo WhatsApp.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseTemplateModal}
+                disabled={sendingTemplate}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Fechar
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.85fr)]">
+                <section className="space-y-3">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                    A cobrança depende da categoria, país, entrega e política vigente da Meta.
+                  </div>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-slate-900">Modelos disponíveis</h3>
+                      <button
+                        type="button"
+                        onClick={() => void loadInboxTemplates()}
+                        disabled={templatesLoading || sendingTemplate}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {templatesLoading ? "Atualizando..." : "Atualizar"}
+                      </button>
+                    </div>
+                    {templatesLoading ? (
+                      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                        Carregando modelos aprovados...
+                      </p>
+                    ) : null}
+                    {!templatesLoading && usableInboxTemplates.length === 0 ? (
+                      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                        Nenhum modelo aprovado e ativo disponível para envio pelo Inbox.
+                      </p>
+                    ) : null}
+                    <div className="space-y-2">
+                      {usableInboxTemplates.map((template) => {
+                        const selected = template.id === selectedTemplateId;
+                        return (
+                          <button
+                            key={template.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTemplateId(template.id);
+                              setTemplateVariables({});
+                              setTemplateError(null);
+                            }}
+                            disabled={sendingTemplate}
+                            className={`w-full rounded-lg border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                              selected
+                                ? "border-[#20b15a] bg-emerald-50 shadow-[0_0_0_2px_rgba(32,177,90,0.16)]"
+                                : "border-slate-200 bg-white hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-950">{template.displayName || template.name}</span>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
+                                {template.category}
+                              </span>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                {template.language}
+                              </span>
+                            </div>
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-600">
+                              {getTemplateBodyPreview(template.content)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  {!selectedTemplate ? (
+                    <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-4 text-center text-sm text-slate-500">
+                      Selecione um modelo aprovado para revisar a mensagem e preencher variáveis.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-950">{selectedTemplate.displayName || selectedTemplate.name}</h3>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Modelo aprovado para envio ativo pelo WhatsApp.
+                        </p>
+                      </div>
+                      {selectedTemplateVariableKeys.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase text-slate-500">Variáveis</p>
+                          {selectedTemplateVariableKeys.map((key) => (
+                            <label key={key} className="grid gap-1 text-sm">
+                              <span className="text-xs font-medium text-slate-600">{`{{${key}}}`}</span>
+                              <input
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#20b15a]"
+                                value={templateVariables[key] ?? ""}
+                                onChange={(event) =>
+                                  setTemplateVariables((current) => ({
+                                    ...current,
+                                    [key]: event.target.value,
+                                  }))
+                                }
+                                disabled={sendingTemplate}
+                                placeholder="Valor a enviar"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                          Este modelo não possui variáveis obrigatórias.
+                        </p>
+                      )}
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Prévia</p>
+                        <div className="rounded-2xl border border-emerald-200 bg-[#e6ffdc] px-4 py-3 text-sm leading-relaxed text-slate-900 shadow-sm">
+                          <p className="whitespace-pre-wrap break-words">
+                            {renderTemplatePreview(selectedTemplate.content, templateVariables)}
+                          </p>
+                        </div>
+                      </div>
+                      {templateError ? (
+                        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                          {templateError}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCloseTemplateModal}
+                          disabled={sendingTemplate}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleSendTemplate()}
+                          disabled={sendingTemplate || !selectedTemplate}
+                          className="rounded-lg bg-[#20b15a] px-3 py-2 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {sendingTemplate ? "Enviando..." : "Enviar modelo"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {showContactTimeline ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6">
           <section className="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -5776,6 +6142,21 @@ export default function AppInboxPage() {
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:w-9 max-[1366px]:rounded-xl max-md:hidden"
               >
                 😊
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !selectedConversationWaId ||
+                  !templateComposerEnabled ||
+                  isHydratingSelectedTimeline ||
+                  sendingTemplate
+                }
+                onClick={handleOpenTemplateModal}
+                title="Enviar modelo aprovado"
+                aria-label="Enviar modelo aprovado"
+                className="flex h-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4c7b5] bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 max-[1366px]:h-9 max-[1366px]:rounded-xl max-[1366px]:px-2.5 max-[1366px]:text-xs max-md:h-11"
+              >
+                Modelo
               </button>
               <button
                 type="button"

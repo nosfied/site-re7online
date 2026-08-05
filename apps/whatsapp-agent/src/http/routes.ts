@@ -72,6 +72,12 @@ import {
   type CampaignTemplateComponents,
 } from "../campaigns/campaignService.js";
 import { startCampaignRun } from "../campaigns/campaignRunner.js";
+import { sendTemplate } from "../services/outboundTemplateService.js";
+import {
+  buildTemplateComponentsFromVariables,
+  extractTemplatePlaceholderKeys as extractTemplateBodyPlaceholderKeys,
+  renderTemplateBody,
+} from "../templates/templateRendering.js";
 import {
   CAMPAIGN_RECIPIENT_OPT_OUT_BLOCKED_EVENT,
   filterOptedOutCampaignRecipients,
@@ -405,6 +411,39 @@ function normalizeConversationRouteId(input: string) {
   return normalizeWaId(raw);
 }
 
+function parseInboxTemplateVariables(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const output: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const normalizedKey = key.trim();
+    if (!/^\d+$/.test(normalizedKey)) continue;
+    const normalizedValue = String(value ?? "").trim();
+    if (normalizedValue) output[normalizedKey] = normalizedValue.slice(0, 240);
+  }
+  return output;
+}
+
+function buildInboxTemplateEventPayload(params: {
+  conversationId: string | null;
+  templateId: string;
+  templateName: string;
+  templateCategory: string | null;
+  templateLanguage: string | null;
+  windowOpenAtSend: boolean;
+  reason?: string | null;
+}) {
+  return {
+    source: "inbox_template",
+    conversationId: params.conversationId,
+    templateId: params.templateId,
+    templateName: params.templateName,
+    templateCategory: params.templateCategory,
+    templateLanguage: params.templateLanguage,
+    windowOpenAtSend: params.windowOpenAtSend,
+    reason: params.reason ?? null,
+  };
+}
+
 async function loadWebchatConversationStateFromDb(
   prisma: ReturnType<typeof getPrisma>,
   params: { clientId: string; clientKey: string; waId: string }
@@ -561,6 +600,13 @@ async function loadInboxConversationState(
       error: (error as Error).message,
     });
   }
+  const dbStates = await loadInboxConversationStatesFromDb(prisma, {
+    clientId: params.clientId,
+    clientKey: params.clientKey,
+    candidates: [{ waId: params.waId, waIdCanonical: params.waId, channel: params.channel }],
+  });
+  const dbState = dbStates.get(params.waId);
+  if (dbState) return dbState;
   if (!isWebchat) return null;
   return loadWebchatConversationStateFromDb(prisma, params);
 }
@@ -4037,6 +4083,418 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     req.method === "POST" &&
     pathname.startsWith("/app/conversation/") &&
     pathname.split("/").length === 5 &&
+    pathname.endsWith("/send-template")
+  ) {
+    const prisma = getPrisma();
+    const clientAuth = requireClientAuth(req, res);
+    if (!clientAuth) return;
+    try {
+      const waId = normalizeConversationRouteId(decodeURIComponent(pathname.split("/")[3] ?? ""));
+      if (!waId) {
+        json(res, 400, httpError("bad_request", "Conversation id is required."));
+        return;
+      }
+      const body = await readJsonBody(req, res);
+      if (!body) return;
+      const templateId = String(body.templateId ?? "").trim();
+      const variables = parseInboxTemplateVariables((body as Record<string, unknown>).variables);
+      if (!templateId) {
+        json(res, 400, httpError("template_required", "Selecione um template aprovado."));
+        return;
+      }
+
+      const client = await getScopedClientById(prisma, clientAuth.clientId);
+      if (!client) {
+        json(res, 404, httpError("client_not_found", "Client not found"));
+        return;
+      }
+      if (client.status !== "ACTIVE") {
+        json(res, 403, httpError("client_inactive", "Client inactive"));
+        return;
+      }
+
+      const resolvedConversation = await resolveConversationTarget(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        rawWaId: waId,
+        requestId,
+        source: "app_conversation_send_template",
+      });
+      const conversationRow = resolvedConversation.winner;
+      if (!conversationRow) {
+        json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      const resolvedChannel = serializeInboxChannelFields(conversationRow).channel;
+      if (resolvedChannel && resolvedChannel !== "whatsapp") {
+        json(res, 409, httpError("unsupported_channel", "Envio de template pelo Inbox esta disponivel apenas para WhatsApp."));
+        return;
+      }
+
+      const currentConversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: resolvedChannel,
+      });
+      if (!currentConversation) {
+        json(res, 404, httpError("conversation_not_found", "Conversa nao encontrada."));
+        return;
+      }
+      const departmentAccess = await loadAppDepartmentAccess(prisma, {
+        clientId: client.id,
+        userId: clientAuth.userId,
+        role: clientAuth.role,
+      });
+      if (
+        !hasConversationDepartmentAccess({
+          role: clientAuth.role,
+          userDepartmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? conversationRow.departmentId ?? null,
+        })
+      ) {
+        logAppDepartmentDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-template",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          departmentId: departmentAccess.departmentId,
+          conversationDepartmentId: currentConversation.departmentId ?? conversationRow.departmentId ?? null,
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 403, httpError("forbidden", "Conversa fora do seu departamento."));
+        return;
+      }
+      if (
+        currentConversation.mode !== "HUMAN" ||
+        !canManageOwnedConversation(clientAuth.role, currentConversation.assignedUserId, clientAuth.userId)
+      ) {
+        logAppRbacDenied({
+          requestId,
+          route: "/app/conversation/:waId/send-template",
+          userId: clientAuth.userId,
+          clientId: client.id,
+          role: clientAuth.role,
+          reason: currentConversation.mode !== "HUMAN" ? "not_human_mode" : "not_owner",
+          waId: resolvedConversation.resolvedWaIdCanonical,
+        });
+        json(res, 409, httpError("conversation_not_assigned", "Assuma a conversa antes de enviar template."));
+        return;
+      }
+
+      const identityCandidates = Array.from(
+        new Set([resolvedConversation.resolvedWaId, resolvedConversation.resolvedWaIdCanonical].filter(Boolean))
+      );
+      const [lead, contact] = await Promise.all([
+        prisma.lead.findFirst({
+          where: {
+            tenantId: client.id,
+            OR: [{ waId: { in: identityCandidates } }, { waIdCanonical: { in: identityCandidates } }],
+          },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            waId: true,
+            waIdCanonical: true,
+            externalUserHash: true,
+            name: true,
+            phone: true,
+          },
+        }),
+        prisma.contact.findFirst({
+          where: {
+            clientId: client.id,
+            waId: { in: identityCandidates },
+          },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            waId: true,
+            externalUserHash: true,
+            name: true,
+          },
+        }),
+      ]);
+      if (
+        [
+          lead?.waId,
+          lead?.waIdCanonical,
+          lead?.externalUserHash,
+          lead?.name,
+          lead?.phone,
+          contact?.waId,
+          contact?.externalUserHash,
+          contact?.name,
+        ].some(isAnonymizedCampaignMarker)
+      ) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          eventName: "inbox.template.blocked",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId,
+            templateName: "",
+            templateCategory: null,
+            templateLanguage: null,
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+            reason: "anonymized_contact",
+          }),
+        });
+        json(res, 409, httpError("anonymized_contact", "Contato anonimizado nao pode receber envio ativo."));
+        return;
+      }
+
+      const optOutIdentity = normalizeOptOutWaId(resolvedConversation.resolvedWaIdCanonical || resolvedConversation.resolvedWaId);
+      const optOuts = optOutIdentity
+        ? await filterOptedOutCampaignRecipients(prisma, {
+            clientId: client.id,
+            waIds: [optOutIdentity.waIdCanonical],
+          })
+        : { allowed: [], blocked: [] };
+      if (optOuts.blocked.length > 0) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          requestId,
+          eventName: "inbox.template.blocked",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId,
+            templateName: "",
+            templateCategory: null,
+            templateLanguage: null,
+            windowOpenAtSend: currentConversation.window.isOpen === true,
+            reason: "active_send_blocked",
+          }),
+        });
+        json(res, 409, httpError("active_send_blocked", "Contato bloqueado para envio ativo."));
+        return;
+      }
+
+      const template = await prisma.template.findFirst({
+        where: { id: templateId, clientId: client.id },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          language: true,
+          status: true,
+          content: true,
+          variables: true,
+        },
+      });
+      if (!template) {
+        json(res, 404, httpError("template_not_found", "Template nao encontrado."));
+        return;
+      }
+      const availability = await getTemplateLocalAvailabilityMap(prisma, {
+        clientId: client.id,
+        templateIds: [template.id],
+      });
+      const usageBlock = getTemplateUsageBlock({
+        id: template.id,
+        status: template.status,
+        category: template.category,
+        language: template.language,
+        content: template.content,
+        locallyDisabled: availability.get(template.id)?.locallyDisabled === true,
+      });
+      if (usageBlock?.reason === "locally_disabled") {
+        json(res, 409, httpError("template_locally_disabled", "Template inativo no Converta."));
+        return;
+      }
+      if (usageBlock?.reason) {
+        json(res, 409, httpError(usageBlock.reason, usageBlock.label));
+        return;
+      }
+
+      const requiredKeys = extractTemplateBodyPlaceholderKeys(template.content);
+      const missingKeys = requiredKeys.filter((key) => !variables[key]);
+      if (missingKeys.length > 0) {
+        json(res, 400, httpError("template_variables_required", "Preencha todas as variaveis obrigatorias."));
+        return;
+      }
+      const components = buildTemplateComponentsFromVariables({ requiredKeys, variables });
+      const bodyText = renderTemplateBody(template.content, components);
+      if (requiredKeys.length > 0 && /\{\{\s*\d+\s*\}\}/.test(bodyText ?? "")) {
+        json(res, 400, httpError("template_variables_required", "Preencha todas as variaveis obrigatorias."));
+        return;
+      }
+
+      const tenants = await getTenants();
+      const phoneNumberId = tenants[client.clientKey]?.metaPhoneNumberId || undefined;
+      const windowOpenAtSend = currentConversation.window.isOpen === true;
+      const messageId = `inbox.template.${requestId}`;
+      const sendResult = await sendTemplate({
+        toE164: resolvedConversation.resolvedWaIdCanonical || resolvedConversation.resolvedWaId,
+        waId: resolvedConversation.resolvedWaId,
+        intent: undefined,
+        templateName: template.name,
+        lang: template.language,
+        components,
+        requestId,
+        rid: requestId,
+        messageId,
+        clientId: client.id,
+        clientKey: client.clientKey,
+      });
+      if (sendResult.blockedByUsage) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          messageId,
+          requestId,
+          eventName: "inbox.template.blocked",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId: template.id,
+            templateName: template.name,
+            templateCategory: template.category,
+            templateLanguage: template.language,
+            windowOpenAtSend,
+            reason: "usage_limit_reached",
+          }),
+        });
+        json(res, 429, httpError("usage_limit_reached", "Limite de uso atingido."));
+        return;
+      }
+
+      const createdAt = new Date();
+      const status = sendResult.ok ? MessageStatus.SENT : MessageStatus.FAILED;
+      await persistOutboundMessage({
+        clientId: client.id,
+        phoneNumberId,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        messageId,
+        type: MessageType.TEMPLATE,
+        status,
+        bodyText,
+        templateName: template.name,
+        templateLang: template.language,
+        requestId,
+        metaMessageId: sendResult.metaMessageId ?? null,
+        errorBody: sendResult.errorBody ?? null,
+        rawPayload: {
+          source: "inbox_template",
+          conversationId: conversationRow.id,
+          templateId: template.id,
+          templateName: template.name,
+          templateCategory: template.category,
+          templateLanguage: template.language,
+          windowOpenAtSend,
+          components: components ?? null,
+          status: sendResult.status ?? null,
+        },
+      });
+      if (!sendResult.ok) {
+        await persistEvent({
+          clientId: client.id,
+          conversationId: conversationRow.id,
+          waId: resolvedConversation.resolvedWaId,
+          waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+          messageId,
+          requestId,
+          eventName: "inbox.template.failed",
+          payloadJson: buildInboxTemplateEventPayload({
+            conversationId: conversationRow.id,
+            templateId: template.id,
+            templateName: template.name,
+            templateCategory: template.category,
+            templateLanguage: template.language,
+            windowOpenAtSend,
+            reason: "meta_failed",
+          }),
+        });
+        json(res, 502, httpError("template_send_failed", "Falha ao enviar template."));
+        return;
+      }
+
+      await prisma.conversation.update({
+        where: { id: conversationRow.id },
+        data: {
+          lastOutboundAt: createdAt,
+          updatedAt: createdAt,
+        },
+      });
+      await prisma.conversationRuntimeState.updateMany({
+        where: {
+          clientId: client.id,
+          OR: [
+            { waId: resolvedConversation.resolvedWaId },
+            { waIdCanonical: resolvedConversation.resolvedWaIdCanonical },
+          ],
+        },
+        data: {
+          lastOutboundAt: createdAt,
+          lastOutboundMessageId: messageId,
+        },
+      });
+      await persistEvent({
+        clientId: client.id,
+        conversationId: conversationRow.id,
+        waId: resolvedConversation.resolvedWaId,
+        waIdCanonical: resolvedConversation.resolvedWaIdCanonical,
+        messageId,
+        requestId,
+        eventName: "inbox.template.sent",
+        payloadJson: buildInboxTemplateEventPayload({
+          conversationId: conversationRow.id,
+          templateId: template.id,
+          templateName: template.name,
+          templateCategory: template.category,
+          templateLanguage: template.language,
+          windowOpenAtSend,
+        }),
+      });
+
+      const nextConversation = await loadInboxConversationState(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        waId: resolvedConversation.resolvedWaId,
+        channel: resolvedChannel,
+      });
+      const payload = await buildConversationActionPayload(prisma, {
+        clientId: client.id,
+        clientKey: client.clientKey,
+        conversation: nextConversation ?? currentConversation,
+      });
+      json(res, 200, {
+        ...payload,
+        waId: payload.waId ?? resolvedConversation.resolvedWaId,
+        waIdCanonical: payload.waIdCanonical ?? resolvedConversation.resolvedWaIdCanonical,
+        message: {
+          messageId,
+          status,
+          metaMessageId: sendResult.metaMessageId ?? null,
+          createdAt: createdAt.toISOString(),
+          type: MessageType.TEMPLATE,
+          bodyText,
+          templateName: template.name,
+          templateLang: template.language,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        event: "app.conversation.send_template.error",
+        message: (error as Error).message,
+        requestId,
+      });
+      json(res, 500, httpError("server_error", "Server error"));
+    }
+    return;
+  }
+
+  if (
+    req.method === "POST" &&
+    pathname.startsWith("/app/conversation/") &&
+    pathname.split("/").length === 5 &&
     pathname.split("/")[4] === "read-state"
   ) {
     const prisma = getPrisma();
@@ -4582,6 +5040,13 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse) {
           error: "conversation_not_assigned",
           message: "Assuma a conversa antes de responder manualmente.",
         });
+        return;
+      }
+      if (
+        (!resolvedChannel || resolvedChannel === "whatsapp") &&
+        !isWindowOpen(currentConversation, Date.now())
+      ) {
+        json(res, 409, { error: buildWindowClosedError(currentConversation.window.expiresAt) });
         return;
       }
       const result =

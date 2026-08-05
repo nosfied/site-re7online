@@ -9,6 +9,7 @@ type FeedbackToastProps = {
   onMouseLeave?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  onClick?: () => void;
 };
 
 export function usePausableFeedbackAutoDismiss(
@@ -46,6 +47,7 @@ export function FeedbackToast({
   onMouseLeave,
   onFocus,
   onBlur,
+  onClick,
 }: FeedbackToastProps) {
   if (!message) return null;
 
@@ -66,6 +68,7 @@ export function FeedbackToast({
       onMouseLeave={onMouseLeave}
       onFocus={onFocus}
       onBlur={onBlur}
+      onClick={onClick}
     >
       {message}
     </div>
